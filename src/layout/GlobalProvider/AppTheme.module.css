@@ -1,3 +1,5 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules :global() */
+
 /* scrollbar-width and scrollbar-color are supported from Chrome 121
    https://developer.mozilla.org/en-US/docs/Web/CSS/scrollbar-color */
 .scrollbar {
@@ -5,19 +7,19 @@
   scrollbar-width: thin;
 }
 
-.scrollbar #lobe-mobile-scroll-container {
-  scrollbar-width: none;
-}
-
-.scrollbar #lobe-mobile-scroll-container ::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-}
-
 /* so this is a polyfill for older browsers */
 .scrollbar ::-webkit-scrollbar {
   width: 0.75em;
   height: 0.75em;
+}
+
+.scrollbar :global(#lobe-mobile-scroll-container) {
+  scrollbar-width: none;
+}
+
+.scrollbar :global(#lobe-mobile-scroll-container) ::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .scrollbar ::-webkit-scrollbar-thumb {

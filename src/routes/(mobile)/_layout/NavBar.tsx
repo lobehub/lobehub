@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { MOBILE_TABBAR_HEIGHT } from '@/const/layoutTokens';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveTabKey } from '@/hooks/useActiveTabKey';
+import { useMobileNavigation } from '@/hooks/useMobileNavigation';
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -27,7 +27,7 @@ const styles = stylex.create({
 
 const NavBar = memo(() => {
   const { t } = useTranslation('common');
-  const activeKey = useActiveTabKey();
+  const { activeKey } = useMobileNavigation();
   const navigate = useWorkspaceAwareNavigate();
 
   const { showMarket } = useServerConfigStore(featureFlagsSelectors);
@@ -66,7 +66,7 @@ const NavBar = memo(() => {
           title: t('tab.me'),
         },
       ].filter(Boolean) as TabBarProps['items'],
-    [t],
+    [navigate, showMarket, t],
   );
 
   return (

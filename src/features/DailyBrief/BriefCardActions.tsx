@@ -38,6 +38,7 @@ export interface BriefCardActionsProps {
   recommendedActionKey?: string;
   resolvedAction?: string | null;
   taskId?: string | null;
+  taskIdentifier?: string | null;
   /** Parent task's runtime status — `scheduled` flips the result action to a plain "Confirm" since approving must NOT terminate a task parked between automated runs. */
   taskStatus?: TaskStatus | null;
   /** When set together with taskId, renders a "View run" shortcut to the topic drawer. */
@@ -67,6 +68,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
     onAfterResolve,
     resolvedAction,
     taskId,
+    taskIdentifier,
     taskStatus,
     topicId,
     topicTitle,
@@ -308,6 +310,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
                   icon={Target}
                   key={action.key}
                   taskId={taskId}
+                  taskIdentifier={taskIdentifier}
                   url={action.url}
                   variant={'quiet'}
                 >
@@ -357,6 +360,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
                   className={styles.actionBtn}
                   key={action.key}
                   taskId={taskId}
+                  taskIdentifier={taskIdentifier}
                   url={action.url}
                 >
                   {getActionLabel(action)}
@@ -396,6 +400,7 @@ const BriefCardActions = memo<BriefCardActionsProps>(
                 agentId={agentId}
                 className={styles.actionBtnPrimary}
                 taskId={taskId}
+                taskIdentifier={taskIdentifier}
                 url={primaryActions.url}
               >
                 {getActionLabel(primaryActions)}

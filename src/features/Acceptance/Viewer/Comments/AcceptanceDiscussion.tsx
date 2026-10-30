@@ -1,7 +1,7 @@
 'use client';
 
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Text } from '@lobehub/ui';
 import { BadgeCheck, Undo2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -13,7 +13,8 @@ import { buildAuthReturnUrl, currentReturnPath } from '@/utils/authReturnUrl';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
-import { useCommentAnchor } from './anchor';
+import AccessRequestEntry from './AccessRequestEntry';
+import { commentAnchorId, useCommentAnchor } from './anchor';
 import { commentAuthorName } from './CommentCard';
 import CommentComposer from './CommentComposer';
 import DiscussionAside from './DiscussionAside';
@@ -73,7 +74,7 @@ const local = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   feed: css`
-    flex: 999 1 480px;
+    flex: 1;
     min-width: 0;
   `,
   round: css`
@@ -81,11 +82,21 @@ const local = createStaticStyles(({ css }) => ({
       margin-block-start: 28px;
     }
   `,
+  // Measured against its own width, not the window's: the viewer also renders
+  // inside narrower hosts (portal, task detail), where the aside has to drop
+  // below the feed even on a wide screen.
+  container: css`
+    container-type: inline-size;
+  `,
   layout: css`
     display: flex;
-    flex-wrap: wrap;
     gap: 32px;
     align-items: flex-start;
+
+    @container (width < 720px) {
+      flex-direction: column;
+      align-items: stretch;
+    }
   `,
   signInPrompt: css`
     padding-block: 16px;
@@ -102,6 +113,7 @@ const entryCommentIds = (entry: DiscussionEntry): string[] => {
   if (entry.kind === 'region')
     return [entry.thread.root.id, ...entry.thread.replies.map((reply) => reply.id)];
   if (entry.kind === 'round' && entry.proposal) return [entry.proposal.id];
+  if (entry.kind === 'accessRequest') return [entry.request.id];
   return [];
 };
 
@@ -122,8 +134,10 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
   const isSignedIn = useUserStore(authSelectors.isLogin);
   const { data } = useAcceptanceBundle(acceptanceId);
   const {
+    answerAccessRequest,
     canApprove,
     canComment,
+    canManageAccess,
     create,
     error,
     isLoading,
@@ -247,6 +261,21 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
           {entry.comment && <div className={entryStyles.quote}>{entry.comment}</div>}
         </TimelineEvent>
       );
+    if (entry.kind === 'accessRequest')
+      return (
+        <div
+          className={cx(entry.request.id === anchoredId && styles.entryAnchored)}
+          id={commentAnchorId(entry.request.id)}
+          key={entry.request.id}
+        >
+          <AccessRequestEntry
+            at={entry.at}
+            canManage={canManageAccess}
+            request={entry.request}
+            onAnswer={answerAccessRequest}
+          />
+        </div>
+      );
     if (entry.kind === 'approval') {
       const who =
         entry.approval.contextRoundIndex === null
@@ -315,41 +344,43 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
   const ungrouped = sections.length <= 1 && (sections[0]?.roundIndex ?? null) === null;
 
   return (
-    <div className={local.layout}>
-      <Flexbox className={local.feed}>
-        {timeline.length === 0 && (
-          <span className={local.empty}>{t('acceptance.comments.empty')}</span>
-        )}
-        {ungrouped ? (
-          <>
-            {sections[0]?.entries.map((entry) => renderEntry(entry))}
-            {reply}
-          </>
-        ) : (
-          sections.map((section, index) => {
-            const key = sectionKey(section);
-            const open = toggled[key] ?? (index === 0 || section === anchoredSection);
-            return (
-              <div className={local.round} key={key}>
-                <RoundSection
-                  open={open}
-                  section={section}
-                  onToggle={() => setToggled((state) => ({ ...state, [key]: !open }))}
-                >
-                  {section.entries.map((entry) => renderEntry(entry))}
-                </RoundSection>
-                {index === 0 && reply}
-              </div>
-            );
-          })
-        )}
-      </Flexbox>
-      <DiscussionAside
-        items={items}
-        latestRound={data?.rounds.at(-1)?.run.roundIndex ?? undefined}
-        status={data?.acceptance.status}
-        onOpenChecks={onOpenChecks}
-      />
+    <div className={local.container}>
+      <div className={local.layout}>
+        <Flexbox className={local.feed}>
+          {timeline.length === 0 && (
+            <span className={local.empty}>{t('acceptance.comments.empty')}</span>
+          )}
+          {ungrouped ? (
+            <>
+              {sections[0]?.entries.map((entry) => renderEntry(entry))}
+              {reply}
+            </>
+          ) : (
+            sections.map((section, index) => {
+              const key = sectionKey(section);
+              const open = toggled[key] ?? (index === 0 || section === anchoredSection);
+              return (
+                <div className={local.round} key={key}>
+                  <RoundSection
+                    open={open}
+                    section={section}
+                    onToggle={() => setToggled((state) => ({ ...state, [key]: !open }))}
+                  >
+                    {section.entries.map((entry) => renderEntry(entry))}
+                  </RoundSection>
+                  {index === 0 && reply}
+                </div>
+              );
+            })
+          )}
+        </Flexbox>
+        <DiscussionAside
+          items={items}
+          latestRound={data?.rounds.at(-1)?.run.roundIndex ?? undefined}
+          status={data?.acceptance.status}
+          onOpenChecks={onOpenChecks}
+        />
+      </div>
     </div>
   );
 });

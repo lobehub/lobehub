@@ -10,6 +10,8 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
+import WorkspaceAvatar from '@/components/WorkspaceAvatar';
+import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { electronStylish } from '@/styles/electron';
 
 import { type ResolvedTab } from './hooks/useResolvedTabs';
@@ -19,6 +21,7 @@ import { useTabUnread } from './hooks/useTabUnread';
 import { TAB_SPRING } from './motion';
 import { styles } from './styles';
 import tabStyles from './tab.module.css';
+import { isTabClosable } from './tabClose';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { rubberBand } from './tabDrag';
 import { resolveTabInset, type TabTier } from './tabLayout';
@@ -49,6 +52,7 @@ interface TabItemProps {
   enterWidth: number;
   enterX: number;
   index: number;
+  instant: boolean;
   isActive: boolean;
   isSplitVisible: boolean;
   item: ResolvedTab;
@@ -85,6 +89,7 @@ const TabItem = memo<TabItemProps>(
     drag,
     enterWidth,
     enterX,
+    instant,
     onActivate,
     onClose,
     onCloseOthers,
@@ -106,8 +111,9 @@ const TabItem = memo<TabItemProps>(
     // Which tiers actually show the button is settled in CSS so that it can fade rather
     // than unmount. Staying mounted below the compact tier would otherwise leave an
     // invisible button in the focus order, so those tiers are made inert rather than
-    // merely transparent.
-    const closeInert = tier !== 'full' && tier !== 'compact';
+    // merely transparent. A lone tab is not closable at all (see tabClose).
+    const closable = isTabClosable(totalCount);
+    const closeInert = !closable || (tier !== 'full' && tier !== 'compact');
 
     const isDragging = !!drag;
 
@@ -129,13 +135,28 @@ const TabItem = memo<TabItemProps>(
     const zIndex = useMotionValue(pinned ? 1 : 0);
 
     useEffect(() => {
-      targetWidth.set(width);
-      targetInset.set(resolveTabInset(width));
-    }, [width, targetWidth, targetInset]);
+      const nextInset = resolveTabInset(width);
+      if (!instant) {
+        targetWidth.set(width);
+        targetInset.set(nextInset);
+        return;
+      }
+
+      targetWidth.jump(width);
+      springWidth.jump(width);
+      targetInset.jump(nextInset);
+      springInset.jump(nextInset);
+    }, [width, instant, targetWidth, springWidth, targetInset, springInset]);
 
     useEffect(() => {
       if (!drag) {
-        targetX.set(x);
+        if (!instant) {
+          targetX.set(x);
+          return;
+        }
+
+        targetX.jump(x);
+        springX.jump(x);
         return;
       }
 
@@ -158,7 +179,7 @@ const TabItem = memo<TabItemProps>(
         offPointer();
         offWidth();
       };
-    }, [drag, x, targetX, springX, springWidth]);
+    }, [drag, x, instant, targetX, springX, springWidth]);
 
     // A dropped tab springs from the release point into its slot; it stays above its
     // neighbours until it lands, or it would slide underneath the one it overlaps.
@@ -210,9 +231,9 @@ const TabItem = memo<TabItemProps>(
       (e: React.MouseEvent) => {
         if (e.button !== 1) return;
         e.preventDefault();
-        onClose(id);
+        if (closable) onClose(id);
       },
-      [onClose, id],
+      [closable, onClose, id],
     );
 
     const contextMenuItems = useCallback(
@@ -257,8 +278,12 @@ const TabItem = memo<TabItemProps>(
     const preview = useTabPreview(id, hovered);
 
     const indicator = (
-      <span {...stylex.props(styles.avatarWrapper)}>
-        {meta.avatar ? (
+      <span className={stylex.props(styles.avatarWrapper).className}>
+        {meta.avatarSeed ? (
+          <ProjectAvatar avatar={meta.avatar} name={meta.avatarSeed} size={16} />
+        ) : meta.avatarKind === 'workspace' ? (
+          <WorkspaceAvatar avatar={meta.avatar} name={meta.title} size={16} />
+        ) : meta.avatar ? (
           <Avatar
             emojiScaleWithBackground
             avatar={meta.avatar}
@@ -284,6 +309,7 @@ const TabItem = memo<TabItemProps>(
     const face = (
       <m.div
         data-active={isActive ? 'true' : undefined}
+        data-closable={closable ? 'true' : undefined}
         data-tier={tier}
         role="button"
         tabIndex={0}

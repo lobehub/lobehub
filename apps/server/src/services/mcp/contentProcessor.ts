@@ -99,7 +99,7 @@ export const processContentBlocks = async (
         today,
       });
 
-      log(`Image uploaded, proxy URL: ${url}`);
+      log('MCP media uploaded: %O', { mediaType: 'image' });
 
       return { ...block, data: url, mimeType };
     }
@@ -115,7 +115,7 @@ export const processContentBlocks = async (
         today,
       });
 
-      log(`Audio uploaded, proxy URL: ${url}`);
+      log('MCP media uploaded: %O', { mediaType: 'audio' });
 
       return { ...block, data: url, mimeType };
     }
@@ -137,7 +137,7 @@ export const processContentBlocks = async (
         today,
       });
 
-      log(`Resource ${mediaType} uploaded (${resource.uri}), proxy URL: ${url}`);
+      log('MCP media uploaded: %O', { mediaType });
 
       // Convert to native media content so downstream renderers/model adapters handle it visually.
       const metadata = resourceBlock._meta ? { _meta: resourceBlock._meta } : {};

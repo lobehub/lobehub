@@ -24,6 +24,9 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { applyCoreUpdate } from './applyCoreUpdate';
 import { formatCoreVersion } from './coreVersion';
 import { selectUpdateInfo } from './selectUpdateInfo';
+import { useAutoDismiss } from './useAutoDismiss';
+
+const APPLIED_TOAST_DURATION = 3000;
 
 const styles = stylex.create({
   installLaterCloseButton: {
@@ -177,6 +180,13 @@ export const UpdateNotification: React.FC = () => {
   });
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
+  // The "updated to version" toast only shows when no pending update takes its slot
+  const appliedToastHoverHandlers = useAutoDismiss(
+    updateInfo ? null : appliedVersion,
+    () => setAppliedVersion(null),
+    APPLIED_TOAST_DURATION,
+  );
+
   useWatchBroadcast('updateReady', (info) => {
     receivedUpdateEvent.current = true;
     setUpdateInfo((current) => selectUpdateInfo(current, info));
@@ -242,11 +252,21 @@ export const UpdateNotification: React.FC = () => {
 
   if (!updateInfo)
     return appliedVersion ? (
-      <div {...stylex.props(styles.installLaterToast)}>
+      <div
+        className={stylex.props(styles.installLaterToast).className}
+        {...appliedToastHoverHandlers}
+      >
         <span>
           {tElectron('updater.rendererUpdated', { version: formatCoreVersion(appliedVersion) })}
         </span>
-        <BaseButton size={'small'} type={'text'} onClick={() => setAppliedVersion(null)}>
+        <BaseButton
+          size={'small'}
+          type={'text'}
+          onClick={() => {
+            setAppliedVersion(null);
+            rendererOtaService.dismissAppliedNotice().catch(console.error);
+          }}
+        >
           {tElectron('updater.ignore')}
         </BaseButton>
       </div>

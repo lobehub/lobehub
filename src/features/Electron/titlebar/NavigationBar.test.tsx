@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   handlers: new Map<string, () => void>(),
   leftPanelVisible: false,
   leftPanelWidth: 0,
+  navPanelResizing: false,
   navigate: vi.fn(),
   openAllAgentsDrawer: vi.fn(),
 }));
@@ -22,7 +23,8 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
 }));
 vi.mock('@/services/electron/system', () => ({ electronSystemService: {} }));
 vi.mock('@/store/global', () => ({
-  useGlobalStore: (selector: (state: unknown) => unknown) => selector({}),
+  useGlobalStore: (selector: (state: unknown) => unknown) =>
+    selector({ isNavPanelResizing: mocks.navPanelResizing }),
 }));
 vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: {
@@ -60,6 +62,7 @@ describe('NavigationBar tray broadcasts', () => {
     mocks.isMac = false;
     mocks.leftPanelVisible = false;
     mocks.leftPanelWidth = 0;
+    mocks.navPanelResizing = false;
     vi.clearAllMocks();
   });
 
@@ -92,6 +95,20 @@ describe('NavigationBar tray broadcasts', () => {
     const expanded = render(<NavigationBar />);
 
     expect(expanded.container.querySelector('[data-width]')).toHaveStyle({ width: '268px' });
+  });
+
+  it('follows the sidebar width without a transition while it is being resized', () => {
+    mocks.leftPanelVisible = true;
+    mocks.leftPanelWidth = 280;
+    const idle = render(<NavigationBar />);
+
+    expect(idle.container.querySelector('[data-width]')).not.toHaveAttribute('data-resizing');
+    idle.unmount();
+
+    mocks.navPanelResizing = true;
+    const resizing = render(<NavigationBar />);
+
+    expect(resizing.container.querySelector('[data-width]')).toHaveAttribute('data-resizing');
   });
 
   it('reserves the traffic light inset on macOS when the sidebar is collapsed', async () => {

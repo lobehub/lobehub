@@ -1,3 +1,5 @@
+import { deserializeMcpIpcPayload, serializeMcpIpcPayload } from '@lobechat/utils/mcpIpcPayload';
+import { SdkError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -33,6 +35,7 @@ const makeClientInstance = (label: string) => ({
     isError: false,
   })),
   disconnect: vi.fn().mockResolvedValue(undefined),
+  getProtocolEra: vi.fn().mockReturnValue('legacy'),
   initialize: vi.fn().mockResolvedValue(undefined),
   listManifests: vi.fn().mockResolvedValue({ tools: [] }),
 });
@@ -49,6 +52,137 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it.each(['My server description'])(
+    'keeps stdio descriptions as metadata (%s)',
+    async (description) => {
+      const instance = {
+        ...makeClientInstance('tools-only'),
+        listManifests: vi.fn().mockResolvedValue({
+          prompts: undefined,
+          resources: undefined,
+          tools: [{ inputSchema: { type: 'object' }, name: 'hello' }],
+        }),
+      };
+      mcpClientMocks.mockReturnValue(instance);
+
+      const result = await ctr.getStdioMcpServerManifest(
+        serializeMcpIpcPayload({
+          command: 'test-command',
+          metadata: { description },
+          name: 'tools-only',
+        }),
+      );
+      const manifest = deserializeMcpIpcPayload<{ api: unknown[]; meta: { description?: string } }>(
+        result,
+      );
+
+      expect(manifest.api).toHaveLength(1);
+      expect(manifest.meta.description).toBe(description);
+    },
+  );
+
+  it.each(['My server description'])(
+    'keeps HTTP descriptions as metadata (%s)',
+    async (description) => {
+      const instance = { ...makeClientInstance('http'), listTools: vi.fn().mockResolvedValue([]) };
+      mcpClientMocks.mockReturnValue(instance);
+
+      const result = await ctr.getStreamableMcpServerManifest(
+        serializeMcpIpcPayload({
+          identifier: 'empty-server',
+          metadata: { description },
+          url: 'http://localhost/mcp',
+        }),
+      );
+      const manifest = deserializeMcpIpcPayload<{ api: unknown[]; meta: { description?: string } }>(
+        result,
+      );
+
+      expect(manifest.api).toEqual([]);
+      expect(manifest.meta.description).toBe(description);
+    },
+  );
+
+  it.each([
+    {
+      capabilities: { tools: [{ name: 'hello' }] },
+      summary: '1 tool',
+    },
+    {
+      capabilities: { prompts: [], resources: [], tools: [] },
+      summary: 'no tools, prompts, or resources',
+    },
+    {
+      capabilities: {
+        prompts: [{ name: 'greet' }],
+        resources: [{ name: 'readme' }],
+        tools: [{ name: 'hello' }],
+      },
+      summary: '1 prompt, 1 resource, 1 tool',
+    },
+  ])('persists the automatic stdio description: $summary', async ({ capabilities, summary }) => {
+    const instance = makeClientInstance('automatic');
+    instance.listManifests.mockResolvedValue(capabilities);
+    mcpClientMocks.mockReturnValue(instance);
+
+    const result = await ctr.getStdioMcpServerManifest(
+      serializeMcpIpcPayload({ command: 'test-command', name: 'automatic' }),
+    );
+    const manifest = deserializeMcpIpcPayload<{ meta: { description: string } }>(result);
+
+    expect(manifest.meta.description).toBe(`automatic MCP server has ${summary}`);
+    expect(manifest.meta.description).not.toContain('undefined');
+  });
+
+  it.each([
+    { tools: [], summary: 'no tools, prompts, or resources' },
+    { tools: [{ name: 'hello' }], summary: '1 tool, like "hello"' },
+  ])('persists the automatic HTTP description: $summary', async ({ tools, summary }) => {
+    mcpClientMocks.mockReturnValue({
+      ...makeClientInstance('automatic'),
+      listTools: vi.fn().mockResolvedValue(tools),
+    });
+    const result = await ctr.getStreamableMcpServerManifest(
+      serializeMcpIpcPayload({ identifier: 'automatic', url: 'http://localhost/mcp' }),
+    );
+    const manifest = deserializeMcpIpcPayload<{ meta: { description: string } }>(result);
+
+    expect(manifest.meta.description).toBe(`automatic MCP server has ${summary}`);
+    expect(manifest.meta.description).not.toContain('undefined');
+  });
+
+  it('returns a failed tool result without replaying an MCP isError result', async () => {
+    const instance = makeClientInstance('failed');
+    instance.callTool.mockResolvedValue({
+      content: [{ type: 'text', text: 'Additional input is unsupported' }],
+      isError: true,
+    });
+    mcpClientMocks.mockReturnValue(instance);
+    await expect(
+      ctr.runHttpMcpTool({ name: 'modern', url: 'http://localhost/mcp' }, 'needs_input', {}),
+    ).resolves.toMatchObject({
+      error: { message: 'Additional input is unsupported' },
+      success: false,
+      state: { isError: true },
+    });
+    expect(instance.callTool).toHaveBeenCalledOnce();
+  });
+
+  it('does not reconnect or replay a modern HTTP tool on 404', async () => {
+    const instance = makeClientInstance('modern');
+    instance.getProtocolEra.mockReturnValue('modern');
+    const error = new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Endpoint not found', {
+      status: 404,
+    });
+    instance.callTool.mockRejectedValue(error);
+    mcpClientMocks.mockReturnValue(instance);
+    await expect(
+      ctr.runHttpMcpTool({ name: 'modern', url: 'http://localhost/mcp' }, 'write', {}),
+    ).rejects.toBe(error);
+    expect(mcpClientMocks).toHaveBeenCalledTimes(1);
+    expect(instance.callTool).toHaveBeenCalledOnce();
   });
 
   it('reuses one stdio session across consecutive tool calls (state survives)', async () => {
@@ -101,7 +235,11 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
 
   it('retries on a fresh session after a stale pooled session fails, then keeps pooling', async () => {
     const stale = makeClientInstance('stale');
-    stale.callTool.mockRejectedValue(new Error('No valid session ID provided'));
+    stale.callTool.mockRejectedValue(
+      new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Session not found', {
+        status: 404,
+      }),
+    );
     const fresh = makeClientInstance('fresh');
     mcpClientMocks.mockReturnValueOnce(stale).mockReturnValueOnce(fresh).mockReturnValue(fresh);
 
@@ -130,7 +268,11 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
   it('propagates the failure when the fresh retry also fails', async () => {
     mcpClientMocks.mockImplementation(() => {
       const failing = makeClientInstance('failing');
-      failing.callTool.mockRejectedValue(new Error('No valid session ID provided'));
+      failing.callTool.mockRejectedValue(
+        new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Session not found', {
+          status: 404,
+        }),
+      );
       return failing;
     });
 
@@ -141,7 +283,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
         params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
         toolName: 'execute_python',
       } as any),
-    ).rejects.toThrow('No valid session ID provided');
+    ).rejects.toThrow('Session not found');
   });
 
   it('does NOT retry when the tool itself failed at app level (no double-apply of side effects)', async () => {
@@ -216,7 +358,9 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
 
   it('evicts the pooled client when listManifests fails on a stale session', async () => {
     const seeded = makeClientInstance('seeded');
-    seeded.listManifests.mockRejectedValue(new Error('Connection closed'));
+    seeded.listManifests.mockRejectedValue(
+      new SdkError(SdkErrorCode.ConnectionClosed, 'Connection closed'),
+    );
     mcpClientMocks.mockReturnValue(seeded);
 
     await expect(
@@ -294,9 +438,17 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
 
   it('evicts the replacement session when its retry also fails (pool never serves a dead client)', async () => {
     const stale = makeClientInstance('stale');
-    stale.callTool.mockRejectedValue(new Error('No valid session ID provided'));
+    stale.callTool.mockRejectedValue(
+      new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Session not found', {
+        status: 404,
+      }),
+    );
     const replacement = makeClientInstance('replacement');
-    replacement.callTool.mockRejectedValue(new Error('No valid session ID provided'));
+    replacement.callTool.mockRejectedValue(
+      new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Session not found', {
+        status: 404,
+      }),
+    );
     mcpClientMocks
       .mockReturnValueOnce(stale)
       .mockReturnValueOnce(replacement)
@@ -309,7 +461,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
         params: { args: ['--stdio'], command: 'ida-mcp', name: 'ida-mcp' },
         toolName: 'execute_python',
       } as any),
-    ).rejects.toThrow('No valid session ID provided');
+    ).rejects.toThrow('Session not found');
 
     // Both the stale session and the proven-dead replacement were evicted.
     expect(stale.disconnect).toHaveBeenCalledTimes(1);
@@ -318,7 +470,11 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
 
   it('single-flights the replacement when two concurrent calls share a stale session', async () => {
     const shared = makeClientInstance('stale-shared');
-    shared.callTool.mockRejectedValue(new Error('No valid session ID provided'));
+    shared.callTool.mockRejectedValue(
+      new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Session not found', {
+        status: 404,
+      }),
+    );
     const replacement = makeClientInstance('replacement');
     mcpClientMocks
       .mockReturnValueOnce(shared) // both concurrent calls pool-acquire this
@@ -351,7 +507,11 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
 
   it('keeps the healthy replacement pooled when its post-processing fails after a successful tool run', async () => {
     const stale = makeClientInstance('stale');
-    stale.callTool.mockRejectedValue(new Error('No valid session ID provided'));
+    stale.callTool.mockRejectedValue(
+      new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Session not found', {
+        status: 404,
+      }),
+    );
     const fresh = makeClientInstance('fresh');
     fresh.callTool.mockResolvedValue({
       content: [
@@ -464,7 +624,11 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     // eviction must leave the pool immediately but NOT disconnect the shared
     // client while the manifest request still holds its lease.
     const shared = makeClientInstance('shared');
-    shared.callTool.mockRejectedValue(new Error('No valid session ID provided'));
+    shared.callTool.mockRejectedValue(
+      new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Session not found', {
+        status: 404,
+      }),
+    );
     mcpClientMocks.mockImplementation(() => shared);
 
     let releaseManifest!: () => void;
@@ -490,7 +654,7 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     // First tool call: stale error → evicts the shared client → retry on
     // the replacement (same mocked instance) → stale again → propagates.
     await expect(ctr.runStdioMcpTool({ ...params, toolName: 'explode' } as any)).rejects.toThrow(
-      'No valid session ID provided',
+      'Session not found',
     );
     // Eviction happened (client left the pool) but the disconnect is
     // deferred while the manifest call still holds its lease.
@@ -573,7 +737,9 @@ describe('McpCtr stdio session reuse (T-801 stateful MCP servers)', () => {
     // dead client MUST leave the pool — otherwise every later call
     // refreshes and reuses the corpse.
     const dead = makeClientInstance('dead');
-    dead.callTool.mockRejectedValue(new Error('Connection closed'));
+    dead.callTool.mockRejectedValue(
+      new SdkError(SdkErrorCode.ConnectionClosed, 'Connection closed'),
+    );
     const replacement = makeClientInstance('replacement');
     mcpClientMocks.mockReturnValueOnce(dead).mockReturnValue(replacement);
 

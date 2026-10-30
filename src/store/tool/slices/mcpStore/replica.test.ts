@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The MCP marketplace list is a `@lobechat/replica` paged resource: the
+ * The MCP marketplace list is a `local-replica` paged resource: the
  * persisted head page paints before the network answers, the response confirms
  * and persists it, "load more" appends through the engine, and a query change
  * (search term) repaints from its own head page instead of appending to the

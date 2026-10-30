@@ -117,6 +117,12 @@ const Connections = memo<ConnectionsProps>(
           </Text>
         )}
 
+        {connections.length > 0 && (
+          <Text style={{ fontSize: 13 }} type="secondary">
+            {t('linear.sync.projectHint')}
+          </Text>
+        )}
+
         {connections.length === 0 ? (
           <div {...stylex.props(styles.emptyState)}>{t('linear.connections.empty')}</div>
         ) : (

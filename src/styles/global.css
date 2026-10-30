@@ -101,3 +101,26 @@ button {
 .accordion-action:has(.lobe-dropdown-menu-trigger[data-popup-open]:not([data-no-highlight])) {
   opacity: 1;
 }
+
+/* CONVERSATION_PRINT_ROOT_CLASS from @/features/Conversation/ChatList/constants */
+@media screen {
+  .conversation-print-root {
+    display: none;
+  }
+}
+
+@media print {
+  html:has(> body > .conversation-print-root),
+  body:has(> .conversation-print-root) {
+    overflow: visible;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    color-scheme: light !important;
+    background: none !important;
+  }
+
+  body:has(> .conversation-print-root) > :not(.conversation-print-root) {
+    display: none !important;
+  }
+}

@@ -1,6 +1,7 @@
 import { and, count, eq, gt, gte, lte, ne, or, sql } from 'drizzle-orm';
 
 import { topics } from '../../schemas';
+import { notChannelTopic } from '../../utils/topicVisibility';
 import type { TopicModelContext } from './context';
 import type { ListTopicsForMemoryExtractorCursor } from './types';
 
@@ -36,8 +37,10 @@ export const listTopicsForMemoryExtractor = async (
     where: and(
       ctx.ownership(),
       // Share-visitor conversations are not the creator's own speech — never
-      // feed them into the creator's memory extraction.
+      // feed them into the creator's memory extraction. Channel runs carry
+      // other members' Channel content, which stays inside the Channel.
       ctx.notShareVisitor(),
+      notChannelTopic(),
       options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
       options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
       options.ignoreExtracted
@@ -66,6 +69,7 @@ export const countTopicsForMemoryExtractor = async (
       and(
         ctx.ownership(),
         ctx.notShareVisitor(),
+        notChannelTopic(),
         options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
         options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
         options.ignoreExtracted

@@ -10,10 +10,12 @@ import type {
   FtsSearchFolderResult,
   FtsSearchKnowledgeBaseDocumentHit,
   FtsSearchPageResult,
+  FtsSearchTimeRange,
 } from '../types';
 import type { PostgresFtsSearchContext } from './context';
 import type { PostgresFtsSearchField } from './dialect';
 import { buildResponse, truncate } from './results';
+import { timeRangeWhere } from './timeRange';
 
 const FOLDER_FIELDS: PostgresFtsSearchField[] = [
   { column: documents.title, weight: 4 },
@@ -116,6 +118,7 @@ export async function searchPages(
   query: string,
   limit: number,
   excludeKbIds?: string[],
+  timeRange?: FtsSearchTimeRange,
 ): Promise<FtsSearchBackendResponse<FtsSearchPageResult>> {
   const { db, dialect } = context;
   const preparedQuery = dialect.prepare(query);
@@ -160,6 +163,7 @@ export async function searchPages(
         context.liftsExclusionFilter
           ? undefined
           : excludeKb(documents.knowledgeBaseId, documents.fileId),
+        timeRangeWhere(documents, timeRange),
         dialect.match(PAGE_FIELDS, preparedQuery),
       ),
     )

@@ -11,16 +11,25 @@ vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
   useClientDataSWR: vi.fn(),
 }));
+const userStore = vi.hoisted(() => ({ refreshUserState: vi.fn() }));
+vi.mock('@/store/user', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useUserStore: { getState: () => userStore },
+}));
+
 vi.mock('@/services/dashboard', () => ({
   dashboardService: {
     addItem: vi.fn(),
     create: vi.fn(),
     getPreviewRun: vi.fn(),
+    grantDryRunAccess: vi.fn(),
     publish: vi.fn(),
     removeItems: vi.fn(),
-    rename: vi.fn(),
     runWidget: vi.fn(),
+    setWidgetSchedule: vi.fn(),
     trash: vi.fn(),
+    update: vi.fn(),
+    updateWidget: vi.fn(),
     updateItemLayouts: vi.fn(),
   },
 }));
@@ -91,9 +100,9 @@ describe('board entity propagation', () => {
       dashboardListByLevel: { personal: [board()] },
       projectDashboardsMap: { p1: [board({ projectId: 'p1' })] },
     });
-    vi.mocked(dashboardService.rename).mockResolvedValue(undefined as any);
+    vi.mocked(dashboardService.update).mockResolvedValue(undefined as any);
 
-    await useDashboardStore.getState().renameDashboard('d1', 'Renamed', {});
+    await useDashboardStore.getState().updateDashboard('d1', { title: 'Renamed' }, {});
 
     const state = useDashboardStore.getState();
     expect(state.dashboardDetailMap.d1.title).toBe('Renamed');
@@ -101,6 +110,26 @@ describe('board entity propagation', () => {
     expect(state.dashboardDetailMap.d1.items).toHaveLength(2);
     expect(state.dashboardListByLevel.personal[0].title).toBe('Renamed');
     expect(state.projectDashboardsMap.p1[0].title).toBe('Renamed');
+  });
+
+  it('shows the visibility the server kept, not the one asked for', async () => {
+    useDashboardStore.setState({
+      dashboardDetailMap: { d1: detail },
+      dashboardListByLevel: { personal: [board({ visibility: 'private' })] },
+    });
+    // A board of a private project stays private whatever the settings asked.
+    vi.mocked(dashboardService.update).mockResolvedValue(
+      board({ description: 'Ops health', visibility: 'private' }),
+    );
+
+    const saved = await useDashboardStore
+      .getState()
+      .updateDashboard('d1', { description: 'Ops health', visibility: 'public' }, {});
+
+    expect(saved?.visibility).toBe('private');
+    const state = useDashboardStore.getState();
+    expect(state.dashboardListByLevel.personal[0].visibility).toBe('private');
+    expect(state.dashboardListByLevel.personal[0].description).toBe('Ops health');
   });
 
   it('drops the board from the loaded lists when trashed', async () => {
@@ -250,5 +279,67 @@ describe('refreshWidgetPlacement', () => {
     // One revalidate per affected resource: widget detail, board detail, both
     // board lists and the project widget list.
     expect(vi.mocked(mutate).mock.calls.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('setWidgetsSchedule', () => {
+  it('saves every widget and counts the ones the server refused', async () => {
+    vi.mocked(dashboardService.setWidgetSchedule)
+      .mockResolvedValueOnce({} as any)
+      .mockRejectedValueOnce(new Error('Only the widget creator can change it'))
+      .mockResolvedValueOnce({} as any);
+
+    const result = await useDashboardStore
+      .getState()
+      .setWidgetsSchedule(['w1', 'w2', 'w3'], { pattern: '0 * * * *', timezone: 'Asia/Shanghai' });
+
+    expect(result).toEqual({ failed: 1 });
+    expect(dashboardService.setWidgetSchedule).toHaveBeenCalledTimes(3);
+    expect(dashboardService.setWidgetSchedule).toHaveBeenCalledWith(
+      'w2',
+      '0 * * * *',
+      'Asia/Shanghai',
+    );
+  });
+});
+
+describe('updateWidget', () => {
+  it("saves the widget's title and metric definition", async () => {
+    vi.mocked(dashboardService.updateWidget).mockResolvedValue({} as any);
+
+    await useDashboardStore
+      .getState()
+      .updateWidget('w1', { description: 'Open PRs by me', title: 'My open PRs' });
+
+    expect(dashboardService.updateWidget).toHaveBeenCalledWith('w1', {
+      description: 'Open PRs by me',
+      title: 'My open PRs',
+    });
+  });
+
+  it('surfaces a refused save to the caller', async () => {
+    vi.mocked(dashboardService.updateWidget).mockRejectedValue(new Error('NOT_FOUND'));
+
+    await expect(useDashboardStore.getState().updateWidget('w1', { title: 'x' })).rejects.toThrow(
+      'NOT_FOUND',
+    );
+  });
+});
+
+describe('grantDryRunAccess', () => {
+  it('reloads user settings after the grant so the next audit sees it', async () => {
+    const order: string[] = [];
+    vi.mocked(dashboardService.grantDryRunAccess).mockImplementation(async () => {
+      order.push('grant');
+      return undefined;
+    });
+    userStore.refreshUserState.mockImplementation(async () => {
+      order.push('refresh');
+    });
+
+    await useDashboardStore.getState().grantDryRunAccess('w1', 'v2');
+
+    expect(dashboardService.grantDryRunAccess).toHaveBeenCalledWith('w1', 'v2');
+    expect(order).toEqual(['grant', 'refresh']);
   });
 });

@@ -3,7 +3,6 @@
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   ActionIcon,
-  Avatar,
   Button,
   Checkbox,
   Flexbox,
@@ -23,8 +22,8 @@ import { type ChangeEvent } from 'react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import ImperativeModal from '@/components/ImperativeModal';
-import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -46,7 +45,7 @@ const AvailableAgentItem = memo<{
   const _agentId = agent.id;
   const title = agentDisplayName(agent, t('defaultSession', { ns: 'common' }));
   const description = agent.description || '';
-  const avatar = typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR;
+  const avatar = typeof agent.avatar === 'string' ? agent.avatar : undefined;
   const avatarBackground = agent.backgroundColor || undefined;
 
   if (!_agentId) return null;
@@ -64,7 +63,15 @@ const AvailableAgentItem = memo<{
           }}
         />
         <Flexbox style={{ flexShrink: 0 }}>
-          <Avatar animation={isHovering} avatar={avatar} background={avatarBackground} size={40} />
+          <AgentAvatar
+            agentId={_agentId}
+            animation={isHovering}
+            avatar={avatar}
+            background={avatarBackground}
+            name={title}
+            shape={'circle'}
+            size={40}
+          />
         </Flexbox>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Text weight={500}>{title}</Text>
@@ -285,7 +292,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
           if (!agent) return null;
 
           const title = agentDisplayName(agent, t('defaultSession', { ns: 'common' }));
-          const avatar = typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR;
+          const avatar = typeof agent.avatar === 'string' ? agent.avatar : undefined;
           const avatarBackground = agent.backgroundColor || undefined;
           const description = agent.description || '';
 
@@ -299,7 +306,14 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
               />
             ),
             avatar: (
-              <Avatar avatar={avatar} background={avatarBackground} shape="circle" size={40} />
+              <AgentAvatar
+                agentId={agentId}
+                avatar={avatar}
+                background={avatarBackground}
+                name={title}
+                shape="circle"
+                size={40}
+              />
             ),
             description,
             key: agentId,

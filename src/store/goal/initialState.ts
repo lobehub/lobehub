@@ -59,6 +59,10 @@ export interface GoalState {
   homeGoalsByScope: Record<string, GoalListValue>;
   /** Local-first bookkeeping for `homeGoalsByScope`. */
   homeGoalsReplica: ReplicaState<GoalListValue>;
+  /** Goals created from one conversation, keyed by topic id. */
+  topicGoalsByTopicId: Record<string, GoalListValue>;
+  /** Local-first bookkeeping for `topicGoalsByTopicId`. */
+  topicGoalsReplica: ReplicaState<GoalListValue>;
 }
 
 export const initialState: GoalState = {
@@ -73,4 +77,6 @@ export const initialState: GoalState = {
   goalViewMode: 'list',
   homeGoalsByScope: {},
   homeGoalsReplica: createReplicaState(),
+  topicGoalsByTopicId: {},
+  topicGoalsReplica: createReplicaState(),
 };

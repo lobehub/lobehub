@@ -1,6 +1,8 @@
 import { Avatar, Flexbox, Tag, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 
+import WorkspaceAvatar from '@/components/WorkspaceAvatar';
+
 import scopeStyles from './scopeOptions.module.css';
 
 export const PERSONAL_SCOPE = 'personal';
@@ -55,7 +57,11 @@ const renderScopeOption = ({
   personalTagLabel?: string;
 }) => (
   <Flexbox horizontal align="center" className={stylex.props(styles.scopeOption).className} gap={8}>
-    <Avatar avatar={avatar || label} shape="square" size={20} />
+    {isPersonal ? (
+      <Avatar avatar={avatar || label} shape="square" size={20} />
+    ) : (
+      <WorkspaceAvatar avatar={avatar} name={label} size={20} />
+    )}
     <Flexbox
       horizontal
       align="center"

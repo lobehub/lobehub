@@ -1,4 +1,5 @@
 import { getBuiltinIntervention } from '@lobechat/builtin-tools/interventions';
+import type { BuiltinRememberApproval } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
@@ -46,6 +47,12 @@ const Intervention = memo<InterventionProps>(
     // Raised by an intervention that cannot show what is being approved yet
     // (review data loading or failed); the approve action waits on it.
     const [approvalBlocked, setApprovalBlocked] = useState(false);
+    // A tool-specific "approve and remember" choice the intervention offers.
+    const [rememberOption, setRememberOption] = useState<BuiltinRememberApproval>();
+    const registerRememberApproval = useCallback((option: BuiltinRememberApproval) => {
+      setRememberOption(option);
+      return () => setRememberOption((current) => (current === option ? undefined : current));
+    }, []);
     const updatePluginArguments = useConversationStore((s) => s.updatePluginArguments);
     const message = useConversationStore((s) => dataSelectors.getDbMessageById(id)(s));
     const usesDurableServerClaim = Boolean(
@@ -317,6 +324,8 @@ const Intervention = memo<InterventionProps>(
             assistantGroupId={assistantGroupId}
             identifier={identifier}
             messageId={id}
+            rememberOption={rememberOption}
+            toolArgs={parsedArgs}
             toolCallId={toolCallId}
             onBeforeApprove={handleBeforeApprove}
           />
@@ -332,6 +341,7 @@ const Intervention = memo<InterventionProps>(
             identifier={identifier}
             messageId={id}
             registerBeforeApprove={registerBeforeApprove}
+            registerRememberApproval={registerRememberApproval}
             onApprovalBlockedChange={setApprovalBlocked}
             onArgsChange={handleArgsChange}
           />

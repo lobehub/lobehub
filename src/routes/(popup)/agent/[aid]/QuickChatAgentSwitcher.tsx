@@ -2,7 +2,7 @@
 
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -11,7 +11,8 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
+import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { type SidebarAgentItem } from '@/database/repositories/home';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -107,7 +108,7 @@ const useSwitchItems = (): SwitchItem[] => {
     };
 
     const fromAgent = (a: SidebarAgentItem): SwitchItem => ({
-      avatar: typeof a.avatar === 'string' ? a.avatar : DEFAULT_AVATAR,
+      avatar: typeof a.avatar === 'string' ? a.avatar : undefined,
       background: a.backgroundColor || undefined,
       id: a.id,
       navId: a.id,
@@ -178,10 +179,11 @@ const QuickChatAgentSwitcher = memo(() => {
             type={'button'}
             onClick={() => handleSelect(item)}
           >
-            <Avatar
+            <AgentAvatar
+              agentId={item.id}
               avatar={item.avatar}
               background={item.background}
-              shape={'square'}
+              name={item.title}
               size={AVATAR_SIZE}
             />
           </button>
@@ -213,10 +215,11 @@ const QuickChatAgentSwitcher = memo(() => {
                       key={item.id}
                       onClick={() => handleSelect(item)}
                     >
-                      <Avatar
+                      <AgentAvatar
+                        agentId={item.id}
                         avatar={item.avatar}
                         background={item.background}
-                        shape={'square'}
+                        name={item.title}
                         size={22}
                       />
                       <span

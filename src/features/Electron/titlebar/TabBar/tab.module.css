@@ -68,18 +68,18 @@
    Reservation is 20px button + 3px inset - the tab's own 6px end padding. Margin
    rather than padding: the mask applies to the padding box, so padding would put the
    gradient inside the reservation instead of at the text's edge. */
-.tab[data-tier='full']:hover [data-tab-close],
-.tab[data-tier='compact']:hover [data-tab-close],
-.tab[data-tier='full']:has([data-tab-close]:focus-visible) [data-tab-close],
-.tab[data-tier='compact']:has([data-tab-close]:focus-visible) [data-tab-close] {
+.tab[data-closable][data-tier='full']:hover [data-tab-close],
+.tab[data-closable][data-tier='compact']:hover [data-tab-close],
+.tab[data-closable][data-tier='full']:has([data-tab-close]:focus-visible) [data-tab-close],
+.tab[data-closable][data-tier='compact']:has([data-tab-close]:focus-visible) [data-tab-close] {
   pointer-events: auto;
   opacity: 1;
 }
 
-.tab[data-tier='full']:hover [data-tab-title],
-.tab[data-tier='compact']:hover [data-tab-title],
-.tab[data-tier='full']:has([data-tab-close]:focus-visible) [data-tab-title],
-.tab[data-tier='compact']:has([data-tab-close]:focus-visible) [data-tab-title] {
+.tab[data-closable][data-tier='full']:hover [data-tab-title],
+.tab[data-closable][data-tier='compact']:hover [data-tab-title],
+.tab[data-closable][data-tier='full']:has([data-tab-close]:focus-visible) [data-tab-title],
+.tab[data-closable][data-tier='compact']:has([data-tab-close]:focus-visible) [data-tab-title] {
   margin-inline-end: 17px;
 }
 

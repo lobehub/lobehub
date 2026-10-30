@@ -388,13 +388,16 @@ export const setTaskWorksVisibility = async (
  * eligible. Cascades `work_versions`, `project_works` and
  * `goal_node_work_versions` via FK.
  */
-export const deleteWork = async (ctx: WorkContext, params: DeleteWorkParams): Promise<void> => {
+export const deleteWork = async (
+  ctx: WorkContext,
+  params: DeleteWorkParams,
+): Promise<{ canvasManifestKeys: string[]; resourceId: string | null; resourceType: string }[]> => {
   const backingResourceGone = sql<boolean>`case ${works.resourceType}
     when 'task' then not exists (select 1 from ${tasks} where ${tasks.id} = ${works.resourceId})
     when 'document' then not exists (select 1 from ${documents} where ${documents.id} = ${works.resourceId})
     else true end`;
 
-  await ctx.db
+  return ctx.db
     .delete(works)
     .where(
       and(
@@ -403,5 +406,16 @@ export const deleteWork = async (ctx: WorkContext, params: DeleteWorkParams): Pr
         eq(works.userId, ctx.userId),
         backingResourceGone,
       ),
-    );
+    )
+    .returning({
+      // RETURNING reads the version keys before the FK cascade removes their rows.
+      canvasManifestKeys: sql<string[]>`array(
+        select distinct ${workVersions.metadata} -> 'canvas' ->> 'manifestKey'
+        from ${workVersions}
+        where ${workVersions.workId} = ${params.id}
+          and coalesce(${workVersions.metadata} -> 'canvas' ->> 'manifestKey', '') <> ''
+      )`,
+      resourceId: works.resourceId,
+      resourceType: works.resourceType,
+    });
 };

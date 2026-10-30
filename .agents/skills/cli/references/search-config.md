@@ -68,7 +68,7 @@ lh search view <target> [-i <impls>] [--json [fields]]
 
 ---
 
-## User Configuration (`lh whoami` / `lh usage`)
+## User Configuration (`lh whoami` / `lh usage` / `lh usage quota`)
 
 **Source**: `apps/cli/src/commands/config.ts`
 
@@ -97,6 +97,22 @@ lh usage [--month <YYYY-MM>] [--agent-id <id>] [--daily] [--json [fields]]
 | `--daily`           | Group by day              | `false` (monthly total) |
 
 **Output**: Token usage, costs, and model breakdown for the specified period.
+
+### `lh usage quota`
+
+Show the caller's credit allowance for the current cycle: used share, what is
+left, and the next reset. Reads `GET /api/v1/usage` (its `quota` field), so it
+needs a deployment with a metered budget provider; elsewhere it prints that no
+allowance exists.
+
+```bash
+lh usage quota [--workspace <id|slug>] [--json [fields]]
+```
+
+`--json` prints `{ quota, scope }`. `quota.usedRatio` is `used / limit`
+clamped to `0..1`, and `null` when the allowance has no cap. In a workspace,
+`quota.source` is `member_budget` when the member has their own cap, otherwise
+`workspace_pool`. Any member, viewers included, may read it.
 
 ---
 

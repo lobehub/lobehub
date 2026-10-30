@@ -93,6 +93,9 @@ export const exchangeLinearCode = (code: string): Promise<LinearTokenSet> =>
     redirect_uri: getLinearRedirectUri(),
   });
 
+export const refreshLinearToken = (refreshToken: string): Promise<LinearTokenSet> =>
+  requestToken({ grant_type: 'refresh_token', refresh_token: refreshToken });
+
 /**
  * Best effort: a token Linear already forgot is as good as revoked. An expired
  * access token cannot authorize its own revocation, so it is refreshed first.
@@ -105,10 +108,7 @@ export const revokeLinearToken = async (
   try {
     let { accessToken } = credentials;
     if (credentials.refreshToken && expiresAt && expiresAt.getTime() <= Date.now()) {
-      const refreshed = await requestToken({
-        grant_type: 'refresh_token',
-        refresh_token: credentials.refreshToken,
-      });
+      const refreshed = await refreshLinearToken(credentials.refreshToken);
       accessToken = refreshed.accessToken;
     }
 

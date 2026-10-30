@@ -1,3 +1,4 @@
+import { documentBlocksPrompt } from '@lobechat/prompts';
 import { describe, expect, it } from 'vitest';
 
 import { systemPrompt } from './systemRole';
@@ -34,5 +35,9 @@ describe('systemPrompt', () => {
     expect(systemPrompt).toContain('A **document** can be a parent.');
     expect(systemPrompt).toContain('a workflow/SOP document with its execution records');
     expect(systemPrompt).toContain('removeDocument refuses an entry that has children');
+  });
+
+  it('should tell the agent which rich blocks documents support', () => {
+    expect(systemPrompt).toContain(documentBlocksPrompt);
   });
 });

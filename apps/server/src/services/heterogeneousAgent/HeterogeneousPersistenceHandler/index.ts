@@ -4,7 +4,7 @@ import type {
   MainAgentReduceCtx,
   SubagentIntent,
 } from '@lobechat/heterogeneous-agents';
-import { reduceMainAgent } from '@lobechat/heterogeneous-agents';
+import { getEventScope, reduceMainAgent } from '@lobechat/heterogeneous-agents';
 import { isEchoedErrorText } from '@lobechat/heterogeneous-agents/errors';
 import { isHeteroStatusGuideErrorData } from '@lobechat/heterogeneous-agents/processFailure';
 import { createNanoId } from '@lobechat/utils';
@@ -17,6 +17,7 @@ import { applyMainIntent, applySubagentIntent } from './applyIntents';
 import { eventKey, operationStates } from './operationState';
 import {
   loadOrCreateState,
+  recoverLastToolMessageFromDb,
   refreshMainStateFromDb,
   refreshSubagentRunsFromDb,
   refreshToolMessageIndex,
@@ -30,6 +31,24 @@ export type { HeterogeneousPersistenceHandlerDeps } from './types';
 const log = debug('lobe-server:hetero-agent:persistence');
 
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
+
+/** A `newStep` carrying `externalSignal` opens a signal turn (a background task's wake-up). */
+const opensSignalTurn = (event: AgentStreamEvent): boolean =>
+  event.type === 'stream_start' && !!event.data?.newStep && !!event.data?.externalSignal;
+
+/** Subagent turns live in their thread; only main-agent step boundaries name a main assistant. */
+const isMainStreamStart = (event: AgentStreamEvent): boolean =>
+  event.type === 'stream_start' && getEventScope(event).kind === 'main';
+
+/** `parentToolCallId`s of the subagent runs a batch writes to. */
+const subagentParentsOf = (events: AgentStreamEvent[]): Set<string> => {
+  const parents = new Set<string>();
+  for (const event of events) {
+    const scope = getEventScope(event);
+    if (scope.kind === 'subagent') parents.add(scope.ctx.parentToolCallId);
+  }
+  return parents;
+};
 
 /** The raw text a CLI would have echoed into the answer for this failure. */
 const errorEchoText = (error: { body?: Record<string, unknown>; message?: string }): string => {
@@ -114,9 +133,17 @@ export class HeterogeneousPersistenceHandler {
       await syncAssistantPointerForAdvancedStep(this.deps, state);
     }
 
+    const subagentParents = subagentParentsOf(params.events);
+
     await refreshToolMessageIndex(this.deps, state);
     await refreshMainStateFromDb(this.deps, state);
-    await refreshSubagentRunsFromDb(this.deps, state);
+    await refreshSubagentRunsFromDb(this.deps, state, subagentParents);
+    // Only a batch that opens a signal turn needs the tool anchor; skip the
+    // lookup for the rest. Re-read it even when warm: another replica may have
+    // persisted a newer tool since this one last saw the run.
+    if (params.events.some(opensSignalTurn)) {
+      await recoverLastToolMessageFromDb(this.deps, state);
+    }
 
     for (const event of params.events) {
       const key = eventKey(event);
@@ -130,6 +157,9 @@ export class HeterogeneousPersistenceHandler {
       // would ack OK while DB state diverges from the renderer's view. Mark
       // only on success so a retry can complete the lost write.
       await this.handleEvent(state, event);
+      if (isMainStreamStart(event)) {
+        state.streamStartAssistantIds.set(key, state.main.currentAssistantId);
+      }
       state.processedKeys.add(key);
       state.lastStepIndex = Math.max(state.lastStepIndex, event.stepIndex);
     }
@@ -138,6 +168,7 @@ export class HeterogeneousPersistenceHandler {
     // picking up this operation always sees the latest content in the DB,
     // even if it never processes a step boundary or terminal event.
     await this.flushBatchContent(state);
+    await this.flushSubagentContent(state, subagentParents);
   }
 
   /**
@@ -158,9 +189,34 @@ export class HeterogeneousPersistenceHandler {
     return events.filter((event) => !state.publishedKeys.has(eventKey(event)));
   }
 
+  /**
+   * Wire `data` for an event about to be published.
+   *
+   * A main-agent `stream_start` carries the assistant row it resolved to as
+   * `assistantMessage.id`. CLI adapters never know the server's message ids,
+   * so without it a subscriber can only infer each step's row from where it
+   * started. A reconnect starts from `runningOperation.assistantMessageId`,
+   * the newest row, so its full replay wrote every earlier step onto that row.
+   * Without state (a retry on a cold replica) the event goes out unchanged
+   * and the client falls back to its DB lookup.
+   */
+  publishData(operationId: string, event: AgentStreamEvent): AgentStreamEvent['data'] {
+    const assistantId = operationStates
+      .get(operationId)
+      ?.streamStartAssistantIds.get(eventKey(event));
+    if (!assistantId) return event.data;
+
+    return { ...event.data, assistantMessage: { id: assistantId } };
+  }
+
   /** Latch an event as published so a batch retry skips its XADD. */
   markEventPublished(operationId: string, event: AgentStreamEvent): void {
-    operationStates.get(operationId)?.publishedKeys.add(eventKey(event));
+    const state = operationStates.get(operationId);
+    if (!state) return;
+
+    const key = eventKey(event);
+    state.publishedKeys.add(key);
+    state.streamStartAssistantIds.delete(key);
   }
 
   /**
@@ -201,7 +257,7 @@ export class HeterogeneousPersistenceHandler {
     // after the publish) races the refetch and the error card doesn't render
     // live. Bootstrap from topic.metadata.runningOperation like ingest does;
     // a stale/mismatched operation stays a no-op.
-    if (!state && params.result === 'error' && params.error && params.topicId) {
+    if (!state && params.topicId) {
       try {
         state = await loadOrCreateState(
           this.deps,
@@ -223,6 +279,20 @@ export class HeterogeneousPersistenceHandler {
     if (!state) return;
 
     try {
+      // A producer may finish without ingesting its final stream event. Close
+      // its pending questions before the caller publishes runtime_end. Refresh
+      // only the intervention projection: finish must not flush stale text.
+      await refreshToolMessageIndex(this.deps, state);
+      const terminal = reduceMainAgent(
+        state.main,
+        { type: 'agent_runtime_end' },
+        this.mainReduceCtx(state),
+      );
+      for (const intent of terminal.intents) {
+        if (intent.kind === 'setToolIntervention') {
+          await applyMainIntent(this.deps, state, intent, state.lastStepIndex);
+        }
+      }
       if (params.error) await this.persistFinishError(state, params.error);
     } finally {
       operationStates.delete(params.operationId);
@@ -255,6 +325,7 @@ export class HeterogeneousPersistenceHandler {
     return {
       agentId: state.agentId,
       newId: (kind) => (kind === 'thread' ? generateThreadId() : `msg_${createNanoId(18)()}`),
+      toolMessageIds: state.toolMsgIdByCallId,
       topicId: state.topicId,
     };
   }
@@ -362,7 +433,28 @@ export class HeterogeneousPersistenceHandler {
     const update: Record<string, any> = {};
     if (state.main.accContent) update.content = state.main.accContent;
     if (state.main.accReasoning) update.reasoning = { content: state.main.accReasoning };
-    if (Object.keys(state.main.turnMetadata).length > 0) update.metadata = state.main.turnMetadata;
+    // The first assistant is seeded before the heterogeneous operation exists.
+    // Stamp every durable main reply so ordinary completion lookups stay scoped to this run.
+    update.metadata = {
+      ...state.main.turnMetadata,
+      operationId: state.operationId,
+    };
     await this.deps.messageModel.update(state.main.currentAssistantId, update);
+  }
+
+  /**
+   * Subagent counterpart of {@link flushBatchContent}, limited to the runs this
+   * batch wrote to. Without it, a turn whose text spans replicas loses the part
+   * the earlier replica only held in memory.
+   */
+  private async flushSubagentContent(state: OperationState, parents: Set<string>): Promise<void> {
+    for (const parentToolCallId of parents) {
+      const run = state.main.subagents.runs.get(parentToolCallId);
+      if (!run || (!run.accContent && !run.accReasoning)) continue;
+      const update: Record<string, any> = {};
+      if (run.accContent) update.content = run.accContent;
+      if (run.accReasoning) update.reasoning = { content: run.accReasoning };
+      await this.deps.messageModel.update(run.currentAssistantId, update);
+    }
   }
 }

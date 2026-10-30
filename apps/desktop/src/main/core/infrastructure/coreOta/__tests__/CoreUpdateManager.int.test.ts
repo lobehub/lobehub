@@ -1,49 +1,36 @@
-import { generateKeyPairSync, sign } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { constants, zstdCompressSync } from 'node:zlib';
 
-import { zipSync } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ShellGlobal } from '@/const/shell';
-
-import { canonicalJson, type CoreManifestV3 as CoreManifest, sha256File } from '../manifest';
+import { sha256File } from '../manifest';
 import { readPointer, writePointer } from '../pointer';
-import type { RendererSource } from '../rendererSource';
 import { SAFE_VERSION } from '../store';
-
-const { privateKey, publicKey } = generateKeyPairSync('ed25519');
-const PUBLIC_KEY_PEM = publicKey.export({ format: 'pem', type: 'spki' }).toString();
-const ABI = 'a'.repeat(64);
-const SERVER = 'https://updates.test';
-const OBJECTS = 'https://cdn.test/cas';
-const ORIGINAL_PLATFORM = process.platform;
-const PLATFORM = 'linux' as CoreManifest['platform'];
-
-const BASE_FILES: Record<string, string> = {
-  'dist/main/index.js': 'main-v1',
-  'dist/renderer/apps/desktop/index.html': '<script src="/assets/index.js"></script>',
-  'dist/renderer/apps/desktop/overlay.html': '<script src="/assets/overlay.js"></script>',
-  'dist/renderer/apps/desktop/popup.html': '<script src="/assets/popup.js"></script>',
-  'dist/renderer/assets/index.js': 'index-v1',
-  'dist/renderer/assets/overlay.js': 'overlay',
-  'dist/renderer/assets/popup.js': 'popup',
-  'package.json': '{"main":"dist/main/index.js"}',
-};
-
-let userDataDir: string;
-let builtinDir: string;
-let served: Map<string, Buffer>;
+import {
+  ABI,
+  BASE_FILES,
+  buildManifest,
+  coreDir,
+  expectAppliedRenderer,
+  fetchImpl,
+  fixture,
+  flushGc,
+  loadManager,
+  mainChanged,
+  makeApp,
+  makeShell,
+  materialize,
+  OBJECTS,
+  otaRoot,
+  PLATFORM,
+  pointerAt,
+  rendererOnly,
+  serveLatest,
+  SERVER,
+  setupOtaFixture,
+  storeDir,
+  teardownOtaFixture,
+} from './testUtils';
 
 const { electronMock, loggerMock } = vi.hoisted(() => ({
   electronMock: {
@@ -69,175 +56,13 @@ vi.mock('@/modules/updater/configs', () => ({
   coerceStoredUpdateChannel: (channel?: string) => (channel === 'canary' ? 'canary' : 'stable'),
 }));
 
-const makeApp = () => ({
-  browserManager: {
-    broadcastToAllWindows: vi.fn(),
-    browsers: new Map([
-      [
-        'main',
-        {
-          browserWindow: { webContents: { id: 1, reloadIgnoringCache: vi.fn() } },
-          cancelUnloadConfirmation: vi.fn(),
-          reloadIgnoringCache: vi.fn(function (this: {
-            browserWindow: { webContents: { reloadIgnoringCache: () => void } };
-          }) {
-            this.browserWindow.webContents.reloadIgnoringCache();
-          }),
-        },
-      ],
-    ]),
-  },
-  isQuiting: false,
-  rendererUrlManager: {
-    activeRenderer: null as RendererSource | null,
-    getActiveRenderer() {
-      return this.activeRenderer;
-    },
-    setActiveRenderer: vi.fn(function (
-      this: { activeRenderer: RendererSource | null },
-      source: RendererSource | null,
-    ) {
-      this.activeRenderer = source;
-    }),
-  },
-  storeManager: { get: vi.fn(() => 'stable') },
-  updaterManager: { captureRestoreRoute: vi.fn() },
-});
-
-const signManifest = (unsigned: Omit<CoreManifest, 'signature'>): CoreManifest => ({
-  ...unsigned,
-  signature: sign(null, Buffer.from(canonicalJson(unsigned)), privateKey).toString('base64'),
-});
-
-const zst = (content: Buffer) =>
-  zstdCompressSync(content, { params: { [constants.ZSTD_c_compressionLevel]: 3 } });
-
-const buildManifest = (
-  version: string,
-  seq: number,
-  files: Record<string, string>,
-  overrides: Partial<Omit<CoreManifest, 'signature'>> = {},
-): CoreManifest => {
-  const objects = new Map(Object.entries(files).map(([p, c]) => [p, Buffer.from(c)] as const));
-  const tree = [...objects]
-    .map(([p, content]) => ({ path: p, sha256: sha256File(content), size: content.length }))
-    .sort((a, b) => a.path.localeCompare(b.path));
-  const zippable: Record<string, Uint8Array> = {};
-  for (const [, content] of objects) zippable[`objects/${sha256File(content)}`] = content;
-  const pack = Buffer.from(zipSync(zippable));
-  const packSha = sha256File(pack);
-  served.set(`${SERVER}/stable/core/${PLATFORM}/packs/${packSha}.zip`, pack);
-  for (const [, content] of objects) {
-    served.set(`${OBJECTS}/objects/${sha256File(content)}.zst`, zst(content));
-  }
-  return signManifest({
-    applyMode: null,
-    channel: 'stable',
-    full: { path: `packs/${packSha}.zip`, sha256: packSha, size: pack.length },
-    objectsBaseUrl: OBJECTS,
-    patches: [],
-    platform: PLATFORM,
-    previous: null,
-    rollout: 1,
-    schemaVersion: 3,
-    seq,
-    shellAbi: ABI,
-    tree,
-    version,
-    ...overrides,
-  });
-};
-
-const materialize = (dir: string, files: Record<string, string>, manifest: CoreManifest) => {
-  for (const [p, c] of Object.entries(files)) {
-    mkdirSync(path.dirname(path.join(dir, p)), { recursive: true });
-    writeFileSync(path.join(dir, p), c);
-  }
-  writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest));
-};
-
-const serveLatest = (manifest: CoreManifest | null) => {
-  const url = `${SERVER}/stable/core/${PLATFORM}/latest.json`;
-  if (manifest) served.set(url, Buffer.from(JSON.stringify(manifest)));
-  else served.delete(url);
-};
-
-const fetchImpl = vi.fn(async (url: string) =>
-  served.has(url)
-    ? new Response(new Uint8Array(served.get(url)!))
-    : new Response('nope', { status: 404 }),
-);
-
-const otaRoot = () => path.join(userDataDir, 'core-ota');
-const storeDir = () => path.join(otaRoot(), 'store');
-const pointerAt = (patch: Partial<ReturnType<typeof readPointer>>) =>
-  writePointer(otaRoot(), {
-    abi: ABI,
-    blacklist: [],
-    channel: 'stable',
-    current: null,
-    previous: null,
-    staged: null,
-    ...patch,
-  });
-const coreDir = (version: string) => path.join(otaRoot(), 'cores', version);
-
-const makeShell = (overrides: Partial<ShellGlobal> = {}): ShellGlobal => ({
-  abi: ABI,
-  builtinDir,
-  coreDir: builtinDir,
-  log: [],
-  manifest: builtinManifest,
-  markHealthy: () => {},
-  publicKey: PUBLIC_KEY_PEM,
-  shellVersion: '1.0.0',
-  source: 'builtin',
-  ...overrides,
-});
-
-const loadManager = async (app = makeApp(), shell: ShellGlobal | null = makeShell()) => {
-  vi.resetModules();
-  const { CoreUpdateManager } = await import('../CoreUpdateManager');
-  const manager = new CoreUpdateManager(app as never, { fetchImpl, shell: shell ?? undefined });
-  manager.initialize();
-  return { app, manager };
-};
-
-const expectAppliedRenderer = (app: ReturnType<typeof makeApp>, indexContent: string) => {
-  const renderer = app.rendererUrlManager.setActiveRenderer.mock.calls.at(-1)?.[0];
-  expect(readFileSync(renderer!.resolve('assets/index.js')!, 'utf8')).toBe(indexContent);
-  expect(readFileSync(renderer!.resolve('assets/popup.js')!, 'utf8')).toBe('popup');
-};
-
-const flushGc = (manager: unknown) => (manager as { gcTask: Promise<void> }).gcTask;
-
-let builtinManifest: CoreManifest;
-
 beforeEach(() => {
-  Object.defineProperty(process, 'platform', { value: 'linux' });
   vi.clearAllMocks();
-  served = new Map();
-  userDataDir = mkdtempSync(path.join(tmpdir(), 'core-ota-user-'));
-  builtinDir = mkdtempSync(path.join(tmpdir(), 'core-ota-builtin-'));
-  electronMock.app.getPath.mockReturnValue(userDataDir);
-  builtinManifest = buildManifest('1.0.0', 0, BASE_FILES);
-  materialize(builtinDir, BASE_FILES, builtinManifest);
+  setupOtaFixture();
+  electronMock.app.getPath.mockReturnValue(fixture.userDataDir);
 });
 
-afterEach(() => {
-  Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM });
-  rmSync(userDataDir, { force: true, recursive: true });
-  rmSync(builtinDir, { force: true, recursive: true });
-});
-
-const rendererOnly = (version: string, seq: number) =>
-  buildManifest(version, seq, {
-    ...BASE_FILES,
-    'dist/renderer/assets/index.js': `index-${version}`,
-  });
-
-const mainChanged = (version: string, seq: number) =>
-  buildManifest(version, seq, { ...BASE_FILES, 'dist/main/index.js': `main-${version}` });
+afterEach(teardownOtaFixture);
 
 describe('CoreUpdateManager initialize', () => {
   it('disables manual and scheduled OTA on macOS Stable', async () => {
@@ -358,10 +183,10 @@ describe('CoreUpdateManager initialize', () => {
       'renderer-ota',
       'renderer-ota-v2',
     ]) {
-      mkdirSync(path.join(userDataDir, dir), { recursive: true });
-      writeFileSync(path.join(userDataDir, dir, 'old-file'), 'old OTA bytes');
+      mkdirSync(path.join(fixture.userDataDir, dir), { recursive: true });
+      writeFileSync(path.join(fixture.userDataDir, dir, 'old-file'), 'old OTA bytes');
     }
-    writeFileSync(path.join(userDataDir, 'app-data.json'), 'keep app data');
+    writeFileSync(path.join(fixture.userDataDir, 'app-data.json'), 'keep app data');
 
     const { manager } = await loadManager();
     await flushGc(manager);
@@ -370,14 +195,16 @@ describe('CoreUpdateManager initialize', () => {
     expect(readdirSync(path.join(otaRoot(), 'cores'))).toEqual([]);
     await vi.waitFor(() => {
       for (const dir of ['core-ota/staging', 'renderer-ota', 'renderer-ota-v2'])
-        expect(existsSync(path.join(userDataDir, dir))).toBe(false);
+        expect(existsSync(path.join(fixture.userDataDir, dir))).toBe(false);
     });
     expect(readPointer(otaRoot(), ABI)).toMatchObject({
       current: null,
       previous: null,
       staged: null,
     });
-    expect(readFileSync(path.join(userDataDir, 'app-data.json'), 'utf8')).toBe('keep app data');
+    expect(readFileSync(path.join(fixture.userDataDir, 'app-data.json'), 'utf8')).toBe(
+      'keep app data',
+    );
   });
 
   it('clears pointer.current when the shell fell back to builtin and the core dir is gone', async () => {
@@ -420,7 +247,7 @@ describe('CoreUpdateManager initialize', () => {
   });
 
   it('accepts an unsigned builtin manifest while running an external core', async () => {
-    materialize(builtinDir, BASE_FILES, { ...builtinManifest, signature: '' });
+    materialize(fixture.builtinDir, BASE_FILES, { ...fixture.builtinManifest, signature: '' });
     const v1Files = { ...BASE_FILES, 'dist/renderer/assets/index.js': 'index-1.0.1' };
     const v1 = buildManifest('1.0.1', 1, v1Files);
     materialize(coreDir('1.0.1'), v1Files, v1);
@@ -582,7 +409,7 @@ describe('CoreUpdateManager checkForUpdates', () => {
     async (shellVersion) => {
       const manifest = mainChanged('1.0.0-core.17', 17);
       // A shared or another application's feed must never be used as a fallback.
-      served.set(`${SERVER}/stable/core-v4/${PLATFORM}/latest.json`, Buffer.from('{}'));
+      fixture.served.set(`${SERVER}/stable/core-v4/${PLATFORM}/latest.json`, Buffer.from('{}'));
       const { manager } = await loadManager(
         makeApp(),
         makeShell({ coreProtocol: 4, manifest, shellVersion, source: 'external' }),
@@ -666,55 +493,6 @@ describe('CoreUpdateManager checkForUpdates', () => {
 
     expect(manager.getStatus()).toMatchObject({ needsFullRelease: true, staged: null });
     expect(existsSync(coreDir('1.0.1'))).toBe(false);
-  });
-
-  it('retains a healthy hot update and its active renderer version for late subscribers', async () => {
-    serveLatest(rendererOnly('1.0.1', 1));
-    const { app, manager } = await loadManager();
-    await manager.checkForUpdates();
-    expect(manager.getStatus().appliedVersion).toBeNull();
-    manager.applyStagedNow();
-    manager.handleBootPing('loaded');
-    expect(manager.getStatus().appliedVersion).toBeNull();
-    expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalledWith(
-      'coreUpdateApplied',
-      expect.anything(),
-    );
-    manager.handleBootPing('mounted');
-    expect(manager.getStatus()).toMatchObject({
-      appliedVersion: '1.0.1',
-      running: '1.0.1',
-      staged: null,
-    });
-    expect(app.browserManager.broadcastToAllWindows).toHaveBeenCalledWith(
-      'coreUpdateApplied',
-      '1.0.1',
-    );
-    manager.handleBootPing('mounted');
-    expect(
-      app.browserManager.broadcastToAllWindows.mock.calls.filter(
-        ([event]) => event === 'coreUpdateApplied',
-      ),
-    ).toHaveLength(1);
-  });
-
-  it('does not announce a failed hot update as completed', async () => {
-    vi.useFakeTimers();
-    try {
-      serveLatest(rendererOnly('1.0.1', 1));
-      const { app, manager } = await loadManager();
-      await manager.checkForUpdates();
-      manager.applyStagedNow();
-      await vi.advanceTimersByTimeAsync(60_000);
-      manager.handleBootPing('mounted');
-      expect(manager.getStatus().appliedVersion).toBeNull();
-      expect(app.browserManager.broadcastToAllWindows).not.toHaveBeenCalledWith(
-        'coreUpdateApplied',
-        expect.anything(),
-      );
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('stages a renderer-only update as core-reload and applies it in place', async () => {
@@ -1193,8 +971,9 @@ describe('CoreUpdateManager checkForUpdates', () => {
   it('records a stage failure and clears staging', async () => {
     const remote = rendererOnly('1.0.1', 1);
     serveLatest({ ...remote, signature: remote.signature });
-    served.delete(`${SERVER}/stable/core/${PLATFORM}/${remote.full.path}`);
-    for (const key of served.keys()) if (key.startsWith(OBJECTS)) served.delete(key);
+    fixture.served.delete(`${SERVER}/stable/core/${PLATFORM}/${remote.full.path}`);
+    for (const key of fixture.served.keys())
+      if (key.startsWith(OBJECTS)) fixture.served.delete(key);
     const { manager } = await loadManager();
 
     await manager.checkForUpdates();
@@ -1226,7 +1005,7 @@ describe('CoreUpdateManager checkForUpdates', () => {
 
 describe('first launch update gate', () => {
   it('opens only after a verified up-to-date response', async () => {
-    serveLatest(builtinManifest);
+    serveLatest(fixture.builtinManifest);
     const { manager } = await loadManager();
     await expect(manager.checkBeforeFirstLaunch(vi.fn())).resolves.toBe('ready');
   });
@@ -1248,9 +1027,9 @@ describe('first launch update gate', () => {
   it('fails closed on missing feed and invalid signature, and can retry', async () => {
     const { manager } = await loadManager();
     await expect(manager.checkBeforeFirstLaunch(vi.fn())).rejects.toThrow('feed-not-found');
-    serveLatest({ ...builtinManifest, signature: 'invalid' });
+    serveLatest({ ...fixture.builtinManifest, signature: 'invalid' });
     await expect(manager.checkBeforeFirstLaunch(vi.fn())).rejects.toThrow('signature');
-    serveLatest(builtinManifest);
+    serveLatest(fixture.builtinManifest);
     await expect(manager.checkBeforeFirstLaunch(vi.fn())).resolves.toBe('ready');
   });
 

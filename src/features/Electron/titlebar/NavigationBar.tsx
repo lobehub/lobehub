@@ -53,6 +53,7 @@ const styles = stylex.create({
     transition: {
       'default': `width 0.2s ${cssVar.motionEaseOut}`,
       '@media (prefers-reduced-motion: reduce)': 'none',
+      '[data-resizing]': 'none',
     },
   },
 });
@@ -67,6 +68,7 @@ const NavigationBar = memo(() => {
   const activeRecentScope = useElectronStore((state) => state.activeRecentScope);
 
   const leftPanelWidth = useNavPanelWidth();
+  const navPanelResizing = useGlobalStore((s) => !!s.isNavPanelResizing);
 
   useWatchBroadcast('windowFullscreenChanged', ({ isFullScreen }) => {
     if (isMac) setIsWindowFullScreen(isFullScreen);
@@ -139,6 +141,7 @@ const NavigationBar = memo(() => {
       horizontal
       align="center"
       className={stylex.props(styles.root).className}
+      data-resizing={navPanelResizing || undefined}
       data-width={leftPanelWidth}
       gap={8}
       justify={isMac || isWindows ? 'space-between' : 'end'}

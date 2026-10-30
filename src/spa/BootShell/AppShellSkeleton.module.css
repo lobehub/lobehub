@@ -3,3 +3,18 @@
 body:has([role='dialog'][data-open]) .yield {
   visibility: hidden;
 }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.hint[data-enter] {
+  animation: fadeIn 0.3s var(--lobe-motion-ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint[data-enter] {
+    animation: none;
+  }
+}

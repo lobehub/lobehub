@@ -1,17 +1,17 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { LobeAgentAgencyConfig, WorkspaceInitResult } from '@lobechat/types';
-import { buildGoalOverviewContext, getWorkingDirEffectivePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
 import { DeviceModel } from '@/database/models/device';
 import { ExpertiseModel } from '@/database/models/expertise';
-import { GoalGraphModel } from '@/database/models/goalGraph';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
@@ -33,8 +33,10 @@ import type {
 } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
+import { buildRunProjectContextPrompt } from './projectContext';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
+import { buildViewedGoalOverview } from './viewedGoalContext';
 import { buildViewedTaskContextPrompt } from './viewedTaskContext';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -690,37 +692,25 @@ export const prepareOperation = async (
     }
   }
 
-  // Tasks side conversation: the viewed task (or just the assignee defaults).
-  const taskManagerPrompt = await buildViewedTaskContextPrompt(deps, appContext, input.taskId);
-  if (taskManagerPrompt) {
+  // Page-scoped context (the viewed task or goal) and the project the run is in.
+  // Delegation rules name the task tool, so they follow its presence in the final set.
+  const [taskManagerPrompt, goalOverview, projectPrompt] = await Promise.all([
+    buildViewedTaskContextPrompt(deps, appContext, input.taskId),
+    buildViewedGoalOverview(deps, appContext),
+    buildRunProjectContextPrompt(deps, appContext?.projectId, resolvedAgentId, {
+      coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
+    }),
+  ]);
+  if (taskManagerPrompt || goalOverview || projectPrompt) {
     initialContext = {
       ...initialContext,
       initialContext: {
         ...initialContext.initialContext,
-        taskManager: { contextPrompt: taskManagerPrompt },
+        ...(goalOverview && { goalOverview }),
+        ...(projectPrompt && { projectContext: { contextPrompt: projectPrompt } }),
+        ...(taskManagerPrompt && { taskManager: { contextPrompt: taskManagerPrompt } }),
       },
     };
-  }
-
-  // Goal-page side conversation: mirror the client executor's injection so
-  // server-run agents also answer progress questions from the live graph.
-  if (appContext?.viewedGoal?.goalId) {
-    try {
-      const snapshot = await new GoalGraphModel(deps.db, deps.userId, deps.workspaceId).getGraph(
-        appContext.viewedGoal.goalId,
-      );
-      if (snapshot) {
-        initialContext = {
-          ...initialContext,
-          initialContext: {
-            ...initialContext.initialContext,
-            goalOverview: buildGoalOverviewContext(snapshot),
-          },
-        };
-      }
-    } catch (error) {
-      log('execAgent: failed to build goal overview context: %O', error);
-    }
   }
 
   // Persist the @-mentioned agents into the runtime initialContext so the

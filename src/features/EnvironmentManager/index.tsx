@@ -12,18 +12,9 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import ListSkeleton from '@/components/ListSkeleton';
 
 import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
-import { openCreateInstanceModal } from './CreateInstanceModal';
-import { openCreatedEnvironment } from './environmentCreated';
 import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
-import {
-  type CreatedEnvironment,
-  useEnvironmentActions,
-  useEnvironments,
-  useInstances,
-  useWorkspaceUsage,
-} from './useEnvironmentData';
-import WorkspaceUsageMeter from './WorkspaceUsageMeter';
+import { type CreatedEnvironment, useEnvironments } from './useEnvironmentData';
 
 const styles = stylex.create({
   detailCol: {
@@ -53,11 +44,14 @@ const styles = stylex.create({
 const LIST_MIN_HEIGHT = 4 * 72;
 
 /**
- * Environments and the copies built from them.
+ * Code environments and the folders initialized from them.
  *
  * An environment is a SPECIFICATION — the sources to check out, what makes them
- * usable, what they run with. What a sandbox builds from it is a cache, which is
- * why a copy can be thrown away and made again rather than repaired by hand.
+ * usable, what they run with. Writing one down needs no drive, so this page is
+ * there for everyone; what a sandbox builds from it on the drive is a cache,
+ * which is why a folder can be thrown away and made again rather than repaired
+ * by hand. Folders are initialized from the directory picker's "new folder";
+ * this page lists them, rebuilds, stops and deletes them.
  *
  * List beside detail, the shape the device manager uses: the rows carry only
  * what tells one environment from another, and picking one opens everything
@@ -82,9 +76,6 @@ interface EnvironmentManagerProps {
 const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) => {
   const { t } = useTranslation('setting');
   const { data, error, isValidating, mutate } = useEnvironments(visibility);
-  const { data: instanceData, mutate: refreshInstances } = useInstances();
-  const { refresh: refreshUsage } = useWorkspaceUsage();
-  const { buildInstance } = useEnvironmentActions();
 
   const [selectedId, setSelectedId] = useState<string>();
   // Whether a refresh the user asked for is still running.
@@ -106,7 +97,6 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   }, [isValidating]);
 
   const environments = data?.environments ?? [];
-  const instances = instanceData?.instances ?? [];
   const selected = selectedId
     ? environments.find((environment) => environment.id === selectedId)
     : undefined;
@@ -115,56 +105,35 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     setSelectedId((current) => (current === id ? undefined : id));
   };
 
-  // The row's "new copy" shortcut: open the environment so the copy is seen
-  // landing in its list, and ask for it in the same dialog the panel's own
-  // button opens.
-  const createInstance = (id: string) => {
-    setSelectedId(id);
-    openCreateInstanceModal({ environmentId: id });
-  };
-
-  // No instance dialog after creating one: see `openCreatedEnvironment`.
-  const onEnvironmentCreated = (created: CreatedEnvironment) =>
-    openCreatedEnvironment(created, { buildInstance, select: setSelectedId });
+  // Open what was just made. Nothing is built: an environment is applied to
+  // a working directory when a conversation picks it.
+  const onEnvironmentCreated = (created: CreatedEnvironment) => setSelectedId(created.id);
 
   /**
-   * Both lists, because the two halves of what this page shows are fetched
-   * separately and the slow one — instance state, which needs the execution
-   * plane — is the one worth a manual refresh.
-   *
    * The spinner is driven by this call rather than by SWR's `isValidating`,
-   * which is true of every fetch the page makes. Read off that flag the button
-   * span on a tab switch and on any background revalidation, reporting work
-   * nobody asked it to do and, worse, implying the click had already happened.
+   * which is true of every fetch the page makes — read off that flag the button
+   * would spin on a tab switch and on any background revalidation.
    */
   const refresh = async () => {
     setRefreshing(true);
     try {
-      // The storage figure rides along, because this is the one moment the
-      // user has asked for a fresh answer — and re-measuring also stamps the
-      // workspace as active, which no page load should do on its own.
-      await Promise.all([mutate(), refreshInstances(), refreshUsage()]);
+      await mutate();
     } finally {
       setRefreshing(false);
     }
   };
 
   /**
-   * The storage meter, the way to add one, and the way to refetch. Shared by
-   * both layouts because they are the same things wherever they sit; only the
-   * frame around them differs.
-   *
-   * No count of environments: the list is right below it and short enough to
-   * take in at a glance, so the number restated what the reader could already
-   * see. The meter stays because it is the one number the page cannot show —
-   * and the one that stops it working when it runs out.
+   * The way to add one, and the way to refetch. Shared by both layouts because
+   * they are the same things wherever they sit; only the frame around them
+   * differs. How much of the drive is used is the plan's business, and is
+   * shown with the plan's other usage rather than here.
    */
   const actions = (
     // `flex: none`, because this shares a `space-between` row with whatever
     // names the list. Left shrinkable, the group gets compressed by a wide
     // neighbour.
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-      <WorkspaceUsageMeter />
       <Button
         icon={<Icon icon={RefreshCwIcon} />}
         loading={refreshing}
@@ -234,21 +203,6 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
                 environment={environment}
                 key={environment.id}
                 selected={environment.id === selectedId}
-                instanceCount={
-                  instances.filter((instance) => instance.environmentId === environment.id).length
-                }
-                // What the environment's instances keep, summed. A brand-new
-                // instance has no snapshot and counts as nothing; when the
-                // snapshot store could not be reached the sizes are unknown,
-                // not zero, so the row says nothing rather than "0 B".
-                storageBytes={
-                  instanceData?.snapshotsUnavailable
-                    ? null
-                    : instances
-                        .filter((instance) => instance.environmentId === environment.id)
-                        .reduce((sum, instance) => sum + (instance.snapshot?.bytes ?? 0), 0)
-                }
-                onCreateInstance={() => createInstance(environment.id)}
                 onSelect={() => select(environment.id)}
               />
             ))}

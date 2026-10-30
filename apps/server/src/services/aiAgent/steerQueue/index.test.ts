@@ -1,7 +1,12 @@
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mergeQueuedFollowUps, type QueuedFollowUp, startQueuedFollowUp } from './index';
+import {
+  mergeQueuedFollowUps,
+  type QueuedFollowUp,
+  startQueuedFollowUp,
+  takeSameSenderFollowUps,
+} from './index';
 
 const {
   assertCanUseAgentRunConversation,
@@ -106,6 +111,35 @@ describe('mergeQueuedFollowUps', () => {
   });
 });
 
+describe('takeSameSenderFollowUps', () => {
+  const writer = { agentId: 'agt-writer', topicId: 'tpc-writer' };
+  const reviewer = { agentId: 'agt-reviewer', topicId: 'tpc-reviewer' };
+
+  it('takes the leading follow-ups of one author, in queue order', () => {
+    const a = { ...followUp('a', 2, {}), agentSender: writer };
+    const b = { ...followUp('b', 1, {}), agentSender: writer };
+    const c = { ...followUp('c', 3, {}), agentSender: reviewer };
+    const d = followUp('d', 4, {});
+
+    expect(takeSameSenderFollowUps([a, c, b, d])).toEqual({
+      agentSender: writer,
+      rest: [c, d],
+      taken: [b, a],
+    });
+  });
+
+  it('keeps a person’s follow-ups together, with no sender', () => {
+    const entries = [followUp('a', 1, {}), followUp('b', 2, {})];
+
+    expect(takeSameSenderFollowUps(entries)).toEqual({
+      agentSender: undefined,
+      rest: [],
+      taken: entries,
+    });
+    expect(takeSameSenderFollowUps([])).toEqual({ rest: [], taken: [] });
+  });
+});
+
 describe('startQueuedFollowUp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -122,7 +156,7 @@ describe('startQueuedFollowUp', () => {
     startComposerRun.mockResolvedValue({ operationId: 'op-2' });
   });
 
-  it('starts the drained follow-ups as one steered turn on the same surface', async () => {
+  it('starts the drained follow-ups as their own turn on the same surface', async () => {
     drain.mockResolvedValue([followUp('a', 1, {}), followUp('b', 2, {})]);
 
     await expect(
@@ -142,9 +176,12 @@ describe('startQueuedFollowUp', () => {
       expect.objectContaining({
         appContext: { threadId: 'thd-1', topicId: 'tpc-1' },
         prompt: 'a\n\nb',
-        steer: true,
+        queuedSuccessor: true,
       }),
     );
+    // A drained follow-up opens a turn of its own; only a steer of the run it
+    // waited behind would mark the user message.
+    expect(startComposerRun.mock.calls[0][1].steer).toBeUndefined();
     // Delivered: the slots the drain reserved are free again.
     expect(settle).toHaveBeenCalledWith(
       expect.objectContaining({ topicId: 'tpc-1' }),
@@ -168,6 +205,25 @@ describe('startQueuedFollowUp', () => {
     });
     expect(request).not.toHaveProperty('contextSelections');
     expect(request).not.toHaveProperty('pageSelections');
+  });
+
+  it('starts an agent’s follow-ups as a turn authored by that agent, one author at a time', async () => {
+    const writer = { agentId: 'agt-writer', hop: 2, topicId: 'tpc-writer' };
+    const typed = followUp('typed', 3, {});
+    drain.mockResolvedValue([
+      { ...followUp('a', 1, {}), agentSender: writer },
+      { ...followUp('b', 2, {}), agentSender: writer },
+      typed,
+    ]);
+
+    await startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }));
+
+    expect(startComposerRun).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ agentSender: writer, prompt: 'a\n\nb' }),
+    );
+    // The person's follow-up waits for the turn this starts to finish.
+    expect(settle).toHaveBeenCalledWith(expect.anything(), expect.any(String), [typed.id]);
   });
 
   it('puts the follow-ups back when the next turn cannot start', async () => {

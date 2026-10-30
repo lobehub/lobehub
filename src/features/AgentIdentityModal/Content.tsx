@@ -1,7 +1,16 @@
 'use client';
 
 import { randomAgentName } from '@lobechat/const';
-import { ActionIcon, Button, cssVar, Flexbox, Input, Text, useModalContext } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  cssVar,
+  Flexbox,
+  Input,
+  Text,
+  TextArea,
+  useModalContext,
+} from '@lobehub/ui';
 import { DicesIcon } from 'lucide-react';
 import { memo, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,8 +40,11 @@ interface AgentIdentityContentProps {
   agentId: string;
 }
 
+/** Matches the `agents.description` column width. */
+const DESCRIPTION_MAX_LENGTH = 1000;
+
 /**
- * The three identity fields as a real form. They used to be inline inputs in the
+ * The identity fields as a real form. They used to be inline inputs in the
  * profile header, which crowded it and left no room for a per-field label or
  * error. All behaviour lives in {@link useAgentIdentityForm}.
  */
@@ -80,6 +92,24 @@ const AgentIdentityContent = memo<AgentIdentityContentProps>(({ agentId }) => {
           placeholder={t('settingAgent.role.placeholder', { ns: 'setting' })}
           value={form.title}
           onChange={(e) => form.setTitle(e.target.value)}
+        />
+      </Field>
+      {/* Other agents read this when they list agents to pick a teammate, so
+          the hint says who the text is for. */}
+      <Field
+        label={t('settingAgent.description.label', { ns: 'setting' })}
+        hint={
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {t('settingAgent.description.hint', { ns: 'setting' })}
+          </Text>
+        }
+      >
+        <TextArea
+          autoSize={{ maxRows: 6, minRows: 2 }}
+          maxLength={DESCRIPTION_MAX_LENGTH}
+          placeholder={t('settingAgent.description.inputPlaceholder', { ns: 'setting' })}
+          value={form.description}
+          onChange={(e) => form.setDescription(e.target.value)}
         />
       </Field>
       {/* A builtin agent's identifier is not an editable field at all, so it is

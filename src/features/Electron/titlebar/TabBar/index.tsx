@@ -16,6 +16,7 @@ import { useRegisterDesktopTabHotkeys } from '@/hooks/useHotkeys/desktopTabScope
 import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
+import { useGlobalStore } from '@/store/global';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { electronStylish } from '@/styles/electron';
@@ -45,6 +46,7 @@ const TabBar = () => {
   const { allowed: canCreate, reason } = usePermission('create_content');
   const [stripWidth, stripRef] = useStripWidth();
   const { tabs, activeTabId } = useResolvedTabs();
+  const navPanelResizing = useGlobalStore((s) => !!s.isNavPanelResizing);
   const splitView = useElectronStore((s) => s.splitView);
   const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
   const switchTab = useElectronStore((s) => s.switchTab);
@@ -105,9 +107,10 @@ const TabBar = () => {
   // their final geometry rather than spring in from nothing like a tab the user opened.
   const hasPopulated = useRef(false);
   const settleInstantly = !hasPopulated.current;
+  const followInstantly = settleInstantly || navPanelResizing;
 
   useEffect(() => {
-    if (settleInstantly) {
+    if (followInstantly) {
       targetTotal.jump(total);
       springTotal.jump(total);
       targetDividerX.jump(dividerX);
@@ -127,7 +130,7 @@ const TabBar = () => {
     springDividerX,
     tabs.length,
     stripWidth,
-    settleInstantly,
+    followInstantly,
   ]);
 
   const newTabUrl = useMemo(() => {
@@ -279,6 +282,7 @@ const TabBar = () => {
                   enterWidth={settleInstantly ? placement.width : 0}
                   enterX={settleInstantly ? placement.x : previousTotal.current}
                   index={tabIds.indexOf(placement.id)}
+                  instant={navPanelResizing}
                   isActive={placement.id === activeTabId}
                   item={tab}
                   key={placement.id}

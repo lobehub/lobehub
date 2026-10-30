@@ -7,10 +7,7 @@ import {
   assertWorkspaceRowManageable,
   shouldRestrictBulkDeleteToCreator,
 } from '../_helpers/assertWorkspaceRowManageable';
-import {
-  assertCanUseConversationTargets,
-  assertCanUseSessionTargets,
-} from '../_helpers/conversationResourceGuard';
+import { assertCanUseConversationTargets } from '../_helpers/conversationResourceGuard';
 import { resolveContext } from '../_helpers/resolveContext';
 import { guardCtx, topicProcedure } from './procedures';
 
@@ -62,15 +59,16 @@ export const removeRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      if (input.agentId) {
-        await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId: input.agentId }]);
-      } else if (resolved.sessionId) {
-        await assertCanUseSessionTargets(guardCtx(ctx), [resolved.sessionId]);
-      }
-
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
       const restrictToCreator = shouldRestrictBulkDeleteToCreator(ctx, input.scope);
-
-      await ctx.trashService.trashTopicsBySession(resolved.sessionId, { restrictToCreator });
+      if (resolved.agentId) {
+        await ctx.trashService.trashTopicsByAgent(resolved.agentId, {
+          legacySessionId: resolved.sessionId,
+          restrictToCreator,
+        });
+      } else {
+        await ctx.trashService.trashTopicsBySession(resolved.sessionId, { restrictToCreator });
+      }
     }),
   removeAllTopics: topicProcedure
     .use(withScopedPermission('topic:delete'))

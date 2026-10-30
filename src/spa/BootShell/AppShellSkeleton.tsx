@@ -5,7 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { memo, useEffect, useLayoutEffect, useState } from 'react';
+import { memo, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { retainSkeleton } from '@/components/Skeleton/skeletonHandover';
@@ -20,6 +20,7 @@ import { sx } from '@/styles/sx';
 
 import moduleStyles from './AppShellSkeleton.module.css';
 import { readBootShellGeometry } from './geometry';
+import { useLoadingHint } from './useLoadingHint';
 
 // antd emits its design tokens as `.lobe-vars{--ant-*: …}` — a plain global
 // class rule, not a `:root` one. The shell renders outside `AppTheme`, so it has
@@ -28,16 +29,6 @@ import { readBootShellGeometry } from './geometry';
 const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
-
-const HINT_DELAY = 1000;
-
-// The X half of the transform is the centering, not the motion — it has to be
-// restated in both frames or the keyframe overwrites it and the caption jumps
-// to the anchor's left edge.
-const slideUp = stylex.keyframes({
-  from: { opacity: 0, transform: 'translate(-50%, 10px)' },
-  to: { opacity: 1, transform: 'translate(-50%, 0)' },
-});
 
 const styles = stylex.create({
   contentBrand: {
@@ -55,12 +46,9 @@ const styles = stylex.create({
     position: 'absolute',
     insetBlockStart: 'calc(100% + 8px)',
     insetInlineStart: '50%',
+    transform: 'translateX(-50%)',
     fontSize: '13px',
     whiteSpace: 'nowrap',
-    animationName: slideUp,
-    animationDuration: '0.42s',
-    animationTimingFunction: cssVar.motionEaseOut,
-    animationFillMode: 'both',
   },
   brand: {
     position: 'relative',
@@ -89,10 +77,14 @@ const styles = stylex.create({
  * i18n, so calling it up front would hit react-i18next with no instance —
  * a console warning and a first render that echoes the raw key.
  */
-const LoadingHint = memo(() => {
+const LoadingHint = memo<{ enter: boolean }>(({ enter }) => {
   const { t } = useTranslation('common');
 
-  return <div {...stylex.props(styles.hint)}>{t('stillLoading')}</div>;
+  return (
+    <div {...sx(styles.hint, moduleStyles.hint)} data-enter={enter || undefined}>
+      {t('bootLoadingHint')}
+    </div>
+  );
 });
 
 LoadingHint.displayName = 'AppShellLoadingHint';
@@ -103,14 +95,9 @@ interface AppShellSkeletonProps {
 
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
-  const [waiting, setWaiting] = useState(false);
+  const hint = useLoadingHint();
 
   useLayoutEffect(retainSkeleton, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setWaiting(true), HINT_DELAY);
-    return () => clearTimeout(timer);
-  }, []);
 
   return (
     <div aria-hidden id={id} {...sx([styles.root], `${CSS_VAR_CLASS} ${moduleStyles.yield}`)}>
@@ -155,7 +142,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
             <div {...stylex.props(styles.contentBrand)}>
               <div {...stylex.props(styles.brand)}>
                 <LobeHub size={40} type={'text'} />
-                {waiting && <LoadingHint />}
+                {hint && <LoadingHint enter={hint === 'enter'} />}
               </div>
             </div>
           </Flexbox>

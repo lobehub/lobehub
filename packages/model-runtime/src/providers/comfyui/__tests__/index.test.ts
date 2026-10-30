@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { ComfyUIKeyVault } from '@lobechat/types';
-import { createBasicAuthCredentials } from '@lobechat/utils';
+import { createBasicAuthCredentials } from '../../../utils/base64';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../../types/image';

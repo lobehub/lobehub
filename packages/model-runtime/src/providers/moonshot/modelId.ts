@@ -100,6 +100,15 @@ export const isKimiReasoningEffortModel = (model: string): boolean => {
   return parsed.majorVersion >= 3;
 };
 
+export type KimiReasoningEffort = 'low' | 'high' | 'max';
+
+/**
+ * K3+ accepts only low/high/max. Generic values such as `medium` are dropped so
+ * stale cross-model settings cannot make the provider reject the whole request.
+ */
+export const resolveKimiReasoningEffort = (value: unknown): KimiReasoningEffort | undefined =>
+  value === 'low' || value === 'high' || value === 'max' ? value : undefined;
+
 /**
  * Models that must round-trip the complete assistant message (including
  * `reasoning_content`) across turns with no opt-out: `-code` variants since
