@@ -74,6 +74,7 @@ describe('generate tts', () => {
       model: 'speech-02-hd',
       params: { emotion: 'happy', format: 'wav', pitch: -2, sampleRate: 32_000, speed: 1.2 },
       provider: 'minimax',
+      speed: 1.2,
       voice: 'female-shaonv',
     });
     expect(await readFile(output, 'utf8')).toBe('RIFF-audio');
@@ -88,6 +89,7 @@ describe('generate tts', () => {
       model: 'tts-1',
       params: undefined,
       provider: 'openai',
+      speed: undefined,
       voice: undefined,
     });
   });
