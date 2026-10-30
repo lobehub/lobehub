@@ -57,7 +57,7 @@ const subjectNames = (item: LegacyContextItem) =>
     .filter((n): n is string => !!n && !['User', 'user', 'Assistant'].includes(n));
 
 export const itemLine = (item: LegacyContextItem, max = 400) =>
-  `[${item.id}] ${item.capturedAt.toISOString().slice(0, 10)} | ${item.title ?? ''} | ${(item.description ?? '').slice(0, max)} | entities: ${subjectNames(item).join(', ') || 'none'}`;
+  `[${item.id}] ${item.capturedAt.toISOString().slice(0, 10)} | ${item.title ?? ''} | ${(item.description ?? '').slice(0, max)} | 涉及：${subjectNames(item).join('、') || '无'}`;
 
 /** Character-bigram overlap, enough to shortlist contexts for the online step. */
 const grams = (text: string) => {
@@ -218,9 +218,9 @@ export class MemoryConsolidationService {
     const items = await this.model.getLegacyContextsByIds(ids);
     items.sort((a, b) => a.capturedAt.getTime() - b.capturedAt.getTime());
     const prompt =
-      `Domain: ${label}\n` +
-      (existingStubs.length > 0 ? `Existing structure:\n${existingStubs.join('\n')}\n\n` : '') +
-      `Memories (oldest first):\n${items.map((i) => itemLine(i, 360)).join('\n')}`;
+      `领域：${label}\n` +
+      (existingStubs.length > 0 ? `已有结构：\n${existingStubs.join('\n')}\n\n` : '') +
+      `记忆（按时间）：\n${items.map((i) => itemLine(i, 360)).join('\n')}`;
     const out = await this.generate<SynthesisResult>(
       SYNTHESIZE_SCHEMA,
       SYNTHESIZE_SYSTEM,
@@ -238,13 +238,20 @@ export class MemoryConsolidationService {
   /** Pick route and context for one new memory, showing recalled + recent consolidated contexts. */
   async route(
     item: LegacyContextItem,
-    contexts: { id: string; lastEvidenceAt: Date | null; text: string; title: string | null }[],
+    contexts: {
+      id: string;
+      lastEvidenceAt: Date | null;
+      /** Text recall runs on; `text` is what the model is shown. */
+      recall: string;
+      text: string;
+      title: string | null;
+    }[],
   ) {
     const q = grams(
       `${item.title ?? ''} ${(item.description ?? '').slice(0, 500)} ${subjectNames(item).join(' ')}`,
     );
     const recalled = [...contexts]
-      .map((c) => ({ c, s: overlap(q, grams(c.text)) }))
+      .map((c) => ({ c, s: overlap(q, grams(c.recall)) }))
       .sort((a, b) => b.s - a.s)
       .slice(0, ROUTE_TOP_CONTEXTS)
       .map((x) => x.c);
@@ -253,9 +260,9 @@ export class MemoryConsolidationService {
       .slice(0, ROUTE_RECENT_CONTEXTS);
     const shown = [...new Map([...recalled, ...recent].map((c) => [c.id, c])).values()];
     const prompt =
-      `New memory (${item.capturedAt.toISOString().slice(0, 10)}):\nTitle: ${item.title ?? ''}\n` +
-      `Content: ${(item.description ?? '').slice(0, 900)}\nEntities: ${subjectNames(item).join(', ') || 'none'}\n\n` +
-      `Contexts:\n${shown.map((c) => `- context id=${c.id}: ${c.text}`).join('\n') || '(none)'}`;
+      `新记忆（${item.capturedAt.toISOString().slice(0, 10)}）：\n标题：${item.title ?? ''}\n` +
+      `内容：${(item.description ?? '').slice(0, 900)}\n涉及：${subjectNames(item).join('、') || '无'}\n\n` +
+      `context 列表：\n${shown.map((c) => `- context id=${c.id}：${c.text}`).join('\n') || '（无）'}`;
     const out = await this.generate<RouteResult>(ROUTE_SCHEMA, ROUTE_SYSTEM, prompt, 'route');
     const known = new Set(contexts.map((c) => c.id));
     return { ...out, context: known.has(out.context) ? out.context : 'new' };

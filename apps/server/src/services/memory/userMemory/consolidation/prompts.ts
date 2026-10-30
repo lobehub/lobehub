@@ -1,21 +1,19 @@
 /**
  * Prompts and output schemas for memory consolidation. Calibrated on a 200-memory replay and a
- * full 1586-memory run (see the consolidation PR): a blind judge rated 91% of online placements
- * reasonable, and dossier coherence 4.7 / 5.
+ * full 1586-memory run with DeepSeek flash: a blind judge rated 91% of online placements
+ * reasonable and dossier coherence 4.7 / 5. An English translation scored lower on the same
+ * replay (4.4 / 5, 88%), so the prompts stay in the wording they were calibrated in; titles and
+ * summaries follow the language of the memories.
  */
 
-const LANGUAGE_RULE = 'Write every title and summary in the language the memories are written in.';
-
 export const CLASSIFY_SYSTEM = [
-  "You are organizing one user's historical memories. Each memory was extracted from one conversation. Decide where each one goes:",
-  '- evidence: progress on something that keeps moving across conversations (a project, a feature, a customer deal, fundraising, a negotiation), including single work sessions on it;',
-  '- fact: a stable fact about a person, company or product (identity, relationship, renaming, positioning) that does not change as work moves on;',
-  '- preference: a preference, habit or requirement of someone (usually the user, possibly a customer or investor);',
-  '- drop: one-off technical Q&A, reading notes on papers or research, chit-chat, anything not tied to an ongoing matter.',
-  'domain: a short key "area/direction" (e.g. product/task-system, customer/acme, company/fundraising); the same matter always gets the same key.',
-  'entities: concrete people, companies, products, repositories mentioned (never "User").',
-  'holder: for a preference, whose preference it is ("self" for the user).',
-  'Return one item per input memory, keeping its id.',
+  '你在整理一个用户的历史记忆。每条记忆是从一次对话里抽出来的。逐条判断它该去哪里：',
+  '- evidence：某件持续推进的事（项目、功能、客户合作、融资、交易）的一次进展或经过，包括单次开发流水；',
+  '- fact：关于某个人、公司、产品的稳定事实（身份、关系、改名、定位），不随事情推进而变；',
+  '- preference：某人（通常是用户本人，也可能是客户/投资人）的偏好、习惯、要求；',
+  '- drop：一次性技术问答、调研/论文解读、闲聊、与任何持续事项无关的内容。',
+  'domain 用「大类/方向」写一个简短的领域键（如 product/task-system、customer/acme、company/fundraising），同一件事用同一个键。entities 列出提到的具体人、公司、产品、仓库（不要写 User/用户）。preference 时 holder 填偏好的持有者（用户本人填 self）。',
+  '每条输入记忆都要返回一项，保留它的 id。',
 ].join('\n');
 
 export const CLASSIFY_SCHEMA = {
@@ -47,9 +45,7 @@ export const CLASSIFY_SCHEMA = {
 };
 
 export const NORMALIZE_SYSTEM = [
-  'Below are domain keys produced while classifying memories, with how many memories each has. Many are different spellings of the same domain or are split too finely.',
-  'Merge them into one shared list: the same project direction, the same customer, the same company matter become one domain. Do not force different project directions together.',
-  'Every raw key must map to exactly one unified key.',
+  '下面是从记忆里得到的领域键和条数，其中很多是同一个领域的不同写法或过细的拆分。把它们归并成一份统一的领域列表：同一个项目方向、同一个客户、同一件公司事务归成一个领域；不同的项目方向不要硬并。每个原始键都必须映射到一个统一键。',
 ].join('\n');
 
 export const NORMALIZE_SCHEMA = {
@@ -74,13 +70,11 @@ export const NORMALIZE_SCHEMA = {
 };
 
 export const SYNTHESIZE_SYSTEM = [
-  "You organize one user's memories in one domain into two levels:",
-  '- context (level 1): a project direction, a customer relationship or a company matter, e.g. "Task system", "Acme partnership", "Seed round". A domain usually has 1-3 contexts; do not split one project direction into several contexts.',
-  '- dossier (level 2): one feature, one deal or one ongoing sub-task inside a context, e.g. "Task scheduler backend (heartbeat/cron)", "Bridge loan". A dossier usually spans many conversations: every session of developing, fixing, reviewing or rebasing the same feature belongs to that one dossier. Do not split dossiers by session, by PR or by single bug. Only memories unrelated to all others get a dossier of their own.',
-  'Every memory goes into exactly one dossier (members are memory ids), or into "unplaced" when it has nothing to do with the ongoing matters of this domain.',
-  'When an existing structure is given (built from earlier memories), file memories that belong to an existing dossier with existing_dossier set to that dossier id, and keep an existing context with existing_context set to its id. Do not open duplicates.',
-  '"now": where the matter stands now, from the newest memories, one or two sentences. next_steps / open_questions: only what the memories state explicitly.',
-  LANGUAGE_RULE,
+  '你在为一个用户把同一领域下的历史记忆整理成两级结构：',
+  '- context（第一级）：一个项目方向 / 一个客户合作 / 一件公司事务，例如「某产品的任务系统」「与某客户的合作」「种子轮融资」。一个领域通常只有 1–3 个 context，不要把同一个项目方向拆成多个 context；',
+  '- 档案（第二级）：context 下的一个功能、一笔交易或一个持续子任务，例如「任务调度后端（heartbeat/cron）」「任务详情页与路由」「一笔过桥借款」。档案通常跨多次对话：同一功能的每次开发、修 bug、提 PR、rebase 都是这份档案的经过，必须放进同一份档案，不要按会话、按 PR、按单个 bug 拆档案。只有和其它记忆确实无关的才单独成一份档案。',
+  '每条记忆必须且只能放进一份档案（members 写记忆 id），或放进 unplaced（与这个领域的持续事项都无关）。已有结构（来自更早的记忆）给出时，属于已有档案的记忆用 existing_dossier 填那份档案的 id，不要另开。now 写这件事现在的状态（基于最新的记忆，一两句），next_steps / open_questions 只写记忆里明确出现的。',
+  '标题和摘要使用记忆原文的语言书写。',
 ].join('\n');
 
 export const SYNTHESIZE_SCHEMA = {
@@ -133,11 +127,10 @@ export const SYNTHESIZE_SCHEMA = {
 };
 
 export const ROUTE_SYSTEM = [
-  "You maintain one user's memory. Structure: context (a project direction / customer relationship / company matter) -> dossier (one feature, deal or ongoing sub-task) -> evidence (progress from each conversation).",
-  "A new memory extracted from a conversation arrives. First decide route: evidence (progress on something ongoing, including a single work session) / fact (a stable fact about a person or company) / preference (someone's preference or requirement) / drop (one-off technical Q&A, research notes, chit-chat).",
-  'For evidence, pick the context it belongs to from the list (context = its id). Only when none is related, set context to "new" and give new_context_title. Work in the same project direction belongs to the same context; a new sub-feature is not a reason for a new context.',
-  'confidence is how sure you are of the context choice (0-1).',
-  LANGUAGE_RULE,
+  '你在维护一个用户的记忆。结构：context（一个项目方向/客户合作/公司事务）→ 档案（一个功能、一笔交易或一个持续子任务）→ 证据（每次对话的进展）。',
+  '新来一条从对话里抽出的记忆。先判断 route：evidence（某件持续推进的事的进展，包括单次开发流水）/ fact（关于人或公司的稳定事实）/ preference（某人的偏好或要求）/ drop（一次性技术问答、调研、闲聊）。',
+  '如果是 evidence，从下面的 context 列表里选出它所属的 context（context 填 id）；确实没有任何一个相关时填 new，并给 new_context_title。同一项目方向的工作都属于同一个 context，不要因为是新的子功能就新开 context。confidence 是你对 context 选择的把握。',
+  '标题和摘要使用记忆原文的语言书写。',
 ].join('\n');
 
 export const ROUTE_SCHEMA = {

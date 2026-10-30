@@ -127,18 +127,22 @@ export const consolidationHandler = async (context: WorkflowContext) => {
         consolidated.dossiers.map((d) => d.id),
         2,
       );
-      const dossiersOf = new Map<string, string[]>();
+      const dossierTitles = new Map<string, string[]>();
+      const recallText = new Map<string, string[]>();
       for (const d of consolidated.dossiers) {
         if (!d.contextId) continue;
-        dossiersOf.set(d.contextId, [
-          ...(dossiersOf.get(d.contextId) ?? []),
-          `${d.title ?? ''} ${(titles[d.id] ?? []).join(' ')}`,
+        dossierTitles.set(d.contextId, [...(dossierTitles.get(d.contextId) ?? []), d.title ?? '']);
+        recallText.set(d.contextId, [
+          ...(recallText.get(d.contextId) ?? []),
+          d.title ?? '',
+          ...(titles[d.id] ?? []),
         ]);
       }
       const candidates = consolidated.contexts.map((c) => ({
         id: c.id,
         lastEvidenceAt: c.lastEvidenceAt,
-        text: `${c.title ?? ''} | dossiers: ${(dossiersOf.get(c.id) ?? []).slice(0, 8).join('; ')}`,
+        recall: `${c.title ?? ''} ${(recallText.get(c.id) ?? []).join(' ')}`,
+        text: `${c.title ?? ''} | 档案：${(dossierTitles.get(c.id) ?? []).slice(0, 8).join('；')}`,
         title: c.title,
       }));
       const entries: { id: string; key: string; route: ConsolidationRoute }[] = [];
@@ -193,12 +197,12 @@ const synthesizeAndApply = async (
     3,
   );
   const stubs = known.flatMap((c) => [
-    `context id=${c.id}: ${c.title ?? ''}`,
+    `context id=${c.id}：${c.title ?? ''}`,
     ...dossiers
       .filter((d) => d.contextId === c.id)
       .map(
         (d) =>
-          `  dossier id=${d.id}: ${d.title ?? ''} (${d.activityCount} memories, now: ${(d.now ?? '').slice(0, 80)}; recent: ${(titles[d.id] ?? []).join('; ')})`,
+          `  档案 id=${d.id}：${d.title ?? ''}（${d.activityCount} 条，现在：${(d.now ?? '').slice(0, 60)}，近期：${(titles[d.id] ?? []).join('；')}）`,
       ),
   ]);
   const result = await s.synthesize(label, ids, stubs);
