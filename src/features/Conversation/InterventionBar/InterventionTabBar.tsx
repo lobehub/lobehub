@@ -1,11 +1,11 @@
-import { Button, cx, Tooltip } from '@lobehub/ui';
+import { Button, Tabs, Tooltip } from '@lobehub/ui';
 import { CheckCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type PendingIntervention } from '../store/slices/data/pendingInterventions';
 import { styles } from './style';
-import { interventionTabLabelKey } from './tabLabel';
+import { interventionTabLabelKey, numberDuplicateLabels } from './tabLabel';
 
 interface InterventionTabBarProps {
   activeIndex: number;
@@ -26,22 +26,21 @@ interface InterventionTabBarProps {
 const InterventionTabBar = memo<InterventionTabBarProps>(
   ({ interventions, activeIndex, approveAll, onTabChange }) => {
     const { t } = useTranslation(['chat', 'plugin']);
+    const labels = numberDuplicateLabels(
+      interventions.map((item) => {
+        const labelKey = interventionTabLabelKey(item);
+        return labelKey ? t(labelKey, { defaultValue: item.apiName, ns: 'plugin' }) : item.apiName;
+      }),
+    );
 
     return (
       <div className={styles.tabBar}>
-        {interventions.map((item, index) => {
-          const labelKey = interventionTabLabelKey(item);
-          return (
-            <div
-              className={cx(styles.tab, index === activeIndex && styles.tabActive)}
-              key={item.toolCallId}
-              onClick={() => onTabChange(index)}
-            >
-              🔧{' '}
-              {labelKey ? t(labelKey, { defaultValue: item.apiName, ns: 'plugin' }) : item.apiName}
-            </div>
-          );
-        })}
+        <Tabs
+          activeKey={String(activeIndex)}
+          items={labels.map((label, index) => ({ key: String(index), label }))}
+          size={'small'}
+          onChange={(key) => onTabChange(Number(key))}
+        />
         <div className={styles.tabTrailing}>
           <span className={styles.tabCounter}>
             {activeIndex + 1} / {interventions.length}
