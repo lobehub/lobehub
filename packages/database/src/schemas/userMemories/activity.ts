@@ -1,4 +1,3 @@
-import { sql } from 'drizzle-orm';
 import { boolean, index, jsonb, pgTable, text, vector } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../../utils/idGenerator';
@@ -81,9 +80,6 @@ export const userMemoriesActivities = pgTable(
     index('user_memories_activities_user_id_index').on(table.userId),
     index('user_memories_activities_user_memory_id_index').on(table.userMemoryId),
     index('user_memories_activities_status_index').on(table.status),
-    index('user_memories_activities_dossier_id_index')
-      .on(table.dossierId)
-      .where(sql`${table.dossierId} IS NOT NULL`),
   ],
 );
 

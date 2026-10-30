@@ -1,9 +1,10 @@
 -- Structured user memory columns on the existing user_memories* tables (lifecycle, context
 -- synthesis, dossier and entity links), per-device agent account pins, and workspace visibility for
 -- subscription accounts. The new memory tables themselves landed in 0193.
--- Every change to an existing table is additive and nullable (or has a constant default).
--- Foreign keys on the existing large memory tables are NOT VALID: the new columns are all NULL, so
--- validation would only scan the table under lock. Run VALIDATE CONSTRAINT later if wanted.
+-- Only fast, metadata-level changes on the existing large memory tables: nullable columns (or a
+-- constant default) and NOT VALID foreign keys. drizzle runs every pending migration in one
+-- transaction, so a plain CREATE INDEX here would hold the ADD COLUMN locks on those tables for the
+-- whole index build. Their indexes come in the next migration, created CONCURRENTLY by hand first.
 CREATE TABLE IF NOT EXISTS "agent_account_device_pins" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"agent_id" text NOT NULL,
@@ -59,10 +60,4 @@ ALTER TABLE "user_memories_preferences" DROP CONSTRAINT IF EXISTS "user_memories
 ALTER TABLE "user_memories_preferences" ADD CONSTRAINT "user_memories_preferences_holder_entity_id_user_memories_entities_id_fk" FOREIGN KEY ("holder_entity_id") REFERENCES "public"."user_memories_entities"("id") ON DELETE set null ON UPDATE no action NOT VALID;--> statement-breakpoint
 ALTER TABLE "user_memories_preferences" DROP CONSTRAINT IF EXISTS "user_memories_preferences_applies_to_entity_id_user_memories_entities_id_fk";--> statement-breakpoint
 ALTER TABLE "user_memories_preferences" ADD CONSTRAINT "user_memories_preferences_applies_to_entity_id_user_memories_entities_id_fk" FOREIGN KEY ("applies_to_entity_id") REFERENCES "public"."user_memories_entities"("id") ON DELETE set null ON UPDATE no action NOT VALID;--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "agent_provider_accounts_workspace_visibility_idx" ON "agent_provider_accounts" USING btree ("workspace_id","visibility","user_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "user_memories_activities_dossier_id_index" ON "user_memories_activities" USING btree ("dossier_id") WHERE "user_memories_activities"."dossier_id" IS NOT NULL;--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "user_memories_contexts_user_memory_id_index" ON "user_memories_contexts" USING btree ("user_memory_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "user_memories_contexts_user_id_last_evidence_at_index" ON "user_memories_contexts" USING btree ("user_id","last_evidence_at");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "user_memories_identities_entity_id_index" ON "user_memories_identities" USING btree ("entity_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "user_memories_preferences_holder_entity_id_index" ON "user_memories_preferences" USING btree ("holder_entity_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "user_memories_preferences_applies_to_entity_id_index" ON "user_memories_preferences" USING btree ("applies_to_entity_id");
+CREATE INDEX IF NOT EXISTS "agent_provider_accounts_workspace_visibility_idx" ON "agent_provider_accounts" USING btree ("workspace_id","visibility","user_id");
