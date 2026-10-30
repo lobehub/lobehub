@@ -409,7 +409,7 @@ const DecisionBar = memo<DecisionBarProps>(
         ) : rejectOnlyReason ? (
           // Granted reject access only: sending back is theirs, accepting is not.
           state === 'settled' && (
-            <Flexbox horizontal className={styles.actions} gap={8}>
+            <Flexbox horizontal gap={8} {...stylex.props(styles.actions)}>
               <Button disabled={pending} type={'fill'} onClick={onRejectComment}>
                 {t('acceptance.bar.rejectComment')}
               </Button>
