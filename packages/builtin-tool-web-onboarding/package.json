@@ -15,7 +15,7 @@
     "@lobechat/const": "workspace:*",
     "@lobechat/markdown-patch": "workspace:*",
     "@lobechat/prompts": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
