@@ -633,6 +633,53 @@ describe('AgentBridgeService', () => {
       // Tracked → downstream hooks will edit this message in place.
       expect(progressMessageIdFromHooks()).toBe('progress-msg-1');
     });
+
+    it('skips the ack on an edit-incapable platform when processingMessage is off', async () => {
+      mockGetPlatform.mockReturnValue({ id: 'qq', name: 'QQ', supportsMessageEdit: false });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platform: 'qq', platformThreadId: 'qq:c2c:user-1' } as any,
+        botSettings: { processingMessage: false },
+        client: createClient(),
+      });
+
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(thread.startTyping).toHaveBeenCalled();
+      expect(progressMessageIdFromHooks()).toBeUndefined();
+    });
+
+    it('skips the ack and posts the reply fresh on an editable platform when processingMessage is off', async () => {
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platform: 'discord', platformThreadId: THREAD_ID } as any,
+        botSettings: { processingMessage: false },
+        client: createClient(),
+      });
+
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(progressMessageIdFromHooks()).toBeUndefined();
+    });
+
+    it('keeps the ack when processingMessage is on', async () => {
+      mockGetPlatform.mockReturnValue({ id: 'qq', name: 'QQ', supportsMessageEdit: false });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread();
+
+      await service.handleMention(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platform: 'qq', platformThreadId: 'qq:c2c:user-1' } as any,
+        botSettings: { processingMessage: true },
+        client: createClient(),
+      });
+
+      expect(thread.post).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('activeThreads cleanup on side-effect failure', () => {

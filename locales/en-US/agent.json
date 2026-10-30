@@ -344,6 +344,8 @@
   "channel.platform.wechat.description": "Make the agent available in everyday chats—ideal for personal assistance and WeChat-based audiences.",
   "channel.platform.whatsapp.description": "Meet customers in familiar mobile chats for support and follow-ups—ideal for customer-facing teams.",
   "channel.platforms": "Platforms",
+  "channel.processingMessage": "Processing Message",
+  "channel.processingMessageHint": "Post a short message saying the bot is working on it before the reply. Turn it off to send only the reply, e.g. for role-play bots.",
   "channel.publicKey": "Public Key",
   "channel.publicKeyHint": "Used to verify interaction requests from Discord. A 64-character hex string on your app's General Information page.",
   "channel.publicKeyInvalid": "Public Key must be a 64-character hex string. Copy it from the Discord app's General Information page — not the OAuth URL, and not an API key.",
