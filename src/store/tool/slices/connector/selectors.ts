@@ -90,6 +90,26 @@ const agentConnectors =
   (s: ToolStore): ConnectorWithTools[] =>
     s.agentConnectors?.[agentId] ?? [];
 
+/**
+ * The connector a conversation of `agentId` resolves `identifier` to, mirroring
+ * the server's agent-aware resolution: the agent's own row first (agent-owned
+ * over mounted), else the base connector. Agent tools are only known once that
+ * agent's list has loaded.
+ */
+const connectorByIdentifierForAgent =
+  (identifier: string, agentId?: string) =>
+  (s: ToolStore): ConnectorWithTools | undefined => {
+    const agentRows = agentId
+      ? (s.agentConnectors?.[agentId] ?? []).filter((c) => c.identifier === identifier)
+      : [];
+
+    return (
+      agentRows.find((c) => c.agentId === agentId) ??
+      agentRows[0] ??
+      connectorByIdentifier(identifier)(s)
+    );
+  };
+
 const isAgentConnectorsInit =
   (agentId: string) =>
   (s: ToolStore): boolean =>
@@ -129,6 +149,7 @@ export const connectorSelectors = {
   connectedConnectors,
   connectorById,
   connectorByIdentifier,
+  connectorByIdentifierForAgent,
   connectorList,
   isAgentConnectorsInit,
   connectorToolsGrouped,

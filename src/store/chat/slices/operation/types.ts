@@ -4,6 +4,7 @@ import type {
   MessageMetadata,
   UploadFileItem,
 } from '@lobechat/types';
+import { mergeMcpAppSource } from '@lobechat/types';
 
 import type { QueuedFollowUpRequest } from '@/services/aiAgent';
 
@@ -471,6 +472,13 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
       ...(pageSelections.length ? { pageSelections } : undefined),
     };
   }, undefined);
+  // The spread above keeps the last view; a merge keeps it only when every
+  // message came from that view.
+  if (metadata) {
+    delete metadata.mcpAppSource;
+    const mcpAppSource = mergeMcpAppSource(sorted.map((m) => m.metadata?.mcpAppSource));
+    if (mcpAppSource) metadata.mcpAppSource = mcpAppSource;
+  }
 
   // If any queued message pins the runtime, propagate it — a "server topic"
   // follow-up must stay on its rails even after merge.

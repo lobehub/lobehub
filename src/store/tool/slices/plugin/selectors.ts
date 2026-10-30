@@ -23,6 +23,10 @@ const installedPlugins = (s: ToolStoreState) => s.installedPlugins;
 const isInstalledPluginsCacheOnly = (s: ToolStoreState) =>
   s.installedPluginsReplica?.entries[INSTALLED_PLUGINS_KEY]?.source === 'storage';
 
+/** Whether the list holds the server's full records (not unloaded, not the cached projection). */
+const isInstalledPluginsServerConfirmed = (s: ToolStoreState) =>
+  s.installedPluginsReplica?.entries[INSTALLED_PLUGINS_KEY]?.source === 'server';
+
 /**
  * The full installed-plugin records — settings and MCP connection included —
  * that tool assembly, tool execution, edit forms and writes may act on. Empty
@@ -142,6 +146,7 @@ export const pluginSelectors = {
   installedPluginMetaList,
   installedPlugins,
   isInstalledPluginsCacheOnly,
+  isInstalledPluginsServerConfirmed,
   isPluginHasUI,
   isPluginInstalled,
   storeAndInstallPluginsIdList,

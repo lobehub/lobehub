@@ -92,6 +92,21 @@ describe('mergeQueuedFollowUps', () => {
     ).toEqual({ editorData: doc('only') });
   });
 
+  it('names the MCP App view only when every merged follow-up came from it', () => {
+    const fromView = (id: string, createdAt: number, identifier: string) =>
+      followUp(id, createdAt, { userMessage: { metadata: { mcpAppSource: { identifier } } } });
+
+    expect(
+      mergeQueuedFollowUps([fromView('a', 1, 'weather'), fromView('b', 2, 'weather')]).userMessage,
+    ).toEqual({ metadata: { mcpAppSource: { identifier: 'weather' } } });
+    expect(
+      mergeQueuedFollowUps([fromView('a', 1, 'weather'), followUp('b', 2, {})]).userMessage,
+    ).toBeUndefined();
+    expect(
+      mergeQueuedFollowUps([fromView('a', 1, 'weather'), fromView('b', 2, 'maps')]).userMessage,
+    ).toBeUndefined();
+  });
+
   it('runs with the newest settings and drops per-send client ids once merged', () => {
     const merged = mergeQueuedFollowUps([
       followUp('a', 1, { clientIds: { userMessageId: 'u-a' } as any, deviceId: 'old' }),

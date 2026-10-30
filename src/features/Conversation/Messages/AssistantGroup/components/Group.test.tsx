@@ -30,6 +30,12 @@ vi.mock('@/store/chat/slices/operation/selectors', () => ({
   },
 }));
 
+// The `mcp_app` flag's default: these cases cover the layout without MCP App views.
+vi.mock('@/store/serverConfig', () => ({
+  serverConfigSelectors: { enableMcpApp: () => false },
+  useServerConfigStore: (selector: (s: unknown) => unknown) => selector({}),
+}));
+
 // Mock the council list so importing Group doesn't pull in the AgentCouncil
 // render chain (→ shared-tool-ui inspectors → `@lobehub/ui` `keyframes`), which is
 // out of scope for this unit test.

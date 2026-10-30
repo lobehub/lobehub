@@ -8,7 +8,7 @@ import { LOADING_FLAT } from '@/const/message';
 import type { AssistantContentBlock } from '@/types/index';
 
 import { areWorkflowToolsComplete } from '../toolDisplayNames';
-import { isImageBearingTool } from '../toolRenderRules';
+import { isBreakoutTool, isImageBearingTool } from '../toolRenderRules';
 import type { GroupRenderSegment } from './segments';
 import type { RenderableAssistantContentBlock } from './types';
 
@@ -244,11 +244,16 @@ export const hasPendingIntervention = (blocks: RenderableAssistantContentBlock[]
 
 export const buildChainView = (
   chain: GroupChainInput,
-  state: { hasActiveOperation: boolean; isGenerating: boolean },
+  state: {
+    /** Runtime flag `mcp_app`: MCP App views break out of collapsed runs too. */
+    enableMcpApp?: boolean;
+    hasActiveOperation: boolean;
+    isGenerating: boolean;
+  },
 ): GroupChainView => {
   const { isGenerating } = state;
   const partitioned = partitionAssistantGroupBlocks(chain.blocks, {
-    isBreakoutTool: isImageBearingTool,
+    isBreakoutTool: state.enableMcpApp ? isBreakoutTool : isImageBearingTool,
     isGenerating,
     toolsPhaseComplete: isGenerating
       ? areWorkflowToolsComplete(chain.blocks.flatMap((block) => block.tools ?? []))

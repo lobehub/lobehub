@@ -5,9 +5,11 @@ import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
+import { getMcpAppFromState } from '@/libs/mcp/mcpApp';
 import dynamic from '@/libs/next/dynamic';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
@@ -50,10 +52,14 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const renderDisplayControl = useToolStore(
     toolSelectors.getRenderDisplayControl(identifier, apiName, result?.state),
   );
+  // MCP Apps results open by default so their interactive view is visible
+  const isMcpApp = useServerConfigStore(
+    (s) => serverConfigSelectors.enableMcpApp(s) && !!getMcpAppFromState(result?.state),
+  );
   const isPending = intervention?.status === 'pending';
   const isReject = intervention?.status === 'rejected';
   const isAbort = intervention?.status === 'aborted';
-  const needExpand = renderDisplayControl !== 'collapsed' || isPending;
+  const needExpand = renderDisplayControl !== 'collapsed' || isPending || isMcpApp;
   const isAlwaysExpand = renderDisplayControl === 'alwaysExpand';
 
   const { handleExpand, setShowDebug, showDebug, showToolRender } = useToolExpandState({

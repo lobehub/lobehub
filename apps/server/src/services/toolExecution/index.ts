@@ -20,6 +20,7 @@ import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceC
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
+import { isMcpAppEnabled } from '@/server/services/mcp/featureGate';
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
@@ -341,6 +342,7 @@ export class ToolExecutionService {
       const result = await this.mcpService.callTool({
         argsStr: args,
         clientParams: mcpParams,
+        mcpApp: await isMcpAppEnabled(context.userId),
         toolName: apiName,
       });
 

@@ -43,6 +43,18 @@ describe('MCP SDK v2 error handling', () => {
     await expect(httpClient().callTool('test', {})).rejects.toMatchObject({ status: 404 });
   });
 
+  it('reports a legacy HTTP 404 on a resource read as a stale session', async () => {
+    vi.spyOn(Client.prototype, 'getProtocolEra').mockReturnValue('legacy');
+    vi.spyOn(Client.prototype, 'readResource').mockRejectedValue(httpError(404));
+    await expect(httpClient().readResource('ui://app')).rejects.toThrow('NoValidSessionId');
+  });
+
+  it('passes a modern HTTP 404 on a resource read through unchanged', async () => {
+    vi.spyOn(Client.prototype, 'getProtocolEra').mockReturnValue('modern');
+    vi.spyOn(Client.prototype, 'readResource').mockRejectedValue(httpError(404));
+    await expect(httpClient().readResource('ui://app')).rejects.toMatchObject({ status: 404 });
+  });
+
   it('returns a completed tool failure for unsupported input_required', async () => {
     vi.spyOn(Client.prototype, 'callTool').mockRejectedValue(
       new SdkError(SdkErrorCode.UnsupportedResultType, 'input_required', {

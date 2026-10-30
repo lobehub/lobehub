@@ -27,6 +27,7 @@ import AgentSenderSourceLink from './components/AgentSenderSourceLink';
 import UserMessageContent from './components/MessageContent';
 import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender';
 import { UserMessageExtra } from './Extra';
+import McpAppSourceFooter from './McpAppSourceFooter';
 import { getAgentSender, getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
 import {
@@ -146,6 +147,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       belowMessage={
         <>
           {subAgentCallback && <SubAgentThreadLink callback={subAgentCallback} />}
+          {metadata?.mcpAppSource && <McpAppSourceFooter source={metadata.mcpAppSource} />}
           <ScheduledRunFooter id={id} />
         </>
       }

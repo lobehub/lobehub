@@ -85,6 +85,14 @@ export const FeatureFlagsSchema = z.object({
   dashboard: FeatureFlagValue.optional(),
 
   /**
+   * MCP Apps: a tool result that declares an interactive `ui://` view renders
+   * that view (third-party HTML in a sandboxed iframe) in the conversation and
+   * stays on screen when the turn folds. Off: such results render as plain
+   * tool results. Array values are user ids.
+   */
+  mcp_app: FeatureFlagValue.optional(),
+
+  /**
    * Multi-agent Channels: the sidebar section, Channel pages and every Channel API, including
    * Agent history reads (`lobe-channel`, `lh channel`). Off: none of it is reachable. Work that
    * was already queued still finishes. Array values are user ids, checked per member.
@@ -170,6 +178,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   dashboard: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
+  mcp_app: false,
+
+  // Off until an admin publishes a user allowlist or flips it to true.
   channel: false,
 
   // Off until the backend replaces the preview read; allowlist first.
@@ -211,6 +222,7 @@ export const mapFeatureFlagsEnvToState = (
     enableBotWake: evaluateFeatureFlag(config.bot_wake, userId),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId),
+    enableMcpApp: evaluateFeatureFlag(config.mcp_app, userId),
     enableChannels: evaluateFeatureFlag(config.channel, userId),
     enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),

@@ -106,11 +106,39 @@ interface GetStreamableMcpServerManifestInput {
   url: string;
 }
 
-export interface CallToolInput {
+export interface StdioCallToolInput {
   args: any;
   env: any;
+  http?: undefined;
   params: GetStdioMcpServerManifestInput;
   toolName: string;
+}
+
+/** A call to an HTTP endpoint only this machine can reach (localhost / LAN). */
+export interface HttpCallToolInput {
+  args: any;
+  http: {
+    auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+    headers?: Record<string, string>;
+    name: string;
+    url: string;
+  };
+  toolName: string;
+}
+
+export type CallToolInput = StdioCallToolInput | HttpCallToolInput;
+
+export interface ReadUiResourceInput {
+  env?: any;
+  /** HTTP endpoint only this machine can reach (localhost / LAN). */
+  http?: {
+    auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+    headers?: Record<string, string>;
+    name: string;
+    url: string;
+  };
+  params?: GetStdioMcpServerManifestInput;
+  uri: string;
 }
 
 type SuperJSONSerialized<T = unknown> = McpIpcPayload<T>;
@@ -587,7 +615,74 @@ export default class McpCtr extends ControllerModule {
   @IpcMethod()
   async callTool(payload: SuperJSONSerialized<CallToolInput>) {
     const input = deserializePayload<CallToolInput>(payload);
-    return serializePayload(await this.runStdioMcpTool(input));
+    if ('http' in input && input.http) {
+      return serializePayload(await this.runHttpMcpTool(input.http, input.toolName, input.args));
+    }
+    return serializePayload(await this.runStdioMcpTool(input as StdioCallToolInput));
+  }
+
+  /**
+   * Read an MCP Apps `ui://` resource from a stdio or local-network HTTP
+   * server, so the chat can render a tool result's interactive view.
+   *
+   * Unlike the web routes, not gated by the `mcp_app` flag: the main process
+   * has no per-user flags, and the renderer only asks while the flag is on.
+   */
+  @IpcMethod()
+  async readUiResource(payload: SuperJSONSerialized<ReadUiResourceInput>) {
+    const input = deserializePayload<ReadUiResourceInput>(payload);
+    if (!input.uri?.startsWith('ui://')) throw new Error('Only ui:// resources can be read');
+
+    let params: MCPClientParams;
+    if (input.http) {
+      params = { ...input.http, type: 'http' };
+    } else if (input.params) {
+      params = {
+        args: input.params.args || [],
+        command: input.params.command,
+        env: input.env,
+        name: input.params.name,
+        type: 'stdio',
+      };
+    } else {
+      throw new Error('Missing MCP server params');
+    }
+
+    const read = (client: MCPClient) =>
+      this.withClientLease(client, () => client.readResource(input.uri));
+    // Reading is idempotent, so unlike tool calls a dead transport is retried
+    // too: the stale session is evicted and the read runs once on a fresh one.
+    const isSessionFailure = (error: unknown) =>
+      isStaleSessionError(error) || isDeadTransportError(error);
+
+    const client = await this.acquireClient(params);
+    try {
+      return serializePayload(await read(client));
+    } catch (error) {
+      if (!isSessionFailure(error)) throw error;
+
+      logger.warn('MCP App resource read failed on pooled session, retrying with a fresh one:', {
+        message: (error as Error).message,
+      });
+      await this.evictClient(params, client);
+      const retryClient = await this.acquireClient(params);
+      try {
+        return serializePayload(await read(retryClient));
+      } catch (retryError) {
+        if (isSessionFailure(retryError)) await this.evictClient(params, retryClient);
+        throw retryError;
+      }
+    }
+  }
+
+  /** Never fails the tool call: an unknown UI resource only means no interactive view. */
+  private async getToolUiResourceUri(client: MCPClient, toolName: string) {
+    try {
+      return await client.getToolUiResourceUri(toolName);
+    } catch (error) {
+      logger.warn('Failed to resolve MCP App resource for tool:', { error, toolName });
+      return undefined;
+    }
   }
 
   /**
@@ -598,7 +693,7 @@ export default class McpCtr extends ControllerModule {
    * caller can shape its own error response.
    */
   async runStdioMcpTool(
-    input: CallToolInput,
+    input: StdioCallToolInput,
   ): Promise<{ content: string; state: unknown; success: boolean }> {
     return this.runMcpTool(
       {
@@ -660,6 +755,7 @@ export default class McpCtr extends ControllerModule {
       const runOn = (client: MCPClient) =>
         this.withClientLease(client, async () => {
           try {
+            const uiResourceUri = await this.getToolUiResourceUri(client, toolName);
             const raw = (await client.callTool(toolName, args)) as ToolCallResult;
             const processed = raw.isError
               ? raw.content
@@ -667,10 +763,16 @@ export default class McpCtr extends ControllerModule {
             const content = await toMarkdown(processed, (key) =>
               this.fileService.getFileHTTPURL(key),
             );
+            const state = {
+              ...raw,
+              content: processed,
+              // MCP Apps: the `ui://` resource the chat renders this result with
+              ...(uiResourceUri && !raw.isError && { mcpApp: { resourceUri: uiResourceUri } }),
+            };
             return {
               content,
               ...(raw.isError ? { error: { message: content, name: 'MCPToolError' } } : {}),
-              state: { ...raw, content: processed },
+              state,
               success: raw.isError !== true,
             };
           } catch (error) {

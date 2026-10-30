@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import type { ComposerUserMessage, MessageMetadata } from '@lobechat/types';
-import { COMPOSER_USER_MESSAGE_METADATA_KEYS, toComposerUserMessage } from '@lobechat/types';
+import {
+  COMPOSER_USER_MESSAGE_METADATA_KEYS,
+  mergeMcpAppSource,
+  toComposerUserMessage,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -61,11 +65,16 @@ const uniq = <T>(items: T[]) => [...new Set(items)];
 const mergeComposerUserMessages = (
   messages: (ComposerUserMessage | undefined)[],
 ): ComposerUserMessage | undefined => {
-  const metadata: Record<string, unknown[]> = {};
+  const metadata: Record<string, unknown> = {};
   for (const key of COMPOSER_USER_MESSAGE_METADATA_KEYS) {
+    if (key === 'mcpAppSource') continue;
     const values = messages.flatMap((message): unknown[] => message?.metadata?.[key] ?? []);
     if (values.length) metadata[key] = values;
   }
+  const mcpAppSource = mergeMcpAppSource(
+    messages.map((message) => message?.metadata?.mcpAppSource),
+  );
+  if (mcpAppSource) metadata.mcpAppSource = mcpAppSource;
   const editorData = messages.length === 1 ? messages[0]?.editorData : undefined;
 
   return toComposerUserMessage({ editorData, metadata: metadata as MessageMetadata });

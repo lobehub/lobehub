@@ -359,11 +359,19 @@ export class MCPClient {
    * "Connection closed" is the only way to surface an actionable error.
    */
   private stdioParams?: { args?: string[]; command: string; env?: Record<string, string> };
+  /** tool name → `ui://` resource URI, filled from the last `listTools` */
+  private uiResourceUris?: Map<string, string>;
 
   constructor(params: MCPClientParams) {
     this.mcp = new Client(
       { name: 'lobehub-desktop-mcp-client', version: '1.0.0' },
       {
+        // Advertise MCP Apps (SEP-1865) so servers expose their interactive views.
+        capabilities: {
+          extensions: {
+            'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] },
+          },
+        },
         // Do not add a probe subprocess/timeout to stdio installations or calls.
         versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
         inputRequired: { autoFulfill: false },
@@ -725,7 +733,30 @@ export class MCPClient {
 
   async listTools() {
     const { tools } = await this.mcp.listTools();
+    this.uiResourceUris = new Map(
+      (tools || []).flatMap((tool) => {
+        const meta = tool._meta as Record<string, any> | undefined;
+        const uri = meta?.ui?.resourceUri ?? meta?.['ui/resourceUri'];
+        return typeof uri === 'string' && uri.startsWith('ui://')
+          ? [[tool.name, uri] as const]
+          : [];
+      }),
+    );
     return (tools || []) as McpTool[];
+  }
+
+  /**
+   * The MCP Apps `ui://` resource a tool renders its result with, if any.
+   * Lists tools once per client to learn it.
+   */
+  async getToolUiResourceUri(toolName: string): Promise<string | undefined> {
+    if (!this.uiResourceUris) await this.listTools();
+
+    return this.uiResourceUris?.get(toolName);
+  }
+
+  async readResource(uri: string) {
+    return this.mcp.readResource({ uri });
   }
 
   async listResources() {

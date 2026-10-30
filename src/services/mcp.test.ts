@@ -105,6 +105,9 @@ describe('MCPService', () => {
     environment.isDesktop = false;
     environment.deviceGatewayConfigured = undefined;
     mockGetToolStoreState.mockReturnValue({});
+    // Like the real selectors: a lookup function that finds no plugin by default
+    mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => undefined);
+    mockPluginSelectors.getCustomPluginById.mockReturnValue(() => undefined);
   });
 
   describe('invokeMcpToolCall', () => {

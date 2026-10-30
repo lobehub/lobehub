@@ -177,6 +177,10 @@ export const MessageSignalSchema = z.object({
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
+export const MessageMcpAppSourceSchema = z.object({
+  identifier: z.string(),
+});
+
 export const MessageSubAgentCallbackSchema = z.object({
   agentId: z.string().optional(),
   name: z.string(),
@@ -348,6 +352,8 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   localSystemToolSnapshots: z.array(LocalSystemToolSnapshotSchema).optional(),
+  // User message an MCP App view posted; its bubble names that view.
+  mcpAppSource: MessageMcpAppSourceSchema.optional(),
   // Creation provenance (agent operation that produced this message). Listed
   // here so zod does NOT strip the runtime's stamp from writes going through
   // CreateMessageParamsSchema / UpdateMessageParamsSchema.
@@ -573,6 +579,12 @@ export interface MessageMetadata {
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
   /**
+   * Present on a user message an MCP App view posted into the conversation
+   * (`ui/message`). The bubble names the view, so the message reads as a
+   * follow-up from it rather than something the user typed.
+   */
+  mcpAppSource?: MessageMcpAppSource;
+  /**
    * Orchestration role of the message author within a group conversation.
    * `'supervisor'` = the group's coordinating agent, `'member'` = a delegated
    * member agent. Persisted as a snapshot at write time (not derived at render)
@@ -722,6 +734,12 @@ export interface MessageWorkMetadata {
 }
 
 /** Who sent a background sub-agent's answer — see `MessageMetadata.subAgentCallback`. */
+/** The MCP App view a user message came from — see `MessageMetadata.mcpAppSource`. */
+export interface MessageMcpAppSource {
+  /** The MCP server (plugin or connector identifier) whose view posted the message. */
+  identifier: string;
+}
+
 export interface MessageSubAgentCallback {
   /**
    * The agent that answered: a `callAgent` target, or the parent agent itself

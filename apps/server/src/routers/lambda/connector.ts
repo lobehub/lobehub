@@ -14,20 +14,23 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
-import type { ConnectorMetadata, OIDCConfig } from '@/database/schemas';
+import type { OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
   ConnectorStatus,
   ConnectorToolPermission,
 } from '@/database/schemas';
-import type { LobeChatDatabase } from '@/database/type';
 import { getComposioClient } from '@/libs/composio';
 import { getMCPConnectionErrorType, inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { callConnectorToolById, ConnectorToolCallError } from '@/server/services/connector/exec';
+import {
+  callConnectorToolById,
+  ConnectorToolCallError,
+  readConnectorUiResourceById,
+} from '@/server/services/connector/exec';
 import {
   buildAuthorizationUrl,
   discoverConnectorOAuth,
@@ -41,17 +44,13 @@ import {
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
   withTrustedLinkedByUserId,
 } from '@/server/utils/connectorAttribution';
 
-import {
-  assertWorkspaceRowManageable,
-  isWorkspaceNonOwner,
-} from './_helpers/assertWorkspaceRowManageable';
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
@@ -59,6 +58,7 @@ import {
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
 } from './_helpers/connectorManagePolicy';
+import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -828,6 +828,8 @@ export const connectorRouter = router({
   callTool: connectorWriteProcedure
     .input(
       z.object({
+        /** Resolve the identifier for this agent (agent-owned connector first). */
+        agentId: z.string().optional(),
         args: z.string().optional(),
         identifier: z.string().min(1),
         toolName: z.string().min(1),
@@ -846,6 +848,28 @@ export const connectorRouter = router({
           code: 'INTERNAL_SERVER_ERROR',
           message: `Connector tool call failed: ${err?.message ?? 'unknown error'}`,
         });
+      }
+    }),
+
+  /**
+   * Read the MCP Apps `ui://` resource a connector tool result renders with.
+   */
+  readUiResource: connectorProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        identifier: z.string().min(1),
+        uri: z.string().startsWith('ui://'),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      try {
+        return await readConnectorUiResourceById(input, ctx);
+      } catch (err: any) {
+        if (err instanceof ConnectorToolCallError) {
+          throw new TRPCError({ cause: err, code: err.code, message: err.message });
+        }
+        throw err;
       }
     }),
 
@@ -1095,79 +1119,6 @@ export const connectorRouter = router({
 });
 
 // ── Private helpers ───────────────────────────────────────────────────────────
-
-/**
- * Create connector entry if not exists (or update metadata), return connectorId.
- *
- * These bootstrap syncs run whenever any member opens a shared skill's detail
- * panel, so an existing row created by someone else must not be rewritten by a
- * non-owner caller — the row is returned read-only (`writable: false`) and the
- * caller skips the tool upsert instead of throwing, keeping browsing intact.
- */
-async function upsertConnectorEntry(
-  ctx: {
-    connectorModel: ConnectorModel;
-    serverDB: LobeChatDatabase;
-    userId: string;
-    workspaceId?: string | null;
-    workspaceRole?: string;
-  },
-  params: {
-    avatar?: string;
-    composio?: ConnectorMetadata['composio'];
-    description?: string;
-    identifier: string;
-    name: string;
-    sourceType: string;
-  },
-): Promise<{ connectorId: string; writable: boolean }> {
-  const metadata: ConnectorMetadata = {};
-  if (params.description) metadata.description = params.description;
-  if (params.avatar) metadata.avatar = params.avatar;
-  if (params.composio) metadata.composio = params.composio;
-
-  // Viewers keep browse access: they resolve existing rows read-only below,
-  // but must never create or rewrite connector state. These bootstrap
-  // endpoints run without the RBAC middleware, so ctx.workspaceRole may be
-  // absent — a missing role must NOT be treated as writable; fall back to an
-  // explicit member-level permission check (viewers lack agent:update).
-  const canWrite = !ctx.workspaceId
-    ? true
-    : ctx.workspaceRole
-      ? ctx.workspaceRole !== 'viewer'
-      : await hasWorkspaceScopedPermission({
-          action: 'AGENT_UPDATE',
-          db: ctx.serverDB,
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-        });
-
-  const existing = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
-  if (existing.length > 0) {
-    const row = existing[0];
-    const writable = canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
-    if (writable) {
-      // Preserve runtime-owned metadata (especially Composio account identity)
-      // while refreshing display fields from the latest plugin manifest.
-      await ctx.connectorModel.update(row.id, { metadata: { ...row.metadata, ...metadata } });
-    }
-    return { connectorId: row.id, writable };
-  }
-
-  if (!canWrite) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'Viewers cannot install connectors' });
-  }
-
-  const created = await ctx.connectorModel.create({
-    identifier: params.identifier,
-    isEnabled: true,
-    metadata,
-    name: params.name,
-    sourceType: params.sourceType as any,
-    status: ConnectorStatus.connected,
-  });
-  return { connectorId: created.id, writable: true };
-}
 
 /** Map builtin manifest humanIntervention → default ConnectorToolPermission */
 function resolveDefaultPermission(humanIntervention: unknown): ConnectorToolPermission {

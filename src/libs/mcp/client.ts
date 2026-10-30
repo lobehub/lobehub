@@ -14,6 +14,7 @@ import { type Progress, type Transport } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
+import { getToolUiResourceUri, MCP_APP_CLIENT_CAPABILITIES } from './mcpApp';
 import {
   type MCPClientParams,
   type MCPError,
@@ -32,6 +33,8 @@ const MCP_TOOL_TIMEOUT = (() => {
   const val = Number(process.env.MCP_TOOL_TIMEOUT);
   return Number.isFinite(val) && val > 0 ? val : 60_000;
 })();
+// How long a failed tool listing counts as "no views" before the next result lists again
+const UI_RESOURCE_LIST_RETRY_MS = 60_000;
 
 /**
  * Pre-check stdio command to capture detailed error information
@@ -165,16 +168,30 @@ async function preCheckStdioCommand(params: {
   });
 }
 
+export interface MCPClientOptions {
+  /**
+   * Advertise MCP Apps (SEP-1865) during `initialize`, so servers expose their
+   * interactive views. Off: the client announces itself as it did before MCP
+   * Apps, and servers answer as they would any other client.
+   */
+  mcpApp?: boolean;
+}
+
 export class MCPClient {
   private mcp: Client;
   private transport: Transport;
   private params: MCPClientParams;
+  /** tool name → `ui://` resource URI, filled from the last successful `listTools` */
+  private uiResourceUris?: Map<string, string>;
+  /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
+  private uiResourceListFailedAt?: number;
 
-  constructor(params: MCPClientParams) {
+  constructor(params: MCPClientParams, { mcpApp = false }: MCPClientOptions = {}) {
     this.params = params;
     this.mcp = new Client(
       { name: 'lobehub-mcp-client', version: '1.0.0' },
       {
+        ...(mcpApp ? { capabilities: MCP_APP_CLIENT_CAPABILITIES } : {}),
         // Stdio stays legacy: auto would spawn a sibling probe process and can
         // wait the entire probe timeout on servers that ignore unknown requests.
         versionNegotiation: { mode: params.type === 'http' ? 'auto' : 'legacy' },
@@ -370,6 +387,12 @@ export class MCPClient {
     try {
       log('Listing tools...');
       const { tools } = await this.mcp.listTools();
+      this.uiResourceUris = new Map(
+        tools.flatMap((tool) => {
+          const uri = getToolUiResourceUri(tool);
+          return uri ? [[tool.name, uri] as const] : [];
+        }),
+      );
       log('Listed %d MCP tool(s)', tools.length);
       return tools as McpTool[];
     } catch (e) {
@@ -441,6 +464,38 @@ export class MCPClient {
     });
 
     return manifest;
+  }
+
+  /**
+   * The MCP Apps `ui://` resource a tool renders its result with, if any.
+   * Lists tools once per client to learn it. A failed listing counts as "no
+   * views" for `UI_RESOURCE_LIST_RETRY_MS` instead of being retried on every
+   * call, then the next call lists again. On the server nothing else refreshes
+   * the map: manifests are listed on a separate client without MCP Apps.
+   */
+  async getToolUiResourceUri(toolName: string): Promise<string | undefined> {
+    const failedAt = this.uiResourceListFailedAt;
+    if (
+      !this.uiResourceUris &&
+      (failedAt === undefined || Date.now() - failedAt >= UI_RESOURCE_LIST_RETRY_MS)
+    ) {
+      await this.listTools();
+      this.uiResourceListFailedAt = this.uiResourceUris ? undefined : Date.now();
+    }
+
+    return this.uiResourceUris?.get(toolName);
+  }
+
+  async readResource(uri: string) {
+    log('Reading resource: %s', uri);
+    try {
+      return await this.mcp.readResource({ uri });
+    } catch (e) {
+      if (this.isNoValidSessionError(e)) {
+        throw new Error('NoValidSessionId', { cause: e });
+      }
+      throw e;
+    }
   }
 
   async callTool(toolName: string, args: any): Promise<ToolCallResult> {

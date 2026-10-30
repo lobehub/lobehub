@@ -3,6 +3,7 @@ import { isLocalOrPrivateUrl } from '@lobechat/utils';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
+import { isMcpAppEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
@@ -22,6 +23,19 @@ export class ConnectorToolCallError extends Error {
 }
 
 /**
+ * The connector an identifier names. With an agent, resolve the way that agent's
+ * runs do (agent-owned > mounted > free base row); without one, keep the base
+ * lookup the classic chat path has always used.
+ */
+const findConnector = (
+  params: { agentId?: string; identifier: string },
+  ctx: ConnectorToolSyncContext,
+) =>
+  params.agentId
+    ? ctx.connectorModel.resolveByIdentifiers([params.identifier], params.agentId)
+    : ctx.connectorModel.queryByIdentifiers([params.identifier]);
+
+/**
  * Execute a single connector tool, enforcing the full permission model:
  * - the connector must exist and be enabled,
  * - the tool must exist in the synced tool list (no calling unsynced / forged
@@ -32,10 +46,11 @@ export class ConnectorToolCallError extends Error {
  * credentials. Shared by the `connector.callTool` tRPC procedure.
  */
 export const callConnectorToolById = async (
-  params: { args?: string; identifier: string; toolName: string },
-  ctx: ConnectorToolSyncContext,
+  params: { agentId?: string; args?: string; identifier: string; toolName: string },
+  /** `userId` decides the caller's `mcp_app` flag: whether the result may carry an MCP App view. */
+  ctx: ConnectorToolSyncContext & { userId?: string | null },
 ): Promise<unknown> => {
-  const [connector] = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
+  const [connector] = await findConnector(params, ctx);
   if (!connector) {
     throw new ConnectorToolCallError('NOT_FOUND', 'Connector not found');
   }
@@ -104,6 +119,53 @@ export const callConnectorToolById = async (
   return mcpService.callTool({
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
+    mcpApp: await isMcpAppEnabled(ctx.userId),
     toolName: params.toolName,
   });
+};
+
+/**
+ * Read an MCP Apps `ui://` resource from a connector's server, so the chat can
+ * render a connector tool result's interactive view. Same connector checks as
+ * {@link callConnectorToolById}, minus the per-tool ones. Refused while the
+ * `mcp_app` flag is off, since the read opens a session that advertises MCP Apps.
+ */
+export const readConnectorUiResourceById = async (
+  params: { agentId?: string; identifier: string; uri: string },
+  /** `userId` decides the caller's `mcp_app` flag: whether views may be read at all. */
+  ctx: ConnectorToolSyncContext & { userId?: string | null },
+) => {
+  if (!(await isMcpAppEnabled(ctx.userId))) {
+    throw new ConnectorToolCallError('FORBIDDEN', 'Interactive views are turned off');
+  }
+
+  const [connector] = await findConnector(params, ctx);
+  if (!connector) {
+    throw new ConnectorToolCallError('NOT_FOUND', 'Connector not found');
+  }
+  if (!connector.isEnabled) {
+    throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
+  }
+  if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) {
+    throw new ConnectorToolCallError(
+      'BAD_REQUEST',
+      'Interactive views are not supported for stdio connectors yet',
+    );
+  }
+  // A cloud server can't reach a localhost / LAN endpoint, and resource reads
+  // aren't tunneled to the device yet; the chat falls back to the plain result.
+  if (
+    deviceGateway.isConfigured &&
+    !!connector.mcpServerUrl &&
+    isLocalOrPrivateUrl(connector.mcpServerUrl)
+  ) {
+    throw new ConnectorToolCallError(
+      'BAD_REQUEST',
+      'Interactive views are not supported for local-network connectors yet',
+    );
+  }
+
+  const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+
+  return mcpService.readUiResource(buildConnectorMcpParams(fresh), params.uri);
 };
