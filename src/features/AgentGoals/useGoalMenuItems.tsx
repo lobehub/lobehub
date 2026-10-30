@@ -33,6 +33,8 @@ interface UseGoalMenuItemsOptions {
   goalId: string;
   /** Replaces the default redirect to the goal list after a delete. */
   onDeleted?: () => void;
+  /** Replaces the rename dialog, for a host that already edits the title in place. */
+  onRename?: () => void;
   /** Runs after a status change lands, for hosts that render the status from another read. */
   onStatusChanged?: () => void;
   projectId?: string | null;
@@ -47,6 +49,7 @@ export const useGoalMenuItems = ({
   creatorUserId,
   goalId,
   onDeleted,
+  onRename,
   onStatusChanged,
   projectId,
   status,
@@ -108,7 +111,8 @@ export const useGoalMenuItems = ({
         key: 'rename',
         label: t('rename', { ns: 'common' }),
         onClick: () => {
-          if (title !== undefined) openRename(title);
+          if (onRename) onRename();
+          else if (title !== undefined) openRename(title);
         },
       },
       { type: 'divider' },
@@ -171,6 +175,7 @@ export const useGoalMenuItems = ({
       confirmDelete,
       current,
       goalId,
+      onRename,
       openRename,
       shareUrl,
       status,

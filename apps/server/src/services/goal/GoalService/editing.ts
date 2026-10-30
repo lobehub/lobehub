@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 
 import { TaskService } from '../../task';
 import { GoalAssignmentService } from '../assignment';
@@ -63,12 +64,25 @@ export const updateRequirement = async (
 };
 
 /**
- * Rename the goal. Only the label changes: the requirement, the graph and the
- * Tasks already dispatched keep their own text.
+ * Rename the goal. Only the label changes: the requirement and the Tasks already
+ * dispatched keep their own text. The map's root question and the management
+ * topic were named after the goal, so they follow unless someone renamed them.
  */
 export const updateTitle = async (ctx: GoalServiceContext, goalId: string, title: string) => {
+  const previous = await ctx.goalModel.findById(goalId);
   const goal = await ctx.goalModel.update(goalId, { title });
   if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+  if (!previous || previous.title === title) return goal;
+
+  await ctx.graphAs().renameProblemNode(goalId, previous.title, title);
+
+  const topicId = goal.config?.managerState?.topicId;
+  if (topicId) {
+    const topicModel = new TopicModel(ctx.db, ctx.userId, ctx.workspaceId);
+    const topic = await topicModel.findById(topicId);
+    if (topic?.title === `Goal management: ${previous.title}`)
+      await topicModel.update(topicId, { title: `Goal management: ${title}` });
+  }
   return goal;
 };
 

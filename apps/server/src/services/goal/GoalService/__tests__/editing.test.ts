@@ -6,7 +6,7 @@ import { getTestDB } from '@/database/core/getTestDB';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { agents, goals, taskTopics, topics } from '@/database/schemas';
+import { agents, goalNodes, goals, taskTopics, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../../../task';
@@ -214,6 +214,47 @@ describe('GoalService', () => {
     expect(read.title).toBe('桌宠 TTS 语音系统');
     expect(read.requirement).toBe(longAsk);
     await expect(service.updateTitle('goal_missing', 'x')).rejects.toThrow();
+  });
+
+  it('renames the root question and the management topic with the goal', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Old name' });
+    await serverDB
+      .insert(topics)
+      .values({ id: 'tpc_rename_manager', title: 'Goal management: Old name', userId });
+    await serverDB
+      .update(goals)
+      .set({ config: { managerState: { consumed: true, topicId: 'tpc_rename_manager' } } as never })
+      .where(eq(goals.id, graph.goal.id));
+
+    await service.updateTitle(graph.goal.id, 'New name');
+
+    const read = await service.graph(graph.goal.id);
+    expect(read.nodes.find((node) => node.kind === 'problem')?.title).toBe('New name');
+    const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'tpc_rename_manager'));
+    expect(topic.title).toBe('Goal management: New name');
+  });
+
+  it('leaves a root question and a topic someone already renamed', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Old name' });
+    const problem = graph.nodes.find((node) => node.kind === 'problem')!;
+    await serverDB
+      .update(goalNodes)
+      .set({ title: 'My question' })
+      .where(eq(goalNodes.id, problem.id));
+    await serverDB.insert(topics).values({ id: 'tpc_rename_kept', title: 'My topic', userId });
+    await serverDB
+      .update(goals)
+      .set({ config: { managerState: { consumed: true, topicId: 'tpc_rename_kept' } } as never })
+      .where(eq(goals.id, graph.goal.id));
+
+    await service.updateTitle(graph.goal.id, 'New name');
+
+    const read = await service.graph(graph.goal.id);
+    expect(read.nodes.find((node) => node.kind === 'problem')?.title).toBe('My question');
+    const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'tpc_rename_kept'));
+    expect(topic.title).toBe('My topic');
   });
 
   it('names the agent each dispatched task node is assigned to', async () => {

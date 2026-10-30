@@ -2,7 +2,7 @@ import type { DropdownItem } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useGoalItemMenu } from './useGoalMenuItems';
+import { useGoalItemMenu, useGoalMenuItems } from './useGoalMenuItems';
 
 const mocks = vi.hoisted(() => ({
   autoRename: vi.fn(),
@@ -128,5 +128,17 @@ describe('useGoalItemMenu', () => {
     expect(mocks.renameGoalId).toBe('goal_1');
     expect(mocks.autoRename).toHaveBeenCalled();
     expect(mocks.openRename).toHaveBeenCalledWith('Desk pet');
+  });
+
+  it('hands Rename to a host that edits the title in place, without the dialog', () => {
+    const onRename = vi.fn();
+    const { result } = renderHook(() =>
+      useGoalMenuItems({ goalId: 'goal_1', onRename, title: 'Desk pet' }),
+    );
+
+    (result.current[1] as any).onClick();
+
+    expect(onRename).toHaveBeenCalled();
+    expect(mocks.openRename).not.toHaveBeenCalled();
   });
 });

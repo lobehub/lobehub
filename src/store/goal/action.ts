@@ -27,6 +27,7 @@ import { goalKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
+import { useChatStore } from '@/store/chat';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -416,11 +417,15 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
   };
 
+  /** Each goal's latest title write, so writes reach the server in the order they were made. */
+  #titleWrites = new Map<string, Promise<unknown>>();
+
   /**
    * Rename a goal everywhere it is shown — the page header, every list tab,
    * the home rail and the conversation that created it — before the server
    * answers. A rejected rename re-reads them all from the server and rethrows,
-   * so the caller can say why.
+   * so the caller can say why. Writes run one at a time per goal, so the latest
+   * edit is the one the server keeps, whichever request would have finished first.
    */
   updateGoalTitle = async (goalId: string, title: string): Promise<void> => {
     const next = title.trim().slice(0, GOAL_TITLE_MAX_LENGTH);
@@ -428,20 +433,43 @@ export class GoalActionImpl {
 
     this.#goalGraph.update(
       goalId,
-      (graph) => graph && { ...graph, goal: { ...graph.goal, title: next } },
+      (graph) =>
+        graph && {
+          ...graph,
+          goal: { ...graph.goal, title: next },
+          // The server moves the root question along while it still has the old title.
+          nodes: graph.nodes.map((node) =>
+            node.kind === 'problem' && node.title === graph.goal.title
+              ? { ...node, title: next }
+              : node,
+          ),
+        },
     );
     this.#goalListRows.update(goalId, (item) => ({ ...item, goal: { ...item.goal, title: next } }));
 
+    const write = (this.#titleWrites.get(goalId) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => goalService.updateTitle(goalId, next));
+    this.#titleWrites.set(goalId, write);
+
     try {
-      await goalService.updateTitle(goalId, next);
+      await write;
+      // The goal's management topic was renamed with it.
+      const topicId = this.#get().goalGraphById[goalId]?.goal.config?.managerState?.topicId;
+      if (topicId) void useChatStore.getState().refreshTopicDetail(topicId, true);
     } catch (error) {
-      await Promise.allSettled([
-        this.refreshGoalGraph(goalId),
-        revalidateReplica(goalListResource),
-        revalidateReplica(homeGoalListResource),
-        revalidateReplica(topicGoalListResource),
-      ]);
+      // A newer edit is still on its way: re-reading now would show this one's old title over it.
+      if (this.#titleWrites.get(goalId) === write) {
+        await Promise.allSettled([
+          this.refreshGoalGraph(goalId),
+          revalidateReplica(goalListResource),
+          revalidateReplica(homeGoalListResource),
+          revalidateReplica(topicGoalListResource),
+        ]);
+      }
       throw error;
+    } finally {
+      if (this.#titleWrites.get(goalId) === write) this.#titleWrites.delete(goalId);
     }
   };
 

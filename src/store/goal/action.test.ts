@@ -31,6 +31,10 @@ vi.mock('@/services/goal', () => ({
   },
 }));
 
+vi.mock('@/store/chat', () => ({
+  useChatStore: { getState: () => ({ refreshTopicDetail: vi.fn() }) },
+}));
+
 vi.mock('@/services/aiChat', () => ({
   aiChatService: { generateJSON: vi.fn() },
 }));
@@ -469,6 +473,47 @@ describe('GoalAction', () => {
       await expect(useGoalStore.getState().updateGoalTitle('goal-1', 'New')).rejects.toBe(error);
 
       expect(mutate).toHaveBeenCalled();
+    });
+
+    it('sends title writes one at a time, so the latest edit is the last the server sees', async () => {
+      seedEverywhere();
+      const finish: Array<() => void> = [];
+      vi.mocked(goalService.updateTitle).mockImplementation(
+        () => new Promise((resolve) => finish.push(() => resolve({} as never))),
+      );
+
+      const first = useGoalStore.getState().updateGoalTitle('goal-1', 'First');
+      const second = useGoalStore.getState().updateGoalTitle('goal-1', 'Second');
+      await vi.waitFor(() => expect(goalService.updateTitle).toHaveBeenCalledTimes(1));
+      expect(goalService.updateTitle).toHaveBeenLastCalledWith('goal-1', 'First');
+
+      finish[0]();
+      await first;
+      await vi.waitFor(() => expect(goalService.updateTitle).toHaveBeenCalledTimes(2));
+      expect(goalService.updateTitle).toHaveBeenLastCalledWith('goal-1', 'Second');
+
+      finish[1]();
+      await second;
+      expect(titlesShown()).toEqual(['Second', 'Second', 'Second']);
+    });
+
+    it('keeps the newer edit on screen when an older write fails', async () => {
+      seedEverywhere();
+      const error = new Error('network');
+      vi.mocked(goalService.updateTitle)
+        .mockRejectedValueOnce(error)
+        .mockResolvedValueOnce({} as never);
+      mutate.mockClear();
+
+      const first = useGoalStore.getState().updateGoalTitle('goal-1', 'First');
+      const second = useGoalStore.getState().updateGoalTitle('goal-1', 'Second');
+
+      await expect(first).rejects.toBe(error);
+      await second;
+
+      expect(goalService.updateTitle).toHaveBeenLastCalledWith('goal-1', 'Second');
+      expect(mutate).not.toHaveBeenCalled();
+      expect(titlesShown()).toEqual(['Second', 'Second', 'Second']);
     });
 
     it('names the goal from its ask and progress with the topic title chain', async () => {

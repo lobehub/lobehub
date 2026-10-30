@@ -125,6 +125,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
   const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
   const collapsedRailRef = useRef(false);
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (showPortal) {
@@ -233,6 +234,14 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
     else openPanel();
   };
 
+  // Deferred past the menu closing, which hands focus back to its trigger.
+  const focusTitleEditor = () => {
+    requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+  };
+
   // Clipped like the workspace crumb, so a long title cannot push the header's
   // actions off the bar.
   const goalCrumb = (
@@ -276,7 +285,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 />
                 {/* Not nested under the breadcrumb: an agent-less goal still has to
                   be deletable, and this menu is the only place that can do it. */}
-                <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />
+                <GoalDetailActions
+                  agentId={agentId}
+                  goalId={goal.id}
+                  projectId={goal.projectId}
+                  onRename={focusTitleEditor}
+                />
               </Flexbox>
             }
             right={
@@ -300,7 +314,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           <Flexbox flex={1} style={{ overflowY: 'auto' }}>
             <WideScreenContainer gap={20} paddingBlock={16}>
               <Flexbox className={styles.header} gap={8}>
-                <GoalDetailTitle creatorUserId={goal.userId} goalId={goal.id} title={goal.title} />
+                <GoalDetailTitle
+                  creatorUserId={goal.userId}
+                  goalId={goal.id}
+                  inputRef={titleInputRef}
+                  title={goal.title}
+                />
                 <GoalHeaderMetrics goalId={goalId} />
                 {/* Pause/resume above the requirement document — its reviewed
                   home. The status glyph keeps the "running" animation; this

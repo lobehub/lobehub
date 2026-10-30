@@ -1,6 +1,7 @@
 import { GOAL_TITLE_MAX_LENGTH } from '@lobechat/const/goal';
 import { TextArea } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, type Ref } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
@@ -16,6 +17,8 @@ const MAX_TITLE_ROWS = 3;
 interface GoalDetailTitleProps {
   creatorUserId?: string | null;
   goalId: string;
+  /** Lets the header's menu move focus here for its Rename entry. */
+  inputRef?: Ref<HTMLTextAreaElement>;
   title: string;
 }
 
@@ -24,7 +27,8 @@ interface GoalDetailTitleProps {
  * instead of truncating, up to `MAX_TITLE_ROWS`, so a goal still titled with a
  * whole pasted prompt cannot take over the page before it is renamed.
  */
-const GoalDetailTitle = memo<GoalDetailTitleProps>(({ creatorUserId, goalId, title }) => {
+const GoalDetailTitle = memo<GoalDetailTitleProps>(({ creatorUserId, goalId, inputRef, title }) => {
+  const { t } = useTranslation('common');
   const { allowed: canEdit } = usePermission('create_content');
   // Same rule the server applies to a workspace goal: its creator or an owner.
   const canManage = useResourceManageable(creatorUserId);
@@ -33,21 +37,25 @@ const GoalDetailTitle = memo<GoalDetailTitleProps>(({ creatorUserId, goalId, tit
   const { onBlur, onKeyDown, setValue, value } = useGoalTitleEditor(title, rename);
 
   return (
-    <TextArea
-      autoSize={{ maxRows: MAX_TITLE_ROWS, minRows: 1 }}
-      className={renaming ? shinyTextStyles.shinyText : undefined}
-      maxLength={GOAL_TITLE_MAX_LENGTH}
-      readOnly={!canEdit || !canManage || renaming}
-      style={{ padding: 0 }}
-      value={value}
-      variant={'borderless'}
-      styles={{
-        input: { fontSize: 22, fontWeight: 600, lineHeight: 1.35, minHeight: 'auto' },
-      }}
-      onBlur={onBlur}
-      onChange={(event) => setValue(event.target.value)}
-      onKeyDown={onKeyDown}
-    />
+    <h1 style={{ margin: 0 }}>
+      <TextArea
+        aria-label={t('rename')}
+        autoSize={{ maxRows: MAX_TITLE_ROWS, minRows: 1 }}
+        className={renaming ? shinyTextStyles.shinyText : undefined}
+        maxLength={GOAL_TITLE_MAX_LENGTH}
+        readOnly={!canEdit || !canManage || renaming}
+        ref={inputRef}
+        style={{ padding: 0 }}
+        value={value}
+        variant={'borderless'}
+        styles={{
+          input: { fontSize: 22, fontWeight: 600, lineHeight: 1.5, minHeight: 'auto' },
+        }}
+        onBlur={onBlur}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={onKeyDown}
+      />
+    </h1>
   );
 });
 
