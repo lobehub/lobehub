@@ -12,6 +12,7 @@ lh generate (alias: gen)
 ├── json <prompt>                          # Structured output (JSON Schema)
 ├── decide [state]                         # Decision model: typed questions → probabilities
 ├── image <prompt>                         # Image generation
+├── image-params                           # Parameters an image model accepts
 ├── video <prompt>                         # Video generation
 ├── tts <text>                             # Text-to-speech
 ├── asr <audio-file>                       # Audio-to-text (speech recognition)
@@ -132,23 +133,27 @@ Generate images from text prompt. This is an async operation — the command sub
 **Source**: `apps/cli/src/commands/generate/image.ts`
 
 ```bash
-lh gen image <prompt> [-m <model>] [-p <provider>] [-n <n>] [--width <px>] [--height <px>] [--steps <n>] [--seed <n>] [--json]
+lh gen image <prompt> [-m <model>] [-p <provider>] [-n <n>] [--param <key=value>...] [--width <px>] [--height <px>] [--steps <n>] [--seed <n>] [--json]
 ```
 
 ```bash
 lh gen image "A cute cat" --model dall-e-3 --provider openai --json
+lh gen image "A cute cat" -m gpt-image-2.5 -p lobehub --param size=1536x1024 --param quality=high
 ```
 
-| Option                      | Description      | Default    |
-| --------------------------- | ---------------- | ---------- |
-| `-m, --model <model>`       | Model ID         | `dall-e-3` |
-| `-p, --provider <provider>` | Provider name    | `openai`   |
-| `-n, --num <n>`             | Number of images | `1`        |
-| `--width <px>`              | Width in pixels  | -          |
-| `--height <px>`             | Height in pixels | -          |
-| `--steps <n>`               | Number of steps  | -          |
-| `--seed <n>`                | Random seed      | -          |
-| `--json`                    | Output raw JSON  | `false`    |
+Parameters are model-specific: list them with `lh gen image-params -m <model> -p <provider>`. The server rejects parameters the model does not declare (for example `width`/`height` on gpt-image models, which take `size`) and empty prompts, before the task is queued or charged.
+
+| Option                      | Description                                                    | Default    |
+| --------------------------- | -------------------------------------------------------------- | ---------- |
+| `-m, --model <model>`       | Model ID                                                       | `dall-e-3` |
+| `-p, --provider <provider>` | Provider name                                                  | `openai`   |
+| `-n, --num <n>`             | Number of images                                               | `1`        |
+| `--param <key=value>`       | Model parameter, repeatable; values parse as JSON, else string | -          |
+| `--width <px>`              | Shortcut for `--param width=<px>`                              | -          |
+| `--height <px>`             | Shortcut for `--param height=<px>`                             | -          |
+| `--steps <n>`               | Shortcut for `--param steps=<n>`                               | -          |
+| `--seed <n>`                | Shortcut for `--param seed=<n>`                                | -          |
+| `--json`                    | Output raw JSON                                                | `false`    |
 
 **Output** (non-JSON):
 
@@ -173,6 +178,24 @@ lh gen image "A cute cat"
 # 2. Wait & download using generationId + asyncTaskId (the UUID)
 lh gen download gen_abc123 7ad0eb13-e9a5-4403-8070-1f7fe95b2f95 -o cat.png
 ```
+
+---
+
+## `lh generate image-params` / `lh gen image-params`
+
+Show the parameters an image model declares, with allowed values and defaults.
+
+**Source**: `apps/cli/src/commands/generate/image.ts`
+
+```bash
+lh gen image-params -m <model> -p <provider> [--json]
+```
+
+| Option                      | Description                     | Required |
+| --------------------------- | ------------------------------- | -------- |
+| `-m, --model <model>`       | Model ID                        | Yes      |
+| `-p, --provider <provider>` | Provider name                   | Yes      |
+| `--json`                    | Output the raw parameter schema | No       |
 
 ---
 
