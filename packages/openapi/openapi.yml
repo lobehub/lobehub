@@ -1003,6 +1003,44 @@ components:
             - since
             - until
           type: object
+        quota:
+          additionalProperties: false
+          properties:
+            limit:
+              type:
+                - number
+                - "null"
+            remaining:
+              type:
+                - number
+                - "null"
+            resetsAt:
+              format: date-time
+              type:
+                - string
+                - "null"
+            source:
+              enum:
+                - personal
+                - workspace_pool
+                - member_budget
+              type: string
+            used:
+              type: number
+            usedRatio:
+              type:
+                - number
+                - "null"
+          required:
+            - limit
+            - remaining
+            - resetsAt
+            - source
+            - used
+            - usedRatio
+          type:
+            - object
+            - "null"
         remainingBalance:
           type:
             - number
@@ -1037,6 +1075,7 @@ components:
         - currency
         - daily
         - period
+        - quota
         - remainingBalance
         - scope
         - spent

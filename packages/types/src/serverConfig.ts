@@ -167,6 +167,8 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableMultimodalUnderstanding?: boolean;
+  /** Pages collaborate live through the gateway's document rooms (LobeHub Cloud). */
+  enablePageCollab?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
   /**
@@ -184,6 +186,11 @@ export interface GlobalServerConfig {
    * reverse proxy or on desktop.
    */
   oidcIssuer?: string;
+  /**
+   * The sandbox the page agent edits pages in: Market (needs the user's Market
+   * authorization unless the trusted client is configured), Onlyboxes, or none.
+   */
+  sandbox?: 'market' | 'onlyboxes' | 'unconfigured';
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;

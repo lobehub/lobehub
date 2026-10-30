@@ -31,7 +31,9 @@ is part of the key because a transferred Agent starts a new conversation in its 
 Only that human participant can access it, even if another
 membership is accidentally granted. It accepts no additional Agent members and routes unmentioned
 messages directly to the bound Agent. Group channels leave `agentId` NULL, including groups with
-only one Agent. Deleting a bound Agent cascades its direct conversations and their public history.
+only one Agent. A group whose only active members are one person and one Agent also skips routing:
+every message that mentions no Agent, in the main timeline or any Thread, goes to that Agent,
+which then follows the Thread. Deleting a bound Agent cascades its direct conversations and their public history.
 
 Group history survives deletion of an author or Agent. Message sender references use `SET NULL`;
 new writes require exactly one actual sender. Human requests have `userId`, Agent replies have

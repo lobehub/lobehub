@@ -57,6 +57,8 @@ import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
 
+import { resolveCloudSandboxInPageScope } from './pageScope';
+
 /**
  * Default tool IDs that will always be added to the tools list.
  * Shared between frontend (createAgentToolsEngine) and server (createServerAgentToolsEngine).
@@ -422,6 +424,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: CloudSandboxManifest.identifier,
     manifest: CloudSandboxManifest,
+    resolveManifest: resolveCloudSandboxInPageScope(CloudSandboxManifest),
     type: 'builtin',
   },
   {

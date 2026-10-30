@@ -11,8 +11,9 @@ type Id = string | null | undefined;
 
 const seg = (value: string) => encodeURIComponent(value);
 
+/** Library items are addressed inside their library: `…/library/<kb>/{docs,file}/<id>`. */
 const libraryItemPath = (id: string, knowledgeBaseId: Id) =>
-  `/resource/library/${seg(knowledgeBaseId!)}?file=${seg(id)}`;
+  `/resource/library/${seg(knowledgeBaseId!)}/${id.startsWith('docs_') ? 'docs' : 'file'}/${seg(id)}`;
 
 /** Standalone pages and files open in Docs; `/page/:id` and `/resource/file/` only redirect there. */
 const docsPagePath = (id: string) => `/resource/page/${seg(id)}`;

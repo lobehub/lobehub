@@ -26,6 +26,7 @@ import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
 import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
+import { libraryFolderPath, libraryItemPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useImageStore } from '@/store/image';
 import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
@@ -122,9 +123,9 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'file': {
-          // Navigate to resource library with file parameter
+          // Open the file inside its library, or over the Docs home
           const fileUrl = result.knowledgeBaseId
-            ? `/resource/library/${result.knowledgeBaseId}?file=${result.id}`
+            ? libraryItemPath(result.knowledgeBaseId, result.id)
             : docsFilePath(result.id);
           console.info('[SearchResults] File navigation:', {
             fileDetails: result,
@@ -134,15 +135,12 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'folder': {
-          // Navigate to folder by slug
-          if (result.knowledgeBaseId && result.slug) {
-            navigate(`/resource/library/${result.knowledgeBaseId}/${result.slug}`);
-          } else if (result.slug) {
-            navigate(`/resource/library/${result.slug}`);
-          } else {
-            // Fallback to library root if no slug
-            navigate(`/resource/library`);
-          }
+          // Open the folder inside its library, or the library gallery without one
+          navigate(
+            result.knowledgeBaseId
+              ? libraryFolderPath(result.knowledgeBaseId, result.id)
+              : '/resource/library',
+          );
           break;
         }
         case 'page': {

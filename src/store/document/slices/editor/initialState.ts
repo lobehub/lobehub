@@ -19,10 +19,21 @@ export type DocumentContentFormat = 'html' | 'markdown' | 'skillMarkdown';
  */
 export interface EditorContentState {
   /**
+   * Agent commands editing the stored page right now. Without a collaboration
+   * room the page is read-only meanwhile, so an edit typed in between can't be
+   * overwritten by, or overwrite, the agent's write.
+   */
+  agentEditing?: number;
+  /**
    * Whether auto-save is enabled for this document
    * Defaults to true. Set to false if the consumer handles saving themselves.
    */
   autoSave?: boolean;
+  /**
+   * The body syncs through a live collaboration room, which persists it; local
+   * saves only carry metadata.
+   */
+  collab?: boolean;
   /**
    * Document content (markdown)
    */
@@ -31,11 +42,11 @@ export interface EditorContentState {
    * Content format used by the editor persistence pipeline.
    */
   contentFormat?: DocumentContentFormat;
+
   /**
    * Editor JSON data (BlockNote format)
    */
   editorData: any;
-
   /**
    * Whether there are unsaved changes
    */

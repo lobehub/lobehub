@@ -138,7 +138,7 @@ describe('useFileItemDropdown — copy link', () => {
     mocks.activeWorkspaceId = 'ws-1';
     mocks.activeWorkspaceSlug = 'acme';
     await expect(copyLink({ id: 'docs_abc', libraryId: 'kb_1' })).resolves.toBe(
-      'https://app.example.com/acme/resource/library/kb_1?file=docs_abc',
+      'https://app.example.com/acme/resource/library/kb_1/docs/docs_abc',
     );
   });
 

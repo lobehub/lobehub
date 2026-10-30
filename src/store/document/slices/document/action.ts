@@ -492,8 +492,18 @@ export class DocumentActionImpl {
           return;
         }
         // Only react to *this* entry changing; every other store write (typing
-        // in the editor included) is none of our business.
-        if (previous && previous.documentDetailMap[documentId] === next) return;
+        // in the editor included) is none of our business — except this
+        // document becoming active while still unadopted. `#adoptDocument`
+        // skips an entry while another document is active, and the caller
+        // (`DocumentIdMode`) only claims `activeDocumentId` in a passive effect,
+        // after this layout effect ran. An entry already in memory never writes
+        // again, so without this retry the editor stays on its skeleton until
+        // the document is reopened.
+        if (previous && previous.documentDetailMap[documentId] === next) {
+          const becameActive =
+            state.activeDocumentId === documentId && previous.activeDocumentId !== documentId;
+          if (!becameActive || state.documents[documentId]) return;
+        }
         // Entries are scope-owned by the engine; never adopt one that belongs to
         // another identity (this hook can stay mounted across an identity switch).
         const scope = state.documentDetailReplica?.scope;

@@ -217,7 +217,7 @@ describe('doc command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(
         JSON.stringify(
-          { ...doc, url: 'https://app.lobehub.com/resource/library/kb1?file=doc1' },
+          { ...doc, url: 'https://app.lobehub.com/resource/library/kb1/file/doc1' },
           null,
           2,
         ),

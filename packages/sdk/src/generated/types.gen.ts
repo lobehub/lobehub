@@ -331,6 +331,14 @@ export type Usage = {
         since: string;
         until: string;
     };
+    quota: {
+        limit: number | null;
+        remaining: number | null;
+        resetsAt: string | null;
+        source: 'personal' | 'workspace_pool' | 'member_budget';
+        used: number;
+        usedRatio: number | null;
+    } | null;
     remainingBalance: number | null;
     scope: 'personal' | 'workspace';
     spent: number;
@@ -6338,12 +6346,14 @@ export type PostApiV1ImMessagesData = {
         agentId: string;
         clientMessageId?: string;
         content: string;
+        fileIds?: Array<string>;
         groupId?: string;
         topicId?: string | null;
     } | {
         agentId?: string;
         clientMessageId?: string;
         content: string;
+        fileIds?: Array<string>;
         groupId: string;
         topicId?: string | null;
     };
@@ -6403,6 +6413,13 @@ export type PostApiV1ImMessagesResponses = {
                 content: string;
                 createdAt: string;
                 error: boolean;
+                files?: Array<{
+                    id: string;
+                    name: string;
+                    fileType: string;
+                    size: number;
+                    url: string;
+                }>;
                 id: string;
                 role: 'assistant' | 'user';
             };
@@ -6478,6 +6495,13 @@ export type GetApiV1ImTopicsByTopicIdSyncResponses = {
                 content: string;
                 createdAt: string;
                 error: boolean;
+                files?: Array<{
+                    id: string;
+                    name: string;
+                    fileType: string;
+                    size: number;
+                    url: string;
+                }>;
                 id: string;
                 role: 'assistant' | 'user';
             }>;

@@ -13,7 +13,7 @@ import {
   PencilLine,
   Pin,
   PinOff,
-  Share2,
+  Share,
   Trash,
   Wand2,
 } from 'lucide-react';
@@ -52,7 +52,7 @@ export const useDropdownMenu = ({
   topicId,
   topicTitle,
 }: UseDropdownMenuProps): (() => DropdownItem[]) => {
-  const { t } = useTranslation(['common', 'topic']);
+  const { t } = useTranslation(['common', 'topic', 'chat']);
 
   const appOrigin = useAppOrigin();
   const navigate = useWorkspaceAwareNavigate();
@@ -223,9 +223,9 @@ export const useDropdownMenu = ({
         },
         {
           disabled: !canEditTopic,
-          icon: <Icon icon={Share2} />,
+          icon: <Icon icon={Share} />,
           key: 'share',
-          label: t('share'),
+          label: t('shareModal.title', { ns: 'chat' }),
           onClick: handleOpenShareModal,
           sfSymbol: 'square.and.arrow.up',
         },

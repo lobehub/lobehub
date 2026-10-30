@@ -39,9 +39,15 @@ export interface CreateUserMemoryContextParams extends BaseCreateUserMemoryParam
   context: Optional<
     Omit<
       UserMemoryContext,
-      'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryIds'
+      'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryIds' | 'userMemoryId'
     >,
-    'capturedAt'
+    | 'capturedAt'
+    | 'firstSeenAt'
+    | 'lastEvidenceAt'
+    | 'nextSteps'
+    | 'now'
+    | 'openQuestions'
+    | 'synthesizedAt'
   >;
 }
 
@@ -51,7 +57,7 @@ export interface CreateUserMemoryActivityParams extends BaseCreateUserMemoryPara
       UserMemoryActivity,
       'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryId'
     >,
-    'capturedAt'
+    'capturedAt' | 'dossierId' | 'injectable'
   >;
 }
 
@@ -71,7 +77,7 @@ export interface CreateUserMemoryIdentityParams extends BaseCreateUserMemoryPara
       UserMemoryIdentity,
       'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryId'
     >,
-    'capturedAt'
+    'capturedAt' | 'entityId'
   >;
 }
 
@@ -81,7 +87,13 @@ export interface CreateUserMemoryPreferenceParams extends BaseCreateUserMemoryPa
       UserMemoryPreference,
       'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryId'
     >,
-    'capturedAt'
+    | 'appliesToEntityId'
+    | 'capturedAt'
+    | 'evidenceCount'
+    | 'evidenceSource'
+    | 'holderEntityId'
+    | 'lastEvidenceAt'
+    | 'scope'
   >;
 }
 
