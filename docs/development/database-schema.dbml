@@ -694,6 +694,20 @@ table agent_labels {
   }
 }
 
+table agent_likes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (agent_id, user_id) [name: 'agent_likes_agent_id_user_id_unique', unique]
+    user_id [name: 'agent_likes_user_id_idx']
+    workspace_id [name: 'agent_likes_workspace_id_idx']
+  }
+}
+
 table agent_mails {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]
@@ -5565,6 +5579,12 @@ ref: agent_eval_runs.target_agent_id - agents.id
 ref: agent_eval_runs.user_id - users.id
 
 ref: agent_eval_test_cases.dataset_id > agent_eval_datasets.id
+
+ref: agent_likes.agent_id > agents.id
+
+ref: agent_likes.user_id - users.id
+
+ref: agent_likes.workspace_id - workspaces.id
 
 ref: agents_files.file_id > files.id
 
