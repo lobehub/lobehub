@@ -570,7 +570,7 @@ describe('Tool Actions', () => {
       ({
         apiName,
         batchId,
-        identifier: 'lobe-dashboard',
+        identifier: 'builtin-dashboard',
         operationId: 'op-1',
         requestArgs: JSON.stringify({ versionId: toolMessageId }),
         toolCallId: `call-${toolMessageId}`,
@@ -602,14 +602,14 @@ describe('Tool Actions', () => {
       await act(async () => {
         await store.getState().approveToolCallAndCovered('tool-a', 'group-1', {
           isCovered: async () => false,
-          rememberToolKey: 'lobe-dashboard/dryRunWidget',
+          rememberToolKey: 'builtin-dashboard/dryRunWidget',
         });
       });
 
       expect(mockApproveAllToolCalls).not.toHaveBeenCalled();
       expect(mockApproveToolCalling).toHaveBeenCalledWith('tool-a', 'group-1', context, {
         editedArguments: undefined,
-        rememberToolKey: 'lobe-dashboard/dryRunWidget',
+        rememberToolKey: 'builtin-dashboard/dryRunWidget',
       });
     });
 
@@ -620,11 +620,11 @@ describe('Tool Actions', () => {
       await act(async () => {
         await store.getState().approveToolCallAndCovered('tool-a', 'group-1', {
           isCovered: async () => true,
-          rememberToolKey: 'lobe-dashboard/dryRunWidget',
+          rememberToolKey: 'builtin-dashboard/dryRunWidget',
         });
       });
 
-      expect(mockAddToolToAllowList).toHaveBeenCalledWith('lobe-dashboard/dryRunWidget');
+      expect(mockAddToolToAllowList).toHaveBeenCalledWith('builtin-dashboard/dryRunWidget');
       expect(mockApproveAllToolCalls).toHaveBeenCalledWith(['tool-a', 'tool-b'], context);
     });
 

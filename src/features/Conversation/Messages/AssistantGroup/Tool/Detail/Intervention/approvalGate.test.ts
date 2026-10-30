@@ -95,15 +95,15 @@ describe('approveChoiceLabelKeys', () => {
     const dryRun = approveChoiceLabelKeys({
       apiName: 'dryRunWidget',
       choice: 'approve',
-      identifier: 'lobe-dashboard',
+      identifier: 'builtin-dashboard',
     });
     const publish = approveChoiceLabelKeys({
       apiName: 'requestPublish',
       choice: 'approve',
-      identifier: 'lobe-dashboard',
+      identifier: 'builtin-dashboard',
     });
-    expect(dryRun.tool).toBe('builtins.lobe-dashboard.approve.dryRunWidget');
-    expect(publish.tool).toBe('builtins.lobe-dashboard.approve.requestPublish');
+    expect(dryRun.tool).toBe('builtins.builtin-dashboard.approve.dryRunWidget');
+    expect(publish.tool).toBe('builtins.builtin-dashboard.approve.requestPublish');
     expect(dryRun.shared).toBe('tool.intervention.optionApprove');
   });
 
@@ -112,11 +112,11 @@ describe('approveChoiceLabelKeys', () => {
       approveChoiceLabelKeys({
         apiName: 'dryRunWidget',
         choice: 'approve-remember',
-        identifier: 'lobe-dashboard',
+        identifier: 'builtin-dashboard',
       }),
     ).toEqual({
       shared: 'tool.intervention.optionApproveRemember',
-      tool: 'builtins.lobe-dashboard.approveRemember.dryRunWidget',
+      tool: 'builtins.builtin-dashboard.approveRemember.dryRunWidget',
     });
   });
 });
