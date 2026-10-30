@@ -1,6 +1,13 @@
 import {
+  minimaxSpeech02Schema,
+  minimaxSpeech26Schema,
+  minimaxSpeech28Schema,
+  minimaxTTSVoices,
+} from '../const/ttsParameters';
+import {
   type AIChatModelCard,
   type AIImageModelCard,
+  type AITTSModelCard,
   type AIVideoModelCard,
 } from '../types/aiModel';
 
@@ -637,6 +644,95 @@ const minimaxVideoModels: AIVideoModelCard[] = [
   },
 ];
 
-export const allModels = [...minimaxChatModels, ...minimaxImageModels, ...minimaxVideoModels];
+// Prices are ¥3.5 (HD) and ¥2 (Turbo) per 10k characters, billed on `usage_characters`.
+// @see https://platform.minimaxi.com/docs/guides/pricing-paygo
+const minimaxTTSModels: AITTSModelCard[] = [
+  {
+    description:
+      'The latest high-fidelity speech model with natural prosody, rich emotion and precise timbre reproduction.',
+    displayName: 'Speech 2.8 HD',
+    enabled: true,
+    id: 'speech-2.8-hd',
+    parameters: minimaxSpeech28Schema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'textInput', rate: 350, strategy: 'fixed', unit: 'millionCharacters' }],
+    },
+    type: 'tts',
+    voices: minimaxTTSVoices,
+  },
+  {
+    description:
+      'The latest low-latency speech model, balancing synthesis speed with natural expression.',
+    displayName: 'Speech 2.8 Turbo',
+    enabled: true,
+    id: 'speech-2.8-turbo',
+    parameters: minimaxSpeech28Schema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'textInput', rate: 200, strategy: 'fixed', unit: 'millionCharacters' }],
+    },
+    type: 'tts',
+    voices: minimaxTTSVoices,
+  },
+  {
+    description:
+      'High-fidelity speech model with expressive emotion control, including fluent and whisper styles.',
+    displayName: 'Speech 2.6 HD',
+    id: 'speech-2.6-hd',
+    parameters: minimaxSpeech26Schema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'textInput', rate: 350, strategy: 'fixed', unit: 'millionCharacters' }],
+    },
+    type: 'tts',
+    voices: minimaxTTSVoices,
+  },
+  {
+    description:
+      'Low-latency speech model with expressive emotion control, including fluent and whisper styles.',
+    displayName: 'Speech 2.6 Turbo',
+    id: 'speech-2.6-turbo',
+    parameters: minimaxSpeech26Schema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'textInput', rate: 200, strategy: 'fixed', unit: 'millionCharacters' }],
+    },
+    type: 'tts',
+    voices: minimaxTTSVoices,
+  },
+  {
+    description:
+      'High-fidelity speech model with strong rhythm, stable timbre and high similarity.',
+    displayName: 'Speech 02 HD',
+    id: 'speech-02-hd',
+    parameters: minimaxSpeech02Schema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'textInput', rate: 350, strategy: 'fixed', unit: 'millionCharacters' }],
+    },
+    type: 'tts',
+    voices: minimaxTTSVoices,
+  },
+  {
+    description: 'Low-latency speech model with improved multilingual performance.',
+    displayName: 'Speech 02 Turbo',
+    id: 'speech-02-turbo',
+    parameters: minimaxSpeech02Schema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'textInput', rate: 200, strategy: 'fixed', unit: 'millionCharacters' }],
+    },
+    type: 'tts',
+    voices: minimaxTTSVoices,
+  },
+];
+
+export const allModels = [
+  ...minimaxChatModels,
+  ...minimaxImageModels,
+  ...minimaxVideoModels,
+  ...minimaxTTSModels,
+];
 
 export default allModels;
