@@ -18,7 +18,6 @@ import {
   notExists,
   notInArray,
   or,
-  sum,
 } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
@@ -45,6 +44,7 @@ import {
 } from '../utils/fileVisibility';
 import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { FileModel, type StorageTarget } from './file';
 
 export interface QueryDocumentParams {
   /**
@@ -616,25 +616,30 @@ export class DocumentModel {
     return collected;
   };
 
-  countFileUsageInSubtree = async (
+  /**
+   * Bytes copying or transferring the files anchored in this document's
+   * subtree into `target` adds to the target's storage usage; see
+   * {@link FileModel.sumAddedStorageBytes}.
+   */
+  countAddedStorageBytesInSubtree = async (
     rootId: string,
+    target: StorageTarget,
     runner: LobeChatDatabase = this.db,
   ): Promise<number> => {
     const subtree = await this.collectSubtree(rootId, runner);
     if (subtree.length === 0) return 0;
 
-    const ids = subtree.map((d) => d.id);
-    const result = await runner
-      .select({ totalSize: sum(files.size) })
-      .from(files)
-      .where(
-        and(
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
-          inArray(files.parentId, ids),
+    return FileModel.sumAddedStorageBytes(
+      runner,
+      target,
+      and(
+        buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+        inArray(
+          files.parentId,
+          subtree.map((d) => d.id),
         ),
-      );
-
-    return parseInt(result[0]?.totalSize ?? '0') || 0;
+      )!,
+    );
   };
 
   /**

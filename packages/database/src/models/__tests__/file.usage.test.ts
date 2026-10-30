@@ -121,3 +121,73 @@ describe('FileModel.countUsage', () => {
     expect(await fileModel.countUsage()).toBe(300);
   });
 });
+
+describe('FileModel added storage bytes', () => {
+  const createWorkspace = async () => {
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'usage-target', primaryOwnerId: userId, slug: 'file-usage-target' })
+      .returning();
+    return workspace;
+  };
+
+  it('adds nothing for a new row of an object the space already stores', async () => {
+    await serverDB.insert(files).values(row({ fileHash: 'h1', size: 1000, url: 'files/u/h1.png' }));
+    const target = { userId };
+
+    // A renamed re-upload of the same bytes.
+    expect(
+      await FileModel.addedStorageBytesForObject(serverDB, target, {
+        fileHash: 'h1',
+        size: 1000,
+        url: 'files/u/h1.png',
+      }),
+    ).toBe(0);
+    // A new object, and an object the space does not store yet.
+    expect(
+      await FileModel.addedStorageBytesForObject(serverDB, target, {
+        fileHash: 'h2',
+        size: 300,
+        url: 'files/u/h2.png',
+      }),
+    ).toBe(300);
+    // Rows without a hash cannot be matched to an object.
+    expect(
+      await FileModel.addedStorageBytesForObject(serverDB, target, {
+        fileHash: null,
+        size: 40,
+        url: 'files/u/h1.png',
+      }),
+    ).toBe(40);
+  });
+
+  it('adds only the objects the target does not store yet, each once', async () => {
+    const workspace = await createWorkspace();
+    const [stored, sharedA, sharedB, legacy] = await serverDB
+      .insert(files)
+      .values([
+        row({ fileHash: 'h1', size: 1000, url: 'files/u/h1.png' }),
+        row({ fileHash: 'h2', size: 300, url: 'files/u/h2.png' }),
+        row({ fileHash: 'h2', size: 300, url: 'files/u/h2.png' }),
+        row({ fileHash: null, size: 40, url: 'files/u/legacy.txt' }),
+      ])
+      .returning();
+    await serverDB
+      .insert(files)
+      .values(
+        row({ fileHash: 'h1', size: 1000, url: 'files/u/h1.png', workspaceId: workspace.id }),
+      );
+    const target = { userId, workspaceId: workspace.id };
+
+    expect(await FileModel.sumAddedStorageBytes(serverDB, target, [stored.id])).toBe(0);
+    expect(
+      await FileModel.sumAddedStorageBytes(serverDB, target, [
+        stored.id,
+        sharedA.id,
+        sharedB.id,
+        legacy.id,
+      ]),
+    ).toBe(300 + 40);
+    expect(await FileModel.sumAddedStorageBytes(serverDB, target, [])).toBe(0);
+  });
+});

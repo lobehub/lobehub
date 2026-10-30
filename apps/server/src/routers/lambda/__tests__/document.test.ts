@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   assertCanPerformResourceAction: vi.fn(),
   businessFileTransferStorageCheck: vi.fn(),
   canPerformResourceAction: vi.fn(),
-  countFileUsageInSubtree: vi.fn(),
+  countAddedStorageBytesInSubtree: vi.fn(),
   createDocument: vi.fn(),
   deleteDocument: vi.fn(),
   deleteDocuments: vi.fn(),
@@ -51,7 +51,7 @@ vi.mock('@/database/models/document', async (importOriginal) => ({
     .DOCUMENT_TRANSFER_FOREIGN_ROWS,
   DocumentModel: vi.fn(function () {
     return {
-      countFileUsageInSubtree: mocks.countFileUsageInSubtree,
+      countAddedStorageBytesInSubtree: mocks.countAddedStorageBytesInSubtree,
       findById: mocks.findById,
       findByIds: mocks.findByIds,
       findBySlug: mocks.findBySlug,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { DOCUMENT_TRANSFER_FOREIGN_ROWS } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
 import { router } from '@/libs/trpc/lambda';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
@@ -73,7 +74,10 @@ export const transferRouter = router({
             workspaceId: ctx.workspaceId,
           });
         }
-        const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
+        const additionalSize = await ctx.documentModel.countAddedStorageBytesInSubtree(input.id, {
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
         await businessFileTransferStorageCheck({
           additionalSize,
           targetUserId: ctx.userId,
@@ -113,7 +117,11 @@ export const transferRouter = router({
         });
       assertWorkspaceRowManageable(ctx, file.userId, 'file');
       await businessFileTransferStorageCheck({
-        additionalSize: file.size,
+        additionalSize: await FileModel.sumAddedStorageBytes(
+          ctx.serverDB,
+          { userId: ctx.userId, workspaceId: input.targetWorkspaceId },
+          [file.id],
+        ),
         targetUserId: ctx.userId,
         targetWorkspaceId: input.targetWorkspaceId,
       });
@@ -160,7 +168,10 @@ export const transferRouter = router({
             message: input.entityType === 'folder' ? 'Folder not found' : 'Document not found',
           });
         }
-        const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
+        const additionalSize = await ctx.documentModel.countAddedStorageBytesInSubtree(input.id, {
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        });
         await businessFileTransferStorageCheck({
           additionalSize,
           targetUserId: ctx.userId,
@@ -182,7 +193,11 @@ export const transferRouter = router({
           message: 'File not found',
         });
       await businessFileTransferStorageCheck({
-        additionalSize: file.size,
+        additionalSize: await FileModel.sumAddedStorageBytes(
+          ctx.serverDB,
+          { userId: ctx.userId, workspaceId: input.targetWorkspaceId },
+          [file.id],
+        ),
         targetUserId: ctx.userId,
         targetWorkspaceId: input.targetWorkspaceId,
       });

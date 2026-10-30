@@ -7,7 +7,6 @@ import { fileRouter } from '@/server/routers/lambda/file';
 import { downloadRemoteImage } from '@/server/services/file/downloadRemoteImage';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
-import { TransferErrorCode } from '@/types/transferError';
 
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
 
@@ -193,28 +192,34 @@ const mockFileModelQuery = vi.fn();
 const mockFileModelUpdate = vi.fn();
 const mockFileModelUpdateGlobalFile = vi.fn();
 const mockFileModelClear = vi.fn();
-const mockFileModelTransferTo = vi.fn();
-const mockFileModelCopyToWorkspace = vi.fn();
+const mockFileModelAddedStorageBytesForObject = vi.fn(
+  async (_db: unknown, _target: unknown, object: { size: number }) => object.size,
+);
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(function () {
-    return {
-      checkHash: mockFileModelCheckHash,
-      create: mockFileModelCreate,
-      delete: mockFileModelDelete,
-      deleteUnreferenced: mockFileModelDeleteUnreferenced,
-      deleteMany: mockFileModelDeleteMany,
-      findById: mockFileModelFindById,
-      findByIds: mockFileModelFindByIds,
-      findKnowledgeBaseIds: mockFileModelFindKnowledgeBaseIds,
-      query: mockFileModelQuery,
-      update: mockFileModelUpdate,
-      updateGlobalFile: mockFileModelUpdateGlobalFile,
-      clear: mockFileModelClear,
-      copyToWorkspace: mockFileModelCopyToWorkspace,
-      transferTo: mockFileModelTransferTo,
-    };
-  }),
+  FileModel: Object.assign(
+    vi.fn(function () {
+      return {
+        checkHash: mockFileModelCheckHash,
+        create: mockFileModelCreate,
+        delete: mockFileModelDelete,
+        deleteUnreferenced: mockFileModelDeleteUnreferenced,
+        deleteMany: mockFileModelDeleteMany,
+        findById: mockFileModelFindById,
+        findByIds: mockFileModelFindByIds,
+        findKnowledgeBaseIds: mockFileModelFindKnowledgeBaseIds,
+        query: mockFileModelQuery,
+        update: mockFileModelUpdate,
+        updateGlobalFile: mockFileModelUpdateGlobalFile,
+        clear: mockFileModelClear,
+      };
+    }),
+    {
+      addedStorageBytesForObject: (
+        ...args: Parameters<typeof mockFileModelAddedStorageBytesForObject>
+      ) => mockFileModelAddedStorageBytesForObject(...args),
+    },
+  ),
 }));
 
 const mockKnowledgeBaseFindById = vi.fn();
@@ -274,12 +279,8 @@ vi.mock('@/server/services/fileUpload', () => ({
 
 const mockKnowledgeRepoQuery = vi.fn().mockResolvedValue([]);
 const mockDocumentServiceDeleteDocuments = vi.fn();
-const mockDocumentModelCountFileUsageInSubtree = vi.fn();
-const mockDocumentModelCopyToWorkspace = vi.fn();
 const mockDocumentModelFindById = vi.fn();
 const mockDocumentModelFindBySlug = vi.fn();
-const mockDocumentModelTransferTo = vi.fn();
-const mockDocumentModelSubtreeHasForeignRows = vi.fn().mockResolvedValue(false);
 const mockDocumentModelSyncFromFile = vi.fn().mockResolvedValue([]);
 
 vi.mock('@/database/repositories/knowledge', () => ({
@@ -293,13 +294,9 @@ vi.mock('@/database/repositories/knowledge', () => ({
 vi.mock('@/database/models/document', () => ({
   DocumentModel: vi.fn(function () {
     return {
-      countFileUsageInSubtree: mockDocumentModelCountFileUsageInSubtree,
-      copyToWorkspace: mockDocumentModelCopyToWorkspace,
       findById: mockDocumentModelFindById,
       findBySlug: mockDocumentModelFindBySlug,
-      subtreeHasForeignRows: mockDocumentModelSubtreeHasForeignRows,
       syncFromFile: mockDocumentModelSyncFromFile,
-      transferTo: mockDocumentModelTransferTo,
     };
   }),
 }));
@@ -310,12 +307,6 @@ vi.mock('@/server/services/document', () => ({
       deleteDocuments: mockDocumentServiceDeleteDocuments,
     };
   }),
-}));
-
-const mockAssertCanPerformResourceAction = vi.hoisted(() => vi.fn());
-
-vi.mock('@/server/services/resourcePermission', () => ({
-  assertCanPerformResourceAction: mockAssertCanPerformResourceAction,
 }));
 
 describe('fileRouter rehostImage', () => {
@@ -710,6 +701,35 @@ describe('fileRouter', () => {
       expect(mockFileModelCreate).toHaveBeenCalledWith(
         expect.objectContaining({ size: 100 }),
         true,
+        routerMocks.transactionClient,
+      );
+    });
+
+    it('charges a renamed re-upload only the bytes the space does not store yet', async () => {
+      mockFileModelCheckHash.mockResolvedValue({ isExist: true, url: 'files/test.txt' });
+      mockFileModelCreate.mockResolvedValue({ id: 'renamed-file-id' });
+      mockFileModelAddedStorageBytesForObject.mockResolvedValueOnce(0);
+
+      await caller.createFile({
+        hash: 'test-hash',
+        fileType: 'text',
+        name: 'renamed.txt',
+        size: 100,
+        url: 'files/test.txt',
+        metadata: {},
+      });
+
+      expect(mockFileModelAddedStorageBytesForObject).toHaveBeenCalledWith(
+        routerMocks.transactionClient,
+        { userId: 'test-user', workspaceId: undefined },
+        { fileHash: 'test-hash', size: 100, url: 'files/test.txt' },
+      );
+      expect(routerMocks.businessFileUploadCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ actualSize: 0 }),
+      );
+      expect(mockFileModelCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'renamed.txt', size: 100 }),
+        false,
         routerMocks.transactionClient,
       );
     });
@@ -1562,145 +1582,6 @@ describe('fileRouter', () => {
         offset: 0,
         showFilesInKnowledgeBase: false,
       });
-    });
-  });
-
-  describe('transferEntity', () => {
-    it('should transfer document resources via documentModel', async () => {
-      ctx.workspaceId = 'workspace-active';
-      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1', userId: 'test-user' });
-      mockDocumentModelCountFileUsageInSubtree.mockResolvedValue(4096);
-      mockDocumentModelTransferTo.mockResolvedValue({ id: 'doc-1' });
-
-      await caller.transferEntity({
-        entityType: 'document',
-        id: 'doc-1',
-        targetWorkspaceId: null,
-      });
-
-      expect(mockDocumentModelFindById).toHaveBeenCalledWith('doc-1');
-      expect(mockAssertCanPerformResourceAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'transfer',
-          resourceId: 'doc-1',
-          resourceType: 'document',
-          userId: 'test-user',
-          workspaceId: 'workspace-active',
-        }),
-      );
-      expect(mockDocumentModelCountFileUsageInSubtree).toHaveBeenCalledWith('doc-1');
-      expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
-        additionalSize: 4096,
-        targetUserId: 'test-user',
-        targetWorkspaceId: null,
-      });
-      expect(mockDocumentModelTransferTo).toHaveBeenCalledWith(
-        'doc-1',
-        null,
-        'test-user',
-        undefined,
-        {
-          forbidForeignRows: true,
-        },
-      );
-      expect(mockFileModelFindById).not.toHaveBeenCalled();
-    });
-
-    it('should check target storage before transferring a file resource', async () => {
-      mockFileModelFindById.mockResolvedValue({ id: 'file-1', size: 2048 });
-      mockFileModelTransferTo.mockResolvedValue({ fileId: 'file-1' });
-
-      await caller.transferEntity({
-        entityType: 'file',
-        id: 'file-1',
-        targetWorkspaceId: 'workspace-target',
-      });
-
-      expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
-        additionalSize: 2048,
-        targetUserId: 'test-user',
-        targetWorkspaceId: 'workspace-target',
-      });
-      expect(mockFileModelTransferTo).toHaveBeenCalledWith(
-        'file-1',
-        'workspace-target',
-        'test-user',
-        undefined,
-      );
-    });
-
-    it('should reject target workspace transfer when RBAC denies file upload', async () => {
-      routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(false);
-      mockFileModelFindById.mockResolvedValue({ id: 'file-1', size: 2048 });
-
-      await expect(
-        caller.transferEntity({
-          entityType: 'file',
-          id: 'file-1',
-          targetWorkspaceId: 'workspace-target',
-        }),
-      ).rejects.toMatchObject({
-        cause: {
-          data: {
-            code: TransferErrorCode.TargetNoWriteAccess,
-          },
-        },
-      });
-
-      expect(routerMocks.businessFileTransferStorageCheck).not.toHaveBeenCalled();
-      expect(mockFileModelTransferTo).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('copyEntityToWorkspace', () => {
-    it('should check target storage before copying a file resource', async () => {
-      mockFileModelFindById.mockResolvedValue({ id: 'file-1', size: 2048 });
-      mockFileModelCopyToWorkspace.mockResolvedValue({ fileId: 'file-new' });
-
-      await caller.copyEntityToWorkspace({
-        entityType: 'file',
-        id: 'file-1',
-        targetWorkspaceId: null,
-      });
-
-      expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
-        additionalSize: 2048,
-        targetUserId: 'test-user',
-        targetWorkspaceId: null,
-      });
-      expect(mockFileModelCopyToWorkspace).toHaveBeenCalledWith(
-        'file-1',
-        null,
-        'test-user',
-        undefined,
-      );
-    });
-
-    it('should copy document resources via documentModel', async () => {
-      mockDocumentModelCopyToWorkspace.mockResolvedValue({ id: 'doc-1' });
-      mockDocumentModelFindById.mockResolvedValue({ id: 'doc-1', userId: 'test-user' });
-      mockDocumentModelCountFileUsageInSubtree.mockResolvedValue(4096);
-
-      await caller.copyEntityToWorkspace({
-        entityType: 'document',
-        id: 'doc-1',
-        targetWorkspaceId: null,
-      });
-
-      expect(mockDocumentModelFindById).toHaveBeenCalledWith('doc-1');
-      expect(mockDocumentModelCountFileUsageInSubtree).toHaveBeenCalledWith('doc-1');
-      expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
-        additionalSize: 4096,
-        targetUserId: 'test-user',
-        targetWorkspaceId: null,
-      });
-      expect(mockDocumentModelCopyToWorkspace).toHaveBeenCalledWith(
-        'doc-1',
-        null,
-        'test-user',
-        undefined,
-      );
-      expect(mockFileModelFindById).not.toHaveBeenCalled();
     });
   });
 

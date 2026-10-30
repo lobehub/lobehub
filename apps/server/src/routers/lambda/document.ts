@@ -713,7 +713,13 @@ export const documentRouter = router({
         }
       }
 
-      const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.documentId);
+      const additionalSize = await ctx.documentModel.countAddedStorageBytesInSubtree(
+        input.documentId,
+        {
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        },
+      );
       await businessFileTransferStorageCheck({
         additionalSize,
         targetUserId: ctx.userId,
@@ -943,7 +949,13 @@ export const documentRouter = router({
         }
       }
 
-      const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.documentId);
+      const additionalSize = await ctx.documentModel.countAddedStorageBytesInSubtree(
+        input.documentId,
+        {
+          userId: ctx.userId,
+          workspaceId: input.targetWorkspaceId,
+        },
+      );
       await businessFileTransferStorageCheck({
         additionalSize,
         targetUserId: ctx.userId,

@@ -16,6 +16,7 @@ import {
   isNotNull,
   isNull,
   like,
+  max,
   ne,
   not,
   notExists,
@@ -69,6 +70,12 @@ export interface SandboxInitFileItem {
   size: number;
   /** S3 key / storage url, needs to be turned into a download url before use */
   url: string;
+}
+
+/** The owner of one storage quota: a workspace, or a user's personal space. */
+export interface StorageTarget {
+  userId: string;
+  workspaceId?: string | null;
 }
 
 export class FileModel {
@@ -404,6 +411,64 @@ export class FileModel {
     const [result] = await db.select({ totalSize: sum(objects.size) }).from(objects);
 
     return Number(result?.totalSize) || 0;
+  };
+
+  /**
+   * The rows whose bytes count toward one storage quota: a workspace's files,
+   * or a user's personal files.
+   */
+  static storageScope = ({ userId, workspaceId }: StorageTarget): SQL =>
+    workspaceId ? eq(files.workspaceId, workspaceId) : buildWorkspaceWhere({ userId }, files);
+
+  /**
+   * Bytes that bringing existing rows into the storage of `target` (by copy or
+   * transfer, both of which keep `url`, `fileHash` and `size`) adds to its
+   * usage under {@link sumStorageBytes}. An object the target already stores
+   * adds nothing, and several incoming rows of one object add it once.
+   *
+   * @param incoming - The incoming rows, as file ids or a `files` predicate.
+   */
+  static sumAddedStorageBytes = async (
+    db: LobeChatDatabase | Transaction,
+    target: StorageTarget,
+    incoming: SQL | string[],
+  ): Promise<number> => {
+    if (Array.isArray(incoming) && incoming.length === 0) return 0;
+
+    const targetScope = FileModel.storageScope(target);
+    const incomingScope = Array.isArray(incoming) ? inArray(files.id, incoming) : incoming;
+    const [after, before] = await Promise.all([
+      FileModel.sumStorageBytes(db, or(targetScope, incomingScope)),
+      FileModel.sumStorageBytes(db, targetScope),
+    ]);
+
+    return Math.max(0, after - before);
+  };
+
+  /**
+   * Bytes a new row for `object` adds to the usage of `target` under
+   * {@link sumStorageBytes}: zero when the target already stores the object
+   * (a renamed or re-parented re-upload of the same bytes).
+   */
+  static addedStorageBytesForObject = async (
+    db: LobeChatDatabase | Transaction,
+    target: StorageTarget,
+    object: { fileHash?: string | null; size: number; url: string },
+  ): Promise<number> => {
+    if (!object.fileHash || object.url.startsWith('internal://')) return object.size;
+
+    const [row] = await db
+      .select({ size: max(files.size) })
+      .from(files)
+      .where(
+        and(
+          FileModel.storageScope(target),
+          eq(files.url, object.url),
+          eq(files.fileHash, object.fileHash),
+        ),
+      );
+
+    return Math.max(0, object.size - (Number(row?.size) || 0));
   };
 
   /**

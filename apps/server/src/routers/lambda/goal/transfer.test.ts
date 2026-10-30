@@ -33,6 +33,11 @@ vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileTransferStorageCheck: (...args: unknown[]) => mockStorageCheck(...args),
 }));
 
+const mockSumAddedStorageBytes = vi.fn();
+vi.mock('@/database/models/file', () => ({
+  FileModel: { sumAddedStorageBytes: (...args: unknown[]) => mockSumAddedStorageBytes(...args) },
+}));
+
 const mockCopy = vi.fn();
 const mockFixtureResources = vi.fn();
 const copyScopes: Array<string | undefined> = [];
@@ -97,11 +102,19 @@ describe('goal transferRouter.copyGoalToWorkspace', () => {
       ],
     });
 
+    // The target already stores one of the two files.
+    mockSumAddedStorageBytes.mockResolvedValue(300);
+
     await caller('ws-source').copyGoalToWorkspace({ id: 'goal_1', targetWorkspaceId: 'ws-target' });
 
     expect(checkedActions()).toEqual(['AGENT_UPDATE', 'DOCUMENT_CREATE', 'FILE_UPLOAD']);
+    expect(mockSumAddedStorageBytes).toHaveBeenCalledWith(
+      {},
+      { userId: 'user-1', workspaceId: 'ws-target' },
+      ['file_1', 'file_2'],
+    );
     expect(mockStorageCheck).toHaveBeenCalledWith({
-      additionalSize: 500,
+      additionalSize: 300,
       targetUserId: 'user-1',
       targetWorkspaceId: 'ws-target',
     });
@@ -122,6 +135,7 @@ describe('goal transferRouter.copyGoalToWorkspace', () => {
   it('stops before writing when fixture files exceed the target storage', async () => {
     mockFixtureResources.mockResolvedValue({ documentIds: [], files: [{ id: 'file_1', size: 9 }] });
     mockStorageCheck.mockRejectedValue(new TRPCError({ code: 'FORBIDDEN', message: 'quota' }));
+    mockSumAddedStorageBytes.mockResolvedValue(9);
 
     await expect(
       caller('ws-source').copyGoalToWorkspace({ id: 'goal_1', targetWorkspaceId: null }),

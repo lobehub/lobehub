@@ -200,7 +200,10 @@ export const knowledgeBaseRouter = router({
         }
       }
 
-      const additionalSize = await ctx.knowledgeBaseModel.countFileUsage(input.id);
+      const additionalSize = await ctx.knowledgeBaseModel.countAddedStorageBytes(input.id, {
+        userId: ctx.userId,
+        workspaceId: input.targetWorkspaceId,
+      });
       await businessFileTransferStorageCheck({
         additionalSize,
         targetUserId: ctx.userId,
@@ -462,7 +465,10 @@ export const knowledgeBaseRouter = router({
         }
       }
 
-      const additionalSize = await ctx.knowledgeBaseModel.countFileUsage(input.id);
+      const additionalSize = await ctx.knowledgeBaseModel.countAddedStorageBytes(input.id, {
+        userId: ctx.userId,
+        workspaceId: input.targetWorkspaceId,
+      });
       await businessFileTransferStorageCheck({
         additionalSize,
         targetUserId: ctx.userId,

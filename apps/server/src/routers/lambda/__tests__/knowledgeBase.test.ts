@@ -11,7 +11,7 @@ const routerMocks = vi.hoisted(() => ({
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
-const mockKnowledgeBaseModelCountFileUsage = vi.fn();
+const mockKnowledgeBaseModelCountAddedStorageBytes = vi.fn();
 const mockKnowledgeBaseModelAddFiles = vi.fn();
 const mockKnowledgeBaseModelCopyToWorkspace = vi.fn();
 const mockKnowledgeBaseModelDeleteWithFiles = vi.fn();
@@ -78,7 +78,7 @@ vi.mock('@/database/models/knowledgeBase', () => ({
     return {
       addFilesToKnowledgeBase: mockKnowledgeBaseModelAddFiles,
       copyToWorkspace: mockKnowledgeBaseModelCopyToWorkspace,
-      countFileUsage: mockKnowledgeBaseModelCountFileUsage,
+      countAddedStorageBytes: mockKnowledgeBaseModelCountAddedStorageBytes,
       deleteWithFiles: mockKnowledgeBaseModelDeleteWithFiles,
       findById: mockKnowledgeBaseModelFindById,
       hasForeignLinkedRows: mockKnowledgeBaseModelHasForeignLinkedRows,
@@ -108,7 +108,7 @@ describe('knowledgeBaseRouter', () => {
     routerMocks.businessFileTransferStorageCheck.mockResolvedValue(undefined);
     routerMocks.hasWorkspaceScopedPermission.mockResolvedValue(true);
     mockKnowledgeBaseModelCopyToWorkspace.mockResolvedValue({ id: 'kb-copy' });
-    mockKnowledgeBaseModelCountFileUsage.mockResolvedValue(4096);
+    mockKnowledgeBaseModelCountAddedStorageBytes.mockResolvedValue(4096);
     mockKnowledgeBaseModelDeleteWithFiles.mockResolvedValue({ deletedFiles: [] });
     mockKnowledgeBaseModelFindById.mockResolvedValue({
       id: 'kb-1',
@@ -278,7 +278,10 @@ describe('knowledgeBaseRouter', () => {
         targetWorkspaceId: null,
       });
 
-      expect(mockKnowledgeBaseModelCountFileUsage).toHaveBeenCalledWith('kb-1');
+      expect(mockKnowledgeBaseModelCountAddedStorageBytes).toHaveBeenCalledWith('kb-1', {
+        userId: 'test-user',
+        workspaceId: null,
+      });
       expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
         additionalSize: 4096,
         targetUserId: 'test-user',
@@ -345,7 +348,10 @@ describe('knowledgeBaseRouter', () => {
         targetWorkspaceId: null,
       });
 
-      expect(mockKnowledgeBaseModelCountFileUsage).toHaveBeenCalledWith('kb-1');
+      expect(mockKnowledgeBaseModelCountAddedStorageBytes).toHaveBeenCalledWith('kb-1', {
+        userId: 'test-user',
+        workspaceId: null,
+      });
       expect(routerMocks.businessFileTransferStorageCheck).toHaveBeenCalledWith({
         additionalSize: 4096,
         targetUserId: 'test-user',
@@ -373,7 +379,7 @@ describe('knowledgeBaseRouter', () => {
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
       expect(routerMocks.hasWorkspaceScopedPermission).not.toHaveBeenCalled();
-      expect(mockKnowledgeBaseModelCountFileUsage).not.toHaveBeenCalled();
+      expect(mockKnowledgeBaseModelCountAddedStorageBytes).not.toHaveBeenCalled();
       expect(routerMocks.businessFileTransferStorageCheck).not.toHaveBeenCalled();
       expect(mockKnowledgeBaseModelCopyToWorkspace).not.toHaveBeenCalled();
     });
