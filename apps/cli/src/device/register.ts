@@ -6,6 +6,7 @@ import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identit
 import { createLambdaClient } from '../api/client';
 import { cliVersion } from '../pkg';
 import { isTransientNetworkError } from '../utils/error';
+import { resolveDevicePlatform } from './platform';
 
 const WORKSPACE_TOKEN_RETRY_DELAYS_MS = [250, 1000, 2500];
 
@@ -52,13 +53,26 @@ export async function registerDevice(
     deviceId: identity.deviceId,
     hostname: os.hostname(),
     identitySource: identity.identitySource,
+    ...buildDeviceInfo(),
+  });
+}
+
+/**
+ * Machine-reported identity fields shared by both register calls. Platform goes
+ * through `resolveDevicePlatform` so an Android host (whose kernel reports
+ * `linux`) is not registered as a Linux desktop.
+ */
+export function buildDeviceInfo(): { metadata: Record<string, string>; platform: string } {
+  const { metadata, platform } = resolveDevicePlatform();
+  return {
     metadata: {
       cliVersion,
       node: process.versions.node,
       osRelease: os.release(),
+      ...metadata,
     },
-    platform: process.platform,
-  });
+    platform,
+  };
 }
 
 type Auth = { serverUrl: string; token: string; tokenType: 'apiKey' | 'jwt' | 'serviceToken' };
@@ -116,12 +130,7 @@ export async function registerWorkspaceDevice(
     deviceId: identity.deviceId,
     hostname: os.hostname(),
     identitySource: identity.identitySource,
-    metadata: {
-      cliVersion,
-      node: process.versions.node,
-      osRelease: os.release(),
-    },
-    platform: process.platform,
+    ...buildDeviceInfo(),
     visibility,
   });
 }

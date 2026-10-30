@@ -164,6 +164,20 @@ describe('GatewayClient', () => {
       c.disconnect();
     });
 
+    it('reports process.platform in the handshake by default', () => {
+      client.connect();
+      const ws = (client as any).ws;
+      expect(new URL(ws.url).searchParams.get('platform')).toBe(process.platform);
+    });
+
+    it('reports an explicit platform over process.platform', () => {
+      const c = new GatewayClient({ autoReconnect: false, platform: 'android', token: 'tok' });
+      c.connect();
+      const ws = (c as any).ws;
+      expect(new URL(ws.url).searchParams.get('platform')).toBe('android');
+      c.disconnect();
+    });
+
     it('should default connectionId to a generated UUID when omitted', () => {
       const c = new GatewayClient({ autoReconnect: false, token: 'tok' });
       c.connect();
