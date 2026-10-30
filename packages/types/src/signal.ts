@@ -107,6 +107,27 @@ export const SIGNAL_DECISION_LABELS = [
 ] as const;
 export type SignalDecisionLabel = (typeof SIGNAL_DECISION_LABELS)[number];
 
+/** `signal_decision_labels.source` for a mark the bot's owner set in its settings. */
+export const BOT_WAKE_USER_LABEL_SOURCE = 'user';
+
+/** The labels a mark can be, a subset of {@link SIGNAL_DECISION_LABELS}. */
+export const BOT_WAKE_USER_LABELS = ['correct', 'false_wake', 'missed_wake'] as const;
+export type BotWakeUserLabel = (typeof BOT_WAKE_USER_LABELS)[number];
+
+/**
+ * What the owner can mark a wake decision as, by what the router did with it: a wake was right or
+ * should not have happened, a skip was right or should have woken, and a deferred message can be
+ * either.
+ */
+export const BOT_WAKE_USER_LABELS_BY_OUTCOME: Record<
+  SignalDecisionOutcome,
+  readonly BotWakeUserLabel[]
+> = {
+  defer: ['correct', 'false_wake', 'missed_wake'],
+  skip: ['correct', 'missed_wake'],
+  wake: ['correct', 'false_wake'],
+};
+
 /**
  * How a bot wake reached the agent.
  *

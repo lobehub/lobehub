@@ -77,6 +77,23 @@ class AgentBotProviderService {
     return lambdaClient.agentBotProvider.testConnection.mutate(params);
   };
 
+  /** One bot's wake decisions, newest first; pass the previous page's `nextCursor` for more. */
+  listWakeDecisions = async (
+    params: Parameters<typeof lambdaClient.agentBotWake.listWakeDecisions.query>[0],
+  ) => {
+    return lambdaClient.agentBotWake.listWakeDecisions.query(params);
+  };
+
+  getWakeSummary = async (botId: string) => {
+    return lambdaClient.agentBotWake.getWakeSummary.query({ botId });
+  };
+
+  labelWakeDecision = async (
+    params: Parameters<typeof lambdaClient.agentBotWake.labelWakeDecision.mutate>[0],
+  ) => {
+    return lambdaClient.agentBotWake.labelWakeDecision.mutate(params);
+  };
+
   lineFetchBotInfo = async (channelAccessToken: string) => {
     return lambdaClient.agentBotProvider.lineFetchBotInfo.mutate({ channelAccessToken });
   };
@@ -111,3 +128,7 @@ class AgentBotProviderService {
 }
 
 export const agentBotProviderService = new AgentBotProviderService();
+
+export type WakeDecisionPage = Awaited<ReturnType<AgentBotProviderService['listWakeDecisions']>>;
+export type WakeDecisionItem = WakeDecisionPage['items'][number];
+export type WakeSummary = Awaited<ReturnType<AgentBotProviderService['getWakeSummary']>>;

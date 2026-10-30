@@ -271,8 +271,9 @@ const PlatformDetail = memo<PlatformDetailProps>(
           groupSettingsFields(getSchemaFields(platformDef.schema, 'settings', featureFlags)).map(
             (group) => group.key,
           ),
+          { hasConfig: !!currentConfig },
         ),
-      [featureFlags, platformDef.schema],
+      [featureFlags, platformDef.schema, currentConfig],
     );
     const activeTab =
       pickedTab && tabs.includes(pickedTab) ? pickedTab : defaultTab(tabs, !!currentConfig);

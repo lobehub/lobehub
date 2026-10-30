@@ -899,6 +899,30 @@ export const agentSignalKeys = {
   ]),
 };
 
+// ---- bot wake records (one bot's judged messages; never persisted) ----
+export const botWakeKeys = {
+  decisions: def(
+    'botWake:decisions',
+    // Keyed by context: a bot id is only visible in the workspace it lives in.
+    (
+      workspaceId: string | null,
+      botId: string,
+      filters: { followupOnly: boolean; outcome?: string; unmarkedOnly: boolean },
+      cursor: { createdAt: string; id: string } | undefined,
+    ) => [
+      'botWake:decisions',
+      workspaceId,
+      botId,
+      filters.outcome ?? null,
+      filters.followupOnly,
+      filters.unmarkedOnly,
+      cursor?.createdAt ?? null,
+      cursor?.id ?? null,
+    ],
+  ),
+  summary: def('botWake:summary', (botId: string) => ['botWake:summary', botId]),
+};
+
 // ---- misc UI singletons -------------------------------------------------
 export const ollamaKeys = {
   downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
