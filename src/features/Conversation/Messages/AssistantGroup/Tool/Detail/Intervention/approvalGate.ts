@@ -97,3 +97,41 @@ export const approveChoiceLabelKeys = ({
   const [toolKey, shared] = APPROVE_LABEL_KEY[choice];
   return { shared, tool: `builtins.${identifier}.${toolKey}.${apiName}` };
 };
+
+/** The dynamic audit type of an intervention config, when it has one. */
+export const dynamicAuditType = (config: unknown): string | undefined => {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return undefined;
+  const dynamic = (config as { dynamic?: { type?: unknown } }).dynamic;
+  return typeof dynamic?.type === 'string' ? dynamic.type : undefined;
+};
+
+/**
+ * Whether a sibling call of the same tool, still waiting in the same parallel
+ * batch, no longer needs approval once "approve, and don't ask again" took
+ * effect. Siblings were audited when the model emitted them, before the
+ * remember existed, so without this the user is asked again for the very
+ * thing they just said not to ask about.
+ *
+ * Allow-list: the sibling is covered unless it must always ask. Tool's own
+ * remember: the tool's audit is re-run with the remembered access; with no
+ * audit, or when it fails, the sibling still asks (fails closed).
+ */
+export const isCoveredByRemember = async ({
+  audit,
+  config,
+  rememberAction,
+  toolArgs,
+}: {
+  audit?: (toolArgs: Record<string, unknown>) => boolean | Promise<boolean>;
+  config?: unknown;
+  rememberAction: 'allow-list' | 'tool';
+  toolArgs: Record<string, unknown>;
+}) => {
+  if (rememberAction === 'allow-list') return canRememberViaAllowList({ config, toolArgs });
+  if (!audit) return false;
+  try {
+    return !(await audit(toolArgs));
+  } catch {
+    return false;
+  }
+};

@@ -1,11 +1,13 @@
 import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotkeys';
-import type { BuiltinRememberApproval } from '@lobechat/types';
+import type { BuiltinRememberApproval, DynamicInterventionResolver } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
 import { Button, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import { CircleStop, CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { clientInterventionAudits } from '@/store/chat/slices/agentRun/actions/transports/client/interventionAudits';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
@@ -15,12 +17,22 @@ import {
   type ApprovalChoice,
   approveChoiceLabelKeys,
   canRememberViaAllowList,
+  dynamicAuditType,
   getApprovalChoices,
   isChoiceSubmitBlocked,
+  isCoveredByRemember,
   resolveRememberAction,
 } from './approvalGate';
 import { type ApprovalMode } from './index';
 import { isSubmitShortcutBlockedByTarget } from './submitShortcutGuard';
+
+/** The audit this client runs for a tool's dynamic approval, to re-check calls after a remember. */
+const rememberAuditFor = (config: unknown) => {
+  const type = dynamicAuditType(config);
+  return type
+    ? (clientInterventionAudits as Record<string, DynamicInterventionResolver>)[type]
+    : undefined;
+};
 
 interface ApprovalActionsProps {
   apiName: string;
@@ -200,12 +212,17 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     const effectiveChoice: Choice = choices.includes(choice) ? choice : 'approve';
     const rememberAction = resolveRememberAction({ toolRemember: hasToolRemember });
 
-    const [approveToolCall, rejectAndContinueToolCall, stopPendingApprovalForCard] =
-      useConversationStore((s) => [
-        s.approveToolCall,
-        s.rejectAndContinueToolCall,
-        s.stopPendingApprovalForCard,
-      ]);
+    const [
+      approveToolCall,
+      approveToolCallAndCovered,
+      rejectAndContinueToolCall,
+      stopPendingApprovalForCard,
+    ] = useConversationStore((s) => [
+      s.approveToolCall,
+      s.approveToolCallAndCovered,
+      s.rejectAndContinueToolCall,
+      s.stopPendingApprovalForCard,
+    ]);
     const [stopping, setStopping] = useState(false);
 
     /**
@@ -245,12 +262,24 @@ const ApprovalActions = memo<ApprovalActionsProps>(
           // after this approval already sees it.
           if (remember && rememberAction === 'tool') await rememberOption?.onRemember();
           const editedArguments = await onBeforeApprove?.();
-          await approveToolCall(messageId, assistantGroupId ?? '', {
-            editedArguments,
-            ...(remember && rememberAction === 'allow-list'
-              ? { rememberToolKey: `${identifier}/${apiName}` }
-              : {}),
-          });
+          if (remember) {
+            const audit = rememberAuditFor(interventionConfig);
+            await approveToolCallAndCovered(messageId, assistantGroupId ?? '', {
+              editedArguments,
+              isCovered: (sibling) =>
+                isCoveredByRemember({
+                  audit,
+                  config: interventionConfig,
+                  rememberAction,
+                  toolArgs: safeParseJSON(sibling.requestArgs) ?? {},
+                }),
+              ...(rememberAction === 'allow-list'
+                ? { rememberToolKey: `${identifier}/${apiName}` }
+                : {}),
+            });
+          } else {
+            await approveToolCall(messageId, assistantGroupId ?? '', { editedArguments });
+          }
         }
       } finally {
         setLoading(false);
@@ -258,10 +287,12 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     }, [
       apiName,
       approveToolCall,
+      approveToolCallAndCovered,
       assistantGroupId,
       canUseResource,
       effectiveChoice,
       identifier,
+      interventionConfig,
       isMessageCreating,
       loading,
       messageId,
