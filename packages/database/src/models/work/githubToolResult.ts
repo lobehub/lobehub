@@ -90,6 +90,7 @@ const numberFromRecord = (record: Record<string, unknown>, keys: string[]) => {
 
 /** Join MCP-style content parts (`{ content: [{ text }] }`) back into one string. */
 const textFromContentParts = (value: unknown): string | null => {
+  /* v8 ignore next -- unreachable: both callers pass a value already checked with Array.isArray */
   if (!Array.isArray(value)) return null;
 
   const joined = value

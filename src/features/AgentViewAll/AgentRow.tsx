@@ -4,7 +4,7 @@ import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const'
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { ContextMenuTrigger, type DropdownItem, Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
@@ -14,18 +14,37 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
-import AgentAvatar from './AgentAvatar';
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
 import { identityMarker } from './markers.stylex';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 /** Fixed action-column width (sidebar-eye toggle + "…" menu) so rows stay aligned. */
 export const ACTION_COL_WIDTH = 64;
 
 /** Author avatar slot — reserved even when the author is unknown. */
 const AUTHOR_COL_WIDTH = 20;
+export const NAME_COL_WIDTH = 240;
+export const ROLE_COL_WIDTH = 200;
 
 const styles = stylex.create({
+  description: {
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0',
+    minWidth: '180px',
+    color: cssVar.colorTextTertiary,
+    display: { 'default': null, '@container agent-row (width < 600px)': 'none' },
+  },
+  name: {
+    flex: { 'default': `0 1 ${NAME_COL_WIDTH}px`, '@container agent-row (width < 600px)': '3 1 0' },
+    minWidth: 0,
+  },
+  role: {
+    flex: { 'default': `0 1 ${ROLE_COL_WIDTH}px`, '@container agent-row (width < 600px)': '2 1 0' },
+    minWidth: 0,
+    color: cssVar.colorTextSecondary,
+  },
   // The link spans the name column (not the whole row) — a management list
   // is for scanning and acting, and a full-row link turns clicks on the
   // author / timestamp / action columns into a navigation. The name column
@@ -40,6 +59,8 @@ const styles = stylex.create({
     color: 'inherit',
   },
   row: {
+    containerName: 'agent-row',
+    containerType: 'inline-size',
     paddingBlock: '8px',
     paddingInline: '12px',
     borderRadius: cssVar.borderRadiusLG,
@@ -96,10 +117,10 @@ interface AgentRowProps {
 const AgentRow = memo<AgentRowProps>(
   ({ author, item, onToggleSidebar, showAuthor, sidebarHidden }) => {
     const { t } = useTranslation('common');
-    const { id, type, updatedAt } = item;
+    const { description, id, type, updatedAt } = item;
     // Groups have no personal name, so this resolves to their title.
     const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
-    const roleTag = agentSecondaryDisplayName(item);
+    const role = agentSecondaryDisplayName(item);
     const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
     // Right-click support (Task-List-style): the hook-bearing menu mounts on
@@ -136,21 +157,26 @@ const AgentRow = memo<AgentRowProps>(
             className={stylex.props(styles.identity, identityMarker).className}
             to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           >
-            <AgentAvatar item={item} size={28} />
-            <Flexbox flex={1} style={{ minWidth: 0 }}>
-              {/* Single-line row (Linear-style density) — the description only
-                renders in card mode, where there is room to browse. */}
-              <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-                <Text ellipsis className={stylex.props(styles.title).className} weight={500}>
-                  {displayTitle}
-                </Text>
-                {roleTag ? (
-                  <Tag size={'small'} style={{ flex: 'none' }}>
-                    {roleTag}
-                  </Tag>
-                ) : null}
-              </Flexbox>
-            </Flexbox>
+            <SidebarItemAvatar item={item} size={28} />
+            {/* Three single-line columns: who the agent is, the role it plays,
+              and what it is responsible for. */}
+            <Text
+              ellipsis
+              className={stylex.props(styles.title, styles.name).className}
+              weight={500}
+            >
+              {displayTitle}
+            </Text>
+            <Text ellipsis className={stylex.props(styles.role).className} title={role}>
+              {role}
+            </Text>
+            <Text
+              ellipsis
+              className={stylex.props(styles.description).className}
+              title={description ?? undefined}
+            >
+              {description}
+            </Text>
           </WorkspaceLink>
           {/* Trailing cluster (Task-list-style): label pills + author avatar +
             update time as one tight right-aligned group. */}

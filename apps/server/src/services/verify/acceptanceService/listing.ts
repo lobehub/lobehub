@@ -53,7 +53,7 @@ export const resolveSubjects = async (
 
   try {
     const [tasks, topics, documents] = await Promise.all([
-      new TaskModel(deps.db, deps.userId, deps.workspaceId).resolveMany(
+      new TaskModel(deps.db, deps.userId, deps.workspaceId).resolveRefs(
         idsByType.get('task') ?? [],
       ),
       // Creator-facing lookup: exclude agent-share visitor topics from the
@@ -66,10 +66,9 @@ export const resolveSubjects = async (
       ),
     ]);
     const taskTitles = new Map<string, string | null>();
-    for (const task of tasks) {
+    for (const [ref, task] of tasks.byRef) {
       const title = task.name ?? task.identifier;
-      taskTitles.set(task.id, title);
-      taskTitles.set(task.identifier, title);
+      taskTitles.set(ref, title);
     }
     const topicTitles = new Map(topics.map((topic) => [topic.id, topic.title ?? null]));
     const documentTitles = new Map(
@@ -180,10 +179,16 @@ export const latestCheckCounts = async (
   return out;
 };
 
+/**
+ * Rows the caller created in the active scope — their subjects resolve through
+ * the scoped models. A teammate's row in the same workspace does not qualify:
+ * its private task/topic/document is hidden from the caller's models, though
+ * the list already granted the row itself, so it resolves like any other
+ * owner's.
+ */
 export const isInOwnScope = (deps: AcceptanceServiceDeps, row: AcceptanceItem) =>
-  row.workspaceId
-    ? row.workspaceId === deps.workspaceId
-    : !deps.workspaceId && row.userId === deps.userId;
+  row.userId === deps.userId &&
+  (row.workspaceId ? row.workspaceId === deps.workspaceId : !deps.workspaceId);
 
 export const resolveForeignSubjects = async (
   deps: AcceptanceServiceDeps,

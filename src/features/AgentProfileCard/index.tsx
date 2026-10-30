@@ -1,11 +1,11 @@
 'use client';
 
-import { Avatar, Center, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar, { isDefaultAgentAvatar } from '@/components/AgentAvatar';
 
 const styles = stylex.create({
   banner: { position: 'relative', overflow: 'hidden', height: '60px' },
@@ -31,6 +31,8 @@ const styles = stylex.create({
 });
 
 export interface AgentProfileCardProps {
+  /** Seeds the generated avatar of an agent without one. */
+  agentId?: string | null;
   avatar?: string | null;
   backgroundColor?: string | null;
   children?: ReactNode;
@@ -45,6 +47,7 @@ export interface AgentProfileCardProps {
 
 const AgentProfileCard = memo<AgentProfileCardProps>(
   ({
+    agentId,
     avatar,
     backgroundColor,
     description,
@@ -60,25 +63,32 @@ const AgentProfileCard = memo<AgentProfileCardProps>(
           className={stylex.props(styles.banner).className}
           style={{ background: cssVar.colorFillTertiary }}
         >
-          <Avatar
-            emojiScaleWithBackground
-            avatar={avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={agentId}
+            avatar={avatar}
             background={backgroundColor ?? undefined}
             className={stylex.props(styles.bannerInner).className}
+            name={title}
             shape={'square'}
             size={400}
           />
         </Center>
 
         <Flexbox className={stylex.props(styles.header).className} gap={8}>
-          <Avatar
-            emojiScaleWithBackground
-            avatar={avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={agentId}
+            avatar={avatar}
             background={backgroundColor ?? undefined}
             className={stylex.props(onHeaderClick ? styles.clickableAvatar : undefined).className}
+            name={title}
             shape={'square'}
             size={48}
-            style={{ border: `2px solid ${cssVar.colorBgElevated}` }}
+            // The generated character has no tile, so a frame would box empty space.
+            style={
+              isDefaultAgentAvatar(avatar)
+                ? undefined
+                : { border: `2px solid ${cssVar.colorBgElevated}` }
+            }
             onClick={onHeaderClick}
           />
           <Flexbox gap={2}>

@@ -5,7 +5,7 @@ import type { GroupedTopic } from '@lobechat/types';
 import { ActionIcon, Checkbox, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FolderIcon, MoreHorizontal, Star } from 'lucide-react';
+import { FolderIcon, MoreHorizontal, Pin } from 'lucide-react';
 import { Fragment, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -177,7 +177,7 @@ const Row = memo<RowProps>(({ topic, agentId }) => {
       <div {...stylex.props(styles.cell)}>
         <Flexbox horizontal align={'center'} gap={6}>
           {topic.favorite && (
-            <Icon icon={Star} size={12} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+            <Icon icon={Pin} size={12} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }} />
           )}
           {BotPlatformIcon && (
             <BotPlatformIcon

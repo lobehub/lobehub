@@ -5,7 +5,7 @@ import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
 import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
+import { CircleDollarSign, FolderIcon, GitBranchIcon, MessageSquare, Pin, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,9 +16,11 @@ import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
-import { getProjectLabel } from './utils';
+import moduleStyles from './TopicCard.module.css';
+import { getProjectInfo } from './utils';
 
 const styles = stylex.create({
+  projectLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   card: {
     cursor: 'pointer',
     position: 'relative',
@@ -91,7 +93,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
     e.stopPropagation();
   }, []);
 
-  const projectLabel = getProjectLabel(topic);
+  const project = getProjectInfo(topic);
   const status = topic.status ?? 'active';
   // Bot source platform icon (same identity mark as the sidebar topic item).
   const botPlatform = topic.metadata?.bot?.platform;
@@ -135,7 +137,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
         gap={6}
       >
         {topic.favorite && (
-          <Icon icon={Star} size={13} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+          <Icon icon={Pin} size={13} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }} />
         )}
         {BotPlatformIcon && (
           <BotPlatformIcon
@@ -159,10 +161,27 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
         </Text>
       )}
 
-      {projectLabel && (
-        <Tag icon={<Icon icon={FolderIcon} size={11} />} size={'small'}>
-          {projectLabel}
-        </Tag>
+      {project && (
+        <Flexbox gap={4}>
+          <Tag
+            className={moduleStyles.projectTag}
+            icon={<Icon icon={FolderIcon} size={11} />}
+            size={'small'}
+            title={project.path}
+          >
+            <span className={stylex.props(styles.projectLabel).className}>{project.path}</span>
+          </Tag>
+          {project.branch && (
+            <Tag
+              className={moduleStyles.projectTag}
+              icon={<Icon icon={GitBranchIcon} size={11} />}
+              size={'small'}
+              title={project.branch}
+            >
+              <span className={stylex.props(styles.projectLabel).className}>{project.branch}</span>
+            </Tag>
+          )}
+        </Flexbox>
       )}
 
       <Flexbox

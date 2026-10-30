@@ -1,0 +1,9 @@
+.projectTag {
+  align-self: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.projectTag > :first-child {
+  flex-shrink: 0;
+}

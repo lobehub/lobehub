@@ -8,7 +8,9 @@ import {
   agents,
   chatGroups,
   chatGroupsAgents,
+  files,
   messages,
+  messagesFiles,
   pushLiveActivities,
   pushTokens,
   topics,
@@ -102,6 +104,7 @@ beforeEach(async () => {
   await db.delete(pushTokens);
   await db.delete(agentOperations);
   await db.delete(messages);
+  await db.delete(files);
   await db.delete(topics);
   await db.delete(chatGroupsAgents);
   await db.delete(chatGroups);
@@ -113,6 +116,55 @@ beforeEach(async () => {
 });
 
 describe('ImRestService.sync — whole-message delivery', () => {
+  it('delivers and counts an attachment-only assistant reply and allows marking it read', async () => {
+    await db.insert(files).values({
+      id: 'file_reply',
+      userId: USER,
+      name: 'reply.png',
+      fileType: 'image/png',
+      size: 123,
+      url: 'https://example.com/reply.png',
+    });
+    await insertMessage('msg_file_reply', 'assistant', '', '2026-10-04T10:00:00Z');
+    await db
+      .insert(messagesFiles)
+      .values({ fileId: 'file_reply', messageId: 'msg_file_reply', userId: USER });
+    const result = await service.sync(TOPIC, {});
+    expect(result.messages[0]).toMatchObject({ content: '', files: [{ id: 'file_reply' }] });
+    expect(result.unread).toBe(1);
+    await expect(service.markRead(TOPIC, { messageId: 'msg_file_reply' })).resolves.toEqual({
+      unread: 0,
+    });
+  });
+  it('returns attachment metadata with an attachment-only user message', async () => {
+    await db.insert(files).values({
+      id: 'file_tea',
+      userId: USER,
+      name: 'tea.png',
+      fileType: 'image/png',
+      size: 123,
+      url: 'https://example.com/tea.png',
+    });
+    await insertMessage('msg_photo', 'user', '', '2026-10-04T10:00:00Z');
+    await db
+      .insert(messagesFiles)
+      .values({ fileId: 'file_tea', messageId: 'msg_photo', userId: USER });
+
+    const result = await service.sync(TOPIC, {});
+    expect(result.messages[0]).toMatchObject({
+      content: '',
+      files: [
+        {
+          id: 'file_tea',
+          name: 'tea.png',
+          fileType: 'image/png',
+          size: 123,
+          url: 'https://example.com/tea.png',
+        },
+      ],
+    });
+  });
+
   it('withholds the reply (placeholder included) while the run is in flight, then delivers it whole', async () => {
     await insertMessage('msg_u1', 'user', 'hi', '2026-10-04T10:00:00.000100Z');
     await insertMessage('msg_a1', 'assistant', '...', '2026-10-04T10:00:00.000300Z');
@@ -533,6 +585,71 @@ describe('ImRestService.send', () => {
     expect(ImSendRequestSchema.safeParse({ content: 'hi' }).success).toBe(false);
     expect(ImSendRequestSchema.safeParse({ agentId: AGENT, content: 'hi' }).success).toBe(true);
     expect(ImSendRequestSchema.safeParse({ content: 'hi', groupId: GROUP }).success).toBe(true);
+  });
+
+  it('accepts attachment-only messages but rejects an empty turn', () => {
+    expect(
+      ImSendRequestSchema.safeParse({ agentId: AGENT, content: '', fileIds: ['file_tea'] }).success,
+    ).toBe(true);
+    expect(
+      ImSendRequestSchema.safeParse({ agentId: AGENT, content: '  ', fileIds: [] }).success,
+    ).toBe(false);
+    expect(
+      ImSendRequestSchema.safeParse({ agentId: AGENT, content: '', fileIds: [''] }).success,
+    ).toBe(false);
+  });
+
+  it('rejects missing or inaccessible files before starting an agent', async () => {
+    await db.insert(files).values({
+      id: 'file_other',
+      userId: OTHER,
+      name: 'private.png',
+      fileType: 'image/png',
+      size: 123,
+      url: 'https://example.com/private.png',
+    });
+    for (const fileId of ['file_missing', 'file_other']) {
+      await expect(
+        service.send({ agentId: AGENT, content: 'look', fileIds: [fileId] }),
+      ).rejects.toThrow();
+    }
+    expect(execAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('attaches uploaded files to an agent turn and retains them in an idempotent receipt', async () => {
+    await db.insert(files).values({
+      id: 'file_tea',
+      userId: USER,
+      name: 'tea.png',
+      fileType: 'image/png',
+      size: 123,
+      url: 'https://example.com/tea.png',
+    });
+    execAgentMock.mockImplementation(async (input) => {
+      await insertMessage('msg_file00001', 'user', input.prompt, '2026-10-04T10:00:00Z');
+      await insertMessage('msg_file_reply', 'assistant', '...', '2026-10-04T10:00:01Z');
+      for (const fileId of input.fileIds ?? []) {
+        await db.insert(messagesFiles).values({ fileId, messageId: 'msg_file00001', userId: USER });
+      }
+      return {
+        success: true,
+        operationId: 'op_file',
+        topicId: TOPIC,
+        userMessageId: 'msg_file00001',
+      };
+    });
+    const input = {
+      agentId: AGENT,
+      content: '',
+      fileIds: ['file_tea'],
+      clientMessageId: 'msg_file00001',
+    };
+    const sent = await service.send(input);
+    const retried = await service.send(input);
+    expect(sent.userMessage.files?.map((file) => file.id)).toEqual(['file_tea']);
+    expect(retried.userMessage.files).toEqual(sent.userMessage.files);
+    expect(retried.accepted).toBe(false);
+    expect(execAgentMock).toHaveBeenCalledTimes(1);
   });
 
   it('runs a group send through the group supervisor in a new group topic', async () => {

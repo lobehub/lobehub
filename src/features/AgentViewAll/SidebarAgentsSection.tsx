@@ -6,7 +6,6 @@ import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { Block, ContextMenuTrigger, type DropdownItem, Flexbox, Icon } from '@lobehub/ui';
 import { Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
-import { media } from '@lobehub/ui/stylex/media.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -16,8 +15,9 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import AgentAvatar from './AgentAvatar';
+import { AGENT_GRID_MIN_COLUMN } from './AgentCard';
 import ItemActions from './ItemActions';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 // "In sidebar" overview: a collapsible card grid pinned above the main list
 // so the user can see at a glance which agents currently show in the sidebar
@@ -53,16 +53,14 @@ const styles = stylex.create({
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: {
-      default: 'repeat(3, minmax(0, 1fr))',
-      [media.md]: 'repeat(2, minmax(0, 1fr))',
-      [media.sm]: 'minmax(0, 1fr)',
-    },
     gap: '12px',
     width: '100%',
     minWidth: '0',
   },
   header: { cursor: 'pointer', userSelect: 'none' },
+  gridColumns: (minColumn: number) => ({
+    gridTemplateColumns: `repeat(auto-fill, minmax(min(${minColumn}px, 100%), 1fr))`,
+  }),
   link: { display: 'block', minWidth: '0', color: 'inherit' },
 });
 
@@ -109,7 +107,7 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
           variant={'outlined'}
         >
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <AgentAvatar item={item} size={24} />
+            <SidebarItemAvatar item={item} size={24} />
             <Text ellipsis style={{ minWidth: 0 }} weight={600}>
               {displayTitle}
             </Text>
@@ -198,7 +196,7 @@ const SidebarAgentsSection = memo<SidebarAgentsSectionProps>(({ items, onToggleS
         </Flexbox>
       </Flexbox>
       {!collapsed && (
-        <div {...stylex.props(styles.grid)}>
+        <div {...stylex.props(styles.grid, styles.gridColumns(AGENT_GRID_MIN_COLUMN))}>
           {items.map((item) => (
             <SidebarMiniCard item={item} key={item.id} onToggleSidebar={onToggleSidebar} />
           ))}

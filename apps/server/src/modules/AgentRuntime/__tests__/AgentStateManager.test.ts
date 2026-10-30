@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentStateManager } from '../AgentStateManager';
 
@@ -202,6 +202,159 @@ describe('AgentStateManager', () => {
     });
   });
 
+  // The tool set is immutable, the heaviest thing on the state, and re-written
+  // at every step; it lives in its own key written once per process and is
+  // re-attached on load. Distinct operationIds per test: the write-once cache
+  // is process-global and survives `clearAllMocks`.
+  describe('operationToolSet externalization', () => {
+    const toolSet = { enabledToolIds: ['foo'], manifestMap: { foo: { api: [] } }, tools: [{}] };
+
+    // Stripping is opt-in so a previous-build worker can still execute an
+    // operation mid-rollout (see `isToolSetStripEnabled`).
+    const STRIP_FLAG = 'AGENT_RUNTIME_STRIP_OPERATION_TOOLSET';
+    const originalFlag = process.env[STRIP_FLAG];
+
+    beforeEach(() => {
+      process.env[STRIP_FLAG] = '1';
+    });
+
+    afterAll(() => {
+      if (originalFlag === undefined) delete process.env[STRIP_FLAG];
+      else process.env[STRIP_FLAG] = originalFlag;
+    });
+
+    it('writes the tool set to its own key and strips it from the state blob', async () => {
+      await stateManager.saveAgentState('op-ots-strip', {
+        operationToolSet: toolSet,
+        status: 'running',
+        stepCount: 1,
+      } as any);
+
+      expect(redisMock.setex).toHaveBeenCalledWith(
+        'agent_runtime_toolset:op-ots-strip',
+        2 * 3600,
+        JSON.stringify(toolSet),
+      );
+      const blob = redisMock.setex.mock.calls.find(
+        (c) => c[0] === 'agent_runtime_state:op-ots-strip',
+      );
+      expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
+      expect(JSON.parse(blob![2] as string).status).toBe('running');
+    });
+
+    it('writes the tool set once per process and only refreshes its TTL after that', async () => {
+      const op = 'op-ots-once';
+      const state = { operationToolSet: toolSet, status: 'running', stepCount: 1 } as any;
+
+      await stateManager.saveAgentState(op, state);
+      await stateManager.saveAgentState(op, state);
+
+      const writes = redisMock.setex.mock.calls.filter(
+        (c) => c[0] === `agent_runtime_toolset:${op}`,
+      );
+      expect(writes).toHaveLength(1);
+      expect(redisMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
+    });
+
+    it('refreshes the tool-set TTL inside the step pipeline and strips the blob', async () => {
+      const op = 'op-ots-step';
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: { operationToolSet: toolSet, status: 'running', stepCount: 1 },
+        stepIndex: 1,
+      } as any);
+
+      expect(redisMock.setex).toHaveBeenCalledWith(
+        `agent_runtime_toolset:${op}`,
+        2 * 3600,
+        JSON.stringify(toolSet),
+      );
+      expect(pipelineMock.expire).toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, 2 * 3600);
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      expect(JSON.parse(blob![2] as string).operationToolSet).toBeUndefined();
+    });
+
+    it('re-attaches the tool set from its key when the loaded blob has none', async () => {
+      const op = 'op-ots-load';
+      redisMock.get.mockImplementation((key: string) =>
+        key === `agent_runtime_state:${op}`
+          ? JSON.stringify({ status: 'running', stepCount: 2 })
+          : key === `agent_runtime_toolset:${op}`
+            ? JSON.stringify(toolSet)
+            : null,
+      );
+
+      const loaded = await stateManager.loadAgentState(op);
+      expect(loaded?.operationToolSet).toEqual(toolSet);
+    });
+
+    it('leaves an inline (legacy / rolling-deploy) tool set untouched', async () => {
+      const op = 'op-ots-inline';
+      const inline = { enabledToolIds: [], manifestMap: { bar: {} }, tools: [] };
+      redisMock.get.mockImplementation((key: string) =>
+        key === `agent_runtime_state:${op}`
+          ? JSON.stringify({ operationToolSet: inline, status: 'running', stepCount: 1 })
+          : null,
+      );
+
+      const loaded = await stateManager.loadAgentState(op);
+      expect(loaded?.operationToolSet).toEqual(inline);
+      expect(redisMock.get).not.toHaveBeenCalledWith(`agent_runtime_toolset:${op}`);
+    });
+  });
+
+  // A queue continuation targets the shared runtime URL, so an operation saved
+  // by this build can next run on a previous-build worker that never reads the
+  // external key. Until operators drain that build the blob must stay
+  // self-contained.
+  describe('operationToolSet externalization · rolling-deploy compatibility', () => {
+    const STRIP_FLAG = 'AGENT_RUNTIME_STRIP_OPERATION_TOOLSET';
+    const originalFlag = process.env[STRIP_FLAG];
+
+    afterAll(() => {
+      if (originalFlag === undefined) delete process.env[STRIP_FLAG];
+      else process.env[STRIP_FLAG] = originalFlag;
+    });
+
+    it('keeps the inline tool set and writes no external key while stripping is off', async () => {
+      delete process.env[STRIP_FLAG];
+      const op = 'op-ots-compat-off';
+      const toolSet = { enabledToolIds: ['compat'], manifestMap: { bar: {} }, tools: [{}] };
+
+      await stateManager.saveAgentState(op, {
+        operationToolSet: toolSet,
+        status: 'running',
+        stepCount: 1,
+      } as any);
+
+      expect(redisMock.setex.mock.calls.some((c) => c[0] === `agent_runtime_toolset:${op}`)).toBe(
+        false,
+      );
+      expect(redisMock.expire).not.toHaveBeenCalledWith(`agent_runtime_toolset:${op}`, expect.anything());
+      const blob = redisMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      expect(JSON.parse(blob![2] as string).operationToolSet).toEqual(toolSet);
+    });
+
+    it('keeps the inline tool set in the step pipeline while stripping is off', async () => {
+      delete process.env[STRIP_FLAG];
+      const op = 'op-ots-compat-step';
+      const toolSet = { enabledToolIds: ['compat-step'], manifestMap: {}, tools: [] };
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: { operationToolSet: toolSet, status: 'running', stepCount: 1 },
+        stepIndex: 1,
+      } as any);
+
+      expect(pipelineMock.expire).not.toHaveBeenCalledWith(
+        `agent_runtime_toolset:${op}`,
+        expect.anything(),
+      );
+      const blob = pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`);
+      expect(JSON.parse(blob![2] as string).operationToolSet).toEqual(toolSet);
+    });
+  });
+
   describe('step execution lock', () => {
     it('claims an operation-scoped lock with the provided owner token', async () => {
       redisMock.eval.mockResolvedValue(1);
@@ -286,6 +439,7 @@ describe('AgentStateManager', () => {
 
       expect(redisMock.del).toHaveBeenCalledWith(
         'agent_runtime_state:op-del',
+        'agent_runtime_toolset:op-del',
         'agent_runtime_steps:op-del',
         'agent_runtime_meta:op-del',
         'agent_runtime_interrupt:op-del',

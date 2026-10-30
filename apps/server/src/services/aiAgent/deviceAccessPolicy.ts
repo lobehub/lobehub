@@ -17,10 +17,8 @@ export type DeviceAccessReason =
    */
   | 'bot-personal-platform'
   /**
-   * Bot caller, sender is on the operator's trusted external list. Reserved —
-   * the resolver never returns this value yet; future work will plumb the
-   * trusted list through `DeviceAccessPolicyInput` and add the branch here
-   * without touching `AgentToolsEngine`.
+   * Bot caller, sender is on the owner's device list (`settings.devicePolicy =
+   * 'allowlist'`), carried as `botContext.isDeviceTrusted`.
    */
   | 'bot-trusted'
   /** Bot caller, sender is identifiable but not the owner — DENY device tools. */
@@ -111,9 +109,9 @@ export const resolveDeviceAccessPolicy = (
     return { canUseDevice: true, reason: 'bot-personal-platform' };
   }
 
-  // Future: bot-trusted branch (operator-curated allowlist of external
-  // senders). Falls through to the deny branch until the trusted list is
-  // wired into `DeviceAccessPolicyInput`.
+  if (botContext.isDeviceTrusted) {
+    return { canUseDevice: true, reason: 'bot-trusted' };
+  }
 
   if (!botContext.senderExternalUserId) {
     return { canUseDevice: false, reason: 'bot-owner-not-configured' };

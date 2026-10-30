@@ -14,6 +14,7 @@ import {
   listComments,
   setResolved,
 } from './handlers';
+import { getSiteInfo } from './sites';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
@@ -37,6 +38,7 @@ app.use(
     onError: (c) => reviewError(c, 413, 'TOO_LARGE', 'Request body is too large'),
   }),
 );
+app.get('/sites/:siteId', getSiteInfo);
 app.use('*', reviewAuth);
 app.onError(handleReviewError);
 app.notFound((c) => reviewError(c, 404, 'NOT_FOUND', 'Not found'));

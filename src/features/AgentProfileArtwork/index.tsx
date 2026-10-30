@@ -8,7 +8,6 @@ import {
 import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
-  Avatar,
   Button,
   type DropdownItem,
   DropdownMenu,
@@ -22,6 +21,7 @@ import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } fr
 import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import EmojiPicker from '@/components/EmojiPicker';
 import {
   openAgentArtworkStudio,
@@ -492,6 +492,17 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             shape={'square'}
             size={72}
             value={avatar || undefined}
+            // Without an avatar of its own the trigger shows the agent's generated
+            // character, the same one every other agent avatar draws.
+            customRender={() => (
+              <AgentAvatar
+                agentId={agentId}
+                avatar={avatar}
+                className={'lobe-emoji-picker-avatar'}
+                name={name || title}
+                size={72}
+              />
+            )}
             customTabs={[
               {
                 label: (
@@ -505,10 +516,11 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                       className={stylex.props(styles.generatedPreview).className}
                       height={156}
                     >
-                      <Avatar
-                        avatar={avatar || undefined}
+                      <AgentAvatar
+                        agentId={agentId}
+                        avatar={avatar}
                         key={avatarRemountKey(avatar)}
-                        shape={'square'}
+                        name={name || title}
                         size={112}
                       />
                     </Center>

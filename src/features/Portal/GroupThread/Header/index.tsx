@@ -1,9 +1,9 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import PortalHeader from '@/features/Portal/components/Header';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useSessionStore } from '@/store/session';
@@ -24,9 +24,11 @@ const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
     <PortalHeader
       title={
         <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-          <Avatar
-            avatar={currentAgent?.avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={currentAgent?.id}
+            avatar={currentAgent?.avatar}
             background={currentAgent?.backgroundColor ?? undefined}
+            name={agentDisplayName(currentAgent, t('defaultSession'))}
             shape={'square'}
             size={20}
           />

@@ -31,18 +31,23 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import Avatar from '@/components/Avatar';
 import TailMarquee from '@/components/TailMarquee';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
+import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { AgentDirectoryActions } from '@/features/Projects/WorkingDirectories/AgentDirectoryActions';
+import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
+import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { type ProjectTopicSubGroupMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -139,18 +144,50 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     ],
   );
 
-  // A merged project group may span several machines. It opens the plain new
-  // topic composer — no directory is pre-committed and no chooser modal pops;
-  // the user picks the machine/directory in the composer control bar, the
-  // same habit as the header's new-topic action. Single-directory groups keep
-  // the legacy direct start above.
+  // A merged project group may span several machines, so there is no single
+  // directory to commit to the agent. It still has to open the blank composer
+  // INSIDE the project: stage one runnable directory — the agent's current
+  // device first — so the first send binds the new topic to the project, and
+  // let the user move to another machine in the composer's device switcher.
+  // Staging nothing (the old behaviour) dropped the topic into a path-only
+  // conversation, detached from the project the "+" belonged to. No directory
+  // can run it → fall back to the plain composer, as before.
+  const fixedDeviceId = useAgentFixedDeviceId(targetAgentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(targetAgentId ?? '', {
+    topicId: null,
+  });
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const handleStartPlain = useCallback(() => {
     if (!currentAgentId || !targetAgentId) return;
+    const runnable = projectDirectories.filter((d) => canStageDraftOn(d, fixedDeviceId));
+    const preferredDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+      workspaceScoped,
+    });
+    const stagedDirectory =
+      runnable.find((d) => preferredDeviceId && d.deviceId === preferredDeviceId) ?? runnable[0];
     useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+    useChatStore
+      .getState()
+      .setPendingNewTopicDirectory(
+        stagedDirectory
+          ? { agentId: targetAgentId, projectWorkingDirectoryId: stagedDirectory.id }
+          : undefined,
+      );
     router.push(
       buildPrefixedAgentRoutePath(AGENT_CHAT_URL(targetAgentId), agentRoute, activeWorkspaceSlug),
     );
-  }, [currentAgentId, targetAgentId, router, agentRoute, activeWorkspaceSlug]);
+  }, [
+    currentAgentId,
+    targetAgentId,
+    projectDirectories,
+    fixedDeviceId,
+    agencyConfig,
+    currentDeviceId,
+    workspaceScoped,
+    router,
+    agentRoute,
+    activeWorkspaceSlug,
+  ]);
 
   // Start on one specific project directory — the device sub-group "+". The
   // directory pins the device, so nothing is committed to the agent default.
@@ -296,8 +333,8 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
             <Center flex="none" height={24} width={28}>
               {project ? (
-                <Avatar
-                  avatar={project.projectAvatar || undefined}
+                <ProjectAvatar
+                  avatar={project.projectAvatar}
                   name={project.projectName}
                   size={18}
                 />
@@ -363,6 +400,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
       <AccordionPanel contentStyle={{ padding: 0 }}>
         <ProjectTopicList
           mode={subGroupMode}
+          startAgentId={targetAgentId}
           startDirectories={projectId ? projectDirectories : project ? [project] : undefined}
           topics={children}
           onStartInDirectory={!scope && targetAgentId ? handleStartInDirectory : undefined}

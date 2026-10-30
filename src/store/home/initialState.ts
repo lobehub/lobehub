@@ -1,5 +1,7 @@
 import { type AgentListState } from './slices/agentList/initialState';
 import { initialAgentListState } from './slices/agentList/initialState';
+import { type FavoriteState } from './slices/favorite/initialState';
+import { initialFavoriteState } from './slices/favorite/initialState';
 import { type HomeInputState } from './slices/homeInput/initialState';
 import { initialHomeInputState } from './slices/homeInput/initialState';
 import { type HomeInboxState } from './slices/inbox/initialState';
@@ -12,10 +14,18 @@ import { type SidebarUIState } from './slices/sidebarUI/initialState';
 import { initialSidebarUIState } from './slices/sidebarUI/initialState';
 
 export interface HomeStoreState
-  extends AgentListState, RecentState, HomeInboxState, HomeInputState, LabelState, SidebarUIState {}
+  extends
+    AgentListState,
+    FavoriteState,
+    RecentState,
+    HomeInboxState,
+    HomeInputState,
+    LabelState,
+    SidebarUIState {}
 
 export const initialState: HomeStoreState = {
   ...initialAgentListState,
+  ...initialFavoriteState,
   ...initialRecentState,
   ...initialHomeInboxState,
   ...initialHomeInputState,

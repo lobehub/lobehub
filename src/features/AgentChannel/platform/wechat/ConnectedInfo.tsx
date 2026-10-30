@@ -1,11 +1,8 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
-import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import type { LucideIcon } from 'lucide-react';
-import { Fingerprint, KeyRound, UserRound } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,27 +11,19 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 import QrCodeAuth from './QrCodeAuth';
 
 const styles = stylex.create({
-  fieldIcon: { flex: 'none', color: cssVar.colorTextSecondary },
   header: { display: 'flex', alignItems: 'center', marginBlockEnd: '16px' },
 });
 
 const ReadOnlyField = memo<{
   divider?: boolean;
-  icon: LucideIcon;
   label: string;
   password?: boolean;
   value?: string;
-}>(({ divider, icon, label, password, value }) => {
+}>(({ divider, label, password, value }) => {
   const InputComponent = password ? FormPassword : FormInput;
 
   return (
-    <Form.Field
-      avatar={<Icon className={stylex.props(styles.fieldIcon).className} icon={icon} size={20} />}
-      divider={divider}
-      label={label}
-      minWidth={'max(50%, 400px)'}
-      variant="outlined"
-    >
+    <Form.Field divider={divider} label={label} layout="vertical">
       <InputComponent readOnly value={value || ''} />
     </Form.Field>
   );
@@ -77,30 +66,23 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
           />
         )}
         {shouldShowApplicationId && (
-          <ReadOnlyField
-            icon={Fingerprint}
-            label={t('channel.applicationId')}
-            value={currentConfig.applicationId}
-          />
+          <ReadOnlyField label={t('channel.applicationId')} value={currentConfig.applicationId} />
         )}
         {__DEV__ && (
           <>
             <ReadOnlyField
               divider={shouldShowApplicationId}
-              icon={Fingerprint}
               label={t('channel.wechatBotId')}
               value={currentConfig.credentials.botId}
             />
             <ReadOnlyField
               divider
               password
-              icon={KeyRound}
               label={t('channel.botToken')}
               value={currentConfig.credentials.botToken}
             />
             <ReadOnlyField
               divider
-              icon={UserRound}
               label={t('channel.wechatUserId')}
               value={currentConfig.credentials.userId}
             />

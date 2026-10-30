@@ -32,4 +32,55 @@ describe('shouldRecordGatewayError', () => {
   ] as const)('%s → %s', (_label, errorType, provider, expected) => {
     expect(shouldRecordGatewayError({ errorType, provider })).toBe(expected);
   });
+
+  describe('normalized error classification', () => {
+    // A platform admission refusal keeps the numeric `Forbidden` type, which
+    // has no spec; the normalizer classifies it on the error itself.
+    const forbidden = '403';
+
+    it('keeps a user-side refusal without a spec off the board', () => {
+      expect(
+        shouldRecordGatewayError({
+          error: { attribution: 'user', countAsFailure: false },
+          errorType: forbidden,
+          provider: BRANDING_PROVIDER,
+        }),
+      ).toBe(false);
+    });
+
+    it('files an unclassified refusal', () => {
+      expect(shouldRecordGatewayError({ error: {}, errorType: forbidden })).toBe(true);
+    });
+
+    it('files a refusal the normalizer counts as a failure', () => {
+      expect(
+        shouldRecordGatewayError({
+          error: { attribution: 'harness', countAsFailure: true },
+          errorType: forbidden,
+        }),
+      ).toBe(true);
+    });
+
+    it('overrides the generic type a heterogeneous CLI failure keeps', () => {
+      // A Claude Code session limit stays `AgentRuntimeError`, whose spec
+      // counts as a failure; the CLI classification says it is the user's.
+      expect(
+        shouldRecordGatewayError({
+          error: { attribution: 'user', countAsFailure: false },
+          errorType: AgentRuntimeErrorType.AgentRuntimeError,
+          provider: 'claude-code',
+        }),
+      ).toBe(false);
+    });
+
+    it('keeps a CLI capacity error off the board for the CLI provider', () => {
+      expect(
+        shouldRecordGatewayError({
+          error: { attribution: 'provider', countAsFailure: false },
+          errorType: AgentRuntimeErrorType.AgentRuntimeError,
+          provider: 'codex',
+        }),
+      ).toBe(false);
+    });
+  });
 });

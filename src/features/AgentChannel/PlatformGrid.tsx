@@ -1,7 +1,6 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { media } from '@lobehub/ui/stylex/media.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -9,7 +8,7 @@ import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { type BotRuntimeStatus } from '@/types/botRuntimeStatus';
@@ -73,9 +72,10 @@ const PlatformGrid = memo<PlatformGridProps>(
               values={{ name: agentName }}
               components={{
                 avatar: (
-                  <span {...stylex.props(styles.titleAvatar)}>
-                    <Avatar
-                      avatar={meta.avatar || DEFAULT_AVATAR}
+                  <span className={stylex.props(styles.titleAvatar).className}>
+                    <AgentAvatar
+                      agentId={agentId}
+                      avatar={meta.avatar}
                       background={meta.backgroundColor}
                       shape={'square'}
                       size={28}

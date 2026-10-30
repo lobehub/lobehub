@@ -1,10 +1,12 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/utils';
 import type OpenAI from 'openai';
 
 import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { normalizeAnthropicToolSchema } from '../../utils/anthropicToolSchema';
+import { resolveImageMimeTypeFromBase64 } from '../../utils/imageMimeType';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { parseDataUri } from '../../utils/uriParser';
+import { type InlineImageBudgetOptions, inlineImagesWithinBudget } from './inlineImageBudget';
 
 const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -329,9 +331,15 @@ export const buildAnthropicMessage = async (
 };
 
 export const buildAnthropicMessages = async (
-  oaiMessages: OpenAIChatMessage[],
-  options: { enabledContextCaching?: boolean } = {},
+  inputMessages: OpenAIChatMessage[],
+  options: {
+    enabledContextCaching?: boolean;
+    /** Overrides for the inline image budget, e.g. a provider's lower body limit. */
+    imageBudget?: Partial<InlineImageBudgetOptions>;
+  } = {},
 ): Promise<Anthropic.Messages.MessageParam[]> => {
+  // Every image is inlined as base64, so keep the request under the body limit first.
+  const oaiMessages = await inlineImagesWithinBudget(inputMessages, options.imageBudget);
   const messages: Anthropic.Messages.MessageParam[] = [];
 
   // === Two-pass strategy to guarantee tool_use / tool_result pairing ===

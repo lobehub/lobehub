@@ -10,10 +10,11 @@ import {
   deviceMetricSampleSchema,
 } from '@lobechat/types';
 
-import type { CpuTimes, MemoryUsage } from './systemSnapshot';
+import type { CpuTimes, DiskUsage, MemoryUsage } from './systemSnapshot';
 import {
   cpuPercentBetween,
   readCpuTimes,
+  readDiskUsage,
   readLoadAverage,
   readMemoryUsage,
 } from './systemSnapshot';
@@ -35,6 +36,7 @@ export interface DeviceMetricsSamplerOptions {
   /** Test seams for the machine readings. */
   readers?: {
     cpuTimes?: () => CpuTimes;
+    disk?: () => Promise<DiskUsage | undefined>;
     loadAverage?: () => [number, number, number] | null;
     memory?: () => Promise<MemoryUsage>;
   };
@@ -50,7 +52,7 @@ export interface DeviceMetricsSamplerOptions {
 }
 
 /**
- * Samples this machine's CPU / memory / load once a minute and uploads the
+ * Samples this machine's CPU / memory / load / disk once a minute and uploads the
  * samples in batches. Samples are kept locally until an upload succeeds, so
  * the stretch a device spent disconnected is uploaded once it reconnects —
  * that stretch is exactly what explains a drop.
@@ -122,11 +124,14 @@ export class DeviceMetricsSampler {
 
     try {
       const memory = await (readers.memory ?? readMemoryUsage)();
+      const disk = await (readers.disk ?? readDiskUsage)();
       const load = (readers.loadAverage ?? readLoadAverage)();
       this.pending.push({
         connected: this.options.isConnected(),
         cpuCount: Math.max(1, os.cpus().length),
         cpuPercent,
+        diskTotalBytes: disk?.totalBytes ?? null,
+        diskUsedBytes: disk?.usedBytes ?? null,
         load1: load?.[0] ?? null,
         load15: load?.[2] ?? null,
         load5: load?.[1] ?? null,

@@ -24,12 +24,16 @@ describe('PlanLimitCard budget helpers', () => {
     expect(getNextUpgradePlan(Plans.Premium)).toBe(Plans.Ultimate);
     expect(getNextUpgradePlan(Plans.Ultimate)).toBeUndefined();
     expect(getNextUpgradePlan(Plans.Hobby)).toBeUndefined();
+    expect(getNextUpgradePlan(Plans.Plus)).toBe(Plans.Pro);
+    expect(getNextUpgradePlan(Plans.Pro)).toBe(Plans.Max);
+    expect(getNextUpgradePlan(Plans.Max)).toBeUndefined();
     expect(getNextUpgradePlan(undefined)).toBeUndefined();
   });
 
   it('should detect known plan ids', () => {
     expect(isKnownPlan(Plans.Free)).toBe(true);
     expect(isKnownPlan(Plans.Hobby)).toBe(true);
+    expect(isKnownPlan(Plans.Max)).toBe(true);
     expect(isKnownPlan('legacy')).toBe(false);
     expect(isKnownPlan(undefined)).toBe(false);
   });

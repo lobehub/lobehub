@@ -15,6 +15,11 @@ import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
+import type * as AgentReferenceModule from '@/server/services/agent/resolveReference';
+import {
+  InboxNotProvisionedError,
+  resolveAgentReference,
+} from '@/server/services/agent/resolveReference';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
@@ -30,6 +35,11 @@ import {
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 import { agentRouter } from '../agent';
+
+vi.mock('@/server/services/agent/resolveReference', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentReferenceModule>()),
+  resolveAgentReference: vi.fn(),
+}));
 
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
 vi.mock('../_helpers/workspaceAgentGuard', () => ({
@@ -140,6 +150,11 @@ describe('agentRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(resolveAgentReference).mockImplementation(async (id) => {
+      if (id === INBOX_SESSION_ID)
+        throw new TRPCError({ cause: new InboxNotProvisionedError(), code: 'NOT_FOUND' });
+      return { agentId: id, sessionId: null };
+    });
     vi.mocked(assertCanPerformResourceAction).mockResolvedValue();
     vi.mocked(isWorkspacePrimaryOwner).mockResolvedValue(false);
     vi.mocked(getResourceMeta).mockResolvedValue({
@@ -247,7 +262,7 @@ describe('agentRouter', () => {
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
 
-    it('should create inbox session if user exists but no inbox session', async () => {
+    it('provisions the builtin inbox when no legacy inbox exists', async () => {
       const mockUser = { id: userId };
       const mockSession = { id: 'inboxSessionId' };
 
@@ -255,24 +270,30 @@ describe('agentRouter', () => {
       sessionModelMock.findByIdOrSlug
         .mockResolvedValueOnce(undefined)
         .mockResolvedValueOnce(mockSession);
-      agentModelMock.findBySessionId.mockResolvedValue(DEFAULT_AGENT_CONFIG);
+      agentServiceMock.getBuiltinAgent = vi.fn().mockResolvedValue(DEFAULT_AGENT_CONFIG);
 
       const caller = agentRouter.createCaller(mockCtx);
       const result = await caller.getAgentConfig({ sessionId: INBOX_SESSION_ID });
 
-      expect(agentServiceMock.createInbox).toHaveBeenCalled();
+      expect(agentServiceMock.getBuiltinAgent).toHaveBeenCalledWith(INBOX_SESSION_ID);
+      expect(agentServiceMock.createInbox).not.toHaveBeenCalled();
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
 
     it('should find agent by session id if session exists', async () => {
       const mockSession = { id: 'session1' };
       sessionModelMock.findByIdOrSlug.mockResolvedValue(mockSession);
-      agentModelMock.findBySessionId.mockResolvedValue(DEFAULT_AGENT_CONFIG);
+      agentServiceMock.getAgentConfigById = vi.fn().mockResolvedValue(DEFAULT_AGENT_CONFIG);
 
       const caller = agentRouter.createCaller(mockCtx);
       const result = await caller.getAgentConfig({ sessionId: 'session1' });
 
-      expect(agentModelMock.findBySessionId).toHaveBeenCalledWith('session1');
+      expect(resolveAgentReference).toHaveBeenCalledWith(
+        'session1',
+        expect.anything(),
+        userId,
+        undefined,
+      );
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
   });

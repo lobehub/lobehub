@@ -1,6 +1,6 @@
 ---
 name: zustand
-description: 'Use for Zustand stores: state shapes and type sources, state-only stores with xActions classes, replica-backed list/detail data (@lobechat/replica), selectors, optimistic writes, and legacy slice/internal_* action composition.'
+description: 'Use for Zustand stores: state shapes and type sources, state-only stores with xActions classes, replica-backed list/detail data (local-replica), selectors, optimistic writes, and legacy slice/internal_* action composition.'
 user-invocable: false
 ---
 
@@ -33,14 +33,14 @@ Actions stay out of the Zustand state. Reference: `src/store/page`.
 
 ## Replica-Backed Server Data
 
-Server lists and details the UI paints go through `@/libs/replica`, not a hand-written SWR `onSuccess` + reducer. The engine owns hydration from IndexedDB, head revalidation, paging, optimistic overlays with rollback, and scope (user + workspace) isolation. API reference: [`packages/replica/README.md`](../../../packages/replica/README.md).
+Server lists and details the UI paints go through `@/libs/replica`, not a hand-written SWR `onSuccess` + reducer. The engine owns hydration from IndexedDB, head revalidation, paging, optimistic overlays with rollback, and scope (user + workspace) isolation. API reference: the [`local-replica` README](https://github.com/lobehub/local-replica#readme). The engine is maintained in [lobehub/local-replica](https://github.com/lobehub/local-replica): fix it there, publish, then bump the dependency here.
 
 1. Define the resource (`defineReplica` / `definePagedReplica`) in the store's `projection.ts`, converting server rows at the boundary.
 2. Add two state fields per replica: the view (`xxxMap: Record<key, TData>`) and its bookkeeping (`xxxReplica: createReplicaState()`).
 3. Bind it in the private class: `createReplicaSlice(resource, { get, set, stateKey: 'xxxReplica', view: recordLens('xxxMap'), … })`. When the same entity lives in several replicas (list row + detail), link them with `linkReplicaEntity([list, detail])`.
 4. Read: `slice.useSync(params)` returns only fetch flags (`isHydrated`, `isValidating`, `error`, `revalidate`). Data comes from selectors over `xxxMap`. "Entry is `undefined`" is the loading signal — do not add `xxxInit` flags or `loadingXxxIds`.
 5. Read with no view mounted (hover prefetch, refresh after a mutation): `await slice.fetch(params)` (`{ fresh: true }` after a write). Never call the service and `slice.replace(...)` by hand, because that skips the scope, removal, clear and superseded-request guards. Side effects of every response (not-found maps, seeding another store) go in the slice `effects` (`onApplied` / `onMissing` / `onPurge` / `onError`) with `isMissing`, not in one hook's `onSuccess`.
-6. Cold start without a skeleton: `useSync` hydrates only after the component mounts. For a list that must paint from the local copy, add a `preHydrate` action (`ensureScope` + `hydrate`) and call it from the route's `loader` through a lazy wrapper (`src/spa/router/pageListLoader.ts`, `agentChatTopicListLoader.ts`) bounded by `PRE_PAINT_HYDRATE_TIMEOUT`.
+6. Cold start without a skeleton: `useSync` hydrates only after the component mounts. For a list that must paint from the local copy, add a `preHydrate` action (`ensureScope` + `hydrate`) and call it from the route's `loader` through a lazy wrapper (`src/spa/router/pageListLoader.ts`, `agentChatTopicListLoader.ts`) bounded by `settleWithin(…, PRE_PAINT_HYDRATE_TIMEOUT)` from `@/libs/replica/prePaint`. `@/libs/replica` presets the cache scope, IndexedDB / localStorage storage (`AppIndexedDBStorage` / `AppLocalStorage` in `@/libs/replica/storage`) and the app's SWR driver; the package README stays app-agnostic.
 7. Write: `slice.optimistic(key, apply, serverCall)` or `entity.optimistic(id, fn | 'remove', serverCall)`. A failed call rolls back to the confirmed value, so deletes are optimistic too. Rows that exist only on the client (temp ids) are declared with `isClientOnly` and seeded with `update(key, fn, { persist: false })`.
 
 Outside test seeding, write a replica's view only through its slice. A plain `set` bypasses the engine's bookkeeping (persistence, rollback base, entity links).

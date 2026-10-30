@@ -1,9 +1,10 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
-import { Avatar, cssVar, Flexbox } from '@lobehub/ui';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
 
 import type { OwnerSection } from './labels';
 import { styles } from './styles';
@@ -25,8 +26,9 @@ const OwnerLabel = ({ count, owner }: OwnerLabelProps) => {
       {/* Decorative: the name follows, so screen readers should not hear it twice. */}
       {owner.kind === 'agent' && (
         <span aria-hidden style={{ display: 'inline-flex' }}>
-          <Avatar
-            avatar={owner.agent.avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={owner.agent.id}
+            avatar={owner.agent.avatar}
             background={owner.agent.backgroundColor || cssVar.colorBgContainer}
             shape={'circle'}
             size={16}

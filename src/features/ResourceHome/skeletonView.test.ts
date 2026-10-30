@@ -4,10 +4,12 @@ import { resolveResourceSkeletonView } from './skeletonView';
 
 describe('resolveResourceSkeletonView', () => {
   it.each([
-    ['/resource/files', null, 'list'],
-    ['/resource/images', null, 'masonry'],
-    ['/resource/images', 'list', 'list'],
+    ['/resource/drive', null, 'list'],
+    ['/resource/drive/files', null, 'list'],
+    ['/resource/drive/images', null, 'masonry'],
+    ['/resource/drive/images', 'list', 'list'],
     ['/resource/works', null, 'works'],
+    ['/team/resource/library', null, 'libraries'],
   ])('uses the settled view for %s', (pathname, requestedView, expected) => {
     expect(resolveResourceSkeletonView(pathname, requestedView)).toBe(expected);
   });

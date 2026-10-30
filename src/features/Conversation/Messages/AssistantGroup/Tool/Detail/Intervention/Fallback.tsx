@@ -179,6 +179,7 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
           assistantGroupId={assistantGroupId}
           identifier={identifier}
           messageId={id}
+          toolArgs={parsedArgs}
           toolCallId={toolCallId}
           onBeforeApprove={() => pendingEditedArgumentsRef.current}
         />

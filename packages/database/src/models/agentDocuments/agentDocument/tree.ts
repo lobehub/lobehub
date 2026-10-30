@@ -13,6 +13,7 @@ export async function listByParentIds(
   parentIds: string[],
   options?: AgentDocumentQueryOptions,
 ): Promise<AgentDocument[]> {
+  /* v8 ignore next -- unreachable: the only caller (listSubtreeByDocumentId) loops while pendingParentIds is non-empty */
   if (parentIds.length === 0) return [];
 
   const results = await ctx.db
@@ -60,7 +61,9 @@ export async function countChildrenByParentIds(
     .groupBy(documents.parentId);
 
   return new Map(
+    /* v8 ignore start -- unreachable `: []`: the WHERE clause (inArray / isNotNull on parent_id) never yields a NULL parent */
     rows.flatMap((row) => (row.parentId ? [[row.parentId, Number(row.count)] as const] : [])),
+    /* v8 ignore stop */
   );
 }
 

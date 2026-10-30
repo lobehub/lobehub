@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Header from './index';
 
 const mocks = vi.hoisted(() => ({
+  copyToClipboard: vi.fn(),
   marketSubmission: { isSubmitting: false, isUnderReview: false, open: vi.fn(), revision: 0 },
   agentState: {
     activeAgentId: 'agent-1',
@@ -98,6 +99,7 @@ const getLatestExportedBlob = () => vi.mocked(URL.createObjectURL).mock.calls.at
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
+  copyToClipboard: mocks.copyToClipboard,
   DropdownMenu: ({
     children,
     items = [],
@@ -432,6 +434,14 @@ describe('Agent profile Header', () => {
     expect(
       screen.getByRole('button', { name: 'pageEditor.menu.export.markdown' }),
     ).toBeInTheDocument();
+  });
+
+  it('copies the Agent ID from the actions menu', async () => {
+    render(<Header />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'agent.copyId' }));
+
+    await waitFor(() => expect(mocks.copyToClipboard).toHaveBeenCalledWith('agent-1'));
   });
 
   it('shows workspace resource permission controls for the LobeAI inbox agent', () => {
