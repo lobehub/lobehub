@@ -151,6 +151,26 @@ export const gitRouter = router({
       return result ?? [];
     }),
   /**
+   * What a new worktree in a directory on a remote device would fork from (the
+   * current HEAD, or `baseRef`), via the device's `resolveGitWorktreeBase` RPC.
+   * Rejects when the device can't answer, so the create dialog can tell that
+   * apart from a ref that doesn't exist.
+   */
+  resolveGitWorktreeBase: deviceProcedure
+    .input(z.object({ baseRef: z.string().optional(), deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) =>
+      requireDeviceAnswer(
+        await deviceGateway.resolveGitWorktreeBase({
+          baseRef: input.baseRef,
+          deviceId: input.deviceId,
+          path: input.path,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+        'the worktree base',
+      ),
+    ),
+  /**
    * List the local branches of a directory on a remote device, via the device's
    * `listGitBranches` RPC. Lets the web/remote branch switcher populate the same
    * dropdown the local desktop renders over IPC.
@@ -273,6 +293,7 @@ export const gitRouter = router({
   addGitWorktree: deviceProcedure
     .input(
       z.object({
+        baseRef: z.string().optional(),
         branch: z.string(),
         deviceId: z.string(),
         path: z.string(),
@@ -280,6 +301,7 @@ export const gitRouter = router({
     )
     .mutation(async ({ ctx, input }) =>
       deviceGateway.addGitWorktree({
+        baseRef: input.baseRef,
         branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,

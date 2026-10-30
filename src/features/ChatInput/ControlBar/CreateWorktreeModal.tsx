@@ -3,6 +3,7 @@
 import { cssVar, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
+  AutoComplete,
   Button,
   createModal,
   Input,
@@ -16,7 +17,11 @@ import { DicesIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFetchGitBranches } from '@/store/device';
+
+import { useWorktreeBase } from './useWorktreeBase';
 import { useWorktreeBranchSeed } from './useWorktreeBranchSeed';
+import { formatWorktreeBase } from './worktreeHelpers';
 
 interface CreateWorktreeContentProps {
   deviceId?: string;
@@ -24,7 +29,7 @@ interface CreateWorktreeContentProps {
    * Create the worktree on a fresh branch. Return an error message to show
    * inline and keep the modal open; return undefined on success (modal closes).
    */
-  onSubmit: (branch: string) => Promise<string | undefined>;
+  onSubmit: (branch: string, baseRef?: string) => Promise<string | undefined>;
   path: string;
   /** Preview the target directory the new worktree will occupy for a branch name. */
   resolvePath: (branch: string) => string;
@@ -46,6 +51,25 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>();
     const inputRef = useRef<HTMLInputElement>(null);
+    // Unedited, the field shows the source HEAD and creation forks from it; only a
+    // ref the user typed or picked is sent as `baseRef`.
+    const [editedBase, setEditedBase] = useState<string>();
+    const { data: branches } = useFetchGitBranches(deviceId, path);
+    const {
+      base,
+      headBase,
+      isInvalid: isBaseInvalid,
+      isPending: isBasePending,
+      ref: baseRef,
+      unavailable: isBaseUnavailable,
+    } = useWorktreeBase(deviceId, path, editedBase);
+    const headLabel = headBase ? formatWorktreeBase(headBase) : '';
+    // A typed ref only blocks while it can't be proven to be honored.
+    const isBaseBlocked = isBaseInvalid || isBasePending || (!!baseRef && isBaseUnavailable);
+    const baseOptions = useMemo(
+      () => branches?.map(({ name }) => ({ label: name, value: name })) ?? [],
+      [branches],
+    );
 
     const value = edited ?? name ?? '';
     const trimmed = value.trim();
@@ -72,10 +96,10 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
     const handleSubmit = useCallback(async () => {
       if (loading) return;
       const branch = value.trim();
-      if (!branch) return;
+      if (!branch || isBaseBlocked) return;
       setLoading(true);
       try {
-        const message = await onSubmit(branch);
+        const message = await onSubmit(branch, baseRef);
         if (message) {
           setError(message);
           return;
@@ -84,7 +108,7 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
       } finally {
         setLoading(false);
       }
-    }, [close, loading, onSubmit, value]);
+    }, [baseRef, close, isBaseBlocked, loading, onSubmit, value]);
 
     return (
       <Flexbox gap={16}>
@@ -121,12 +145,54 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
             <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text>
           ) : null}
         </Flexbox>
+        <Flexbox gap={6}>
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {tDevice('workingDirectory.newWorktreeBaseLabel')}
+          </Text>
+          {/* The default is a label (`canary @9a1b3127`), not a ref to extend, so
+              typing replaces it instead of appending to it. */}
+          <div
+            onFocus={(event) => {
+              if (editedBase === undefined && event.target instanceof HTMLInputElement)
+                event.target.select();
+            }}
+          >
+            <AutoComplete
+              filter={editedBase === undefined ? null : undefined}
+              options={baseOptions}
+              placeholder={headLabel || tDevice('workingDirectory.newWorktreeBasePlaceholder')}
+              value={editedBase ?? headLabel}
+              onChange={(next) => setEditedBase(next)}
+            />
+          </div>
+          {isBaseUnavailable ? (
+            <Text style={{ color: cssVar.colorWarning, fontSize: 12 }}>
+              {tDevice('workingDirectory.newWorktreeBaseUnavailable')}
+            </Text>
+          ) : isBaseInvalid ? (
+            <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
+              {tDevice('workingDirectory.newWorktreeBaseInvalid', { ref: baseRef })}
+            </Text>
+          ) : base?.detached ? (
+            <Text style={{ color: cssVar.colorWarning, fontSize: 12 }}>
+              {tDevice('workingDirectory.newWorktreeBaseDetached', {
+                sha: formatWorktreeBase(base),
+              })}
+            </Text>
+          ) : baseRef && base ? (
+            <Text style={{ color: cssVar.colorTextTertiary, fontSize: 12 }}>
+              {tDevice('workingDirectory.newWorktreeBaseResolved', {
+                base: formatWorktreeBase(base),
+              })}
+            </Text>
+          ) : null}
+        </Flexbox>
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button disabled={loading} onClick={close}>
             {tCommon('cancel')}
           </Button>
           <Button
-            disabled={!isReady || !trimmed}
+            disabled={!isReady || !trimmed || isBaseBlocked}
             loading={loading}
             type={'primary'}
             onClick={handleSubmit}
@@ -145,15 +211,17 @@ CreateWorktreeContent.displayName = 'CreateWorktreeContent';
  * Branch-name entry for "create worktree". Mirrors the create-branch modal but
  * seeds the field with a generated branch name (time prefix + word pair, so it
  * sorts chronologically and needs no inventing) and adds a live preview of the
- * sibling directory the new worktree will occupy. Submitting runs
- * `git worktree add -b <branch> <path>` and switches into it.
+ * sibling directory the new worktree will occupy and an editable base, which
+ * defaults to the source HEAD so what the branch forks from is visible before
+ * confirming. Submitting runs `git worktree add -b <branch> <path> <base>` and
+ * switches into it.
  *
  * The name is drawn against the working directory's full local branch list, so
  * the directory it reads is part of the contract.
  */
 export const openCreateWorktreeModal = (options: {
   deviceId?: string;
-  onSubmit: (branch: string) => Promise<string | undefined>;
+  onSubmit: (branch: string, baseRef?: string) => Promise<string | undefined>;
   path: string;
   resolvePath: (branch: string) => string;
 }): ModalInstance =>

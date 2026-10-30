@@ -42,7 +42,13 @@ import { gitService } from '@/services/git';
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
 import { gitMenuTriggerStyles } from './gitMenuTriggerStyles';
 import { useSwitchWorktree } from './useSwitchWorktree';
-import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';
+import {
+  formatWorktreeBase,
+  formatWorktreeForkPoint,
+  getPathName,
+  isDisabled,
+  normalizeDisplayPath,
+} from './worktreeHelpers';
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
@@ -574,10 +580,24 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     // branch" flow), then switch the working directory into it. Returns an error
     // message for inline display in the modal, or undefined on success.
     const handleCreateWorktree = useCallback(
-      async (branch: string): Promise<string | undefined> => {
+      async (branch: string, baseRef?: string): Promise<string | undefined> => {
         const worktreePath = deriveWorktreePath(sourcePath, branch);
-        const result = await gitService.addGitWorktree({ branch, deviceId, path, worktreePath });
+        const result = await gitService.addGitWorktree({
+          baseRef,
+          branch,
+          deviceId,
+          path,
+          worktreePath,
+        });
         if (!result.success) return result.error || t('workingDirectory.createWorktreeFailed');
+
+        // The modal closes on success, so this is the last word on what the branch
+        // actually forked from.
+        if (result.base?.detached) {
+          toast.warning(
+            t('workingDirectory.newWorktreeBaseDetached', { sha: formatWorktreeBase(result.base) }),
+          );
+        }
 
         // Point the conversation at the freshly created worktree, then reconcile
         // the list so the new row (now `current`) appears.
@@ -698,6 +718,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                         t('workingDirectory.detachedHeadShort', { sha }),
                       );
                       const displayPath = getRelativeDisplayPath(worktree.path, sourcePath);
+                      const forkPoint = formatWorktreeForkPoint(worktree);
                       const disabled = isDisabled(worktree);
                       const removing = removingPaths.has(worktree.path);
                       const removable =
@@ -744,6 +765,8 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                               )}
                             </div>
                             <div className={styles.path} title={worktree.path}>
+                              {forkPoint &&
+                                `${t('workingDirectory.worktreeForkPoint', { base: forkPoint })} · `}
                               {displayPath}
                             </div>
                           </div>

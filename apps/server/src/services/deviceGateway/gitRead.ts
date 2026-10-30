@@ -11,6 +11,7 @@ import type {
   DeviceGitPullRequestDetailResult,
   DeviceGitPullRequestMergeContext,
   DeviceGitRemoteBranchListItem,
+  DeviceGitResolveWorktreeBaseResult,
   DeviceGitWorkingTreeFiles,
   DeviceGitWorkingTreePatches,
   DeviceGitWorkingTreeStatus,
@@ -173,6 +174,25 @@ export function listGitWorktrees(
   return invokeDeviceRead<DeviceGitWorktreeListItem[]>(getClient, 'listGitWorktrees', params, {
     path: params.path,
   });
+}
+
+/** What a new worktree in a directory on a remote device would fork from. */
+export function resolveGitWorktreeBase(
+  getClient: DeviceClientGetter,
+  params: {
+    baseRef?: string;
+    deviceId: string;
+    path: string;
+    userId: string;
+    workspaceId?: string;
+  },
+) {
+  return invokeDeviceRead<DeviceGitResolveWorktreeBaseResult>(
+    getClient,
+    'resolveGitWorktreeBase',
+    params,
+    { baseRef: params.baseRef, path: params.path },
+  );
 }
 
 /**

@@ -166,11 +166,25 @@ export interface GitWorkingTreeStatus {
   total: number;
 }
 
+/**
+ * A worktree's fork point against the repo's default branch, computed from
+ * `git merge-base` on every read so worktrees created earlier show it too.
+ */
+export interface GitWorktreeForkPoint {
+  /** True when the merge-base is the default branch's tip. */
+  atTip: boolean;
+  /** Default branch short name, without the remote (`canary`). */
+  defaultBranch: string;
+  /** Full merge-base SHA. */
+  sha: string;
+}
+
 export interface GitWorktreeListItem {
   bare?: boolean;
   branch?: string;
   current: boolean;
   detached?: boolean;
+  forkPoint?: GitWorktreeForkPoint;
   head?: string;
   locked?: boolean;
   lockReason?: string;
@@ -337,7 +351,25 @@ export interface GitRemoveWorktreeResult {
   success: boolean;
 }
 
+/** Where a new worktree's branch forks from, resolved before anything is created. */
+export interface GitWorktreeBase {
+  /** True when the base is a detached HEAD, so there is no branch to name. */
+  detached: boolean;
+  /** Branch of the source HEAD, or the ref the caller named. Absent when detached. */
+  ref?: string;
+  /** Full commit SHA the new branch forks from. */
+  sha: string;
+}
+
+export interface GitResolveWorktreeBaseResult {
+  base?: GitWorktreeBase;
+  error?: string;
+  success: boolean;
+}
+
 export interface GitAddWorktreeResult {
+  /** The commit the branch forked from. Absent from devices too old to honor `baseRef`. */
+  base?: GitWorktreeBase;
   error?: string;
   success: boolean;
   /** Absolute path of the created worktree, echoed back so the UI can switch to it. */

@@ -175,6 +175,7 @@ export async function removeGitWorktree(
 export async function addGitWorktree(
   getClient: DeviceClientGetter,
   params: {
+    baseRef?: string;
     branch: string;
     deviceId: string;
     path: string;
@@ -184,14 +185,23 @@ export async function addGitWorktree(
     worktreePath: string;
   },
 ): Promise<DeviceGitAddWorktreeResult> {
-  const { userId, deviceId, branch, path, worktreePath, workspaceId, timeout = 30_000 } = params;
+  const {
+    baseRef,
+    userId,
+    deviceId,
+    branch,
+    path,
+    worktreePath,
+    workspaceId,
+    timeout = 30_000,
+  } = params;
   const client = getClient();
   if (!client) return { error: 'Device gateway not configured', success: false };
 
   try {
     const result = await client.invokeRpc<DeviceGitAddWorktreeResult>(
       { deviceId, timeout, userId, workspaceId },
-      { method: 'addGitWorktree', params: { branch, path, worktreePath } },
+      { method: 'addGitWorktree', params: { baseRef, branch, path, worktreePath } },
     );
 
     if (!result.success || !result.data) {

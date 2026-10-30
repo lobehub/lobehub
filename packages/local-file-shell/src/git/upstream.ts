@@ -55,7 +55,7 @@ const listRemotes = async (dirPath: string): Promise<string[]> => {
 };
 
 /** The remote's default branch (`origin/canary`), or undefined when `origin/HEAD` is unset. */
-const getDefaultRemoteBranch = async (
+export const getDefaultRemoteBranch = async (
   dirPath: string,
   remote: string,
 ): Promise<string | undefined> => {
