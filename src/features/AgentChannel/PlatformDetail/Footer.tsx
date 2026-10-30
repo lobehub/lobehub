@@ -94,6 +94,12 @@ interface FooterNoticesProps {
   currentConfig?: CurrentConfig;
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
+  /**
+   * Leave out what the settings still need (the missing user id, the QQ webhook move): on a tab
+   * that shows history rather than settings there is nothing to fill in. What just happened
+   * (saved, connected, tested) still shows.
+   */
+  hideSetupHints?: boolean;
   platformDef: SerializedPlatformDefinition;
   saveResult?: TestResult;
   testResult?: TestResult;
@@ -106,7 +112,16 @@ interface FooterNoticesProps {
  * the person has to see.
  */
 export const FooterNotices = memo<FooterNoticesProps>(
-  ({ platformDef, currentConfig, form, hasConfig, connectResult, saveResult, testResult }) => {
+  ({
+    platformDef,
+    currentConfig,
+    form,
+    hasConfig,
+    hideSetupHints,
+    connectResult,
+    saveResult,
+    testResult,
+  }) => {
     const { t } = useTranslation('agent');
     const platformId = platformDef.id;
     const settingsConnectionMode = useWatch(form, 'settings.connectionMode');
@@ -136,6 +151,7 @@ export const FooterNotices = memo<FooterNoticesProps>(
     }, [watchedUserId]);
     const effectiveUserId = formHydrated ? watchedUserId : savedUserId;
     const userIdMissing =
+      !hideSetupHints &&
       hasConfig &&
       hasUserIdField &&
       !(typeof effectiveUserId === 'string' && effectiveUserId.trim());
@@ -214,7 +230,7 @@ export const FooterNotices = memo<FooterNoticesProps>(
           />
         )}
 
-        {hasConfig && showWebhookUrl && platformId === 'qq' && (
+        {!hideSetupHints && hasConfig && showWebhookUrl && platformId === 'qq' && (
           <Alert
             closable
             showIcon

@@ -39,6 +39,7 @@ import {
   type ChannelTab,
   defaultTab,
   footerSaveHidden,
+  isRecordTab,
   resolveTabs,
   tabsWithIssues,
 } from './channelTabs';
@@ -1039,6 +1040,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
                   currentConfig={currentConfig}
                   form={form}
                   hasConfig={!!currentConfig}
+                  hideSetupHints={isRecordTab(activeTab)}
                   platformDef={platformDef}
                   saveResult={saveResult}
                   testResult={testResult}
