@@ -483,6 +483,66 @@ describe('useConversationScroll — pin behavior', () => {
     expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: false });
   });
 
+  it('keeps the pin on the sent turn when compression folds the history in front of it', () => {
+    const { result, rerender } = renderScrollHook({
+      dataSource: ['m0', 'm1', 'm2', 'm3'],
+      isSecondLastMessageFromUser: false,
+    });
+    rerender({
+      dataSource: ['m0', 'm1', 'm2', 'm3', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    rerender({
+      dataSource: ['group', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    scrollToIndex.mockClear();
+
+    act(() => result.current.registerSpacerNode(document.createElement('div')));
+
+    expect(scrollToIndex).toHaveBeenCalledWith(1, { align: 'start', smooth: true });
+  });
+
+  it('keeps the pin on the sent turn when a later compression leaves the older group first', () => {
+    const { result, rerender } = renderScrollHook({
+      dataSource: ['g1', 'm0', 'm1', 'm2'],
+      isSecondLastMessageFromUser: false,
+    });
+    rerender({
+      dataSource: ['g1', 'm0', 'm1', 'm2', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    rerender({
+      dataSource: ['g1', 'g2', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    scrollToIndex.mockClear();
+
+    act(() => result.current.registerSpacerNode(document.createElement('div')));
+
+    expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: true });
+  });
+
+  it('keeps the pin on the sent turn when an older page is prepended', () => {
+    const { result, rerender } = renderScrollHook({
+      dataSource: ['m0', 'm1'],
+      isSecondLastMessageFromUser: false,
+    });
+    rerender({
+      dataSource: ['m0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    rerender({
+      dataSource: ['o0', 'o1', 'o2', 'm0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    scrollToIndex.mockClear();
+
+    act(() => result.current.registerSpacerNode(document.createElement('div')));
+
+    expect(scrollToIndex).toHaveBeenCalledWith(5, { align: 'start', smooth: true });
+  });
+
   it('does not scroll on initial render', () => {
     renderScrollHook({
       dataSource: ['a', 'b', userId, assistantId],

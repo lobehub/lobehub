@@ -12,6 +12,7 @@ import {
 import { type VListHandle } from 'virtua';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import { isTranscriptSwap } from '../utils/transcriptSwap';
 
 const log = debug('lobe:conversation:scroll');
 
@@ -487,6 +488,7 @@ export const useConversationScroll = ({
   const lastId = dataSource.at(-1);
   const prevLengthRef = useRef(dataSource.length);
   const prevLastIdRef = useRef<string | undefined>(lastId);
+  const prevRowsRef = useRef(dataSource);
   // Whether later rounds were still unread as of the previous dataSource. A
   // send can only append at the end of the conversation, so a pair appended
   // while later rounds were unread is a forward read's next page.
@@ -544,6 +546,7 @@ export const useConversationScroll = ({
 
     prevLengthRef.current = dataSource.length;
     prevLastIdRef.current = dataSource.at(-1);
+    prevRowsRef.current = dataSource;
     hadLaterMessagesRef.current = hasLaterMessages;
     clearPin('context switch');
     setUserMessageIndex(null);
@@ -561,6 +564,18 @@ export const useConversationScroll = ({
     // two; only a pair placed after the previous last row is a send.
     const appendedAtEnd = dataSource.at(-3) === prevLastIdRef.current;
     prevLastIdRef.current = dataSource.at(-1);
+    // Rows changed in front of the turn (an older page, or compression folding
+    // the history): it moved with the list's end, so the tracked indices follow.
+    const prevRows = prevRowsRef.current;
+    prevRowsRef.current = dataSource;
+    const frontChanged = dataSource[0] !== prevRows[0] || isTranscriptSwap(prevRows, dataSource);
+    if (frontChanged && newMessageCount !== 0) {
+      const shiftIndex = (index: number | null) =>
+        index === null ? null : Math.max(index + newMessageCount, 0);
+      setUserMessageIndex(shiftIndex);
+      setAssistantMessageIndex(shiftIndex);
+      if (pinRef.current) pinRef.current.index = shiftIndex(pinRef.current.index)!;
+    }
     const appendedLaterPage = hadLaterMessagesRef.current;
     hadLaterMessagesRef.current = hasLaterMessages;
 
