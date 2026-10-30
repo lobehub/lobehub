@@ -51,7 +51,9 @@ const bothUploaded = [
   { checkItemId: 'rename', evidenceId: 'remote-api', position: 1 },
 ];
 
-const remoteBundle = (evidence: { id: string }[]) => ({
+/** `latestRunId` is the published acceptance's current round. */
+const remoteBundle = (evidence: { id: string }[], latestRunId = 'remote-run-1') => ({
+  rounds: [{ run: { id: latestRunId } }],
   checks: [
     {
       id: 'criterion-rename',
@@ -343,7 +345,7 @@ describe('lh acceptance publish', () => {
       reject,
     ]);
     ingestReportAction.mockResolvedValueOnce(ingested(1)).mockResolvedValueOnce(ingested(2));
-    client.acceptance.getBundle.query.mockResolvedValue(remoteBundle([]));
+    client.acceptance.getBundle.query.mockResolvedValue(remoteBundle([], 'remote-run-2'));
 
     await publishAction(fixture.acceptanceDir, { json: true });
     expect(client.acceptance.accept.mutate).not.toHaveBeenCalled();
@@ -353,6 +355,40 @@ describe('lh acceptance publish', () => {
       id: 'remote-acceptance',
       roundId: 'remote-run-2',
     });
+  });
+
+  it('refuses a decision once the published acceptance moved past the round it judged', async () => {
+    const { info } = loadLocalAcceptance(fixture.acceptanceDir, { create: true });
+    ingestReportAction.mockResolvedValueOnce(ingested(1));
+    await publishAction(fixture.acceptanceDir, { json: true, reviews: false });
+
+    // Online, someone ingested a newer round; locally the reviewer accepted round 1.
+    writeReviewLog(fixture.acceptanceDir, info.id, [
+      {
+        action: 'accept',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        id: 'event-1',
+        kind: 'decision',
+        roundIndex: 1,
+      },
+    ]);
+    client.acceptance.getBundle.query.mockResolvedValue(remoteBundle([], 'remote-run-2'));
+
+    await publishAction(fixture.acceptanceDir, { json: true });
+    expect(client.acceptance.accept.mutate).not.toHaveBeenCalled();
+    expect(outputJson.mock.calls[1]![0].reviews).toEqual({
+      skipped: [
+        {
+          checkId: 'decision:accept',
+          reason: 'the published acceptance has a newer round than the one this decision judged',
+        },
+      ],
+      uploaded: 0,
+    });
+    const stored = JSON.parse(
+      readFileSync(path.join(fixture.acceptanceDir, ACCEPTANCE_FILE), 'utf8'),
+    );
+    expect(stored.remote.carriedReviews).toBeUndefined();
   });
 
   it('reports how to repair evidence a published round failed to upload', async () => {

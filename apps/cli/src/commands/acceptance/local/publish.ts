@@ -135,12 +135,20 @@ async function carryReviews(
       });
     }
   }
-  if (pendingDecision) {
-    // Bound to the round it judged: the server refuses it once a newer round landed.
-    const latestDir = [...read.source.rounds]
-      .sort((a, b) => a.run.roundIndex - b.run.roundIndex)
-      .at(-1)?.dir;
-    const roundId = remote.rounds.find((round) => round.dir === latestDir)?.verifyRunId;
+  const latestDir = [...read.source.rounds]
+    .sort((a, b) => a.run.roundIndex - b.run.roundIndex)
+    .at(-1)?.dir;
+  const roundId = remote.rounds.find((round) => round.dir === latestDir)?.verifyRunId;
+  // Bound to the round it judged. The server checks `roundId` only for some
+  // subjects and otherwise stamps whatever round is newest, so a decision on a
+  // round that is no longer the published acceptance's current one is refused
+  // here rather than landing on a delivery nobody reviewed.
+  if (pendingDecision && (!roundId || bundle.rounds.at(-1)?.run.id !== roundId)) {
+    carry.skipped.push({
+      checkId: `decision:${pendingDecision.action}`,
+      reason: 'the published acceptance has a newer round than the one this decision judged',
+    });
+  } else if (pendingDecision) {
     try {
       if (pendingDecision.action === 'accept')
         await client.acceptance.accept.mutate({
