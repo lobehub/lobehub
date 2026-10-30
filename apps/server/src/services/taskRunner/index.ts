@@ -320,15 +320,18 @@ export class TaskRunnerService {
       // The device the run will actually use. It differs from the task's pin
       // when the caller names another device for this run (`--device`), or when
       // the author FIXED the agent's target, and that difference decides
-      // whether the directory may travel: see `resolveTaskRunExecution`.
-      const runDeviceId = taskExecution
-        ? resolveRunDeviceId(
-            taskExecution,
-            await this.agentModel.getAgentAgencyConfig(agentRef),
-            this.workspaceId,
-            deviceId,
-          )
-        : deviceId;
+      // whether the directory may travel: see `resolveTaskRunExecution`. A
+      // requested device goes through the policy even when the task pins
+      // nothing — a fixed target replaces it all the same.
+      const runDeviceId =
+        taskExecution || deviceId
+          ? resolveRunDeviceId(
+              taskExecution,
+              await this.agentModel.getAgentAgencyConfig(agentRef),
+              this.workspaceId,
+              deviceId,
+            )
+          : undefined;
       const runExecution = resolveTaskRunExecution(taskExecution, runDeviceId, deviceId);
 
       // A continued topic keeps its own metadata (`turnSetup` stamps

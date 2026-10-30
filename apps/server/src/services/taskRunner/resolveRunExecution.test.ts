@@ -365,9 +365,18 @@ describe('explicit run device', () => {
   });
 
   it('forwards the requested device for a task that pins nothing', () => {
-    expect(resolveTaskRunExecution(undefined, undefined, 'device-b')).toEqual({
+    const runDeviceId = resolveRunDeviceId(undefined, memberSelected, 'ws-1', 'device-b');
+
+    expect(resolveTaskRunExecution(undefined, runDeviceId, 'device-b')).toEqual({
       deviceId: 'device-b',
     });
+  });
+
+  it('drops a requested device the fixed target replaces for a task that pins nothing', () => {
+    const runDeviceId = resolveRunDeviceId(undefined, fixedAgentDevice, 'ws-1', 'device-b');
+
+    expect(runDeviceId).toBe('device-c');
+    expect(resolveTaskRunExecution(undefined, runDeviceId, 'device-b')).toBeUndefined();
   });
 
   it('ignores a requested device the fixed agent target replaces', () => {

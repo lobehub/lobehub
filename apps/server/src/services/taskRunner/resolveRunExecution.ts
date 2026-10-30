@@ -80,7 +80,13 @@ export const resolveTaskRunExecution = (
    */
   requestedDeviceId?: string,
 ): TaskRunExecution | undefined => {
-  if (!execution) return requestedDeviceId ? { deviceId: requestedDeviceId } : undefined;
+  // A request the run will not honor (a fixed agent target replaced it) must not
+  // stand in for the pin: it would be persisted on a continued topic as the
+  // run's machine while the run goes elsewhere.
+  const honoredDeviceId =
+    requestedDeviceId && requestedDeviceId === runDeviceId ? requestedDeviceId : undefined;
+
+  if (!execution) return honoredDeviceId ? { deviceId: honoredDeviceId } : undefined;
 
   const { boundDeviceId, repos, workingDirectory, workingDirectoryConfig } = execution;
 
@@ -112,12 +118,8 @@ export const resolveTaskRunExecution = (
       : {}),
   };
 
-  // A request the run will not honor (a fixed agent target replaced it) must not
-  // stand in for the pin either: it would be persisted on a continued topic as
-  // the run's machine while the run goes elsewhere. Fall back to exactly what
-  // the run sent before the caller could name a device.
-  const honoredDeviceId =
-    requestedDeviceId && requestedDeviceId === runDeviceId ? requestedDeviceId : undefined;
+  // An unhonored request falls back to exactly what the run sent before the
+  // caller could name a device: the task's own pin.
   const deviceId = honoredDeviceId ?? boundDeviceId;
 
   const runExecution: TaskRunExecution = {

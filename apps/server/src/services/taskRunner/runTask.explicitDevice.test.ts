@@ -254,4 +254,25 @@ describe('TaskRunnerService.runTask explicit device', () => {
     expect(mocks.updateTopicMetadata).not.toHaveBeenCalled();
     expect(execParams().deviceId).toBe('device-a');
   });
+
+  it('does not move a continued topic to a device the fixed target replaces after its selection was cleared', async () => {
+    // A cleared selection is still persisted (as `null` axes), so the topic sync
+    // runs even though the task pins nothing.
+    setupTask({
+      execution: { boundDeviceId: null, workingDirectory: null },
+      model: 'codex',
+      provider: 'openai',
+    });
+    mocks.getAgentAgencyConfig.mockResolvedValue({
+      boundDeviceId: 'device-c',
+      executionTarget: 'device',
+      executionTargetSelectionPolicy: 'fixed',
+    } satisfies LobeAgentAgencyConfig);
+    mocks.findTopicById.mockResolvedValue({ id: 'tpc-old', metadata: {} });
+
+    await run({ continueTopicId: 'tpc-old', deviceId: 'device-b' });
+
+    expect(mocks.updateTopicMetadata).not.toHaveBeenCalled();
+    expect(execParams().deviceId).toBeUndefined();
+  });
 });
