@@ -256,7 +256,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
   const diskUsed = newest?.diskUsedBytes ?? null;
 
   const lastConnected = dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow();
-  const platformLabel = getPlatformLabel(device.platform);
+  const platformLabel = getPlatformLabel(device.platform, undefined, device.metadata);
   const enrollerName =
     device.enroller?.fullName ||
     device.enroller?.username ||

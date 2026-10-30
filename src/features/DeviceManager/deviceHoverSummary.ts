@@ -48,7 +48,7 @@ export const buildDeviceHoverSummary = (
     memoryTotalBytes: series?.memoryTotalBytes || undefined,
     online: device.online,
     onlineUnknown: !!device.onlineUnknown,
-    platformLabel: getPlatformLabel(device.platform),
+    platformLabel: getPlatformLabel(device.platform, undefined, device.metadata),
     workingDir: device.defaultCwd || undefined,
   };
 };

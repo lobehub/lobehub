@@ -201,7 +201,7 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
     state.status === 'unavailable' && install
       ? getDeviceInstallCommands(install.commands, device?.platform)
       : [];
-  const platformLabel = getPlatformLabel(device?.platform, device?.architecture);
+  const platformLabel = getPlatformLabel(device?.platform, device?.architecture, device?.metadata);
 
   return (
     <Flexbox {...stylex.props(styles.card)} gap={12}>

@@ -235,7 +235,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
     device.enroller?.fullName ||
     device.enroller?.username ||
     t('workspaceSetting.devices.unknownEnroller');
-  const platformLabel = getPlatformLabel(device.platform, device.architecture);
+  const platformLabel = getPlatformLabel(device.platform, device.architecture, device.metadata);
   const usage = latestUsageView({ data, error });
 
   return (
