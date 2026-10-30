@@ -525,7 +525,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       if (hasGoal && goalsEnabled) {
         return (
           <Tooltip title={t('metaCard.goal')}>
-            <span aria-label={t('metaCard.goal')} className={styles.markerIcon}>
+            <span aria-label={t('metaCard.goal')} {...stylex.props(styles.markerIcon)}>
               <Icon
                 icon={TargetIcon}
                 size={'small'}
