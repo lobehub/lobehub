@@ -42,12 +42,14 @@ export const resolveRunDeviceId = (
   execution: TaskExecutionConfig | undefined,
   agencyConfig: LobeAgentAgencyConfig | null | undefined,
   workspaceId?: string,
+  /** A device the caller named for this run only (`lh task run --device`). */
+  requestedDeviceId?: string,
 ): string | undefined => {
   const isFixedSelection =
     !!workspaceId && agencyConfig?.executionTargetSelectionPolicy === 'fixed';
 
-  // A member-selected target is exactly the task-level pin, so nothing replaces it.
-  if (!isFixedSelection) return execution?.boundDeviceId;
+  // A member-selected target follows the run's request first, then the task pin.
+  if (!isFixedSelection) return requestedDeviceId ?? execution?.boundDeviceId;
 
   // Only a `device` fixed target names a machine; a fixed sandbox names none.
   return agencyConfig?.executionTarget === 'device' ? agencyConfig.boundDeviceId : undefined;
@@ -70,8 +72,14 @@ export const resolveTaskRunExecution = (
    * would silently drop the directory of every pinned task.
    */
   runDeviceId: string | undefined,
+  /**
+   * A device the caller named for this run only. It outranks the task's pin as
+   * the run's `deviceId`; the pin's directory then stays behind unless the two
+   * name the same machine (pass the same request to `resolveRunDeviceId`).
+   */
+  requestedDeviceId?: string,
 ): TaskRunExecution | undefined => {
-  if (!execution) return undefined;
+  if (!execution) return requestedDeviceId ? { deviceId: requestedDeviceId } : undefined;
 
   const { boundDeviceId, repos, workingDirectory, workingDirectoryConfig } = execution;
 
@@ -103,8 +111,10 @@ export const resolveTaskRunExecution = (
       : {}),
   };
 
+  const deviceId = requestedDeviceId ?? boundDeviceId;
+
   const runExecution: TaskRunExecution = {
-    ...(boundDeviceId ? { deviceId: boundDeviceId } : {}),
+    ...(deviceId ? { deviceId } : {}),
     ...(Object.keys(initialTopicMetadata).length > 0 ? { initialTopicMetadata } : {}),
   };
 
@@ -157,17 +167,20 @@ export const resolveTopicExecutionPatch = (
   taskConfig: null | Record<string, unknown> | undefined,
   /** The device this run will use — see {@link resolveTaskRunExecution}. */
   runDeviceId: string | undefined,
+  /** A device the caller named for this run only; it outranks the task's pin. */
+  requestedDeviceId?: string,
 ): ChatTopicMetadata | undefined => {
   const stored = taskConfig?.execution;
   if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return undefined;
 
   const execution = readTaskExecutionConfig(taskConfig);
-  const initial = resolveTaskRunExecution(execution, runDeviceId)?.initialTopicMetadata;
+  const run = resolveTaskRunExecution(execution, runDeviceId, requestedDeviceId);
+  const initial = run?.initialTopicMetadata;
 
   const next: ChatTopicMetadata = {
     // `undefined` clears the axis: `TopicModel.updateMetadata` shallow-merges, so
     // the key is dropped rather than kept at its previous value.
-    boundDeviceId: execution?.boundDeviceId,
+    boundDeviceId: run?.deviceId,
     repos: initial?.repos,
     workingDirectory: initial?.workingDirectory,
     workingDirectoryConfig: initial?.workingDirectoryConfig,

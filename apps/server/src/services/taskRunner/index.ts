@@ -97,9 +97,15 @@ export class TaskRunnerService {
     topicId: string,
     taskConfig: Record<string, unknown>,
     runDeviceId: string | undefined,
+    requestedDeviceId: string | undefined,
   ): Promise<void> {
     const topic = await this.topicModel.findById(topicId);
-    const patch = resolveTopicExecutionPatch(topic?.metadata, taskConfig, runDeviceId);
+    const patch = resolveTopicExecutionPatch(
+      topic?.metadata,
+      taskConfig,
+      runDeviceId,
+      requestedDeviceId,
+    );
     if (!patch) return;
 
     await this.topicModel.updateMetadata(topicId, patch);
@@ -295,16 +301,18 @@ export class TaskRunnerService {
       // the run keeps inheriting the assignee agent's target and cwd.
       const taskExecution = readTaskExecutionConfig(taskConfig);
       // The device the run will actually use. It differs from the task's pin
-      // when the author FIXED the agent's target, and that difference decides
+      // when the caller names another device for this run (`--device`), or when
+      // the author FIXED the agent's target, and that difference decides
       // whether the directory may travel: see `resolveTaskRunExecution`.
       const runDeviceId = taskExecution
         ? resolveRunDeviceId(
             taskExecution,
             await this.agentModel.getAgentAgencyConfig(agentRef),
             this.workspaceId,
+            deviceId,
           )
-        : undefined;
-      const runExecution = resolveTaskRunExecution(taskExecution, runDeviceId);
+        : deviceId;
+      const runExecution = resolveTaskRunExecution(taskExecution, runDeviceId, deviceId);
 
       // A continued topic keeps its own metadata (`turnSetup` stamps
       // `initialTopicMetadata` only for a topic it creates) and those stored
@@ -312,7 +320,7 @@ export class TaskRunnerService {
       // be ignored, and the previous machine's kept. Stamp the task's selection
       // onto the topic first; see `resolveTopicExecutionPatch`.
       if (continueTopicId) {
-        await this.syncTopicExecution(continueTopicId, taskConfig, runDeviceId);
+        await this.syncTopicExecution(continueTopicId, taskConfig, runDeviceId, deviceId);
       }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
@@ -321,7 +329,6 @@ export class TaskRunnerService {
         ...(onOperationCreated ? { onOperationCreated } : {}),
         ...(isSlug ? { slug: agentRef } : { agentId: agentRef }),
         additionalPluginIds: pluginIds,
-        ...(deviceId && { deviceId }),
         ...(typeof taskConfig.model === 'string' && { model: taskConfig.model }),
         ...(typeof taskConfig.provider === 'string' && { provider: taskConfig.provider }),
         hooks: createTaskRunHooks({
@@ -339,10 +346,10 @@ export class TaskRunnerService {
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,
         trigger: TopicTrigger.RunTask,
         userInterventionConfig: { approvalMode: 'headless' },
-        // The task's own pin, when it has one. `deviceId` forces device routing
-        // unless the agent's selection policy is `fixed` (author-controlled
-        // targets stay authoritative — same rule the chat picker follows), and
-        // the directory rides into the topic this run creates.
+        // The caller's device for this run, else the task's own pin. `deviceId`
+        // forces device routing unless the agent's selection policy is `fixed`
+        // (author-controlled targets stay authoritative — same rule the chat
+        // picker follows), and the directory rides into the topic this run creates.
         ...(runExecution?.deviceId ? { deviceId: runExecution.deviceId } : {}),
         ...(continueTopicId || runExecution?.initialTopicMetadata
           ? {
