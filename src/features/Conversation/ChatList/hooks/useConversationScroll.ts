@@ -297,40 +297,46 @@ const useSpacerHeight = ({
 // during render — this avoids the race where a send effect ran before the
 // ref was attached and silently dropped the scroll.
 // ---------------------------------------------------------------------------
-type PinState = { index: number; seenActive: boolean; sentAt: number } | null;
+type PinState = { messageId: string; seenActive: boolean; sentAt: number } | null;
 
 const usePinController = ({
+  dataSource,
   headerOffset,
   virtuaRef,
 }: {
+  dataSource: string[];
   headerOffset: number;
   virtuaRef: RefObject<VListHandle | null>;
 }) => {
   const pinRef = useRef<PinState>(null);
+  const dataSourceRef = useRef(dataSource);
+  dataSourceRef.current = dataSource;
 
   const scrollToPinned = useCallback(
     (reason: string) => {
       const pin = pinRef.current;
       if (!pin) return;
+      const index = dataSourceRef.current.indexOf(pin.messageId);
+      if (index < 0) return;
 
       const scrollToIndex = virtuaRef.current?.scrollToIndex;
       if (!scrollToIndex) {
-        log('scrollToPinned skipped: virtua not ready (%s) index=%d', reason, pin.index);
+        log('scrollToPinned skipped: virtua not ready (%s) index=%d', reason, index);
         return;
       }
 
       const smooth = Date.now() - pin.sentAt < SEND_SCROLL_ANIMATION_WINDOW_MS;
 
-      log('scrollToPinned (%s) index=%d smooth=%s', reason, pin.index, smooth);
-      // pin.index is a message index; the header slot row shifts virtua rows.
-      scrollToIndex(pin.index + headerOffset, { align: 'start', smooth });
+      log('scrollToPinned (%s) index=%d smooth=%s', reason, index, smooth);
+      // Resolve the message index again after paging; the header shifts virtua rows.
+      scrollToIndex(index + headerOffset, { align: 'start', smooth });
     },
     [headerOffset, virtuaRef],
   );
 
   const clearPin = useCallback((reason: string) => {
     if (!pinRef.current) return;
-    log('clearPin (%s) index=%d', reason, pinRef.current.index);
+    log('clearPin (%s) message=%s', reason, pinRef.current.messageId);
     pinRef.current = null;
   }, []);
 
@@ -478,12 +484,15 @@ export const useConversationScroll = ({
   const isAIGeneratingRef = useRef(isAIGenerating);
   isAIGeneratingRef.current = isAIGenerating;
 
-  // State (not ref) so that downstream memos / effects re-run when a new turn
-  // is pinned. The pin indices are only set from the send-detection effect;
-  // using state keeps the observer & signature in sync on the very next
-  // render rather than waiting for an unrelated dep to change.
-  const [userMessageIndex, setUserMessageIndex] = useState<number | null>(null);
-  const [assistantMessageIndex, setAssistantMessageIndex] = useState<number | null>(null);
+  // Track the sent turn by ID: an earlier page can arrive after sending and
+  // shift its indices. Both the spacer measurements and pin must follow that
+  // same turn instead of measuring or scrolling to an older message.
+  const [userMessageId, setUserMessageId] = useState<string | null>(null);
+  const [assistantMessageId, setAssistantMessageId] = useState<string | null>(null);
+  const userIndex = userMessageId === null ? -1 : dataSource.indexOf(userMessageId);
+  const assistantIndex = assistantMessageId === null ? -1 : dataSource.indexOf(assistantMessageId);
+  const userMessageIndex = userIndex < 0 ? null : userIndex;
+  const assistantMessageIndex = assistantIndex < 0 ? null : assistantIndex;
   const lastId = dataSource.at(-1);
   const prevLengthRef = useRef(dataSource.length);
   const prevLastIdRef = useRef<string | undefined>(lastId);
@@ -522,7 +531,11 @@ export const useConversationScroll = ({
     userMessageIndex,
   });
 
-  const { clearPin, pinRef, scrollToPinned } = usePinController({ headerOffset, virtuaRef });
+  const { clearPin, pinRef, scrollToPinned } = usePinController({
+    dataSource,
+    headerOffset,
+    virtuaRef,
+  });
 
   const { onScrollOffset, prevScrollOffsetRef } = useScrollShrink({
     clearPin,
@@ -546,8 +559,8 @@ export const useConversationScroll = ({
     prevLastIdRef.current = dataSource.at(-1);
     hadLaterMessagesRef.current = hasLaterMessages;
     clearPin('context switch');
-    setUserMessageIndex(null);
-    setAssistantMessageIndex(null);
+    setUserMessageId(null);
+    setAssistantMessageId(null);
     setMounted(false);
     setScrollReduction(() => 0);
     prevScrollOffsetRef.current = null;
@@ -583,9 +596,13 @@ export const useConversationScroll = ({
 
     setScrollReduction(() => 0);
     prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
-    setUserMessageIndex(userIndex);
-    setAssistantMessageIndex(assistantIndex);
-    pinRef.current = { index: userIndex, seenActive: mountedRef.current, sentAt: Date.now() };
+    setUserMessageId(dataSource[userIndex]);
+    setAssistantMessageId(dataSource[assistantIndex]);
+    pinRef.current = {
+      messageId: dataSource[userIndex],
+      seenActive: mountedRef.current,
+      sentAt: Date.now(),
+    };
 
     // Scroll immediately. If virtuaRef isn't ready yet, the spacerLayoutVersion
     // bumps that follow mount+measurement will retry.

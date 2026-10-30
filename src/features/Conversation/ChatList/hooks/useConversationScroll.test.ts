@@ -286,6 +286,50 @@ describe('useConversationScroll — pin behavior', () => {
     expect(scrollToIndex).not.toHaveBeenCalled();
   });
 
+  it('keeps a sent turn pinned when an earlier history page arrives', async () => {
+    let offsets = [0, 100, 200, 350];
+    let sizes = [100, 100, 150, 100];
+    const { result, rerender } = renderScrollHook({
+      dataSource: ['m0', 'm1'],
+      fixture: {
+        virtuaScrollMethods: {
+          getItemOffset: (index) => offsets[index],
+          getItemSize: (index) => sizes[index],
+          getViewportSize: () => 800,
+        },
+      },
+      isSecondLastMessageFromUser: false,
+    });
+
+    rerender({
+      dataSource: ['m0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    expect(result.current.spacerHeight).toBe(550);
+    scrollToIndex.mockClear();
+
+    offsets = [0, 50, 100, 200, 3000, 3150];
+    sizes = [50, 50, 100, 2800, 150, 100];
+    rerender({
+      dataSource: ['older-user', 'older-assistant', 'm0', 'm1', userId, assistantId],
+      isSecondLastMessageFromUser: true,
+    });
+    expect(scrollToIndex).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.registerSpacerNode(document.createElement('div'));
+    });
+
+    expect(scrollToIndex).toHaveBeenLastCalledWith(4, { align: 'start', smooth: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    expect(result.current.spacerHeight).toBe(550);
+  });
+
   it('does not scroll when only the assistant message is appended', () => {
     const { rerender } = renderScrollHook({
       dataSource: [userId, assistantId],
