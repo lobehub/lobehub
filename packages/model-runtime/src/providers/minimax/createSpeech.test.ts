@@ -238,7 +238,13 @@ describe('createMiniMaxSpeech', () => {
       [1002, AgentRuntimeErrorType.RateLimitExceeded],
       // 1039 is a token limit the request must be adjusted for, not a retryable rate limit
       [1039, AgentRuntimeErrorType.ProviderBizError],
+      [1045, AgentRuntimeErrorType.RateLimitExceeded],
+      [2045, AgentRuntimeErrorType.RateLimitExceeded],
+      [2062, AgentRuntimeErrorType.RateLimitExceeded],
       [1008, AgentRuntimeErrorType.InsufficientQuota],
+      [2053, AgentRuntimeErrorType.InsufficientQuota],
+      [2056, AgentRuntimeErrorType.InsufficientQuota],
+      [2067, AgentRuntimeErrorType.InsufficientQuota],
       [2013, AgentRuntimeErrorType.ProviderBizError],
       [1000, AgentRuntimeErrorType.ProviderBizError],
     ])('maps status_code %d to %s', async (statusCode, errorType) => {
@@ -302,10 +308,23 @@ describe('createMiniMaxSpeech', () => {
 
   describe('LobeMinimaxAI routing', () => {
     it.each([
-      ['default base URL', {}],
-      ['Anthropic base URL', { baseURL: 'https://api.minimax.io/anthropic' }],
-      ['Anthropic SDK type', { baseURL: 'https://api.minimax.io/anthropic', sdkType: 'anthropic' }],
-    ])('sends speech models to t2a_v2 with the %s', async (_name, runtimeOptions) => {
+      ['default base URL', {}, 'https://api.minimaxi.com/v1/t2a_v2'],
+      [
+        'global Anthropic base URL',
+        { baseURL: 'https://api.minimax.io/anthropic' },
+        'https://api.minimax.io/v1/t2a_v2',
+      ],
+      [
+        'Anthropic SDK type and /v1/messages URL',
+        { baseURL: 'https://api.minimax.io/anthropic/v1/messages', sdkType: 'anthropic' },
+        'https://api.minimax.io/v1/t2a_v2',
+      ],
+      [
+        'China Anthropic base URL',
+        { baseURL: 'https://api.minimaxi.com/anthropic' },
+        'https://api.minimaxi.com/v1/t2a_v2',
+      ],
+    ])('sends speech models to t2a_v2 with the %s', async (_name, runtimeOptions, expectedURL) => {
       fetchMock.mockResolvedValue(okResponse());
       const runtime = new LobeMinimaxAI({ apiKey: 'test-key', ...runtimeOptions });
 
@@ -317,13 +336,27 @@ describe('createMiniMaxSpeech', () => {
       });
 
       const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toBe('https://api.minimaxi.com/v1/t2a_v2');
-      expect(url).not.toContain('/audio/speech');
+      expect(url).toBe(expectedURL);
       expect(JSON.parse(init.body).voice_setting).toEqual({
         emotion: 'calm',
         voice_id: 'female-shaonv',
       });
       expect(result.usage?.inputCharacters).toBe(12);
+    });
+
+    it('routes an alias mapped onto a speech model to t2a_v2', async () => {
+      fetchMock.mockResolvedValue(okResponse());
+      const runtime = new LobeMinimaxAI({
+        apiKey: 'test-key',
+        baseURL: 'https://api.minimax.io/anthropic',
+        modelIdMapping: { 'voice-prod': 'speech-2.8-hd' },
+      } as any);
+
+      await runtime.textToSpeech!({ input: 'hi', model: 'voice-prod', voice: 'female-yujie' });
+
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://api.minimax.io/v1/t2a_v2');
+      expect(JSON.parse(init.body).model).toBe('speech-2.8-hd');
     });
 
     it('requires an API key', () => {
