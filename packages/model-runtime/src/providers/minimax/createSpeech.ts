@@ -189,7 +189,7 @@ export async function createMiniMaxSpeech(
 
     log('t2a_v2 request: model=%s voice=%s format=%s', requestModel, payload.voice, format);
 
-    const response = await fetch(`${baseURL}/t2a_v2`, {
+    const response = await fetch(`${baseURL.replace(/\/+$/, '')}/t2a_v2`, {
       body: JSON.stringify(body),
       headers: {
         ...options.headers,
