@@ -1,5 +1,6 @@
 import {
   ACCEPTANCE_REVIEW_ERRORED_ERROR,
+  VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
 } from '@lobechat/const/goal';
 import type { GoalGraphNode, GoalGraphSnapshot, TaskItem } from '@lobechat/types';
@@ -223,6 +224,14 @@ describe('decideNextMove', () => {
       expect(
         decide(snapshot, {
           frontierTask: task({ error: ACCEPTANCE_REVIEW_ERRORED_ERROR, status: 'paused' }),
+        }),
+      ).toMatchObject({ branch: 'failure_decision', outcome: 'waiting_human' });
+
+      // A verifier refused for want of credits refuses every re-delivery too.
+      // Retrying it like any verifier error spent a builder attempt per round.
+      expect(
+        decide(snapshot, {
+          frontierTask: task({ error: VERIFICATION_OUT_OF_CREDITS_ERROR, status: 'paused' }),
         }),
       ).toMatchObject({ branch: 'failure_decision', outcome: 'waiting_human' });
     });

@@ -1,6 +1,5 @@
-/* Rule order mirrors the original emotion registration order (body, clickableRow,
-   container, fixedTable, wideList, table), which decides ties between equal
-   specificity selectors. */
+/* Base table rules precede the fixed/wide variants. Emotion composed these
+   variants after table; declaration-key order was not its insertion order. */
 .body {
   overflow-x: auto;
 }
@@ -16,6 +15,42 @@
 
 .container {
   container-type: inline-size;
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: max-content;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding-block: 8px;
+  padding-inline: 8px;
+  text-align: start;
+  vertical-align: middle;
+}
+
+.table thead th {
+  font-weight: 500;
+  color: var(--lobe-color-text-secondary);
+  white-space: nowrap;
+  background: var(--lobe-color-fill-quaternary);
+}
+
+.table tr th:first-child,
+.table tr td:first-child {
+  padding-inline-start: 24px;
+}
+
+.table tr th:last-child,
+.table tr td:last-child {
+  padding-inline-end: 24px;
+}
+
+.table tbody tr:hover {
+  background: var(--lobe-color-fill-quaternary);
 }
 
 .fixedTable {
@@ -100,42 +135,6 @@
   .wideList td[data-list-slot='actions'] {
     justify-content: flex-end;
   }
-}
-
-.table {
-  border-collapse: collapse;
-  width: 100%;
-  min-width: max-content;
-  font-size: 13px;
-}
-
-.table th,
-.table td {
-  padding-block: 8px;
-  padding-inline: 8px;
-  text-align: start;
-  vertical-align: middle;
-}
-
-.table thead th {
-  font-weight: 500;
-  color: var(--lobe-color-text-secondary);
-  white-space: nowrap;
-  background: var(--lobe-color-fill-quaternary);
-}
-
-.table tr th:first-child,
-.table tr td:first-child {
-  padding-inline-start: 24px;
-}
-
-.table tr th:last-child,
-.table tr td:last-child {
-  padding-inline-end: 24px;
-}
-
-.table tbody tr:hover {
-  background: var(--lobe-color-fill-quaternary);
 }
 
 @container (max-width: 600px) {

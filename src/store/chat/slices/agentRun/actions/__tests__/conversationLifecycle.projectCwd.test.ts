@@ -165,6 +165,44 @@ describe('sendMessage in a project directory', () => {
     expect(pendingAtDispatch).toEqual([]);
   });
 
+  // Regression (acceptance): a first send the server refused (device offline)
+  // rolled the optimistic topic back but left the staging consumed, so the
+  // blank project conversation lost its directory — on a project page the
+  // composer vanished and the restored draft had nowhere to be sent.
+  it('restages the project directory when a refused first send rolls back', async () => {
+    mockConstEnv.isDesktop = true;
+    setupMockSelectors({
+      agentConfig: { agencyConfig: { boundDeviceId: DEVICE_ID, executionTarget: 'device' } },
+    });
+    const agentId = TEST_IDS.SESSION_ID;
+    const staged = { agentId, projectWorkingDirectoryId: 'dir-85' };
+    const executeGatewayAgentSpy = vi
+      .fn()
+      .mockRejectedValue(new Error('Device is offline or working directory is unavailable'));
+
+    act(() => {
+      useChatStore.setState({
+        activeAgentId: agentId,
+        activeTopicId: undefined,
+        executeGatewayAgent: executeGatewayAgentSpy,
+        isGatewayModeEnabled: () => true,
+        pendingNewTopicDirectory: staged,
+      });
+    });
+
+    const { result } = renderHook(() => useChatStore());
+    await act(async () => {
+      await result.current.sendMessage({
+        context: { agentId, threadId: null, topicId: null },
+        message: 'Start on an offline device',
+      });
+    });
+
+    expect(executeGatewayAgentSpy).toHaveBeenCalled();
+    expect(result.current.activeTopicId).toBeFalsy();
+    expect(result.current.pendingNewTopicDirectory).toEqual(staged);
+  });
+
   // `/newTopic` from a project topic creates a topic outside the project, so it
   // must not inherit the directory it was sent from.
   it('keeps a /newTopic sent from a project topic on the agent default', async () => {

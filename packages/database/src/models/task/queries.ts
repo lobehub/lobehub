@@ -291,6 +291,7 @@ export const groupList = async (
       total: priorityCounts.get(group.priority) ?? 0,
     }));
   } else {
+    /* v8 ignore next -- unreachable: `groupBy` is exhausted above, so the guard at the top already proved `groups` non-empty */
     const statusGroups = (groups ?? []).map((group) => ({
       ...group,
       statuses: Array.from(new Set(group.statuses)),
@@ -336,6 +337,7 @@ export const groupList = async (
     groupQueries.map(async (group) => {
       const groupTasks =
         group.prefetchedTasks ??
+        /* v8 ignore start -- unreachable: every grouping branch above prefetches its tasks. The stop marker sits after the return because V8 charges the continuation of this never-resumed `await` to the statement that follows it */
         (await ctx.db
           .select()
           .from(tasks)
@@ -355,6 +357,7 @@ export const groupList = async (
         tasks: groupTasks,
         total: group.total,
       };
+      /* v8 ignore stop */
     }),
   );
 

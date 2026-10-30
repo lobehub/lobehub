@@ -160,7 +160,39 @@ describe('Goal automatic Acceptance review', () => {
     });
   });
 
+  it('names the rejected checks of the reviewed round so they can be repaired in it', async () => {
+    mocks.predict.mockResolvedValue({
+      id: 'p1',
+      status: 'judged',
+      action: 'reject',
+      comment: 'Each chapter needs a second screenshot.',
+    });
+    expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({
+      rejectedChecks: [{ checkItemId: 'c1', feedback: 'Each chapter needs a second screenshot.' }],
+    });
+  });
+
+  it('does not offer an earlier round’s result for an in-round repair', async () => {
+    mocks.run.mockResolvedValue({ id: 'r2', acceptanceId: 'a1', metadata: {} });
+    mocks.rounds.mockResolvedValue({
+      runs: [
+        { id: 'r1', roundIndex: 1, plan: [check] },
+        { id: 'r2', roundIndex: 2, plan: [{ ...check, id: 'c2' }] },
+      ],
+      results: [result, { ...result, id: 'result2', checkItemId: 'c2', verifyRunId: 'r2' }],
+    });
+    mocks.predict.mockImplementation(async ({ checkResultId }: { checkResultId: string }) =>
+      checkResultId === 'result1'
+        ? { id: 'p1', status: 'judged', action: 'reject', comment: 'Old evidence is short.' }
+        : { id: 'p2', status: 'judged', action: 'accept' },
+    );
+    const review = await reviewGoalDelivery(db, 'u1', 't1', 'op1');
+    expect(review?.status).toBe('rejected');
+    expect(review?.rejectedChecks).toBeUndefined();
+  });
+
   it('reviews supplementary checks across rounds, not only the bound run', async () => {
+    mocks.run.mockResolvedValue({ id: 'r2', acceptanceId: 'a1', metadata: {} });
     mocks.rounds.mockResolvedValue({
       runs: [
         { id: 'r1', roundIndex: 1, plan: [check] },
@@ -186,6 +218,7 @@ describe('Goal automatic Acceptance review', () => {
   });
 
   it('ignores a result filed under an id that no round ever planned', async () => {
+    mocks.run.mockResolvedValue({ id: 'r2', acceptanceId: 'a1', metadata: {} });
     mocks.rounds.mockResolvedValue({
       runs: [
         { id: 'r1', roundIndex: 1, plan: [check] },
@@ -324,6 +357,25 @@ describe('Goal automatic Acceptance review', () => {
           userDecision: null,
         },
         { id: 'r1', plan: [check], planConfirmedAt: new Date(), roundIndex: 2, status: 'passed' },
+      ],
+      results: [result],
+    });
+
+    expect(await reviewGoalDelivery(db, 'u1', 't1', 'op1')).toMatchObject({ status: 'passed' });
+    expect(mocks.predict).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * A concurrent attempt opened its round while this delivery was being judged.
+   * Task rounds confirm their plan when they open, so the empty newer round
+   * planned every check and flagged this round's evidence as carried forward —
+   * a passing delivery was sent back for "current evidence" it had just filed.
+   */
+  it('ignores a round opened after the one under review', async () => {
+    mocks.rounds.mockResolvedValue({
+      runs: [
+        { id: 'r1', plan: [check], planConfirmedAt: new Date(), roundIndex: 1, status: 'passed' },
+        { id: 'r2', plan: [check], planConfirmedAt: new Date(), roundIndex: 2, status: 'running' },
       ],
       results: [result],
     });

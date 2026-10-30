@@ -22,6 +22,13 @@ export type AgentImageSource =
     };
 
 export interface AgentTextBlock {
+  /**
+   * Set when a context provider attached this block rather than the user typing
+   * it, naming the provider (e.g. `LOBEHUB_CLI_GUIDE_CONTEXT`). It lets the
+   * executing side drop a copy it delivers through a native channel instead.
+   * Serializers never forward it to the agent.
+   */
+  context?: string;
   text: string;
   type: 'text';
 }

@@ -15,6 +15,7 @@ import {
   updateAgentSignalReceiptMetadata,
 } from '@/server/services/agentSignal/services/receiptService';
 import { DocumentService } from '@/server/services/document';
+import { updateDocumentThroughRoom } from '@/server/services/pageCollab/bodyWriter';
 
 type RollbackPersistedStatus = 'conflict' | 'failed' | 'not_found' | 'rolled_back' | 'unsupported';
 type RollbackTerminalStatus = RollbackPersistedStatus | 'already_rolled_back';
@@ -286,12 +287,18 @@ export const rollbackAgentSignalReceipt = async (
         return toResult(resolvedInput, 'not_found', 'Document history not found');
       }
 
-      await documentService.updateDocument(documentId, {
-        editorData: history.editorData,
-        ...(lockOwnerId ? { lockOwnerId } : {}),
-        restoreFromHistoryId: history.id,
-        saveSource: 'restore',
-      });
+      await updateDocumentThroughRoom(
+        context.db,
+        documentService,
+        documentId,
+        {
+          editorData: history.editorData,
+          ...(lockOwnerId ? { lockOwnerId } : {}),
+          restoreFromHistoryId: history.id,
+          saveSource: 'restore',
+        },
+        { userId: context.userId, workspaceId: context.workspaceId },
+      );
 
       await persistRollbackStatus(resolvedInput, 'rolled_back');
       return toResult(resolvedInput, 'rolled_back');

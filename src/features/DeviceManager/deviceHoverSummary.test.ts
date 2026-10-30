@@ -6,6 +6,7 @@ import { buildDeviceHoverSummary } from './deviceHoverSummary';
 const series: DeviceMetricSeries = {
   bucketMs: 300_000,
   cpuCount: 8,
+  diskTotalBytes: 512 * 1024 ** 3,
   from: 0,
   memoryTotalBytes: 32 * 1024 ** 3,
   points: [],
@@ -40,6 +41,7 @@ describe('buildDeviceHoverSummary', () => {
       architecture: 'x64',
       connections: 2,
       cores: 8,
+      diskTotalBytes: 512 * 1024 ** 3,
       enrollerName: undefined,
       hostname: 'dev-box.local',
       lastConnectedAt: '2026-10-15T10:00:00.000Z',
@@ -61,13 +63,14 @@ describe('buildDeviceHoverSummary', () => {
         online: false,
         platform: null,
       }),
-      { ...series, cpuCount: null, memoryTotalBytes: null },
+      { ...series, cpuCount: null, diskTotalBytes: null, memoryTotalBytes: null },
     );
 
     expect(summary).toMatchObject({
       architecture: undefined,
       connections: 0,
       cores: undefined,
+      diskTotalBytes: undefined,
       hostname: undefined,
       lastConnectedAt: '2026-10-14T00:00:00.000Z',
       memoryTotalBytes: undefined,

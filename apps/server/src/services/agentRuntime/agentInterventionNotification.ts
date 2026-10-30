@@ -159,6 +159,13 @@ const actionsFor = (
     // A form resolved by approval (the secure credential form): the card
     // approves after its own write, so there are no arguments to edit and no
     // allow-list entry to remember.
+    //
+    // These actions become the durable row's `allowedActions`, which every
+    // surface resolves against, the conversation card included. `approve_tool`
+    // must stay here or the card's own submit is rejected as unavailable. The
+    // surfaces that cannot render the form (Review opened from a push or IM
+    // notification) withhold approve for this shape in the Cloud resolution
+    // service instead, so approving there cannot skip the secret entry.
     return ['approve_tool', 'reject_continue', 'stop'];
   }
 

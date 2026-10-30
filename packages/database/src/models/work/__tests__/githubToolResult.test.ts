@@ -421,4 +421,251 @@ describe('normalizeGithubShellToolResult', () => {
       }),
     ).toBeNull();
   });
+
+  it('skips a shell payload flagged as an application error', () => {
+    expect(
+      normalizeGithubShellToolResult({
+        data: {
+          command: `gh pr create --repo lobehub/lobehub --title 'x'`,
+          exitCode: 0,
+          isError: true,
+          output: 'https://github.com/lobehub/lobehub/pull/1',
+        },
+        toolName: 'command_execution',
+      }),
+    ).toBeNull();
+  });
+});
+
+/**
+ * Structured REST-shaped tool results (`create_issue`, `update_pull_request`, ...)
+ * reach the same `owner/repo#number` identity through `unwrapData` → `buildParams`.
+ */
+describe('normalizeGithubToolResult (structured REST results)', () => {
+  const structured = (data: unknown, args?: Record<string, unknown>, toolName = 'create_issue') =>
+    normalizeGithubToolResult({ args, data, toolName });
+
+  it('parses a numeric string `number` into the identifier', () => {
+    const operation = structured({ number: '42', repository_full_name: 'lobehub/lobehub' });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'created',
+      identifier: 'lobehub/lobehub#42',
+      resourceType: 'github_issue',
+    });
+  });
+
+  it('defaults missing args to an empty record', () => {
+    const operation = structured({ number: 7, repository_full_name: 'lobehub/lobehub' });
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#7');
+  });
+
+  it('resolves the repo from the args when the result carries none', () => {
+    const operation = structured({ number: 5 }, { repository: 'lobehub/lobehub' });
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#5');
+  });
+
+  it('resolves the repo from an api.github.com repository_url', () => {
+    const operation = structured({
+      number: 5,
+      repository_url: 'https://api.github.com/repos/lobehub/lobehub',
+    });
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#5');
+  });
+
+  it('falls back to the `url` field when html_url is absent', () => {
+    const operation = structured({
+      number: 5,
+      repository_full_name: 'lobehub/lobehub',
+      url: 'https://github.com/lobehub/lobehub/issues/5',
+    });
+
+    expect(operation?.params.url).toBe('https://github.com/lobehub/lobehub/issues/5');
+  });
+
+  it('collapses merged and draft into the display status', () => {
+    const merged = structured({ merged: true, number: 5, repository_full_name: 'o/r' });
+    expect(merged?.params.status).toBe('merged');
+
+    const draft = structured({ draft: true, number: 6, repository_full_name: 'o/r' });
+    expect(draft?.params.status).toBe('draft');
+  });
+
+  it('unwraps an MCP content-parts array', () => {
+    const operation = structured([
+      { text: '{"number": 7, "repository_full_name": "lobehub/lobehub"}' },
+    ]);
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#7');
+  });
+
+  it('unwraps a content-parts array of plain strings', () => {
+    const operation = structured(['{"number": 8, "repository_full_name": "lobehub/lobehub"}']);
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#8');
+  });
+
+  it('falls back to the first array element when parts carry no text', () => {
+    // No text/content in the parts ⇒ the joined text is empty and the first
+    // element is used as-is; it holds no identity, so nothing registers.
+    expect(structured([{}])).toBeNull();
+  });
+
+  it('unwraps a `content` array on a wrapper record', () => {
+    const operation = structured({
+      content: [{ text: '{"number": 8, "repository_full_name": "lobehub/lobehub"}' }],
+    });
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#8');
+  });
+
+  it('keeps the wrapper record when its content array is not JSON', () => {
+    expect(structured({ content: [{ text: 'not-json' }] })).toBeNull();
+  });
+
+  it('unwraps a nested resource wrapper key', () => {
+    const operation = structured({
+      issue: { number: 11, repository_full_name: 'lobehub/lobehub' },
+    });
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#11');
+  });
+
+  it('skips payloads that are not JSON objects', () => {
+    expect(structured('plain text payload')).toBeNull();
+  });
+
+  it('ignores non-record parts between MCP content parts', () => {
+    const operation = structured([
+      { text: '{"number": 9, "repository_full_name": "lobehub/lobehub"}' },
+      42,
+    ]);
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#9');
+  });
+
+  it('ignores an unparseable repository_url', () => {
+    expect(structured({ number: 5, repository_url: 'not a url' })).toBeNull();
+  });
+
+  it('skips structured results flagged as an application error', () => {
+    expect(
+      structured({ isError: true, number: 5, repository_full_name: 'lobehub/lobehub' }),
+    ).toBeNull();
+  });
+
+  it('skips tools that are not GitHub write tools', () => {
+    const operation = structured(
+      { number: 5, repository_full_name: 'lobehub/lobehub' },
+      undefined,
+      'get_issue',
+    );
+
+    expect(operation).toBeNull();
+  });
+
+  it('skips results without a resolvable identity', () => {
+    expect(structured({ title: 'no repo or number' })).toBeNull();
+  });
+});
+
+describe('normalizeGithubToolResult (gh CLI edge cases)', () => {
+  it('reads the command from args when the result record carries none', () => {
+    const operation = normalizeGithubToolResult({
+      args: { command: `gh issue create --repo lobehub/lobehub --title 'From args'` },
+      data: { output: 'https://github.com/lobehub/lobehub/issues/77' },
+      toolName: 'runCommand',
+    });
+
+    expect(operation?.params).toMatchObject({
+      identifier: 'lobehub/lobehub#77',
+      title: 'From args',
+    });
+  });
+
+  it('skips a result with no command at all', () => {
+    expect(
+      normalizeGithubToolResult({
+        data: { output: 'https://github.com/lobehub/lobehub/issues/77' },
+        toolName: 'runCommand',
+      }),
+    ).toBeNull();
+  });
+
+  it('skips a non-object payload', () => {
+    expect(
+      normalizeGithubToolResult({ data: 'plain text payload', toolName: 'runCommand' }),
+    ).toBeNull();
+  });
+
+  it('ignores gh subcommands that are neither issue nor pr', () => {
+    expect(
+      normalizeGithubToolResult({
+        data: { command: 'gh repo create lobehub/x --public', exitCode: 0, output: '' },
+        toolName: 'runCommand',
+      }),
+    ).toBeNull();
+  });
+
+  it('tolerates a value flag with no value at the end of the command', () => {
+    const operation = normalizeGithubToolResult({
+      data: {
+        command: 'gh issue create --repo lobehub/lobehub --title',
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/issues/88',
+      },
+      toolName: 'runCommand',
+    });
+
+    expect(operation?.params.identifier).toBe('lobehub/lobehub#88');
+    expect(operation?.params.title).toBeUndefined();
+  });
+
+  it('parses the short -t/-b/-d flags on gh pr create', () => {
+    const operation = normalizeGithubToolResult({
+      data: {
+        command: `gh pr create -R lobehub/lobehub -t 'Short flags' -b 'Body text' -d`,
+        exitCode: 0,
+        output: 'https://github.com/lobehub/lobehub/pull/99',
+      },
+      toolName: 'runCommand',
+    });
+
+    expect(operation?.params).toMatchObject({
+      content: 'Body text',
+      identifier: 'lobehub/lobehub#99',
+      resourceType: 'github_pull_request',
+      status: 'draft',
+      title: 'Short flags',
+    });
+  });
+
+  it('takes an entity URL positional as the edit target', () => {
+    const operation = normalizeGithubToolResult({
+      data: {
+        command: `gh pr edit https://github.com/lobehub/lobehub/pull/9 --title 'Retitled'`,
+        exitCode: 0,
+        output: '',
+      },
+      toolName: 'runCommand',
+    });
+
+    expect(operation?.params).toMatchObject({
+      changeType: 'updated',
+      identifier: 'lobehub/lobehub#9',
+      title: 'Retitled',
+    });
+  });
+
+  it('skips a create command that leaves no resolvable identity', () => {
+    expect(
+      normalizeGithubToolResult({
+        data: { command: `gh issue create --title 'No repo'`, exitCode: 0, output: 'no url here' },
+        toolName: 'runCommand',
+      }),
+    ).toBeNull();
+  });
 });

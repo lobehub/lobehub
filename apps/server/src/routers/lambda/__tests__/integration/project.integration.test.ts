@@ -157,6 +157,55 @@ describe('Project Router Integration', () => {
     expect(updated.data.slug).toBe('team_launch_v2');
   });
 
+  it('lets a workspace member manage a project another member created', async () => {
+    const workspaceId = 'project-teammate-workspace';
+    const teammateId = await createTestUser(serverDB);
+    await serverDB
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'Teammates', primaryOwnerId: userId, slug: workspaceId });
+    const memberCaller = (id: string) =>
+      projectRouter.createCaller({
+        ...createTestContext(id),
+        workspaceId,
+        workspaceRole: 'member' as const,
+      });
+    const project = await memberCaller(userId).create({ identifier: 'TEAM', name: 'Team' });
+    const teammate = memberCaller(teammateId);
+
+    try {
+      const detail = await teammate.detail({ id: project.data.id });
+      expect(detail.data.permissions).toEqual({
+        canManage: true,
+        canManageKnowledgeBases: true,
+        canManageMembers: false,
+      });
+
+      const renamed = await teammate.update({ id: project.data.id, name: 'Renamed' });
+      expect(renamed.data.name).toBe('Renamed');
+      await expect(
+        teammate.update({ id: project.data.id, visibility: 'private' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      const task = await taskRouter
+        .createCaller({ ...createTestContext(teammateId), workspaceId, workspaceRole: 'member' })
+        .create({ instruction: 'Help the team', projectId: project.data.id });
+      expect(task.data.projectId).toBe(project.data.id);
+
+      await teammate.updateStatus({ id: project.data.id, status: 'active' });
+      await teammate.requestCompletion({ id: project.data.id });
+      const accepted = await teammate.acceptCompletion({ id: project.data.id });
+      expect(accepted.data.project.status).toBe('completed');
+      await teammate.reopen({ id: project.data.id });
+
+      await teammate.delete({ id: project.data.id });
+      await expect(memberCaller(userId).detail({ id: project.data.id })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+    } finally {
+      await cleanupTestUser(serverDB, teammateId);
+    }
+  });
+
   it('reports no management permissions to a workspace viewer, even the creator', async () => {
     const workspaceId = 'project-viewer-workspace';
     await serverDB

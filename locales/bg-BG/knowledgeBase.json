@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "Добавяне към библиотека",
   "addToKnowledgeBase.totalFiles": "{{count}} избрани файла",
   "createNew.confirm": "Създай нова",
+  "createNew.cover.label": "Корицa",
   "createNew.description.label": "Описание на библиотеката (по избор)",
   "createNew.description.placeholder": "Описанието помага на LLM да разбере по-добре вашата библиотека",
   "createNew.edit.confirm": "Запази промените",

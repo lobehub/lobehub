@@ -20,6 +20,15 @@ interface VirtualizedFileListProps {
   };
   data: FileListItem[];
   hasMore: boolean;
+  /**
+   * Viewport height. Defaults to the folder list's viewport-derived height; a
+   * consumer inside a sized flex container passes `'100%'` to fill it.
+   */
+  height?: string;
+  /** Next-page loader; defaults to the folder list's. */
+  loadMore?: () => Promise<void>;
+  /** Failure of a page past the head, rendered as a retry row in the footer. */
+  loadMoreError?: unknown;
   showUploader?: boolean;
   virtuosoRef: RefObject<VirtuosoHandle | null>;
 }
@@ -28,6 +37,9 @@ const VirtualizedFileList = ({
   columnWidths,
   data,
   hasMore,
+  height = 'calc(100vh - 100px)',
+  loadMore,
+  loadMoreError,
   showUploader = true,
   virtuosoRef,
 }: VirtualizedFileListProps) => {
@@ -43,6 +55,8 @@ const VirtualizedFileList = ({
     columnWidths,
     dataLength: data.length,
     hasMore,
+    loadMore,
+    loadMoreError,
     showUploader,
   });
   const dataRef = useRef<FileListItem[]>(data);
@@ -101,7 +115,7 @@ const VirtualizedFileList = ({
       initialItemCount={30}
       overscan={48 * 5}
       ref={virtuosoRef}
-      style={{ height: 'calc(100vh - 100px)' }}
+      style={{ height }}
       itemContent={useCallback(
         (index: number, item: FileListItem) => {
           if (!item) return null;

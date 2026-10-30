@@ -92,6 +92,15 @@ class DeviceService {
     return lambdaClient.device.getDeviceActivity.query(input) as any;
   }
 
+  /**
+   * The device each agent runs on for the caller, resolved server-side in one
+   * read. Agents that route to no device (sandbox, none, auto, unbound) are
+   * absent from the result.
+   */
+  getAgentDeviceBindings(agentIds: string[]): Promise<Record<string, string>> {
+    return lambdaClient.device.getAgentDeviceBindings.query({ agentIds });
+  }
+
   /** Running-topic count and the members behind it, for every device in the list. */
   getRunningSummary(): Promise<DeviceRunningSummary[]> {
     return lambdaClient.device.getRunningSummary.query();

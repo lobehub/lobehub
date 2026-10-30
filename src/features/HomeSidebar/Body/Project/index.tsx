@@ -8,10 +8,13 @@ import {
   AccordionTrigger,
   ActionIcon,
   cx,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
   Text,
 } from '@lobehub/ui';
-import { ArrowRightIcon, PlusIcon } from 'lucide-react';
-import { memo } from 'react';
+import { ArrowDownUpIcon, ArrowRightIcon, PlusIcon } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -20,11 +23,16 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
 import { resolveProjectListState } from '@/features/Projects/projectListState';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useGlobalStore } from '@/store/global';
+import type { ProjectListSortBy } from '@/store/global/initialState';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useLoadedProjectList, useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import ProjectItem from './ProjectItem';
+import SortableProjectList from './SortableProjectList';
+
+const SORT_BYS: ProjectListSortBy[] = ['manual', 'createdAt', 'updatedAt'];
 
 interface ProjectProps {
   itemKey: string;
@@ -39,6 +47,20 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
     (s) => s.useFetchProjectList,
   )(enabled);
   const state = resolveProjectListState({ error, isHydrated, isValidating, projects });
+  const sortBy = useGlobalStore(systemStatusSelectors.projectListSortBy);
+  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+
+  const sortMenuItems = useMemo<DropdownItem[]>(
+    () =>
+      SORT_BYS.map((by) => ({
+        checked: sortBy === by,
+        key: by,
+        label: t(`sidebar.sort.${by}`),
+        onCheckedChange: () => updateSystemStatus({ projectListSortBy: by }),
+        type: 'checkbox' as const,
+      })),
+    [sortBy, t, updateSystemStatus],
+  );
 
   if (!enabled) return null;
 
@@ -57,12 +79,23 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
             accordionStyles.actionBorderless,
           )}
         >
-          <ActionIcon
-            icon={ArrowRightIcon}
-            size="small"
-            title={t('list.viewAll')}
-            onClick={() => navigate('/projects')}
-          />
+          <Flexbox horizontal align="center" gap={2}>
+            <DropdownMenu items={sortMenuItems} placement={'bottomRight'}>
+              <ActionIcon icon={ArrowDownUpIcon} size="small" title={t('sidebar.sort.title')} />
+            </DropdownMenu>
+            <ActionIcon
+              icon={ArrowRightIcon}
+              size="small"
+              title={t('list.viewAll')}
+              onClick={() => navigate('/projects')}
+            />
+            <ActionIcon
+              icon={PlusIcon}
+              size="small"
+              title={t('create.title')}
+              onClick={() => openCreateProjectModal()}
+            />
+          </Flexbox>
         </div>
       </AccordionHeader>
       <AccordionPanel>
@@ -77,7 +110,7 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
             onClick={() => openCreateProjectModal()}
           />
         ) : (
-          projects?.map((project) => <ProjectItem key={project.id} project={project} />)
+          projects && <SortableProjectList projects={projects} />
         )}
       </AccordionPanel>
     </AccordionItem>

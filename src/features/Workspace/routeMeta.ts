@@ -12,7 +12,10 @@ const WorkspaceHomeDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) 
   usePublishDynamicRouteMeta(
     workspace
       ? {
-          avatar: workspace.avatar || workspace.name,
+          // `null` clears a cached logo once it is removed; the tab then draws
+          // the workspace's generated mark from its name.
+          avatar: workspace.avatar || null,
+          avatarKind: 'workspace',
           title: workspace.name,
         }
       : {},

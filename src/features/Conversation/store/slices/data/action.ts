@@ -81,7 +81,10 @@ export interface DataAction {
    * Dispatch message updates for optimistic UI updates
    * This method updates the frontend state without persisting to database
    */
-  internal_dispatchMessage: (payload: MessageDispatch) => void;
+  internal_dispatchMessage: (
+    payload: MessageDispatch,
+    options?: { creationOrigin?: 'client' | 'server' },
+  ) => void;
 
   /** Mirror the chat store bucket of the current context into this store. */
   internal_syncChatTranscript: () => void;
@@ -170,7 +173,7 @@ export const dataSlice: StateCreator<
   };
 
   return {
-    internal_dispatchMessage: (payload) => {
+    internal_dispatchMessage: (payload, options) => {
       const { context, transcriptSource } = get();
 
       log(
@@ -201,7 +204,9 @@ export const dataSlice: StateCreator<
       }
 
       if (transcriptSource === 'chat') {
-        useChatStore.getState().internal_dispatchMessage(payload, { conversationContext: context });
+        useChatStore
+          .getState()
+          .internal_dispatchMessage(payload, { conversationContext: context }, options);
         // Read the write back now, whether or not a mounted mirror subscribes.
         get().internal_syncChatTranscript();
         return;

@@ -154,6 +154,11 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     options: CreateVideoOptions,
   ) => Promise<HandleCreateVideoWebhookResult>;
   id: string;
+  /**
+   * Whether a chat model's deliverable is an image. Its reasoning then stays provisional
+   * during streamed fallback, so a channel failing before the final image falls back.
+   */
+  isImageOutputModel?: (model: string) => boolean | Promise<boolean>;
   models?:
     | ((params: { client: OpenAI; options?: ConstructorOptions<T> }) => Promise<ChatModelCard[]>)
     | {

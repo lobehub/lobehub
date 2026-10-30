@@ -1,4 +1,3 @@
-import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -41,7 +40,7 @@ export const taskProcedureWrite = taskProcedure.use(withScopedPermission('agent:
 
 // All procedures that take an id accept either raw id (task_xxx) or identifier (TASK-1)
 // Resolution happens in the model layer via model.resolve()
-export const idInput = z.object({ id: z.string() });
+export const idInput = z.object({ id: z.string().trim().min(1) });
 
 export const taskVerifyConfigPatchSchema = z.object({
   enabled: z.boolean().nullish(),
@@ -51,10 +50,3 @@ export const taskVerifyConfigPatchSchema = z.object({
   verifyCriteriaIds: z.array(z.string()).nullish(),
   verifyRubricId: z.string().nullish(),
 });
-
-// Helper: resolve id/identifier and throw if not found
-export async function resolveOrThrow(model: TaskModel, id: string) {
-  const task = await model.resolve(id);
-  if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
-  return task;
-}

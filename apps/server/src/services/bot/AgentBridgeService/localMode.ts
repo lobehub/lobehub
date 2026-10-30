@@ -1,5 +1,5 @@
 import type { BotPlatformContext } from '@lobechat/context-engine';
-import type { BotSenderMetadata, ChatTopicBotContext } from '@lobechat/types';
+import type { BotSenderMetadata, BotWakeKind, ChatTopicBotContext } from '@lobechat/types';
 import type { Message, SentMessage, Thread } from 'chat';
 import debug from 'debug';
 
@@ -10,12 +10,15 @@ import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewa
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { createBotCompletionWebhook } from '../createBotCompletionHook';
+import { detectNoReply, extractStandDown } from '../noReply';
+import { recordNoReplyLabel } from '../noReplyLabel';
 import type { BotReactionMode, BotReplyLocale, PlatformClient } from '../platforms';
 import {
   DEFAULT_BOT_REACTION_MODE,
   getStepReactionEmoji,
   platformFromThreadId,
   shouldApplyReaction,
+  THINKING_REACTION_EMOJI,
 } from '../platforms';
 import { renderThrownAgentError } from '../renderThrownError';
 import {
@@ -25,7 +28,13 @@ import {
   renderStopped,
   splitMessage,
 } from '../replyTemplate';
-import type { BridgeExecutionDeps, DiscordChannelContext, ThreadState } from './types';
+import { recordWakeRunOutcome } from '../wake/scheduler';
+import type {
+  BridgeExecutionDeps,
+  BridgeExecutionResult,
+  DiscordChannelContext,
+  ThreadState,
+} from './types';
 import { extractErrorMessage, hookEventAttachmentsToChatSdk } from './utils';
 
 const log = debug('lobe-server:bot:agent-bridge');
@@ -44,6 +53,8 @@ export async function executeWithHooksLocalMode(
     botContext?: ChatTopicBotContext;
     botPlatformContext?: BotPlatformContext;
     botSender?: BotSenderMetadata;
+    /** The bot's settings, for the bot-wake bookkeeping done at completion. */
+    botSettings?: Record<string, unknown>;
     callbackUrl: string;
     charLimit?: number;
     channelContext?: DiscordChannelContext;
@@ -55,25 +66,34 @@ export async function executeWithHooksLocalMode(
     prompt: string;
     reactionMode?: BotReactionMode;
     replyLocale: BotReplyLocale;
+    /**
+     * Present for a `followup` wake: shows typing / the placeholder message. Held back until the
+     * agent first continues past a step (it is acting, so it has decided to speak).
+     */
+    showFeedback?: () => Promise<{
+      gatewayConnectionId?: string;
+      progressMessage?: SentMessage;
+    }>;
     toolModeOverride?: ThreadState['toolMode'];
     topicId?: string;
     trigger?: string;
     userMessage?: Message;
+    wakeKind?: BotWakeKind;
     webhookBody: Record<string, unknown>;
   },
-): Promise<{ reply: string; topicId: string }> {
+): Promise<BridgeExecutionResult> {
   const {
     agentId,
     botContext,
     botPlatformContext,
     botSender,
+    botSettings,
     callbackUrl,
     charLimit,
     channelContext,
     client,
     displayToolCalls,
     files,
-    gatewayConnectionId,
     prompt,
     reactionMode = DEFAULT_BOT_REACTION_MODE,
     replyLocale,
@@ -81,10 +101,23 @@ export async function executeWithHooksLocalMode(
     topicId,
     trigger,
     userMessage,
+    wakeKind,
     webhookBody,
   } = opts;
 
-  let { progressMessage } = opts;
+  let { gatewayConnectionId, progressMessage } = opts;
+  // Set while a follow-up's feedback is still held back; cleared the moment it is shown.
+  let pendingShowFeedback = opts.showFeedback;
+
+  const revealFeedback = async () => {
+    const show = pendingShowFeedback;
+    if (!show) return;
+    pendingShowFeedback = undefined;
+    ({ gatewayConnectionId, progressMessage } = await show());
+    if (userMessage && shouldApplyReaction(reactionMode, 'thinking')) {
+      await deps.setReaction(thread, userMessage, client, THINKING_REACTION_EMOJI, botContext);
+    }
+  };
   let operationStartTime = 0;
   // Tracks the last markdown body written to `progressMessage` so we can
   // skip redundant edits. Telegram rejects edits with identical content
@@ -101,7 +134,7 @@ export async function executeWithHooksLocalMode(
     }
   };
 
-  return new Promise<{ reply: string; topicId: string }>((resolve, reject) => {
+  return new Promise<BridgeExecutionResult>((resolve, reject) => {
     const timeout = setTimeout(() => {
       stopGatewayTyping();
       reject(new Error(`Agent execution timed out`));
@@ -131,6 +164,10 @@ export async function executeWithHooksLocalMode(
           hooks: [
             {
               handler: async (event) => {
+                // The agent is going on to another step (tools, more reasoning), so it is acting
+                // rather than staying silent: show the feedback a follow-up deferred.
+                if (event.shouldContinue) await revealFeedback();
+
                 if (
                   event.shouldContinue &&
                   userMessage &&
@@ -255,8 +292,72 @@ export async function executeWithHooksLocalMode(
                   return;
                 }
 
+                const lastAssistantContent = event.lastAssistantContent;
+                const noReply = detectNoReply({
+                  content: lastAssistantContent,
+                  hasAttachments: !!(event.attachments as unknown[] | undefined)?.length,
+                  wakeKind,
+                });
+                // Bot-wake bookkeeping (follow-up window, silent-wake budget, stand-down), as the
+                // queue-mode callback does: best-effort and a no-op unless bot-wake is enabled.
+                if (botContext?.applicationId && botContext.platformThreadId) {
+                  try {
+                    await recordWakeRunOutcome({
+                      applicationId: botContext.applicationId,
+                      platform: botContext.platform,
+                      platformThreadId: botContext.platformThreadId,
+                      settings: botSettings,
+                      spoke: !noReply,
+                      // What was posted: without the stand-down marker, which is for the runtime.
+                      spoken: {
+                        id: event.operationId,
+                        text: extractStandDown(lastAssistantContent).content,
+                      },
+                      // A `STAND_DOWN` line after the reply, or `NO_REPLY:stand_down`.
+                      standDown:
+                        noReply?.reason === 'stand_down' ||
+                        extractStandDown(lastAssistantContent).standDown,
+                      wakeKind,
+                    });
+                  } catch (error) {
+                    log('executeWithCallback[local]: recordWakeRunOutcome failed: %O', error);
+                  }
+                }
+
+                if (noReply) {
+                  log(
+                    'onComplete: no_reply reason=%s operationId=%s',
+                    noReply.reason,
+                    event.operationId,
+                  );
+                  // A placeholder only exists if the agent acted before choosing silence.
+                  if (progressMessage) {
+                    try {
+                      await progressMessage.delete();
+                    } catch (error) {
+                      log(
+                        'executeWithCallback[local]: failed to delete progress message: %O',
+                        error,
+                      );
+                    }
+                  }
+                  if (botContext?.applicationId && userMessage) {
+                    await recordNoReplyLabel(deps.db, {
+                      applicationId: botContext.applicationId,
+                      noReply,
+                      operationId: event.operationId,
+                      platform: platformFromThreadId(botContext.platformThreadId),
+                      platformThreadId: botContext.platformThreadId ?? thread.id,
+                      userId: deps.userId,
+                      userMessageId: userMessage.id,
+                      workspaceId: deps.workspaceId,
+                    });
+                  }
+                  resolve({ noReply, reply: '', topicId: resolvedTopicId });
+                  return;
+                }
+
                 try {
-                  const lastAssistantContent = event.lastAssistantContent;
                   // Convert hook-event attachments (JSON-safe) to chat-sdk
                   // Attachment shape. Only the *last* chunk carries
                   // attachments so a multi-chunk reply doesn't repeat the
@@ -264,13 +365,15 @@ export async function executeWithHooksLocalMode(
                   const lastChunkAttachments = hookEventAttachmentsToChatSdk(
                     event.attachments as any,
                   );
-                  const hasText = !!lastAssistantContent;
+                  // The stand-down marker is for the runtime, not the channel.
+                  const replyText = extractStandDown(lastAssistantContent).content;
+                  const hasText = !!replyText;
                   const hasAttachments = !!lastChunkAttachments?.length;
 
                   if (hasText || hasAttachments) {
                     let chunks: string[];
                     if (hasText) {
-                      const replyBody = renderFinalReply(lastAssistantContent!);
+                      const replyBody = renderFinalReply(replyText!);
                       const replyStats = {
                         elapsedMs: event.duration ?? getElapsedMs(),
                         llmCalls: event.llmCalls ?? 0,
@@ -321,7 +424,7 @@ export async function executeWithHooksLocalMode(
                       chunks.length,
                       lastChunkAttachments?.length ?? 0,
                     );
-                    resolve({ reply: lastAssistantContent ?? '', topicId: resolvedTopicId });
+                    resolve({ reply: replyText ?? '', topicId: resolvedTopicId });
 
                     // Fire-and-forget: summarize topic title in DB. Only when
                     // we have text to summarize on — image-only replies skip

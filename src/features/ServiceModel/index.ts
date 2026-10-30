@@ -1,2 +1,2 @@
 export { default as ChatAssistForm } from './ChatAssistForm';
-export { default as ModelAssignmentsForm } from './ModelAssignmentsForm';
+export { default as ServiceModelForm } from './ServiceModelForm';

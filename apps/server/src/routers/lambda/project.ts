@@ -7,7 +7,8 @@ import {
   type WorkspaceRole,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { ProjectModel } from '@/database/models/project';
+import { ProjectModel, type ProjectModelOptions } from '@/database/models/project';
+import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -26,12 +27,20 @@ const isWorkspaceViewer = (ctx: { workspaceId?: string | null; workspaceRole?: W
 
 const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const options: ProjectModelOptions = {
+    canManageAllMembers: isWorkspaceAdmin(ctx),
+    readOnly: isWorkspaceViewer(ctx),
+  };
   return opts.next({
     ctx: {
-      projectModel: new ProjectModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined, {
-        canManageAllMembers: isWorkspaceAdmin(ctx),
-        readOnly: isWorkspaceViewer(ctx),
-      }),
+      projectCoordinatorRepo: new ProjectCoordinatorRepository(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+        options,
+      ),
+      projectModel: new ProjectModel(ctx.serverDB, ctx.userId, workspaceId, options),
     },
   });
 });
@@ -165,8 +174,9 @@ export const projectRouter = router({
     .input(
       z.object({
         avatar: z.string().optional(),
+        coordinatorAgentId: z.string().optional(),
         description: z.string().optional(),
-        identifier: projectIdentifierInput,
+        identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
         slug: projectSlugInput.optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
@@ -174,6 +184,9 @@ export const projectRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        if (input.coordinatorAgentId) {
+          await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
+        }
         return {
           data: await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input)),
           message: 'Project created',
@@ -200,19 +213,27 @@ export const projectRouter = router({
     try {
       const project = await withMainAgent(
         ctx.projectModel,
-        requireResult(await ctx.projectModel.findByIdOrSlug(input.id)),
+        requireResult(await ctx.projectModel.findByReference(input.id)),
       );
-      const [agents, completionReviews, knowledgeBases, tasks, works] = await Promise.all([
-        ctx.projectModel.listAgents(project.id),
-        ctx.projectModel.listCompletionReviews(project.id),
-        ctx.projectModel.listKnowledgeBases(project.id),
-        ctx.projectModel.listTasks(project.id),
-        ctx.projectModel.listWorks(project.id),
-      ]);
+      // TODO(2026-12-31): remove with `ProjectModel.joinTopicAgents`.
+      await ctx.projectModel.joinTopicAgents(project.id);
+      const [agents, completionReviews, knowledgeBases, tasks, works, coordinatorRetires] =
+        await Promise.all([
+          ctx.projectModel.listAgents(project.id),
+          ctx.projectModel.listCompletionReviews(project.id),
+          ctx.projectModel.listKnowledgeBases(project.id),
+          ctx.projectModel.listTasks(project.id),
+          ctx.projectModel.listWorks(project.id),
+          ctx.projectModel.isDedicatedCoordinator(project.coordinatorAgentId, {
+            exceptProjectId: project.id,
+          }),
+        ]);
       return {
         data: {
           agents,
           completionReviews,
+          /** Replacing the main agent hands its history over and deletes it. */
+          coordinatorRetiresOnReplace: coordinatorRetires,
           knowledgeBases,
           permissions: ctx.projectModel.getPermissions(project),
           project,
@@ -231,7 +252,7 @@ export const projectRouter = router({
       return {
         data: await withMainAgent(
           ctx.projectModel,
-          requireResult(await ctx.projectModel.findByIdOrSlug(input.id)),
+          requireResult(await ctx.projectModel.findByReference(input.id)),
         ),
         success: true,
       };
@@ -272,6 +293,9 @@ export const projectRouter = router({
 
   // Keep the released API contract so old clients receive a clear business error.
   // Project moves are paused while project-scoped task numbering is redesigned.
+  // Re-enabling them must also move the task's acceptances (and those of its
+  // run topics): `acceptances.project_id` is copied from the task when filed,
+  // unless the publisher named another project explicitly.
   moveTask: projectWriteProcedure
     .input(idInput.extend({ taskId: z.string() }))
     .mutation(async () => {
@@ -306,6 +330,26 @@ export const projectRouter = router({
         return { message: 'Agent removed from project', success: true };
       } catch (error) {
         mapProjectError(error, 'removeAgent');
+      }
+    }),
+
+  replaceCoordinator: projectWriteProcedure
+    .input(idInput.extend({ agentId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await assertResourceUsable(ctx, 'agent', input.agentId);
+        return {
+          data: await withMainAgent(
+            ctx.projectModel,
+            requireResult(
+              await ctx.projectCoordinatorRepo.replaceCoordinator(input.id, input.agentId),
+            ),
+          ),
+          message: 'Project main agent replaced',
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'replaceCoordinator');
       }
     }),
 
@@ -345,6 +389,20 @@ export const projectRouter = router({
     }
   }),
 
+  /** Move one project in the scope's shared manual order, next to another project. */
+  move: projectWriteProcedure
+    .input(
+      idInput.and(z.union([z.object({ beforeId: z.string() }), z.object({ afterId: z.string() })])),
+    )
+    .mutation(async ({ ctx, input: { id, ...anchor } }) => {
+      try {
+        await ctx.projectModel.move(id, anchor);
+        return { message: 'Project moved', success: true };
+      } catch (error) {
+        mapProjectError(error, 'move');
+      }
+    }),
+
   requestCompletion: projectWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return {
@@ -369,6 +427,15 @@ export const projectRouter = router({
     )
     .mutation(async ({ ctx, input: { id, ...input } }) => {
       try {
+        if (input.visibility !== undefined) {
+          const project = requireResult(await ctx.projectModel.findById(id));
+          if (project.userId !== ctx.userId) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Only the project creator can change its visibility',
+            });
+          }
+        }
         return {
           data: await withMainAgent(
             ctx.projectModel,

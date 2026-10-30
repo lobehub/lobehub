@@ -1,7 +1,7 @@
 contact_links:
   - name: Ask a question for self-hosting
-    url: https://github.com/lobehub/lobe-chat/discussions/new?category=self-hosting-%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2
+    url: https://github.com/lobehub/lobehub/discussions/new?category=self-hosting-%E7%A7%81%E6%9C%89%E5%8C%96%E9%83%A8%E7%BD%B2
     about: Please post questions, and ideas in discussions.
   - name: Questions and ideas
-    url: https://github.com/lobehub/lobe-chat/discussions/new/choose
+    url: https://github.com/lobehub/lobehub/discussions/new/choose
     about: Please post questions, and ideas in discussions.

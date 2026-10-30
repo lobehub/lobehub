@@ -26,7 +26,9 @@ describe('useVerifyReportUrl', () => {
     mocks.bundle = undefined;
   });
 
-  it('links a run in an acceptance to its round', () => {
+  // The workspace-prefixed route is gated on membership, so the copied link stays
+  // on the public route even inside a workspace.
+  it('links a run in an acceptance to its public round URL inside a workspace', () => {
     mocks.bundle = { run: { acceptanceId: 'acc_1', roundIndex: 2 } };
     const { result } = renderHook(() => useVerifyReportUrl());
 

@@ -30,7 +30,7 @@ interface LockedLibIconProps {
 }
 
 /**
- * The shared "restricted library" visual: the library keeps its folder icon
+ * The shared "restricted library" visual: the library keeps its own icon
  * (it is shared workspace content), and a small corner lock says members
  * cannot open it. Use this everywhere a member-restricted KB renders an icon,
  * so the state reads the same across sidebar, cards, and pickers.

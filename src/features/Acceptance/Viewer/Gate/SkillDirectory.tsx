@@ -4,12 +4,10 @@ import { createStaticStyles, cssVar, Flexbox, Highlighter, Markdown } from '@lob
 import { memo, useMemo, useState } from 'react';
 
 import Loading from '@/components/Loading/CircleLoading';
-import {
-  skillFileTree,
-  skillVersionContent,
-} from '@/features/AgentGoals/ProcessControl/BatchPlan/skillVersions';
+import { skillVersionContent } from '@/features/AgentGoals/ProcessControl/BatchPlan/skillVersions';
 import { getLanguage } from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
+import { skillFileTree } from '@/features/SkillViewer/skillFileTree';
 import { useClientDataSWR } from '@/libs/swr';
 import { userSkillService } from '@/services/userSkill';
 import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';

@@ -127,6 +127,19 @@ describe('PageEditor Copilot TopicSelector useDropdownMenu', () => {
     ]);
   });
 
+  it('labels the share action like the sidebar topic menu', () => {
+    const { result } = renderHook(() =>
+      useDropdownMenu({
+        agentId: 'agent-1',
+        onClose: vi.fn(),
+        topicId: 'topic-1',
+        topicTitle: 'Topic 1',
+      }),
+    );
+
+    expect(getMenuItem(result.current(), 'share')).toMatchObject({ label: 'shareModal.title' });
+  });
+
   it('disables write actions for viewers but keeps copy actions available', () => {
     permissionMock.create_content = false;
     permissionMock.edit_own_content = false;

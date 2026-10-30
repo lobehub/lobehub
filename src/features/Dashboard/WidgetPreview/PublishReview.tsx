@@ -1,13 +1,24 @@
 'use client';
 
-import { Alert, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Alert, cssVar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import dayjs from 'dayjs';
+import { CircleCheckIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import WidgetCard from '../WidgetCard';
+import { formatSchedule } from '../utils/schedule';
 import { ScriptDiff } from '../WidgetDetail/VersionDiff';
-import { resolvePublishSchedule, toPreviewWidget } from './previewWidget';
-import { AccessFacts, Fact, reviewStyles, ReviewUnavailable } from './ReviewFacts';
+import { resolvePublishSchedule } from './previewWidget';
+import {
+  AccessFacts,
+  Fact,
+  FoldedSection,
+  ReviewPreviewCard,
+  ReviewSection,
+  reviewStyles,
+  ReviewUnavailable,
+} from './ReviewFacts';
+import ReviewStage, { ReviewStageNote } from './ReviewStage';
 import { useWidgetReview } from './useWidgetReview';
 
 interface PublishReviewProps {
@@ -27,9 +38,10 @@ interface PublishReviewProps {
 }
 
 /**
- * Everything a user needs to approve making a widget live: what it showed in
- * its dry run, what it means, what it may touch (network, credentials), how
- * often it runs, and exactly how its code differs from what is live now.
+ * Everything a user needs to approve making a widget live: the card its dry
+ * run produced, what it means, what it may touch (network, credentials), how
+ * often it runs, and — folded — exactly how its code differs from what is
+ * live now.
  */
 const PublishReview = memo<PublishReviewProps>(
   ({ widgetId, versionId, summary, onApprovalBlockedChange, onPinVersion }) => {
@@ -62,26 +74,34 @@ const PublishReview = memo<PublishReviewProps>(
 
     return (
       <Flexbox data-widget-publish-review={widgetId} gap={12}>
-        <Flexbox gap={4}>
-          <Text weight={600}>{`${widget.title} · v${target.version}`}</Text>
+        <ReviewStage stage={'publish'} title={widget.title} version={target.version}>
           {summary && <Text fontSize={13}>{summary}</Text>}
-          <Text fontSize={12} type={'secondary'}>
-            {t('publish.intro')}
-          </Text>
-        </Flexbox>
+          {/* Says the dry run is behind it, so this does not read as approving it again. */}
+          {run && (
+            <Flexbox horizontal align={'center'} gap={4}>
+              <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={12} />
+              <ReviewStageNote>
+                {t('publish.dryRunPassed', {
+                  time: dayjs(run.finishedAt ?? run.startedAt).fromNow(),
+                  version: target.version,
+                })}
+              </ReviewStageNote>
+            </Flexbox>
+          )}
+        </ReviewStage>
 
         {run ? (
-          <Flexbox gap={6}>
-            <Text fontSize={12} type={'secondary'} weight={500}>
-              {t('publish.previewTitle')}
-            </Text>
-            <div style={{ height: run.output?.type === 'stat' ? 150 : 240 }}>
-              <WidgetCard view={target.view} widget={toPreviewWidget(widget, run)} />
-            </div>
-          </Flexbox>
+          <ReviewSection title={t('review.expected')}>
+            <ReviewPreviewCard run={run} view={target.view} widget={widget} />
+          </ReviewSection>
         ) : (
           <Alert showIcon title={t('publish.noSuccessfulRun')} type={'warning'} />
         )}
+
+        {/* The intro introduces the credentials and schedule it sits above. */}
+        <Text fontSize={12} type={'secondary'}>
+          {t('publish.intro')}
+        </Text>
 
         <Flexbox className={reviewStyles.section} gap={6}>
           <Fact label={t('chat.definition')}>
@@ -90,21 +110,22 @@ const PublishReview = memo<PublishReviewProps>(
           <Fact label={t('publish.schedule')}>
             <Text fontSize={12}>
               {schedule.pattern
-                ? [schedule.pattern, schedule.timezone].filter(Boolean).join(' · ')
+                ? formatSchedule(t, schedule.pattern, schedule.timezone)
                 : t('publish.scheduleNone')}
             </Text>
           </Fact>
           <AccessFacts manifest={manifest} />
         </Flexbox>
 
-        <Flexbox gap={6}>
-          <Text fontSize={12} type={'secondary'} weight={500}>
-            {live && live.id !== target.id
+        <FoldedSection
+          title={
+            live && live.id !== target.id
               ? t('publish.scriptChanges', { version: live.version })
-              : t('publish.scriptNew')}
-          </Text>
+              : t('publish.scriptNew')
+          }
+        >
           <ScriptDiff base={live && live.id !== target.id ? live : undefined} target={target} />
-        </Flexbox>
+        </FoldedSection>
       </Flexbox>
     );
   },

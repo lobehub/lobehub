@@ -60,4 +60,5 @@ const HtmlDocumentFrame = ({ content, title }: HtmlDocumentFrameProps) => {
   );
 };
 
+/**  Superseded by Canvas (`lobe-canvas`); kept so existing conversations keep rendering. */
 export default HtmlDocumentFrame;

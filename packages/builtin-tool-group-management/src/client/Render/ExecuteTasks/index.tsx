@@ -1,13 +1,19 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinRenderProps } from '@lobechat/types';
-import { Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Accordion, Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from '@lobehub/ui';
+import {
+  Accordion,
+  Block,
+  createStaticStyles,
+  Flexbox,
+  Markdown,
+  Text,
+  useTheme,
+} from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
@@ -95,9 +101,11 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
             items={tasksWithAgents.map((task, index) => ({
               action: (
                 <div className={styles.assignee}>
-                  <Avatar
-                    avatar={task.agent?.avatar || DEFAULT_AVATAR}
+                  <AgentAvatar
+                    agentId={task.agentId}
+                    avatar={task.agent?.avatar}
                     background={task.agent?.backgroundColor || theme.colorBgContainer}
+                    name={task.agent?.title}
                     shape={'circle'}
                     size={20}
                   />

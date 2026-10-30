@@ -1,9 +1,10 @@
 import type { AgentInterventionSourceAction } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
 
 import { type Store as ConversationStore } from '../../action';
-import { getInterventionBatch } from '../data/pendingInterventions';
+import { getInterventionBatch, type PendingIntervention } from '../data/pendingInterventions';
 import { dataSelectors } from '../data/selectors';
 
 /**
@@ -63,6 +64,58 @@ export class ToolActionImpl {
     if (hooks.onToolCallComplete) {
       hooks.onToolCallComplete(toolMessageId, undefined);
     }
+  };
+
+  /**
+   * "Approve, and don't ask again for similar actions" from one card, once its
+   * remember step has taken effect.
+   *
+   * The other calls of the same tool in this card's parallel batch were
+   * audited when the model emitted them, before the remember existed, so they
+   * would still ask. Those `isCovered` now clears are approved together with
+   * this card in one batch approval: the run continues once, and the user is
+   * not asked again for what they just said not to ask about. A card with
+   * staged argument edits approves alone, as the batch approval carries none.
+   */
+  approveToolCallAndCovered = async (
+    toolMessageId: string,
+    assistantGroupId: string,
+    {
+      editedArguments,
+      isCovered,
+      rememberToolKey,
+    }: {
+      editedArguments?: Record<string, unknown>;
+      isCovered: (sibling: PendingIntervention) => Promise<boolean>;
+      rememberToolKey?: string;
+    },
+  ): Promise<void> => {
+    const pending = dataSelectors.pendingInterventions(this.#get());
+    const active = pending.find((item) => item.toolMessageId === toolMessageId);
+    const siblings = editedArguments
+      ? []
+      : getInterventionBatch(pending, active).filter(
+          (item) =>
+            item.toolMessageId !== toolMessageId &&
+            item.identifier === active?.identifier &&
+            item.apiName === active?.apiName,
+        );
+    const covered: string[] = [];
+    for (const sibling of siblings) {
+      if (await isCovered(sibling)) covered.push(sibling.toolMessageId);
+    }
+
+    if (covered.length === 0) {
+      await this.approveToolCall(toolMessageId, assistantGroupId, {
+        editedArguments,
+        ...(rememberToolKey ? { rememberToolKey } : {}),
+      });
+      return;
+    }
+
+    // The batch approval approves once; the allow-list entry is written here.
+    if (rememberToolKey) await useUserStore.getState().addToolToAllowList(rememberToolKey);
+    await this.approveAllToolCalls([toolMessageId, ...covered]);
   };
 
   /**
