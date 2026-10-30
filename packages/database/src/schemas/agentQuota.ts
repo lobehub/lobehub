@@ -2,11 +2,13 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   boolean,
+  foreignKey,
   index,
   integer,
   jsonb,
   pgTable,
   text,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -48,11 +50,15 @@ export const agentProviderAccounts = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     // Visibility WITHIN a workspace (same contract as devices / agents):
-    //   - 'public'  → every member sees the subscription and agents can draw on it.
-    //   - 'private' → only `userId` sees it; other members' account lists and
-    //     pickers never surface it. Hiding a subscription is an explicit opt-in,
-    //     so the default keeps today's shared behaviour. Ignored for personal
-    //     rows (`workspace_id IS NULL`). Filtered via `buildWorkspaceWhere`.
+    //   - 'public'  → every member sees the subscription (without its identity
+    //     fields) and agents can draw on it: a team account on a shared machine.
+    //   - 'private' → only members holding a login for it
+    //     (`agent_provider_account_logins`) see and use it.
+    //   Ignored for personal rows (`workspace_id IS NULL`).
+    // The default stays 'public' (today's behaviour) until ingestion dedupes by
+    // identity regardless of visibility and reads go through logins; flipping
+    // it earlier would make a second member's login of a private account
+    // collide with the workspace identity unique index.
     visibility: text('visibility', { enum: ['private', 'public'] })
       .default('public')
       .notNull(),
@@ -165,17 +171,71 @@ export type NewAgentAccountBinding = typeof agentAccountBindings.$inferInsert;
 export type AgentAccountBindingItem = typeof agentAccountBindings.$inferSelect;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// agent_account_device_pins — per-device "switch account" lock
+// agent_provider_account_logins — which devices an account is signed in on
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Account rows are shared across devices, but a login lives on one machine, so
- * a pin has to be chosen per device: pinning an account signed in on device A
- * must not make the same agent fail on device B. The pool (`agent_account_bindings`)
- * stays agent-wide; a device without a pin here balances across it.
+ * An account row is the real provider account (one per scope, so its quota is
+ * counted once); a login is that account signed in on one device. Several
+ * members can sign in to the same account, each on their own machine, and
+ * every login points at the same account row. Written by the desktop sampler
+ * whenever it reports a reading from a device it can resolve.
+ *
+ * Logins decide where an account can run (a login only exists on its machine)
+ * and, for a `private` account, who may see and use it: the members whose
+ * devices hold a login.
  */
-export const agentAccountDevicePins = pgTable(
-  'agent_account_device_pins',
+export const agentProviderAccountLogins = pgTable(
+  'agent_provider_account_logins',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+
+    accountId: uuid('account_id')
+      .references(() => agentProviderAccounts.id, { onDelete: 'cascade' })
+      .notNull(),
+    deviceId: uuid('device_id')
+      .references(() => devices.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** The member whose sampler last reported this login. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    firstSeenAt: timestamptz('first_seen_at').notNull().defaultNow(),
+    lastSeenAt: timestamptz('last_seen_at').notNull().defaultNow(),
+
+    ...timestamps,
+  },
+  (t) => [
+    /** One login per account per device; the target of the device-binding foreign key. */
+    unique('agent_provider_account_logins_account_device_unique').on(t.accountId, t.deviceId),
+    index('agent_provider_account_logins_device_id_idx').on(t.deviceId),
+    index('agent_provider_account_logins_user_id_idx').on(t.userId),
+    index('agent_provider_account_logins_workspace_id_idx').on(t.workspaceId),
+  ],
+);
+
+export type NewAgentProviderAccountLogin = typeof agentProviderAccountLogins.$inferInsert;
+export type AgentProviderAccountLoginItem = typeof agentProviderAccountLogins.$inferSelect;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// agent_device_account_bindings — per-device account choice for an agent
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Which account an agent uses on one device, overriding the agent-wide pool
+ * (`agent_account_bindings`). A login lives on one machine, so the choice has
+ * to be per device: an account signed in on device A must not make the same
+ * agent fail on device B. A device without a row here balances across the pool,
+ * restricted to the accounts it holds a login for.
+ *
+ * The (account, device) pair must be a login on that device, enforced by the
+ * composite foreign key: signing out (deleting the login) removes the binding.
+ */
+export const agentDeviceAccountBindings = pgTable(
+  'agent_device_account_bindings',
   {
     id: uuid('id').defaultRandom().primaryKey(),
 
@@ -183,6 +243,7 @@ export const agentAccountDevicePins = pgTable(
       .references(() => agents.id, { onDelete: 'cascade' })
       .notNull(),
 
+    /** The member who chose the account. */
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
@@ -198,17 +259,22 @@ export const agentAccountDevicePins = pgTable(
     ...timestamps,
   },
   (t) => [
-    /** At most one pinned account per agent on each device. */
-    uniqueIndex('agent_account_device_pins_agent_device_unique').on(t.agentId, t.deviceId),
-    index('agent_account_device_pins_device_id_idx').on(t.deviceId),
-    index('agent_account_device_pins_account_id_idx').on(t.accountId),
-    index('agent_account_device_pins_user_id_idx').on(t.userId),
-    index('agent_account_device_pins_workspace_id_idx').on(t.workspaceId),
+    foreignKey({
+      columns: [t.accountId, t.deviceId],
+      foreignColumns: [agentProviderAccountLogins.accountId, agentProviderAccountLogins.deviceId],
+      name: 'agent_device_account_bindings_login_fk',
+    }).onDelete('cascade'),
+    /** At most one account per agent on each device. */
+    uniqueIndex('agent_device_account_bindings_agent_device_unique').on(t.agentId, t.deviceId),
+    index('agent_device_account_bindings_device_id_idx').on(t.deviceId),
+    index('agent_device_account_bindings_account_device_idx').on(t.accountId, t.deviceId),
+    index('agent_device_account_bindings_user_id_idx').on(t.userId),
+    index('agent_device_account_bindings_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
-export type NewAgentAccountDevicePin = typeof agentAccountDevicePins.$inferInsert;
-export type AgentAccountDevicePinItem = typeof agentAccountDevicePins.$inferSelect;
+export type NewAgentDeviceAccountBinding = typeof agentDeviceAccountBindings.$inferInsert;
+export type AgentDeviceAccountBindingItem = typeof agentDeviceAccountBindings.$inferSelect;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // agent_quota_snapshots — append-only provider observation (the instrument)

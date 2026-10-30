@@ -816,7 +816,7 @@ table agent_account_bindings {
   }
 }
 
-table agent_account_device_pins {
+table agent_device_account_bindings {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]
   user_id text [not null]
@@ -828,11 +828,32 @@ table agent_account_device_pins {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (agent_id, device_id) [name: 'agent_account_device_pins_agent_device_unique', unique]
-    device_id [name: 'agent_account_device_pins_device_id_idx']
-    account_id [name: 'agent_account_device_pins_account_id_idx']
-    user_id [name: 'agent_account_device_pins_user_id_idx']
-    workspace_id [name: 'agent_account_device_pins_workspace_id_idx']
+    
+    (agent_id, device_id) [name: 'agent_device_account_bindings_agent_device_unique', unique]
+    device_id [name: 'agent_device_account_bindings_device_id_idx']
+    (account_id, device_id) [name: 'agent_device_account_bindings_account_device_idx']
+    user_id [name: 'agent_device_account_bindings_user_id_idx']
+    workspace_id [name: 'agent_device_account_bindings_workspace_id_idx']
+  }
+}
+
+table agent_provider_account_logins {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  account_id uuid [not null]
+  device_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  first_seen_at "timestamp with time zone" [not null, default: `now()`]
+  last_seen_at "timestamp with time zone" [not null, default: `now()`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (account_id, device_id) [name: 'agent_provider_account_logins_account_device_unique', unique]
+    device_id [name: 'agent_provider_account_logins_device_id_idx']
+    user_id [name: 'agent_provider_account_logins_user_id_idx']
+    workspace_id [name: 'agent_provider_account_logins_workspace_id_idx']
   }
 }
 
