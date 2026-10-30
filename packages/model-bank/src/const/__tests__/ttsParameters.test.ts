@@ -69,6 +69,8 @@ describe('MiniMax TTS model cards', () => {
 
       const voiceIds = card.voices!.map((voice) => voice.id);
       expect(voiceIds).toContain(params.voice!.default);
+      // The default must also exist on the global endpoint, which lacks e.g. `female-shaonv`.
+      expect(params.voice!.default).toBe('Chinese (Mandarin)_Warm_Girl');
       expect(new Set(voiceIds).size).toBe(voiceIds.length);
       for (const voice of card.voices!) expect(() => TTSVoiceSchema.parse(voice)).not.toThrow();
 

@@ -157,7 +157,8 @@ const createMiniMaxTTSSchema = (emotions: string[]): TTSModelParamsSchema => ({
   pitch: { default: 0, max: 12, min: -12, step: 1 },
   sampleRate: { default: 32_000, enum: [8000, 16_000, 22_050, 24_000, 32_000, 44_100] },
   speed: { default: 1, max: 2, min: 0.5, step: 0.05 },
-  voice: { default: 'female-shaonv' },
+  // Offered by both the China and the global endpoint; most catalog ids are China-only.
+  voice: { default: 'Chinese (Mandarin)_Warm_Girl' },
   volume: { default: 1, max: 10, min: 0.1, step: 0.1 },
 });
 
