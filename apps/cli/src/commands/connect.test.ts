@@ -20,10 +20,11 @@ import {
   writeStatus,
 } from '../daemon/manager';
 import type * as DeviceRegister from '../device/register';
+import { resolveWorkspaceDeviceIdentity } from '../device/register';
 import type * as SystemInfoModule from '../device/systemInfo';
 import { cliVersion } from '../pkg';
 import type * as ServiceStatusModule from '../service/status';
-import { loadDeviceGatewayUrl, saveDeviceGatewayUrl } from '../settings';
+import { loadDeviceGatewayUrl, loadWorkspaceEnrollments, saveDeviceGatewayUrl } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
@@ -549,6 +550,35 @@ describe('connect command', () => {
 
       expect(createLambdaClientMock).toHaveBeenCalledWith(expect.anything(), 'ws-1');
       expect(drainWorktreeCleanups).toHaveBeenCalledWith({ deviceId: 'mock-device-id' });
+    });
+
+    it('refreshes the workspace row platform when restoring a persisted share', async () => {
+      const wsIdentity = resolveWorkspaceDeviceIdentity('ws-1', undefined, 'test-connection-id');
+      vi.mocked(loadWorkspaceEnrollments).mockReturnValueOnce(['ws-1']);
+      createLambdaClientMock.mockReturnValueOnce({
+        device: {
+          drainWorktreeCleanups: { mutate: drainWorktreeCleanups },
+          listDevices: {
+            query: vi.fn().mockResolvedValue([{ deviceId: wsIdentity.deviceId, registered: true }]),
+          },
+        },
+      });
+      mintWorkspaceConnectTokenMock.mockResolvedValueOnce({
+        token: 'ws-token',
+        workspaceId: 'ws-1',
+      });
+      registerWorkspaceDeviceMock.mockResolvedValueOnce(undefined);
+
+      await connect();
+
+      await vi.waitFor(() =>
+        expect(clientOptions).toMatchObject({ token: 'ws-token', workspaceId: 'ws-1' }),
+      );
+      expect(registerWorkspaceDeviceMock).toHaveBeenCalledWith(
+        expect.objectContaining({ token: 'test-token' }),
+        wsIdentity,
+        'ws-1',
+      );
     });
 
     it('passes --gateway through to the daemon child, which resolves the same way', async () => {
