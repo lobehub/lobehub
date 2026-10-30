@@ -1,7 +1,10 @@
 import { type WorkflowContext } from '@upstash/workflow';
 import { z } from 'zod';
 
-import type { ConsolidationRoute } from '@/database/models/userMemory/consolidation';
+import {
+  type ConsolidationRoute,
+  UserMemoryConsolidationModel,
+} from '@/database/models/userMemory/consolidation';
 import { getServerDB } from '@/database/server';
 import {
   CLASSIFY_BATCH,
@@ -17,8 +20,11 @@ const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/consolidation/
 const ROUTE_BATCH = 10;
 
 const payloadSchema = z.object({
+  /** `revert` undoes the run `revertRunId` instead of consolidating. */
+  action: z.enum(['run', 'revert']).optional(),
   model: z.string().optional(),
   provider: z.string().optional(),
+  revertRunId: z.string().optional(),
   userId: z.string().min(1),
 });
 
@@ -47,6 +53,18 @@ export const consolidationHandler = async (context: WorkflowContext) => {
   );
   const runId = context.workflowRunId;
   const db = await getServerDB();
+
+  if (payload.action === 'revert') {
+    // Return rather than throw: a throw makes Upstash retry a request that can never succeed.
+    if (!payload.revertRunId)
+      return { ...empty, error: 'revertRunId is required', mode: 'revert' as const };
+    const revertRunId = payload.revertRunId;
+    const reverted = await runStep(context, `${STEP}:revert`, () =>
+      new UserMemoryConsolidationModel(db, payload.userId).revertRun(revertRunId),
+    );
+    return { ...empty, mode: 'revert' as const, reverted, revertRunId };
+  }
+
   const service = () =>
     new MemoryConsolidationService(db, payload.userId, runId, {
       model: payload.model,
