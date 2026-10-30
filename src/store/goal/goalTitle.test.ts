@@ -41,4 +41,16 @@ describe('buildGoalTitleMessages', () => {
 
     expect(reply.content.split('\n')).toHaveLength(20);
   });
+
+  it('caps Tasks and findings together, Tasks first', () => {
+    const nodes = [
+      ...Array.from({ length: 15 }, (_, index) => ({ kind: 'task', title: `T${index}` })),
+      ...Array.from({ length: 15 }, (_, index) => ({ kind: 'finding', title: `F${index}` })),
+    ];
+    const [, reply] = buildGoalTitleMessages(snapshot({ requirement: 'Ask' }, nodes));
+    const lines = reply.content.split('\n');
+
+    expect(lines).toHaveLength(20);
+    expect(lines.filter((line) => line.startsWith('- Task:'))).toHaveLength(15);
+  });
 });

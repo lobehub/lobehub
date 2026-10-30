@@ -51,7 +51,7 @@ import { shinyTextStyles } from '@/styles';
 import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
-import { deriveGoalTitle, resolveSubmittedGoalTitle } from './goalTitle';
+import { deriveGoalTitle, resolveFallbackTitle, resolveSubmittedGoalTitle } from './goalTitle';
 import { hasUnsavedGoalDraft } from './hasUnsavedGoalDraft';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -293,7 +293,8 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const handleNext = useCallback(async () => {
     const instruction = instructionRef.current.trim() || plan.instruction.trim();
     if (!canCreate || !instruction) return;
-    const name = plan.name.trim() || deriveGoalTitle(instruction);
+    const typed = plan.name.trim();
+    const name = typed || deriveGoalTitle(instruction);
     setPlan((current) => ({
       ...current,
       instruction,
@@ -308,6 +309,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         goal: instruction,
       });
       instructionRef.current = generated.instruction;
+      fallbackTitleRef.current = undefined;
       setPlan((current) => ({
         ...current,
         criteria: generated.criteria,
@@ -319,7 +321,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       console.error('[CreateGoalContent] generate failed:', error);
       // Never the instruction itself: a pasted prompt as the title is what
       // took over the goal page. The instruction stays the goal's body.
-      fallbackTitleRef.current = name;
+      fallbackTitleRef.current = resolveFallbackTitle({
+        name,
+        previousFallback: fallbackTitleRef.current,
+        typed,
+      });
       setPlan((current) => ({
         ...current,
         criteria: [createFallbackGoalCriterion(instruction)],

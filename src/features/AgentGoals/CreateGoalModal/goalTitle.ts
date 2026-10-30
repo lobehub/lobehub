@@ -25,3 +25,20 @@ export const resolveSubmittedGoalTitle = ({
   const title = typed || deriveGoalTitle(instruction);
   return { needsGeneratedTitle: !typed || typed === fallbackTitle, title };
 };
+
+/**
+ * The stopgap title to remember when a criteria draft fails. Only a title the
+ * user did not write stays a stopgap: one they typed or edited before this
+ * draft is theirs, even when the draft fails again.
+ */
+export const resolveFallbackTitle = ({
+  name,
+  previousFallback,
+  typed,
+}: {
+  /** The title the field holds after the failed draft. */
+  name: string;
+  previousFallback?: string;
+  /** What was in the field before the draft, trimmed. */
+  typed: string;
+}) => (!typed || typed === previousFallback ? name : undefined);

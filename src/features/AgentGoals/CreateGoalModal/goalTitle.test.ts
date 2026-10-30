@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveGoalTitle, resolveSubmittedGoalTitle } from './goalTitle';
+import { deriveGoalTitle, resolveFallbackTitle, resolveSubmittedGoalTitle } from './goalTitle';
 
 describe('deriveGoalTitle', () => {
   it('uses the first semantic clause instead of the entire instruction', () => {
@@ -45,5 +45,29 @@ describe('resolveSubmittedGoalTitle', () => {
         name: '  桌宠 TTS  ',
       }),
     ).toEqual({ needsGeneratedTitle: false, title: '桌宠 TTS' });
+  });
+});
+
+describe('resolveFallbackTitle', () => {
+  const stopgap = '桌宠 TTS';
+
+  it('records the derived title when the field was blank', () => {
+    expect(resolveFallbackTitle({ name: stopgap, typed: '' })).toBe(stopgap);
+  });
+
+  it('keeps an untouched stopgap across a failed retry', () => {
+    expect(resolveFallbackTitle({ name: stopgap, previousFallback: stopgap, typed: stopgap })).toBe(
+      stopgap,
+    );
+  });
+
+  it('does not treat a title edited before a failed retry as a stopgap', () => {
+    expect(
+      resolveFallbackTitle({ name: '我的标题', previousFallback: stopgap, typed: '我的标题' }),
+    ).toBeUndefined();
+  });
+
+  it('does not treat a title typed before the first draft as a stopgap', () => {
+    expect(resolveFallbackTitle({ name: '我的标题', typed: '我的标题' })).toBeUndefined();
   });
 });

@@ -13,14 +13,13 @@ export const buildGoalTitleMessages = ({
   goal,
   nodes = [],
 }: GoalGraphSnapshot): Array<{ content: string; role: 'assistant' | 'user' }> => {
-  const titlesOf = (kind: GoalNodeKind, label: string) =>
-    nodes
-      .filter((node) => node.kind === kind)
-      .slice(0, MAX_TITLE_CONTEXT_ITEMS)
-      .map((node) => `- ${label}: ${node.title}`);
+  const ofKind = (kind: GoalNodeKind) => nodes.filter((node) => node.kind === kind);
 
   const ask = goal.requirement?.trim() || goal.title;
-  const progress = [...titlesOf('task', 'Task'), ...titlesOf('finding', 'Finding')];
+  // One cap across both kinds, Tasks first.
+  const progress = [...ofKind('task'), ...ofKind('finding')]
+    .slice(0, MAX_TITLE_CONTEXT_ITEMS)
+    .map((node) => `- ${node.kind === 'task' ? 'Task' : 'Finding'}: ${node.title}`);
 
   return [
     { content: ask, role: 'user' },
