@@ -39,6 +39,7 @@ function expected(): Array<
     ['getAgentByMarketIdentifier', 'query', 12],
     ['getAgentConfig', 'query', 12],
     ['getAgentConfigById', 'query', 12],
+    ['getAgentDeleteImpact', 'query', 12],
     ['getAgentLock', 'query', 13],
     ['getBuiltinAgent', 'query', 12],
     ['getGroupMembershipImpact', 'query', 12],

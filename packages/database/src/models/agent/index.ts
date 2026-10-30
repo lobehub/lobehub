@@ -129,6 +129,7 @@ export class AgentModel {
   // **************** Transfer *************** //
 
   transferHasForeignRows = this.withContext(transfer.transferHasForeignRows);
+  getDeleteImpact = this.withContext(transfer.getDeleteImpact);
   /**
    * Cross-scope transfer of agents and everything they own. The unit of work
    * spans many aggregates, so it lives in {@link AgentTransferRepository};

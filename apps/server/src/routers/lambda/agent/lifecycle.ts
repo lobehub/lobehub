@@ -9,7 +9,10 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
-import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import {
+  assertCanPerformResourceAction,
+  getResourceMeta,
+} from '@/server/services/resourcePermission';
 import { TrashService } from '@/server/services/trash';
 import { TransferErrorCode } from '@/types/transferError';
 
@@ -152,6 +155,26 @@ export const lifecycleRouter = router({
    * Get an agent by marketIdentifier
    * @returns agent id if exists, null otherwise
    */
+  /**
+   * What deleting the agent would take down besides the caller's own work —
+   * feeds the delete confirmation, so it is gated like the delete itself.
+   * Personal scope has no other members, so it reports nothing foreign.
+   */
+  getAgentDeleteImpact: agentProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      if (!ctx.workspaceId) return { foreignTopicCount: 0, hasForeignContent: false };
+
+      await assertCanPerformResourceAction({
+        action: 'delete',
+        db: ctx.serverDB,
+        resourceId: input.agentId,
+        resourceType: 'agent',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return ctx.agentModel.getDeleteImpact(input.agentId);
+    }),
   getAgentByMarketIdentifier: agentProcedure
     .input(
       z.object({
@@ -194,19 +217,24 @@ export const lifecycleRouter = router({
     .input(z.object({ agentId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       if (ctx.workspaceId) {
+        const meta = await getResourceMeta(ctx.serverDB, 'agent', input.agentId);
         await assertCanPerformResourceAction({
           action: 'delete',
           db: ctx.serverDB,
+          meta: meta ?? undefined,
           resourceId: input.agentId,
           resourceType: 'agent',
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         });
-        // Same rule as transfer: the delete cascade erases every linked
-        // session/topic/message, so a non-owner member must not take teammates'
-        // conversations down with their own agent.
+        // The delete cascade trashes every linked session/topic/message. The
+        // agent's author may still delete it — the client confirms first that
+        // teammates' topics go with it (`getAgentDeleteImpact`) — but a
+        // non-owner admin must not take other members' conversations down with
+        // an agent that isn't theirs.
         if (
           isWorkspaceNonOwner(ctx) &&
+          meta?.userId !== ctx.userId &&
           (await ctx.agentModel.transferHasForeignRows(input.agentId))
         ) {
           throw new TRPCError({

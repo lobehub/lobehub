@@ -5,6 +5,7 @@ import { Check, Copy, ListTree, MoreVertical, Pin, PinOff, Plus, Trash } from 'l
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -137,32 +138,36 @@ const Actions = ({
       disabled: !editable || !manageable || !access.canManageResource,
       icon: <Icon icon={Trash} />,
       label: t('delete', { ns: 'common' }),
-      onClick: () =>
+      onClick: () => {
+        const onDelete = () =>
+          run(async () => {
+            try {
+              await (item.type === 'group' ? removeAgentGroup : removeAgent)(item.id);
+              toast.success(
+                t(
+                  item.type === 'group'
+                    ? 'confirmRemoveGroupSuccess'
+                    : 'confirmRemoveSessionSuccess',
+                ),
+              );
+            } catch (error) {
+              toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
+            }
+          });
+
+        if (item.type !== 'group') {
+          void confirmRemoveAgent({ agentId: item.id, onConfirm: onDelete });
+          return;
+        }
+
         confirmModal({
           title: t('delete', { ns: 'common' }),
-          content: t(
-            item.type === 'group'
-              ? 'confirmRemoveChatGroupItemAlert'
-              : 'confirmRemoveSessionItemAlert',
-          ),
+          content: t('confirmRemoveChatGroupItemAlert'),
           okText: t('delete', { ns: 'common' }),
           okButtonProps: { danger: true },
-          onOk: () =>
-            run(async () => {
-              try {
-                await (item.type === 'group' ? removeAgentGroup : removeAgent)(item.id);
-                toast.success(
-                  t(
-                    item.type === 'group'
-                      ? 'confirmRemoveGroupSuccess'
-                      : 'confirmRemoveSessionSuccess',
-                  ),
-                );
-              } catch (error) {
-                toast.error(t(getDeleteErrorMessageKey(error), { ns: 'common' }));
-              }
-            }),
-        }),
+          onOk: onDelete,
+        });
+      },
     },
   ];
   return (

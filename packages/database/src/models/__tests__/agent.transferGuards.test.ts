@@ -169,6 +169,64 @@ describe('AgentModel.transferHasForeignRows', () => {
   });
 });
 
+describe('AgentModel.getDeleteImpact', () => {
+  it('reports nothing foreign when every cascaded row belongs to the caller', async () => {
+    await linkSession('agtg-own-session', ownerId);
+    await serverDB
+      .insert(topics)
+      .values({ agentId, id: 'agtg-own-topic', userId: ownerId, workspaceId: wsId });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: false,
+    });
+  });
+
+  it("counts teammates' live topics reached via the agent or its sessions", async () => {
+    await linkSession('agtg-teammate-session', teammateId);
+    await serverDB.insert(topics).values([
+      { agentId, id: 'agtg-own-topic', userId: ownerId, workspaceId: wsId },
+      { agentId, id: 'agtg-teammate-topic', userId: teammateId, workspaceId: wsId },
+      {
+        id: 'agtg-teammate-session-topic',
+        sessionId: 'agtg-teammate-session',
+        userId: teammateId,
+        workspaceId: wsId,
+      },
+      {
+        agentId,
+        id: 'agtg-teammate-trashed-topic',
+        isDeleted: true,
+        userId: teammateId,
+        workspaceId: wsId,
+      },
+    ]);
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 2,
+      hasForeignContent: true,
+    });
+  });
+
+  it("flags a teammate's comment on the caller's own topic without counting a topic", async () => {
+    await serverDB
+      .insert(topics)
+      .values({ agentId, id: 'agtg-own-topic', userId: ownerId, workspaceId: wsId });
+    await serverDB.insert(topicComments).values({
+      authorUserId: teammateId,
+      clientId: 'agtg-comment-client',
+      content: 'teammate note',
+      topicId: 'agtg-own-topic',
+      workspaceId: wsId,
+    });
+
+    expect(await ownerModel.getDeleteImpact(agentId)).toEqual({
+      foreignTopicCount: 0,
+      hasForeignContent: true,
+    });
+  });
+});
+
 describe('AgentModel.transferAgentOwnership guards', () => {
   const handover = (model: AgentModel) =>
     serverDB.transaction((trx) =>

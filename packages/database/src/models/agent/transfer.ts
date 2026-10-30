@@ -1,6 +1,7 @@
-import { and, inArray, ne, or } from 'drizzle-orm';
+import { and, count, eq, inArray, ne, or } from 'drizzle-orm';
 
 import { agentsToSessions, messages, sessions, tasks, threads, topics } from '../../schemas';
+import { notTrashed } from '../../utils/softDelete';
 import { hasForeignTopicComments } from '../topicComment';
 import { type AgentModelContext } from './context';
 
@@ -88,4 +89,35 @@ export const transferHasForeignRows = async (
     )
     .limit(1);
   return !!foreignTask;
+};
+
+/**
+ * What deleting the agent takes down besides the caller's own work, for the
+ * delete confirmation: how many live topics other members started under it,
+ * and whether anything foreign at all (sessions, comments on the caller's
+ * topics, messages, threads, tasks) rides along with the cascade.
+ */
+export const getDeleteImpact = async (
+  ctx: AgentModelContext,
+  agentId: string,
+): Promise<{ foreignTopicCount: number; hasForeignContent: boolean }> => {
+  const links = await ctx.db
+    .select({ sessionId: agentsToSessions.sessionId })
+    .from(agentsToSessions)
+    .where(eq(agentsToSessions.agentId, agentId));
+  const sessionIds = [...new Set(links.map((link) => link.sessionId))];
+
+  const topicWhere =
+    sessionIds.length > 0
+      ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
+      : eq(topics.agentId, agentId);
+  const [row] = await ctx.db
+    .select({ count: count() })
+    .from(topics)
+    .where(and(topicWhere, ne(topics.userId, ctx.userId), notTrashed(topics.isDeleted)));
+  const foreignTopicCount = Number(row?.count ?? 0);
+
+  const hasForeignContent = foreignTopicCount > 0 || (await transferHasForeignRows(ctx, agentId));
+
+  return { foreignTopicCount, hasForeignContent };
 };

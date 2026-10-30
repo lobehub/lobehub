@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
 import { cssVar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, confirmModal, type ModalInstance, toast } from '@lobehub/ui';
+import { ActionIcon, type ModalInstance, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import {
@@ -26,6 +26,7 @@ import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorks
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import { confirmRemoveAgent } from '@/features/AgentDeleteConfirm';
 import { useAgentMarketSubmission } from '@/features/AgentMarketSubmission/useAgentMarketSubmission';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import NavHeader from '@/features/NavHeader';
@@ -163,9 +164,9 @@ const Header = memo(() => {
 
   const handleDelete = useCallback(() => {
     if (!canManage || !activeAgentId) return;
-    confirmModal({
-      okButtonProps: { danger: true },
-      onOk: async () => {
+    void confirmRemoveAgent({
+      agentId: activeAgentId,
+      onConfirm: async () => {
         try {
           await removeAgent(activeAgentId);
         } catch (error) {
@@ -175,9 +176,6 @@ const Header = memo(() => {
         toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
-      content: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
-      okText: t('delete', { ns: 'common' }),
-      title: t('delete', { ns: 'common' }),
     });
   }, [activeAgentId, canManage, navigate, removeAgent, t]);
 

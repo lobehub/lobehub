@@ -292,6 +292,17 @@ class AgentService {
   };
 
   /**
+   * What deleting the agent takes down besides the caller's own work — other
+   * members' topics (counted) and any other foreign content — for the delete
+   * confirmation.
+   */
+  getAgentDeleteImpact = async (
+    agentId: string,
+  ): Promise<{ foreignTopicCount: number; hasForeignContent: boolean }> => {
+    return lambdaClient.agent.getAgentDeleteImpact.query({ agentId });
+  };
+
+  /**
    * Query non-virtual agents with optional keyword filter.
    * Returns agents with minimal info (id, title, description, avatar, backgroundColor).
    */
