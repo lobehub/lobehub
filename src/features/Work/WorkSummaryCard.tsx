@@ -83,7 +83,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   inlineDescription: css`
-    flex: 0 1 auto;
+    flex: 1 1 0;
     min-width: 0;
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
@@ -94,9 +94,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextQuaternary};
   `,
   inlineIdentifier: css`
-    flex: 0 1 auto;
+    /* The short resource key keeps its width; the long description truncates first. */
+    flex: 0 0 auto;
 
-    min-width: 0;
+    max-width: 70%;
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
