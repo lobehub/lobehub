@@ -30,11 +30,7 @@ import { sx } from '@/styles/sx';
 
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { GATE_COLOR, KIND_COLOR, KIND_ICON, SKILL_COLOR, SKILL_ICON } from '../shared';
-import {
-  BATCH_FRAME_HEAD,
-  BATCH_RETRO_ROW,
-  BATCH_SQUARE_GAP,
-} from './batchLayout';
+import { BATCH_FRAME_HEAD, BATCH_RETRO_ROW, BATCH_SQUARE_GAP } from './batchLayout';
 import {
   type BatchCell,
   type BatchCellState,
@@ -48,7 +44,7 @@ import {
  * The expanded batch, drawn the way it is followed and with no frame of its
  * own: the first round's trials (an experiment probe) as task cards, the roster as waves of squares, and a
  * small re-dispatch group per re-opened round. Squares carry the canonical
- * execution states — grey not run, amber running (breathing square), blue needs a
+ * execution states — grey not run, amber running (glowing square), blue needs a
  * person, green done, faded superseded.
  */
 
@@ -69,14 +65,16 @@ export const CELL_VISUAL: Record<BatchCellState, { color: string; icon: LucideIc
 
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 
-const breathe = stylex.keyframes({
-  '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-  '50%': { opacity: 0.42, transform: 'scale(0.86)' },
+const glow = stylex.keyframes({
+  '0%, 100%': { boxShadow: `0 0 0 0 color-mix(in srgb, ${cssVar.colorWarning} 0%, transparent)` },
+  '50%': {
+    boxShadow: `0 0 0 2px color-mix(in srgb, ${cssVar.colorWarning} 28%, transparent), 0 0 8px 2px color-mix(in srgb, ${cssVar.colorWarning} 55%, transparent)`,
+  },
 });
 
 const styles = stylex.create({
-  breathe: {
-    animationName: { default: breathe, [REDUCED_MOTION]: 'none' },
+  glow: {
+    animationName: { default: glow, [REDUCED_MOTION]: 'none' },
     animationDuration: '1.6s',
     animationTimingFunction: 'ease-in-out',
     animationIterationCount: 'infinite',
@@ -442,7 +440,7 @@ export const Square = memo<{
           [
             styles.square,
             nodeId && onSelect ? styles.squareLink : null,
-            state === 'running' && styles.breathe,
+            state === 'running' && styles.glow,
           ],
           'nodrag',
         ).className

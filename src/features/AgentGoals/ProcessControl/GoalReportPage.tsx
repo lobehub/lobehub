@@ -18,6 +18,7 @@ const PREVIEW_MAX_HEIGHT = 480;
 
 const styles = stylex.create({
   card: {
+    isolation: 'isolate',
     position: 'relative',
     overflow: 'hidden',
     maxHeight: `${PREVIEW_MAX_HEIGHT}px`,

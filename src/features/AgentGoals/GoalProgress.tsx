@@ -21,11 +21,15 @@ const styles = stylex.create({
   metric: { justifySelf: 'end', whiteSpace: 'nowrap' },
   metrics: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) 48px 64px',
-    columnGap: '12px',
+    gridTemplateColumns: {
+      'default': 'minmax(0, 1fr) 48px 64px',
+      '@media (width <= 767px)': 'minmax(0, 1fr) auto auto',
+    },
+    flex: { 'default': null, '@media (width <= 767px)': '1 1 0' },
+    columnGap: { 'default': '12px', '@media (width <= 767px)': '8px' },
     alignItems: 'center',
-    width: 'min(100%, 390px)',
-    minWidth: '390px',
+    width: { 'default': 'min(100%, 390px)', '@media (width <= 767px)': 'auto' },
+    minWidth: { 'default': '390px', '@media (width <= 767px)': 0 },
   },
   needsYou: { flex: 'none', color: cssVar.colorWarning, whiteSpace: 'nowrap' },
   progress: {

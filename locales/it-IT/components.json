@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "Questo modello supporta il riconoscimento video",
   "ModelSelect.featureTag.vision": "Questo modello supporta il riconoscimento visivo.",
   "ModelSelect.removed": "Il modello non è presente nell'elenco. Verrà rimosso automaticamente se deselezionato.",
+  "ModelSelect.routing": "Instradamento",
+  "ModelSelect.routingTooltip": "Un gruppo di instradamento: diversi provider servono questo modello e ogni richiesta viene indirizzata a quello che risponde.",
   "ModelSelect.staleModel.current": "Selezione corrente",
   "ModelSelect.staleModel.notEnabled.action": "Abilita questo modello",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Impossibile abilitare il modello. Riprova.",

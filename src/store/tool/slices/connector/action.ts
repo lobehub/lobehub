@@ -93,7 +93,7 @@ export const createConnectorSlice = (set: Setter, get: () => ToolStore, _api?: u
   new ConnectorActionImpl(set, get, _api);
 
 /**
- * The connector slice is a set of `@lobechat/replica` resources: the base
+ * The connector slice is a set of `local-replica` resources: the base
  * list, the agent-bound aggregate and the per-agent buckets. The store fields
  * keep their historical shape (`connectors`, `agentBoundConnectors`,
  * `agentConnectors`) as the replica views, so every selector and consumer is

@@ -144,13 +144,21 @@ export interface GoalNodeView {
   heartbeatAt: Date;
   /** Decisions on this node a human already resolved. */
   humanTouches: GoalGraphDecision[];
-  /** Active for longer than the lease window with no heartbeat — the coordinator would reclaim it. */
+  /**
+   * Active for longer than the lease window with no heartbeat — the coordinator
+   * would reclaim it. Never set while the Task waits out a usage window.
+   */
   isStale: boolean;
   /** Delivered and waiting for its Acceptance judgment to settle. */
   isVerifying: boolean;
   node: GoalGraphNode;
   /** The Task that produced this finding. */
   producedBy?: GoalGraphNode;
+  /**
+   * When the coordinator retries a Task a usage window refused. The Task is
+   * held on purpose, so it is neither running nor stalled.
+   */
+  quotaRetryAt?: Date;
   /** Stable 1-based number over task nodes in graph creation order. */
   seq?: number;
   /** When the current attempt started, for the running clock. */
@@ -196,7 +204,7 @@ export const hasReviewableResult = (view: GoalNodeView): boolean => {
  */
 export const isRunningNode = (view: GoalNodeView): boolean => {
   if (view.node.kind === 'problem') return false;
-  return view.node.status === 'active' && !view.isStale && !view.halted;
+  return view.node.status === 'active' && !view.isStale && !view.halted && !view.quotaRetryAt;
 };
 
 /** A goal in one of these states runs nothing, whatever its nodes still say. */
@@ -204,7 +212,8 @@ const CLOSED_GOAL_STATUSES = new Set<string>(['achieved', 'canceled', 'failed'])
 /** Ended by a person or by success: `GoalService.decide` refuses gates until a reopen. */
 const GOAL_ENDED_STATUSES = new Set<string>(['achieved', 'canceled']);
 
-export type FrontierItemKind = 'gate' | 'stale' | 'verifying' | 'running' | 'ready' | 'done';
+export type FrontierItemKind =
+  'gate' | 'stale' | 'quota' | 'verifying' | 'running' | 'ready' | 'done';
 
 export interface FrontierItem {
   key: string;
@@ -343,6 +352,7 @@ export const buildGoalGraphView = (
     events,
     goal,
     nodes,
+    quotaRetryAt: quotaRetryAtByNode,
     report,
     runHeartbeats,
     spend,
@@ -453,6 +463,13 @@ export const buildGoalGraphView = (
       node.kind === 'task' &&
       live &&
       (acceptanceVerifying || (!!delivered && now - delivered.getTime() <= VERIFY_SETTLE_GRACE_MS));
+    // A usage window refused the run and the coordinator holds the Task until it
+    // reopens. Its run has ended, so the heartbeat ages past the lease while
+    // nothing is wrong — read as lost, it showed a failure badge on a Task that
+    // resumes by itself.
+    const quotaRetry = quotaRetryAtByNode?.[node.id];
+    const quotaRetryAt =
+      node.kind === 'task' && live && !isVerifying && quotaRetry ? new Date(quotaRetry) : undefined;
 
     return {
       answers: supportsByFinding.get(node.id) ?? [],
@@ -477,11 +494,17 @@ export const buildGoalGraphView = (
       gateSubjectId: gateSubject.get(node.id),
       heartbeatAt,
       humanTouches: nodeDecisions.filter((d) => d.status === 'resolved' && !!d.resolvedByUserId),
-      isStale: node.kind === 'task' && live && !isVerifying && now - heartbeatAt.getTime() > lease,
+      isStale:
+        node.kind === 'task' &&
+        live &&
+        !isVerifying &&
+        !quotaRetryAt &&
+        now - heartbeatAt.getTime() > lease,
       isVerifying,
       ...(halted ? { halted } : {}),
       node,
       producedBy: producedByFinding.get(node.id),
+      ...(quotaRetryAt ? { quotaRetryAt } : {}),
       seq: node.kind === 'experiment' ? ++experimentSeq : node.kind === 'task' ? ++seq : undefined,
       startedAt: isRunningAttempt ? open.startedAt : undefined,
     };
@@ -507,7 +530,13 @@ export const buildGoalGraphView = (
       if (goalClosed) continue;
       frontier.push({
         key: node.id,
-        kind: view.isStale ? 'stale' : view.isVerifying ? 'verifying' : 'running',
+        kind: view.isStale
+          ? 'stale'
+          : view.quotaRetryAt
+            ? 'quota'
+            : view.isVerifying
+              ? 'verifying'
+              : 'running',
         rank: view.isStale ? 0 : 1,
         view,
       });
@@ -546,7 +575,9 @@ export const buildGoalGraphView = (
     findings: views.filter((view) => view.node.kind === 'finding'),
     frontier: [...done, ...frontier],
     goal,
-    needsYou: frontier.filter((item) => item.rank === 0).length,
+    // A stalled Task leads the list, but the coordinator restarts it on its own:
+    // only a gate actually waits on the person.
+    needsYou: frontier.filter((item) => item.kind === 'gate').length,
     nodes: views,
     report,
     spend,

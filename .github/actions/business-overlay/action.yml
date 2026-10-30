@@ -43,9 +43,9 @@ runs:
 
         rm -rf "$overlay_checkout"
 
-        git clone --depth 1 --no-checkout "https://x-access-token:${OVERLAY_TOKEN}@github.com/${OVERLAY_REPOSITORY}.git" "$overlay_checkout"
+        bash "$GITHUB_ACTION_PATH/../../scripts/gitWithRetry.sh" clone --depth 1 --no-checkout "https://x-access-token:${OVERLAY_TOKEN}@github.com/${OVERLAY_REPOSITORY}.git" "$overlay_checkout"
         if [ -n "$OVERLAY_REF_INPUT" ]; then
-          git -C "$overlay_checkout" fetch --depth 1 origin "$OVERLAY_REF_INPUT"
+          bash "$GITHUB_ACTION_PATH/../../scripts/gitWithRetry.sh" -C "$overlay_checkout" fetch --depth 1 origin "$OVERLAY_REF_INPUT"
           git -C "$overlay_checkout" checkout --detach FETCH_HEAD
         else
           git -C "$overlay_checkout" checkout --detach

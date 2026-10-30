@@ -29,6 +29,7 @@ import {
 } from './coordinatorCopy';
 import type { FrontierItem, GoalGraphView, GoalNodeView } from './goalGraphViewModel';
 import ReleaseGateEntry from './ReleaseGateEntry';
+import { TASK_HOLD_VISUALS, useQuotaResumeText } from './taskHold';
 import { useElapsed } from './useElapsed';
 
 /**
@@ -148,8 +149,17 @@ const RowGlyph = memo<{ kind: FrontierItem['kind']; view: GoalNodeView }>(({ kin
     case 'stale': {
       return (
         <Icon
-          color={TASK_STATUS_VISUALS.failed.color}
-          icon={TASK_STATUS_VISUALS.failed.icon}
+          color={TASK_HOLD_VISUALS.stalled.color}
+          icon={TASK_HOLD_VISUALS.stalled.icon}
+          size={16}
+        />
+      );
+    }
+    case 'quota': {
+      return (
+        <Icon
+          color={TASK_HOLD_VISUALS.waitingQuota.color}
+          icon={TASK_HOLD_VISUALS.waitingQuota.icon}
           size={16}
         />
       );
@@ -240,6 +250,19 @@ const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
 
 RunningClock.displayName = 'GoalRunningClock';
 
+const QuotaResumeTime = memo<{ retryAt?: Date }>(({ retryAt }) => {
+  const { t } = useTranslation('chat');
+  const text = useQuotaResumeText(retryAt);
+  if (!text) return null;
+  return (
+    <Text fontSize={12} title={t('goalProcess.quota.tooltip')} type={'secondary'}>
+      {text}
+    </Text>
+  );
+});
+
+QuotaResumeTime.displayName = 'GoalQuotaResumeTime';
+
 const DoneTime = memo<{ view: GoalNodeView }>(({ view }) => {
   const { text, title } = useActivityTime(view.node.resolvedAt ?? view.node.updatedAt);
   return (
@@ -261,7 +284,7 @@ const StaleBody = memo<{ view: GoalNodeView }>(({ view }) => {
   const { text } = useActivityTime(view.heartbeatAt);
   return (
     <Text fontSize={13} type={'secondary'}>
-      {t('goalProcess.stale.description', { duration: text })}
+      {t('goalProcess.stalled.description', { duration: text })}
     </Text>
   );
 });
@@ -494,16 +517,18 @@ const FrontierRow = memo<{
         ? null
         : { color: 'info', text: t('goalProcess.tag.verifying') }
       : item.kind === 'stale'
-        ? { color: 'error', text: t('goalProcess.tag.lost') }
-        : item.kind === 'done'
-          ? {
-              color: undefined,
-              text:
-                node.status === 'resolved'
-                  ? t('goalProcess.tag.done')
-                  : t('goalProcess.tag.retired'),
-            }
-          : null;
+        ? { color: 'warning', text: t('goalProcess.tag.stalled') }
+        : item.kind === 'quota'
+          ? { color: 'warning', text: t('goalProcess.tag.waitingQuota') }
+          : item.kind === 'done'
+            ? {
+                color: undefined,
+                text:
+                  node.status === 'resolved'
+                    ? t('goalProcess.tag.done')
+                    : t('goalProcess.tag.retired'),
+              }
+            : null;
 
   return (
     <Block
@@ -536,6 +561,7 @@ const FrontierRow = memo<{
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
           <AcceptanceChip view={view} />
           {item.kind === 'running' && <RunningClock startedAt={view.startedAt} />}
+          {item.kind === 'quota' && <QuotaResumeTime retryAt={view.quotaRetryAt} />}
           {item.kind === 'done' && <DoneTime view={view} />}
         </Flexbox>
       </Flexbox>
@@ -561,8 +587,13 @@ const FrontierRow = memo<{
               {node.description}
             </Text>
           )}
-          {item.kind === 'stale' && <StaleBody view={view} />}
-          <AttemptLedger view={subject ?? view} />
+          {item.kind === 'stale' ? (
+            // The open attempt would read "Running" under a "Stalled" badge; the
+            // body already says when it went quiet and what happens next.
+            <StaleBody view={view} />
+          ) : (
+            <AttemptLedger view={subject ?? view} />
+          )}
         </Flexbox>
       )}
     </Block>

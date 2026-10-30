@@ -6,14 +6,10 @@ const log = debug('lobe-server:bot:message-router');
 // single-user thread relaxation. A subscribed channel thread
 // with only one human follower is effectively a private 1:1 with the
 // bot, so we drop the @mention requirement for follow-ups. Once a
-// second human posts we revert to mention-only mode and announce the
-// switch once so participants understand why the bot went quiet.
-// Mirrors `MessengerRouter`'s implementation — see that file for the
-// shared rationale.
-export const PARTICIPANTS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+// second human posts the bot is no longer addressed by default; bot-wake
+// decides whether it still speaks up, so nothing is announced.
+const PARTICIPANTS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const participantsKey = (threadId: string): string => `messenger:thread-humans:${threadId}`;
-export const mentionRequiredAnnouncedKey = (threadId: string): string =>
-  `messenger:thread-mention-required-announced:${threadId}`;
 
 /**
  * Track the distinct participants (humans and other bots) who have spoken in a subscribed thread, stored in

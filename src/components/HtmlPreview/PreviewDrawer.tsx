@@ -126,4 +126,5 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
 
 HtmlPreviewDrawer.displayName = 'HtmlPreviewDrawer';
 
+/**  Superseded by Canvas (`lobe-canvas`); kept so existing conversations keep rendering. */
 export default HtmlPreviewDrawer;

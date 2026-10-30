@@ -2,7 +2,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 /**
- * Shared look for the task-side execution chips (run location + working
+ * Shared look for the task-side execution chips (environment + working
  * directory) and their popover rows.
  *
  * They live in one module for the reason the chat side keeps `gitChipStyles`:
@@ -36,8 +36,8 @@ export const taskExecutionStyles = stylex.create({
    * wears.
    *
    * Where a run goes is the task's one real decision; the directory follows from
-   * that target and is inherited most of the time. Giving the two the same
-   * weight reads as two equal choices. This is the muted text affordance the
+   * that target and only shows once the task stops following the agent. Giving
+   * the two the same weight reads as two equal choices. This is the muted text affordance the
    * chat composer's own directory / repo pickers use, so the two surfaces agree
    * on the hierarchy as well.
    */
@@ -75,6 +75,13 @@ export const taskExecutionStyles = stylex.create({
    * control, so the box must not take the click a second time.
    */
   checkboxSlot: { pointerEvents: 'none', display: 'inline-flex', flex: 'none' },
+  followSummary: {
+    minWidth: 0,
+    paddingBlockStart: '2px',
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+  switchRow: { paddingBlock: '6px', paddingInline: '8px' },
   emptyHint: {
     paddingBlock: '12px',
     paddingInline: '8px',

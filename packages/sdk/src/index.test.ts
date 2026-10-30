@@ -27,6 +27,28 @@ describe('createLobeHub', () => {
     expect(data).toEqual({ status: 'ok' });
   });
 
+  it('asks the accessToken provider before every request', async () => {
+    const { fetch, requests } = captureFetch();
+    let issued = 0;
+    const lobehub = createLobeHub({
+      accessToken: async () => `jwt-${++issued}`,
+      apiKey: 'sk-lh-ignored',
+      fetch,
+    });
+
+    await lobehub.health.check();
+    await lobehub.health.check();
+
+    expect(requests.map((request) => request.headers.get('authorization'))).toEqual([
+      'Bearer jwt-1',
+      'Bearer jwt-2',
+    ]);
+  });
+
+  it('requires an apiKey or an accessToken provider', () => {
+    expect(() => createLobeHub({})).toThrow('apiKey or an accessToken');
+  });
+
   it('honors a custom baseURL and extra headers', async () => {
     const { fetch, requests } = captureFetch();
     const lobehub = createLobeHub({

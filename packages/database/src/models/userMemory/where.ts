@@ -36,13 +36,20 @@ export const buildUserMemoryWhere = (
   userId: string,
   table: UserMemoryScopedTable,
 ): SQL => {
-  const liveMemory = table.isDeleted
-    ? notTrashed(table.isDeleted)
-    : table.userMemoryId
-      ? liveParentMemory(db, userId, table.userMemoryId)
-      : table.userMemoryIds
-        ? liveContextMemory(db, userId, table.userMemoryIds)
-        : undefined;
+  let liveMemory: SQL | undefined;
+  if (table.isDeleted) liveMemory = notTrashed(table.isDeleted);
+  else if (table.userMemoryId && table.userMemoryIds) {
+    // Contexts carry both while rows move from the legacy id list to a single parent: a row with
+    // a parent is judged by it, a row without one still by its legacy list.
+    liveMemory = or(
+      and(
+        sql`${table.userMemoryId} IS NOT NULL`,
+        inArray(table.userMemoryId, liveMemoryIds(db, userId)),
+      ),
+      and(isNull(table.userMemoryId), liveContextMemory(db, userId, table.userMemoryIds)),
+    ) as SQL;
+  } else if (table.userMemoryId) liveMemory = liveParentMemory(db, userId, table.userMemoryId);
+  else if (table.userMemoryIds) liveMemory = liveContextMemory(db, userId, table.userMemoryIds);
 
   return and(eq(table.userId, userId), liveMemory) as SQL;
 };

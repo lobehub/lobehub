@@ -7,6 +7,7 @@ import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
   Button,
+  confirmModal,
   Flexbox,
   Icon,
   InputNumber,
@@ -37,6 +38,7 @@ import {
   CriterionRow,
   openCriterionEditModal,
 } from '@/features/Acceptance';
+import { useEscapeDiscardGuard } from '@/features/AgentTasks/shared/useEscapeDiscardGuard';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
@@ -49,6 +51,7 @@ import moduleStyles from './CreateGoalContent.module.css';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
 import { deriveGoalTitle } from './goalTitle';
+import { hasUnsavedGoalDraft } from './hasUnsavedGoalDraft';
 
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 
@@ -86,6 +89,7 @@ const styles = stylex.create({
   },
   criteriaList: { overflowY: 'auto', maxHeight: '320px' },
   footer: {
+    flexShrink: 0,
     paddingBlock: '8px',
     paddingInline: '16px',
     borderBlockStartWidth: '1px',
@@ -114,11 +118,13 @@ const styles = stylex.create({
   },
   generatingTextViewport: { overflow: 'hidden', height: '22px' },
   head: {
+    minHeight: 0,
     position: 'relative',
     paddingBlockStart: '16px',
     paddingBlockEnd: '8px',
     paddingInline: '16px',
   },
+  inputScroller: { overflowY: 'auto', flex: '1', minHeight: 0 },
   inputShell: {
     overflow: 'hidden',
     minHeight: '208px',
@@ -403,10 +409,38 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     }
   }, []);
 
+  // Escape is easy to hit by accident, so it asks before throwing away a
+  // described or drafted goal; an untouched modal still closes straight away.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEscapeDiscardGuard(rootRef, {
+    hasUnsavedInput: () =>
+      hasUnsavedGoalDraft({
+        editorJson: editor?.getDocument?.('json'),
+        initialInstruction: initialRequirement ?? initialTitle,
+        instruction: instructionRef.current,
+        step,
+      }),
+    onEscape: () =>
+      confirmModal({
+        cancelText: t('createGoal.discardConfirm.cancel'),
+        content: t('createGoal.discardConfirm.content'),
+        okButtonProps: { danger: true },
+        okText: t('createGoal.discardConfirm.ok'),
+        onOk: close,
+        title: t('createGoal.discardConfirm.title'),
+      }),
+  });
+
   return (
-    <Flexbox onKeyDown={handleKeyDown}>
-      <Flexbox horizontal className={stylex.props(styles.head).className}>
-        <Flexbox flex={1} gap={6}>
+    <Flexbox flex={1} ref={rootRef} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
+      {/* The describe step's editor lives in the head, so the head shrinks and
+          its editor scrolls; on review only the body below scrolls. */}
+      <Flexbox
+        horizontal
+        className={stylex.props(styles.head).className}
+        style={{ flexShrink: step === 'review' ? 0 : 1 }}
+      >
+        <Flexbox flex={1} gap={6} style={{ minHeight: 0 }}>
           {step === 'review' && (
             <Flexbox horizontal align={'center'} gap={8}>
               <ActionIcon
@@ -439,16 +473,18 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 className={stylex.props(styles.inputShell).className}
                 generating={step === 'preparing'}
               >
-                <EditorCanvas
-                  disabled={!canCreate || step === 'preparing'}
-                  editor={editor}
-                  editorData={{ content: plan.instruction }}
-                  entityId={'create-goal-description'}
-                  floatingToolbar={false}
-                  placeholder={t('createGoal.instructionPlaceholder')}
-                  style={{ fontSize: 14, minHeight: 206, padding: 16 }}
-                  onContentChange={handleContentChange}
-                />
+                <div className={stylex.props(styles.inputScroller).className}>
+                  <EditorCanvas
+                    disabled={!canCreate || step === 'preparing'}
+                    editor={editor}
+                    editorData={{ content: plan.instruction }}
+                    entityId={'create-goal-description'}
+                    floatingToolbar={false}
+                    placeholder={t('createGoal.instructionPlaceholder')}
+                    style={{ fontSize: 14, minHeight: 206, padding: 16 }}
+                    onContentChange={handleContentChange}
+                  />
+                </div>
               </GeneratingBorder>
               {step === 'preparing' ? (
                 <Flexbox
@@ -522,7 +558,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8}>
                 <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={16} />
-                <Text fontSize={13} weight={600}>
+                <Text fontSize={13} style={{ flex: 'none' }} weight={600}>
                   {t('createGoal.criteriaTitle')}
                 </Text>
                 <Text className={stylex.props(styles.sectionHint).className} fontSize={12}>

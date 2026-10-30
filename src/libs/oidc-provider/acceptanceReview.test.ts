@@ -64,3 +64,41 @@ describe('isAcceptanceReviewAudience', () => {
     expect(isAcceptanceReviewAudience(['urn:lobehub:hetero-operation'])).toBe(false);
   });
 });
+
+describe('site review resources', () => {
+  const SITE = 'urn:lobehub:site:psite_7f3k9q2mAbCd:https%3A%2F%2Ffieldnotes.app';
+
+  it('issues an eight hour JWT for a site through the browser code flow', () => {
+    expect(reviewResourceServer('lobehub-review', SITE, SITE, { route: 'authorization' })).toEqual({
+      accessTokenFormat: 'jwt',
+      accessTokenTTL: 8 * 60 * 60,
+      audience: SITE,
+      scope: 'acceptance:review',
+    });
+    expect(
+      reviewResourceServer('lobehub-review', SITE, SITE, {
+        grantType: 'authorization_code',
+        route: 'token',
+      }),
+    ).toMatchObject({ audience: SITE });
+  });
+
+  it('refuses a site through the device flow, which has no origin to hand the result back to', () => {
+    expect(
+      reviewResourceServer('lobehub-review', SITE, SITE, { route: 'device_authorization' }),
+    ).toBe('reject');
+    expect(
+      reviewResourceServer('lobehub-review', SITE, SITE, {
+        grantType: 'urn:ietf:params:oauth:grant-type:device_code',
+        route: 'token',
+      }),
+    ).toBe('reject');
+    expect(reviewResourceServer('lobehub-review', SITE, SITE, { route: 'code_verification' })).toBe(
+      'reject',
+    );
+  });
+
+  it('counts a site audience as review-issued so it never passes as an app session', () => {
+    expect(isAcceptanceReviewAudience(SITE)).toBe(true);
+  });
+});

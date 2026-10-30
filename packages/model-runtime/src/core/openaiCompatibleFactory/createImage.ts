@@ -1,4 +1,4 @@
-import { cleanObject } from '@lobechat/utils/object';
+import { cleanObject } from '../../utils/object';
 import createDebug from 'debug';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
 import type OpenAI from 'openai';
@@ -37,6 +37,12 @@ async function generateByImageMode(
   const routingModel = imageOptions?.routingModel ?? model;
 
   log('Creating image with model: %s and params: %O', requestModel, params);
+
+  // Both fields map to the API's single `image` input. Reject a payload carrying both instead of
+  // letting one silently overwrite the other while the generation is still billed.
+  if (params.imageUrl && params.imageUrls?.length) {
+    throw new Error('Pass reference images in either imageUrl or imageUrls, not both.');
+  }
 
   // Map parameter names, mapping imageUrls to image
   const paramsMap = new Map<RuntimeImageGenParamsValue, string>([
@@ -195,21 +201,25 @@ async function generateByChatModel(
     },
   ];
 
-  // Add image for editing mode if provided
-  if (params.imageUrl && params.imageUrl !== null) {
-    log('Processing image URL for editing mode: %s', params.imageUrl);
-    try {
-      const processedImageUrl = await processImageUrlForChat(params.imageUrl);
-      content.push({
-        image_url: {
-          url: processedImageUrl,
-        },
-        type: 'image_url',
-      });
-      log('Successfully processed image URL for chat input');
-    } catch (error) {
-      throw new Error(`Failed to process image URL: ${error}`, { cause: error });
-    }
+  // `:image` model cards declare only `imageUrls` (CHAT_MODEL_IMAGE_GENERATION_PARAMS). Reject
+  // `imageUrl` so the caller resends in the declared field instead of generating without it.
+  if (params.imageUrl) {
+    throw new Error('Chat image models take reference images in imageUrls, not imageUrl.');
+  }
+  const referenceUrls = params.imageUrls ?? [];
+  // Download references concurrently; Promise.all keeps their order for the message content.
+  const processedImageUrls = await Promise.all(
+    referenceUrls.map(async (imageUrl) => {
+      log('Processing image URL for editing mode: %s', imageUrl);
+      try {
+        return await processImageUrlForChat(imageUrl);
+      } catch (error) {
+        throw new Error(`Failed to process image URL: ${error}`, { cause: error });
+      }
+    }),
+  );
+  for (const url of processedImageUrls) {
+    content.push({ image_url: { url }, type: 'image_url' });
   }
 
   // Call chat completion API

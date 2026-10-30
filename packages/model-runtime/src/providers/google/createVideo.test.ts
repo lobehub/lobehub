@@ -28,7 +28,7 @@ vi.mock('../../utils/uriParser', () => ({
   }),
 }));
 
-vi.mock('@lobechat/utils', () => ({
+vi.mock('../../utils/imageToBase64', () => ({
   imageUrlToBase64: vi.fn(async (_url) => ({
     base64: 'mock-base64-data',
     mimeType: 'image/jpeg',

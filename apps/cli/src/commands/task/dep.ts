@@ -50,7 +50,12 @@ export function registerDepCommands(task: Command) {
         return;
       }
 
-      const rows = result.data.map((d: any) => [d.type, d.dependsOnId, timeAgo(d.createdAt)]);
-      printTable(rows, ['TYPE', 'DEPENDS ON', 'CREATED']);
+      const rows = result.data.map((d: any) => [
+        d.type,
+        d.dependsOnIdentifier ?? d.dependsOnId,
+        d.dependsOnId,
+        timeAgo(d.createdAt),
+      ]);
+      printTable(rows, ['TYPE', 'DEPENDS ON', 'ID', 'CREATED']);
     });
 }

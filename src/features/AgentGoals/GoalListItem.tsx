@@ -20,6 +20,8 @@ import { useGoalItemMenu } from './useGoalMenuItems';
 const HOVERED = ':is(:hover, [data-popup-open])';
 const styles = stylex.create({
   row: {
+    flexWrap: { 'default': null, '@media (width <= 767px)': 'wrap' },
+    rowGap: { 'default': null, '@media (width <= 767px)': '6px' },
     minWidth: 0,
     borderRadius: 0,
     borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
@@ -30,6 +32,11 @@ const styles = stylex.create({
     },
     backgroundColor: { default: null, [HOVERED]: cssVar.colorFillQuaternary },
     backgroundImage: { default: null, [HOVERED]: 'none' },
+  },
+  title: {
+    flex: '1',
+    minWidth: 0,
+    flexBasis: { 'default': null, '@media (width <= 767px)': '100%' },
   },
 });
 
@@ -74,7 +81,7 @@ export const GoalListItem = memo<GoalItemProps>(({ globalScopeId, goal: item, pr
         onClick={handleClick}
         onKeyDown={handleKeyDown}
       >
-        <Flexbox gap={4} style={{ flex: '1', minWidth: 0 }}>
+        <Flexbox className={stylex.props(styles.title).className} gap={4}>
           <Flexbox horizontal align={'center'} gap={7}>
             <GoalStatusGlyph size={13} status={goal.status} />
             <Text ellipsis fontSize={15} weight={600}>

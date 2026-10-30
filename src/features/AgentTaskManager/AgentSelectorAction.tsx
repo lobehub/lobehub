@@ -7,9 +7,9 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { type SidebarAgentItem } from '@/database/repositories/home';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
-import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
@@ -187,7 +187,11 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
       >
         <Flexbox horizontal align={'center'} gap={4}>
           <AgentAvatar
+            agentId={activeAgent?.id}
             avatar={typeof activeAgent?.avatar === 'string' ? activeAgent.avatar : undefined}
+            background={activeAgent?.backgroundColor || undefined}
+            name={activeAgent ? agentDisplayName(activeAgent) : undefined}
+            size={22}
           />
           <ChevronsUpDownIcon className={stylex.props(styles.chevron).className} size={14} />
         </Flexbox>

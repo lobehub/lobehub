@@ -1,30 +1,16 @@
 'use client';
 
-import type { TaskExecutionConfig, WorkingDirConfig } from '@lobechat/types';
-import {
-  applyTaskDirectorySelection,
-  applyTaskReposSelection,
-  applyTaskTargetSelection,
-  getWorkingDirEffectivePath,
-  hasTaskExecutionSelection,
-} from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import * as stylex from '@stylexjs/stylex';
-import { FolderIcon } from 'lucide-react';
-import { memo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
+import type { TaskExecutionConfig } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { memo } from 'react';
 
-import {
-  getWorkingDirectoryName,
-  getWorkingDirectoryPathString,
-} from '@/helpers/workingDirectoryPath';
+import { getWorkingDirectoryName } from '@/helpers/workingDirectoryPath';
 
 import TaskDeviceChip from './TaskDeviceChip';
-import { taskExecutionStyles as styles } from './taskExecutionStyles';
 import TaskRepoChip from './TaskRepoChip';
 import TaskWorkingDirectoryChip from './TaskWorkingDirectoryChip';
 import { useTaskExecutionAvailability } from './useTaskExecutionAvailability';
-import { useTaskRunTarget } from './useTaskRunTarget';
+import { useTaskExecutionSelection } from './useTaskExecutionSelection';
 
 interface TaskExecutionControlsProps {
   /** The assignee whose execution environment a task inherits by default. */
@@ -38,123 +24,81 @@ interface TaskExecutionControlsProps {
 /**
  * Where this task will run, next to the other task properties.
  *
- * Two axes, and the second one is decided by the first:
+ * One switch decides it: **follow the agent**, and the task runs on the
+ * assignee's machine in the assignee's folder — both axes, because the agent's
+ * environment is one thing; or **don't**, and the task picks both itself:
  *
- * - **run location** — pin a machine, or follow the assignee agent.
+ * - **run location** — a machine from the task's pool (or the agent's own
+ *   target when that is not a machine, e.g. the cloud sandbox).
  * - **working directory** — expressed in the units of the target the run lands
  *   on: an absolute path when it lands on a machine, a cloud repo identifier
- *   when it lands in the sandbox. When the target leaves nothing choosable the
- *   directory is reported as a muted line instead of an interactive control.
+ *   when it lands in the sandbox.
  *
- * Everything the task leaves unset falls back to the assignee agent, so a task
- * created without touching either axis behaves exactly as tasks did before this
- * existed. Changing the target clears the directory, because the two describe
- * the same thing in different units — a leftover selection would be a path the
- * cloud run cannot use, or a repo name nothing on the machine resolves. Re-picking
- * the target already in force is a no-op, so the checked row never deletes a
- * directory the task holds.
+ * A task left on "follow" stores nothing, so it behaves exactly as tasks did
+ * before this existed. Changing the target clears the directory, because the
+ * two describe the same thing in different units — a leftover selection would
+ * be a path the cloud run cannot use, or a repo name nothing on the machine
+ * resolves. See {@link useTaskExecutionSelection} for the state behind it.
  */
 const TaskExecutionControls = memo<TaskExecutionControlsProps>((props) => {
   const { assigneeAgentId } = props;
   if (!assigneeAgentId) return null;
-  return <TaskExecutionControlsInner {...props} assigneeAgentId={assigneeAgentId} />;
+  // Keyed by the assignee: "not following" is a decision about ONE agent's
+  // environment, and must not carry over to the next agent picked.
+  return (
+    <TaskExecutionControlsInner
+      key={assigneeAgentId}
+      {...props}
+      assigneeAgentId={assigneeAgentId}
+    />
+  );
 });
 
 const TaskExecutionControlsInner = memo<
   Omit<TaskExecutionControlsProps, 'assigneeAgentId'> & { assigneeAgentId: string }
 >(({ assigneeAgentId, disabled, onChange, value }) => {
-  const { t } = useTranslation('chat');
   const canExecuteSomewhere = useTaskExecutionAvailability(assigneeAgentId);
-
-  const target = useTaskRunTarget(assigneeAgentId, value?.boundDeviceId);
-
-  // Both callbacks funnel through here so callers only ever receive `undefined`
-  // ("inherit everything") or a selection with at least one real axis set —
-  // never an object of empty values that would be persisted as a no-op.
-  const emit = useCallback(
-    (next?: TaskExecutionConfig) => {
-      onChange(next && hasTaskExecutionSelection(next) ? next : undefined);
-    },
-    [onChange],
-  );
-
-  const handleDeviceChange = useCallback(
-    (deviceId?: string) => {
-      const next = applyTaskTargetSelection(value, deviceId);
-      // Re-picking the target already in force is a no-op: the directory is
-      // dropped on a target CHANGE, and a no-op that cleared it would delete a
-      // directory the task legitimately holds (an explicit directory on an
-      // agent-bound device, or the checked "Follow the agent" row).
-      if (next === value) return;
-      emit(next);
-    },
-    [emit, value],
-  );
-
-  const handleReposChange = useCallback(
-    (repos?: string[]) => {
-      emit(applyTaskReposSelection(value, repos));
-    },
-    [emit, value],
-  );
-
-  const handleDirectoryChange = useCallback(
-    (config?: WorkingDirConfig) => {
-      // The path lives on the run's machine; pin it so the directory never
-      // travels to another target the agent later moves to.
-      emit(applyTaskDirectorySelection(value, config, target.deviceId));
-    },
-    [emit, target.deviceId, value],
-  );
+  const { changeDevice, changeDirectory, changeFollowing, changeRepos, following, target } =
+    useTaskExecutionSelection({ agentId: assigneeAgentId, onChange, value });
 
   if (!canExecuteSomewhere) return null;
 
-  // What the run actually starts in: the task's own choice first, then the
-  // chain the runtime falls back to. Shown as the muted hint so "inherit" is
-  // legible as a concrete directory instead of a black box.
-  const selectedDirectory =
-    getWorkingDirEffectivePath(value?.workingDirectoryConfig) ??
-    getWorkingDirectoryPathString(value?.workingDirectory);
-  const effectiveDirectory = selectedDirectory ?? target.inheritedDirectory?.path;
-  const directorySummary = effectiveDirectory
-    ? (getWorkingDirectoryName(effectiveDirectory) ?? effectiveDirectory)
-    : t('taskExecution.followAgent');
+  // While following, `inheritedDirectory` is the agent's own folder on its own
+  // machine — shown under the switch so "follow" reads as a concrete place.
+  const followDirectory = getWorkingDirEffectivePath(target.inheritedDirectory);
 
   return (
     <>
       <TaskDeviceChip
         agentId={assigneeAgentId}
-        directoryHint={directorySummary}
         disabled={disabled}
+        following={following}
         value={value?.boundDeviceId}
-        onChange={handleDeviceChange}
+        followDirectory={
+          followDirectory
+            ? (getWorkingDirectoryName(followDirectory) ?? followDirectory)
+            : undefined
+        }
+        onChange={changeDevice}
+        onFollowChange={changeFollowing}
       />
-      {target.directoryKind === 'device' && target.deviceId ? (
-        <TaskWorkingDirectoryChip
-          deviceId={target.deviceId}
-          disabled={disabled || target.isPending}
-          value={value?.workingDirectoryConfig}
-          onChange={handleDirectoryChange}
-        />
-      ) : target.directoryKind === 'repo' ? (
-        <TaskRepoChip
-          agentId={assigneeAgentId}
-          disabled={disabled}
-          value={value?.repos}
-          onChange={handleReposChange}
-        />
-      ) : (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={stylex.props(styles.hint).className}
-          gap={4}
-        >
-          <Icon icon={FolderIcon} size={12} />
-          <span>{t('taskExecution.workingDirectory')}</span>
-          <span className={stylex.props(styles.hintValue).className}>· {directorySummary}</span>
-        </Flexbox>
-      )}
+      {!following &&
+        (target.directoryKind === 'device' && target.deviceId ? (
+          <TaskWorkingDirectoryChip
+            deviceId={target.deviceId}
+            disabled={disabled || target.isPending}
+            fallback={target.inheritedDirectory}
+            value={value?.workingDirectoryConfig}
+            onChange={changeDirectory}
+          />
+        ) : target.directoryKind === 'repo' ? (
+          <TaskRepoChip
+            agentId={assigneeAgentId}
+            disabled={disabled}
+            value={value?.repos}
+            onChange={changeRepos}
+          />
+        ) : null)}
     </>
   );
 });

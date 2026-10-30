@@ -3,7 +3,7 @@
 import { Github } from '@lobehub/icons';
 import { Checkbox, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { CheckIcon, ChevronDownIcon, SquircleDashed } from 'lucide-react';
+import { ChevronDownIcon, SquircleDashed } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,7 +24,7 @@ interface TaskRepoChipProps {
    */
   className?: string;
   disabled?: boolean;
-  /** Selected repos, or `undefined` to inherit (the agent's own directory). */
+  /** Selected repos, or `undefined` for none (the agent's own directory). */
   onChange: (repos: string[] | undefined) => void;
   value?: string[];
 }
@@ -37,11 +37,12 @@ const getRepoName = (repo: string) => repo.split('/').findLast(Boolean) || repo;
  * Only offered when the run lands in the cloud sandbox — the caller decides
  * that from the task's TARGET, because a repo identifier is the directory only
  * there. On a machine the directory is a path, and a repo name stored as one
- * would be a value the run cannot use.
+ * would be a value the run cannot use. Like the directory picker it appears
+ * once the task stops following the agent, so it carries no "follow" row.
  *
  * Reads the same source the chat composer's repo switcher does — the agent's
  * `heterogeneousProvider.env.GITHUB_REPOS` — so the two surfaces cannot offer
- * different repo sets for the same agent. An empty selection means "inherit":
+ * different repo sets for the same agent. An empty selection picks no repo:
  * the run falls back to the agent's per-device directory and then the device
  * default.
  */
@@ -69,8 +70,8 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
         const next = selected.includes(repo)
           ? selected.filter((item) => item !== repo)
           : [...selected, repo];
-        // An empty selection is inheritance, not "no directory" — collapse it
-        // back to undefined so only the intent is persisted.
+        // An empty selection is "no repo", not an empty list — collapse it back
+        // to undefined so only the intent is persisted.
         onChange(next.length > 0 ? next : undefined);
       },
       [disabled, onChange, selected],
@@ -82,7 +83,7 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
 
     const chipLabel =
       selected.length === 0
-        ? t('taskExecution.followAgent')
+        ? t('heteroAgent.cloudRepo.notSet')
         : selected.length === 1
           ? getRepoName(selected[0])
           : t('heteroAgent.cloudRepo.multiSelected', { count: selected.length });
@@ -97,24 +98,6 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
         <div className={stylex.props(styles.sectionTitle).className}>
           {t('heteroAgent.cloudRepo.sectionTitle')}
         </div>
-        <TaskPickerOption
-          checked={selected.length === 0}
-          disabled={disabled}
-          onSelect={() => onChange(undefined)}
-        >
-          <Icon className={stylex.props(styles.icon).className} icon={SquircleDashed} size={16} />
-          <Flexbox flex={1} style={{ minWidth: 0 }}>
-            <div className={stylex.props(styles.rowTitle).className}>
-              {t('taskExecution.followAgent')}
-            </div>
-            <div className={stylex.props(styles.rowDesc).className}>
-              {t('taskExecution.followAgentDesc')}
-            </div>
-          </Flexbox>
-          {selected.length === 0 && (
-            <Icon className={stylex.props(styles.check).className} icon={CheckIcon} size={14} />
-          )}
-        </TaskPickerOption>
         <div className={stylex.props(styles.scroll).className}>
           {availableRepos.map((repo) => {
             const isChecked = selected.includes(repo);

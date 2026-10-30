@@ -1,5 +1,4 @@
 import { isInThreadScope } from '../indexing';
-import { toTime } from '../utils/timestamp';
 import type {
   ContextNode,
   IdNode,
@@ -8,6 +7,7 @@ import type {
   SignalCallbacksNode,
   ThreadScope,
 } from '../types';
+import { toTime } from '../utils/timestamp';
 import { BranchResolver } from './BranchResolver';
 
 /**
@@ -51,6 +51,17 @@ const isCallbackSignal = (sig: MessageSignal | undefined): boolean =>
 /** `task-completion` — post-task summary, rendered as a plain message AFTER the SignalCallbacks block. */
 const isTaskCompletionSignal = (sig: MessageSignal | undefined): boolean =>
   sig?.type === 'task-completion';
+
+/**
+ * A signal-tagged turn that called tools: a background task woke the LLM and it
+ * went back to work on the main chain. `getMessageSignal` hides its tag so the
+ * chain walks it, but it is a later step, never a regenerated branch, so it must
+ * not compete with the step's other continuations in branch resolution.
+ */
+const isWakeUpTurn = (msg: Message): boolean =>
+  msg.role === 'assistant' &&
+  !!msg.tools?.length &&
+  !!(msg.metadata as { signal?: MessageSignal } | undefined | null)?.signal;
 
 /** Lookups over one message array, each list in that array's order. */
 interface MessageArrayIndex {
@@ -206,10 +217,18 @@ export class MessageCollector {
     const groupAgentId = assistant.agentId;
     const allMessages = this.scopedMessages();
     const visited = new Set<string>([assistant.id]);
+    const pending: Message[] = [];
     let current: Message = assistant;
 
     while (true) {
-      const next = this.findFlatChainContinuation(current, [], allMessages, visited, groupAgentId);
+      const next = this.findFlatChainContinuation(
+        current,
+        [],
+        allMessages,
+        visited,
+        groupAgentId,
+        pending,
+      );
       if (!next) return false;
       if (next.tools && next.tools.length > 0) return true;
 
@@ -232,6 +251,8 @@ export class MessageCollector {
     allToolMessages: Message[],
     processedIds: Set<string>,
   ): void {
+    // Continuations found at earlier steps that a sooner one went ahead of.
+    const pending: Message[] = [];
     let current: Message | undefined = currentAssistant;
     while (current) {
       current = this.collectAssistantChainStep(
@@ -240,6 +261,7 @@ export class MessageCollector {
         assistantChain,
         allToolMessages,
         processedIds,
+        pending,
       );
     }
   }
@@ -254,6 +276,7 @@ export class MessageCollector {
     assistantChain: Message[],
     allToolMessages: Message[],
     processedIds: Set<string>,
+    pending: Message[],
   ): Message | undefined {
     if (processedIds.has(currentAssistant.id)) return;
 
@@ -280,6 +303,7 @@ export class MessageCollector {
       allMessages,
       processedIds,
       groupAgentId,
+      pending,
     );
     if (!continuation) return;
 
@@ -304,6 +328,7 @@ export class MessageCollector {
         allMessages,
         processedIds,
         groupAgentId,
+        pending,
       );
     }
 
@@ -329,6 +354,12 @@ export class MessageCollector {
    *   first resolve the active direct child of this assistant (including
    *   continuations under different tool results), then resolve regenerated
    *   siblings under that child.
+   *
+   * Wake-up turns ({@link isWakeUpTurn}) skip branch resolution. The writer
+   * parents them off the run's latest tool result, so they sit next to the
+   * toolless reply that ended the turn, and two of them can share one tool.
+   * They join `pending` with the active continuation, and the earliest pending
+   * one becomes the next step, so every turn renders in creation order.
    */
   private findFlatChainContinuation(
     currentAssistant: Message,
@@ -336,6 +367,7 @@ export class MessageCollector {
     allMessages: Message[],
     processedIds: Set<string>,
     groupAgentId: string | undefined,
+    pending: Message[],
   ): Message | undefined {
     const candidateParentIds = new Set<string>();
     let hasFanOutTool = false;
@@ -354,26 +386,33 @@ export class MessageCollector {
     // Equal timestamps fall back to array order, as a stable sort of the
     // whole array did before the index.
     const { position } = this.messageIndex(allMessages);
+    const byCreation = (a: Message, b: Message) =>
+      toTime(a.createdAt) - toTime(b.createdAt) || position.get(a.id)! - position.get(b.id)!;
     const candidates = [...candidateParentIds]
       .flatMap((parentId) => this.childrenOf(allMessages, parentId))
       .filter((m) => m.role !== 'tool' && !processedIds.has(m.id))
       .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
-      .sort((a, b) => toTime(a.createdAt) - toTime(b.createdAt) || position.get(a.id)! - position.get(b.id)!);
+      .sort(byCreation);
+    const wakeUps = candidates.filter(isWakeUpTurn);
+    const branchCandidates = candidates.filter((m) => !isWakeUpTurn(m));
 
-    const activeId = this.resolveActiveContinuationId(candidates, currentAssistant);
-    if (!activeId) {
-      this.markUnselectedContinuations(undefined, candidates, processedIds);
-      return;
+    const activeId = this.resolveActiveContinuationId(branchCandidates, currentAssistant);
+    const activeContinuation = branchCandidates.find((message) => message.id === activeId);
+    this.markUnselectedContinuations(activeContinuation?.id, branchCandidates, processedIds);
+
+    if (branchCandidates.length > 0 && !activeContinuation) {
+      // No active branch here (one is still being created): the chain stops at
+      // this step, so its wake-ups go with it.
+      this.markUnselectedContinuations(undefined, wakeUps, processedIds);
+    } else {
+      if (activeContinuation) pending.push(activeContinuation);
+      pending.push(...wakeUps);
     }
 
-    const activeContinuation = candidates.find((message) => message.id === activeId);
-    if (!activeContinuation) {
-      this.markUnselectedContinuations(undefined, candidates, processedIds);
-      return;
-    }
-
-    this.markUnselectedContinuations(activeContinuation.id, candidates, processedIds);
-    return activeContinuation;
+    pending.sort(byCreation);
+    let next = pending.shift();
+    while (next && processedIds.has(next.id)) next = pending.shift();
+    return next;
   }
 
   /**
@@ -540,6 +579,40 @@ export class MessageCollector {
   }
 
   /**
+   * User turns that interrupted a folded group at `assistant`, an intermediate
+   * step whose next step in the chain is `next`. Branch selection among them
+   * stays with the caller.
+   *
+   * A user turn sent after the group's tail is a deliberate rewind and stays
+   * hidden, unless the chain reached `next` from the wake-up queue rather than
+   * from `assistant` itself. Nothing at `assistant` then competes with the user
+   * turn, and it can postdate the tail: before wake-ups joined the chain,
+   * `assistant` was where the rendered reply ended, so users replied to it.
+   */
+  collectGroupInterruptions(
+    assistant: Message,
+    next: Message,
+    tail: Message,
+    processedIds: Set<string>,
+  ): string[] {
+    const nextParent = next.parentId ? this.messageMap.get(next.parentId) : undefined;
+    const continuesHere =
+      next.parentId === assistant.id ||
+      (nextParent?.role === 'tool' && nextParent.parentId === assistant.id);
+
+    return (this.childrenMap.get(assistant.id) ?? []).filter((id) => {
+      const message = this.messageMap.get(id);
+      return (
+        message?.role === 'user' &&
+        !message.threadId &&
+        !processedIds.has(id) &&
+        toTime(message.createdAt) >= toTime(assistant.createdAt) &&
+        (!continuesHere || toTime(message.createdAt) <= toTime(tail.createdAt))
+      );
+    });
+  }
+
+  /**
    * Collect assistant messages for an AssistantGroup (contextTree version)
    * Only collects messages from the SAME agent (matching agentId)
    */
@@ -553,10 +626,17 @@ export class MessageCollector {
     const agentId = groupAgentId ?? message.agentId;
 
     // Walked iteratively: a group's chain can be thousands of steps long.
+    const pending: IdNode[] = [];
     let currentMessage: Message | undefined = message;
     let currentNode: IdNode | undefined = idNode;
     while (currentMessage && currentNode) {
-      currentNode = this.collectAssistantGroupStep(currentMessage, currentNode, children, agentId);
+      currentNode = this.collectAssistantGroupStep(
+        currentMessage,
+        currentNode,
+        children,
+        agentId,
+        pending,
+      );
       currentMessage = currentNode ? this.messageMap.get(currentNode.id) : undefined;
     }
   }
@@ -569,6 +649,7 @@ export class MessageCollector {
     idNode: IdNode,
     children: ContextNode[],
     agentId: string | undefined,
+    pending: IdNode[],
   ): IdNode | undefined {
     // Get tool message IDs if this assistant has tools
     const toolIds = idNode.children
@@ -589,7 +670,7 @@ export class MessageCollector {
     children.push(messageNode);
 
     // Find the next step's assistant (dual-form aware, see findChainContinuationNode)
-    return this.findChainContinuationNode(idNode, agentId);
+    return this.findChainContinuationNode(idNode, agentId, pending);
   }
 
   /**
@@ -599,9 +680,14 @@ export class MessageCollector {
    * assistant-anchored post-task summary) and branch resolution (>1 non-tool
    * siblings under one parent ⇒ pick the active branch) as the flat variant.
    * Signal-tagged toolless siblings (Monitor callbacks etc.) are skipped so the
-   * main chain walks the real follower.
+   * main chain walks the real follower, and wake-up turns queue in `pending`
+   * outside branch resolution, as in the flat variant.
    */
-  private findChainContinuationNode(idNode: IdNode, groupAgentId?: string): IdNode | undefined {
+  private findChainContinuationNode(
+    idNode: IdNode,
+    groupAgentId: string | undefined,
+    pending: IdNode[],
+  ): IdNode | undefined {
     const candidateNodes: IdNode[] = [];
     let hasFanOutTool = false;
 
@@ -636,12 +722,23 @@ export class MessageCollector {
           c.msg?.role === 'assistant' && c.msg.agentId === groupAgentId && !getMessageSignal(c.msg),
       )
       .sort((a, b) => toTime(a.msg!.createdAt) - toTime(b.msg!.createdAt));
+    const wakeUps = eligible.filter((c) => isWakeUpTurn(c.msg!)).map((c) => c.node);
+    const branchCandidates = eligible.filter((c) => !isWakeUpTurn(c.msg!));
 
     const activeId = this.resolveActiveContinuationId(
-      eligible.map((c) => c.msg!),
+      branchCandidates.map((c) => c.msg!),
       this.messageMap.get(idNode.id),
     );
-    return activeId ? eligible.find((c) => c.node.id === activeId)?.node : undefined;
+    const activeNode = branchCandidates.find((c) => c.node.id === activeId)?.node;
+    // No active branch here: the chain stops at this step, so its wake-ups go with it.
+    if (activeNode || branchCandidates.length === 0) {
+      if (activeNode) pending.push(activeNode);
+      pending.push(...wakeUps);
+    }
+
+    const createdAt = (node: IdNode) => toTime(this.messageMap.get(node.id)!.createdAt);
+    pending.sort((a, b) => createdAt(a) - createdAt(b));
+    return pending.shift();
   }
 
   /**
@@ -808,11 +905,12 @@ export class MessageCollector {
    */
   private findLastAssistantNodeInGroup(idNode: IdNode, groupAgentId?: string): IdNode {
     // Iterative: a group's chain can be thousands of steps long.
+    const pending: IdNode[] = [];
     let current = idNode;
-    let nextNode = this.findChainContinuationNode(current, groupAgentId);
+    let nextNode = this.findChainContinuationNode(current, groupAgentId, pending);
     while (nextNode) {
       current = nextNode;
-      nextNode = this.findChainContinuationNode(current, groupAgentId);
+      nextNode = this.findChainContinuationNode(current, groupAgentId, pending);
     }
     return current;
   }

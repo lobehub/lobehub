@@ -81,6 +81,11 @@ class AgentDocumentService {
     return lambdaClient.agentDocument.getReaderDocument.query(params);
   };
 
+  /** A managed skill and its `SKILL.md`; `null` once it no longer exists. */
+  getSkill = async (params: { agentDocumentId: string; agentId: string }) => {
+    return lambdaClient.agentDocument.getSkill.query(params);
+  };
+
   associateDocument = async (params: { agentId: string; documentId: string }) => {
     const result = await lambdaClient.agentDocument.associateDocument.mutate(params);
     await invalidateDocumentMutation({

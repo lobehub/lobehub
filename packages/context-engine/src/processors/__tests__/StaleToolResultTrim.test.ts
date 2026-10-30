@@ -108,6 +108,70 @@ describe('StaleToolResultTrimProcessor', () => {
     expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
   });
 
+  describe('chat images from readMessages', () => {
+    const T0 = Date.parse('2026-09-20T08:00:00Z');
+    const images = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ mediaType: 'image/png', url: `https://app/f/${i}` }));
+    const readWithImages = (n: number) =>
+      toolMessage('lobe-message', 'readMessages', 'Fetched 3 messages', {
+        pluginState: { images: images(n), messages: [] },
+      });
+    // Old read, filler pushing it out of the recency tail, then the turn boundary.
+    const history = (imageCount: number, gapMs: number) => [
+      readWithImages(imageCount),
+      { content: 'filler 1', id: 'f1', role: 'assistant' },
+      { content: 'filler 2', id: 'f2', role: 'assistant' },
+      { content: 'filler 3', id: 'f3', role: 'assistant' },
+      { content: 'done', createdAt: T0, id: 'prev', role: 'assistant' },
+      { content: 'next', createdAt: T0 + gapMs, id: 'trigger', role: 'user' },
+    ];
+
+    it('drops the images of an old result but keeps its text', async () => {
+      const result = await createProcessor().process(createContext(history(1, 600_000)));
+
+      expect(result.messages[0].content).toBe(
+        'Fetched 3 messages\n[1 image(s) from this readMessages result are no longer attached. Call readMessages again if you need to see them.]',
+      );
+      expect((result.messages[0] as any).pluginState.images).toBeUndefined();
+      expect((result.messages[0] as any).pluginState.messages).toEqual([]);
+      expect(result.metadata.staleToolResultTrim?.byRule).toEqual({ staleMessageImages: 1 });
+    });
+
+    // Regression (Codex P2): images were worth 0 chars, so a history of image reads never
+    // cleared the size gate however many images it held.
+    it('counts images toward the minimum-size gate', async () => {
+      const processor = new StaleToolResultTrimProcessor({
+        imageCharEquivalent: 5000,
+        keepRecentMessages: 3,
+        minTotalToolChars: 20_000,
+      });
+
+      const below = await processor.process(createContext(history(3, 600_000)));
+      expect((below.messages[0] as any).pluginState.images).toHaveLength(3);
+
+      const above = await processor.process(createContext(history(4, 600_000)));
+      expect((above.messages[0] as any).pluginState.images).toBeUndefined();
+    });
+
+    // Regression (Codex P2): the replacement only appends text, so without counting the dropped
+    // images the saving was negative and the warm-cache break-even always skipped.
+    it('counts dropped images as savings in the warm-cache break-even', async () => {
+      const result = await createProcessor().process(createContext(history(4, 60_000)));
+
+      expect(result.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: true,
+        byRule: { staleMessageImages: 1 },
+      });
+      expect((result.messages[0] as any).pluginState.images).toBeUndefined();
+    });
+
+    it('keeps the images inside the recency window', async () => {
+      const result = await createProcessor().process(createContext([readWithImages(1)]));
+
+      expect((result.messages[0] as any).pluginState.images).toHaveLength(1);
+    });
+  });
+
   it('trims stale browser snapshots outside the recency window', async () => {
     const messages = [
       toolMessage('lobe-browser', 'snapshot', '- button "写作" [ref=e1]\n'.repeat(100)),

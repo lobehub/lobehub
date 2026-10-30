@@ -272,15 +272,13 @@ describe('windows launcher pre-exit recovery (P2 4307489808)', () => {
     const taskkillInvocations: string[][] = [];
     let cimSnapshotCount = 0;
     vi.doMock('node:child_process', async (importOriginal) => {
-      const actual = importOriginal<any>();
+      const actual = await importOriginal<any>();
       return {
         ...actual,
         execFile: (
           file: string,
           args: readonly string[],
-          optionsOrCallback:
-            | { timeout?: number }
-            | ((error: Error | null, stdout: string) => void),
+          optionsOrCallback: { timeout?: number } | ((error: Error | null, stdout: string) => void),
           maybeCallback?: (error: Error | null, stdout: string) => void,
         ) => {
           // Node arity: (file, args, callback) or (file, args, options, callback)
@@ -304,7 +302,7 @@ describe('windows launcher pre-exit recovery (P2 4307489808)', () => {
       } as any;
     });
     vi.doMock('node:util', async (importOriginal) => {
-      const actual = importOriginal<any>();
+      const actual = await importOriginal<any>();
       return {
         ...actual,
         promisify:

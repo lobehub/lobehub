@@ -1,6 +1,7 @@
 import type { AgentSignalMiddleware } from '../runtime/middleware';
+import { createScenarioPolicies } from '../scenarios/registry';
+import { AGENT_SIGNAL_SCENARIO_IDS } from '../scenarios/types';
 import type { CreateAnalyzeIntentPolicyOptions } from './analyzeIntent';
-import { createAnalyzeIntentPolicy } from './analyzeIntent';
 import type {
   SkillManagementActionHandlerOptions,
   UserMemoryActionHandlerOptions,
@@ -8,9 +9,7 @@ import type {
 import type { CreateFeedbackDomainJudgePolicyOptions } from './analyzeIntent/feedbackDomain';
 import type { CreateFeedbackSatisfactionJudgePolicyOptions } from './analyzeIntent/feedbackSatisfaction';
 import type { CreateCompletionPolicyOptions } from './completionPolicy';
-import { createCompletionPolicy } from './completionPolicy';
 import type { CreateReviewNightlyPolicyOptions } from './reviewNightly';
-import { createReviewNightlyPolicy } from './reviewNightly';
 
 export * from './actionIdempotency';
 export * from './analyzeIntent';
@@ -37,21 +36,6 @@ export interface CreateDefaultAgentSignalPoliciesOptions extends CreateFeedbackD
   userMemory?: UserMemoryActionHandlerOptions;
 }
 
-type DefaultAgentSignalPolicyFactory = (
-  options: CreateDefaultAgentSignalPoliciesOptions,
-) => AgentSignalMiddleware[];
-
-const DEFAULT_AGENT_SIGNAL_POLICY_FACTORIES: DefaultAgentSignalPolicyFactory[] = [
-  (options) => [createAnalyzeIntentPolicy(options)],
-  (options) =>
-    createReviewNightlyPolicy({
-      nightlyReview: options.nightlyReview,
-      selfFeedbackIntent: options.selfFeedbackIntent,
-      selfReflection: options.selfReflection,
-    }),
-  (options) => [createCompletionPolicy(options.completion ?? {})],
-];
-
 /**
  * Creates the default Agent Signal policy stack with optional self-iteration source handlers.
  *
@@ -70,5 +54,5 @@ const DEFAULT_AGENT_SIGNAL_POLICY_FACTORIES: DefaultAgentSignalPolicyFactory[] =
 export const createDefaultAgentSignalPolicies = (
   options: CreateDefaultAgentSignalPoliciesOptions = {},
 ): AgentSignalMiddleware[] => {
-  return DEFAULT_AGENT_SIGNAL_POLICY_FACTORIES.flatMap((createPolicy) => createPolicy(options));
+  return createScenarioPolicies(AGENT_SIGNAL_SCENARIO_IDS.selfIteration, options);
 };

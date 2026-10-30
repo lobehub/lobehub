@@ -29,35 +29,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     min-height: 0;
     padding-block: 0 8px;
   `,
-  tab: css`
-    cursor: pointer;
-
-    padding-block: 5px;
-    padding-inline: 10px;
-    border-block-end: 2px solid transparent;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition:
-      border-color 0.2s,
-      color 0.2s,
-      background 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  tabActive: css`
-    border-block-end-color: ${cssVar.colorPrimary};
-    color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
-  `,
   tabBar: css`
     overflow-x: auto;
     display: flex;
+    gap: 8px;
     align-items: center;
+
+    padding-block: 6px;
+    padding-inline: 4px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   tabCounter: css`

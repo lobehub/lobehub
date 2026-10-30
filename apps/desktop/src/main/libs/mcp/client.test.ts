@@ -1,3 +1,9 @@
+import {
+  ProtocolError,
+  ProtocolErrorCode,
+  SdkError,
+  SdkErrorCode,
+} from '@modelcontextprotocol/client';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -146,26 +152,22 @@ describe('describeStdioSpawnFailure', () => {
 });
 
 describe('isBareConnectionClosedError', () => {
-  it('matches the bare -32000 Connection closed transport failure', () => {
-    const error = Object.assign(new Error('MCP error -32000: Connection closed'), {
-      code: -32_000,
-    });
+  it('matches the SDK ConnectionClosed transport failure', () => {
+    const error = new SdkError(SdkErrorCode.ConnectionClosed, 'Connection closed');
 
     expect(isBareConnectionClosedError(error)).toBe(true);
   });
 
-  it('rejects -32000 errors without the connection-closed message', () => {
-    const error = Object.assign(new Error('MCP error -32000: other transport failure'), {
-      code: -32_000,
-    });
+  it('rejects server protocol errors with code -32000', () => {
+    const error = new ProtocolError(-32_000, 'other transport failure');
 
     expect(isBareConnectionClosedError(error)).toBe(false);
   });
 
-  it('rejects protocol/configuration failures that are not -32000', () => {
-    const error = Object.assign(
-      new Error('MCP error -32602: Invalid params — incompatible protocol version'),
-      { code: -32_602 },
+  it('rejects protocol/configuration failures', () => {
+    const error = new ProtocolError(
+      ProtocolErrorCode.InvalidParams,
+      'Invalid params — incompatible protocol version',
     );
 
     expect(isBareConnectionClosedError(error)).toBe(false);
@@ -323,9 +325,7 @@ describe('selectDiagnosticOutputLines', () => {
     // copy uses near-identical but distinct wording, and since the real
     // marker's stream is capped the payload copy is dropped with the head.
     const stream = new PrecheckOutputStream('stdout');
-    stream.append(
-      Buffer.from('[stdout truncated: pre-check app reached]\nreal payload line\n'),
-    );
+    stream.append(Buffer.from('[stdout truncated: pre-check app reached]\nreal payload line\n'));
     stream.append(Buffer.from('y'.repeat(CAP)));
     stream.append(Buffer.from('\ndecisive error\n'));
 
@@ -553,7 +553,7 @@ describe('preCheckStdioCommand', () => {
 describe('MCPClient.initialize respawn gating (P2 4306033474)', () => {
   /**
    * Drive `initialize()` against a stubbed SDK client to prove the
-   * diagnostic re-spawn only fires for the bare -32000 connection-closed
+   * diagnostic re-spawn only fires for the SDK ConnectionClosed
    * failure it was built to diagnose.
    */
   const runInitialize = async (connectError: unknown): Promise<{ respawned: boolean }> => {
@@ -588,9 +588,9 @@ describe('MCPClient.initialize respawn gating (P2 4306033474)', () => {
     return { respawned };
   };
 
-  it('re-spawns for the bare -32000 Connection closed failure', async () => {
+  it('re-spawns for the SDK ConnectionClosed failure', async () => {
     const { respawned } = await runInitialize(
-      Object.assign(new Error('MCP error -32000: Connection closed'), { code: -32_000 }),
+      new SdkError(SdkErrorCode.ConnectionClosed, 'Connection closed'),
     );
 
     expect(respawned).toBe(true);
@@ -598,9 +598,10 @@ describe('MCPClient.initialize respawn gating (P2 4306033474)', () => {
 
   it('does not re-spawn for other handshake failures (protocol/config errors)', async () => {
     const { respawned } = await runInitialize(
-      Object.assign(new Error('MCP error -32602: Invalid params — incompatible protocol version'), {
-        code: -32_602,
-      }),
+      new ProtocolError(
+        ProtocolErrorCode.InvalidParams,
+        'Invalid params — incompatible protocol version',
+      ),
     );
 
     expect(respawned).toBe(false);

@@ -1,8 +1,13 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { TRPCError } from '@trpc/server';
+import { and, eq } from 'drizzle-orm';
 
 import { agentsToSessions } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import {
+  batchResolveSessionAgentIds,
+  resolveAgentReference,
+} from '@/server/services/agent/resolveReference';
 
 import { type ConversationContextInput } from '../_schema/context';
 
@@ -31,30 +36,56 @@ export const resolveContext = async (
   userId: string,
   workspaceId?: string,
 ): Promise<ResolvedContext> => {
-  let resolvedSessionId: string | null = input.sessionId ?? null;
-
-  // If agentId is provided, prioritize looking up the corresponding sessionId from agentsToSessions table
-  if (input.agentId) {
-    const [relation] = await db
-      .select({ sessionId: agentsToSessions.sessionId })
-      .from(agentsToSessions)
-      .where(
-        and(
-          eq(agentsToSessions.agentId, input.agentId),
-          buildWorkspaceWhere({ userId, workspaceId }, agentsToSessions),
-        ),
+  const id = input.agentId || input.sessionId;
+  let agentId: string | null = null;
+  let sessionId: string | null = null;
+  if (id) {
+    let resolved;
+    try {
+      resolved = await resolveAgentReference(id, db, userId, workspaceId);
+    } catch (error) {
+      // Preserve the existing stale-agent fallback, but authorize and write
+      // using the fallback's real agent identity, never the stale input.
+      if (
+        !(error instanceof TRPCError) ||
+        error.code !== 'NOT_FOUND' ||
+        !input.agentId ||
+        !input.sessionId
       )
-      .limit(1);
-
-    if (relation) {
-      resolvedSessionId = relation.sessionId;
+        throw error;
+      resolved = await resolveAgentReference(input.sessionId, db, userId, workspaceId);
+    }
+    agentId = resolved.agentId;
+    sessionId = resolved.sessionId;
+    if (!sessionId && agentId) {
+      const links = await db
+        .select({ sessionId: agentsToSessions.sessionId })
+        .from(agentsToSessions)
+        .where(
+          and(
+            eq(agentsToSessions.agentId, agentId),
+            buildWorkspaceWhere({ userId, workspaceId }, agentsToSessions),
+          ),
+        )
+        .limit(2);
+      // Never select an arbitrary shell when an agent belongs to several.
+      if (links.length === 1) {
+        try {
+          sessionId = (await resolveAgentReference(links[0].sessionId, db, userId, workspaceId))
+            .sessionId;
+        } catch (error) {
+          // An Agent can participate in an old group shell. It remains an
+          // Agent context; the group must never become its legacy container.
+          if (!(error instanceof TRPCError) || !['NOT_FOUND', 'BAD_REQUEST'].includes(error.code))
+            throw error;
+        }
+      }
     }
   }
-
   return {
-    agentId: input.agentId ?? null,
+    agentId,
     groupId: input.groupId ?? null,
-    sessionId: resolvedSessionId,
+    sessionId,
     threadId: input.threadId ?? null,
     topicId: input.topicId ?? null,
   };
@@ -76,18 +107,7 @@ export const resolveAgentIdFromSession = async (
   userId: string,
   workspaceId?: string,
 ): Promise<string | undefined> => {
-  const [relation] = await db
-    .select({ agentId: agentsToSessions.agentId })
-    .from(agentsToSessions)
-    .where(
-      and(
-        eq(agentsToSessions.sessionId, sessionId),
-        buildWorkspaceWhere({ userId, workspaceId }, agentsToSessions),
-      ),
-    )
-    .limit(1);
-
-  return relation?.agentId;
+  return (await resolveAgentReference(sessionId, db, userId, workspaceId)).agentId ?? undefined;
 };
 
 /**
@@ -100,16 +120,7 @@ export const resolveContextWithAgentId = async (
   userId: string,
   workspaceId?: string,
 ): Promise<ResolvedContext> => {
-  const resolved = await resolveContext(input, db, userId, workspaceId);
-  if (!resolved.sessionId) return resolved;
-
-  // Canonicalize the agent from the session that actually won resolution.
-  // This preserves the legacy fallback contract when a stale/non-existent
-  // agentId is sent together with a valid sessionId, instead of carrying the
-  // stale id into a foreign-keyed write.
-  const agentId = await resolveAgentIdFromSession(resolved.sessionId, db, userId, workspaceId);
-
-  return { ...resolved, agentId: agentId ?? resolved.agentId };
+  return resolveContext(input, db, userId, workspaceId);
 };
 
 /**
@@ -128,17 +139,5 @@ export const batchResolveAgentIdFromSessions = async (
   userId: string,
   workspaceId?: string,
 ): Promise<Map<string, string>> => {
-  if (sessionIds.length === 0) return new Map();
-
-  const relations = await db
-    .select({ agentId: agentsToSessions.agentId, sessionId: agentsToSessions.sessionId })
-    .from(agentsToSessions)
-    .where(
-      and(
-        buildWorkspaceWhere({ userId, workspaceId }, agentsToSessions),
-        inArray(agentsToSessions.sessionId, sessionIds),
-      ),
-    );
-
-  return new Map(relations.map((r) => [r.sessionId, r.agentId]));
+  return batchResolveSessionAgentIds(sessionIds, db, userId, workspaceId);
 };

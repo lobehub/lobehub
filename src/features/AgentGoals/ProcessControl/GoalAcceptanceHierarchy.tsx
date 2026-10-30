@@ -1,34 +1,24 @@
 'use client';
 
 import type { VerifyCheckTally } from '@lobechat/types';
-import { ActionIcon, Button, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   BadgeCheck,
   CheckCheck,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
-  ChevronsDownUp,
-  ChevronsUpDown,
   CircleDot,
   CircleSlash,
   CircleX,
-  RotateCcw,
 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
+import { memo, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  type AcceptanceCheck,
-  checkDisplayTitle,
-  checkHeadMeta,
-  CriterionRow,
-  rowKeyDownHandler,
-  useAcceptanceBundle,
-} from '@/features/Acceptance';
+import { rowKeyDownHandler } from '@/features/Acceptance';
 import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 import { sx } from '@/styles/sx';
 
 import type { AcceptanceLevelState, AcceptanceTree } from './goalAcceptanceTree';
@@ -48,18 +38,21 @@ const styles = stylex.create({
     paddingBlock: '8px',
     paddingInlineStart: '12px',
     paddingInlineEnd: '6px',
-    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
-    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
-    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
-    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
-    backgroundImage: { 'default': null, ':hover': 'none' },
     outlineWidth: { 'default': null, ':focus-visible': '2px' },
     outlineStyle: { 'default': null, ':focus-visible': 'solid' },
     outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
     outlineOffset: { 'default': null, ':focus-visible': '-2px' },
   },
-  rowToggle: {
-    cursor: 'pointer',
+  rowInteractive: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  rowTargetInteractive: { cursor: 'pointer' },
+  rowTarget: {
     display: 'flex',
     flex: '1',
     gap: '10px',
@@ -116,29 +109,6 @@ const styles = stylex.create({
   // level keeps full weight: a failure is a result, an absence is not.
   titleQuiet: { color: cssVar.colorTextSecondary },
   meta: { flex: 'none', fontSize: '12px', color: cssVar.colorTextTertiary },
-  // Check rows keep the acceptance page's own list grammar, so opening a level
-  // and opening the acceptance read as the same list.
-  //
-  // The offset is exactly the level row's icon column — its 16px mark plus the
-  // 10px gap — so a check's mark lines up under the level's `#N`. The nesting
-  // reads from the sequence and the mark, not from a second indent.
-  nestedList: { marginBlockEnd: '4px', marginInlineStart: '26px' },
-  // "Nothing verified this" replaces a check list, so it starts on the same
-  // column as the checks' own marks — not a second indent.
-  empty: {
-    paddingBlock: '10px',
-    paddingInlineStart: '38px',
-    paddingInlineEnd: '12px',
-    fontSize: '13px',
-    color: cssVar.colorTextTertiary,
-  },
-  error: {
-    paddingBlock: '10px',
-    paddingInline: '14px',
-    borderRadius: cssVar.borderRadiusLG,
-    backgroundColor: cssVar.colorErrorBg,
-    backgroundImage: 'none',
-  },
 });
 
 /** A level's own state, as a glyph. Never derived from the levels beneath it. */
@@ -194,10 +164,14 @@ const useTallyText = () => {
 interface LevelRowProps {
   /** Trailing level-scoped control — the one-click sign-off, when it applies. */
   action?: ReactNode;
-  chevron: typeof ChevronRight;
+  /** This level's report is the one the side Portal is showing. */
+  active?: boolean;
   dim?: boolean;
+  /** Why the row opens nothing, shown on hover when there is no `onOpen`. */
+  hint?: string;
   meta?: string;
-  onToggle: () => void;
+  /** Opens the level's acceptance report; absent when the task has none yet. */
+  onOpen?: () => void;
   /** The task's position in the Goal graph, so a row can be pointed at. */
   seq?: string;
   state: AcceptanceLevelState;
@@ -205,17 +179,29 @@ interface LevelRowProps {
 }
 
 const LevelRow = memo<LevelRowProps>(
-  ({ action, chevron, dim, meta, onToggle, seq, state, title }) => {
+  ({ action, active, dim, hint, meta, onOpen, seq, state, title }) => {
     const { t } = useTranslation('chat');
     return (
-      <div {...sx([styles.row, stylex.defaultMarker()], 'acc-hierarchy-row')}>
+      <div
+        {...sx(
+          [
+            styles.row,
+            onOpen && styles.rowInteractive,
+            active && styles.rowActive,
+            stylex.defaultMarker(),
+          ],
+          'acc-hierarchy-row',
+        )}
+      >
         <div
-          aria-expanded={chevron === ChevronDown}
-          className={stylex.props(styles.rowToggle).className}
-          role={'button'}
-          tabIndex={0}
-          onClick={onToggle}
-          onKeyDown={rowKeyDownHandler(onToggle)}
+          role={onOpen ? 'button' : undefined}
+          tabIndex={onOpen ? 0 : undefined}
+          title={onOpen ? undefined : hint}
+          className={
+            stylex.props(styles.rowTarget, onOpen && styles.rowTargetInteractive).className
+          }
+          onClick={onOpen}
+          onKeyDown={onOpen ? rowKeyDownHandler(onOpen) : undefined}
         >
           <Icon
             aria-label={t(LEVEL_LABEL_KEY[state] as any)}
@@ -231,107 +217,20 @@ const LevelRow = memo<LevelRowProps>(
           {action}
           <span className={stylex.props(styles.spacer).className} />
           {meta && <span className={stylex.props(styles.meta).className}>{meta}</span>}
-          <Icon
-            color={cssVar.colorTextQuaternary}
-            icon={chevron}
-            size={15}
-            style={{ flex: 'none' }}
-          />
+          {onOpen && (
+            <Icon
+              color={cssVar.colorTextQuaternary}
+              icon={ChevronRight}
+              size={15}
+              style={{ flex: 'none' }}
+            />
+          )}
         </div>
       </div>
     );
   },
 );
 LevelRow.displayName = 'AcceptanceLevelRow';
-
-/**
- * The checks a task's acceptance was judged on, read when the level is opened.
- *
- * Loaded on demand on purpose: the hierarchy's counts come from the graph
- * snapshot, so opening one level costs one bundle instead of the page fetching
- * every task's checks up front.
- *
- * No live poll here. This is a detail view inside a summary, and "expand all"
- * mounts one of these per task — the acceptance page's 5s poll would become one
- * interval per opened row. The tallies stay current because they ride the graph
- * poll, and the surface still revalidates on focus/reconnect.
- */
-const TaskChecks = memo<{ acceptanceId: string; onOpenCheck: (checkId: string) => void }>(
-  ({ acceptanceId, onOpenCheck }) => {
-    const { t } = useTranslation(['chat', 'verify']);
-    const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId, { poll: false });
-    const checks = data?.checks ?? [];
-
-    if (isLoading && !data)
-      return (
-        <Flexbox
-          className={stylex.props(styles.nestedList).className}
-          gap={8}
-          paddingBlock={10}
-          paddingInline={12}
-        >
-          {[0, 1, 2].map((index) => (
-            <Skeleton height={14} key={index} radius={4} width={`${40 + index * 12}%`} />
-          ))}
-        </Flexbox>
-      );
-
-    // A failed read must not read as "this acceptance has no checks".
-    if (error)
-      return (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={stylex.props(styles.error).className}
-          gap={8}
-          justify={'space-between'}
-        >
-          <Text fontSize={12} style={{ flex: 1 }} type={'danger'}>
-            {t('goalProcess.acceptanceHierarchy.checksError')}
-          </Text>
-          <Button
-            icon={<Icon icon={RotateCcw} />}
-            size={'small'}
-            type={'text'}
-            onClick={() => void mutate()}
-          >
-            {t('goalProcess.acceptanceHierarchy.retry')}
-          </Button>
-        </Flexbox>
-      );
-
-    if (checks.length === 0)
-      return (
-        <div className={stylex.props(styles.empty).className}>
-          {t('goalProcess.acceptanceHierarchy.noChecks')}
-        </div>
-      );
-
-    return (
-      /* Flat, indented rows — the same grammar as the level rows above. An
-         outlined card here put its rounded top corner flush under the level
-         row's own separator, so the two lines read as one broken edge. */
-      <div className={stylex.props(styles.nestedList).className}>
-        {checks.map((check: AcceptanceCheck) => {
-          const meta = checkHeadMeta(check);
-          return (
-            <CriterionRow
-              icon={<Icon color={meta.color} icon={meta.icon} size={16} style={{ flex: 'none' }} />}
-              key={check.id}
-              seq={check.seq}
-              title={checkDisplayTitle(
-                check.title,
-                t('acceptance.checks.holisticTitle', { ns: 'verify' }),
-              )}
-              onOpen={() => onOpenCheck(check.id)}
-            />
-          );
-        })}
-      </div>
-    );
-  },
-);
-TaskChecks.displayName = 'AcceptanceTaskChecks';
 
 export interface GoalAcceptanceHierarchyProps {
   /**
@@ -347,7 +246,7 @@ export interface GoalAcceptanceHierarchyProps {
 /**
  * The per-task acceptance group of the result page's 验收标准 section: one row
  * per task that holds an acceptance of its own, each with its OWN tally,
- * opening in place to the checks it was judged on.
+ * opening that acceptance's report in the side Portal.
  *
  * Every row and every tally rides on the goal graph snapshot the page has
  * already loaded, so this renders with the page instead of adding a second
@@ -372,78 +271,47 @@ export interface GoalAcceptanceHierarchyProps {
 const GoalAcceptanceHierarchy = memo<GoalAcceptanceHierarchyProps>(
   ({ canReview, goalId, tree }) => {
     const { t } = useTranslation('chat');
-    const openAcceptanceCheck = useChatStore((state) => state.openAcceptanceCheck);
+    const openAcceptance = useChatStore((state) => state.openAcceptance);
+    const openedAcceptanceId = useChatStore((state) =>
+      chatPortalSelectors.showPortal(state)
+        ? chatPortalSelectors.acceptancePortalId(state)
+        : undefined,
+    );
     const tallyText = useTallyText();
-    const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
     const { acceptAll, acceptLevel, awaiting, pendingKey } = useAcceptanceSignOff(
       goalId,
       tree.tasks,
     );
-
-    const toggle = useCallback((key: string) => {
-      setExpanded((previous) => {
-        const next = new Set(previous);
-        if (next.has(key)) next.delete(key);
-        else next.add(key);
-        return next;
-      });
-    }, []);
-
-    const taskKeys = useMemo(() => tree.tasks.map((level) => level.key), [tree]);
-    const allExpanded = taskKeys.length > 0 && taskKeys.every((key) => expanded.has(key));
 
     // No task holds an acceptance: the criteria list already carries the goal's
     // own result, so this group is absent rather than an empty heading.
     if (tree.tasks.length === 0) return null;
 
     const groupActions =
-      (canReview && awaiting.length > 0) || taskKeys.length > 1 ? (
-        <Flexbox horizontal align={'center'} gap={4}>
-          {canReview && awaiting.length > 0 && (
-            <Button
-              icon={<Icon icon={CheckCheck} />}
-              size={'small'}
-              type={'text'}
-              onClick={acceptAll}
-            >
-              {t('goalProcess.acceptanceHierarchy.acceptAll')}
-            </Button>
-          )}
-          {taskKeys.length > 1 && (
-            <ActionIcon
-              icon={allExpanded ? ChevronsDownUp : ChevronsUpDown}
-              size={'small'}
-              aria-label={t(
-                allExpanded
-                  ? 'goalProcess.acceptanceHierarchy.collapseAll'
-                  : 'goalProcess.acceptanceHierarchy.expandAll',
-              )}
-              title={t(
-                allExpanded
-                  ? 'goalProcess.acceptanceHierarchy.collapseAll'
-                  : 'goalProcess.acceptanceHierarchy.expandAll',
-              )}
-              onClick={() => setExpanded(allExpanded ? new Set() : new Set(taskKeys))}
-            />
-          )}
-        </Flexbox>
+      canReview && awaiting.length > 0 ? (
+        <Button icon={<Icon icon={CheckCheck} />} size={'small'} type={'text'} onClick={acceptAll}>
+          {t('goalProcess.acceptanceHierarchy.acceptAll')}
+        </Button>
       ) : undefined;
 
     return (
       <Flexbox gap={8}>
         <GroupLabel extra={groupActions}>{t('goalProcess.acceptanceHierarchy.group')}</GroupLabel>
         <Flexbox>
-          {tree.tasks.map((level) => (
-            <Flexbox key={level.key}>
+          {tree.tasks.map((level) => {
+            const acceptanceId = level.acceptanceId;
+            return (
               <LevelRow
-                chevron={expanded.has(level.key) ? ChevronDown : ChevronRight}
+                active={!!acceptanceId && acceptanceId === openedAcceptanceId}
                 dim={level.state === 'unavailable'}
+                hint={t('goalProcess.acceptanceHierarchy.taskNotDispatched')}
+                key={level.key}
                 meta={tallyText(level.checks)}
                 seq={level.node.seq ? `#${level.node.seq}` : undefined}
                 state={level.state}
                 title={level.node.node.title}
                 action={
-                  canReview && level.state === 'awaitingSignOff' && level.acceptanceId ? (
+                  canReview && level.state === 'awaitingSignOff' && acceptanceId ? (
                     <span
                       {...sx([styles.levelAction], 'acc-hierarchy-action')}
                       data-pending={pendingKey === level.key || undefined}
@@ -454,8 +322,8 @@ const GoalAcceptanceHierarchy = memo<GoalAcceptanceHierarchyProps>(
                         loading={pendingKey === level.key}
                         size={'small'}
                         type={'text'}
-                        // The sign-off sits inside the row's own expand target;
-                        // acting on it must not also fold the level.
+                        // The sign-off sits inside the row's own open target;
+                        // acting on it must not also open the report.
                         onClick={(event) => {
                           event.stopPropagation();
                           void acceptLevel(level);
@@ -466,21 +334,13 @@ const GoalAcceptanceHierarchy = memo<GoalAcceptanceHierarchyProps>(
                     </span>
                   ) : undefined
                 }
-                onToggle={() => toggle(level.key)}
+                // The report itself is the drill-down — opened in the side
+                // Portal like every other acceptance on this page, rather than a
+                // second, thinner copy of its checks inlined under the row.
+                onOpen={acceptanceId ? () => openAcceptance(acceptanceId) : undefined}
               />
-              {expanded.has(level.key) &&
-                (level.acceptanceId ? (
-                  <TaskChecks
-                    acceptanceId={level.acceptanceId}
-                    onOpenCheck={(checkId) => openAcceptanceCheck(level.acceptanceId!, checkId)}
-                  />
-                ) : (
-                  <div className={stylex.props(styles.empty).className}>
-                    {t('goalProcess.acceptanceHierarchy.taskNotDispatched')}
-                  </div>
-                ))}
-            </Flexbox>
-          ))}
+            );
+          })}
         </Flexbox>
       </Flexbox>
     );
