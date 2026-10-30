@@ -1,0 +1,45 @@
+---
+title: JZSTOKEN 服务商配置
+description: 了解如何在 LobeHub 中配置 JZSTOKEN，并通过一个 OpenAI 兼容 API 使用多个模型系列。
+tags:
+  - JZSTOKEN
+  - 服务商配置
+  - 设置指南
+---
+
+# JZSTOKEN 服务商配置
+
+JZSTOKEN 通过一个 API 密钥提供对 OpenAI、Anthropic、Google、Kimi、DeepSeek 等模型系列的 OpenAI 兼容访问。
+
+## 获取 API 密钥
+
+1. 创建或登录 [JZSTOKEN 账号](https://jzstoken.com/)。
+2. 充值后打开 [API Keys 页面](https://jzstoken.com/dashboard/keys)。
+3. 为通用模型创建 **Standard** 密钥。仅为 `jzs-max-3.0` 创建的密钥只能访问该模型。
+
+## 配置服务商
+
+1. 打开 **应用设置 → AI 服务商**。
+2. 选择 **JZSTOKEN** 并打开开关。
+3. 输入 API 密钥，选择 **检查** 测试连接。
+4. 获取模型列表，或从 [JZSTOKEN 模型目录](https://jzstoken.com/model-pricing) 添加模型 ID，然后在 Agent 中启用。
+
+## 环境变量
+
+自托管部署可使用以下配置：
+
+```bash
+JZSTOKEN_API_KEY=sk-your-key-here
+JZSTOKEN_PROXY_URL=https://jzstoken.com/api/v1
+JZSTOKEN_MODEL_LIST=
+```
+
+`JZSTOKEN_PROXY_URL` 与 `JZSTOKEN_MODEL_LIST` 为可选项。模型可用性、上下文限制、视觉输入与工具调用支持取决于所选的上游模型。
+
+## 故障排查
+
+- **401 Unauthorized：** 确认密钥有效且账户余额充足。
+- **模型不可用：** 检查密钥类型和准确的模型 ID。Standard 密钥与专用的 `jzs-max-3.0` 密钥可访问的模型不同。
+- **连接错误：** 确认 `JZSTOKEN_PROXY_URL` 以 `/api/v1` 结尾，且不要包含 `/chat/completions`。
+
+如需处理服务商账户、计费或模型可用性问题，请参阅 [JZSTOKEN 文档](https://jzstoken.com/docs/quick-start)。

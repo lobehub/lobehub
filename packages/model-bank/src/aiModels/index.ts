@@ -35,6 +35,7 @@ import { default as hunyuan } from './hunyuan';
 import { default as infiniai } from './infiniai';
 import { default as internlm } from './internlm';
 import { default as jina } from './jina';
+import { default as jzstoken } from './jzstoken';
 import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
 import { default as longcat } from './longcat';
@@ -149,6 +150,7 @@ const staticModelMap: ModelsMap = {
   infiniai,
   internlm,
   jina,
+  jzstoken,
   kimicodingplan,
   lmstudio,
   longcat,
@@ -269,6 +271,7 @@ export { default as hunyuan } from './hunyuan';
 export { default as infiniai } from './infiniai';
 export { default as internlm } from './internlm';
 export { default as jina } from './jina';
+export { default as jzstoken } from './jzstoken';
 export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
 export { default as longcat } from './longcat';
