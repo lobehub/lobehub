@@ -24,6 +24,7 @@ import type {
 } from './payload';
 
 const WORKFLOW_PATHS = {
+  consolidation: '/api/workflows/memory-user-memory/pipelines/consolidation/run',
   hourly: '/api/workflows/memory-user-memory/call-cron-hourly-analysis',
   personaUpdate: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
   topic: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
@@ -278,6 +279,28 @@ export class MemoryExtractionWorkflowService {
       flowControl: {
         key: `memory-user-memory.pipelines.chat-topic.process-topic.user.${userId}`,
         parallelism: 5,
+      } satisfies FlowControl,
+      headers: options?.extraHeaders,
+      url,
+    });
+  }
+
+  /** One consolidation run per user at a time: the flow-control key is per user. */
+  static triggerConsolidation(
+    userId: string,
+    baseUrl: string,
+    options?: { extraHeaders?: Record<string, string>; model?: string; provider?: string },
+  ) {
+    if (!baseUrl) {
+      throw new Error('Missing baseUrl for workflow trigger');
+    }
+
+    const url = getWorkflowUrl(WORKFLOW_PATHS.consolidation, baseUrl);
+    return this.getClient().trigger({
+      body: { model: options?.model, provider: options?.provider, userId },
+      flowControl: {
+        key: `memory-user-memory.pipelines.consolidation.${userId}`,
+        parallelism: 1,
       } satisfies FlowControl,
       headers: options?.extraHeaders,
       url,

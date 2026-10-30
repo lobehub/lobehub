@@ -18,6 +18,7 @@ import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { type LobeChatDatabase } from '@/database/type';
+import { visibleMemoryState } from '@/database/utils/memoryVisibility';
 import { notTrashed } from '@/database/utils/softDelete';
 import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
@@ -198,7 +199,11 @@ export const buildUserPersonaJobInput = async (db: LobeChatDatabase, userId: str
     db.query.userMemories.findMany({
       limit: 20,
       orderBy: [desc(userMemories.capturedAt)],
-      where: and(eq(userMemories.userId, userId), notTrashed(userMemories.isDeleted)),
+      where: and(
+        eq(userMemories.userId, userId),
+        notTrashed(userMemories.isDeleted),
+        visibleMemoryState(userMemories.state),
+      ),
     }),
   ]);
 
