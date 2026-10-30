@@ -168,6 +168,145 @@ describe('doc command', () => {
         expect.objectContaining({ pageSize: 10 }),
       );
     });
+
+    it('should request the given page oldest-first with --page, --sort and --order', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({ items: [], total: 0 });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'doc',
+        'list',
+        '--page',
+        '3',
+        '--sort',
+        'createdAt',
+        '--order',
+        'asc',
+      ]);
+
+      expect(mockTrpcClient.document.queryDocuments.query).toHaveBeenCalledWith(
+        expect.objectContaining({ current: 2, sortBy: 'createdAt', sortOrder: 'asc' }),
+      );
+    });
+
+    it('should print the page position and next page hint under the table', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({
+        items: [{ fileType: 'md', id: 'doc31', title: 'Old', updatedAt: new Date().toISOString() }],
+        total: 61,
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '--page', '2']);
+
+      expect(consoleSpy).toHaveBeenLastCalledWith(
+        expect.stringContaining('Page 2/3 · 31-31 of 61 · next: --page 3'),
+      );
+    });
+
+    it('should say there are no more pages on the last page', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({
+        items: [{ fileType: 'md', id: 'doc61', title: 'Oldest' }],
+        total: 61,
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '--page', '3']);
+
+      expect(consoleSpy).toHaveBeenLastCalledWith(expect.stringContaining('no more pages'));
+    });
+
+    it('should keep JSON stdout a bare array and send paging hints to stderr', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({
+        items: [{ fileType: 'md', id: 'doc1', title: 'Test' }],
+        total: 2,
+      });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '--json', 'id', '-L', '1']);
+
+      expect(JSON.parse(consoleSpy.mock.calls[0][0])).toEqual([{ id: 'doc1' }]);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('next: --page 2'));
+      errorSpy.mockRestore();
+    });
+
+    it('should point to the last page when --page is past the end', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({ items: [], total: 61 });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '--page', '5']);
+
+      expect(consoleSpy).toHaveBeenLastCalledWith(
+        expect.stringContaining('Page 5 is past the end · 61 total · last page: --page 3'),
+      );
+    });
+
+    it('should warn when an older server ignores --order asc', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({
+        items: [
+          { createdAt: '2026-10-02T00:00:00Z', id: 'newer', title: 'Newer' },
+          { createdAt: '2026-10-01T00:00:00Z', id: 'older', title: 'Older' },
+        ],
+        total: 2,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'doc',
+        'list',
+        '--sort',
+        'createdAt',
+        '--order',
+        'asc',
+      ]);
+
+      expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('ignored --order asc'));
+    });
+
+    it('should not warn when the server honours --order asc', async () => {
+      mockTrpcClient.document.queryDocuments.query.mockResolvedValue({
+        items: [
+          { createdAt: '2026-10-01T00:00:00Z', id: 'older', title: 'Older' },
+          { createdAt: '2026-10-02T00:00:00Z', id: 'newer', title: 'Newer' },
+        ],
+        total: 2,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'doc',
+        'list',
+        '--sort',
+        'createdAt',
+        '--order',
+        'asc',
+      ]);
+
+      expect(log.warn).not.toHaveBeenCalled();
+    });
+
+    it('should reject a --limit above the server cap', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '-L', '500']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--page'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.document.queryDocuments.query).not.toHaveBeenCalled();
+    });
+
+    it('should reject an unknown --sort field', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'doc', 'list', '--sort', 'size']);
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.document.queryDocuments.query).not.toHaveBeenCalled();
+    });
   });
 
   // ── view ──────────────────────────────────────────────

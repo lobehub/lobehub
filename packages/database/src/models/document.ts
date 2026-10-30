@@ -66,6 +66,11 @@ export interface QueryDocumentParams {
    * `title` lists A→Z. Ties fall back to the id so offset pages never overlap.
    */
   sortBy?: DocumentQuerySortBy;
+  /**
+   * Direction of the `sortBy` column. Defaults to `desc` for the timestamps and
+   * `asc` for `title`; `asc` on a timestamp walks from the oldest document.
+   */
+  sortOrder?: 'asc' | 'desc';
   sourceTypes?: string[];
   /** Keep only documents that live outside every knowledge base. */
   standaloneOnly?: boolean;
@@ -198,6 +203,7 @@ export class DocumentModel {
     excludeKnowledgeBaseIds,
     fileTypes,
     sortBy = 'updatedAt',
+    sortOrder,
     sourceTypes,
     standaloneOnly,
   }: QueryDocumentParams = {}): Promise<{
@@ -263,11 +269,12 @@ export class DocumentModel {
     }
 
     const whereCondition = and(...conditions);
+    const direction = (sortOrder ?? (sortBy === 'title' ? 'asc' : 'desc')) === 'asc' ? asc : desc;
     const orderBy =
       sortBy === 'title'
-        ? [asc(documents.title), desc(documents.updatedAt), asc(documents.id)]
+        ? [direction(documents.title), desc(documents.updatedAt), asc(documents.id)]
         : [
-            desc(sortBy === 'createdAt' ? documents.createdAt : documents.updatedAt),
+            direction(sortBy === 'createdAt' ? documents.createdAt : documents.updatedAt),
             asc(documents.id),
           ];
 

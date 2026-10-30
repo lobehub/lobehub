@@ -6,10 +6,30 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { formatPageFooter } from '../utils/pagination';
 import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 // ── Helpers ────────────────────────────────────────────────
+
+// Matches the `queryDocuments` input cap; larger sets are read page by page.
+const MAX_LIST_PAGE_SIZE = 100;
+
+const DOC_SORT_FIELDS = ['updatedAt', 'createdAt', 'title'] as const;
+type DocSortField = (typeof DOC_SORT_FIELDS)[number];
+
+/**
+ * Servers that predate `sortOrder` drop the unknown key and keep listing newest
+ * first. Detect that from the returned timestamps so a cleanup script walking
+ * "oldest first" does not silently act on the newest documents instead.
+ */
+function isTimestampOrderReversed(docs: any[], sortBy: DocSortField, order: 'asc' | 'desc') {
+  if (sortBy === 'title' || docs.length < 2) return false;
+  const first = new Date(docs[0][sortBy]).getTime();
+  const last = new Date(docs.at(-1)[sortBy]).getTime();
+  if (Number.isNaN(first) || Number.isNaN(last) || first === last) return false;
+  return order === 'asc' ? first > last : first < last;
+}
 
 function readBodyContent(options: { body?: string; bodyFile?: string }): string | undefined {
   if (options.bodyFile) {
@@ -32,7 +52,14 @@ export function registerDocCommand(program: Command) {
   doc
     .command('list')
     .description('List documents')
-    .option('-L, --limit <n>', 'Maximum number of items to fetch', '30')
+    .option('-L, --limit <n>', 'Page size (max 100)', '30')
+    .option(
+      '-P, --page <n>',
+      'Page number (offset-based: when deleting while paging, keep re-reading page 1)',
+      '1',
+    )
+    .option('--sort <field>', 'Sort by: updatedAt, createdAt, title', 'updatedAt')
+    .option('--order <dir>', 'Sort direction: asc, desc (default: desc; asc for title)')
     .option('--file-type <type>', 'Filter by file type')
     .option('--source-type <type>', 'Filter by source type (file, web, api, topic)')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
@@ -41,18 +68,59 @@ export function registerDocCommand(program: Command) {
         fileType?: string;
         json?: string | boolean;
         limit?: string;
+        order?: string;
+        page?: string;
+        sort?: string;
         sourceType?: string;
       }) => {
-        const client = await getTrpcClient();
         const pageSize = Number.parseInt(options.limit || '30', 10);
+        if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_LIST_PAGE_SIZE) {
+          log.error(`--limit must be between 1 and ${MAX_LIST_PAGE_SIZE}; use --page for more.`);
+          process.exit(1);
+          return;
+        }
+        const page = Number.parseInt(options.page || '1', 10);
+        if (!Number.isInteger(page) || page < 1) {
+          log.error('--page must be a positive integer.');
+          process.exit(1);
+          return;
+        }
+        const sortBy = options.sort || 'updatedAt';
+        if (!DOC_SORT_FIELDS.includes(sortBy as DocSortField)) {
+          log.error(`--sort must be one of: ${DOC_SORT_FIELDS.join(', ')}`);
+          process.exit(1);
+          return;
+        }
+        if (options.order && options.order !== 'asc' && options.order !== 'desc') {
+          log.error('--order must be asc or desc.');
+          process.exit(1);
+          return;
+        }
 
-        const query: { fileTypes?: string[]; pageSize: number; sourceTypes?: string[] } = {
-          pageSize,
-        };
+        const client = await getTrpcClient();
+        const query: {
+          current: number;
+          fileTypes?: string[];
+          pageSize: number;
+          sortBy: DocSortField;
+          sortOrder?: 'asc' | 'desc';
+          sourceTypes?: string[];
+        } = { current: page - 1, pageSize, sortBy: sortBy as DocSortField };
+        if (options.order) query.sortOrder = options.order as 'asc' | 'desc';
         if (options.fileType) query.fileTypes = [options.fileType];
         if (options.sourceType) query.sourceTypes = [options.sourceType];
         const result = await client.document.queryDocuments.query(query);
         const docs = Array.isArray(result) ? result : ((result as any).items ?? []);
+        const total = Array.isArray(result) ? undefined : (result as any).total;
+        const footer =
+          typeof total === 'number'
+            ? formatPageFooter({ count: docs.length, page, pageSize, total })
+            : undefined;
+        if (query.sortOrder && isTimestampOrderReversed(docs, query.sortBy, query.sortOrder)) {
+          log.warn(
+            `The server ignored --order ${query.sortOrder}; it needs a newer LobeHub server version.`,
+          );
+        }
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -60,11 +128,14 @@ export function registerDocCommand(program: Command) {
             withUrls(docs, await resolveUrlBuilder(client), resourcePath.document),
             fields,
           );
+          // Keep stdout a plain JSON array for scripts; paging hints go to stderr.
+          if (footer) console.error(pc.dim(footer));
           return;
         }
 
         if (docs.length === 0) {
-          console.log('No documents found.');
+          console.log(page > 1 ? `No documents on page ${page}.` : 'No documents found.');
+          if (footer) console.log(pc.dim(footer));
           return;
         }
 
@@ -76,6 +147,7 @@ export function registerDocCommand(program: Command) {
         ]);
 
         printTable(rows, ['ID', 'TITLE', 'TYPE', 'UPDATED']);
+        if (footer) console.log(pc.dim(footer));
       },
     );
 

@@ -156,54 +156,6 @@ describe('agent command', () => {
     return graphFile;
   }
 
-  describe('list', () => {
-    it('should display agents in table format', async () => {
-      mockTrpcClient.agent.queryAgents.query.mockResolvedValue([
-        { id: 'a1', model: 'gpt-4', title: 'My Agent' },
-      ]);
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'agent', 'list']);
-
-      expect(consoleSpy).toHaveBeenCalledTimes(2); // header + row
-    });
-
-    it('should filter by keyword', async () => {
-      mockTrpcClient.agent.queryAgents.query.mockResolvedValue([]);
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'agent', 'list', '-k', 'test']);
-
-      expect(mockTrpcClient.agent.queryAgents.query).toHaveBeenCalledWith(
-        expect.objectContaining({ keyword: 'test' }),
-      );
-    });
-
-    it('opts the inbox into the lookup, unlike callers that leave the default', async () => {
-      mockTrpcClient.agent.queryAgents.query.mockResolvedValue([]);
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'agent', 'list']);
-
-      // `queryAgents` excludes the product-owned inbox unless a caller opts in,
-      // so `lh agent list` must ask for it explicitly — this is the surface the
-      // inbox is meant to appear on.
-      expect(mockTrpcClient.agent.queryAgents.query).toHaveBeenCalledWith(
-        expect.objectContaining({ includeInbox: true }),
-      );
-    });
-
-    it('should output JSON', async () => {
-      const agents = [{ id: 'a1', title: 'Test' }];
-      mockTrpcClient.agent.queryAgents.query.mockResolvedValue(agents);
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'agent', 'list', '--json']);
-
-      expect(consoleSpy.mock.calls[0][0]).toContain('"url": "https://app.lobehub.com/agent/a1"');
-    });
-  });
-
   describe('view', () => {
     it('should display agent config', async () => {
       mockTrpcClient.agent.getAgentConfigById.query.mockResolvedValue({

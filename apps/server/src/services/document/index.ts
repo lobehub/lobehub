@@ -366,6 +366,7 @@ export class DocumentService {
     fileTypes?: string[];
     pageSize?: number;
     sortBy?: DocumentQuerySortBy;
+    sortOrder?: 'asc' | 'desc';
     sourceTypes?: string[];
     standaloneOnly?: boolean;
   }) {
