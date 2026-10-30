@@ -1656,6 +1656,9 @@ table document_histories {
   workspace_id text
   editor_data jsonb [not null]
   save_source text [not null]
+  editor_ids text[]
+  operation_id text
+  agent_id text
   saved_at "timestamp with time zone" [not null]
 
   indexes {

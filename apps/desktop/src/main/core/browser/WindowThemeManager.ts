@@ -22,6 +22,9 @@ import {
 const logger = createLogger('core:WindowThemeManager');
 
 const MACOS_VIBRANCY = 'sidebar';
+// The AppKit sidebar material exists since macOS 26, but the desktop app only
+// adopts it from macOS 27 on; macOS 26 and older keep Electron sidebar vibrancy.
+const MACOS_GLASS_MINIMUM_MAJOR_VERSION = 27;
 // lobe-design-ignore LOBE-RAW-COLOR: Electron native colors cannot resolve CSS variables.
 const MACOS_TRANSPARENT_BACKGROUND = '#00000000';
 
@@ -186,14 +189,24 @@ export class WindowThemeManager {
   }
 
   /**
+   * macOS product-version gate for the AppKit sidebar material.
+   * Electron exposes the product version (e.g. "27.2.0") via getSystemVersion().
+   */
+  private isMacGlassOSSupported(): boolean {
+    const [major = ''] = process.getSystemVersion().split('.');
+    const majorVersion = Number.parseInt(major, 10);
+    return Number.isFinite(majorVersion) && majorVersion >= MACOS_GLASS_MINIMUM_MAJOR_VERSION;
+  }
+
+  /**
    * Replace the window material in place; transparent renderer regions expose it.
-   * Keep Electron's sidebar vibrancy as the fallback for older systems or addon failure.
+   * Keep Electron's sidebar vibrancy as the fallback below macOS 27 or addon failure.
    */
   private refreshMacVibrancy(): void {
     if (!this.browserWindow) return;
 
     this.browserWindow.setVibrancy(null);
-    if (isGlassSupported()) {
+    if (isGlassSupported() && this.isMacGlassOSSupported()) {
       const applied = setWindowGlass(
         this.browserWindow.getNativeWindowHandle(),
         true,

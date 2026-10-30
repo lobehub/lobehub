@@ -11,6 +11,8 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   a day. Atomic append (bounded), drain and restore; the runtime drains it into the next turn.
   Writes return `undefined` without Redis, and the caller tells the client to send directly.
 - `linear`: single-use OAuth state for "Connect Linear" (ten minutes, deleted on first read).
+- `pageCollab`: a digest of the body each page's last room projection wrote, for a day, so the
+  next projection can tell that something wrote the body outside the room. `null` without Redis.
 - `agentSignal`: spend bounds for background self-iteration — classifier calls per user per UTC
   day, self-feedback declaration slots per topic, manual triggers per user per hour, and the
   distinct topics one nightly review may cover. Its keys live in the `agent-signal` namespace

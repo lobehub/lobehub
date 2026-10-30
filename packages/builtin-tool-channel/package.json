@@ -9,6 +9,7 @@
   },
   "main": "./src/index.ts",
   "devDependencies": {
+    "@lobechat/prompts": "workspace:*",
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {

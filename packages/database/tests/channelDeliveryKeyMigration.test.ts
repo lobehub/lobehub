@@ -16,7 +16,7 @@ import * as schema from '../src/schemas';
 import type { LobeChatDatabase } from '../src/type';
 
 const migrationsFolder = path.join(__dirname, '../migrations');
-const TAG = '0194_channel_jobs_drop_delivery_key';
+const TAG = '0195_channel_jobs_drop_delivery_key';
 
 describe('Channel delivery key removal', () => {
   const client = new PGlite({ extensions: { vector } });

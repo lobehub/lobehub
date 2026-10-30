@@ -100,6 +100,8 @@ export interface ContextFactRequest {
   executionTarget?: string;
   /** Which connector families this deployment offers. */
   features: { composio: boolean; lobehubSkill: boolean };
+  /** Disable unsolicited workspace-agent inventory, not explicit discovery or delegation tools. */
+  includeRecentAgents?: boolean;
   /**
    * The run is a sub-agent (`origin.lineage.isSubAgent`). Nested agent
    * dispatch is rejected there, so no fact may invite delegation.

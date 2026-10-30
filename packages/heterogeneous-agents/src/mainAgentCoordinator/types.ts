@@ -169,6 +169,8 @@ export interface MainAgentReduceCtx {
   agentId?: string | null;
   /** Allocate a prefixed id (`thd_…` / `msg_…`). Deterministic counter in tests. */
   newId: (kind: 'message' | 'thread') => string;
+  /** Persisted tools across all turns and subagent threads, owned by the interpreter. */
+  toolMessageIds?: ReadonlyMap<string, string>;
   topicId: string | null;
 }
 

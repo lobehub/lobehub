@@ -1,9 +1,6 @@
 export default {
   'askUserQuestion.submitting': 'Submitting your response…',
   'askUserQuestion.checking': 'Checking submission status…',
-  'askUserQuestion.uncertain':
-    'We couldn’t confirm whether your response was received. Check its status before trying again.',
-  'askUserQuestion.checkStatus': 'Check submission status',
   'askUserQuestion.submitFailed':
     'Your response hasn’t been confirmed. Your answers are saved; please try again.',
 

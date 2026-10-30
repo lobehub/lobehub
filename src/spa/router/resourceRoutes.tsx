@@ -5,6 +5,7 @@ import {
   FilePenIcon,
   FilesIcon,
   FileText,
+  FolderIcon,
   HardDriveIcon,
   ImageIcon,
   LibraryBigIcon,
@@ -172,6 +173,23 @@ export const resourceRoute: RouteObject = {
           },
           path: 'permission',
         },
+        // A folder (`folder/<docs_id>`), page (`docs/<docs_id>`) or file
+        // (`file/<file_id>`) opened inside the library, all addressed by id.
+        ...(
+          [
+            { icon: FolderIcon, path: 'folder/:folderId' },
+            { icon: FilePenIcon, path: 'docs/:itemId' },
+            { icon: FilesIcon, path: 'file/:itemId' },
+          ] as const
+        ).map(({ icon, path }) => ({
+          element: dynamicElement(
+            () => import('@/routes/(main)/resource/library'),
+            `Desktop > Resource > Library > ${path}`,
+          ),
+          handle: { meta: routeMeta({ icon, titleKey: 'navigation.knowledgeBase' }) },
+          path,
+        })),
+        // Legacy folder links (`/resource/library/<id>/<folderSlug>`) redirect to `folder/<id>`.
         {
           element: dynamicElement(
             () => import('@/routes/(main)/resource/library/[slug]'),

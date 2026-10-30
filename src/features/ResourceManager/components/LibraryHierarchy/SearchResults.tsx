@@ -43,9 +43,9 @@ interface SearchResultsProps {
  */
 const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
   const { t } = useTranslation('file');
-  const { currentFolderSlug } = useFolderPath();
+  const { currentFolderId } = useFolderPath();
   const currentViewItemId = useResourceManagerStore((s) => s.currentViewItemId);
-  const selectedKey = resolveHierarchySelectedKey({ currentFolderSlug, currentViewItemId });
+  const selectedKey = resolveHierarchySelectedKey({ currentFolderId, currentViewItemId });
   // Debounce here rather than in the input so the store always holds what the
   // user sees; only the network request lags behind the keystrokes.
   const debouncedQuery = useDebounce(query.trim(), { wait: 300 });

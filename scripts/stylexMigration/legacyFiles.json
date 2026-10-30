@@ -1176,7 +1176,6 @@
   "src/routes/(main)/agent/profile/features/ProfileEditor/CloudHeterogeneousConfig.tsx",
   "src/routes/(main)/agent/profile/features/ProfileEditor/HeterogeneousAgentStatusCard.tsx",
   "src/routes/(main)/agent/profile/features/ProfileEditor/RemoteAgentConfigCard.tsx",
-  "src/routes/(main)/agent/profile/features/ProfileEditor/WorkspaceAgentDevicePolicy.tsx",
   "src/routes/(main)/agent/profile/features/ProfileEditor/WorkspaceAgentPolicyCard.tsx",
   "src/routes/(main)/agent/profile/features/ProfileEditor/index.tsx",
   "src/routes/(main)/community/(detail)/_layout/Header/style.ts",

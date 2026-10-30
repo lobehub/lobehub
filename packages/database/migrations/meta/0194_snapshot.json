@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "67bd0e5e-1cfa-46ae-ae4d-6b8ce08057ff",
+  "id": "180656bc-dfba-4351-8bba-5c66cd31a299",
   "policies": {},
   "prevId": "0504dd92-6a40-4f7b-97be-7a6f934887c0",
   "roles": {},
@@ -10343,6 +10343,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "delivery_key": {
+          "name": "delivery_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'initial'"
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -10481,6 +10488,12 @@
             },
             {
               "expression": "member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "delivery_key",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -14085,6 +14098,24 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "editor_ids": {
+          "name": "editor_ids",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operation_id": {
+          "name": "operation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "saved_at": {
           "name": "saved_at",
