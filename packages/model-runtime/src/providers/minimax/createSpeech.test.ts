@@ -7,6 +7,7 @@ import { USD_TO_CNY } from '../../const/currency';
 import { getModelPricing } from '../../utils/getModelPricing';
 import {
   buildMiniMaxSpeechRequest,
+  countMiniMaxSpeechCharacters,
   createMiniMaxSpeech,
   decodeMiniMaxHexAudio,
   getMiniMaxSpeechErrorType,
@@ -211,15 +212,22 @@ describe('createMiniMaxSpeech', () => {
       expect(result.usage?.cost).toBeCloseTo(3.5 / USD_TO_CNY, 4);
     });
 
-    it('falls back to counting code points when usage_characters is missing', async () => {
+    it('falls back to MiniMax billing rules when usage_characters is missing', async () => {
       fetchMock.mockResolvedValue(okResponse({ extra_info: {} }));
 
       const result = await createMiniMaxSpeech(
-        { input: '你好😀', model: 'speech-2.8-hd', voice: 'female-shaonv' },
+        { input: '你好, hi😀', model: 'speech-2.8-hd', voice: 'female-shaonv' },
         options,
       );
 
-      expect(result.usage?.inputCharacters).toBe(3);
+      // 2 Chinese characters × 2 + ", hi😀" (5 code points) × 1
+      expect(result.usage?.inputCharacters).toBe(9);
+    });
+
+    it('counts Chinese characters twice', () => {
+      expect(countMiniMaxSpeechCharacters('你好')).toBe(4);
+      expect(countMiniMaxSpeechCharacters('hello, world')).toBe(12);
+      expect(countMiniMaxSpeechCharacters('')).toBe(0);
     });
   });
 
@@ -228,7 +236,8 @@ describe('createMiniMaxSpeech', () => {
       [1004, AgentRuntimeErrorType.InvalidProviderAPIKey],
       [2049, AgentRuntimeErrorType.InvalidProviderAPIKey],
       [1002, AgentRuntimeErrorType.RateLimitExceeded],
-      [1039, AgentRuntimeErrorType.RateLimitExceeded],
+      // 1039 is a token limit the request must be adjusted for, not a retryable rate limit
+      [1039, AgentRuntimeErrorType.ProviderBizError],
       [1008, AgentRuntimeErrorType.InsufficientQuota],
       [2013, AgentRuntimeErrorType.ProviderBizError],
       [1000, AgentRuntimeErrorType.ProviderBizError],

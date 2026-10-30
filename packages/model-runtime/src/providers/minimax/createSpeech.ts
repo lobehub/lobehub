@@ -39,6 +39,16 @@ const MINIMAX_AUDIO_FORMATS: Partial<Record<TTSAudioFormat, string>> = {
 
 const HEX_PATTERN = /^(?:[\da-f]{2})+$/i;
 
+const HAN_PATTERN = /\p{Script=Han}/u;
+
+/**
+ * Billed characters when MiniMax omits `usage_characters`: a Chinese character counts
+ * as 2, every other character (letters, punctuation, spaces, emoji) as 1.
+ * @see https://platform.minimaxi.com/docs/guides/pricing-paygo
+ */
+export const countMiniMaxSpeechCharacters = (input: string) =>
+  [...input].reduce((count, char) => count + (HAN_PATTERN.test(char) ? 2 : 1), 0);
+
 /**
  * `base_resp.status_code` values that map onto a specific runtime error type; everything
  * else is a provider business error.
@@ -48,7 +58,6 @@ const MINIMAX_ERROR_TYPES: Record<number, ILobeAgentRuntimeErrorType> = {
   1002: AgentRuntimeErrorType.RateLimitExceeded,
   1004: AgentRuntimeErrorType.InvalidProviderAPIKey,
   1008: AgentRuntimeErrorType.InsufficientQuota,
-  1039: AgentRuntimeErrorType.RateLimitExceeded,
   2049: AgentRuntimeErrorType.InvalidProviderAPIKey,
 };
 
@@ -226,11 +235,12 @@ export async function createMiniMaxSpeech(
       data.trace_id,
     );
 
-    const usage = convertTextToSpeechUsage(
-      payload.input,
-      pricing,
-      typeof usageCharacters === 'number' ? { inputCharacters: usageCharacters } : undefined,
-    );
+    const usage = convertTextToSpeechUsage(payload.input, pricing, {
+      inputCharacters:
+        typeof usageCharacters === 'number'
+          ? usageCharacters
+          : countMiniMaxSpeechCharacters(payload.input),
+    });
 
     result = { audio, format, usage };
   } catch (error) {
