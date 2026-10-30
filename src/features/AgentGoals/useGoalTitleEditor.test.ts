@@ -39,6 +39,23 @@ describe('useGoalTitleEditor', () => {
     expect(save).toHaveBeenCalledWith('New title');
   });
 
+  it('keeps a newer edit when an older save fails', async () => {
+    let rejectFirst!: (error: Error) => void;
+    save.mockReturnValueOnce(new Promise((_, reject) => (rejectFirst = reject)));
+    const { rerender, result } = renderEditor();
+
+    act(() => result.current.setValue('First'));
+    await act(async () => result.current.onBlur());
+    rerender({ current: 'First' });
+    act(() => result.current.setValue('Second'));
+    await act(async () => result.current.onBlur());
+    rerender({ current: 'Second' });
+
+    await act(async () => rejectFirst(new Error('network')));
+
+    expect(result.current.value).toBe('Second');
+  });
+
   it('leaves the field on Enter, which saves through the blur', () => {
     const { result } = renderEditor();
     const { blur, event } = keyEvent('Enter');

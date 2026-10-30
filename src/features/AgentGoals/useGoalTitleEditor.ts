@@ -9,6 +9,9 @@ export const useGoalTitleEditor = (title: string, save: (title: string) => Promi
   const [value, setValue] = useState(title);
   // Escape blurs the field too; the save that blur would run must not fire.
   const skipBlurSaveRef = useRef(false);
+  // Only the latest save may restore the field: an older one failing must not
+  // put its stale title over a newer edit, which a later blur would then save.
+  const latestSaveRef = useRef(0);
 
   useEffect(() => {
     setValue(title);
@@ -20,10 +23,11 @@ export const useGoalTitleEditor = (title: string, save: (title: string) => Promi
       setValue(title);
       return;
     }
+    const saveId = ++latestSaveRef.current;
     try {
       await save(next);
     } catch {
-      setValue(title);
+      if (saveId === latestSaveRef.current) setValue(title);
     }
   };
 
