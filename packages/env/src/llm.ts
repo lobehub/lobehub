@@ -264,6 +264,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ANTGROUP: z.boolean(),
       ANTGROUP_API_KEY: z.string().optional(),
+
+      ENABLED_JZSTOKEN: z.boolean(),
+      JZSTOKEN_API_KEY: z.string().optional(),
     },
     runtimeEnv: {
       API_KEY_SELECT_MODE: process.env.API_KEY_SELECT_MODE,
@@ -527,6 +530,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ANTGROUP: !!process.env.ANTGROUP_API_KEY,
       ANTGROUP_API_KEY: process.env.ANTGROUP_API_KEY,
+
+      ENABLED_JZSTOKEN: !!process.env.JZSTOKEN_API_KEY,
+      JZSTOKEN_API_KEY: process.env.JZSTOKEN_API_KEY,
     },
   });
 };

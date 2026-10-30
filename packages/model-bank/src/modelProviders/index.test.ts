@@ -88,3 +88,18 @@ describe('isProviderFetchOnClient', () => {
     expect(isProviderFetchOnClient('openai', { keyVaults })).toBe(false);
   });
 });
+
+describe('JZSTOKEN provider', () => {
+  it('is registered as an OpenAI-compatible model fetcher', () => {
+    expect(
+      DEFAULT_MODEL_PROVIDER_LIST.find((provider) => provider.id === 'jzstoken'),
+    ).toMatchObject({
+      name: 'JZSTOKEN',
+      settings: {
+        proxyUrl: { placeholder: 'https://jzstoken.com/api/v1' },
+        sdkType: 'openai',
+        showModelFetcher: true,
+      },
+    });
+  });
+});

@@ -1,0 +1,45 @@
+---
+title: JZSTOKEN Provider Configuration
+description: Learn how to configure JZSTOKEN in LobeHub and access multiple model families through one OpenAI-compatible API.
+tags:
+  - JZSTOKEN
+  - Provider Configuration
+  - Setup Guide
+---
+
+# JZSTOKEN Provider Configuration
+
+JZSTOKEN provides OpenAI-compatible access to OpenAI, Anthropic, Google, Kimi, DeepSeek, and other model families through one API key.
+
+## Get an API key
+
+1. Create or sign in to a [JZSTOKEN account](https://jzstoken.com/).
+2. Add credits, then open the [API Keys page](https://jzstoken.com/dashboard/keys).
+3. Create a **Standard** key for general models. A key created for `jzs-max-3.0` only exposes that model.
+
+## Configure the provider
+
+1. Open **App Settings → AI Providers**.
+2. Select **JZSTOKEN** and turn on its switch.
+3. Enter the API key and select **Check** to test the connection.
+4. Fetch the model list or add a model ID from the [JZSTOKEN catalog](https://jzstoken.com/model-pricing), then enable it for your Agent.
+
+## Environment variables
+
+For a self-hosted deployment, configure the provider with:
+
+```bash
+JZSTOKEN_API_KEY=sk-your-key-here
+JZSTOKEN_PROXY_URL=https://jzstoken.com/api/v1
+JZSTOKEN_MODEL_LIST=
+```
+
+`JZSTOKEN_PROXY_URL` and `JZSTOKEN_MODEL_LIST` are optional. Model availability, context limits, visual input, and tool support depend on the selected upstream model.
+
+## Troubleshooting
+
+- **401 Unauthorized:** Confirm that the key is active and has sufficient account balance.
+- **Model not available:** Verify the key type and the exact model ID. Standard keys and dedicated `jzs-max-3.0` keys expose different models.
+- **Connection errors:** Verify that `JZSTOKEN_PROXY_URL` ends in `/api/v1` and does not include `/chat/completions`.
+
+For provider account, billing, or model availability issues, see the [JZSTOKEN documentation](https://jzstoken.com/docs/quick-start).

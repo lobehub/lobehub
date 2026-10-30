@@ -1,9 +1,7 @@
 ---
 title: LobeHub Model Service Providers - Environment Variables and Configuration
 description: >-
-  Learn about the environment variables and configuration settings for various
-  model service providers like OpenAI, Google AI, AWS Bedrock, Ollama,
-  Perplexity AI, Anthropic AI, Mistral AI, Groq AI, OpenRouter AI, and 01.AI.
+  Learn about the environment variables and configuration settings for various model service providers like OpenAI, Google AI, AWS Bedrock, Ollama, Perplexity AI, Anthropic AI, Mistral AI, Groq AI, OpenRouter AI, and 01.AI.
 tags:
   - Model Service Providers
   - Environment Variables
@@ -867,6 +865,29 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Description: Used to control the AIHubMix model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
 - Default: `-`
 - Example: `-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
+
+## JZSTOKEN
+
+### `JZSTOKEN_API_KEY`
+
+- Type: Required
+- Description: API key created on the JZSTOKEN API Keys page.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `JZSTOKEN_PROXY_URL`
+
+- Type: Optional
+- Description: JZSTOKEN OpenAI-compatible API base URL.
+- Default: `https://jzstoken.com/api/v1`
+- Example: `https://jzstoken.com/api/v1`
+
+### `JZSTOKEN_MODEL_LIST`
+
+- Type: Optional
+- Description: Controls the JZSTOKEN model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize a display name. Separate entries with commas.
+- Default: `-`
+- Example: `-all,+gpt-5.6-terra,+claude-sonnet-5`
 
 ## Straico
 

@@ -32,6 +32,7 @@ import { LobeHunyuanAI } from './providers/hunyuan';
 import { LobeInfiniAI } from './providers/infiniai';
 import { LobeInternLMAI } from './providers/internlm';
 import { LobeJinaAI } from './providers/jina';
+import { LobeJZSTOKENAI } from './providers/jzstoken';
 import { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
 import { LobeLMStudioAI } from './providers/lmstudio';
 import { LobeHubAI } from './providers/lobehub';
@@ -121,6 +122,7 @@ export const providerRuntimeMap = {
   infiniai: LobeInfiniAI,
   internlm: LobeInternLMAI,
   jina: LobeJinaAI,
+  jzstoken: LobeJZSTOKENAI,
   kimicodingplan: LobeKimiCodingPlanAI,
   lmstudio: LobeLMStudioAI,
   lobehub: LobeHubAI,
