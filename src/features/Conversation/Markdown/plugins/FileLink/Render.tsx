@@ -1,5 +1,6 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { A, copyToClipboard, createStaticStyles, Icon, toast } from '@lobehub/ui';
 import { CopyIcon } from 'lucide-react';
@@ -8,7 +9,10 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { EntityLinkRender, parseLobeLink } from '@/features/EntityLink';
 import { useChatStore } from '@/store/chat';
+import { useElectronStore } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
 
 import { useConversationStore } from '../../../store';
@@ -18,14 +22,29 @@ import {
   getFileLinkOpenAction,
   getFileLinkTargetHref,
   isShareVisitorContext,
+  resolveAppOrigin,
 } from './parse';
 
 interface FileLinkProperties {
   fileId?: string;
   linkHref?: string;
   linkLabel?: string;
+  linkScope?: 'active' | 'foreign';
   proxyHref?: string;
 }
+
+/**
+ * The app server's origin, read at click time: on desktop the renderer's own
+ * origin (`app://renderer`) is not the server a copied link must point at.
+ * Kept out of render so the share page's SSR never touches the window or the
+ * (stubbed) desktop store.
+ */
+const getAppOrigin = () =>
+  resolveAppOrigin({
+    isDesktop,
+    remoteServerUrl: () => electronSyncSelectors.remoteServerUrl(useElectronStore.getState()),
+    windowOrigin: () => window.location.origin,
+  });
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   copy: css`
@@ -127,7 +146,7 @@ const OwnedFileLabel = memo<{ fallback: string; fileId: string }>(({ fallback, f
 OwnedFileLabel.displayName = 'FileLinkOwnedFileLabel';
 
 const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
-  const { fileId, linkHref, linkLabel, proxyHref } = node?.properties || {};
+  const { fileId, linkHref, linkLabel, linkScope, proxyHref } = node?.properties || {};
   const openFilePreview = useChatStore((s) => s.openFilePreview);
   // A share reader previews and copies the public proxy, not the owner's page.
   const isShareVisitor = useConversationStore((s) => isShareVisitorContext(s.context));
@@ -140,7 +159,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
     const href = getFileLinkCopyHref({
       isShareVisitor,
       linkHref,
-      origin: window.location.origin,
+      origin: getAppOrigin(),
       proxyHref,
     });
     if (!href) return;
@@ -166,6 +185,23 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
     },
     [fileId, isShareVisitor, label, openFilePreview, proxyHref],
   );
+
+  // The owner's link into another scope (a personal file inside a workspace,
+  // another workspace's file) cannot preview in this one: it stays an ordinary
+  // internal link that navigates there.
+  if (linkScope === 'foreign' && !isShareVisitor) {
+    return (
+      <EntityLinkRender
+        node={{
+          properties: {
+            linkHref,
+            linkKind: parseLobeLink(linkHref)?.kind ?? 'generic',
+            linkLabel: label,
+          },
+        }}
+      />
+    );
+  }
 
   return (
     <>

@@ -74,6 +74,7 @@ export const rehypeFileLink = () => (tree: any) => {
       fileId: parsed.fileId,
       linkHref: href,
       linkLabel: label,
+      linkScope: parsed.scope,
       proxyHref: parsed.proxyHref,
     };
 

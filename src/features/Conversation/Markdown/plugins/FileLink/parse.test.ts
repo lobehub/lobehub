@@ -6,6 +6,7 @@ import {
   getFileLinkTargetHref,
   isShareVisitorContext,
   parseFileLinkHref,
+  resolveAppOrigin,
 } from './parse';
 
 const ORIGIN = 'https://app.lobehub.com';
@@ -14,7 +15,8 @@ describe('parseFileLinkHref', () => {
   it('matches a same-origin absolute file proxy link', () => {
     expect(parseFileLinkHref(`${ORIGIN}/f/file_abc123`, ORIGIN)).toEqual({
       fileId: 'file_abc123',
-      proxyHref: `${ORIGIN}/f/file_abc123`,
+      proxyHref: '/f/file_abc123',
+      scope: 'active',
     });
   });
 
@@ -90,8 +92,18 @@ describe('parseFileLinkHref Docs file links', () => {
   it('matches the Docs file path the CLI prints', () => {
     expect(parseFileLinkHref('https://lobehub.com/resource/file/file_ynz', ORIGIN)).toEqual({
       fileId: 'file_ynz',
-      proxyHref: 'https://lobehub.com/f/file_ynz',
+      proxyHref: '/f/file_ynz',
+      scope: 'active',
     });
+  });
+
+  // Regression: an absolute `https://app.lobehub.com/f/x` previewed from a page
+  // on another origin redirects cross-origin with a tainted Origin, so the
+  // bucket refuses the preview's `fetch` of a text file.
+  it('keeps the proxy root-relative so it resolves on the reading page', () => {
+    expect(
+      parseFileLinkHref('https://app.lobehub.com/f/file_ynz', 'https://lobehub.com')?.proxyHref,
+    ).toBe('/f/file_ynz');
   });
 
   it('matches the legacy ?file= Docs link and a library item', () => {
@@ -101,6 +113,7 @@ describe('parseFileLinkHref Docs file links', () => {
     expect(parseFileLinkHref('/resource/library/kb_1?file=file_ynz', ORIGIN)).toEqual({
       fileId: 'file_ynz',
       proxyHref: '/f/file_ynz',
+      scope: 'active',
     });
   });
 
@@ -121,26 +134,43 @@ describe('parseFileLinkHref Docs file links', () => {
     expect(parseFileLinkHref(`/resource?file=${id}`, ORIGIN)?.fileId).toBe(id);
   });
 
-  it('matches a link prefixed with the active workspace only', () => {
+  it('scopes a workspace-prefixed link to the active workspace only', () => {
     const href = `${ORIGIN}/acme/resource/file/file_ynz`;
 
     expect(parseFileLinkHref(href, ORIGIN, { activeWorkspaceSlug: 'acme' })).toEqual({
       fileId: 'file_ynz',
-      proxyHref: `${ORIGIN}/f/file_ynz`,
+      proxyHref: '/f/file_ynz',
+      scope: 'active',
     });
-    expect(parseFileLinkHref(href, ORIGIN, { activeWorkspaceSlug: 'other' })).toBeNull();
-    expect(parseFileLinkHref(href, ORIGIN)).toBeNull();
+    expect(parseFileLinkHref(href, ORIGIN, { activeWorkspaceSlug: 'other' })?.scope).toBe(
+      'foreign',
+    );
+  });
+
+  // Regression: a shared workspace topic is read with no active workspace, so a
+  // `/{slug}/resource/file/:id` link was not recognized and the visitor followed
+  // the owner's Docs page instead of the public proxy.
+  it('recognizes a workspace-prefixed link with no active workspace', () => {
+    expect(parseFileLinkHref(`${ORIGIN}/acme/resource/file/file_ynz`, ORIGIN)).toEqual({
+      fileId: 'file_ynz',
+      proxyHref: '/f/file_ynz',
+      scope: 'foreign',
+    });
   });
 
   // Regression: inside a workspace an unprefixed Docs link names a personal
   // file; previewing it by id in the workspace scope showed it as unavailable.
-  it('leaves an unprefixed Docs link to navigation inside a workspace', () => {
+  it('marks an unprefixed Docs link foreign inside a workspace', () => {
     const options = { activeWorkspaceSlug: 'acme' };
 
-    expect(parseFileLinkHref('/resource/file/file_ynz', ORIGIN, options)).toBeNull();
-    expect(parseFileLinkHref('/resource?file=file_ynz', ORIGIN, options)).toBeNull();
+    expect(parseFileLinkHref('/resource/file/file_ynz', ORIGIN, options)?.scope).toBe('foreign');
+    expect(parseFileLinkHref('/resource?file=file_ynz', ORIGIN, options)?.scope).toBe('foreign');
     // The file proxy is addressed by id alone, in every scope.
-    expect(parseFileLinkHref('/f/file_ynz', ORIGIN, options)?.fileId).toBe('file_ynz');
+    expect(parseFileLinkHref('/f/file_ynz', ORIGIN, options)?.scope).toBe('active');
+  });
+
+  it('does not take an unrelated two-segment path for a workspace link', () => {
+    expect(parseFileLinkHref('/acme/settings', ORIGIN)).toBeNull();
   });
 
   it('does not match a Docs path on a foreign host', () => {
@@ -220,5 +250,24 @@ describe('getFileLinkTargetHref', () => {
   // own href, the owner's Docs page, instead of the public proxy.
   it('points a share visitor at the public proxy', () => {
     expect(getFileLinkTargetHref({ ...link, isShareVisitor: true })).toBe('/f/file_1');
+  });
+});
+
+describe('resolveAppOrigin', () => {
+  const sources = {
+    remoteServerUrl: () => 'https://hub.example.com/',
+    windowOrigin: () => 'app://renderer',
+  };
+
+  // Regression: on desktop a copied root-relative link came out as
+  // `app://renderer/f/...`, which opens nothing outside the desktop shell.
+  it('uses the remote server on desktop, not the renderer origin', () => {
+    expect(resolveAppOrigin({ ...sources, isDesktop: true })).toBe('https://hub.example.com');
+  });
+
+  it('uses the page origin on the web', () => {
+    expect(resolveAppOrigin({ isDesktop: false, ...sources, windowOrigin: () => ORIGIN })).toBe(
+      ORIGIN,
+    );
   });
 });

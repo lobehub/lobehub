@@ -38,11 +38,22 @@ const asUploadedFileId = (id: string | null | undefined): string | null =>
 export interface ParsedFileLink {
   fileId: string;
   /**
-   * The public `/f/:id` address of the same file. A Docs link is a page of the
-   * app, readable only by the owner's scope; the proxy is what a visitor (or a
-   * new tab outside the app) can open.
+   * The public `/f/:id` address of the same file, root-relative. A Docs link is
+   * a page of the app, readable only in the owner's scope; the proxy is what a
+   * share visitor can open. Root-relative keeps the first hop on the page's own
+   * origin, so the redirect to storage keeps the Origin the bucket allows and
+   * the preview can `fetch` text files (an absolute app address from another
+   * origin taints it).
    */
   proxyHref: string;
+  /**
+   * `active` when the link addresses the scope this client reads (or names no
+   * scope: the `/f/:id` proxy is addressed by id alone); `foreign` for a
+   * personal-space link inside a workspace or another workspace's link. The
+   * owner opens a foreign link by navigating; a share visitor reads every one
+   * through the proxy, since a share page has no workspace of its own.
+   */
+  scope: 'active' | 'foreign';
 }
 
 export interface ParseFileLinkOptions {
@@ -75,22 +86,25 @@ const isDocsPath = (pathname: string) =>
   pathname === '/resource' || pathname.startsWith('/resource/');
 
 /**
- * The Docs path a link addresses in the ACTIVE scope, or null. An unprefixed
- * path is the personal space (workspace routes always carry `/{slug}`), so
- * inside a workspace it is another scope's file and is left to navigation, as
- * is a link into any other workspace.
+ * Split a Docs link into its scope and its unprefixed Docs path, or null when
+ * it is not a Docs path. Workspace routes always carry `/{slug}`, so an
+ * unprefixed path is the personal space: active only outside a workspace.
  */
-const stripWorkspacePrefix = (
+const resolveDocsScope = (
   pathname: string,
   activeWorkspaceSlug?: string | null,
-): string | null => {
-  if (!activeWorkspaceSlug) return isDocsPath(pathname) ? pathname : null;
+): { docsPathname: string; scope: ParsedFileLink['scope'] } | null => {
+  if (isDocsPath(pathname)) {
+    return { docsPathname: pathname, scope: activeWorkspaceSlug ? 'foreign' : 'active' };
+  }
 
-  const prefix = `/${activeWorkspaceSlug}`;
-  if (!pathname.startsWith(`${prefix}/`)) return null;
+  const match = pathname.match(/^\/([^/]+)(\/.*)$/);
+  if (!match || !isDocsPath(match[2])) return null;
 
-  const scoped = pathname.slice(prefix.length);
-  return isDocsPath(scoped) ? scoped : null;
+  return {
+    docsPathname: match[2],
+    scope: safeDecode(match[1]) === activeWorkspaceSlug ? 'active' : 'foreign',
+  };
 };
 
 export const parseFileLinkHref = (
@@ -127,24 +141,21 @@ export const parseFileLinkHref = (
     }
   }
 
-  // A root-relative href keeps its proxy root-relative, so it resolves against
-  // whatever origin the visitor's page is served from.
-  const toProxyHref = (fileId: string) => {
-    const path = `/f/${encodeURIComponent(fileId)}`;
-    return isRootRelative ? path : `${url.origin}${path}`;
-  };
+  // Root-relative on purpose; see `ParsedFileLink.proxyHref`.
+  const toProxyHref = (fileId: string) => `/f/${encodeURIComponent(fileId)}`;
 
   const proxyMatch = url.pathname.match(FILE_PROXY_PATH_REGEX);
   if (proxyMatch) {
     const fileId = safeDecode(proxyMatch[1]);
-    return fileId ? { fileId, proxyHref: href } : null;
+    return fileId ? { fileId, proxyHref: toProxyHref(fileId), scope: 'active' } : null;
   }
 
-  const docsPathname = stripWorkspacePrefix(url.pathname, activeWorkspaceSlug);
-  if (!docsPathname) return null;
+  const docs = resolveDocsScope(url.pathname, activeWorkspaceSlug);
+  if (!docs) return null;
+  const { docsPathname, scope } = docs;
 
   const fileId = matchDocsFile(docsPathname, url.searchParams);
-  return fileId ? { fileId, proxyHref: toProxyHref(fileId) } : null;
+  return fileId ? { fileId, proxyHref: toProxyHref(fileId), scope } : null;
 };
 
 // A link label that names a file, e.g. `report.md` or `action-items.csv`.
@@ -231,3 +242,18 @@ export const getFileLinkCopyHref = ({
     return undefined;
   }
 };
+
+/**
+ * The app server's origin a copied link resolves against. On desktop the
+ * renderer's own origin (`app://renderer`) is not that server; the remote
+ * server URL is (trailing slashes trimmed, as a self-hosted URL may carry one).
+ */
+export const resolveAppOrigin = ({
+  isDesktop,
+  remoteServerUrl,
+  windowOrigin,
+}: {
+  isDesktop: boolean;
+  remoteServerUrl: () => string;
+  windowOrigin: () => string;
+}): string => (isDesktop ? remoteServerUrl().replace(/\/+$/, '') : windowOrigin());
