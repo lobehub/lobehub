@@ -152,6 +152,7 @@ describe('useEffectiveAgencyConfig', () => {
       agencyConfig: { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
       canDisplayExecutionTarget: true,
       canSelectExecutionTarget: true,
+      executionTargetOverridden: true,
       isPreferenceLoading: false,
       topicDeviceUnknown: false,
       workspaceScoped: false,
@@ -191,6 +192,7 @@ describe('useEffectiveAgencyConfig', () => {
       agencyConfig: { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
       canDisplayExecutionTarget: true,
       canSelectExecutionTarget: true,
+      executionTargetOverridden: true,
       isPreferenceLoading: false,
       topicDeviceUnknown: false,
       workspaceScoped: false,
@@ -214,6 +216,46 @@ describe('useEffectiveAgencyConfig', () => {
       canDisplayExecutionTarget: true,
       canSelectExecutionTarget: false,
     });
+  });
+
+  it('reports that a member override applies instead of the shared default', () => {
+    setupStores({
+      override: { boundDeviceId: 'my-device', executionTarget: 'device' },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.executionTargetOverridden).toBe(true);
+  });
+
+  it('does not report an override that a fixed policy shelves for a member', () => {
+    setupStores({
+      agencyConfig: { ...sharedConfig, executionTargetSelectionPolicy: 'fixed' },
+      override: { boundDeviceId: 'my-device', executionTarget: 'device' },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('creator-device');
+    expect(result.current.executionTargetOverridden).toBe(false);
+  });
+
+  it('never reports an override for a personal agent or a device-only override', () => {
+    setupStores({ override: { boundDeviceId: 'my-device', executionTarget: 'device' } });
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current
+        .executionTargetOverridden,
+    ).toBe(false);
+
+    setupStores({ override: { boundDeviceId: 'my-device' }, workspaceId: 'ws-1' });
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current
+        .executionTargetOverridden,
+    ).toBe(false);
   });
 
   it('preserves workspace scope when an override has no explicit execution target', () => {

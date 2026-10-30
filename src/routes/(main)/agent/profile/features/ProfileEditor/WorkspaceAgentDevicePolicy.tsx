@@ -104,6 +104,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+/** Select slots shared by the profile's execution-environment pickers. */
+export const executionTargetSelectClassNames = {
+  item: styles.selectItem,
+  popup: styles.selectPopup,
+  value: styles.selectValue,
+};
+
 interface ExecutionTargetLabelProps {
   compact?: boolean;
   description: string;
@@ -115,7 +122,7 @@ interface ExecutionTargetLabelProps {
   unknownLabel: string;
 }
 
-const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
+export const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
   ({ compact, description, device, label, offlineLabel, onlineLabel, target, unknownLabel }) => {
     const icon = <ExecutionTargetIcon devicePlatform={device?.platform} target={target} />;
     const secondary = device ? (
@@ -380,16 +387,12 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
       >
         {showDevicePicker ? (
           <Select
+            classNames={executionTargetSelectClassNames}
             optionRender={(option) => option.label}
             options={targetOptions}
             placeholder={t('settingAgent.devicePolicy.selectTarget')}
             popupMatchSelectWidth={true}
             value={selectedValue}
-            classNames={{
-              item: styles.selectItem,
-              popup: styles.selectPopup,
-              value: styles.selectValue,
-            }}
             labelRender={(option) => {
               if (typeof option.value !== 'string') return option.label;
               const selection = parseExecutionTargetValue(option.value);
