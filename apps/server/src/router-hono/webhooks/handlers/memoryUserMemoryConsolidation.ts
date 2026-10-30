@@ -1,4 +1,5 @@
 import type { Context } from 'hono';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { UserMemoryConsolidationModel } from '@/database/models/userMemory/consolidation';
@@ -9,10 +10,9 @@ import { MemoryExtractionWorkflowService } from '@/server/services/memory/userMe
 const schema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('run'),
-    baseUrl: z.string().url().optional(),
     model: z.string().optional(),
     provider: z.string().optional(),
-    userIds: z.array(z.string().min(1)).min(1),
+    userIds: z.array(z.string().min(1)).min(1).max(100),
   }),
   z.object({
     action: z.literal('revert'),
@@ -39,9 +39,11 @@ export const memoryUserMemoryConsolidation = async (c: Context) => {
       return c.json({ message: 'Consolidation run reverted.', ...result }, 200);
     }
 
-    const baseUrl = params.baseUrl || webhook.baseUrl || new URL(c.req.url).origin;
-    const results = await Promise.all(
-      [...new Set(params.userIds)].map(async (userId) => {
+    // The workflow destination comes from admin config or this request's origin, never the body.
+    const baseUrl = webhook.baseUrl || new URL(c.req.url).origin;
+    const results = await pMap(
+      [...new Set(params.userIds)],
+      async (userId) => {
         const { workflowRunId } = await MemoryExtractionWorkflowService.triggerConsolidation(
           userId,
           baseUrl,
@@ -52,7 +54,8 @@ export const memoryUserMemoryConsolidation = async (c: Context) => {
           },
         );
         return { userId, workflowRunId };
-      }),
+      },
+      { concurrency: 5 },
     );
 
     return c.json({ message: 'Memory consolidation scheduled via workflow.', results }, 202);

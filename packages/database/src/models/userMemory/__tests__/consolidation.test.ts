@@ -19,7 +19,11 @@ const userId = 'consolidation-test-user';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 /** A legacy per-topic context: parent row + context row linked through `user_memory_ids`. */
-const createLegacy = async (title: string, day: string, sourceId = `tpc_${title}`) => {
+const createLegacy = async (
+  title: string,
+  day: string,
+  { singleParent = false, sourceId = `tpc_${title}` } = {},
+) => {
   const capturedAt = new Date(`${day}T08:00:00.000Z`);
   const [memory] = await serverDB
     .insert(userMemories)
@@ -39,6 +43,8 @@ const createLegacy = async (title: string, day: string, sourceId = `tpc_${title}
       description: `${title} details`,
       title,
       userId,
+      // Current extraction (`createContextMemory`) writes the single parent as well.
+      userMemoryId: singleParent ? memory.id : null,
       userMemoryIds: [memory.id],
     })
     .returning();
@@ -57,11 +63,13 @@ describe('UserMemoryConsolidationModel', () => {
   it('lists pending legacy contexts oldest first and reads queued evidence back', async () => {
     const a = await createLegacy('scheduler backend', '2026-05-01');
     const b = await createLegacy('scheduler panel', '2026-04-01');
-    const c = await createLegacy('one-off question', '2026-05-02');
+    const c = await createLegacy('one-off question', '2026-05-02', { singleParent: true });
 
     const pending = await model.listPendingLegacyContexts();
     expect(pending.map((p) => p.id)).toEqual([b.context.id, a.context.id, c.context.id]);
     expect(pending[0]).toMatchObject({ memoryId: b.memory.id, sourceId: 'tpc_scheduler panel' });
+    // A context written by current extraction (single parent set) is still legacy evidence.
+    expect(pending[2]).toMatchObject({ id: c.context.id, memoryId: c.memory.id });
 
     await model.enqueue('run_1', [
       { id: a.context.id, key: 'product/task', route: 'evidence' },
@@ -124,6 +132,8 @@ describe('UserMemoryConsolidationModel', () => {
     // Readers now see the consolidated context only; the legacy rows are superseded, not deleted.
     const visible = await contextModel.query();
     expect(visible.map((x) => x.title)).toEqual(['Task system']);
+    // Readers that join parents through the legacy list still find the new context.
+    expect(visible[0].userMemoryIds).toEqual([visible[0].userMemoryId]);
     const [legacyParent] = await serverDB
       .select()
       .from(userMemories)
@@ -161,7 +171,8 @@ describe('UserMemoryConsolidationModel', () => {
       openQuestions: [],
       title: 'Task system',
     });
-    const b = await createLegacy('scheduler cron mode', '2026-06-01');
+    // Written by current extraction: has a single parent, but is still legacy, not consolidated.
+    const b = await createLegacy('scheduler cron mode', '2026-06-01', { singleParent: true });
     const consolidated = await model.listConsolidated();
     expect(consolidated.contexts.map((x) => x.id)).toEqual([first.contextId]);
 
@@ -189,7 +200,7 @@ describe('UserMemoryConsolidationModel', () => {
       .select()
       .from(userMemoriesDossiers)
       .where(eq(userMemoriesDossiers.userId, userId));
-    expect(dossier).toMatchObject({ activityCount: 2, now: 'v2' });
+    expect(dossier).toMatchObject({ activityCount: 2, now: 'v2', summary: 'v2' });
 
     // Reverting the later run restores the context and dossier it updated in place.
     await model.revertRun('run_4');
@@ -197,12 +208,14 @@ describe('UserMemoryConsolidationModel', () => {
       .select()
       .from(userMemoriesDossiers)
       .where(eq(userMemoriesDossiers.id, dossier.id));
-    expect(restored).toMatchObject({ activityCount: 1, now: 'v1' });
+    expect(restored).toMatchObject({ activityCount: 1, now: 'v1', summary: 'v1' });
+    expect(restored.lastEvidenceAt?.toISOString()).toBe('2026-05-01T08:00:00.000Z');
     const [ctx] = await serverDB
       .select()
       .from(userMemoriesContexts)
       .where(eq(userMemoriesContexts.id, first.contextId!));
-    expect(ctx.now).toBe('v1');
+    expect(ctx).toMatchObject({ description: 'v1', now: 'v1' });
+    expect(await model.listPendingLegacyContexts()).toHaveLength(1);
   });
 });
 

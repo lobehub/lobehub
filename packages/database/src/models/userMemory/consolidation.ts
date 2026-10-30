@@ -1,3 +1,4 @@
+import type { UserMemoryDossierStatus } from '@lobechat/types';
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import {
@@ -17,6 +18,19 @@ import { notTrashed } from '../../utils/softDelete';
  * activity under its dossier. Nothing is deleted: the legacy row's parent memory is marked
  * `superseded` (hidden from reads) and every write carries the run id, so a run can be reverted.
  */
+
+/**
+ * A legacy context's parent memory: its single parent when set (extraction now writes both), else
+ * the first id of the legacy list.
+ */
+const legacyParentJoin = sql`${userMemories.id} = COALESCE(${userMemoriesContexts.userMemoryId}, ${userMemoriesContexts.userMemoryIds} ->> 0)`;
+
+/**
+ * Not yet seen by consolidation. Key existence, never `(metadata -> 'x') IS NULL`: an IS [NOT] NULL
+ * test on an extracted jsonb value crashes the pg_search planner on bm25-indexed tables
+ * (`user_memories*`), see `jsonbNullTest.test.ts`.
+ */
+const notConsolidated = sql`NOT COALESCE(jsonb_exists(${userMemories.metadata}, 'consolidation'), false)`;
 
 export type ConsolidationRoute = 'drop' | 'evidence' | 'fact' | 'preference';
 
@@ -126,18 +140,15 @@ export class UserMemoryConsolidationModel {
         title: userMemoriesContexts.title,
       })
       .from(userMemoriesContexts)
-      .innerJoin(
-        userMemories,
-        sql`${userMemories.id} = ${userMemoriesContexts.userMemoryIds} ->> 0`,
-      )
+      .innerJoin(userMemories, legacyParentJoin)
       .where(
         and(
           eq(userMemoriesContexts.userId, this.userId),
-          isNull(userMemoriesContexts.userMemoryId),
+          isNull(userMemoriesContexts.synthesizedAt),
           eq(userMemories.userId, this.userId),
           notTrashed(userMemories.isDeleted),
           isNull(userMemories.state),
-          sql`(${userMemories.metadata} -> 'consolidation') IS NULL`,
+          notConsolidated,
         ),
       )
       .orderBy(asc(userMemoriesContexts.capturedAt), asc(userMemoriesContexts.id))
@@ -163,10 +174,7 @@ export class UserMemoryConsolidationModel {
         title: userMemoriesContexts.title,
       })
       .from(userMemoriesContexts)
-      .innerJoin(
-        userMemories,
-        sql`${userMemories.id} = ${userMemoriesContexts.userMemoryIds} ->> 0`,
-      )
+      .innerJoin(userMemories, legacyParentJoin)
       .where(
         and(eq(userMemoriesContexts.userId, this.userId), inArray(userMemoriesContexts.id, ids)),
       );
@@ -195,7 +203,7 @@ export class UserMemoryConsolidationModel {
         .where(
           and(
             eq(userMemoriesContexts.userId, this.userId),
-            isNotNull(userMemoriesContexts.userMemoryId),
+            isNotNull(userMemoriesContexts.synthesizedAt),
             notTrashed(userMemories.isDeleted),
           ),
         ),
@@ -275,17 +283,14 @@ export class UserMemoryConsolidationModel {
         key: sql<string>`${userMemories.metadata} -> 'consolidationQueue' ->> 'key'`,
       })
       .from(userMemoriesContexts)
-      .innerJoin(
-        userMemories,
-        sql`${userMemories.id} = ${userMemoriesContexts.userMemoryIds} ->> 0`,
-      )
+      .innerJoin(userMemories, legacyParentJoin)
       .where(
         and(
           eq(userMemoriesContexts.userId, this.userId),
-          isNull(userMemoriesContexts.userMemoryId),
+          isNull(userMemoriesContexts.synthesizedAt),
           eq(userMemories.userId, this.userId),
           isNull(userMemories.state),
-          sql`(${userMemories.metadata} -> 'consolidation') IS NULL`,
+          notConsolidated,
           sql`${userMemories.metadata} -> 'consolidationQueue' ->> 'runId' = ${runId}`,
           sql`${userMemories.metadata} -> 'consolidationQueue' ->> 'route' = 'evidence'`,
         ),
@@ -377,11 +382,14 @@ export class UserMemoryConsolidationModel {
       if (contextId) {
         const [before] = await tx
           .select({
+            currentStatus: userMemoriesContexts.currentStatus,
+            description: userMemoriesContexts.description,
             firstSeenAt: userMemoriesContexts.firstSeenAt,
             lastEvidenceAt: userMemoriesContexts.lastEvidenceAt,
             nextSteps: userMemoriesContexts.nextSteps,
             now: userMemoriesContexts.now,
             openQuestions: userMemoriesContexts.openQuestions,
+            synthesizedAt: userMemoriesContexts.synthesizedAt,
           })
           .from(userMemoriesContexts)
           .where(
@@ -451,7 +459,8 @@ export class UserMemoryConsolidationModel {
             title: plan.title,
             userId: this.userId,
             userMemoryId: memory.id,
-            userMemoryIds: [],
+            // Existing context readers still join parents through this list.
+            userMemoryIds: [memory.id],
           })
           .returning({ id: userMemoriesContexts.id });
         contextId = created.id;
@@ -471,6 +480,8 @@ export class UserMemoryConsolidationModel {
               activityCount: userMemoriesDossiers.activityCount,
               lastEvidenceAt: userMemoriesDossiers.lastEvidenceAt,
               now: userMemoriesDossiers.now,
+              status: userMemoriesDossiers.status,
+              summary: userMemoriesDossiers.summary,
             })
             .from(userMemoriesDossiers)
             .where(
@@ -496,7 +507,7 @@ export class UserMemoryConsolidationModel {
               .where(eq(userMemoriesDossiers.id, dossierId));
             await op({
               after: { now: d.now },
-              before: { activityCount: existing.activityCount, now: existing.now },
+              before: existing,
               op: 'status',
               targets: { dossier: dossierId },
             });
@@ -631,12 +642,15 @@ export class UserMemoryConsolidationModel {
           await tx
             .update(userMemoriesContexts)
             .set({
+              currentStatus: (before.currentStatus as string) ?? null,
+              description: (before.description as string) ?? null,
               lastEvidenceAt: before.lastEvidenceAt
                 ? new Date(before.lastEvidenceAt as string)
                 : null,
               nextSteps: (before.nextSteps as string[]) ?? null,
               now: (before.now as string) ?? null,
               openQuestions: (before.openQuestions as string[]) ?? null,
+              synthesizedAt: before.synthesizedAt ? new Date(before.synthesizedAt as string) : null,
             })
             .where(
               and(
@@ -649,7 +663,12 @@ export class UserMemoryConsolidationModel {
             .update(userMemoriesDossiers)
             .set({
               activityCount: Number(before.activityCount ?? 0),
+              lastEvidenceAt: before.lastEvidenceAt
+                ? new Date(before.lastEvidenceAt as string)
+                : null,
               now: (before.now as string) ?? null,
+              status: (before.status as UserMemoryDossierStatus | undefined) ?? 'active',
+              summary: (before.summary as string) ?? null,
             })
             .where(
               and(
