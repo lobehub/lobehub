@@ -67,6 +67,7 @@ export const listByRootOperation = async (
     rootOperationIds: [params.rootOperationId],
   });
 
+  /* v8 ignore next -- unreachable: listByRootOperations pre-seeds an entry for every requested id */
   return map[params.rootOperationId] ?? [];
 };
 
@@ -106,6 +107,7 @@ export const listByRootOperations = async (
 
   for (const item of items) {
     const rootOperationId = item.version.rootOperationId;
+    /* v8 ignore next -- unreachable: every adapter filters rows by inArray(rootOperationId, rootOperationIds) */
     if (!rootOperationId || !(rootOperationId in result)) continue;
     if (result[rootOperationId].length >= limit) continue;
     result[rootOperationId].push(item);
@@ -159,6 +161,7 @@ export const listSummariesByRootOperations = async (
 
   const anchorByWorkId = new Map<string, string>();
   for (const row of eventRows) {
+    /* v8 ignore next -- unreachable: the query filters on inArray(rootOperationId, rootOperationIds) */
     if (!row.rootOperationId) continue;
     if (!anchorByWorkId.has(row.workId)) anchorByWorkId.set(row.workId, row.rootOperationId);
   }
@@ -198,6 +201,7 @@ export const listSummariesByRootOperations = async (
 
   for (const summary of summaries) {
     const rootOperationId = anchorByWorkId.get(summary.id);
+    /* v8 ignore next -- unreachable: rows are filtered to anchorByWorkId keys, whose values are requested ids */
     if (!rootOperationId || !(rootOperationId in result)) continue;
     if (result[rootOperationId].length >= limit) continue;
     result[rootOperationId].push(summary);

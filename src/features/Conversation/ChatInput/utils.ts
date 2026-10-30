@@ -61,6 +61,37 @@ export const createQueueSendNowGate = (): QueueSendNowGate => {
   };
 };
 
+/**
+ * Resolves the locale key that tells a queued follow-up when it will be sent.
+ *
+ * Use when:
+ * - Captioning a QueueTray row with the queue's send timing.
+ *
+ * Expects:
+ * - `count` is the number of queued items; more than one is merged into a single send.
+ * - `waitsForRunEnd` is true when the queue waits behind a heterogeneous CLI run (Claude Code,
+ *   Codex, …; see `operationSelectors.isQueueDrainedAtRunEnd`). That run cannot hand the turn
+ *   back at a step boundary, so the queue only drains once the whole run ends, whereas the
+ *   built-in runtime hands the turn back after the current tool step.
+ *
+ * Returns:
+ * - A `chat` namespace key under `inputQueue`.
+ */
+export const getQueuedHintKey = ({
+  count,
+  waitsForRunEnd,
+}: {
+  count: number;
+  waitsForRunEnd: boolean;
+}) => {
+  const merged = count > 1;
+
+  if (waitsForRunEnd)
+    return merged ? 'inputQueue.queuedRunEndMergeHint' : 'inputQueue.queuedRunEndHint';
+
+  return merged ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint';
+};
+
 const isSupportedChatInputMessage = (
   message: UIChatMessage,
 ): message is UIChatMessage & { role: SupportedChatInputRole } =>
@@ -215,6 +246,9 @@ export const sendQueuedMessageNow = async ({
     context,
     editorData: msg.editorData,
     files,
+    // Keep the runtime the item was queued for (a task-run drawer forces the
+    // gateway), as the queue drain does.
+    ...(msg.forceRuntime ? { forceRuntime: msg.forceRuntime } : {}),
     message: msg.content,
     metadata: { ...msg.metadata, steer: true },
   });

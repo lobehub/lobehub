@@ -2,32 +2,45 @@ import { type ContextMenuItem, ContextMenuTrigger, Icon, type IconProps } from '
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PinIcon, XIcon } from 'lucide-react';
-import { memo, type ReactNode } from 'react';
+import { memo, type MouseEvent, type ReactNode } from 'react';
+
+/**
+ * Room the trailing pin badge or close button needs at the tab's end. Pinned
+ * tabs always reserve it; the active tab reserves it for its close button so the
+ * label keeps its full width, and unselected tabs carry no empty gap.
+ */
+const TRAILING_SLOT = 24;
+const TAB_PADDING = 8;
+const CLOSE_INSET = 4;
+const CLOSE_SIZE = 16;
+
+const fadeIn = stylex.keyframes({ from: { opacity: 0 }, to: { opacity: 1 } });
 
 const styles = stylex.create({
   close: {
     cursor: 'pointer',
     position: 'absolute',
     insetBlockStart: '50%',
-    insetInlineEnd: '4px',
+    insetInlineEnd: CLOSE_INSET,
     transform: 'translateY(-50%)',
     display: 'grid',
     placeItems: 'center',
-    width: '20px',
-    height: '20px',
+    width: CLOSE_SIZE,
+    height: CLOSE_SIZE,
     padding: 0,
     borderWidth: 0,
     borderStyle: 'none',
     borderRadius: '4px',
     color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
-    opacity: {
-      default: 0,
-      [stylex.when.ancestor(':hover')]: 1,
-      [stylex.when.ancestor(':focus-within')]: 1,
-    },
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
     backgroundImage: { 'default': 'none', ':hover': 'none' },
-    transition: 'opacity 0.15s',
+    transition: 'color 0.15s, background 0.15s',
+    animationName: { 'default': fadeIn, '@media (prefers-reduced-motion: reduce)': 'none' },
+    animationDuration: { 'default': '0.15s', '@media (prefers-reduced-motion: reduce)': '0s' },
+    animationTimingFunction: {
+      'default': 'ease-out',
+      '@media (prefers-reduced-motion: reduce)': 'ease',
+    },
   },
   container: {
     position: 'relative',
@@ -49,17 +62,18 @@ const styles = stylex.create({
     pointerEvents: 'none',
     position: 'absolute',
     insetBlockStart: '50%',
-    insetInlineEnd: '8px',
+    insetInlineEnd: '6px',
     transform: 'translateY(-50%)',
     display: 'grid',
     placeItems: 'center',
     color: cssVar.colorTextSecondary,
   },
-  label: { overflow: 'hidden', maxWidth: '160px', textOverflow: 'ellipsis' },
+  icon: { display: 'flex', flexShrink: 0 },
+  label: { overflow: 'hidden', minWidth: '24px', maxWidth: '160px', textOverflow: 'ellipsis' },
   tab: {
     cursor: 'pointer',
     paddingBlock: '4px',
-    paddingInline: '10px',
+    paddingInline: TAB_PADDING,
     borderWidth: 0,
     borderStyle: 'none',
     borderRadius: '6px',
@@ -76,7 +90,7 @@ const styles = stylex.create({
     backgroundImage: 'none',
     transition: 'color 0.15s',
   },
-  tabClosable: { paddingInlineEnd: '30px' },
+  tabTrailing: { paddingInlineEnd: TRAILING_SLOT },
   trigger: { display: 'flex', gap: '4px', alignItems: 'center' },
 });
 
@@ -108,6 +122,21 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
     pinnedLabel,
     tabKey,
   }) => {
+    const closable = !pinned && !!onClose;
+    const showClose = closable && active;
+
+    // Middle click closes any closable tab — a shortcut on top of the active
+    // tab's close button and the context menu, never the only way to close.
+    const handleMouseDown = (e: MouseEvent) => {
+      // keep the browser from entering autoscroll mode on middle press
+      if (closable && e.button === 1) e.preventDefault();
+    };
+    const handleAuxClick = (e: MouseEvent) => {
+      if (!closable || e.button !== 1) return;
+      e.preventDefault();
+      onClose?.();
+    };
+
     const content = (
       <div
         {...stylex.props(
@@ -116,24 +145,31 @@ const WorkspaceTab = memo<WorkspaceTabProps>(
           active && styles.containerActive,
         )}
         data-pinned={pinned ? 'true' : undefined}
+        onAuxClick={handleAuxClick}
+        onMouseDown={handleMouseDown}
       >
         <button
           aria-pressed={active}
-          {...stylex.props(styles.tab, (onClose || pinned) && styles.tabClosable)}
+          {...stylex.props(styles.tab, (pinned || showClose) && styles.tabTrailing)}
           data-tab-key={tabKey}
+          title={typeof label === 'string' ? label : undefined}
           type="button"
           onClick={onSelect}
         >
-          <span {...stylex.props(styles.trigger)}>
-            {iconNode ?? <Icon icon={icon} size={14} />}
-            <span {...stylex.props(styles.label)}>{label}</span>
+          <span className={stylex.props(styles.trigger).className}>
+            <span className={stylex.props(styles.icon).className}>
+              {iconNode ?? <Icon icon={icon} size={14} />}
+            </span>
+            <span className={stylex.props(styles.label).className}>{label}</span>
           </span>
         </button>
         {pinned ? (
           <span aria-label={pinnedLabel} {...stylex.props(styles.pinned)} role="img">
             <Icon icon={PinIcon} size={12} />
           </span>
-        ) : onClose ? (
+        ) : showClose ? (
+          // Only the selected tab exposes a close button, so dense strips of
+          // short labels never fill up with close targets.
           <button
             data-tab-close
             aria-label={closeLabel}

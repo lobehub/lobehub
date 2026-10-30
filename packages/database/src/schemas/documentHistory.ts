@@ -25,6 +25,11 @@ export const documentHistories = pgTable(
     saveSource: text('save_source', {
       enum: ['autosave', 'manual', 'restore', 'system', 'llm_call'],
     }).notNull(),
+    /** Everyone whose edits this version records; `user_id` holds the first of them. */
+    editorIds: text('editor_ids').array(),
+    /** Agent run that produced an `llm_call` version; one version per run. */
+    operationId: text('operation_id'),
+    agentId: text('agent_id'),
     savedAt: timestamptz('saved_at').notNull(),
   },
   (table) => [

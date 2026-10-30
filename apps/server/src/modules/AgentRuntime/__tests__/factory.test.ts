@@ -42,6 +42,7 @@ vi.mock('@/envs/app', () => ({
 
 vi.mock('../redis', () => ({
   getAgentRuntimeRedisClient: mockGetAgentRuntimeRedisClient,
+  isAgentRuntimeRedisEnabled: () => mockGetAgentRuntimeRedisClient() !== null,
 }));
 
 vi.mock('../InMemoryAgentStateManager', () => ({
@@ -86,9 +87,17 @@ describe('AgentRuntime factory', () => {
   });
 
   describe('createAgentStateManager', () => {
-    it('uses in-memory state when queue mode is disabled', () => {
+    it('uses in-memory state when queue mode is disabled and Redis is unavailable', () => {
       expect(createAgentStateManager()).toBe(mockInMemoryAgentStateManager);
       expect(MockAgentStateManager).not.toHaveBeenCalled();
+    });
+
+    it('shares Redis-backed state when queue mode is disabled and Redis is available', () => {
+      mockGetAgentRuntimeRedisClient.mockReturnValue({ ping: vi.fn() });
+
+      expect(createAgentStateManager()).toEqual({ kind: 'redis-state-manager' });
+      expect(MockAgentStateManager).toHaveBeenCalledTimes(1);
+      expect(mockAppEnv.enableQueueAgentRuntime).toBe(false);
     });
 
     it('uses Redis-backed state when queue mode is enabled and Redis is available', () => {

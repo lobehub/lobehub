@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 describe('heteroOperationCapabilities', () => {
+  it('grants history reads only to a Channel dispatch', () => {
+    expect(heteroOperationCapabilities('read the discussion', { channel: true })).toContain(
+      'channel:read',
+    );
+    expect(heteroOperationCapabilities('read the discussion')).not.toContain('channel:read');
+  });
   it('grants goal management to a /goal run', () => {
     expect(heteroOperationCapabilities('/goal ship the report')).toContain('goal:manage');
   });

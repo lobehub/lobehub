@@ -23,7 +23,10 @@ const CREDIT_UNIT = 1_000_000;
 const PLAN_TITLE_KEYS = {
   [Plans.Free]: 'plans.plan.free.title',
   [Plans.Hobby]: 'plans.plan.hobby.title',
+  [Plans.Max]: 'plans.plan.max.title',
+  [Plans.Plus]: 'plans.plan.plus.title',
   [Plans.Premium]: 'plans.plan.premium.title',
+  [Plans.Pro]: 'plans.plan.pro.title',
   [Plans.Starter]: 'plans.plan.starter.title',
   [Plans.Ultimate]: 'plans.plan.ultimate.title',
 } as const satisfies Record<Plans, string>;

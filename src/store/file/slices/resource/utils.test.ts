@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { getResourceQueryKey, isOptimisticRowInRequestedPool } from './utils';
+import type { ResourceItem } from '@/types/resource';
+
+import {
+  getResourceQueryKey,
+  isOptimisticRowInRequestedPool,
+  listsMovedRowUnfiltered,
+} from './utils';
 
 describe('getResourceQueryKey', () => {
   it('returns one stable default key when no query is given', () => {
@@ -43,5 +49,24 @@ describe('isOptimisticRowInRequestedPool', () => {
     expect(isOptimisticRowInRequestedPool(key, { libraryId: 'kb-2' })).toBe(false);
     expect(isOptimisticRowInRequestedPool(key, undefined)).toBe(false);
     expect(isOptimisticRowInRequestedPool(undefined, { parentId: 'folder-a' })).toBe(false);
+  });
+});
+
+describe('listsMovedRowUnfiltered', () => {
+  it('keeps a folder in the drive listing but keeps a page out of it', () => {
+    const drive = { filesOnly: true, parentId: null } as const;
+
+    expect(
+      listsMovedRowUnfiltered(drive, {
+        fileType: 'custom/folder',
+        sourceType: 'document',
+      } as unknown as ResourceItem),
+    ).toBe(true);
+    expect(
+      listsMovedRowUnfiltered(drive, {
+        fileType: 'custom/document',
+        sourceType: 'document',
+      } as unknown as ResourceItem),
+    ).toBe(false);
   });
 });

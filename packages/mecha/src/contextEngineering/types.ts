@@ -20,7 +20,7 @@ import type {
   UserMemoryConfig,
   WorkspaceContext,
 } from '@lobechat/context-engine';
-import type { AgentIdentityContext, PageContentContext } from '@lobechat/prompts';
+import type { AgentIdentityContext } from '@lobechat/prompts';
 import type {
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
@@ -132,7 +132,6 @@ export interface ContextStepSnapshot {
   agentManagementContext?: AgentManagementContext;
   groupAgentBuilderContext?: GroupAgentBuilderContext;
   onboardingContext?: OnboardingContext;
-  pageContentContext?: PageContentContext;
   planTodo?: PlanTodoConfig;
   topicReferences?: TopicReferenceItem[];
   workspaceContext?: WorkspaceContext;

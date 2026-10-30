@@ -22,7 +22,12 @@ import { useFileStore } from '@/store/file';
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
 import thumbStyles from './QueueTray.module.css';
-import { createQueueSendNowGate, putQueuedMessageInEditor, sendQueuedMessageNow } from './utils';
+import {
+  createQueueSendNowGate,
+  getQueuedHintKey,
+  putQueuedMessageInEditor,
+  sendQueuedMessageNow,
+} from './utils';
 
 const PREVIEW_SIZE = 28;
 
@@ -184,6 +189,7 @@ const QueueTray = memo(() => {
   );
 
   const queuedMessages = useChatStore((s) => operationSelectors.getQueuedMessages(context)(s));
+  const waitsForRunEnd = useChatStore(operationSelectors.isQueueDrainedAtRunEnd(context));
   const withdrawQueuedMessage = useChatStore((s) => s.withdrawQueuedMessage);
   const dispatchChatUploadFileList = useFileStore((s) => s.dispatchChatUploadFileList);
   const editor = useConversationStore((s) => s.editor);
@@ -250,10 +256,9 @@ const QueueTray = memo(() => {
   if (!canUseResource) return null;
 
   // The queue drains as one take-all and is merged into a single send, so a
-  // multi-item queue has to say "merges" instead of "sends".
-  const hintText = t(
-    queuedMessages.length > 1 ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint',
-  );
+  // multi-item queue has to say "merges" instead of "sends". A heterogeneous
+  // CLI run only drains once the whole run ends, not after the current step.
+  const hintText = t(getQueuedHintKey({ count: queuedMessages.length, waitsForRunEnd }));
 
   return (
     <Flexbox {...stylex.props(styles.container)} gap={0}>

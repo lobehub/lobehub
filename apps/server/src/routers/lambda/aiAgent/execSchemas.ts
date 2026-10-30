@@ -183,6 +183,8 @@ export const ExecAgentFieldsSchema = z.object({
        * identity survives the gateway step_start snapshot / refetch.
        */
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),
+      /** Bind a NEW topic to this project (ignored with topicId; resolved from the topic). */
+      projectId: z.string().optional(),
       /** Bind a NEW topic to this project working directory (ignored with topicId). */
       projectWorkingDirectoryId: z.string().optional(),
       scope: z.string().nullish(),
@@ -296,11 +298,20 @@ export const ExecAgentFieldsSchema = z.object({
    * `'openapi'`, `'eval'`, …) to override.
    */
   /**
-   * The prompt was queued while the previous turn was still running. The
-   * persisted user message carries `metadata.steer` so it renders as a
-   * continuation of that turn instead of a new one.
+   * The send directly steered the turn it replaces (an interrupting "send
+   * now"). The persisted user message carries `metadata.steer` so it renders
+   * as a continuation of that turn instead of a new one. A follow-up that
+   * waited in queue and starts a turn of its own is not marked.
    */
   steer: z.boolean().optional(),
+  /**
+   * Whether this send may take the topic over from a run that still owns it,
+   * as a person at the composer does (default). `false` — another agent
+   * delivering through `lh topic send` — never interrupts: a live run makes the
+   * call fail with `CONFLICT` before anything is written, and the caller queues
+   * the message behind that run instead.
+   */
+  supersedeLiveRun: z.boolean().optional(),
   trigger: z
     .string()
     .refine((value) => value !== RequestTrigger.Bot, {

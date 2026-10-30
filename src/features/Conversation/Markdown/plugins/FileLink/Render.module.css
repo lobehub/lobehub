@@ -1,0 +1,64 @@
+.copy {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-inline-start: 2px;
+  padding: 0;
+  border: none;
+  border-radius: var(--lobe-border-radius-sm);
+  color: var(--lobe-color-text-quaternary);
+  vertical-align: -0.2em;
+  background: transparent;
+  transition: color 0.15s, background 0.15s;
+
+  &:hover {
+    color: var(--lobe-color-text);
+    background: var(--lobe-color-fill-secondary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--lobe-color-primary-border);
+    outline-offset: 1px;
+  }
+}
+
+.icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.label {
+  text-decoration-color: var(--lobe-color-text-tertiary);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+}
+
+.link {
+  cursor: pointer;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  color: var(--lobe-color-text) !important;
+  text-decoration: none;
+  vertical-align: -0.16em;
+
+  &:hover {
+    color: var(--lobe-color-text) !important;
+  }
+
+  &:hover > span:last-child {
+    text-decoration-color: var(--lobe-color-text-secondary);
+  }
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid var(--lobe-color-primary-border);
+    outline-offset: 2px;
+  }
+}

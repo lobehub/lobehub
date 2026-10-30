@@ -82,4 +82,18 @@ export default {
   'success.subTitle':
     'You have successfully authorized the application to access your account. You may now close this page.',
   'success.title': 'Authorization Successful',
+  'consent.acceptanceReview.registered': 'Registered',
+  'consent.acceptanceReview.siteDenied':
+    'You’re not a member of this project, so you can’t review this site. Ask a project maintainer to invite you, or switch accounts.',
+  'consent.acceptanceReview.siteProject': 'Project {{project}}',
+  'consent.acceptanceReview.siteProjectRole': 'Project {{project}} · Your role: {{role}}',
+  'consent.acceptanceReview.siteTarget': 'Review the site: {{site}}',
+  'consent.acceptanceReview.unregisteredHint':
+    'Nothing was shared. If this address is yours, add it under Project settings › Sites.',
+  'consent.acceptanceReview.unregisteredTitle': 'This address isn’t registered for the site',
+  'consent.scope.acceptance-review-site':
+    'Comment on this site’s review from the site itself, for 8 hours',
+  'consent.acceptanceReview.role.viewer': 'Read-only',
+  'consent.acceptanceReview.role.member': 'Can edit',
+  'consent.acceptanceReview.role.admin': 'Administrator',
 };

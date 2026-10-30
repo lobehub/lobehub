@@ -67,6 +67,9 @@ export const useChatRouteSync = (options: ChatRouteSyncOptions = {}) => {
 
         const nextSearchParams = new URLSearchParams(searchParamsRef.current);
         nextSearchParams.delete('topic');
+        // `?message=` is a one-shot send for the conversation the link opened.
+        // Carried onto the topic that send created, a reload would send it again.
+        nextSearchParams.delete('message');
 
         const nextPath = state
           ? options.getTopicPath?.(routeAgentId, state) || AGENT_CHAT_TOPIC_URL(routeAgentId, state)

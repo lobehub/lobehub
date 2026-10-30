@@ -1,3 +1,4 @@
+import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
 import type { TaskStatus } from '@lobechat/types';
 
 import { defineReplica, type ReplicaEntityAdapter, stableQueryKey } from '@/libs/replica';
@@ -28,6 +29,8 @@ export interface TaskListQuery {
   automated?: boolean;
   /** Every page walked (the Tasks list view), or the first server page. */
   complete?: boolean;
+  /** Completed / canceled tasks closed outside this window are left out server-side. */
+  completedWithin?: TaskCompletedWindow;
   /** Archived tasks are hidden unless the "Show archived" option is on. */
   includeArchived?: boolean;
   /** One server page of a paginated collection (scheduled / "My tasks"); ignored by `complete`. */
@@ -52,6 +55,8 @@ export interface TaskListValue {
 export interface TaskGroupListQuery {
   agentId?: string;
   automated?: boolean;
+  /** Completed / canceled cards closed outside this window are left out server-side. */
+  completedWithin?: TaskCompletedWindow;
   /** Sorted. */
   excludeStatuses?: TaskStatus[];
   groupBy: TaskKanbanGroupBy;
@@ -106,15 +111,15 @@ export const taskGroupKeyByStatus: Record<TaskStatus, string> = {
   scheduled: 'running',
 };
 
-/** Tasks are addressed by `identifier` (e.g. `T-12`) across the task store. */
+/** Tasks are addressed by stable database id across the task store. */
 export const taskListEntity: ReplicaEntityAdapter<TaskListValue, TaskListItem> = {
-  has: (data, id) => data.items.some((task) => task.identifier === id),
+  has: (data, id) => data.items.some((task) => task.id === id),
   map: (data, id, fn) => {
     let removed = 0;
     let changed = false;
     const items: TaskListItem[] = [];
     for (const task of data.items) {
-      if (task.identifier !== id) {
+      if (task.id !== id) {
         items.push(task);
         continue;
       }
@@ -135,16 +140,13 @@ export const taskListEntity: ReplicaEntityAdapter<TaskListValue, TaskListItem> =
  * the card to its new column (appended), keeping each column's `total` right.
  */
 export const taskGroupListEntity: ReplicaEntityAdapter<TaskGroupListValue, TaskGroupTask> = {
-  has: (data, id) =>
-    data.groups.some((group) => group.tasks.some((task) => task.identifier === id)),
+  has: (data, id) => data.groups.some((group) => group.tasks.some((task) => task.id === id)),
   map: (data, id, fn) => {
-    const current = data.groups
-      .flatMap((group) => group.tasks)
-      .find((task) => task.identifier === id);
+    const current = data.groups.flatMap((group) => group.tasks).find((task) => task.id === id);
     if (!current) return data;
     let next = fn(current);
     if (next === current) return data;
-    // A card whose new status the board hides (`hideCompleted`) leaves it, even
+    // A card whose new status the board hides ("Completed tasks: None") leaves it, even
     // though the server still returns the hidden status's empty column.
     if (next && data.excludeStatuses?.includes(next.status as TaskStatus)) next = undefined;
 
@@ -152,11 +154,11 @@ export const taskGroupListEntity: ReplicaEntityAdapter<TaskGroupListValue, TaskG
     const moves = data.groupBy === 'status' && next !== undefined && status !== current.status;
     const targetKey = moves && status ? taskGroupKeyByStatus[status] : undefined;
     const groups = data.groups.map((group) => {
-      const contains = group.tasks.some((task) => task.identifier === id);
+      const contains = group.tasks.some((task) => task.id === id);
       if (moves) {
         const isTarget = group.key === targetKey;
         if (!contains && !isTarget) return group;
-        const rest = group.tasks.filter((task) => task.identifier !== id);
+        const rest = group.tasks.filter((task) => task.id !== id);
         return {
           ...group,
           tasks: isTarget ? [...rest, next!] : rest,
@@ -167,7 +169,7 @@ export const taskGroupListEntity: ReplicaEntityAdapter<TaskGroupListValue, TaskG
       return {
         ...group,
         tasks: group.tasks.flatMap((task) =>
-          task.identifier !== id ? [task] : next === undefined ? [] : [next],
+          task.id !== id ? [task] : next === undefined ? [] : [next],
         ),
         total: next === undefined ? group.total - 1 : group.total,
       };

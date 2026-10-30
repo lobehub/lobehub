@@ -50,10 +50,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export const UpdateTaskStatusInspector = memo<
   BuiltinInspectorProps<UpdateTaskStatusParams, UpdateTaskStatusState>
->(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const identifier = args?.identifier || partialArgs?.identifier;
+  const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
   const status = (args?.status || partialArgs?.status) as TaskStatus | undefined;
   const tone = status ? STATUS_TONE[status] : undefined;
 

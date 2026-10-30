@@ -1,12 +1,15 @@
-import { discoverAuthorizationServerMetadata } from '@modelcontextprotocol/sdk/client/auth.js';
-import type { OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { OAuthTokens } from '@modelcontextprotocol/client';
 import debug from 'debug';
 import pMap from 'p-map';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorCredentials } from '@/database/schemas';
 
-import { refreshConnectorToken, toClientInformation } from './oauth';
+import {
+  discoverConnectorAuthorizationServerMetadata,
+  refreshConnectorToken,
+  toClientInformation,
+} from './oauth';
 
 const log = debug('lobe-server:connector:tokens');
 
@@ -62,7 +65,7 @@ export const ensureFreshConnectorToken = async (
   if (!oidc?.issuer || !oidc.clientId) return connector;
 
   try {
-    const metadata = await discoverAuthorizationServerMetadata(oidc.issuer);
+    const metadata = await discoverConnectorAuthorizationServerMetadata(oidc.issuer);
     if (!metadata) return connector;
 
     const { authMethod, tokens } = await refreshConnectorToken({
@@ -85,8 +88,12 @@ export const ensureFreshConnectorToken = async (
     });
 
     return { ...connector, credentials };
-  } catch {
-    log('token refresh failed for connector=%s', connector.id);
+  } catch (error) {
+    log(
+      'token refresh failed for connector=%s errorType=%s',
+      connector.id,
+      error instanceof Error ? error.name : typeof error,
+    );
     return reloadIfRotatedElsewhere(connector, connectorModel);
   }
 };
@@ -175,7 +182,7 @@ const refreshOnce = (
  * background tool sync scheduled after the run started, so the first call after
  * every access-token expiry 401'd even when the refresh token was still valid —
  * and the model then reported a connection that only needed a refresh as one
- * the owner must reconnect (LOBE-14771).
+ * the owner must reconnect.
  *
  * `connectorModel` must carry the gatekeeper so rotated credentials are
  * persisted encrypted. Never throws; a connector that cannot be refreshed is

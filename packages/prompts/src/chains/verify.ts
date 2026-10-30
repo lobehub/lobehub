@@ -259,6 +259,8 @@ export interface JudgeEvidence {
    * every file to their isolated run.
    */
   fileId?: string | null;
+  /** The row's metadata bag — the coverage gate reads a terminal evidence's provenance from it. */
+  metadata?: unknown;
   type: VerifyEvidenceType;
 }
 

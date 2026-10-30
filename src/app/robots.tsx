@@ -28,7 +28,7 @@ const robots = (): MetadataRoute.Robots => {
         // fetch the URL, so the three real share routes are allowed on top of the `/share/*`
         // block. Everything else under `/share/` keeps the block: the SPA fallback answers those
         // paths with the indexable app shell.
-        allow: ['/', '/share/t/', '/share/page/', '/share/artifact/'],
+        allow: ['/', '/share/t/', '/share/page/', '/share/artifact/', '/share/file/'],
         // `/a/*` is the Agent Share visitor page: link-visible, creator-owned
         // content that must never be indexed. `/agent/*` is the creator's own
         // agent pages (and still forwards legacy share links).

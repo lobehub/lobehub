@@ -5,6 +5,7 @@ import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePrintMode } from '@/features/Conversation/components/PrintModeContext';
 import { dataSelectors, useConversationStore } from '@/features/Conversation/store';
 import { openEditorModal } from '@/features/EditorModal';
 import { usePermission } from '@/hooks/usePermission';
@@ -58,6 +59,7 @@ const MessageContent = memo<MessageContentProps>(
     variant,
   }) => {
     const toggleMessageEditing = useConversationStore((s) => s.toggleMessageEditing);
+    const printMode = usePrintMode();
 
     const editorData = useConversationStore(
       (s) => dataSelectors.getDisplayMessageById(id)(s)?.editorData,
@@ -98,10 +100,12 @@ const MessageContent = memo<MessageContentProps>(
       });
 
     useEffect(() => {
-      if (!editing) return;
+      // The print copy renders this component too; opening a second editor for it
+      // would close the real one (and drop its draft) when printing ends.
+      if (!editing || printMode) return;
       const instance = openEditorRef.current!();
       return () => instance.close();
-    }, [editing]);
+    }, [editing, printMode]);
 
     return (
       <Flexbox

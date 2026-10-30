@@ -2,25 +2,59 @@ import type { TaskVerifyConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { checkpointTaskPairsMatch } from '@/database/models/task/checkpoint';
 import { router } from '@/libs/trpc/lambda';
+import { normalizeCheckpointTaskRefs, resolveTaskOrThrow } from '@/server/services/task/utils';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
 
 import {
   idInput,
-  resolveOrThrow,
   taskProcedure,
   taskProcedureWrite,
   taskVerifyConfigPatchSchema,
 } from './procedures';
 
+const checkpointTaskRefSchema = z.object({ id: z.string(), identifier: z.string() });
+
 export const reviewRouter = router({
   getCheckpoint: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const task = await resolveOrThrow(model, input.id);
+      const task = await resolveTaskOrThrow(model, input.id);
       const checkpoint = model.getCheckpointConfig(task);
-      return { data: checkpoint, success: true };
+      const references = (
+        ids: string[] | undefined,
+        pairs: { id: string; identifier: string }[] | undefined,
+      ) => (checkpointTaskPairsMatch(ids, pairs) ? pairs!.map((pair) => pair.id) : (ids ?? []));
+      const refs = [
+        ...references(checkpoint.tasks?.beforeIds, checkpoint.tasks?.beforeTasks),
+        ...references(checkpoint.tasks?.afterIds, checkpoint.tasks?.afterTasks),
+      ];
+      const resolved = await model.resolveRefs(refs);
+      const display = (
+        values: string[] | undefined,
+        pairs: { id: string; identifier: string }[] | undefined,
+      ) =>
+        checkpointTaskPairsMatch(values, pairs)
+          ? pairs!.map((pair) => ({
+              id: pair.id,
+              identifier: resolved.byRef.get(pair.id)?.identifier ?? pair.identifier,
+            }))
+          : values?.map((ref) => {
+              const task = resolved.byRef.get(ref);
+              return task?.identifier === ref
+                ? { id: task.id, identifier: task.identifier }
+                : { identifier: ref };
+            });
+      return {
+        data: {
+          ...checkpoint,
+          beforeTasks: display(checkpoint.tasks?.beforeIds, checkpoint.tasks?.beforeTasks),
+          afterTasks: display(checkpoint.tasks?.afterIds, checkpoint.tasks?.afterTasks),
+        },
+        success: true,
+      };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       console.error('[task:getCheckpoint]', error);
@@ -40,7 +74,9 @@ export const reviewRouter = router({
             tasks: z
               .object({
                 afterIds: z.array(z.string()).optional(),
+                afterTasks: z.array(checkpointTaskRefSchema).optional(),
                 beforeIds: z.array(z.string()).optional(),
+                beforeTasks: z.array(checkpointTaskRefSchema).optional(),
               })
               .optional(),
             topic: z
@@ -57,8 +93,11 @@ export const reviewRouter = router({
       const { id, checkpoint } = input;
       try {
         const model = ctx.taskModel;
-        const resolved = await resolveOrThrow(model, id);
-        const task = await model.updateCheckpointConfig(resolved.id, checkpoint);
+        const resolved = await resolveTaskOrThrow(model, id);
+        const task = await model.updateCheckpointConfig(
+          resolved.id,
+          await normalizeCheckpointTaskRefs(model, checkpoint, model.getCheckpointConfig(resolved)),
+        );
         if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return {
           data: model.getCheckpointConfig(task),
@@ -78,7 +117,7 @@ export const reviewRouter = router({
   getReview: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const task = await resolveOrThrow(model, input.id);
+      const task = await resolveTaskOrThrow(model, input.id);
       return { data: model.getReviewConfig(task) || null, success: true };
     } catch (error) {
       if (error instanceof TRPCError) throw error;
@@ -123,7 +162,7 @@ export const reviewRouter = router({
       const { id, review } = input;
       try {
         const model = ctx.taskModel;
-        const resolved = await resolveOrThrow(model, id);
+        const resolved = await resolveTaskOrThrow(model, id);
         const task = await model.updateReviewConfig(resolved.id, review);
         if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return {
@@ -144,7 +183,7 @@ export const reviewRouter = router({
   getVerifyConfig: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
     try {
       const model = ctx.taskModel;
-      const task = await resolveOrThrow(model, input.id);
+      const task = await resolveTaskOrThrow(model, input.id);
       const resolved = await resolveTaskAcceptance(
         ctx.serverDB,
         ctx.userId,
@@ -179,7 +218,7 @@ export const reviewRouter = router({
       const { id, verify } = input;
       try {
         const model = ctx.taskModel;
-        const task = await resolveOrThrow(model, id);
+        const task = await resolveTaskOrThrow(model, id);
         const acceptanceService = new AcceptanceService(
           ctx.serverDB,
           ctx.userId,
@@ -239,7 +278,10 @@ export const reviewRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const result = await ctx.taskService.runReview(input);
+        const result = await ctx.taskService.runReview({
+          ...input,
+          id: (await resolveTaskOrThrow(ctx.taskModel, input.id)).id,
+        });
         return { data: result, success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;

@@ -69,3 +69,12 @@ export function isTransientNetworkError(error: unknown): boolean {
     return code !== undefined && TRANSIENT_NETWORK_ERROR_CODES.has(code);
   });
 }
+
+/**
+ * A server older than this CLI answers an unknown tRPC procedure with
+ * NOT_FOUND; callers use this to fall back to an older endpoint.
+ */
+export function isMissingProcedure(error: unknown): boolean {
+  const code = toRecord(toRecord(error)?.data)?.code;
+  return code === 'NOT_FOUND' && /procedure/i.test(getErrorMessage(error) ?? '');
+}

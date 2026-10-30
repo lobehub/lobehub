@@ -12,10 +12,11 @@
 - 判断是「建立」还是「追加托管块」；已有内容一律保留
 - 写入入口与顺序、触发条件、执行纪律、自迭代规则；托管块提醒「装完 / 升级后先跑两轮」（I-02）
 - **Round 1 产品画像**：扫描仓库 → 写 `.agents/ux/product.md`（平台、产品类型、用户、核心任务、适用性、**文案 profile**）（I-07）
-- **Round 2 组件盘点**：扫描项目组件 → 写 `.agents/ux/components.md`（薄包装 / 重复 / 业务组件用法）（I-08）
+- **Round 2 组件盘点**：扫描项目组件 → 写 `.agents/ux/components.md`（web：薄包装 / 重复 / 业务组件；mobile：项目原子层 / 薄包装 / 业务组件）（I-08）
 - 项目层落在 `.agents/ux/`，**不改**已安装 skill；重装不覆盖（I-05）
 - 自迭代分两层：宿主项目记进项目层规则文件，通用经验回流后才在 skill 仓库里走版本 / CHANGELOG / LOG / 测试（I-03）
 - 幂等：重跑更新，不追加重复块；`--check` 发现缺失或过期（I-04 / I-09）
+- **平台门控**：Round 1 的 `平台：` 行决定 lint 规则集、托管块与 Round 2 分类；项目层「不适用」优先于 skill 通用规则（I-10）
 
 ## 不负责
 
@@ -34,7 +35,7 @@
 
 ## 只加载
 
-- [init.md](../references/init.md)：I-01..I-09
+- [init.md](../references/init.md)：I-01..I-10
 
 ## 步骤
 
@@ -49,12 +50,12 @@
 
 5. 跑 `node scripts/project-scan.mjs --root <根>`（或 `--json`）收集事实。
 6. 结合 README、路由、i18n、已有 docs，判断平台 / 产品类型 / 用户 / 核心任务；据此定**文案 profile**（`consumer` / `saas` / `admin` / `devtool`，可按路由分区）与人称（无主语 / 你 / 您），写成一行 `copy-profile: …`（I-07）。
-7. 对照 skill 的 P-xx 与关键规则，标出**强调**与**不适用**（适用性表）。
+7. 对照 skill 的 P-xx 与关键规则，标出**强调**与**不适用**（适用性表，一行一条；mobile 项目把 web 专属规则标为不适用）。平台写成机读一行 `平台：<web|desktop|mobile>`（I-10）。
 8. 起草 `.agents/ux/product.md`（文件头带 `<!-- lobe-design-init: version=… fingerprint=… -->`），给用户看后写入。已有文件则**整份更新**，不追加第二份。
 
 ### C. Round 2 · 组件盘点
 
-9. 按 scan 给出的组件目录，把现有组件分成：薄包装、与 lobe-ui 重复、业务组件。
+9. 按 scan 给出的组件目录与分类方案（`componentScheme` / 逐文件初分），把现有组件分成：web —— 薄包装、与 lobe-ui 重复、业务组件；mobile —— 项目原子层、薄包装、业务组件（不写「改用 lobe-ui」）。
 10. 起草 `.agents/ux/components.md`（同样带 init meta）：只写「哪个场景用哪个 + 注意点」。
 11. 若有需要长期记住的选型强调，续写 `.agents/ux/lobe-design-rules.md`（不改 `$LOBE_DESIGN`）。
 12. 跑 `node scripts/project-scan.mjs --check --root <根>`，确认文件齐全且指纹匹配。
@@ -69,8 +70,8 @@
 2. 写入前给用户看过内容，且得到确认。
 3. **托管块之外的内容零改动**——这是硬保证。
 4. 块内含入口、触发（含升级后重跑）、纪律（含先读项目层）、自迭代。
-5. `product.md` 含平台、产品类型、用户、核心任务、适用性表、`copy-profile:` 行，且带 init meta。
-6. `components.md` 三类分清，无实现细节，且带 init meta。
+5. `product.md` 含机读的 `平台：` 行、产品类型、用户、核心任务、适用性表、`copy-profile:` 行，且带 init meta。
+6. `components.md` 按平台的三类分清，无实现细节，且带 init meta。
 7. 未改应用代码、未跑 build。
 8. `bootstrap.mjs --check` 与 `project-scan.mjs --check` 均通过（后者允许仅 WARN 过期已在本轮刷新后消失）。
 9. 重复运行：托管块 `unchanged`；两份 ux 文件是更新而非重复章节。
@@ -82,7 +83,7 @@
 探测：<AGENTS.md | CLAUDE.md | 未找到 → 建立 AGENTS.md>
 操作：<建立 | 追加托管块 | 替换托管块>　块外改动：无
 Round 1：.agents/ux/product.md　平台=<…>　类型=<…>　文案 profile=<…>　适用性=<强调 N / N/A M>
-Round 2：.agents/ux/components.md　薄包装=<n>　重复=<n>　业务=<n>
+Round 2：.agents/ux/components.md　<web：薄包装=n 重复=n 业务=n | mobile：原子层=n 薄包装=n 业务=n>
 脚本：bootstrap --check → <OK/FAIL>；project-scan --check → <OK/FAIL/WARN>
 遗留：<→ 00 / 80>
 ```

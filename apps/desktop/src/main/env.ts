@@ -53,8 +53,10 @@ const envNumber = (defaultValue: number) =>
 
 const getRuntimeEnv = () => ({
   ...process.env,
+  DESKTOP_APP_ID: process.env.DESKTOP_APP_ID,
   DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: process.env.DESKTOP_BACKEND_PROXY_RETHROW_ERRORS,
   DESKTOP_EXTERNAL_NAVIGATION_HOSTS: process.env.DESKTOP_EXTERNAL_NAVIGATION_HOSTS,
+  DESKTOP_PROTOCOL_SCHEME: process.env.DESKTOP_PROTOCOL_SCHEME,
   UPDATE_CHANNEL: process.env.UPDATE_CHANNEL,
   UPDATE_SERVER_URL: process.env.UPDATE_SERVER_URL,
 });
@@ -83,7 +85,16 @@ export const getDesktopEnv = memoize(() =>
       // main-process exceptions so Electron's default dialog can be reproduced.
       DESKTOP_BACKEND_PROXY_RETHROW_ERRORS: envBoolean(false),
 
+      // Distribution identity, baked in at build time (vite.main.config.ts) and
+      // read by electron-builder.mjs too — the two must agree.
+      // Windows AppUserModelID; unset keeps upstream's.
+      DESKTOP_APP_ID: z.string().optional(),
+
       DESKTOP_EXTERNAL_NAVIGATION_HOSTS: z.string().optional().default(''),
+
+      // Deep-link / OAuth-handoff scheme the OS routes to this app; unset keeps
+      // the channel-derived `lobehub*` scheme.
+      DESKTOP_PROTOCOL_SCHEME: z.string().optional(),
 
       // device gateway url override (dev: point at a local `wrangler dev` instance,
       // e.g. http://localhost:8787). Falls back to the stored value, then the

@@ -187,6 +187,26 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
     expect(rows.map((r) => r.id)).toEqual(['hetero']);
   });
 
+  it('looks up heterogeneous rows only in the operation topic', async () => {
+    // A copy of a stamped row in another topic (a fork, say) is not this op's.
+    await seedToolCall({
+      createdAt: T1,
+      id: 'hetero-elsewhere',
+      metadata: { heterogeneousToolStateOperationId: 'op-1' },
+      topicId: 'topic2',
+    });
+
+    const rows = await messageModel.listMessagePluginsForOperation({
+      completedAt: T3,
+      operationId: 'op-1',
+      startedAt: T0,
+      threadId: 'thread1',
+      topicId: 'topic1',
+    });
+
+    expect(rows).toEqual([]);
+  });
+
   it('falls back to now when completedAt is omitted', async () => {
     await seedToolCall({
       createdAt: new Date(),
@@ -363,6 +383,26 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
         expect(
           examined,
           `a message_plugins⋈messages statement examined ${examined} rows — it walked ~all of the user's ${NOISE}-row history instead of a bounded/PK access. A jsonb metadata match was resolved inside the plugin JOIN.`,
+        ).toBeLessThan(NOISE / 2);
+      }
+
+      // The heterogeneous id lookup reads `messages` alone. The metadata
+      // expression has no index, so a user-wide lookup filtered every message the
+      // user owns (40s–300s per `heteroFinish` for a heavy user); it must stay
+      // within the op's topic.
+      const lookupStatements = statements.filter(
+        (s) => /heterogeneousToolStateOperationId/.test(s.sql) && !/"message_plugins"/i.test(s.sql),
+      );
+      expect(lookupStatements.length).toBeGreaterThan(0);
+      for (const statement of lookupStatements) {
+        const explained = await pool.query({
+          text: `EXPLAIN (ANALYZE, FORMAT JSON) ${statement.sql}`,
+          values: statement.params,
+        });
+        const examined = rowsExaminedOn(explained.rows[0]['QUERY PLAN'][0].Plan, 'messages');
+        expect(
+          examined,
+          `the heterogeneous lookup examined ${examined} messages — it filtered the user's whole history instead of the op's topic.`,
         ).toBeLessThan(NOISE / 2);
       }
     });

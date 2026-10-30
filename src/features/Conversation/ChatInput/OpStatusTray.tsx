@@ -6,6 +6,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { CircleDollarSignIcon, CoinsIcon, FootprintsIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +18,7 @@ import { calculateOperationUsageMetrics } from '@/utils/operationUsageMetrics';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../store';
 import { type ActivityKey, resolveOperationActivity } from '../utils/operationActivity';
+import AnimatedCount from './OpStatusTray/AnimatedCount';
 import { parseStatusPhrases, pickRotatingStatusPhrase } from './OpStatusTray/logic';
 
 // Cycle the generating phrase like a carousel so a long-running task doesn't
@@ -172,9 +174,9 @@ const formatCost = (cost: number) => {
   return cost.toFixed(2);
 };
 
-const normalizeStepCount = (stepCount: unknown) => {
-  if (typeof stepCount !== 'number' || !Number.isFinite(stepCount)) return 0;
-  return Math.max(0, Math.floor(stepCount));
+const normalizeCount = (count: unknown) => {
+  if (typeof count !== 'number' || !Number.isFinite(count)) return 0;
+  return Math.max(0, Math.floor(count));
 };
 
 interface OpStatusTrayProps {
@@ -191,10 +193,10 @@ interface OpStatusTrayProps {
 
 interface MetricItem {
   icon: LucideIcon;
-  key: 'cost' | 'steps' | 'tokens';
+  key: 'cost' | 'llmCalls' | 'tokens';
   label: string;
   title: string;
-  value: string;
+  value: ReactNode;
 }
 
 const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
@@ -207,8 +209,8 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
     let activity: ActivityKey | undefined;
     let earliestStart: number | undefined;
     let latestActivityStart = -1;
+    let llmCalls = 0;
     let statusSeed: string | undefined;
-    let stepCount = 0;
     const runtimeOperationIds: string[] = [];
 
     for (const op of ops) {
@@ -227,7 +229,13 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
       }
 
       runtimeOperationIds.push(op.id);
-      stepCount = Math.max(stepCount, normalizeStepCount(op.metadata.stepCount));
+      // Prefer the explicit LLM-call total; older servers only sent the
+      // execution step index, which is the best available fallback.
+      const opLlmCalls =
+        typeof op.metadata.llmCalls === 'number'
+          ? normalizeCount(op.metadata.llmCalls)
+          : normalizeCount(op.metadata.stepCount);
+      llmCalls = Math.max(llmCalls, opLlmCalls);
 
       const turnStartTime = op.metadata.turnStartTime ?? op.metadata.startTime;
       if (earliestStart === undefined || turnStartTime < earliestStart) {
@@ -237,10 +245,10 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
     }
     return {
       activity: activity ?? 'generating',
+      llmCalls,
       operationIdsKey: runtimeOperationIds.join('|'),
       startTime: earliestStart,
       statusSeed,
-      steps: stepCount,
     };
   });
   const operationsByMessage = useChatStore((s) => s.operationsByMessage);
@@ -276,7 +284,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
   const { totalCost, totalTokens } = usageMetrics;
   const elapsed = now - startTime;
   const costLabel = t('chat:opStatusTray.cost');
-  const stepLabel = t('chat:opStatusTray.steps');
+  const llmCallsLabel = t('chat:opStatusTray.llmCalls');
   const tokenLabel = t('chat:opStatusTray.tokens', { defaultValue: 'tokens' });
   const generatingPhrases = parseStatusPhrases(
     t('opStatusTray:generatingPhrases', {
@@ -296,16 +304,16 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
       ? randomGeneratingStatus
       : t(`chat:opStatusTray.status.${operationState.activity}`);
 
-  // Zero-valued metrics render nothing; steps only matter for long-running
-  // multi-step tasks, so a single step stays hidden too.
-  const metrics = [
-    operationState.steps > 1
+  // Zero-valued metrics render nothing. LLM calls are the user-facing "step"
+  // metric: tool-only iterations never increment it.
+  const metricCandidates: (MetricItem | undefined)[] = [
+    operationState.llmCalls > 0
       ? {
           icon: FootprintsIcon,
-          key: 'steps',
-          label: stepLabel,
-          title: `${operationState.steps} ${stepLabel}`,
-          value: String(operationState.steps),
+          key: 'llmCalls',
+          label: llmCallsLabel,
+          title: `${operationState.llmCalls} ${llmCallsLabel}`,
+          value: String(operationState.llmCalls),
         }
       : undefined,
     totalTokens > 0
@@ -314,7 +322,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
           key: 'tokens',
           label: tokenLabel,
           title: `${formatTokens(totalTokens)} ${tokenLabel}`,
-          value: formatTokens(totalTokens),
+          value: <AnimatedCount format={formatTokens} value={totalTokens} />,
         }
       : undefined,
     totalCost > 0
@@ -326,7 +334,8 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
           value: formatCost(totalCost),
         }
       : undefined,
-  ].filter((item): item is MetricItem => !!item);
+  ];
+  const metrics = metricCandidates.filter((item): item is MetricItem => !!item);
   const tokenMetric = metrics.find((metric) => metric.key === 'tokens');
 
   const renderMetric = ({ icon, title, value }: MetricItem) => (

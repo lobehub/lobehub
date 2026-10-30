@@ -1,5 +1,8 @@
 import type {
   ChatCompletionTool,
+  DecisionPayload,
+  DecisionQuestions,
+  DecisionResponse,
   GenerateObjectPayload,
   GenerateObjectSchema,
 } from '@lobechat/model-runtime';
@@ -7,6 +10,7 @@ import type { OpenAIChatMessage, RequestTrigger } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 export interface AiGenerationObjectInput {
   messages: OpenAIChatMessage[] | GenerateObjectPayload['messages'];
@@ -15,6 +19,12 @@ export interface AiGenerationObjectInput {
   schema?: GenerateObjectSchema;
   thinking?: GenerateObjectPayload['thinking'];
   tools?: ChatCompletionTool[];
+}
+
+export interface AiGenerationDecisionInput<
+  Q extends DecisionQuestions = DecisionQuestions,
+> extends DecisionPayload<Q> {
+  provider: string;
 }
 
 export interface AiGenerationObjectOptions {
@@ -82,5 +92,28 @@ export class AiGenerationService {
       },
       { metadata: options.metadata, signal: options.signal, tracing: options.tracing },
     )) as T;
+  }
+
+  /**
+   * Asks a decision model typed questions about one state and returns its probabilities.
+   *
+   * Always called from the server: decision endpoints are hosted APIs, and the device relay
+   * {@link generateObject} may use has no decision call. A provider without a decision endpoint
+   * rejects with `CapabilityNotSupported`.
+   */
+  async decide<Q extends DecisionQuestions>(
+    input: AiGenerationDecisionInput<Q>,
+    options: AiGenerationObjectOptions,
+  ): Promise<DecisionResponse<Q>> {
+    const runtime = await initModelRuntimeFromDB(
+      this.db,
+      this.userId,
+      input.provider,
+      this.workspaceId,
+    );
+    return runtime.decide(
+      { model: input.model, questions: input.questions, state: input.state },
+      { metadata: options.metadata, signal: options.signal, tracing: options.tracing },
+    );
   }
 }
