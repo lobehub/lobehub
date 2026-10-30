@@ -184,6 +184,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   agentEval: 'blocked',
   agentEvalExternal: 'blocked',
   agentLabel: rw('agent:read', 'agent:write'),
+  agentLike: rw('agent:read', 'agent:write'),
   agentNotify: rw('agent:read', 'agent:write'),
   agentQuota: rw('agent:read', null),
   // share management toggles a public entry point and monthly spend caps

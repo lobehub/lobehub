@@ -15,8 +15,10 @@ import {
 import { type CSSProperties, memo, type ReactNode, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
+import AgentLikeButton from './AgentLikeButton';
 import AgentPendant from './AgentPendant';
 import type { AgentRowAuthor } from './AgentRow';
 import { coverPattern } from './coverColor';
@@ -244,6 +246,10 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 16px;
     color: ${cssVar.colorTextTertiary};
   `,
+  // Keeps a long owner name clear of the like button in the opposite corner.
+  ownerBesideLike: css`
+    padding-inline-end: 56px;
+  `,
   ownerName: css`
     overflow: hidden;
     min-width: 0;
@@ -281,6 +287,13 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     @media (hover: none) {
       opacity: 1;
     }
+  `,
+  /* Bottom-right like slot, a sibling of the card link for the same reason as
+     the "…" slot. Centered on the owner line in the opposite corner. */
+  like: css`
+    position: absolute;
+    inset-block-end: 12px;
+    inset-inline-end: 10px;
   `,
   link: css`
     display: block;
@@ -326,6 +339,11 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
   const badge = resolveAgentBadge(item);
   const coverColor = useAgentCoverColor(item, badge.cover, !!badge.coverImage);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  // Likes are a workspace-wide counter: no heart in personal space, on groups,
+  // or on private agents nobody else can see.
+  const workspaceId = useActiveWorkspaceId();
+  const likeWorkspaceId =
+    workspaceId && type === 'agent' && item.visibility !== 'private' ? workspaceId : null;
 
   // Right-click support — same bridge as AgentRow: the hook-bearing menu
   // mounts on the card's pointer-enter and hands its items back via ref.
@@ -384,7 +402,7 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
             </div>
             <div className={cardStyles.description}>{description}</div>
             {owner?.name ? (
-              <div className={cardStyles.owner}>
+              <div className={cx(cardStyles.owner, likeWorkspaceId && cardStyles.ownerBesideLike)}>
                 <Avatar
                   avatar={owner.avatar || DEFAULT_USER_AVATAR_URL}
                   shape={'circle'}
@@ -413,6 +431,11 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarH
             onToggleSidebar={onToggleSidebar}
           />
         </span>
+        {likeWorkspaceId ? (
+          <span className={cardStyles.like}>
+            <AgentLikeButton agentId={id} workspaceId={likeWorkspaceId} />
+          </span>
+        ) : null}
       </div>
     </ContextMenuTrigger>
   );
