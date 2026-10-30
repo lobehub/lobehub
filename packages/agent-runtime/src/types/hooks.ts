@@ -1,5 +1,6 @@
 import type {
   ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
   ChatErrorHeterogeneousContext,
   ExecutionPlan,
   ToolExecutor,
@@ -88,6 +89,12 @@ export interface AgentHookEvent {
   errorBudget?: ChatErrorBudgetContext;
   // Content
   errorDetail?: string;
+  /**
+   * Allowlisted cause of a run that failed before its agent started (e.g. the
+   * cloud sandbox is missing a credential), so consumers can say what went
+   * wrong without forwarding the free-form dispatch detail.
+   */
+  errorDispatch?: ChatErrorDispatchContext;
   errorHeterogeneous?: ChatErrorHeterogeneousContext;
 
   errorMessage?: string;

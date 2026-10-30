@@ -751,4 +751,81 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
     expect(mocks.signUserJWT).toHaveBeenCalledWith('user-1', '4h');
     expect(result).toMatchObject({ success: true, token: undefined });
   });
+
+  describe('spawn failure', () => {
+    const marketService = { market: { creds: { list: vi.fn().mockResolvedValue({ data: [] }) } } };
+    const credentialMissing =
+      'CLAUDE_CODE_OAUTH_TOKEN 未设置。请先在凭证管理中添加该凭证后再运行 claude-code。';
+    const spawnFailure = async (ctx: ExecRunContext, detail = credentialMissing) => {
+      mocks.spawnHeteroSandbox.mockRejectedValueOnce(new Error(detail));
+      const { deps } = createDeps({ getMarketService: vi.fn().mockResolvedValue(marketService) });
+      await dispatchHeteroAgent(deps, ctx, createInput('claude-code'));
+      await vi.waitFor(() => expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalled());
+      return mocks.finalizeHeteroDispatchError.mock.calls.at(-1)![1];
+    };
+
+    /**
+     * A sender without device access on a device-bound agent is degraded to the
+     * sandbox. When the sandbox then fails, the reply must say why the run was
+     * there at all — otherwise "the sandbox is missing a credential" reads as
+     * nonsense to someone who expected the owner's device.
+     */
+    it('marks a sandbox run that replaced a denied device', async () => {
+      const params = await spawnFailure(
+        createCtx(
+          {
+            boundDeviceId: 'dev-1',
+            executionTarget: 'device',
+            heterogeneousProvider: { type: 'claude-code' },
+          },
+          { canUseDevice: false, deviceAccessReason: 'bot-external-sender' },
+        ),
+      );
+
+      expect(params).toMatchObject({
+        detail: credentialMissing,
+        dispatch: {
+          agentType: 'claude-code',
+          deviceAccessDenied: true,
+          missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+          stage: 'sandbox_spawn',
+        },
+        message: 'Hetero sandbox spawn failed',
+      });
+    });
+
+    const sandboxAgent = () =>
+      createCtx(
+        { executionTarget: 'sandbox', heterogeneousProvider: { type: 'claude-code' } },
+        { canUseDevice: false },
+      );
+
+    it('reads the credential from English wording too', async () => {
+      const params = await spawnFailure(
+        sandboxAgent(),
+        'CLAUDE_CODE_OAUTH_TOKEN is not set. Add it under Credentials and retry.',
+      );
+
+      expect(params.dispatch.missingCredential).toBe('CLAUDE_CODE_OAUTH_TOKEN');
+    });
+
+    it('does not blame device access for an agent that targets the sandbox', async () => {
+      const params = await spawnFailure(sandboxAgent());
+
+      expect(params.dispatch).toEqual({
+        agentType: 'claude-code',
+        missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+        stage: 'sandbox_spawn',
+      });
+    });
+
+    it.each([
+      'E2B_API_KEY is not set; sandbox credential configuration is incomplete',
+      'Gateway Timeout',
+    ])('names no credential for a failure that is not about one (%s)', async (detail) => {
+      const params = await spawnFailure(sandboxAgent(), detail);
+
+      expect(params.dispatch).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
+    });
+  });
 });

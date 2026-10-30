@@ -6,6 +6,7 @@ import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/er
 
 import {
   formatErrorForState,
+  readDispatchErrorContext,
   readErrorBudgetContext,
 } from '@/server/modules/AgentRuntime/formatErrorForState';
 
@@ -107,6 +108,7 @@ export function buildLifecycleEvent(
       errorBudget: readErrorBudgetContext(formattedError),
       errorHeterogeneous: readHeterogeneousErrorContext(formattedError),
       errorDetail: state?.error,
+      errorDispatch: readDispatchErrorContext(formattedError),
       errorMessage: extractErrorMessage(state?.error) || String(state?.error || ''),
       errorType: formattedError?.type === undefined ? undefined : String(formattedError.type),
       finalState: state,

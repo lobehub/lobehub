@@ -4,6 +4,7 @@ import type {
   BotNoReplyResult,
   BotWakeKind,
   ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
   ChatErrorHeterogeneousContext,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -108,6 +109,7 @@ export interface BotCallbackBody {
    * Forwarded verbatim from the agent lifecycle event.
    */
   errorBudget?: ChatErrorBudgetContext;
+  errorDispatch?: ChatErrorDispatchContext;
   errorHeterogeneous?: ChatErrorHeterogeneousContext;
   errorMessage?: string;
   errorType?: string;
@@ -605,6 +607,7 @@ export class BotCallbackService {
       lastAssistantContent,
       errorAttribution,
       errorBudget,
+      errorDispatch,
       errorHeterogeneous,
       errorMessage,
       errorType,
@@ -627,6 +630,7 @@ export class BotCallbackService {
         errorAttribution,
         errorBudget,
         errorHeterogeneous,
+        errorDispatch,
       );
       const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
       if (deliveredChunkCount < 1) {

@@ -42,6 +42,20 @@ export interface ChatErrorBudgetContext {
   shortfallCredits?: number;
 }
 
+/**
+ * Safe context for a run that failed before its agent started (fail-fast
+ * dispatch), for completion hooks and IM replies. Only allowlisted fields:
+ * the free-form dispatch detail stays on the message row.
+ */
+export interface ChatErrorDispatchContext {
+  agentType: string;
+  /** The sender may not use the agent's device, so the run fell back to the cloud sandbox. */
+  deviceAccessDenied?: boolean;
+  /** Environment-variable name of a credential the sandbox reported missing — never its value. */
+  missingCredential?: string;
+  stage: 'sandbox_spawn';
+}
+
 /** Safe external-agent error context for completion hooks and IM replies. */
 export interface ChatErrorHeterogeneousContext {
   agentType: string;
