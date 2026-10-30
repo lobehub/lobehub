@@ -484,15 +484,17 @@ export const useConversationScroll = ({
   const isAIGeneratingRef = useRef(isAIGenerating);
   isAIGeneratingRef.current = isAIGenerating;
 
-  // Track the sent turn by ID: an earlier page can arrive after sending and
-  // shift its indices. Both the spacer measurements and pin must follow that
-  // same turn instead of measuring or scrolling to an older message.
+  // Pin the user by ID so paging cannot move the turn. Its visible response
+  // is the next row and can be replaced by regeneration; do not retain the
+  // old response ID or cross into the next user turn while a reply is absent.
   const [userMessageId, setUserMessageId] = useState<string | null>(null);
-  const [assistantMessageId, setAssistantMessageId] = useState<string | null>(null);
   const userIndex = userMessageId === null ? -1 : dataSource.indexOf(userMessageId);
-  const assistantIndex = assistantMessageId === null ? -1 : dataSource.indexOf(assistantMessageId);
+  const nextMessageId = userIndex < 0 ? undefined : dataSource[userIndex + 1];
+  const nextMessage = nextMessageId
+    ? displayMessages.find((message) => message.id === nextMessageId)
+    : undefined;
   const userMessageIndex = userIndex < 0 ? null : userIndex;
-  const assistantMessageIndex = assistantIndex < 0 ? null : assistantIndex;
+  const assistantMessageIndex = nextMessage && nextMessage.role !== 'user' ? userIndex + 1 : null;
   const lastId = dataSource.at(-1);
   const prevLengthRef = useRef(dataSource.length);
   const prevLastIdRef = useRef<string | undefined>(lastId);
@@ -560,7 +562,6 @@ export const useConversationScroll = ({
     hadLaterMessagesRef.current = hasLaterMessages;
     clearPin('context switch');
     setUserMessageId(null);
-    setAssistantMessageId(null);
     setMounted(false);
     setScrollReduction(() => 0);
     prevScrollOffsetRef.current = null;
@@ -590,14 +591,12 @@ export const useConversationScroll = ({
     if (userMessage?.role !== 'user' || !assistantMessage) return;
 
     const userIndex = dataSource.length - 2;
-    const assistantIndex = dataSource.length - 1;
 
     log('send detected userIndex=%d', userIndex);
 
     setScrollReduction(() => 0);
     prevScrollOffsetRef.current = getScrollOffset?.() ?? null;
     setUserMessageId(dataSource[userIndex]);
-    setAssistantMessageId(dataSource[assistantIndex]);
     pinRef.current = {
       messageId: dataSource[userIndex],
       seenActive: mountedRef.current,

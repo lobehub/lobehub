@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import type { UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { createRef, type RefObject } from 'react';
 import { type VListHandle } from 'virtua';
@@ -117,7 +118,9 @@ describe('useConversationScroll — pin behavior', () => {
    * to verify "user + assistant pair was just appended".
    */
   type StoreFixture = {
-    displayMessages: Array<{ id: string; role: 'user' | 'assistant' }>;
+    displayMessages: Array<
+      Pick<UIChatMessage, 'id' | 'role'> & Partial<Pick<UIChatMessage, 'extra' | 'parentId'>>
+    >;
     hasLaterMessages?: boolean;
     isAIGenerating: boolean;
     virtuaScrollMethods: {
@@ -194,14 +197,16 @@ describe('useConversationScroll — pin behavior', () => {
     const rerender = (next: {
       contextKey?: string;
       dataSource: string[];
+      fixture?: Partial<StoreFixture>;
       hasLaterMessages?: boolean;
       isSecondLastMessageFromUser: boolean;
     }) => {
-      const { hasLaterMessages, ...props } = next;
+      const { fixture, hasLaterMessages, ...props } = next;
       currentFixture = {
         ...currentFixture,
         displayMessages: deriveDisplayMessages(next.isSecondLastMessageFromUser),
         hasLaterMessages: hasLaterMessages ?? currentFixture.hasLaterMessages,
+        ...fixture,
       };
       hook.rerender({ contextKey: undefined, ...props });
     };
@@ -329,6 +334,88 @@ describe('useConversationScroll — pin behavior', () => {
     });
     expect(result.current.spacerHeight).toBe(550);
   });
+
+  it.each(['assistant', 'assistantGroup', 'agentCouncil', 'supervisor'] as const)(
+    'remeasures a regenerated %s reply as it grows',
+    async (role) => {
+      let assistantHeight = 100;
+      const replacementId = 'replacement-assistant';
+      const userNode = document.createElement('div');
+      userNode.dataset.messageId = userId;
+      userNode.getBoundingClientRect = () => ({ height: 150 }) as DOMRect;
+      const replacementNode = document.createElement('div');
+      replacementNode.dataset.messageId = replacementId;
+      replacementNode.getBoundingClientRect = () => ({ height: assistantHeight }) as DOMRect;
+      document.body.append(userNode);
+
+      try {
+        const { result, rerender } = renderScrollHook({
+          dataSource: ['m0', 'm1'],
+          fixture: {
+            virtuaScrollMethods: {
+              getItemOffset: (index) => [0, 100, 200, 350][index],
+              getItemSize: (index) => (index === 3 ? assistantHeight : 150),
+              getViewportSize: () => 800,
+            },
+          },
+          isSecondLastMessageFromUser: false,
+        });
+        rerender({
+          dataSource: ['m0', 'm1', userId, assistantId],
+          isSecondLastMessageFromUser: true,
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(32);
+        });
+        expect(result.current.spacerHeight).toBe(550);
+
+        // Regeneration leaves the user alone before its new branch is rendered.
+        rerender({
+          dataSource: ['m0', 'm1', userId],
+          fixture: {
+            displayMessages: [{ id: userId, role: 'user' }],
+            isAIGenerating: true,
+          },
+          isSecondLastMessageFromUser: false,
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(32);
+        });
+        expect(result.current.spacerHeight).toBe(650);
+
+        document.body.append(replacementNode);
+        rerender({
+          dataSource: ['m0', 'm1', userId, replacementId],
+          fixture: {
+            displayMessages: [
+              { id: userId, role: 'user' },
+              role === 'agentCouncil'
+                ? { extra: { parentMessageId: userId }, id: replacementId, role }
+                : { id: replacementId, parentId: userId, role },
+            ],
+          },
+          isSecondLastMessageFromUser: true,
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(32);
+        });
+        expect(result.current.spacerHeight).toBe(550);
+
+        assistantHeight = 700;
+        act(() => {
+          const observer = MockResizeObserver.latest;
+          if (observer?.observed.includes(replacementNode)) observer.trigger();
+        });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(32);
+        });
+        expect(result.current.spacerHeight).toBe(0);
+      } finally {
+        userNode.remove();
+        replacementNode.remove();
+      }
+    },
+  );
 
   it('does not scroll when only the assistant message is appended', () => {
     const { rerender } = renderScrollHook({
