@@ -4,7 +4,16 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, goalNodes, goals, tasks, topics, users, workspaces } from '../../schemas';
+import {
+  acceptances,
+  agents,
+  goalNodes,
+  goals,
+  tasks,
+  topics,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GoalModel } from '../goal';
 import { GoalGraphModel } from '../goalGraph';
@@ -269,6 +278,36 @@ describe('GoalGraphModel', () => {
 
     expect(await graphModel.updateNodeStatus(goal.id, node!.id, 'resolved')).toBeUndefined();
     expect(await graphModel.getNodeStatus(goal.id, node!.id)).toBe('retired');
+  });
+
+  it('closes the acceptance a retired node was still waiting on', async () => {
+    // A retired node's delivery is discarded; left `delivered`, its acceptance
+    // kept asking the owner to sign off on work the Goal had already dropped.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'Retire sign-off' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Replaced' });
+    const verifying = await graphModel.createNode(goal.id, { kind: 'task', title: 'Judging' });
+    const taskModel = new TaskModel(serverDB, userId);
+    const task = await taskModel.create({ instruction: 'Delivered work' });
+    const judged = await taskModel.create({ instruction: 'Still judged' });
+    await graphModel.bindTask(goal.id, node!.id, task.id);
+    await graphModel.bindTask(goal.id, verifying!.id, judged.id);
+    const [delivered, inFlight] = await serverDB
+      .insert(acceptances)
+      .values([
+        { status: 'delivered', subjectId: task.id, subjectType: 'task', userId },
+        { status: 'verifying', subjectId: judged.id, subjectType: 'task', userId },
+      ])
+      .returning();
+
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'retired', 'replaced by a new plan');
+    await graphModel.updateNodeStatus(goal.id, verifying!.id, 'retired');
+
+    const rows = await serverDB.select().from(acceptances);
+    const statusOf = (id: string) => rows.find((row) => row.id === id);
+    expect(statusOf(delivered.id)).toMatchObject({ status: 'closed' });
+    expect(statusOf(delivered.id)?.completedAt).toBeInstanceOf(Date);
+    // A round still running is left to land; only a settled wait is closed.
+    expect(statusOf(inFlight.id)).toMatchObject({ status: 'verifying' });
   });
 
   it('treats a same-status write as a no-op instead of churning the graph', async () => {

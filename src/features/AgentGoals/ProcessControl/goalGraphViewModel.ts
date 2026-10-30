@@ -36,6 +36,17 @@ export const RECENT_DONE = 2;
 
 const TERMINAL_NODE_STATUSES = new Set(['resolved', 'rejected', 'retired']);
 
+/**
+ * A retired node's delivery is discarded, so its acceptance no longer waits on
+ * anyone. The server closes it on retirement; this covers rows retired before
+ * it did, and a round that landed after — neither should ask for a sign-off.
+ */
+const nodeAcceptance = (node: GoalGraphNode, acceptance: GoalNodeAcceptance): GoalNodeAcceptance =>
+  node.status === 'retired' &&
+  (acceptance.status === 'delivered' || acceptance.status === 'errored')
+    ? { ...acceptance, status: 'closed' }
+    : acceptance;
+
 export type GoalAttemptOutcome = 'passed' | 'failed' | 'retired' | 'running';
 
 export interface GoalAttempt {
@@ -477,7 +488,7 @@ export const buildGoalGraphView = (
         node.kind === 'experiment'
           ? [...members].flatMap((id) => artifactsByNode.get(id) ?? [])
           : (artifactsByNode.get(node.id) ?? []),
-      ...(acceptances?.[node.id] ? { acceptance: acceptances[node.id] } : {}),
+      ...(acceptances?.[node.id] ? { acceptance: nodeAcceptance(node, acceptances[node.id]) } : {}),
       ...(assignees?.[node.id] ? { assigneeAgentId: assignees[node.id] } : {}),
       attempts,
       ...(closedReason ? { closedReason } : {}),

@@ -39,6 +39,7 @@ import {
   goalNodeWorkVersions,
 } from '../schemas/goalGraph';
 import { briefs, tasks } from '../schemas/task';
+import { acceptances } from '../schemas/verify';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { notTrashed } from '../utils/softDelete';
@@ -893,6 +894,24 @@ export class GoalGraphModel {
         reason,
         taskId: node.taskId ?? undefined,
       });
+      // A retired node's delivery will never be judged: its outcome is
+      // discarded (see GoalService completion). Left `delivered` / `errored`, its
+      // acceptance keeps asking the person to sign off on work the Goal already
+      // dropped. Close it in the same transaction so the node and its
+      // acceptance reach their terminal states together. A round still
+      // verifying is left to land; the goal page hides it on a retired row.
+      if (status === 'retired' && node.taskId) {
+        await tx
+          .update(acceptances)
+          .set({ completedAt: new Date(), status: 'closed' })
+          .where(
+            and(
+              eq(acceptances.subjectType, 'task'),
+              eq(acceptances.subjectId, node.taskId),
+              inArray(acceptances.status, ['delivered', 'errored']),
+            ),
+          );
+      }
       return node;
     });
 
