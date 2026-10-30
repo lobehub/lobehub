@@ -182,6 +182,23 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('aiAgent.issueGatewayUserToken', 'query')).toEqual({
       blocked: true,
     });
+    // the GitHub picker reads the connected account through its OAuth grant
+    expect(requiredApiKeyScopeForTrpc('environment.listGithubRepositories', 'query')).toEqual({
+      blocked: true,
+    });
+    expect(requiredApiKeyScopeForTrpc('environment.listGithubBranches', 'query')).toEqual({
+      blocked: true,
+    });
+    // publishing exposes what an environment's directories captured on the drive
+    expect(requiredApiKeyScopeForTrpc('environment.setEnvironmentVisibility', 'mutation')).toEqual({
+      blocked: true,
+    });
+    expect(requiredApiKeyScopeForTrpc('environment.updateEnvironment', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+    expect(requiredApiKeyScopeForTrpc('environment.listEnvironments', 'query')).toEqual({
+      scopes: ['agent:read'],
+    });
     // the rest of the market surface keeps its agent scopes
     expect(requiredApiKeyScopeForTrpc('market.getAgentsByPlugin', 'query')).toEqual({
       scopes: ['agent:read'],

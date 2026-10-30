@@ -3,6 +3,7 @@ import { CircleDashedIcon, CopyIcon, LinkIcon, TrashIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useGoalTransferMenuItem } from '@/business/client/hooks/useGoalTransferMenuItem';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import { renderMenuCheck } from '@/features/AgentTasks/features/menuExtra';
 import { usePermission } from '@/hooks/usePermission';
@@ -52,6 +53,7 @@ export const useGoalMenuItems = ({
   const resumeGoal = useGoalStore((s) => s.resumeGoal);
   const startGoal = useGoalStore((s) => s.startGoal);
   const closeGoal = useGoalStore((s) => s.closeGoal);
+  const transferItems = useGoalTransferMenuItem(goalId) as DropdownItem[] | null;
 
   const current = toManualStatus(status);
 
@@ -118,6 +120,7 @@ export const useGoalMenuItems = ({
           toast.success(t('taskList.contextMenu.copyLinkSuccess'));
         },
       },
+      ...(transferItems ?? []),
       { type: 'divider' },
       {
         danger: true,
@@ -128,7 +131,18 @@ export const useGoalMenuItems = ({
         onClick: confirmDelete,
       },
     ],
-    [canClose, canEditTask, changeStatus, confirmDelete, current, goalId, shareUrl, status, t],
+    [
+      canClose,
+      canEditTask,
+      changeStatus,
+      confirmDelete,
+      current,
+      goalId,
+      shareUrl,
+      status,
+      t,
+      transferItems,
+    ],
   );
 };
 

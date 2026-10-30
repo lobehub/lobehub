@@ -17,8 +17,9 @@ export class MessageSpineQueries extends MessageScope {
    * seed placeholder on a cold / non-sticky serverless replica. Anchoring here
    * instead keeps consecutive cold-replica steps chained linearly rather than
    * forking onto a stale node (the remote "断链" bug). No `createdAt` floor is
-   * needed: a topic runs at most one operation at a time, so the latest spine
-   * message IS this run's continuation point.
+   * needed for a topic-wide conversation tail. An in-flight run must pass its
+   * operationId to getLatestSpineMessageId so late writes from another run
+   * cannot become its continuation point.
    *
    * Excludes `role:'tool'` (inline children) and TOOLLESS signal-tagged
    * assistants (`metadata->'signal'` with no tools), which are tool-child
@@ -80,13 +81,15 @@ export class MessageSpineQueries extends MessageScope {
    * close the concurrent-append race: the client computes `parentId` from a
    * local snapshot whose spine tail may already have advanced (e.g. another
    * assistant turn was written while the user was composing), so trusting it
-   * would fork the new turn off a stale node. Ordering by `createdAt` is safe
-   * because a topic runs at most one operation at a time.
+   * would fork the new turn off a stale node. Heterogeneous step recovery passes
+   * operationId to restrict the tail to that producer's stamped messages.
    */
   getLatestSpineMessageId = async ({
+    operationId,
     topicId,
     threadId,
   }: {
+    operationId?: string;
     threadId?: string | null;
     topicId: string;
   }): Promise<string | undefined> => {
@@ -96,6 +99,9 @@ export class MessageSpineQueries extends MessageScope {
       .where(
         and(
           eq(messages.topicId, topicId),
+          operationId
+            ? sql`${messages.metadata} @> ${JSON.stringify({ operationId })}::jsonb`
+            : undefined,
           not(eq(messages.role, 'tool')),
           threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
           // Exclude signal-tagged assistants — BUT only the toolless ones. The

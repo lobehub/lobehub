@@ -1,12 +1,17 @@
 'use client';
 
 import { Avatar as LobeAvatar, type AvatarProps as LobeAvatarProps } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import { remoteAvatarSrc, resolveAvatar } from './fallback';
 import { useBrokenSrc } from './useBrokenSrc';
 
 export interface AvatarProps extends LobeAvatarProps {
+  /**
+   * Rendered in place of the whole avatar when the image fails to load,
+   * instead of the name's initials.
+   */
+  brokenFallback?: ReactNode;
   /**
    * Seed for the fallback initials. Defaults to `title`; pass it when the
    * visible name differs from the tooltip title.
@@ -28,9 +33,11 @@ export interface AvatarProps extends LobeAvatarProps {
  * two disagree, and on disagreement the library's own "UN" fallback wins.
  */
 const Avatar = memo<AvatarProps>(
-  ({ alt, avatar, background, name, size = 48, title, unoptimized, ...rest }) => {
+  ({ alt, avatar, background, brokenFallback, name, size = 48, title, unoptimized, ...rest }) => {
     const src = remoteAvatarSrc(avatar);
     const [isBroken, markBroken] = useBrokenSrc(src);
+
+    if (isBroken && brokenFallback) return brokenFallback;
 
     const imgAlt = alt || name || title || 'avatar';
     const resolved = resolveAvatar({

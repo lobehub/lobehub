@@ -6,6 +6,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatCell } from '../../utils/format';
+import { useIncrementalRows } from './useIncrementalRows';
 
 const styles = createStaticStyles(({ css }) => ({
   table: css`
@@ -48,11 +49,13 @@ const styles = createStaticStyles(({ css }) => ({
 interface TableViewProps {
   /** Column keys to show, in order (`view.columns`). */
   columns?: string[];
+  /** Reveal rows in batches as the card is scrolled instead of mounting them all. */
+  incremental?: boolean;
   limit?: number;
   output: WidgetTableOutput;
 }
 
-const TableView = memo<TableViewProps>(({ output, columns, limit }) => {
+const TableView = memo<TableViewProps>(({ output, columns, limit, incremental }) => {
   const { t } = useTranslation('dashboard');
 
   const visibleColumns = useMemo(() => {
@@ -61,8 +64,10 @@ const TableView = memo<TableViewProps>(({ output, columns, limit }) => {
     return columns.map((key) => byKey.get(key) ?? { key });
   }, [columns, output.columns]);
 
-  const rows = limit ? output.rows.slice(0, limit) : output.rows;
-  const hidden = output.rows.length - rows.length;
+  const capped = limit ? output.rows.slice(0, limit) : output.rows;
+  const { count, hasMore, sentinelRef } = useIncrementalRows(capped.length, !!incremental);
+  const rows = capped.slice(0, count);
+  const hidden = output.rows.length - capped.length;
 
   if (output.rows.length === 0) {
     return (
@@ -105,7 +110,8 @@ const TableView = memo<TableViewProps>(({ output, columns, limit }) => {
           ))}
         </tbody>
       </table>
-      {hidden > 0 && (
+      {hasMore && <div key={count} ref={sentinelRef} style={{ height: 1 }} />}
+      {hidden > 0 && !hasMore && (
         <Text fontSize={12} style={{ display: 'block', paddingTop: 6 }} type={'secondary'}>
           {t('widget.view.more', { count: hidden })}
         </Text>

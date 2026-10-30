@@ -4,6 +4,7 @@ import type { Command } from 'commander';
 import { Option } from 'commander';
 
 import { getTrpcClient } from '../../api/client';
+import { resolveWorkspaceRef } from '../../api/workspaceRef';
 import type { TopicTranscript } from './atif';
 import { toAtif } from './atif';
 
@@ -15,9 +16,9 @@ export function registerTopicExportCommand(topic: Command) {
     )
     .addOption(new Option('--format <format>', 'Export format').choices(['atif']).default('atif'))
     .option('-o, --output <path>', 'Write to a file instead of stdout (use - for stdout)')
-    .option('--workspace <id>', 'Read the topic from this workspace')
+    .option('--workspace <id|slug>', 'Read the topic from this workspace')
     .action(async (id: string, options: { output?: string; workspace?: string }) => {
-      const client = await getTrpcClient(options.workspace);
+      const client = await getTrpcClient(await resolveWorkspaceRef(options.workspace));
       let transcript: TopicTranscript | undefined;
       const items: TopicTranscript['items'] = [];
       do {

@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { ModelIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
+import RoutingBadge from '@/components/ModelSelect/RoutingBadge';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -255,6 +256,7 @@ const ModelItem = memo<ModelItemProps>(
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}
+              <RoutingBadge id={id} provider={activeAiProvider} />
               <Flexbox horizontal align={'center'} gap={8}>
                 <ModelInfoTags
                   placement={'top'}
@@ -289,6 +291,7 @@ const ModelItem = memo<ModelItemProps>(
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}
+              <RoutingBadge id={id} provider={activeAiProvider} />
               {ModelIdTag}
               {NewTag}
               {Actions && Actions()}

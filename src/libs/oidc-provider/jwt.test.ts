@@ -19,9 +19,13 @@ vi.mock('@/envs/auth', () => ({
 }));
 
 const importJWKMock = vi.fn();
+const createLocalJWKSetMock = vi.fn();
+const decodeProtectedHeaderMock = vi.fn();
 const jwtVerifyMock = vi.fn();
 
 vi.mock('jose', () => ({
+  createLocalJWKSet: (...args: unknown[]) => createLocalJWKSetMock(...args),
+  decodeProtectedHeader: (...args: unknown[]) => decodeProtectedHeaderMock(...args),
   importJWK: (...args: unknown[]) => importJWKMock(...args),
   jwtVerify: (...args: unknown[]) => jwtVerifyMock(...args),
 }));
@@ -29,6 +33,8 @@ vi.mock('jose', () => ({
 describe('validateOIDCJWT', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    createLocalJWKSetMock.mockReturnValue('public-key-set');
+    decodeProtectedHeaderMock.mockReturnValue({ kid: 'test-key' });
     importJWKMock.mockResolvedValue('public-key');
   });
 
@@ -64,6 +70,8 @@ describe('acceptance review tokens', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    createLocalJWKSetMock.mockReturnValue('public-key-set');
+    decodeProtectedHeaderMock.mockReturnValue({ kid: 'test-key' });
     importJWKMock.mockResolvedValue('public-key');
   });
 

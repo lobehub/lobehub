@@ -1,26 +1,29 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionRoot,
   AccordionTrigger,
-  Avatar,
+  createStaticStyles,
+  Flexbox,
+  Icon,
   Input,
   InputNumber,
+  stopPropagation,
   TextArea,
+  Tooltip,
+  useTheme,
 } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Clock, Trash2 } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
@@ -122,9 +125,11 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
           <AccordionTrigger>
             <Flexbox horizontal align={'center'} gap={8}>
               <div className={styles.assignee}>
-                <Avatar
-                  avatar={agent?.avatar || DEFAULT_AVATAR}
+                <AgentAvatar
+                  agentId={task.agentId}
+                  avatar={agent?.avatar}
                   background={agent?.backgroundColor || theme.colorBgContainer}
+                  name={agent?.title}
                   shape={'circle'}
                   size={20}
                 />

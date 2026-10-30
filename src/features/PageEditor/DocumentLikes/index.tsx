@@ -1,22 +1,14 @@
 'use client';
 
 import type { DocumentLikeSummary } from '@lobechat/types';
-import {
-  Avatar,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Skeleton,
-  Text,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
 import { ThumbsUp } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
+import UserAvatar from '@/components/UserAvatar';
 import { useClientDataSWR } from '@/libs/swr';
 import { documentLikeKeys } from '@/libs/swr/keys';
 import { documentLikeService } from '@/services/documentLike';
@@ -267,7 +259,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
             const name = liker.fullName || liker.username || liker.id;
             return (
               <Tooltip key={liker.id} title={name}>
-                <Avatar avatar={liker.avatar || name} size={32} />
+                <UserAvatar avatar={liker.avatar} name={name} size={32} />
               </Tooltip>
             );
           })}

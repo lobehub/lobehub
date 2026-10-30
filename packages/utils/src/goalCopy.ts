@@ -94,6 +94,11 @@ const REASON_PATTERNS: Array<{
     pattern: /^Task (\S+) did not pass verification$/,
   },
   {
+    key: 'goalProcess.gate.reason.verifyStalled',
+    params: ['id', 'count'],
+    pattern: /^Task (\S+) failed verification the same way (\d+) times in a row$/,
+  },
+  {
     key: 'goalProcess.gate.reason.goalAcceptanceFailed',
     pattern: /^Goal-level acceptance did not pass$/,
   },
@@ -108,6 +113,13 @@ const REASON_PATTERNS: Array<{
   {
     key: 'goalProcess.gate.reason.deviceStayedOffline',
     pattern: /^Task device stayed offline$/,
+  },
+  {
+    // The spawn failure `runTask` refused with, when it is one a person can act on.
+    key: 'goalProcess.gate.reason.recoveryFailedWithError',
+    param: 'error',
+    pattern:
+      /^Automatic recovery could not (?:start the next attempt|restart an abandoned operation): (.+)$/,
   },
   {
     key: 'goalProcess.gate.reason.recoveryFailed',

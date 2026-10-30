@@ -40,6 +40,7 @@ describe('provider command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -64,13 +65,21 @@ describe('provider command', () => {
     });
 
     it('should output JSON', async () => {
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
       const providers = [{ id: 'openai', name: 'OpenAI' }];
       mockTrpcClient.aiProvider.getAiProviderList.query.mockResolvedValue(providers);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'provider', 'list', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(providers, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...providers[0], url: 'https://app.lobehub.com/settings/provider/openai' }],
+          null,
+          2,
+        ),
+      );
     });
   });
 

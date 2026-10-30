@@ -53,15 +53,28 @@ describe('resolveDeviceAccessPolicy', () => {
     });
   });
 
-  it('never returns canUseDevice=true for a non-owner bot sender, even with a trusted-looking ID', () => {
-    // Future-proofing: until the trusted list lands, every non-owner bot
-    // sender must be denied. This guards against accidentally reintroducing
-    // a permissive default while wiring the future `bot-trusted` branch.
+  it('denies a non-owner bot sender who is not on the device list', () => {
     const result = resolveDeviceAccessPolicy({
       botContext: baseBotContext({ isOwner: false, senderExternalUserId: 'team-mate' }),
     });
-    expect(result.canUseDevice).toBe(false);
-    expect(result.reason).not.toBe('bot-trusted');
+    expect(result).toEqual({ canUseDevice: false, reason: 'bot-external-sender' });
+  });
+
+  it('grants device access to a sender the owner put on the device list', () => {
+    expect(
+      resolveDeviceAccessPolicy({
+        botContext: baseBotContext({ isDeviceTrusted: true, senderExternalUserId: 'team-mate' }),
+      }),
+    ).toEqual({ canUseDevice: true, reason: 'bot-trusted' });
+  });
+
+  it('keeps a trusted sender away from devices in a shared-agent visitor run', () => {
+    expect(
+      resolveDeviceAccessPolicy({
+        botContext: baseBotContext({ isDeviceTrusted: true }),
+        shareVisitor: true,
+      }),
+    ).toEqual({ canUseDevice: false, reason: 'share-visitor' });
   });
 
   describe('personal-scope bot platforms', () => {

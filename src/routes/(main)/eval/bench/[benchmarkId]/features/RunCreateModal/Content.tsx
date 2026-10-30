@@ -4,7 +4,6 @@ import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobe
 import {
   Accordion,
   ActionIcon,
-  Avatar,
   createStaticStyles,
   cssVar,
   Flexbox,
@@ -21,6 +20,7 @@ import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
@@ -143,9 +143,12 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
       allAgents.map((agent) => ({
         label: (
           <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-            <Avatar
+            <AgentAvatar
+              agentId={agent.id}
               avatar={agent.avatar || undefined}
               background={agent.backgroundColor || undefined}
+              name={agent.title || undefined}
+              shape={'circle'}
               size={20}
               title={agent.title || ''}
             />

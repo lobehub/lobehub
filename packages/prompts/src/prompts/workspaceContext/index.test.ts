@@ -18,7 +18,7 @@ describe('workspaceContextPrompt', () => {
       'MUST start with the workspace slug prefix "https://app.lobehub.com/lobehub/"',
     );
     expect(result).toContain(
-      'agent task detail: https://app.lobehub.com/lobehub/agent/<agentId>/task/<T-123>',
+      'agent task detail: https://app.lobehub.com/lobehub/agent/<agentId>/task/<taskIdentifier>',
     );
     expect(result).toContain(
       'knowledge base: https://app.lobehub.com/lobehub/resource/library/<knowledgeBaseId>',

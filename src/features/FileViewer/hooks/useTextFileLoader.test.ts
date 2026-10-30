@@ -22,6 +22,21 @@ describe('useTextFileLoader', () => {
     });
   });
 
+  /** @example A proxy URL built from another app host is fetched through the page origin. */
+  it('fetches a cross-origin file proxy URL from the current origin', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('# title'));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useTextFileLoader('https://app.lobehub.com/f/file_abc'));
+    await waitFor(() => {
+      expect(result.current.fileData).toBe('# title');
+    });
+    /** @example The proxy 302 carries no CORS headers, so it must be requested same-origin. */
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${window.location.origin}/f/file_abc`,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   /** @example Empty uploads are successful previews, not perpetual loading. */
   it('finishes loading an empty file', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('')));

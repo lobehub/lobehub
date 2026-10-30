@@ -7,6 +7,7 @@ import {
   ActionIcon,
   Block,
   Button,
+  confirmModal,
   cssVar,
   Flexbox,
   Text,
@@ -23,6 +24,7 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { releaseEditorSelection } from '@/features/EditorCanvas/releaseEditorSelection';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
@@ -40,7 +42,9 @@ import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useEscapeDiscardGuard } from '../shared/useEscapeDiscardGuard';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
+import { hasUnsavedTaskDraft } from './hasUnsavedTaskDraft';
 import ScheduleChip from './ScheduleChip';
 import {
   createDefaultScheduleDraft,
@@ -58,7 +62,7 @@ export interface CreateTaskContentProps {
    * agent-scoped task list where every task belongs to that agent.
    */
   lockAssignee?: boolean;
-  onCreated?: (task: { agentId?: string; identifier: string; name?: string }) => void;
+  onCreated?: (task: { id: string; agentId?: string; identifier: string; name?: string }) => void;
   projectId?: string;
   /**
    * Creates a scheduled task: the form gains a schedule chip and the task is
@@ -196,6 +200,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
         if (result) {
           close();
           onCreated?.({
+            id: result.id,
             agentId: result.assigneeAgentId ?? undefined,
             identifier: result.identifier,
             name: result.name ?? undefined,
@@ -238,8 +243,33 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
 
     const handleTitleKeyDown = useTitleEnterToInstruction(editor);
 
+    // Escape is easy to hit by accident, so it asks before throwing away a
+    // filled-in task; an empty modal still closes straight away.
+    const rootRef = useRef<HTMLDivElement>(null);
+    useEscapeDiscardGuard(rootRef, {
+      hasUnsavedInput: () =>
+        hasUnsavedTaskDraft({
+          editorJson: editor?.getDocument?.('json'),
+          instruction: instructionRef.current,
+          title,
+        }),
+      onEscape: () =>
+        confirmModal({
+          cancelText: t('createTask.discardConfirm.cancel'),
+          content: t('createTask.discardConfirm.content'),
+          okButtonProps: { danger: true },
+          okText: t('createTask.discardConfirm.ok'),
+          onOk: close,
+          title: t('createTask.discardConfirm.title'),
+        }),
+    });
+
+    // An image pasted into the instruction finishes uploading later; without
+    // this, that update would move the caret back from the title mid-typing.
+    const handleTitleFocus = useCallback(() => releaseEditorSelection(editor), [editor]);
+
     return (
-      <Flexbox flex={1} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
+      <Flexbox flex={1} ref={rootRef} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
         <Flexbox
           horizontal
           align={'center'}
@@ -265,6 +295,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               padding: '4px 0',
             }}
             onChange={(e) => setTitle(e.target.value)}
+            onFocus={handleTitleFocus}
             onKeyDown={handleTitleKeyDown}
           />
           <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
@@ -275,7 +306,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
                 onClick={handleInline}
               />
             )}
-            <ActionIcon icon={X} onClick={close} />
+            <ActionIcon icon={X} title={t('close', { ns: 'common' })} onClick={close} />
           </Flexbox>
         </Flexbox>
 

@@ -16,6 +16,11 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import CanvasStorageSummary from '@/features/CanvasStorage/Summary';
+import {
+  summarizeCanvasStorage,
+  useFetchCanvasStorage,
+} from '@/features/CanvasStorage/useCanvasStorage';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -24,6 +29,7 @@ import { useWorkspaceWorksInfinite } from './hooks';
 import WorkGallerySkeleton, { WorkGalleryCardsSkeleton } from './Skeleton';
 import { useOpenWork } from './useOpenWork';
 import WorkPreviewCard from './WorkPreviewCard';
+import WorksTypeTabs from './WorksTypeTabs';
 
 const styles = createStaticStyles(({ css }) => ({
   agentFilter: css`
@@ -124,6 +130,11 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
     }
   `,
+  typeBar: css`
+    flex: none;
+    padding-block: 12px 0;
+    padding-inline: 24px;
+  `,
   scroll: css`
     overflow: hidden auto;
     flex: 1;
@@ -178,6 +189,12 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
 
   const { items, error, hasMore, isLoadingInitial, isLoadingMore, loadMore, reload } =
     useWorkspaceWorksInfinite(galleryKey);
+
+  // Canvas cards name the file storage they hold; only the caller's own
+  // canvases have a size, so a teammate's card simply shows none.
+  const hasCanvas = galleryKey === 'canvas' || items.some((item) => item.type === 'canvas');
+  const { data: canvasStorage } = useFetchCanvasStorage(hasCanvas);
+  const canvasSummary = useMemo(() => summarizeCanvasStorage(canvasStorage), [canvasStorage]);
 
   const agentIds = useMemo(
     () => [...new Set(items.map((item) => item.originAgentId).filter(Boolean))] as string[],
@@ -291,7 +308,14 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
               </div>
               <div className={styles.cardList}>
                 {group.items.map((item) => (
-                  <WorkPreviewCard item={item} key={item.id} onOpen={handleOpen} />
+                  <WorkPreviewCard
+                    item={item}
+                    key={item.id}
+                    storage={
+                      item.resourceId ? canvasSummary.byCanvas.get(item.resourceId) : undefined
+                    }
+                    onOpen={handleOpen}
+                  />
                 ))}
               </div>
             </section>
@@ -314,10 +338,21 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
     );
   };
 
+  const typeTabs = (
+    <Flexbox className={styles.typeBar} gap={12}>
+      <WorksTypeTabs activeKey={galleryKey} />
+      {galleryKey === 'canvas' && <CanvasStorageSummary summary={canvasSummary} />}
+    </Flexbox>
+  );
+
   return isLoadingInitial && items.length === 0 ? (
-    <WorkGallerySkeleton />
+    <Flexbox className={styles.container}>
+      {typeTabs}
+      <WorkGallerySkeleton />
+    </Flexbox>
   ) : (
     <Flexbox className={styles.container}>
+      {typeTabs}
       {agentIds.length > 0 && (
         <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
           <Button

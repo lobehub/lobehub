@@ -170,6 +170,17 @@ describe('projectWorkingDirectory store', () => {
       // The directory rows themselves did not change.
       expect(invalidates('projectDirectories', 'project-1')).toBe(false);
     });
+
+    it('refreshes every projection of a project conversation after its agent changed', async () => {
+      await useProjectDirectoryStore.getState().refreshProjectTopics('project-1');
+
+      expect(invalidates('projectTopics', 'project-1')).toBe(true);
+      expect(invalidates('projectTopics', 'project-2')).toBe(false);
+      // Directory and environment rows denormalize the topic's agent.
+      expect(invalidates('directoryTopics', 'directory-1')).toBe(true);
+      expect(invalidates('environmentTopics', 'directory-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'project-1')).toBe(false);
+    });
   });
 });
 

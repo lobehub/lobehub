@@ -4,7 +4,7 @@ import { type TaskDetail } from '@lobechat/types';
 import { Flexbox, Spin, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Footprints, Timer, Wrench } from 'lucide-react';
+import { BrainCircuit, Timer, Wrench } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -240,14 +240,14 @@ const ProcessingState = memo<ProcessingStateProps>(
               )}
             </Flexbox>
             <Flexbox horizontal align="center" gap={12}>
-              {/* Steps */}
+              {/* LLM calls (`totalSteps` holds the LLM-call total) */}
               {totalSteps !== undefined && totalSteps > 0 && (
                 <Text as={'span'} fontSize={12} type={'secondary'}>
-                  <Footprints size={12} />
+                  <BrainCircuit size={12} />
                   <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
                     {totalSteps}
                   </Text>
-                  <span>{t('task.metrics.stepsShort')}</span>
+                  <span>{t('task.metrics.llmCallsShort')}</span>
                 </Text>
               )}
               {/* Tool Calls */}
@@ -322,11 +322,11 @@ const ProcessingState = memo<ProcessingStateProps>(
             <Flexbox horizontal align="center" gap={12}>
               {totalSteps !== undefined && totalSteps > 0 && (
                 <Text as={'span'} fontSize={12} type={'secondary'}>
-                  <Footprints size={12} />
+                  <BrainCircuit size={12} />
                   <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
                     {totalSteps}
                   </Text>
-                  <span>{t('task.metrics.stepsShort')}</span>
+                  <span>{t('task.metrics.llmCallsShort')}</span>
                 </Text>
               )}
               {totalToolCalls !== undefined && totalToolCalls > 0 && (

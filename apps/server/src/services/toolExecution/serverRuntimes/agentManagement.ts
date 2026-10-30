@@ -10,6 +10,7 @@ import {
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
+import { buildBackgroundSubAgentReceipt } from '@lobechat/builtin-tool-lobe-agent';
 import { searchAgentsResultsPrompt } from '@lobechat/prompts';
 import {
   getPluginMode,
@@ -26,6 +27,7 @@ import { AgentService } from '@/server/services/agent';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import { startBackgroundSubAgent } from './backgroundSubAgent';
 import {
   NEXT_RUN_NOTE,
   resolveOrInstallMarketPlugin,
@@ -98,12 +100,46 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           };
         }
 
-        const { started, error, subOperationId, threadId } = await ctx.subAgent.run({
-          agentId,
-          description: `Call agent ${agentId}`,
-          instruction,
-          timeout: 1_800_000,
-        });
+        const background = params.runInBackground === true;
+
+        // The target's name titles its thread and, for a background call, is who
+        // the reply is delivered as.
+        const targetTitle = (await agentModel.getAgentConfigById(agentId))?.title;
+
+        const runner = ctx.subAgent;
+        const startRun = () =>
+          runner.run({
+            agentId,
+            background,
+            description: targetTitle || `Call agent ${agentId}`,
+            instruction,
+            timeout: 1_800_000,
+          });
+
+        let runResult: Awaited<ReturnType<typeof startRun>>;
+        if (background) {
+          const outcome = await startBackgroundSubAgent({
+            db: context.serverDB!,
+            groupId: ctx.groupId,
+            retryHint: 'Call callAgent again without runInBackground to wait for the reply.',
+            start: startRun,
+            threadId: ctx.threadId,
+            topicId: ctx.topicId,
+            userId: context.userId!,
+            workspaceId: context.workspaceId,
+          });
+          if ('refusal' in outcome) {
+            return {
+              content: outcome.refusal.message,
+              error: { code: outcome.refusal.code, message: outcome.refusal.message },
+              success: false,
+            };
+          }
+          runResult = outcome.result;
+        } else {
+          runResult = await startRun();
+        }
+        const { started, error, subOperationId, threadId, toolMessageId } = runResult;
 
         if (!started) {
           const detail = error ? `: ${error}` : '.';
@@ -113,6 +149,13 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             error: { code: 'AGENT_CALL_START_FAILED', message },
             success: false,
           };
+        }
+
+        // Detached: the receipt is the whole tool result; the reply arrives later
+        // as a message from the target. It goes into the runner's placeholder,
+        // which anchors the thread.
+        if (background) {
+          return { content: buildBackgroundSubAgentReceipt(), success: true, toolMessageId };
         }
 
         return {

@@ -84,7 +84,7 @@ export const createHomeSlice = (
 /**
  * The memory home reads: the persona and the identity roles + tags aggregate.
  *
- * Server state is two `@lobechat/replica` single-value resources (`personaData`
+ * Server state is two `local-replica` single-value resources (`personaData`
  * and `identityRolesData`): the persisted copy paints on the first frame and
  * the network confirms it in the background. The domain store exposes the same
  * flat fields and the same action surface it always has, backed by the replica

@@ -79,6 +79,10 @@ class AgentQuotaService {
   listUsageTurns = async (accountId: string, sinceDays?: number) =>
     lambdaClient.agentQuota.listUsageTurns.query({ accountId, sinceDays });
 
+  /** Agent runs in flight on an account, newest turn first. */
+  listActiveRuns = async (accountId: string) =>
+    lambdaClient.agentQuota.listActiveRuns.query({ accountId });
+
   listBindings = async (agentId: string) => lambdaClient.agentQuota.listBindings.query({ agentId });
 
   /** UI "switch account": pin one account for an agent (Manual mode). */
@@ -102,7 +106,7 @@ class AgentQuotaService {
   /** Who the load balancer would pick right now (Auto mode preview + reason). */
   selectAccountForAgent = async (
     agentId: string,
-    options?: { modelScope?: string; provider?: string },
+    options?: { modelScope?: string; provider?: string; runnableExternalAccountIds?: string[] },
   ) => lambdaClient.agentQuota.selectAccountForAgent.query({ agentId, ...options });
 
   /** One assistant turn's consumption → usage ledger (idempotent by message id). */

@@ -165,15 +165,9 @@ describe('Labs settings page', () => {
     );
   });
 
-  it('shows the workspace group only to users with workspace access', () => {
-    renderPage();
-    expect(screen.queryByText('group.workspace')).toBeNull();
-    expect(screen.queryByText('features.workspaceOnboarding.title')).toBeNull();
-    cleanup();
-
+  it('does not render an empty workspace group', () => {
     renderPage({ enableWorkspace: true });
-    expect(screen.getByText('group.workspace')).toBeDefined();
-    expect(screen.getByText('features.workspaceOnboarding.title')).toBeDefined();
+    expect(screen.queryByText('group.workspace')).toBeNull();
   });
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {

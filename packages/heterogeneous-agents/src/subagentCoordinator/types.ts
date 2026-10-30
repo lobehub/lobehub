@@ -68,6 +68,25 @@ export interface SubagentRun {
   threadId: string;
   /** Per-turn tool persistence state. */
   toolState: SubagentTurnToolState;
+  /**
+   * Every adapter `subagentMessageId` this run has opened an assistant for.
+   * Carried into {@link FinalizedSubagentRun} so a replay of one of these turns
+   * after finalize stays a no-op instead of reopening the thread.
+   */
+  turnIds: Set<string>;
+}
+
+/**
+ * What a finalized run leaves behind so the same subagent can resume later.
+ * CC's `SendMessage` wakes a completed subagent and its events keep the
+ * original `parentToolCallId`; a NEW turn id reopens the thread and chains
+ * onto `lastChainParentId`, while a known turn id is a stale replay.
+ */
+export interface FinalizedSubagentRun {
+  lastChainParentId: string;
+  lifetimeToolCallIds: Set<string>;
+  threadId: string;
+  turnIds: Set<string>;
 }
 
 export interface SubagentRunsState {
@@ -82,12 +101,19 @@ export interface SubagentRunsState {
    * boundaries; on the server it is reseeded from DB `Active` isolation threads.
    */
   finalizedParents: Set<string>;
+  /**
+   * Resume anchors for finalized parents, keyed by `parentToolCallId`. A
+   * finalized parent without an anchor (e.g. a cold replica that only knows
+   * the thread is `Active`) cannot resume and drops every event.
+   */
+  finalizedRuns: Map<string, FinalizedSubagentRun>;
   /** Active subagent runs, keyed by `parentToolCallId`. */
   runs: Map<string, SubagentRun>;
 }
 
 export const createSubagentRunsState = (): SubagentRunsState => ({
   finalizedParents: new Set(),
+  finalizedRuns: new Map(),
   runs: new Map(),
 });
 
@@ -116,6 +142,10 @@ export const createSubagentRunsState = (): SubagentRunsState => ({
  * turn behavior as before, no duplicate thread.
  */
 export interface SubagentRunSnapshot {
+  /** Persisted text of the in-flight turn, so a continuation appends instead of replacing it. */
+  accContent?: string;
+  /** Persisted reasoning of the in-flight turn. */
+  accReasoning?: string;
   /** Latest in-thread assistant id (where a continuation turn would otherwise append). */
   currentAssistantId: string;
   /** CC `message.id` of the in-flight turn, from the latest assistant's `metadata.subagentMessageId`. */
@@ -128,39 +158,81 @@ export interface SubagentRunSnapshot {
   parentToolCallId: string;
   /** The existing isolation Thread this run owns. */
   threadId: string;
+  /** Every `subagentMessageId` already persisted in the thread. */
+  turnIds?: string[];
+  /** Tools already on the in-flight assistant, so a cumulative `tools_calling` keeps them. */
+  turnTools?: { payload: ToolCallPayload; toolMessageId: string }[];
 }
+
+/** DB-derived snapshot of a finalized run, used to rebuild its {@link FinalizedSubagentRun}. */
+export interface FinalizedSubagentRunSnapshot {
+  /** The thread's latest non-tool message, where a resumed turn chains on. */
+  lastChainParentId: string;
+  lifetimeToolCallIds?: string[];
+  parentToolCallId: string;
+  threadId: string;
+  turnIds?: string[];
+}
+
+/** Rebuild one live {@link SubagentRun} from its DB snapshot. */
+export const restoreSubagentRun = (s: SubagentRunSnapshot): SubagentRun => {
+  const turnTools = s.turnTools ?? [];
+  return {
+    accContent: s.accContent ?? '',
+    accReasoning: s.accReasoning ?? '',
+    currentAssistantId: s.currentAssistantId,
+    currentSubagentMessageId: s.currentSubagentMessageId ?? '',
+    lastChainParentId: s.lastChainParentId ?? s.currentAssistantId,
+    lifetimeToolCallIds: new Set(s.lifetimeToolCallIds ?? []),
+    threadId: s.threadId,
+    toolState: {
+      payloads: turnTools.map(({ payload }) => ({ ...payload })),
+      persistedIds: new Set(turnTools.map(({ payload }) => payload.id)),
+      toolMsgIdByCallId: new Map(
+        turnTools.map(({ payload, toolMessageId }) => [payload.id, toolMessageId]),
+      ),
+    },
+    turnIds: new Set(s.turnIds ?? []),
+  };
+};
+
+/** Rebuild one {@link FinalizedSubagentRun} resume anchor from its DB snapshot. */
+export const restoreFinalizedSubagentRun = (
+  s: FinalizedSubagentRunSnapshot,
+): FinalizedSubagentRun => ({
+  lastChainParentId: s.lastChainParentId,
+  lifetimeToolCallIds: new Set(s.lifetimeToolCallIds ?? []),
+  threadId: s.threadId,
+  turnIds: new Set(s.turnIds ?? []),
+});
 
 /**
  * Rebuild a {@link SubagentRunsState} from DB-derived snapshots of in-flight
  * runs. Use on a cold start so a continuing subagent reuses its existing thread
- * instead of forking a new one. `accContent` / `accReasoning` / per-turn
- * `toolState` start empty — the next turn boundary opens a fresh in-thread
- * assistant, and inner tool_results still resolve through `lifetimeToolCallIds`.
+ * instead of forking a new one. The in-flight turn's text and tools come back
+ * from the snapshot when provided; inner tool_results resolve through
+ * `lifetimeToolCallIds`.
  *
  * `finalizedParentToolCallIds` seeds {@link SubagentRunsState.finalizedParents}
  * — `parentToolCallId`s whose thread already finalized (`Active`). These are NOT
  * live runs (a completed spawn is never resurrected); they only block a replayed
  * first-event from forking a duplicate thread on a cold replica.
+ * `finalizedRuns` adds resume anchors for the finalized parents that may resume.
  */
 export const rehydrateSubagentRunsState = (
   snapshots: SubagentRunSnapshot[],
   finalizedParentToolCallIds: string[] = [],
-): SubagentRunsState => {
-  const runs = new Map<string, SubagentRun>();
-  for (const s of snapshots) {
-    runs.set(s.parentToolCallId, {
-      accContent: '',
-      accReasoning: '',
-      currentAssistantId: s.currentAssistantId,
-      currentSubagentMessageId: s.currentSubagentMessageId ?? '',
-      lastChainParentId: s.lastChainParentId ?? s.currentAssistantId,
-      lifetimeToolCallIds: new Set(s.lifetimeToolCallIds ?? []),
-      threadId: s.threadId,
-      toolState: { payloads: [], persistedIds: new Set(), toolMsgIdByCallId: new Map() },
-    });
-  }
-  return { finalizedParents: new Set(finalizedParentToolCallIds), runs };
-};
+  finalizedRuns: FinalizedSubagentRunSnapshot[] = [],
+): SubagentRunsState => ({
+  finalizedParents: new Set([
+    ...finalizedParentToolCallIds,
+    ...finalizedRuns.map((s) => s.parentToolCallId),
+  ]),
+  finalizedRuns: new Map(
+    finalizedRuns.map((s) => [s.parentToolCallId, restoreFinalizedSubagentRun(s)]),
+  ),
+  runs: new Map(snapshots.map((s) => [s.parentToolCallId, restoreSubagentRun(s)])),
+});
 
 // ─── Reduce context (per event) ───
 
@@ -199,7 +271,8 @@ export type SubagentIntent =
   | UpdateToolStateIntent
   | ResolveToolResultIntent
   | RecordUsageIntent
-  | FinalizeThreadIntent;
+  | FinalizeThreadIntent
+  | ReopenThreadIntent;
 
 /** Lazy-create the subagent Thread (status Processing). */
 export interface CreateThreadIntent {
@@ -334,5 +407,11 @@ export interface RecordUsageIntent {
 /** Mark the subagent Thread complete (Processing → Active). */
 export interface FinalizeThreadIntent {
   kind: 'finalizeThread';
+  threadId: string;
+}
+
+/** A finalized subagent resumed: mark its Thread running again (Active → Processing). */
+export interface ReopenThreadIntent {
+  kind: 'reopenThread';
   threadId: string;
 }

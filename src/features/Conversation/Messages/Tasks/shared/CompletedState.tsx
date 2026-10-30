@@ -5,7 +5,7 @@ import { type IconProps } from '@lobehub/ui';
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Footprints, Timer, Wrench } from 'lucide-react';
+import { BrainCircuit, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -68,8 +68,8 @@ const MetricsRow = memo<MetricsRowProps>(
     // Build metrics array in order
     if (totalSteps !== undefined && totalSteps > 0) {
       metrics.push({
-        icon: Footprints,
-        label: t('task.metrics.stepsShort'),
+        icon: BrainCircuit,
+        label: t('task.metrics.llmCallsShort'),
         value: totalSteps,
       });
     }
