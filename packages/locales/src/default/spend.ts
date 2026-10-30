@@ -51,6 +51,7 @@ export default {
   'table.columns.trigger.enums.topic_summary': 'Topic Summary',
   'table.columns.trigger.enums.topic_title': 'Topic Title',
   'table.columns.trigger.enums.translate': 'Translation',
+  'table.columns.trigger.enums.tts': 'Voice Synthesis',
   'table.columns.trigger.enums.verify': 'Acceptance Check',
   'table.columns.trigger.enums.video': 'Video Generation',
   'table.columns.trigger.title': 'Trigger',

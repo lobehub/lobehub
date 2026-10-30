@@ -52,6 +52,7 @@
   "table.columns.trigger.enums.topic_summary": "话题摘要",
   "table.columns.trigger.enums.topic_title": "话题标题",
   "table.columns.trigger.enums.translate": "翻译",
+  "table.columns.trigger.enums.tts": "语音合成",
   "table.columns.trigger.enums.verify": "验收",
   "table.columns.trigger.enums.video": "视频生成",
   "table.columns.trigger.title": "触发方式",
