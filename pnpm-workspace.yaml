@@ -57,6 +57,7 @@ allowBuilds:
   es5-ext: false
   esbuild: false
   ffmpeg-static: true
+  msgpackr-extract: false
   protobufjs: false
   sharp: false
   unrs-resolver: false

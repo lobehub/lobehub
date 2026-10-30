@@ -57,17 +57,15 @@ vi.mock('@/database/models/asyncTask', () => ({
   }),
 }));
 
-vi.mock('@/libs/qstash', () => ({
-  OtelWorkflowClient: vi.fn(function () {
-    return {
-      trigger: mockTrigger,
-    };
+vi.mock('@/server/services/memory/userMemory/workflow/impls', () => ({
+  getMemoryWorkflowTrigger: () => ({
+    triggerHourly: mockTrigger,
   }),
+  resetMemoryWorkflowTrigger: vi.fn(),
 }));
 
 describe('MemoryExtractionWorkflowService.triggerHourlyTracked', () => {
   const originalServiceUserId = process.env.MEMORY_EXTRACTION_HOURLY_TASK_USER_ID;
-  const originalQstashToken = process.env.QSTASH_TOKEN;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -75,7 +73,6 @@ describe('MemoryExtractionWorkflowService.triggerHourlyTracked', () => {
     vi.setSystemTime(new Date('2026-07-06T00:00:00.000Z'));
 
     process.env.MEMORY_EXTRACTION_HOURLY_TASK_USER_ID = 'service-account-user';
-    process.env.QSTASH_TOKEN = 'test-qstash-token';
 
     mockGetServerDB.mockResolvedValue({
       db: 'server',
@@ -102,12 +99,6 @@ describe('MemoryExtractionWorkflowService.triggerHourlyTracked', () => {
       delete process.env.MEMORY_EXTRACTION_HOURLY_TASK_USER_ID;
     } else {
       process.env.MEMORY_EXTRACTION_HOURLY_TASK_USER_ID = originalServiceUserId;
-    }
-
-    if (originalQstashToken === undefined) {
-      delete process.env.QSTASH_TOKEN;
-    } else {
-      process.env.QSTASH_TOKEN = originalQstashToken;
     }
   });
 
@@ -154,8 +145,8 @@ describe('MemoryExtractionWorkflowService.triggerHourlyTracked', () => {
       status: AsyncTaskStatus.Pending,
       type: AsyncTaskType.UserMemoryExtractionHourly,
     });
-    expect(mockTrigger).toHaveBeenCalledWith({
-      body: {
+    expect(mockTrigger).toHaveBeenCalledWith(
+      {
         baseUrl: 'https://app.example.com',
         cursor: {
           createdAt: '2026-07-05T23:00:00.000Z',
@@ -163,9 +154,11 @@ describe('MemoryExtractionWorkflowService.triggerHourlyTracked', () => {
         },
         hourlyTaskId: '00000000-0000-4000-8000-000000000001',
       },
-      headers: { 'x-test-header': '1' },
-      url: 'https://app.example.com/api/workflows/memory-user-memory/call-cron-hourly-analysis',
-    });
+      {
+        extraHeaders: { 'x-test-header': '1' },
+        workflowRunId: undefined,
+      },
+    );
     expect(mockAppendUserMemoryWorkflowRunIds).toHaveBeenCalledWith(
       '00000000-0000-4000-8000-000000000001',
       ['workflow-run-1'],
@@ -210,6 +203,10 @@ describe('MemoryExtractionWorkflowService.triggerHourlyTracked', () => {
       type: AsyncTaskType.UserMemoryExtractionHourly,
     });
     expect(mockTrigger).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: 'https://app.example.com',
+        hourlyTaskId: '00000000-0000-4000-8000-000000000001',
+      }),
       expect.objectContaining({
         workflowRunId: 'memory-user-memory-hourly-entry-run-1',
       }),

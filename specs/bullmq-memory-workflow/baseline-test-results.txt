@@ -1,0 +1,13 @@
+Baseline: 2026-08-21
+Test Files: 7 passed (7)
+Tests: 35 passed (35)
+Duration: 12.74s
+
+Files:
+- extract.workflow.test.ts (4 tests)
+- extract.payload.test.ts (4 tests)
+- extract.runtime.test.ts (10 tests)
+- extract-padding.test.ts
+- embedding-padding.test.ts
+- embedding.test.ts
+- parseMemoryExtractionConfig.test.ts

@@ -1,0 +1,14 @@
+{
+  "features": {
+    "ghcr.io/devcontainer-community/devcontainer-features/bun.sh:1": {
+      "version": "1.0.2",
+      "resolved": "ghcr.io/devcontainer-community/devcontainer-features/bun.sh@sha256:97e64946087b8519097510fbef5c66dfcd6cd8e7ac3bbee9638ba8e60fea5918",
+      "integrity": "sha256:97e64946087b8519097510fbef5c66dfcd6cd8e7ac3bbee9638ba8e60fea5918"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "1.10.0",
+      "resolved": "ghcr.io/devcontainers/features/docker-outside-of-docker@sha256:c2c2cf829505ead8e4892c88c31b6594ae94a2bbb209e16e1fac456c1a3a624e",
+      "integrity": "sha256:c2c2cf829505ead8e4892c88c31b6594ae94a2bbb209e16e1fac456c1a3a624e"
+    }
+  }
+}
