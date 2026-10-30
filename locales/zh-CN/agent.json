@@ -510,6 +510,7 @@
   "channel.records.reason.scheduled": "等后续消息一起处理",
   "channel.records.reason.solo-conversation": "一对一对话",
   "channel.records.reason.watch-keyword": "命中监听关键词",
+  "channel.records.refresh": "刷新",
   "channel.records.silenced": "选择不回复",
   "channel.records.silencedWithReason": "选择不回复：{{reason}}",
   "channel.records.summary.defer": "暂缓处理",

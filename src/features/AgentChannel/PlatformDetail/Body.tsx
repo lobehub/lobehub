@@ -495,7 +495,11 @@ const Body = memo<BodyProps>(
           ))}
         {recordsOpened && currentConfig?.id && (
           <Panel active={activeTab === 'records'} tab="records">
-            <WakeRecords botId={currentConfig.id} disabled={disabled} />
+            <WakeRecords
+              active={activeTab === 'records'}
+              botId={currentConfig.id}
+              disabled={disabled}
+            />
           </Panel>
         )}
       </Form>

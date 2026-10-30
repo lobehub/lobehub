@@ -1,18 +1,21 @@
 'use client';
 
 import type { SignalDecisionOutcome } from '@lobechat/types';
-import { Button, Empty, Flexbox, Segmented, Skeleton, Switch, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Empty, Flexbox, Segmented, Skeleton, Switch, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { History } from 'lucide-react';
-import { useState } from 'react';
+import { History, RotateCw } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AsyncError from '@/components/AsyncError';
+import { mutate as mutateGlobal } from '@/libs/swr';
+import { botWakeKeys } from '@/libs/swr/keys';
 
 import { RecordTable } from './RecordTable';
 import { Summary } from './Summary';
+import { useRefreshOnReturn } from './useRefreshOnReturn';
 import { useWakeDecisions, type WakeRecordFilters } from './useWakeRecords';
 
 /** Matches `SCOPE_READ_DEFAULT_DAYS` on the server; the summary reports it too. */
@@ -45,6 +48,8 @@ const ListSkeleton = () => (
 );
 
 interface WakeRecordsProps {
+  /** The tab is showing. The panel stays mounted while hidden; showing it again refetches. */
+  active?: boolean;
   /** `agent_bot_providers.id` of a saved bot. */
   botId: string;
   /** The caller cannot write (a viewer, or a plan gate): marks are read-only. */
@@ -55,12 +60,20 @@ interface WakeRecordsProps {
  * Every message the bot judged lately, what it did and why, and a one-click mark of whether that
  * was right. Read-only history: nothing here takes part in the settings form or its Save.
  */
-export const WakeRecords = ({ botId, disabled }: WakeRecordsProps) => {
+export const WakeRecords = ({ active = true, botId, disabled }: WakeRecordsProps) => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string, options?: Record<string, unknown>) => string;
   const [filters, setFilters] = useState<WakeRecordFilters>(NO_FILTERS);
   const { data, error, isLoading, isValidating, markDecision, mutate, setSize, size } =
     useWakeDecisions(botId, filters);
+
+  // New decisions arrive while the owner is elsewhere (testing the bot): refetch the loaded pages
+  // and the summary on coming back, and on demand.
+  const refresh = useCallback(() => {
+    void mutate();
+    void mutateGlobal(botWakeKeys.summary(botId));
+  }, [botId, mutate]);
+  useRefreshOnReturn(active, refresh);
 
   const items = data?.flatMap((page) => page.items) ?? [];
   const filtered = filters.outcome || filters.followupOnly || filters.unmarkedOnly;
@@ -109,6 +122,15 @@ export const WakeRecords = ({ botId, disabled }: WakeRecordsProps) => {
           />
           <Text>{t('channel.records.filter.unmarkedOnly')}</Text>
         </Flexbox>
+        <ActionIcon
+          aria-label={t('channel.records.refresh')}
+          icon={RotateCw}
+          loading={isValidating && !isLoading}
+          size={'small'}
+          style={{ marginInlineStart: 'auto' }}
+          title={t('channel.records.refresh')}
+          onClick={refresh}
+        />
       </Flexbox>
       <AsyncBoundary
         data={data}

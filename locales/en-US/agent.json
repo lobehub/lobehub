@@ -510,6 +510,7 @@
   "channel.records.reason.scheduled": "Held to read with the next messages",
   "channel.records.reason.solo-conversation": "One-on-one conversation",
   "channel.records.reason.watch-keyword": "Watch keyword matched",
+  "channel.records.refresh": "Refresh",
   "channel.records.silenced": "Chose not to reply",
   "channel.records.silencedWithReason": "Chose not to reply: {{reason}}",
   "channel.records.summary.defer": "Deferred",

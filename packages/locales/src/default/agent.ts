@@ -685,6 +685,7 @@ export default {
   'channel.records.outcome.skip': 'Skipped',
   'channel.records.outcome.defer': 'Deferred',
   'channel.records.proactive': 'Proactive',
+  'channel.records.refresh': 'Refresh',
   'channel.records.purged': 'Message expired',
   'channel.records.purgedHint': 'Message text is kept for 7 days.',
   'channel.records.silenced': 'Chose not to reply',
