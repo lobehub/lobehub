@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { parse } from '../../parse';
 import type { Message } from '../../types';
 import { BranchResolver } from '../BranchResolver';
 import { FlatListBuilder } from '../FlatListBuilder';
@@ -17,11 +18,11 @@ import { MessageTransformer } from '../MessageTransformer';
  * normal turn chains off it (see reducer.test.ts "promotes a tools-bearing
  * signal turn onto the spine"). That produces the LINEAR shape below.
  *
- * These tests pin the read side's behavior on both shapes, proving the write-side
- * promotion is load-bearing:
+ * These tests pin the read side's behavior on both shapes:
  *   - LINEAR (post-fix): the whole spine renders, tail included.
- *   - FORKED (pre-fix):  the reader walks into the signal branch at the fork and
- *                        DROPS the tail — exactly the bug the promotion prevents.
+ *   - FORKED (pre-fix):  the signal turn and the tail both hang off the fork.
+ *                        A wake-up is never a branch alternative, so the reader
+ *                        renders both in creation order instead of dropping one.
  */
 
 const toolArr = (id: string) => [
@@ -46,6 +47,13 @@ const flatten = (messages: Message[]) => {
     new MessageTransformer(),
   );
   return builder.flatten(messages);
+};
+
+/** Steps of the run's single AssistantGroup, in render order. */
+const groupStepIds = (flat: Message[]): string[] => {
+  const groups = flat.filter((m) => m.role === ('assistantGroup' as any)) as any[];
+  expect(groups).toHaveLength(1);
+  return groups[0].children.map((step: { id: string }) => step.id);
 };
 
 // The last fork of tpc_aGIggi9N8DpK, distilled:
@@ -146,14 +154,136 @@ describe('signal turn that emits tools — spine promotion (tpc_aGIggi9N8DpK)', 
     expect(group.signalCallbacks ?? []).toHaveLength(0);
   });
 
-  it('FORKED (pre-fix): S2 re-mounts on the pre-signal spine — reader DROPS the tail', () => {
+  it('FORKED (pre-fix): S2 re-mounts on the pre-signal spine — both sides of the fork render', () => {
     const flat = flatten(scenario('W'));
-    const json = JSON.stringify(flat);
 
-    // The signal branch still renders …
-    expect(json).toContain('TASKCOMP');
-    // … but everything after the fork (the real conclusion) silently vanishes —
-    // the exact symptom the write-side promotion eliminates.
-    expect(json).not.toContain('TAILMARKER');
+    expect(groupStepIds(flat)).toEqual(['W', 'SIG', 'S2', 'TAIL']);
+  });
+});
+
+/**
+ * Observed in a production topic: the main agent left a background search and
+ * an async subagent running, said "waiting" without a tool, and ended its turn.
+ * CC woke the LLM once per finished task, and each wake-up called a tool before
+ * writing its reply. The writer parents every wake-up off the run's latest tool result,
+ * so the first one competes with the closing reply under `RUN`.
+ *
+ * The second wake-up hangs off the first wake-up's tool on a replica that saw the
+ * whole run (LINEAR), or off the same `toolWait` when a stale replica opened it
+ * (STALE). The final answer was missing from the UI in the STALE shape, and the
+ * closing reply was missing in both.
+ */
+describe('wake-up turns that call tools after a toolless closing reply', () => {
+  const wakeUpScenario = (parentOfWake2: 'toolRead1' | 'toolWait'): Message[] => [
+    { content: 'go', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },
+    {
+      agentId: 'a',
+      content: 'waiting on the code-path analysis',
+      createdAt: 100,
+      id: 'RUN',
+      parentId: 'u1',
+      role: 'assistant',
+      tools: toolArr('wait'),
+      updatedAt: 100,
+    },
+    {
+      content: 'waiting',
+      createdAt: 110,
+      id: 'toolWait',
+      parentId: 'RUN',
+      role: 'tool',
+      tool_call_id: 'wait',
+      updatedAt: 110,
+    } as any,
+    {
+      agentId: 'a',
+      content: 'upstream checked, results soon',
+      createdAt: 115,
+      id: 'REPLY',
+      parentId: 'RUN',
+      role: 'assistant',
+      updatedAt: 115,
+    },
+    {
+      agentId: 'a',
+      content: '',
+      createdAt: 120,
+      id: 'WAKE1',
+      metadata: {
+        signal: { sourceToolCallId: 'search', sourceToolName: 'Bash', type: 'task-completion' },
+      } as any,
+      parentId: 'toolWait',
+      role: 'assistant',
+      tools: toolArr('read1'),
+      updatedAt: 120,
+    },
+    {
+      content: 'search output',
+      createdAt: 125,
+      id: 'toolRead1',
+      parentId: 'WAKE1',
+      role: 'tool',
+      tool_call_id: 'read1',
+      updatedAt: 125,
+    } as any,
+    {
+      agentId: 'a',
+      content: 'search finished, still waiting on the subagent',
+      createdAt: 130,
+      id: 'WAKE1_REPLY',
+      parentId: 'WAKE1',
+      role: 'assistant',
+      updatedAt: 130,
+    },
+    {
+      agentId: 'a',
+      content: '',
+      createdAt: 140,
+      id: 'WAKE2',
+      metadata: {
+        signal: { sourceToolCallId: 'subagent', sourceToolName: 'Agent', type: 'task-completion' },
+      } as any,
+      parentId: parentOfWake2,
+      role: 'assistant',
+      tools: toolArr('read2'),
+      updatedAt: 140,
+    },
+    {
+      content: 'script source',
+      createdAt: 145,
+      id: 'toolRead2',
+      parentId: 'WAKE2',
+      role: 'tool',
+      tool_call_id: 'read2',
+      updatedAt: 145,
+    } as any,
+    {
+      agentId: 'a',
+      content: 'final analysis',
+      createdAt: 150,
+      id: 'FINAL',
+      parentId: 'WAKE2',
+      role: 'assistant',
+      updatedAt: 150,
+    },
+  ];
+
+  const everyStep = ['RUN', 'REPLY', 'WAKE1', 'WAKE1_REPLY', 'WAKE2', 'FINAL'];
+
+  /** The contextTree walk follows the same chain rule as the flat list. */
+  const contextTreeStepIds = (messages: Message[]): string[] => {
+    const groups = parse(messages).contextTree.filter((n) => n.type === 'assistantGroup') as any[];
+    expect(groups).toHaveLength(1);
+    return groups[0].children.map((step: { id: string }) => step.id);
+  };
+
+  it('LINEAR: renders the closing reply and every wake-up in order', () => {
+    expect(groupStepIds(flatten(wakeUpScenario('toolRead1')))).toEqual(everyStep);
+    expect(contextTreeStepIds(wakeUpScenario('toolRead1'))).toEqual(everyStep);
+  });
+
+  it('STALE: renders both wake-ups that share one tool result, final answer included', () => {
+    expect(groupStepIds(flatten(wakeUpScenario('toolWait')))).toEqual(everyStep);
+    expect(contextTreeStepIds(wakeUpScenario('toolWait'))).toEqual(everyStep);
   });
 });

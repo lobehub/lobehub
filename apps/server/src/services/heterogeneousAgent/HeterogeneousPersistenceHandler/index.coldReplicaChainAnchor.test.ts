@@ -3,6 +3,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { __resetOperationStatesForTesting, HeterogeneousPersistenceHandler } from '.';
+import { operationStates } from './operationState';
 
 /**
  * Regression for the remote-device chain-fork (observed on tpc_3DKmFfAmx9YA):
@@ -343,5 +344,73 @@ describe('HeterogeneousPersistenceHandler — signal turn anchor on a cold repli
 
     // No tool in this run: fall back to the spine, never cross the user turn.
     expect(signalTurn(h.messages)?.parentId).toBe(SEED);
+  });
+});
+
+/**
+ * Observed in a production topic: two background tasks woke the LLM one after
+ * the other, and each wake-up called a tool. The first wake-up landed on another
+ * replica, so the replica that ran the main turn still held the main turn's tool
+ * as `lastToolMsgIdEver` when the second wake-up reached it. Both wake-ups ended
+ * up under that one tool, and the UI showed only the first.
+ */
+describe('HeterogeneousPersistenceHandler — signal turn anchor on a stale warm replica', () => {
+  beforeEach(() => __resetOperationStatesForTesting());
+  afterEach(() => __resetOperationStatesForTesting());
+
+  const textStep = (stepIndex: number, ccMsgId: string, content: string): AgentStreamEvent[] => [
+    buildEvent('stream_start', stepIndex, {
+      messageId: ccMsgId,
+      newStep: true,
+      provider: 'claude-code',
+    }),
+    buildEvent('stream_chunk', stepIndex, { chunkType: 'text', content }),
+  ];
+
+  const wakeUpStep = (
+    stepIndex: number,
+    ccMsgId: string,
+    toolCallId: string,
+  ): AgentStreamEvent[] => [
+    buildEvent('stream_start', stepIndex, {
+      externalSignal: {
+        sourceToolCallId: 'tc-A',
+        sourceToolName: 'Agent',
+        type: 'task-completion',
+      },
+      messageId: ccMsgId,
+      newStep: true,
+      provider: 'claude-code',
+    }),
+    buildEvent('stream_chunk', stepIndex, {
+      chunkType: 'tools_calling',
+      toolsCalling: [
+        { apiName: 'Bash', arguments: '{}', id: toolCallId, identifier: 'bash', type: 'default' },
+      ],
+    }),
+  ];
+
+  it("anchors the second wake-up onto the first wake-up's tool", async () => {
+    const h = createHarness();
+    const ingest = (events: AgentStreamEvent[]) =>
+      h.handler.ingest({ assistantMessageId: SEED, events, operationId: OP, topicId: TOPIC });
+
+    // Replica A: the main turn launches the task and ends without tools.
+    await ingest([...stepBatch(1, 'cc-A', 'tc-A'), ...textStep(2, 'cc-B', 'still running')]);
+    const replicaA = operationStates.get(OP)!;
+
+    // Replica B: the first wake-up reads the task output, then replies.
+    __resetOperationStatesForTesting();
+    await ingest([...wakeUpStep(3, 'cc-C', 'tc-W1'), ...textStep(4, 'cc-D', 'one task left')]);
+
+    // Replica A again, warm but behind: the second wake-up.
+    __resetOperationStatesForTesting();
+    operationStates.set(OP, replicaA);
+    await ingest(wakeUpStep(5, 'cc-E', 'tc-W2'));
+
+    const toolOf = (toolCallId: string) =>
+      [...h.messages.values()].find((m) => m.tool_call_id === toolCallId)!;
+    const secondWakeUp = toolOf('tc-W2').parentId;
+    expect(h.messages.get(secondWakeUp!)?.parentId).toBe(toolOf('tc-W1').id);
   });
 });

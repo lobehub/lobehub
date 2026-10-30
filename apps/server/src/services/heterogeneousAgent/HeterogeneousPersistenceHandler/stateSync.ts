@@ -427,21 +427,24 @@ const MAX_SIGNAL_ANCHOR_HOPS = 50;
 
 /**
  * Recover `lastToolMsgIdEver` — the anchor a signal turn (a background task's
- * wake-up) parents off — on a replica that never reduced this run's tool
- * batches. Without it the signal turn falls back onto the toolless spine reply,
- * and the read side, which only collects signal turns under tools, renders it
- * as a separate top-level reply.
+ * wake-up) parents off — from the DB instead of trusting this replica's memory.
+ *
+ * A replica that never reduced this run's tool batches has no anchor, so the
+ * signal turn falls back onto the toolless spine reply, and the read side, which
+ * only collects signal turns under tools, renders it as a separate top-level
+ * reply. A warm replica can hold an anchor that another replica has since moved
+ * past (an earlier wake-up called a tool there), which puts the wake-up under an
+ * older tool next to the earlier one. The DB is current in both cases.
  *
  * Walks the spine from its tip back through main-thread assistants and takes
  * the last tool of the first one that called any. Stopping at the first
- * non-assistant (the run's user message) keeps a previous run's tools out.
+ * non-assistant (the run's user message) keeps a previous run's tools out. When
+ * the walk finds no tool, the in-memory anchor stays.
  */
 export async function recoverLastToolMessageFromDb(
   deps: HeterogeneousPersistenceHandlerDeps,
   state: OperationState,
 ): Promise<void> {
-  if (state.main.lastToolMsgIdEver) return;
-
   const threadId = state.threadId ?? null;
   let messageId: string | null | undefined = state.main.lastSpineMessageId;
   for (let hop = 0; messageId && hop < MAX_SIGNAL_ANCHOR_HOPS; hop++) {

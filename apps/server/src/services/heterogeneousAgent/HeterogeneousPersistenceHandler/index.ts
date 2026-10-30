@@ -139,7 +139,8 @@ export class HeterogeneousPersistenceHandler {
     await refreshMainStateFromDb(this.deps, state);
     await refreshSubagentRunsFromDb(this.deps, state, subagentParents);
     // Only a batch that opens a signal turn needs the tool anchor; skip the
-    // lookup for the rest.
+    // lookup for the rest. Re-read it even when warm: another replica may have
+    // persisted a newer tool since this one last saw the run.
     if (params.events.some(opensSignalTurn)) {
       await recoverLastToolMessageFromDb(this.deps, state);
     }
