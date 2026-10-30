@@ -13,7 +13,10 @@ export interface JZSTOKENModelCard {
 export const params = {
   baseURL: 'https://jzstoken.com/api/v1',
   chatCompletion: {
-    handlePayload: (payload) => ({ ...payload, stream: true }) as any,
+    handlePayload: (payload) => {
+      const { apiMode: _, ...rest } = payload;
+      return { ...rest, stream: true } as any;
+    },
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_JZSTOKEN_CHAT_COMPLETION === '1',

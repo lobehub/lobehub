@@ -13,12 +13,31 @@ describe('LobeJZSTOKENAI', () => {
 
   it('forces streaming chat requests', () => {
     const result = params.chatCompletion.handlePayload({
+      apiMode: 'responses',
       messages: [{ content: 'Hello', role: 'user' }],
       model: 'gpt-5.6-terra',
       stream: false,
     });
 
+    expect(result).not.toHaveProperty('apiMode');
     expect(result.stream).toBe(true);
+  });
+
+  it('keeps Responses-capable model IDs on the Chat Completions path', async () => {
+    const instance = new LobeJZSTOKENAI({ apiKey: 'test' });
+    const create = vi
+      .spyOn(instance['client'].chat.completions, 'create')
+      .mockResolvedValue(new ReadableStream() as any);
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gpt-5.6-terra',
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.not.objectContaining({ apiMode: expect.anything() }),
+      expect.anything(),
+    );
   });
 
   it('fetches the key-scoped model list', async () => {
