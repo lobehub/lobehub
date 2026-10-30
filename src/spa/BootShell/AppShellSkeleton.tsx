@@ -60,10 +60,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     inset-block-start: calc(100% + 8px);
     inset-inline-start: 50%;
+    transform: translateX(-50%);
 
     font-size: 13px;
     white-space: nowrap;
 
+    /* A caption taken over at handoff skips the slide-in, so the centering
+       lives here too, not only in the keyframes. */
     &[data-enter] {
       animation: ${slideUp} 0.42s ${cssVar.motionEaseOut} both;
     }
