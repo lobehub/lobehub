@@ -571,8 +571,8 @@ export default {
   'heterogeneousStatus.device.openDocs': 'Installation guide',
   'heterogeneousStatus.device.scanFailed':
     'Couldn’t check {{name}} CLI on {{device}}. Update LobeHub on that device and try again.',
-  'heterogeneousStatus.device.scanFailedReason': 'Details: {{reason}}',
   'heterogeneousStatus.device.scanFailedTag': 'Unknown',
+  'heterogeneousStatus.device.showDetails': 'Show details',
   'heterogeneousStatus.device.unavailable': '{{name}} CLI not found on {{device}}',
   'heterogeneousStatus.sandbox.desc':
     '{{name}} runs in the cloud sandbox. Nothing needs to be installed on your devices.',

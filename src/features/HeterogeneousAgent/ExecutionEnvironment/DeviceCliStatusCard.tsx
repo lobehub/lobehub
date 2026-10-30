@@ -3,7 +3,18 @@
 import { isDesktop } from '@lobechat/const';
 import { getHeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
-import { ActionIcon, Button, Flexbox, Icon, Snippet, Spin, Tag, Text, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Flexbox,
+  Icon,
+  Popover,
+  Snippet,
+  Spin,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, RefreshCw, XCircle } from 'lucide-react';
@@ -49,6 +60,12 @@ const styles = stylex.create({
   metaText: {
     color: cssVar.colorTextSecondary,
     fontSize: 13,
+  },
+  reasonDetails: {
+    maxHeight: 200,
+    overflow: 'auto',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
   },
 });
 
@@ -151,10 +168,30 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
         );
       }
       case 'scanFailed': {
+        // One readable line; the raw probe reason (a gateway or device-client
+        // message) stays folded behind a click, as the device CLI update does.
         return (
-          <Text {...stylex.props(styles.metaText)}>
-            {t('heterogeneousStatus.device.scanFailed', params)}
-          </Text>
+          <Flexbox horizontal align="center" gap={4} wrap={'wrap'}>
+            <Text {...stylex.props(styles.metaText)}>
+              {t('heterogeneousStatus.device.scanFailed', params)}
+            </Text>
+            {current.reason && (
+              <Popover
+                placement={'bottomLeft'}
+                styles={{ content: { maxWidth: 'min(400px, 80vw)' } }}
+                trigger={'click'}
+                content={
+                  <Text fontSize={12} {...stylex.props(styles.reasonDetails)}>
+                    {current.reason}
+                  </Text>
+                }
+              >
+                <Button size={'small'} type={'text'}>
+                  {t('heterogeneousStatus.device.showDetails')}
+                </Button>
+              </Popover>
+            )}
+          </Flexbox>
         );
       }
     }
@@ -210,12 +247,6 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
           )}
         </Flexbox>
       </Flexbox>
-
-      {state.status === 'scanFailed' && state.reason && (
-        <Text fontSize={12} type={'secondary'}>
-          {t('heterogeneousStatus.device.scanFailedReason', { reason: state.reason })}
-        </Text>
-      )}
 
       {installCommands.length > 0 && install && (
         <Flexbox gap={8}>
