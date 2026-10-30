@@ -25,7 +25,7 @@ export interface WorktreeBaseState {
   isInvalid: boolean;
   /** A typed ref hasn't been checked yet, or the HEAD read is still in flight. */
   isPending: boolean;
-  /** The ref to send on creation; undefined forks from the source HEAD. */
+  /** The ref the user typed; undefined means the source HEAD. */
   ref?: string;
   /** The device couldn't answer, e.g. a build too old for this RPC. */
   unavailable: boolean;

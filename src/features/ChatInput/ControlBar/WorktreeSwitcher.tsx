@@ -1,4 +1,8 @@
-import { deriveWorktreePath, type DeviceGitWorktreeListItem } from '@lobechat/types';
+import {
+  deriveWorktreePath,
+  type DeviceGitWorktreeBase,
+  type DeviceGitWorktreeListItem,
+} from '@lobechat/types';
 import {
   confirmModal,
   createStaticStyles,
@@ -580,10 +584,13 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     // branch" flow), then switch the working directory into it. Returns an error
     // message for inline display in the modal, or undefined on success.
     const handleCreateWorktree = useCallback(
-      async (branch: string, baseRef?: string): Promise<string | undefined> => {
+      async (branch: string, base?: DeviceGitWorktreeBase): Promise<string | undefined> => {
         const worktreePath = deriveWorktreePath(sourcePath, branch);
         const result = await gitService.addGitWorktree({
-          baseRef,
+          // The commit the dialog showed, so a branch or HEAD that moved while it
+          // was open can't change what the worktree forks from. Undefined only when
+          // the device couldn't answer, which leaves creation on its current HEAD.
+          baseRef: base?.sha,
           branch,
           deviceId,
           path,
@@ -593,9 +600,9 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
 
         // The modal closes on success, so this is the last word on what the branch
         // actually forked from.
-        if (result.base?.detached) {
+        if (base?.detached) {
           toast.warning(
-            t('workingDirectory.newWorktreeBaseDetached', { sha: formatWorktreeBase(result.base) }),
+            t('workingDirectory.newWorktreeBaseDetached', { sha: formatWorktreeBase(base) }),
           );
         }
 

@@ -1,5 +1,6 @@
 'use client';
 
+import type { DeviceGitWorktreeBase } from '@lobechat/types';
 import { cssVar, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
@@ -29,7 +30,7 @@ interface CreateWorktreeContentProps {
    * Create the worktree on a fresh branch. Return an error message to show
    * inline and keep the modal open; return undefined on success (modal closes).
    */
-  onSubmit: (branch: string, baseRef?: string) => Promise<string | undefined>;
+  onSubmit: (branch: string, base?: DeviceGitWorktreeBase) => Promise<string | undefined>;
   path: string;
   /** Preview the target directory the new worktree will occupy for a branch name. */
   resolvePath: (branch: string) => string;
@@ -51,8 +52,7 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>();
     const inputRef = useRef<HTMLInputElement>(null);
-    // Unedited, the field shows the source HEAD and creation forks from it; only a
-    // ref the user typed or picked is sent as `baseRef`.
+    // Unedited, the field shows the source HEAD and creation forks from it.
     const [editedBase, setEditedBase] = useState<string>();
     const { data: branches } = useFetchGitBranches(deviceId, path);
     const {
@@ -99,7 +99,7 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
       if (!branch || isBaseBlocked) return;
       setLoading(true);
       try {
-        const message = await onSubmit(branch, baseRef);
+        const message = await onSubmit(branch, base);
         if (message) {
           setError(message);
           return;
@@ -108,7 +108,7 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
       } finally {
         setLoading(false);
       }
-    }, [baseRef, close, isBaseBlocked, loading, onSubmit, value]);
+    }, [base, close, isBaseBlocked, loading, onSubmit, value]);
 
     return (
       <Flexbox gap={16}>
@@ -221,7 +221,7 @@ CreateWorktreeContent.displayName = 'CreateWorktreeContent';
  */
 export const openCreateWorktreeModal = (options: {
   deviceId?: string;
-  onSubmit: (branch: string, baseRef?: string) => Promise<string | undefined>;
+  onSubmit: (branch: string, base?: DeviceGitWorktreeBase) => Promise<string | undefined>;
   path: string;
   resolvePath: (branch: string) => string;
 }): ModalInstance =>
