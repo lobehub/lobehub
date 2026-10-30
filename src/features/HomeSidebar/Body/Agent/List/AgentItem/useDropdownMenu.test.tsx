@@ -5,6 +5,11 @@ import { canGoNative } from '@/libs/contextMenu/canGoNative';
 
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
+const favoriteMenuItemMock = vi.hoisted(() =>
+  vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
+);
+vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
+
 const mocks = vi.hoisted(() => ({
   canCreate: true,
   canEdit: true,
@@ -181,6 +186,7 @@ describe('useAgentDropdownMenu', () => {
 
     expect(getMenuKeys(result.current())).toEqual([
       'pin',
+      'toggleFavorite',
       'hideFromSidebar',
       'openInNewWindow',
       'copyAgentId',
@@ -266,6 +272,7 @@ describe('useAgentDropdownMenu', () => {
     );
 
     expect(getMenuKeys(result.current())).toEqual([
+      'toggleFavorite',
       'hideFromSidebar',
       'openInNewWindow',
       'copyAgentId',
@@ -392,6 +399,7 @@ describe('useAgentDropdownMenu', () => {
 
     expect(getMenuLayout(result.current())).toEqual([
       'pin',
+      'toggleFavorite',
       'hideFromSidebar',
       'openInNewWindow',
       'copyAgentId',
@@ -528,5 +536,31 @@ describe('useAgentDropdownMenu', () => {
     expect(mocks.home.updateAgentMeta).toHaveBeenCalledWith('agent-1', {
       title: 'Care Assistant',
     });
+  });
+
+  it('favorites the agent by its chat link, independent of Pin', () => {
+    renderHook(() =>
+      useAgentDropdownMenu({
+        avatar: '🤖',
+        group: undefined,
+        id: 'agent-1',
+        openCreateGroupModal: vi.fn(),
+        pinned: true,
+        title: 'Public Agent',
+        userId: 'creator-1',
+        visibility: 'public',
+      }),
+    );
+
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        icon: '🤖',
+        path: '/agent/agent-1',
+        targetId: 'agent-1',
+        title: 'Public Agent',
+        type: 'agent',
+      },
+      { showHotkey: false },
+    );
   });
 });

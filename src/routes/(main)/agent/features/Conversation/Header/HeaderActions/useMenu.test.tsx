@@ -6,6 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useMenu } from './useMenu';
 
+const favoriteMenuItemMock = vi.hoisted(() =>
+  vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
+);
+vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
+
 const messageSuccessMock = vi.hoisted(() => vi.fn());
 const modalConfirmMock = vi.hoisted(() => vi.fn());
 const openTopicInNewWindowMock = vi.hoisted(() => vi.fn());
@@ -230,5 +235,24 @@ describe('Conversation header action menu', () => {
       threadId: undefined,
       topicId: 'topic-1',
     });
+  });
+
+  it('offers Favorites for the open topic beside Pin, without the hotkey', () => {
+    const { result } = renderHook(() => useMenu());
+
+    const keys = result.current
+      .menuItems()
+      .map((item) => (item && 'key' in item ? item.key : undefined));
+    expect(keys.slice(0, 2)).toEqual(['favorite', 'toggleFavorite']);
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        path: '/agent/agent-1/topic-1',
+        snapshotReady: true,
+        targetId: 'topic-1',
+        title: 'Topic 1',
+        type: 'topic',
+      },
+      { showHotkey: false },
+    );
   });
 });

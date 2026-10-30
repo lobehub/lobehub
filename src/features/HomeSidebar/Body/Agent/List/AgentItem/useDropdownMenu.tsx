@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import {
   agentRenameField,
   SessionDefaultGroup,
@@ -31,6 +32,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { useAgentTransferToMemberMenuItem } from '@/business/client/hooks/useAgentTransferToMemberMenuItem';
 import { openRenameModal } from '@/components/RenameModal';
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import { useOptionalAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
@@ -190,6 +192,12 @@ export const useAgentDropdownMenu = ({
   );
 
   const copyAgentIdItem = useCopyAgentIdMenuItem(id);
+  // Pin orders the agent list; a favorite adds the agent to the home sidebar's
+  // Favorites section. They are independent, so both stay in the menu.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    { icon: avatar ?? null, path: AGENT_CHAT_URL(id), targetId: id, title, type: 'agent' },
+    { showHotkey: false },
+  );
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -213,6 +221,7 @@ export const useAgentDropdownMenu = ({
               },
             ]
           : []),
+        ...(favoriteMenuItem ? [favoriteMenuItem] : []),
         ...(isShownInSidebar
           ? [
               {
@@ -614,6 +623,7 @@ export const useAgentDropdownMenu = ({
       openCreateLabelModal,
       openAgentInNewWindow,
       copyAgentIdItem,
+      favoriteMenuItem,
       sessionCustomGroups,
       group,
       isDefault,
