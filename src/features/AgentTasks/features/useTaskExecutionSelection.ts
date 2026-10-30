@@ -59,8 +59,8 @@ export const useTaskExecutionSelection = ({
 
   // "Not following" with nothing picked yet — a cloud agent before any repo, or
   // a pin just removed — stores nothing, which is indistinguishable from
-  // following. Held here so the pickers stay open until the user either picks
-  // something or switches back.
+  // following. Held here so the pickers stay open until the user switches back:
+  // only the switch returns a task to the agent, never clearing a picker.
   const [customizing, setCustomizing] = useState(false);
   const following = !customizing && !hasTaskExecutionSelection(value);
 
@@ -72,6 +72,18 @@ export const useTaskExecutionSelection = ({
       onChange(next && hasTaskExecutionSelection(next) ? next : undefined);
     },
     [onChange],
+  );
+
+  // A picker is only on screen while the task is off the agent, so every pick
+  // keeps it there — including one that clears the last selection of a task
+  // restored with a saved device or repo, which would otherwise read as
+  // "following" and hide the very picker being used.
+  const emitPick = useCallback(
+    (next?: TaskExecutionConfig) => {
+      setCustomizing(true);
+      emit(next);
+    },
+    [emit],
   );
 
   const changeFollowing = useCallback(
@@ -93,25 +105,25 @@ export const useTaskExecutionSelection = ({
       // dropped on a target CHANGE, and a no-op that cleared it would delete a
       // directory the task legitimately holds.
       if (next === value) return;
-      emit(next);
+      emitPick(next);
     },
-    [emit, value],
+    [emitPick, value],
   );
 
   const changeRepos = useCallback(
     (repos?: string[]) => {
-      emit(applyTaskReposSelection(value, repos));
+      emitPick(applyTaskReposSelection(value, repos));
     },
-    [emit, value],
+    [emitPick, value],
   );
 
   const changeDirectory = useCallback(
     (config?: WorkingDirConfig) => {
       // The path lives on the run's machine; pin it so the directory never
       // travels to another target the agent later moves to.
-      emit(applyTaskDirectorySelection(value, config, deviceId));
+      emitPick(applyTaskDirectorySelection(value, config, deviceId));
     },
-    [deviceId, emit, value],
+    [deviceId, emitPick, value],
   );
 
   return { changeDevice, changeDirectory, changeFollowing, changeRepos, following, target };

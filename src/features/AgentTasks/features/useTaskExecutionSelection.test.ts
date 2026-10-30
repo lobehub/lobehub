@@ -110,6 +110,30 @@ describe('useTaskExecutionSelection', () => {
     expect(result.current.following).toBe(false);
   });
 
+  // A task reopened with a saved selection mounts as "not following" from the
+  // stored value alone; clearing its last pick in a picker must not flip it back
+  // to following and hide that picker.
+  it('stays off the agent when a restored task clears its last repo', () => {
+    cloudAgent();
+    const { onChange, rerender, result } = renderSelection({ repos: ['lobehub/lobehub'] });
+
+    act(() => result.current.changeRepos(undefined));
+    rerender({ current: undefined });
+
+    expect(onChange).toHaveBeenLastCalledWith(undefined);
+    expect(result.current.following).toBe(false);
+  });
+
+  it('stays off the agent when a restored task removes its device pin', () => {
+    cloudAgent();
+    const { rerender, result } = renderSelection({ boundDeviceId: DEVICE_OTHER.deviceId });
+
+    act(() => result.current.changeDevice(undefined));
+    rerender({ current: undefined });
+
+    expect(result.current.following).toBe(false);
+  });
+
   it('pins the machine in force when a folder is picked', () => {
     const { onChange, result } = renderSelection({ boundDeviceId: DEVICE_OTHER.deviceId });
 
