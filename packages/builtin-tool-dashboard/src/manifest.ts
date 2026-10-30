@@ -151,6 +151,27 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
+        'Create an empty dashboard (in a project conversation it belongs to the project) and return its id. Check listDashboards first so you do not duplicate an existing board; to create a board for one widget, addWidgetToDashboard with newDashboardTitle does both in one step.',
+      name: DashboardApiName.createDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          description: {
+            description:
+              'What the dashboard monitors and why, shown under its title, e.g. "Launch monitoring for iBench 0.1: hourly engagement of the announcement post and daily GitHub stars since open-sourcing on 2026-10-29." At most 2000 characters.',
+            type: 'string',
+          },
+          title: {
+            description: 'Dashboard title, e.g. "iBench launch". At most 200 characters.',
+            type: 'string',
+          },
+        },
+        required: ['title', 'description'],
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Create a monitoring widget and save its first draft. Nothing runs and nothing goes live; call dryRunWidget next. The widget is owned by the current agent (and project, in a project conversation).',
       name: DashboardApiName.createWidgetDraft,
       parameters: {
@@ -239,12 +260,17 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Place a widget on a dashboard. Pass dashboardId from listDashboards, or newDashboardTitle to create a dashboard first (in a project conversation it belongs to the project). Placing an unpublished widget is allowed.',
+        'Place a widget on a dashboard. Pass dashboardId from listDashboards, or newDashboardTitle (with newDashboardDescription) to create a dashboard first (in a project conversation it belongs to the project). Placing an unpublished widget is allowed.',
       name: DashboardApiName.addWidgetToDashboard,
       parameters: {
         additionalProperties: false,
         properties: {
           dashboardId: { description: 'Existing dashboard id (uuid).', type: 'string' },
+          newDashboardDescription: {
+            description:
+              'Description of the new dashboard, shown under its title: what it monitors and why, e.g. "Launch monitoring for iBench 0.1: hourly engagement of the announcement post and daily GitHub stars since open-sourcing on 2026-10-29." Only used with newDashboardTitle. At most 2000 characters.',
+            type: 'string',
+          },
           newDashboardTitle: {
             description:
               'Create a new dashboard with this name and place the widget on it. Titles over 200 characters are rejected.',
@@ -253,6 +279,31 @@ export const DashboardManifest: BuiltinToolManifest = {
           widgetId: widgetIdSchema,
         },
         required: ['widgetId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Rename a dashboard or rewrite its description. Pass only what changes; an empty description clears it. Only dashboards listDashboards shows are editable.',
+      name: DashboardApiName.updateDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          dashboardId: {
+            description: 'Dashboard id (uuid) from listDashboards or addWidgetToDashboard.',
+            type: 'string',
+          },
+          description: {
+            description:
+              'New dashboard description: what the board monitors and why. At most 2000 characters.',
+            type: 'string',
+          },
+          title: {
+            description: 'New dashboard title. At most 200 characters.',
+            type: 'string',
+          },
+        },
+        required: ['dashboardId'],
         type: 'object',
       },
     },

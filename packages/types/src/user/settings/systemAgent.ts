@@ -38,6 +38,12 @@ export interface UserSystemAgentConfig {
   /** Background workflow that summarizes inactive topics into description/historySummary. */
   topicAutoSummary: SystemAgentItem;
   translation: SystemAgentItem;
+  /**
+   * Model the builtin verify agent judges task deliveries with. It reads
+   * screenshot evidence, so it must be vision-capable. A Task that pins its own
+   * verifier agent runs on that agent's model instead.
+   */
+  verify: SystemAgentItem;
 }
 
 export interface UserMemoryServiceModelConfig {
@@ -54,7 +60,7 @@ export interface UserServiceModelConfig
  * task slot follows one of them (see `SERVICE_MODEL_TIER_SLOTS`) unless the
  * user pins that slot to its own model.
  */
-export type ServiceModelTier = 'embedding' | 'flash' | 'main';
+export type ServiceModelTier = 'embedding' | 'flash' | 'main' | 'verify';
 
 export interface ServiceModelTierItem {
   model: string;

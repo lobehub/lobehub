@@ -113,7 +113,6 @@ import { getElectronStoreState } from '@/store/electron';
 import { getFileStoreState } from '@/store/file/store';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -134,6 +133,7 @@ import {
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from '../commandBus';
+import { pageConversationNeedsGateway, preparePageConversation } from '../pageConversation';
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
@@ -430,7 +430,8 @@ export class ConversationLifecycleActionImpl {
     );
     const { workspaceScoped } = topicBinding;
     let { agencyConfig } = topicBinding;
-    const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
+    const isGatewayMode =
+      this.#get().isGatewayModeEnabled(agentId) || pageConversationNeedsGateway(context);
     const boundTopic = context.topicId
       ? topicSelectors.getTopicById(context.topicId)(this.#get())
       : undefined;
@@ -536,22 +537,7 @@ export class ConversationLifecycleActionImpl {
     const hasMentionedAgents =
       !context.groupId && !directMentionRoute && mentionedAgents.length > 0;
 
-    // Page-scoped conversations: the page editor runtime tracks the currently
-    // open document. Inject its id at send time so the agent-runtime context
-    // (and downstream server-side PageAgent tool calls, which only receive that
-    // context) is scoped to the open document. Without this the server runtime
-    // throws "received a tool call without documentId in context".
-    //
-    // This fallback is only authoritative when the active page's editor is
-    // mounted (StoreUpdater has called setCurrentDocId for it). Callers that
-    // create a document and send before that editor mounts (e.g. sendAsWrite)
-    // MUST pass the new documentId in context explicitly — the `!context.documentId`
-    // guard preserves it, so the singleton (still bound to the previous page) is
-    // not consulted and a stale id is never injected.
-    const activePageDocumentId =
-      context.scope === 'page' && !context.documentId
-        ? pageAgentRuntime.getCurrentDocId()
-        : undefined;
+    const activePageDocumentId = await preparePageConversation(context);
 
     // Whether this send has to create the topic. From here on this flag — NOT
     // `!operationContext.topicId` — is the "new topic" test: the conversation
@@ -1812,8 +1798,8 @@ export class ConversationLifecycleActionImpl {
           messageContext: operationContext,
           fileIds: fileIdList,
           message,
-          // The server persists the user row on this path, so a queued
-          // follow-up's steer mark must travel with the request.
+          // The server persists the user row on this path, so the steer mark
+          // of a directly-steered send ("send now") must travel with the request.
           metadata: (metadata as Pick<MessageMetadata, 'steer'> | undefined)?.steer
             ? { ...requestMetadata, steer: true }
             : requestMetadata,

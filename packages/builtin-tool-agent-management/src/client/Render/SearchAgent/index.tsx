@@ -1,12 +1,13 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { Avatar, createStaticStyles, Flexbox, useTheme } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, useTheme } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
 
 import type { AgentSearchItem, SearchAgentParams, SearchAgentState } from '../../../types';
 
@@ -99,8 +100,9 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
               gap={12}
               key={agent.id}
             >
-              <Avatar
-                avatar={agent.avatar || DEFAULT_AVATAR}
+              <AgentAvatar
+                agentId={agent.id}
+                avatar={agent.avatar}
                 background={agent.backgroundColor || theme.colorBgContainer}
                 shape={'square'}
                 size={32}

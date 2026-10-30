@@ -370,6 +370,112 @@ describe('owner rules policy', () => {
   });
 });
 
+// From bot-wake review of missed wakes: the owner answering the bot right after its reply, and the
+// person it was helping pasting the link it asked for eight minutes later in the bot's thread.
+describe('owner rules policy: following up on the bot itself', () => {
+  const APP = 'app1';
+  const botLine = (at: number) => ({ at, authorId: APP, id: `m${at}`, isBot: true, text: '好的' });
+  const personLine = (authorId: string, at: number) => ({
+    at,
+    authorId,
+    id: `m${at}`,
+    isBot: false,
+    text: '嗯',
+  });
+
+  const run = ({
+    author = human,
+    botWake = {},
+    channel,
+    recent,
+    threadSubscribed = true,
+  }: {
+    author?: WakeAuthor;
+    botWake?: Record<string, unknown>;
+    channel: Partial<WakeChannelState>;
+    recent: ReturnType<typeof botLine>[];
+    threadSubscribed?: boolean;
+  }) => {
+    const result = createOwnerRulesPolicy('enforce', rulesFor(botWake)).evaluate({
+      signal: signal({ applicationId: APP, author }),
+      state: {
+        ...snapshot(channel),
+        conversation: { botNames: ['Nasa'], recent },
+        threadSubscribed,
+      },
+    });
+    return [result.verdict, result.reason];
+  };
+
+  const owner: WakeAuthor = { ...human, id: 'o1', isOwner: true };
+  const window = {
+    botLastSpokeAt: NOW - 28_000,
+    followupAuthorId: 'u2',
+    followupUntil: NOW + 272_000,
+  };
+
+  it('lets the owner answering the bot’s own line in the window follow up', () => {
+    expect(run({ author: owner, channel: window, recent: [botLine(NOW - 28_000)] })).toEqual([
+      'allow',
+      'owner-answers-bot',
+    ]);
+  });
+
+  it('leaves the owner answering someone else in the window to the duty judge', () => {
+    expect(
+      run({
+        author: owner,
+        channel: window,
+        recent: [botLine(NOW - 60_000), personLine('u2', NOW - 28_000)],
+      }),
+    ).toEqual(['abstain', 'no-owner-rule-opinion']);
+    // Not the owner: someone else replying to the bot is still more likely talking to the room.
+    expect(
+      run({ author: { ...human, id: 'u3' }, channel: window, recent: [botLine(NOW - 28_000)] }),
+    ).toEqual(['abstain', 'no-owner-rule-opinion']);
+  });
+
+  const lapsed = {
+    botLastSpokeAt: NOW - 484_000,
+    followupAuthorId: 'u1',
+    followupUntil: NOW - 184_000,
+  };
+
+  it('lets the person the bot answered come back to its thread after the window', () => {
+    expect(run({ channel: lapsed, recent: [botLine(NOW - 484_000)] })).toEqual([
+      'allow',
+      'thread-followup',
+    ]);
+    expect(
+      run({
+        botWake: { rules: { scope: 'bot-threads' } },
+        channel: lapsed,
+        recent: [botLine(NOW - 484_000), personLine('u1', NOW - 200_000)],
+      }),
+    ).toEqual(['allow', 'thread-followup']);
+  });
+
+  it('does not extend the window outside a subscribed thread, for others, or past 30 minutes', () => {
+    const recent = [botLine(NOW - 484_000)];
+    expect(run({ channel: lapsed, recent, threadSubscribed: false })).toEqual([
+      'abstain',
+      'no-owner-rule-opinion',
+    ]);
+    expect(run({ author: { ...human, id: 'u3' }, channel: lapsed, recent })).toEqual([
+      'abstain',
+      'no-owner-rule-opinion',
+    ]);
+    expect(run({ channel: { ...lapsed, botLastSpokeAt: NOW - 31 * 60_000 }, recent })).toEqual([
+      'abstain',
+      'no-owner-rule-opinion',
+    ]);
+    // Someone else spoke since: the author may be answering them.
+    expect(
+      run({ channel: lapsed, recent: [botLine(NOW - 484_000), personLine('u3', NOW - 60_000)] }),
+    ).toEqual(['abstain', 'no-owner-rule-opinion']);
+  });
+});
+
 describe('owner rules policy: naming the bot', () => {
   const rules = rulesFor({ rules: { ownerPresenceSeconds: 120 } });
   const conversation = { botNames: ['Nasa'], recent: [] };

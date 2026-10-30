@@ -216,6 +216,9 @@ export class TrashService {
   countByType = (filter?: Omit<TrashRootFilter, 'resourceType'>): Promise<TrashCountByType> =>
     this.trashModel.countByType(filter);
 
+  /** Registry ids among `ids` on the private side of the workspace bin. */
+  findPrivateIds = (ids: string[]): Promise<Set<string>> => this.trashModel.findPrivateIds(ids);
+
   findByIds = async (ids: string[]): Promise<TrashItem[]> =>
     (await this.trashModel.findByIds(ids)).map(this.toItem);
 
@@ -317,9 +320,9 @@ export class TrashService {
    */
   emptyTrash = async (
     /**
-     * `deletedByUserId` restricts the sweep to roots this user trashed: a
-     * workspace non-owner may only empty their own items — filtered in the
-     * query, not on a page of results, so "empty trash" really does empty
+     * `deletedByUserId` restricts the sweep to roots this user trashed and
+     * `visibility` to one side of a workspace bin — filtered in the query,
+     * not on a page of results, so "empty trash" really does empty
      * everything it is allowed to.
      */
     filter?: TrashRootFilter,

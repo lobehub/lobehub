@@ -32,7 +32,7 @@ export type IFeatureFlagsState = {
   enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
   /**
-   * Dashboards and the `lobe-dashboard` agent tool (`dashboard`). Off by
+   * Dashboards and the `builtin-dashboard` agent tool (`dashboard`). Off by
    * default: the pages, Portal view, in-chat previews and the tool are hidden
    * and the widget / dashboard APIs answer FORBIDDEN.
    */
@@ -65,6 +65,8 @@ export type IFeatureFlagsState = {
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  /** Hover previews of a topic's final answer (`topic_preview`). */
+  enableTopicPreview: boolean | undefined;
   enableVoiceDictation: boolean | undefined;
   enableWorkspace: boolean | undefined;
   hideDocs: boolean | undefined;
@@ -165,6 +167,8 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableMultimodalUnderstanding?: boolean;
+  /** Pages collaborate live through the gateway's document rooms (LobeHub Cloud). */
+  enablePageCollab?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
   /**
@@ -182,6 +186,11 @@ export interface GlobalServerConfig {
    * reverse proxy or on desktop.
    */
   oidcIssuer?: string;
+  /**
+   * The sandbox the page agent edits pages in: Market (needs the user's Market
+   * authorization unless the trusted client is configured), Onlyboxes, or none.
+   */
+  sandbox?: 'market' | 'onlyboxes' | 'unconfigured';
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;

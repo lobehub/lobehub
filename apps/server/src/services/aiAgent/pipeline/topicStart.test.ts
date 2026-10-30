@@ -14,7 +14,7 @@ const onThread = (extra: Record<string, unknown> = {}) =>
     ...extra,
   }) as any;
 
-const queuedSuccessor = onThread({ interactiveStart: false, steer: true });
+const queuedSuccessor = onThread({ interactiveStart: false, queuedSuccessor: true });
 const composerSend = onThread({ interactiveStart: true });
 
 const createDeps = (liveRuns: string[] = []) =>

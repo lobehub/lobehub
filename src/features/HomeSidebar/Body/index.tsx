@@ -26,6 +26,7 @@ import { isModifierClick } from '@/utils/navigation';
 
 import Agent from './Agent';
 import { openCustomizeSidebarModal } from './CustomizeSidebarModal';
+import Favorites from './Favorites';
 import Private from './Private';
 import Project from './Project';
 import { useSyncWorkspaceSidebarPreference } from './useSyncWorkspaceSidebarPreference';
@@ -33,6 +34,7 @@ import { useSyncWorkspaceSidebarPreference } from './useSyncWorkspaceSidebarPref
 export enum GroupKey {
   Agent = 'agent',
   Community = 'community',
+  Favorites = 'favorites',
   Pages = 'pages',
   Private = 'private',
   Project = 'project',
@@ -41,6 +43,7 @@ export enum GroupKey {
 }
 
 const ACCORDION_KEYS = new Set<string>([
+  GroupKey.Favorites,
   GroupKey.Project,
   GroupKey.Recents,
   GroupKey.Agent,
@@ -50,9 +53,11 @@ const ACCORDION_KEYS = new Set<string>([
 /** Keys rendered in the header — must be excluded from the body to avoid duplicates
  * when migrating users whose persisted sidebarItems still include them. */
 const HEADER_KEYS = new Set<string>(['home', 'search']);
+const SECTION_GAP = 8;
 
 const accordionComponents: Record<string, (key: string) => ReactElement> = {
   [GroupKey.Agent]: (key) => <Agent itemKey={key} key={key} />,
+  [GroupKey.Favorites]: (key) => <Favorites itemKey={key} key={key} />,
   [GroupKey.Private]: (key) => <Private itemKey={key} key={key} />,
   [GroupKey.Project]: (key) => <Project itemKey={key} key={key} />,
   [GroupKey.Recents]: (key) => <Recents itemKey={key} key={key} />,
@@ -200,22 +205,22 @@ const Body = memo(() => {
     [sidebarExpandedKeys, updateSystemStatus],
   );
 
-  // Render the flat list in `sidebarItems` order: group consecutive accordion
-  // items into an Accordion, interleave non-accordion keys as nav links, and
-  // emit a flex spacer wherever the spacer sentinel appears.
+  // Consecutive sections share one spacing group, including Channels' independent
+  // accordion. Nav links and the spacer keep their positions and compact spacing.
   const content = useMemo(() => {
     const elements: ReactElement[] = [];
     let accGroup: { element: ReactElement; key: string }[] = [];
+    let sectionGroup: ReactElement[] = [];
 
     const flushAccordion = () => {
       if (accGroup.length > 0) {
         const accordionKeys = accGroup.map((item) => item.key);
 
-        elements.push(
+        sectionGroup.push(
           <AccordionRoot
             indicatorPlacement="inline"
-            key={`acc-${elements.length}`}
-            style={{ gap: 8 }}
+            key={`acc-${sectionGroup.length}`}
+            style={{ gap: SECTION_GAP }}
             value={sidebarExpandedKeys}
             onValueChange={(keys) => handleAccordionExpandedChange(accordionKeys, keys as string[])}
           >
@@ -226,9 +231,21 @@ const Body = memo(() => {
       }
     };
 
+    const flushSections = () => {
+      flushAccordion();
+      if (sectionGroup.length > 0) {
+        elements.push(
+          <Flexbox gap={SECTION_GAP} key={`sections-${elements.length}`}>
+            {sectionGroup}
+          </Flexbox>,
+        );
+        sectionGroup = [];
+      }
+    };
+
     for (const key of visibleKeys) {
       if (key === SIDEBAR_SPACER_ID) {
-        flushAccordion();
+        flushSections();
         elements.push(
           <div
             aria-hidden
@@ -243,15 +260,17 @@ const Body = memo(() => {
         // Channels sit right below Agents, in their own accordion.
         if (key === GroupKey.Agent) {
           flushAccordion();
-          elements.push(<ChannelList key="channels" />);
+          sectionGroup.push(<ChannelList key="channels" />);
         }
       } else {
-        flushAccordion();
         const link = renderNavLink(key);
-        if (link) elements.push(link);
+        if (link) {
+          flushSections();
+          elements.push(link);
+        }
       }
     }
-    flushAccordion();
+    flushSections();
 
     return elements;
   }, [visibleKeys, renderNavLink, sidebarExpandedKeys, handleAccordionExpandedChange]);

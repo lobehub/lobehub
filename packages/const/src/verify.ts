@@ -249,12 +249,23 @@ export const creatableAcceptanceSubjectTypes = [
  */
 /**
  * Who can see a verify artifact (a run's report page, an acceptance page)
- * beyond its creator. Personal-scope rows default to `public` (the page is
- * meant to be linked from PRs / reports); workspace-scope rows default to
- * `private` (org data stays member-gated until deliberately opened up).
+ * beyond its creator:
+ *
+ * - `public` — anyone holding the link.
+ * - `private` — the creator and members of the row's own workspace. In a
+ *   workspace this is "shared with the team", the default there.
+ * - `owner` — the creator alone, even inside a workspace.
+ *
+ * Personal-scope rows default to `public` (the page is meant to be linked from
+ * PRs / reports); workspace-scope rows default to `private`, so org data reaches
+ * every member without leaking past the workspace.
  */
-export const verifyVisibilities = ['private', 'public'] as const;
+export const verifyVisibilities = ['private', 'public', 'owner'] as const;
 export type VerifyVisibility = (typeof verifyVisibilities)[number];
+
+/** Whether a member of the row's workspace (not its creator) may read it. */
+export const isWorkspaceReadableVisibility = (visibility: VerifyVisibility) =>
+  visibility !== 'owner';
 
 export const acceptanceVisibilities = verifyVisibilities;
 export type AcceptanceVisibility = VerifyVisibility;

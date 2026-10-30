@@ -19,6 +19,7 @@ const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | un
 const topicUnreadCompletedMock = vi.hoisted(() => ({ value: false }));
 const onlyMineMock = vi.hoisted(() => ({ value: false }));
 const currentUserIdMock = vi.hoisted(() => ({ value: 'user-1' as string | undefined }));
+const goalsEnabledMock = vi.hoisted(() => ({ value: true }));
 const topicMetaCardMock = vi.hoisted(() => ({
   value: undefined as
     | { pullRequest?: { ciStatus?: 'failure' | 'pending' | 'success' | 'unknown'; state: string } }
@@ -108,6 +109,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableGoals: () => goalsEnabledMock.value },
   userProfileSelectors: { userId: () => currentUserIdMock.value },
 }));
 vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => onlyMineMock.value }));
@@ -193,6 +195,7 @@ describe('TopicItem active state', () => {
     topicMetaCardMock.value = undefined;
     onlyMineMock.value = false;
     currentUserIdMock.value = 'user-1';
+    goalsEnabledMock.value = true;
     vi.useRealTimers();
   });
 
@@ -590,6 +593,43 @@ describe('TopicItem active state', () => {
 
     expect(screen.queryByTestId('topic-unread-dot')).not.toBeInTheDocument();
     expect(screen.getByTestId('topic-item-icon')).toBeInTheDocument();
+  });
+
+  describe('goal marker', () => {
+    beforeEach(() => {
+      useTopicNavigationMock.mockReturnValue({
+        isInAgentSubRoute: false,
+        isInTopicContextRoute: false,
+        navigateToTopic: vi.fn(),
+        routeTopicId: undefined,
+      });
+    });
+
+    it('marks a topic that has a goal, ahead of its pull request', () => {
+      topicMetaCardMock.value = { pullRequest: { state: 'open' } };
+
+      render(<TopicItem hasGoal id="tpc_test" title="Topic" />);
+
+      expect(screen.getByLabelText('metaCard.goal')).toBeInTheDocument();
+      expect(screen.getByTestId('topic-item-icon')).not.toHaveAttribute(
+        'data-icon',
+        'PullRequestIcon',
+      );
+    });
+
+    it('keeps the execution status ahead of the goal marker', () => {
+      render(<TopicItem hasGoal id="tpc_test" status="failed" title="Topic" />);
+
+      expect(screen.queryByLabelText('metaCard.goal')).not.toBeInTheDocument();
+    });
+
+    it('hides the goal marker while the goals lab is off', () => {
+      goalsEnabledMock.value = false;
+
+      render(<TopicItem hasGoal id="tpc_test" title="Topic" />);
+
+      expect(screen.queryByLabelText('metaCard.goal')).not.toBeInTheDocument();
+    });
   });
 
   it('adds the CI status to the pull request marker', () => {

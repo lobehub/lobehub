@@ -3,6 +3,7 @@
  */
 import { accountDeletionRouter } from '@/business/server/lambda-routers/accountDeletion';
 import { artifactShareRouter } from '@/business/server/lambda-routers/artifactShare';
+import { fileShareRouter } from '@/business/server/lambda-routers/fileShare';
 import { pageShareRouter } from '@/business/server/lambda-routers/pageShare';
 import { referralRouter } from '@/business/server/lambda-routers/referral';
 import { spendRouter } from '@/business/server/lambda-routers/spend';
@@ -62,6 +63,7 @@ import { documentLikeRouter } from './documentLike';
 import { environmentRouter } from './environment';
 import { expertiseRouter } from './expertise';
 import { exporterRouter } from './exporter';
+import { favoriteRouter } from './favorite';
 import { fileRouter } from './file';
 import { followUpActionRouter } from './followUpAction';
 import { generationRouter } from './generation';
@@ -132,6 +134,7 @@ export const lambdaRouter = router({
   agentLabel: agentLabelRouter,
   agentSkills: agentSkillsRouter,
   environment: environmentRouter,
+  favorite: favoriteRouter,
   sandboxStorage: sandboxStorageRouter,
   agentTrace: agentTraceRouter,
   expertise: expertiseRouter,
@@ -229,6 +232,7 @@ export const lambdaRouter = router({
   workspaceUserSettings: workspaceUserSettingsRouter,
   accountDeletion: accountDeletionRouter,
   artifactShare: artifactShareRouter,
+  fileShare: fileShareRouter,
   pageShare: pageShareRouter,
   referral: referralRouter,
   spend: spendRouter,

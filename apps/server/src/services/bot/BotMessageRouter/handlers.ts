@@ -10,7 +10,6 @@ import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWak
 
 import { AgentBridgeService } from '../AgentBridgeService';
 import { buildBotContext } from '../buildBotContext';
-import { isWholeGroupChatThreadId } from '../isWholeGroupChatThreadId';
 import { getOriginMessageId, getSameSenderMessages, getSourceMessages } from '../mergeMessages';
 import {
   type BotReplyLocale,
@@ -43,12 +42,7 @@ import { createAccessGate } from './accessGate';
 import { registerCatchAllHandler } from './catchAll';
 import { registerCommands } from './commands';
 import { createFollowupGate, type FollowupGateDeps } from './followupGate';
-import {
-  createParticipantTracker,
-  isSoloThreadConversation,
-  mentionRequiredAnnouncedKey,
-  PARTICIPANTS_TTL_MS,
-} from './participants';
+import { createParticipantTracker, isSoloThreadConversation } from './participants';
 import { createReplyOpening } from './replyOpening';
 import type { BotCommand, BotHandlerContext, BotReplyVoice, ResolvedAgentInfo } from './types';
 import {
@@ -650,8 +644,6 @@ export function registerHandlers(
         client.isSoloBotConversation && (() => client.isSoloBotConversation!(thread.id)),
       ));
     const isAddressedToBot = isExplicitlyAddressed || isSoloBotConversation;
-    const platformReportsShared =
-      !isExplicitlyAddressed && !!client.isSoloBotConversation && !isSoloBotConversation;
     const isCommand = looksLikeCommand(message.text);
     // operator-configured keyword match also wakes the bot in a
     // subscribed group thread. Skipped (debounced) siblings are inspected
@@ -682,27 +674,6 @@ export function registerHandlers(
         message.author.userName,
         thread.id,
       );
-      // first skip in this thread → tell participants the bot
-      // is now mention-only so newcomers don't think it broke. Dedupe by
-      // thread id so we never announce more than once.
-      if (
-        !thread.isDM &&
-        !isWholeGroupChatThreadId(thread.id) &&
-        (humanCount >= 2 || platformReportsShared)
-      ) {
-        try {
-          const fresh = await bot
-            .getState()
-            .setIfNotExists(mentionRequiredAnnouncedKey(thread.id), '1', PARTICIPANTS_TTL_MS);
-          if (fresh) {
-            await thread.post(
-              "Multiple people are talking in this thread now. From here on I'll only respond when you @mention me.",
-            );
-          }
-        } catch (error) {
-          log('onSubscribedMessage: mention-mode announcement failed: %O', error);
-        }
-      }
       observeBurst('onSubscribedMessage', message, context, thread, true);
       return;
     }

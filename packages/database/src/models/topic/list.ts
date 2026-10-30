@@ -21,10 +21,12 @@ import {
   sql,
 } from 'drizzle-orm';
 
-import { agentOperations, agents, chatGroups, messages, topics } from '../../schemas';
+import { agents, chatGroups, messages, topics } from '../../schemas';
+import { topicRunStartedAtColumn } from '../../utils/topicRunStartedAt';
 import { notChannelTopic } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { topicMetadataWithCreator } from '../topicCreator';
+import { topicHasGoal } from '../topicGoal';
 import type { TopicModelContext } from './context';
 import type { QueryTopicParams, TopicListItem } from './types';
 
@@ -131,33 +133,7 @@ export const query = async (
       topics.updatedAt,
     );
 
-  // When the topic's current run started, so a sidebar can show live elapsed
-  // time instead of `updatedAt` (which moves on every message write). The
-  // latest *top-level* running operation is the current run: sub-operations
-  // (callAgent) would restart the clock at their own spawn time, and an
-  // abandoned `running` row from a crashed earlier run sorts below the live
-  // one. Not scoped by `ownership()` — in a workspace the run may have been
-  // started by another member, and the topic join is already ownership-gated.
-  const runStartedAtSubquery = ctx.db
-    .select({ value: agentOperations.startedAt })
-    .from(agentOperations)
-    .where(
-      and(
-        eq(agentOperations.topicId, topics.id),
-        eq(agentOperations.status, 'running'),
-        isNull(agentOperations.parentOperationId),
-        isNotNull(agentOperations.startedAt),
-      ),
-    )
-    .orderBy(desc(agentOperations.startedAt))
-    .limit(1);
-
-  // CASE-gated so only rows that are actually running pay for the lookup —
-  // and a stale running op under a finished topic can't resurrect a timer.
-  const runStartedAtColumn =
-    sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN (${runStartedAtSubquery}) ELSE NULL END`
-      .mapWith(agentOperations.startedAt)
-      .as('run_started_at');
+  const runStartedAtColumn = topicRunStartedAtColumn(ctx.db);
 
   const orderBy = buildTopicOrderBy(topicActivityAt, sortBy);
 
@@ -312,6 +288,8 @@ export const query = async (
               completedAt: topics.completedAt,
               createdAt: topics.createdAt,
               favorite: topics.favorite,
+              // Marks the goal's planning conversation in the agent sidebar.
+              hasGoal: topicHasGoal(ctx.db, ctx),
               historySummary: topics.historySummary,
               id: topics.id,
               metadata: topicMetadataWithCreator(ctx.db, ctx.messageOwnership()),
@@ -509,42 +487,7 @@ export const queryTopics = async (
     'private' | 'public' | null
   >`COALESCE(${chatGroups.visibility}, ${agents.visibility})`.as('parent_visibility');
 
-  // When the topic's current run started, so a list can show live elapsed
-  // time instead of `updatedAt` (which moves on every message write). The
-  // latest *top-level* running operation is the current run: sub-operations
-  // (callAgent) would restart the clock at their own spawn time, and an
-  // abandoned `running` row from a crashed earlier run sorts below the live
-  // one. Not scoped by `ownership()` — in a workspace the run may have been
-  // started by another member, and the topic join is already ownership-gated.
-  const runStartedAtSubquery = ctx.db
-    .select({ value: agentOperations.startedAt })
-    .from(agentOperations)
-    .where(
-      and(
-        eq(agentOperations.topicId, topics.id),
-        eq(agentOperations.status, 'running'),
-        isNull(agentOperations.parentOperationId),
-        isNotNull(agentOperations.startedAt),
-      ),
-    )
-    .orderBy(desc(agentOperations.startedAt))
-    .limit(1);
-
-  // Client-executed runs (desktop heterogeneous CLI, in-browser runtime) never
-  // reach `agent_operations` — nothing server-side creates the operation — so
-  // their start is stamped onto the topic by the status write that claims it
-  // (see {@link TopicModel.update}). The operation row still wins when both
-  // exist: it is the server's own record of the run, while the stamp is a
-  // client-reported time.
-  const localRunStartedAt = sql`(${topics.metadata} ->> 'runStartedAt')::timestamptz`;
-
-  // CASE-gated so only rows that are actually running pay for the lookup —
-  // and a stale running op (or stamp) under a finished topic can't resurrect
-  // a timer.
-  const runStartedAtColumn =
-    sql<Date | null>`CASE WHEN ${topics.status} = 'running' THEN COALESCE((${runStartedAtSubquery}), ${localRunStartedAt}) ELSE NULL END`
-      .mapWith(agentOperations.startedAt)
-      .as('run_started_at');
+  const runStartedAtColumn = topicRunStartedAtColumn(ctx.db);
 
   if (!withLastMessage) {
     return ctx.db

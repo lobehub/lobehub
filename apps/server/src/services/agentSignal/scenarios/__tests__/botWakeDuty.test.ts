@@ -72,15 +72,15 @@ describe('duty policy', () => {
     expect(judge).toHaveBeenCalledTimes(2);
   });
 
-  it('defaults to 0.8 and takes the threshold from the settings', async () => {
+  it('defaults to 0.65 and takes the threshold from the settings', async () => {
     const at = (score: number) =>
       createDutyPolicy(
         parseBotWakeSettings({ [K.duties]: DUTIES, [K.enabled]: true }).rules,
         judgeScoring(score),
       ).evaluate({ signal: signal(), state: {} });
 
-    expect((await at(0.8)).verdict).toBe('allow');
-    expect((await at(0.79)).verdict).toBe('deny');
+    expect((await at(0.65)).verdict).toBe('allow');
+    expect((await at(0.64)).verdict).toBe('deny');
   });
 
   it('never asks the model without duties', async () => {

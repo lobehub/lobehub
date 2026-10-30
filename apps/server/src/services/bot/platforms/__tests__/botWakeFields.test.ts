@@ -12,8 +12,9 @@ import {
 } from '@/server/services/agentSignal/scenarios/botWake/config';
 
 import agentLocale from '../../../../../../../packages/locales/src/default/agent';
-import { botWakeFields } from '../botWakeFields';
+import { botWakeFields, larkBotWakeFields } from '../botWakeFields';
 import { schema as discordSchema } from '../discord/schema';
+import { sharedSchema as larkSchema } from '../feishu/definitions/schema';
 import type { FieldSchema } from '../types';
 import { mergeWithDefaults } from '../utils';
 
@@ -59,7 +60,7 @@ describe('bot-wake settings fields', () => {
     ]);
   });
 
-  it('give the duties a text area that is off while empty, with a dial from 0.8', () => {
+  it('give the duties a text area that is off while empty, with a dial from 0.65', () => {
     const duties = botWakeFields.find((f) => f.key === BOT_WAKE_SETTING_KEYS.duties)!;
     const threshold = botWakeFields.find((f) => f.key === BOT_WAKE_SETTING_KEYS.dutiesThreshold)!;
 
@@ -67,7 +68,7 @@ describe('bot-wake settings fields', () => {
     expect(duties.rows).toBeGreaterThanOrEqual(8);
     // No default: an untouched form saves no duties, so the bot never steps in on its own.
     expect(duties.default).toBeUndefined();
-    expect(threshold).toMatchObject({ default: 0.8, maximum: 1, minimum: 0, type: 'number' });
+    expect(threshold).toMatchObject({ default: 0.65, maximum: 1, minimum: 0, type: 'number' });
   });
 
   it('are shown by the Discord form', () => {
@@ -165,5 +166,22 @@ describe('bot-wake settings fields', () => {
     expect(parsed.scheduler.mode).toBe('off');
     // Off is the master switch; once it is on, everything enforces.
     expect(parsed.ruleMode).toBe('enforce');
+  });
+
+  it('are offered on Feishu / Lark, with group chat ids in the channel lists', () => {
+    const keys = settingsFields(larkSchema).map((field) => field.key);
+    for (const field of botWakeFields) expect(keys).toContain(field.key);
+
+    const allow = larkBotWakeFields.find((f) => f.key === BOT_WAKE_SETTING_KEYS.allowChannels)!;
+    expect(allow.items?.properties?.[0].placeholder).toBe(
+      'channel.botWakeChannelIdPlaceholderLark',
+    );
+    // Discord's "a channel and its threads count as one place" does not describe a Feishu group.
+    const scope = larkBotWakeFields.find((f) => f.key === BOT_WAKE_SETTING_KEYS.scope)!;
+    expect(scope.enumDescriptions).toContain('channel.botWakeScopeBotThreadsHintLark');
+    expect(agentLocale['channel.botWakeScopeBotThreadsHintLark']).not.toMatch(/discord/i);
+    expect(
+      larkBotWakeFields.flatMap(referencedKeys).filter((key) => !(key in agentLocale)),
+    ).toEqual([]);
   });
 });

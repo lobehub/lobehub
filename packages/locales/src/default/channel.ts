@@ -1,4 +1,6 @@
 export default {
+  'recipients.automatic': 'The decision model will choose which Agents reply',
+
   'people.empty': 'All available workspace members have joined',
   'people.noMatches': 'No matching workspace members',
   'people.searchMore': 'Showing the first 50 members. Search to find more.',
@@ -19,27 +21,37 @@ export default {
     'This Agent is no longer available. Remove it and choose another.',
   'environment.checkingDevice': 'Checking status',
   'environment.chooseDevice': 'Choose a device',
-  'environment.completeRequired': 'Complete the highlighted settings before continuing.',
   'environment.configurationFailed': 'Could not load this Agent’s settings. Try again.',
   'environment.configurationLoading': 'Loading this Agent’s settings…',
-  'environment.defaultsHint':
-    'Each Agent uses its own device and working directory. You can change them for this channel later from the member list.',
+  'environment.connectorUpgradeRequired':
+    'This device’s LobeHub connector needs an update. Update LobeHub Desktop or the LobeHub CLI on that device, then reconnect and try again.',
   'environment.deviceLabel': 'Device for {{name}}',
   'environment.deviceOffline': 'This device is offline. Reconnect it or choose another device.',
   'environment.deviceRequired': 'Choose an online device for this coding Agent.',
+  'environment.deviceUnreachable':
+    'Could not connect to the device to check the working directory. Check the device connection and try again.',
   'environment.deviceUnavailable':
     'This device is unavailable in the current space. Choose an accessible device.',
   'environment.devicesFailed':
     'Could not confirm device status. Refresh the device list and try again.',
   'environment.devicesLoading': 'Checking device status…',
   'environment.directoryLabel': 'Working directory for {{name}}',
+  'environment.directoryInvalid':
+    'The working directory does not exist or is not a folder on this device. Update the working directory and try again.',
   'environment.directoryRequired': 'Choose a working directory on this device.',
+  'environment.inherited.deviceOffline':
+    'This Agent’s device is offline. Reconnect the device, or remove the Agent.',
+  'environment.inherited.deviceRequired':
+    'This coding Agent has no default device. Choose one in its settings, or remove the Agent.',
+  'environment.inherited.deviceUnavailable':
+    'This Agent’s device is unavailable in the current space. Change it in the Agent’s settings, or remove the Agent.',
   'environment.directoryUnavailable':
     'Could not verify the directory. Check the device connection and choose the directory again.',
   'environment.executionRequired':
     'Choose an online device and working directory for every coding Agent.',
   'environment.permissionRequired':
     'You do not have permission to save these members. Check channel and Agent access.',
+  'environment.resolveRequired': 'Resolve the issues shown under the selected Agents first.',
   'environment.saveFailed':
     'Could not save channel members. Your choices are preserved; try again.',
   'environment.signInRequired': 'Sign in again before saving channel members.',
@@ -65,6 +77,8 @@ export default {
   'deleteThreadSuccess': 'Thread moved to trash',
   'deletedMember': 'Former member',
   'membersTitle': 'Members',
+  'members.show': 'Show member list',
+  'members.hide': 'Hide member list',
   'membersCount': 'Members · {{count}}',
   'openAgent': 'Open Agent',
   'openAgentNamed': 'Open {{name}}',

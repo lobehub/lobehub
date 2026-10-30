@@ -16,7 +16,6 @@ on:
       - '.github/workflows/sync*.y*ml'
       - '.github/workflows/auto-*.yml'
       - '.github/workflows/manual-*.yml'
-      - '.github/workflows/lighthouse.yml'
       - '.github/workflows/bundle-analyzer.yml'
   pull_request:
     paths-ignore:
@@ -30,7 +29,6 @@ on:
       - '.github/workflows/sync*.y*ml'
       - '.github/workflows/auto-*.yml'
       - '.github/workflows/manual-*.yml'
-      - '.github/workflows/lighthouse.yml'
       - '.github/workflows/bundle-analyzer.yml'
 
 permissions:

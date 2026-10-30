@@ -4,7 +4,10 @@ import {
   DEFAULT_EMBEDDING_PROVIDER,
   DEFAULT_MINI_PROVIDER,
   DEFAULT_PROVIDER,
+  DEFAULT_VERIFY_MODEL,
+  DEFAULT_VERIFY_PROVIDER,
 } from '@lobechat/business-const';
+import * as businessDefaults from '@lobechat/business-const';
 import type {
   PromptRewriteSystemAgent,
   ServiceModelTier,
@@ -65,10 +68,30 @@ export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = 
   provider: DEFAULT_EMBEDDING_PROVIDER,
 };
 
+// Verification is the quality gate and reads screenshot evidence, so it has its
+// own vision-capable tier instead of following 主模型 / Flash. Deployments can
+// repoint it with `SYSTEM_AGENT=verify=<provider>/<model>`.
+export const DEFAULT_VERIFY_SYSTEM_AGENT_ITEM: SystemAgentItem = {
+  model: DEFAULT_VERIFY_MODEL,
+  provider: DEFAULT_VERIFY_PROVIDER,
+};
+
+// Distribution overlays can deploy separately from the core. Read the new defaults
+// optionally so an older overlay can still build with the self-hosted fallback.
+const channelRoutingModel: unknown = Reflect.get(businessDefaults, 'DEFAULT_CHANNEL_ROUTING_MODEL');
+const channelRoutingProvider: unknown = Reflect.get(
+  businessDefaults,
+  'DEFAULT_CHANNEL_ROUTING_PROVIDER',
+);
+
 export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   agentMeta: DEFAULT_SYSTEM_AGENT_ITEM,
   asr: DEFAULT_ASR_SYSTEM_AGENT_ITEM,
-  channelRouting: { enabled: false, model: 'jev-1.14.0', provider: 'typesafe' },
+  channelRouting: {
+    enabled: true,
+    model: typeof channelRoutingModel === 'string' ? channelRoutingModel : 'jev-1.14.0',
+    provider: typeof channelRoutingProvider === 'string' ? channelRoutingProvider : 'typesafe',
+  },
   expertise: DEFAULT_SYSTEM_AGENT_ITEM,
   followUpAction: DEFAULT_FOLLOW_UP_ACTION_SYSTEM_AGENT_ITEM,
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
@@ -85,6 +108,7 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   topic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   topicAutoSummary: DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM,
   translation: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  verify: DEFAULT_VERIFY_SYSTEM_AGENT_ITEM,
 };
 
 /**
@@ -100,13 +124,15 @@ export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModel
     'topic',
     'thread',
     'generationTopic',
-    'promptRewrite',
+    'translation',
     'historyCompress',
+    'promptRewrite',
     'memoryAnalysisAgentConfig',
     'userMemoryPersonaWriter',
-    'translation',
     'inputCompletion',
     'followUpAction',
   ],
   main: ['agentMeta', 'expertise', 'goal', 'topicAutoSummary'],
+  // Must stay vision-capable: the picker for this tier lists only vision models.
+  verify: ['verify'],
 };

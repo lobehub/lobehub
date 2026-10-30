@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agentOperations,
   agents,
   environments,
   knowledgeBases,
@@ -15,6 +16,7 @@ import {
   projects,
   projectWorks,
   tasks,
+  topics,
   users,
   works,
   workspaces,
@@ -1096,5 +1098,44 @@ describe('ProjectModel', () => {
     expect(await model.listTopics(project.id)).toEqual([
       expect.objectContaining({ agentId: null, agentTitle: null, id: topic.id }),
     ]);
+  });
+
+  // The project sidebar renders a running row's elapsed clock from this. Rows
+  // the client holds no local operation for (every non-active running topic
+  // after a refresh) otherwise show a spinner with no timer.
+  it('resolves runStartedAt for running project topics', async () => {
+    const project = await createProject(model, { name: 'Running work' });
+    await serverDB.insert(topics).values([
+      { id: 't-op', projectId: project.id, status: 'running', title: 'server run', userId },
+      {
+        id: 't-stamp',
+        metadata: { runStartedAt: '2026-01-05T00:00:00Z' },
+        projectId: project.id,
+        status: 'running',
+        title: 'client run',
+        userId,
+      },
+      {
+        id: 't-done',
+        metadata: { runStartedAt: '2026-01-06T00:00:00Z' },
+        projectId: project.id,
+        status: 'completed',
+        title: 'finished run',
+        userId,
+      },
+    ]);
+    await serverDB.insert(agentOperations).values({
+      id: 'op-project-run',
+      startedAt: new Date('2026-01-02T00:00:00Z'),
+      status: 'running',
+      topicId: 't-op',
+      userId,
+    });
+
+    const byId = Object.fromEntries((await model.listTopics(project.id)).map((t) => [t.id, t]));
+
+    expect(byId['t-op'].runStartedAt).toEqual(new Date('2026-01-02T00:00:00Z'));
+    expect(byId['t-stamp'].runStartedAt).toEqual(new Date('2026-01-05T00:00:00Z'));
+    expect(byId['t-done'].runStartedAt).toBeNull();
   });
 });

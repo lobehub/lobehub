@@ -1,4 +1,8 @@
 export default {
+  'systemAgent.channelRouting.title': 'Channel decision model',
+  'systemAgent.channelRouting.modelDesc':
+    'Choose which Agents reply to messages without @mentions. When off, all eligible Agents reply.',
+
   'chatPreference.assist.desc':
     'Personal preferences: they only apply to you, in your personal space and every workspace.',
   'chatPreference.assist.title': 'Chat Assist',
@@ -485,6 +489,7 @@ export default {
   'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Same as primary model',
   'heterogeneousStatus.apiMode.provider': 'Provider',
   'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
+  'heterogeneousStatus.apiMode.useSubscription': 'Use subscription',
   'heterogeneousStatus.apiMode.workspaceUnsupported': 'Not available for workspace agents',
   'heterogeneousStatus.apiMode.serverDefault.checking': 'Checking deployment provider...',
   'heterogeneousStatus.apiMode.serverDefault.disabled':
@@ -515,16 +520,13 @@ export default {
   'heterogeneousStatus.runtime.keyMissing': 'Configure the DeepSeek provider API key',
   'heterogeneousStatus.runtime.configure': 'Provider Settings',
 
-  // Heterogeneous agent — Cloud tab (web environment config)
-  'heterogeneousStatus.cloud.tabLabel': 'Cloud',
+  // Heterogeneous agent — cloud sandbox config
   'heterogeneousStatus.cloud.tokenLabel': 'Claude Code Token',
   'heterogeneousStatus.cloud.tokenDesc':
     'Your Claude Code OAuth token. Saved securely to Credentials once submitted. Run `claude setup-token` in your terminal to generate one.',
   'heterogeneousStatus.cloud.tokenLookupError':
     "Couldn't check whether this token is available here. Retry to load it again.",
   'heterogeneousStatus.cloud.tokenRetry': 'Retry',
-  'heterogeneousStatus.cloud.tokenSharedElsewhere':
-    'Your personal Claude Code token is shared to another workspace. Saving a token here moves it to this workspace, and cloud runs in the other workspace will no longer be able to use it.',
   'heterogeneousStatus.cloud.tokenTypeMismatch':
     'A credential with the key CLAUDE_CODE_OAUTH_TOKEN already exists with a different type. Remove or rename it in Credentials, then save again.',
   'heterogeneousStatus.cloud.tokenNotShared':
@@ -553,8 +555,30 @@ export default {
   'heterogeneousStatus.cloud.repoPlaceholder': 'owner/repo or https://github.com/owner/repo',
   'heterogeneousStatus.cloud.repoAdd': 'Add',
 
-  // Heterogeneous agent — Desktop tab
-  'heterogeneousStatus.desktop.tabLabel': 'Desktop',
+  // Heterogeneous agent — execution environment and its bound device
+  'heterogeneousStatus.device.afterInstall':
+    'After installing, run `{{command}}` on that device once to sign in, then check again.',
+  'heterogeneousStatus.device.detecting': 'Checking {{name}} CLI on {{device}}…',
+  'heterogeneousStatus.device.installDesc':
+    'Run one of these commands in a terminal on {{device}}:',
+  'heterogeneousStatus.device.installTitle': 'Install on {{device}}',
+  'heterogeneousStatus.device.label': 'Device',
+  'heterogeneousStatus.device.missing':
+    'The bound device is no longer available. Choose another execution environment above.',
+  'heterogeneousStatus.device.offline': '{{device}} is offline. Check again once it reconnects.',
+  'heterogeneousStatus.device.openDocs': 'Installation guide',
+  'heterogeneousStatus.device.scanFailed':
+    'Couldn’t check {{name}} CLI on {{device}}. Update LobeHub on that device and try again.',
+  'heterogeneousStatus.device.scanFailedTag': 'Unknown',
+  'heterogeneousStatus.device.showDetails': 'Show details',
+  'heterogeneousStatus.device.unavailable': '{{name}} CLI not found on {{device}}',
+  'heterogeneousStatus.sandbox.desc':
+    '{{name}} runs in the cloud sandbox. Nothing needs to be installed on your devices.',
+  'heterogeneousStatus.target.desc':
+    'New topics run here. Existing topics stay on the device they ran on.',
+  'heterogeneousStatus.target.fixed': 'This environment is fixed. Members can’t change it.',
+  'heterogeneousStatus.target.overridden':
+    'Applies only to you. Other members keep the Agent default.',
 
   // Connected agent profile config panel (openclaw / hermes)
   'platformAgentConfig.title': 'Connection',
@@ -589,23 +613,54 @@ export default {
   'creds.createModal.title': 'Create Credential',
   'creds.edit.title': 'Edit Credential',
   'creds.empty': 'No credentials configured yet',
+  'creds.errors.createFailed': 'Failed to create the credential. Please try again.',
+  'creds.errors.multiOrgShareDisabled':
+    'Sharing one credential into several workspaces is not available yet. Remove its other share first.',
+  'creds.errors.privateCredExists':
+    'You already have a private credential with this key in this workspace. Remove it before making this one private.',
+  'creds.errors.privateCredsDisabled':
+    'Private workspace credentials are not available yet. Please try again later.',
+  'creds.errors.publicCredExists':
+    'This workspace already shares a credential with this key. Remove it before publishing this one.',
   'creds.file.authRequired': 'Please sign in to the Market first',
   'creds.file.uploadFailed': 'File upload failed',
   'creds.file.uploadSuccess': 'File uploaded successfully',
   'creds.file.uploading': 'Uploading...',
   'creds.orgSetupRequired':
     'Community Profile not set up yet. Please complete the workspace Community Profile setup to manage credentials.',
+  'creds.owner.fromPersonal': 'From your personal account',
   'creds.owner.sharedBy': 'Shared by {{name}}',
-  'creds.personalSection.desc':
-    'These are your own credentials. Turn on sharing to make one available to this workspace.',
+  'creds.privateSection.desc':
+    'Only you can see and use these credentials in this workspace. Publish one to let every member use it.',
+  'creds.privateSection.empty': 'No private credentials yet',
+  'creds.share.alreadyShared': 'Shared',
+  'creds.share.badge': 'Shared to {{count}} workspaces',
+  'creds.share.confirm': 'Share',
+  'creds.share.empty': "You haven't joined any workspace yet.",
   'creds.share.error': 'Failed to update sharing for this credential. Please try again.',
-  'creds.share.toggle': 'Share to workspace',
-  'creds.share.visibility.private': 'Private',
-  'creds.share.visibility.public': 'Public',
+  'creds.share.menu': 'Share to Workspace…',
+  'creds.share.modalDesc':
+    'Share this credential into a workspace. It stays in your account, and you can stop sharing at any time.',
+  'creds.share.modalTitle': 'Share Credential to Workspace',
+  'creds.share.revoke': 'Stop Sharing',
+  'creds.share.revokeConfirmDesc':
+    'Agent runs in that workspace will no longer be able to use it. The credential stays in your account.',
+  'creds.share.revokeConfirmTitle': 'Stop sharing to "{{name}}"?',
+  'creds.share.selectPlaceholder': 'Select a workspace',
+  'creds.share.sharedLabel': 'Shared to',
+  'creds.share.success': 'Shared to {{name}}',
+  'creds.share.targetLabel': 'Share to',
+  'creds.share.unshareConfirmDesc':
+    "Agent runs in this workspace will no longer be able to use it. The credential stays in its owner's personal account.",
+  'creds.share.unshareConfirmTitle': 'Stop sharing this credential to the workspace?',
+  'creds.share.viewerHint': "Viewers can't share credentials",
   'creds.signIn': 'Sign In to Market',
   'creds.signInRequired': 'Please sign in to the Market to manage your credentials',
-  'creds.tabs.personal': 'Personal',
+  'creds.tabs.private': 'Private',
   'creds.tabs.workspace': 'Workspace',
+  'creds.viewerHint': "Viewers can't create credentials",
+  'creds.visibility.publish': 'Publish to Workspace',
+  'creds.visibility.publishConfirmTitle': 'Publish this credential to the workspace?',
   'creds.workspaceSection.desc':
     'Credentials available to everyone in this workspace, including credentials shared by members.',
   'creds.form.addPair': 'Add Key-Value Pair',
@@ -700,6 +755,7 @@ export default {
   'devices.detail.cores_one': '{{count}} core',
   'devices.detail.cores_other': '{{count}} cores',
   'devices.detail.cpu': 'CPU',
+  'devices.detail.disk': 'Disk',
   'devices.detail.lastConnected': 'Last connected',
   'devices.detail.loadUsage': 'Load average',
   'devices.detail.memory': 'Memory',
@@ -732,6 +788,7 @@ export default {
   'devices.capabilities.tools.desc': 'Connect local tools to extend what agents can do.',
   'devices.capabilities.tools.title': 'Call system tools',
   'devices.card.cpuUsage': 'CPU usage',
+  'devices.card.diskUsage': 'Disk usage',
   'devices.card.hostname': 'Hostname',
   'devices.card.memoryUsage': 'Memory usage',
   'devices.card.runningTopics': 'Running topics',
@@ -1187,6 +1244,10 @@ export default {
   'settingAgent.agentTools.tabUser': 'User Tools',
   'settingAgent.agentTools.tabWorkspace': 'Workspace Tools',
   'settingAgent.devicePolicy.noPublicDevice': 'No public devices',
+  'settingAgent.devicePolicy.privateDeviceFixed':
+    'A fixed environment can only use public workspace devices',
+  'settingAgent.devicePolicy.privateDevicePublicAgent':
+    'Private devices are for private agents only — other members cannot reach them',
   'settingAgent.devicePolicy.selectTarget': 'Select environment',
   'settingAgent.devicePolicy.title': 'Execution environment',
   'settingAgent.modelPolicy.fixedTip':
@@ -1401,7 +1462,7 @@ export default {
   'settingImage.defaultCount.desc':
     'Set the default number of images generated when creating a new task in the image generation panel.',
   'settingImage.defaultCount.label': 'Default Image Count',
-  'settingImage.defaultCount.title': 'Generation',
+  'settingImage.defaultCount.title': 'Image Generation',
   'settingModel.enableContextCompression.desc':
     'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
@@ -1532,7 +1593,7 @@ export default {
   'serviceModel.advanced.restoreAll': 'Restore all',
   'serviceModel.advanced.summary.custom': '{{count}} customized',
   'serviceModel.advanced.summary.off': '{{count}} off',
-  'serviceModel.advanced.summary.rest': 'the rest follow the settings above',
+  'serviceModel.advanced.summary.followTier': 'the rest follow {{tier}}',
   'serviceModel.advanced.summary.separator': ', ',
   'serviceModel.advanced.summary.total': '{{count}} tasks',
   'serviceModel.advanced.title': 'Advanced',
@@ -1540,14 +1601,9 @@ export default {
   'serviceModel.customModel': 'Choose a model',
   'serviceModel.desc':
     'Models LobeHub uses for background tasks. They follow the system recommendation by default and upgrade automatically when new models arrive.',
-  'serviceModel.group.agent': 'Agents & Goals',
-  'serviceModel.group.content': 'Content Processing',
-  'serviceModel.group.memory': 'Memory',
-  'serviceModel.group.suggestion': 'Suggestions',
-  'serviceModel.group.topic': 'Topic Naming & Summaries',
-  'serviceModel.group.voice': 'Voice',
   'serviceModel.off': 'Off',
   'serviceModel.systemRecommended': 'System recommended',
+  'serviceModel.tierPicker': 'Model',
   'serviceModel.title': 'Service Model',
   'serviceModel.tier.embedding.desc': 'Memory retrieval',
   'serviceModel.tier.embedding.title': 'Embedding Model',
@@ -1556,6 +1612,12 @@ export default {
   'serviceModel.tier.flash.title': 'Flash Model',
   'serviceModel.tier.main.desc': 'Quality-sensitive tasks such as writing and reasoning',
   'serviceModel.tier.main.title': 'Main Model',
+  'serviceModel.tier.verify.desc':
+    'Task and goal acceptance. It reads screenshot evidence, so only vision models are listed',
+  'serviceModel.tier.verify.title': 'Acceptance Model',
+  'serviceModel.voice.desc':
+    'Turns voice messages into text for external agents that only accept text',
+  'serviceModel.voice.title': 'Voice',
   'serviceModel.topicAutoSummary.desc':
     'Summarizes topics created in the rolling 24-hour window after one hour without message activity.',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
@@ -1677,6 +1739,8 @@ When I am ___, I need ___
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
   'skillView.connectors': 'Connectors',
+  'skillView.connectorsDesc':
+    'Connect the apps and tools your agents can use. Open one to see its account and tools.',
   'skillView.skills': 'Skills',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',
@@ -1864,6 +1928,7 @@ When I am ___, I need ___
   'systemAgent.translation.label': 'Model',
   'systemAgent.translation.modelDesc': 'Model used to translate messages',
   'systemAgent.translation.title': 'Message Translation',
+  'systemAgent.verify.title': 'Task Acceptance',
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
   'tab.advanced.appUpdates.title': 'App updates',
@@ -1942,6 +2007,7 @@ When I am ___, I need ___
   'trash.actions.purge': 'Delete forever',
   'trash.actions.restore': 'Restore',
   'trash.columns.deletedAt': 'Deleted',
+  'trash.columns.deletedBy': 'Deleted by',
   'trash.columns.expiresIn': 'Auto-deletes',
   'trash.columns.name': 'Name',
   'trash.columns.type': 'Type',
@@ -1987,6 +2053,8 @@ When I am ___, I need ___
     '{{count}} item(s) are still finishing their work and stayed in the trash. Try again in a moment.',
   'trash.purge.success': 'Deleted permanently',
   'trash.title': 'Trash',
+  'trash.side.private': 'Private',
+  'trash.side.public': 'Public',
   'trash.type.agent': 'Agent',
   'trash.type.channel': 'Channel',
   'trash.type.channelThread': 'Channel thread',
@@ -1995,6 +2063,8 @@ When I am ___, I need ___
   'trash.type.topic': 'Topic',
   'trash.type.widget': 'Widget',
   'trash.untitled': 'Untitled',
+  'trash.workspaceDesc':
+    'Public shows the shared content members deleted. Private shows only the private content you deleted, and no one else can see it. Deleted items stay here for {{days}} days and can be restored. After that they are removed permanently.',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',
@@ -3986,9 +4056,9 @@ When I am ___, I need ___
   'tools.builtins.lobe-skill-store.title': 'Skill Store',
   'tools.builtins.lobe-skills.description': 'Activate and use reusable skill packages',
   'tools.builtins.lobe-skills.title': 'Skills',
-  'tools.builtins.lobe-dashboard.description':
+  'tools.builtins.builtin-dashboard.description':
     'Build live monitoring widgets from sandboxed scripts, preview them with real data and put them on dashboards',
-  'tools.builtins.lobe-dashboard.title': 'Dashboards',
+  'tools.builtins.builtin-dashboard.title': 'Dashboards',
   'tools.builtins.lobe-task.description':
     'Create, schedule, list, edit, and delete tasks with dependencies and review configuration',
   'tools.builtins.lobe-task.title': 'Task Tools',

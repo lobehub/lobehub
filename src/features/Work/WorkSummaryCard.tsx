@@ -83,15 +83,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   inlineDescription: css`
+    flex: 1 1 0;
     min-width: 0;
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
   `,
-  inlineIdentifier: css`
+  inlineDot: css`
     flex-shrink: 0;
+    font-size: 11px;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  inlineIdentifier: css`
+    /* The short resource key keeps its width; the long description truncates first. */
+    flex: 0 0 auto;
+
+    max-width: 70%;
+
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  inlineMeta: css`
+    min-width: 0;
   `,
   inlineIcon: css`
     flex-shrink: 0;
@@ -228,25 +241,37 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           onClick={clickable ? handleOpen : undefined}
         >
           <Icon className={styles.inlineIcon} size={17} />
+          {/* The sidebar is narrow: the title owns the first line (sharing it only
+              with the short usage badge), and the identifier drops to the meta line
+              with the description so a long `owner/repo#n` can't squeeze the title. */}
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text ellipsis className={styles.inlineTitle}>
+              <Text ellipsis className={styles.inlineTitle} style={{ flex: 1 }} title={title}>
                 {title}
               </Text>
-              {showIdentifier && <span className={styles.inlineIdentifier}>{identifier}</span>}
+              {usage && (
+                <Center horizontal className={styles.inlineCost} gap={2} title={usageTitle}>
+                  <LobeIcon icon={usage.icon} />
+                  {usage.value}
+                </Center>
+              )}
             </Flexbox>
-            {description && (
-              <Text ellipsis className={styles.inlineDescription}>
-                {description}
-              </Text>
+            {(showIdentifier || description) && (
+              <Flexbox horizontal align={'center'} className={styles.inlineMeta} gap={4}>
+                {showIdentifier && (
+                  <Text ellipsis className={styles.inlineIdentifier} title={identifier}>
+                    {identifier}
+                  </Text>
+                )}
+                {showIdentifier && description && <span className={styles.inlineDot}>·</span>}
+                {description && (
+                  <Text ellipsis className={styles.inlineDescription} title={description}>
+                    {description}
+                  </Text>
+                )}
+              </Flexbox>
             )}
           </Flexbox>
-          {usage && (
-            <Center horizontal className={styles.inlineCost} gap={2} title={usageTitle}>
-              <LobeIcon icon={usage.icon} />
-              {usage.value}
-            </Center>
-          )}
         </Flexbox>
       );
     }

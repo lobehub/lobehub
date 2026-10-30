@@ -1,6 +1,7 @@
 import type { ChatTopic } from '@/types/topic';
 
 import {
+  areAllTopicsArchived,
   buildBotChannelOptions,
   getBotPlatformName,
   getProjectFilterLabel,
@@ -24,6 +25,19 @@ const createTopic = (
 });
 
 describe('AgentTopicManager utils', () => {
+  it('offers unarchive only when every selected topic is archived', () => {
+    const topics = [
+      createTopic(undefined, { id: 'a', status: 'completed' }),
+      createTopic(undefined, { id: 'b', status: 'archived' }),
+      createTopic(undefined, { id: 'c', status: 'active' }),
+    ];
+
+    expect(areAllTopicsArchived(topics, ['a', 'b'])).toBe(true);
+    expect(areAllTopicsArchived(topics, ['a', 'c'])).toBe(false);
+    expect(areAllTopicsArchived(topics, ['missing'])).toBe(false);
+    expect(areAllTopicsArchived(topics, [])).toBe(false);
+  });
+
   it('keeps channel search results hidden after clearing the trigger filter', () => {
     expect(matchesTrigger(createTopic({}, { trigger: 'channel' }), [])).toBe(false);
     expect(matchesTrigger(createTopic({}, { trigger: 'channel' }), ['chat'])).toBe(false);

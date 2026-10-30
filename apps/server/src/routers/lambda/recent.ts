@@ -21,6 +21,7 @@ export const recentRouter = router({
     .input(
       z
         .object({
+          excludeArchived: z.boolean().optional(),
           limit: z.number().optional(),
           /** Restrict a workspace feed to the viewer's own items (mine/team toggle). */
           mineOnly: z.boolean().optional(),
@@ -44,6 +45,7 @@ export const recentRouter = router({
         input?.withTopicPreview,
         input?.mineOnly,
         input?.sharedOnly,
+        input?.excludeArchived,
       );
 
       return items.map((item) => {
@@ -61,7 +63,7 @@ export const recentRouter = router({
             break;
           }
           case 'document': {
-            routePath = `/page/${item.id}`;
+            routePath = `/resource/page/${item.id}`;
             break;
           }
           case 'task': {

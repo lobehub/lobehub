@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+import { decisionModelProviders } from '../decisionModelProviders';
 import { type ModelRef } from '../serviceModelState';
 import ModelLabel from './ModelLabel';
 
-export type ModelKind = 'asr' | 'chat' | 'embedding';
+/** `vision` is the chat models that can read images. */
+export type ModelKind = 'asr' | 'chat' | 'decision' | 'embedding' | 'vision';
 
 // lobe-design-ignore DETAIL-NO-EMPTY: with no enabled model the picker still offers its follow item, so the list is never empty
 export const toOptionValue = ({ model, provider }: ModelRef) => `${provider}/${model}`;
@@ -18,6 +20,9 @@ export const toOptionValue = ({ model, provider }: ModelRef) => `${provider}/${m
  */
 export const useModelOptions = (kind: ModelKind) => {
   const { t } = useTranslation('setting');
+  const decisionModels = useAiInfraStore((s) => s.enabledAiModels);
+  const enabledProviders = useAiInfraStore((s) => s.enabledAiProviders);
+  const runtimeConfig = useAiInfraStore((s) => s.aiProviderRuntimeConfig);
   const providers = useAiInfraStore((s) =>
     kind === 'embedding'
       ? aiProviderSelectors.enabledEmbeddingModelList(s)
@@ -27,7 +32,20 @@ export const useModelOptions = (kind: ModelKind) => {
   );
 
   const groups = useMemo<SelectOptions>(() => {
-    const withModels = providers.filter((provider) => provider.children.length > 0);
+    const candidates =
+      kind === 'decision'
+        ? decisionModelProviders(decisionModels ?? [], enabledProviders ?? [], runtimeConfig)
+        : providers;
+    const withModels = candidates
+      .map((provider) =>
+        kind === 'vision'
+          ? {
+              ...provider,
+              children: provider.children.filter((model) => model.abilities?.vision),
+            }
+          : provider,
+      )
+      .filter((provider) => provider.children.length > 0);
 
     return withModels.map((provider) => ({
       // With one provider the group is just 「指定模型」; otherwise the provider
@@ -39,7 +57,7 @@ export const useModelOptions = (kind: ModelKind) => {
         value: toOptionValue({ model: model.id, provider: provider.id }),
       })),
     }));
-  }, [providers, t]);
+  }, [decisionModels, enabledProviders, kind, providers, runtimeConfig, t]);
 
   /** Option value → model ref; the model id may itself contain slashes. */
   const parseValue = useCallback((value: string): ModelRef => {

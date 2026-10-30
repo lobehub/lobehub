@@ -108,7 +108,9 @@ export type LinearSyncSkipReason =
   /** Closed in Linear and never imported, so there is nothing to close. */
   | 'closed'
   /** Writing the task failed; the next sync retries it. */
-  | 'failed';
+  | 'failed'
+  /** Picked for import, but Linear no longer returns it (deleted, or not visible). */
+  | 'missing';
 
 export interface LinearSyncResult {
   /** Tasks closed because their issue was completed or canceled in Linear. */
@@ -116,7 +118,10 @@ export interface LinearSyncResult {
   created: number;
   /** Tasks edited in LobeHub, so their name, instruction and priority were kept. */
   keptLocalEdits: number;
+  /** The first skipped issues with why; `skippedCount` holds the full count. */
   skipped: { identifier: string; reason: LinearSyncSkipReason }[];
+  /** Every skipped issue, including those past the `skipped` list. Absent in older results. */
+  skippedCount?: number;
   /** More issues matched than one run imports; run again for the rest. */
   truncated: boolean;
   unchanged: number;
@@ -136,4 +141,40 @@ export interface LinearSyncRuleView {
   stateTypes: LinearIssueStateType[];
   teamId: string;
   teamName: string;
+}
+
+/** Why a background sync stopped without a result. */
+export type LinearSyncJobErrorCode =
+  /** The Linear token was revoked or expired; reconnect the workspace. */
+  | 'reconnect'
+  /** The project, rule or connection is gone or no longer visible. */
+  | 'unavailable'
+  /** No progress for too long; the run was likely cut off. */
+  | 'timeout'
+  | 'failed';
+
+/** What a background sync was asked to do, kept on its `async_tasks` row. */
+export interface LinearSyncJobMetadata {
+  connectionId: string;
+  /** Picked issues (`kind: 'issues'`). */
+  issueIds?: string[];
+  kind: 'issues' | 'rule';
+  projectId: string;
+  result?: LinearSyncResult;
+  /** The saved rule being run (`kind: 'rule'`). */
+  ruleId?: string;
+}
+
+export interface LinearSyncJobView {
+  createdAt: Date;
+  error: LinearSyncJobErrorCode | null;
+  id: string;
+  /** Number of picked issues; absent for a rule run. */
+  issueCount?: number;
+  kind: 'issues' | 'rule';
+  projectId: string;
+  result: LinearSyncResult | null;
+  ruleId: string | null;
+  status: 'pending' | 'processing' | 'success' | 'error';
+  updatedAt: Date;
 }

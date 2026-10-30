@@ -105,3 +105,23 @@ Source: acceptance round 4 review — Discord comparisons for composer, typing l
 Channel join events identify people and Agents using their own avatars, not a generic invitation icon. Render each avatar beside its member name, including every member in a grouped event. Let member pairs wrap at narrow widths; do not detach the avatar stack from the names or silently omit later avatars. A member’s emoji avatar is identity, even when it resembles a warning symbol.
 
 Source: user clarification during acceptance round 6 (2026-10-27).
+
+## LOBE-UX-015 — Feature-gated settings follow the feature's availability
+
+An unreleased feature's settings, search results and settings summary counts use the same per-user feature flag as the feature itself. Channel decision settings are visible only when `serverConfigSelectors.enableChannels` is true; a default-on preference does not bypass the `channel` rollout gate.
+
+Enforcement: `src/features/SettingsSearch/items.test.ts` covers the channel decision search entry with the flag off and on. The service-model form filters the channel row before deriving its groups and counts.
+
+Source: user correction about the unreleased Channel feature (2026-10-28).
+
+## LOBE-UX-016 — A stage path is `Steps`, and its current step is the blue live dot
+
+Show where a flow stands (draft → dry run → publish, select → fill) with `Steps` from `@lobehub/ui`, not a hand-rolled row of labels and chevrons: `Steps` owns the connectors and spacing that make the path readable. Mark the current step with `Badge status="processing"` (the blue `colorInfo` dot with its pulse), not `colorPrimary`, which renders near-black in LobeHub's theme and reads as plain text. Done steps keep a check; upcoming steps are a quiet dot. Leave room above the path when it sits right under a tab bar or divider. Copy under the stage title uses `colorTextDescription`.
+
+Source: reviewer correction on widget approval cards, lobehub#21936 acceptance round 1 (2026-10-30).
+
+## LOBE-UX-017 — A strip of tabs is `Tabs`, with plain labels that tell each tab apart
+
+Switching between items in one space (the approval bar's pending calls) uses `@lobehub/ui` `Tabs` (`size="small"`), not a hand-styled underline row. Do not decorate tab labels with emoji (no `🔧`). When two tabs would read the same (two dry runs of one tool), number them ("试运行组件 1", "试运行组件 2"). Read a reviewer's circled region against the exact screenshot coordinates before acting: in this case, two rounds of feedback on the tab strip were misread as feedback on the stage path below it.
+
+Source: reviewer correction on the approval tab bar, lobehub#21936 acceptance round 2 (2026-10-30).

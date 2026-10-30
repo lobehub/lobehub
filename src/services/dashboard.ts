@@ -178,7 +178,7 @@ class DashboardService {
     return data;
   };
 
-  /** Run one `lobe-dashboard` agent tool call server-side (client agent runtime). */
+  /** Run one `builtin-dashboard` agent tool call server-side (client agent runtime). */
   runAgentTool = async (
     apiName: string,
     args: unknown,

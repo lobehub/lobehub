@@ -9,7 +9,6 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useDeviceStore } from '@/store/device';
-import { useUserStore } from '@/store/user';
 import { useVerifyStore } from '@/store/verify';
 
 const builtinAgentSlugs = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
@@ -40,23 +39,9 @@ export const preHydrateTopicListForRoute = async (routeAgentId?: string): Promis
   const agentId = resolveRouteAgentId(routeAgentId);
   if (!agentId) return;
 
-  // The workspace "only mine" filter is part of the list identity; read it
-  // before deriving the params, or the seeded page is the unfiltered one.
-  let preferenceKnown = false;
-  await settleWithin(
-    useUserStore
-      .getState()
-      .preHydrateWorkspaceUserPreference()
-      .then((known) => {
-        preferenceKnown = known;
-      }),
-    PRE_PAINT_HYDRATE_TIMEOUT,
-  );
-  // Still unknown (no local copy yet, e.g. set on another device): any page
-  // seeded now could be the unfiltered one, so leave the list to the mounted,
-  // preference-gated fetch.
-  if (!preferenceKnown) return;
-
+  // The per-agent "only mine" filter is part of the list identity. It is read
+  // from the system status, which restores it synchronously at store creation
+  // (`createInitialSystemStatus`), so the params below already carry it.
   const params = getSidebarTopicListParams({ agentId });
   if (!params) return;
 

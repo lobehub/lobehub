@@ -1088,7 +1088,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
                 <aside className={styles.quickView}>
                   <div className={styles.quickViewSticky}>
                     <QuickView
-                      botAvatar={{ avatar: agentAvatar, background: agentBackground }}
+                      botAvatar={{ agentId, avatar: agentAvatar, background: agentBackground }}
                       botName={agentName}
                       form={form}
                       platformDef={platformDef}
@@ -1114,7 +1114,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
             >
               <QuickView
                 hideTitle
-                botAvatar={{ avatar: agentAvatar, background: agentBackground }}
+                botAvatar={{ agentId, avatar: agentAvatar, background: agentBackground }}
                 botName={agentName}
                 form={form}
                 platformDef={platformDef}

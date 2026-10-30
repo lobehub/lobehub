@@ -16,8 +16,15 @@ const preferenceMock = vi.hoisted(() => ({
 const updateAgentModeMock = vi.hoisted(() => vi.fn());
 const workspaceMock = vi.hoisted(() => ({
   hasActiveWorkspace: false,
+  ownerId: 'agent-1' as string | undefined,
+  setTopicOnlyMine: vi.fn(),
   topicOnlyMine: false,
-  updateWorkspaceUserPreference: vi.fn(),
+}));
+
+vi.mock('@/hooks/useTopicOnlyMine', () => ({
+  useSetTopicOnlyMine: () => workspaceMock.setTopicOnlyMine,
+  useTopicOnlyMine: () => workspaceMock.topicOnlyMine,
+  useTopicOnlyMineOwnerId: () => workspaceMock.ownerId,
 }));
 
 vi.mock('@/business/client/hooks/useHasActiveWorkspace', () => ({
@@ -49,7 +56,6 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) =>
     selector({
       updatePreference: preferenceMock.updatePreference,
-      updateWorkspaceUserPreference: workspaceMock.updateWorkspaceUserPreference,
     }),
 }));
 
@@ -57,9 +63,6 @@ vi.mock('@/store/user/selectors', () => ({
   preferenceSelectors: {
     topicSortBy: () => preferenceMock.topicSortBy,
     topicIncludeCompleted: () => preferenceMock.topicIncludeCompleted,
-  },
-  workspaceUserSettingsSelectors: {
-    topicOnlyMine: () => () => workspaceMock.topicOnlyMine,
   },
 }));
 
@@ -130,6 +133,7 @@ describe('useTopicFilterDropdownMenu only-mine filter', () => {
     scopeMock.scope = null;
     workspaceMock.hasActiveWorkspace = false;
     workspaceMock.topicOnlyMine = false;
+    workspaceMock.ownerId = 'agent-1';
     vi.clearAllMocks();
   });
 
@@ -141,7 +145,8 @@ describe('useTopicFilterDropdownMenu only-mine filter', () => {
     expect(keys).toEqual(['showCompleted']);
   });
 
-  it('toggles the per-workspace only-mine preference inside a workspace', () => {
+  /** @example Turning it on for one agent must not filter every other agent's list. */
+  it("toggles the current agent's own local only-mine choice inside a workspace", () => {
     workspaceMock.hasActiveWorkspace = true;
 
     const { result } = renderHook(() => useTopicFilterDropdownMenu());
@@ -151,8 +156,16 @@ describe('useTopicFilterDropdownMenu only-mine filter', () => {
 
     expect(item.label).toBe('filter.onlyMine');
     item.onClick();
-    expect(workspaceMock.updateWorkspaceUserPreference).toHaveBeenCalledWith({
-      topicOnlyMine: true,
-    });
+    expect(workspaceMock.setTopicOnlyMine).toHaveBeenCalledWith('agent-1', true);
+  });
+
+  it('hides the only-mine filter until the list knows its agent', () => {
+    workspaceMock.hasActiveWorkspace = true;
+    workspaceMock.ownerId = undefined;
+
+    const { result } = renderHook(() => useTopicFilterDropdownMenu());
+
+    const keys = filterGroup(result.current()).children.map((child: any) => child.key);
+    expect(keys).toEqual(['showCompleted']);
   });
 });

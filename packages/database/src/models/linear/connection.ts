@@ -121,6 +121,23 @@ export class LinearConnectionModel {
     return row;
   };
 
+  /** Replace the token after a refresh. A revoked row keeps its revocation. */
+  static updateCredentials = async (
+    db: LobeChatDatabase,
+    id: string,
+    params: { credentials: LinearConnectionCredentials; tokenExpiresAt?: Date | null },
+    gateKeeper?: GateKeeper,
+  ): Promise<void> => {
+    await db
+      .update(linearConnections)
+      .set({
+        credentials: await encryptCredentials(params.credentials, gateKeeper),
+        tokenExpiresAt: params.tokenExpiresAt ?? null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(linearConnections.id, id), isNull(linearConnections.revokedAt)));
+  };
+
   /** Disconnect: drop the token and hide the row. A reconnect reuses it. */
   static revoke = async (db: LobeChatDatabase, id: string): Promise<void> => {
     await db

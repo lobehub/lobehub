@@ -253,7 +253,7 @@ describe('mergeBotSettingsPatch', () => {
     expect(merged?.allowFrom).toEqual([]);
     expect(merged?.userId).toBe('owner-1');
     // A field neither stored nor sent still gets its schema default.
-    expect(merged?.botWakeDutiesThreshold).toBe(0.8);
+    expect(merged?.botWakeDutiesThreshold).toBe(0.65);
   });
 
   it('writes a flat key the runtime reads, even for a bot configured with a nested botWake', () => {

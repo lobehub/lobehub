@@ -12,6 +12,7 @@ export type SettingsSearchTab = SettingsTabs | WorkspaceSettingsTabs;
 export interface SettingsSearchContext {
   disableEmailPassword: boolean;
   enableBusinessFeatures: boolean;
+  enableChannels: boolean;
   enableComposio: boolean;
   enableGatewayMode: boolean;
   /** Workspaces are available to this user */
@@ -484,11 +485,30 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
       'memory',
       'prompt rewrite',
       'history compress',
-      'voice',
-      'transcription',
     ],
     labelKey: 'serviceModel.advanced.title',
     tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-verify',
+    descKey: 'serviceModel.tier.verify.desc',
+    keywords: ['acceptance', 'verify', 'verifier', 'vision', 'multimodal'],
+    labelKey: 'serviceModel.tier.verify.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-asr',
+    keywords: ['voice', 'transcription', 'speech to text'],
+    labelKey: 'systemAgent.asr.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-channelRouting',
+    descKey: 'systemAgent.channelRouting.modelDesc',
+    keywords: ['channel', 'decision', 'Jev', '频道', '决策', '回复'],
+    labelKey: 'systemAgent.channelRouting.title',
+    tab: SettingsTabs.ServiceModel,
+    visible: (ctx) => ctx.enableChannels,
   },
   // Chat Preferences (workspace only — the personal sidebar keeps these rows in
   // Service Model › Advanced)

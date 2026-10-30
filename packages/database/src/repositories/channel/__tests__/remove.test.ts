@@ -115,7 +115,7 @@ describe('Channel soft deletion', () => {
     const pending = await asOwner.send(channel.id, {
       content: 'Who?',
       requestKey: 'pending',
-      routing: 'jev',
+      routing: 'decision',
     });
     const writers = await asOwner.remove(channel.id);
 

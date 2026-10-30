@@ -15,6 +15,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { isGoalRequestGenerating, linkedGoalConfirmState, selectLinkedGoals } from './linkedGoals';
+import { useMarkSidebarTopicGoal } from './useMarkSidebarTopicGoal';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -154,6 +155,12 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
   const confirmed = useGoalStore(goalSelectors.topicGoalsConfirmed(topicId));
   const confirmState = linkedGoalConfirmState(confirmed, error);
   const retry = useCallback(() => void revalidate(), [revalidate]);
+  // Server-confirmed rows only, in both directions: a goal still pending in a
+  // tool result may not exist yet, and a cached empty list proves nothing.
+  useMarkSidebarTopicGoal(
+    enabled ? topicId : undefined,
+    confirmed ? !!topicGoals?.length : undefined,
+  );
 
   const goals = useMemo(
     () => selectLinkedGoals(topicGoals, displayMessages),

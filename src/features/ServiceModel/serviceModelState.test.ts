@@ -52,6 +52,24 @@ describe('resolveSlotState', () => {
 });
 
 describe('applyTierChoice', () => {
+  it('writes the verify tier into the verify slot the server reads, and only there', () => {
+    const VISION = { model: 'vision-z', provider: 'acme' };
+    const next = applyTierChoice({}, 'verify', VISION);
+
+    expect(next.tiers).toEqual({ verify: VISION });
+    expect(next.verify).toEqual(VISION);
+    expect(next.goal).toBeUndefined();
+    expect(resolveSlotState(next, defaults, 'verify')).toEqual({
+      kind: 'follow',
+      tier: 'verify',
+      value: VISION,
+    });
+
+    const cleared = applyTierChoice(next, 'verify', undefined);
+    expect(cleared.tiers).toBeUndefined();
+    expect(cleared.verify).toBeUndefined();
+  });
+
   it('writes the tier model into following slots and keeps custom ones', () => {
     const next = applyTierChoice({ translation: OTHER }, 'flash', FLASH);
 
@@ -167,5 +185,37 @@ describe('canDisableSlot', () => {
     expect(canDisableSlot('asr')).toBe(true);
     expect(canDisableSlot('userMemoryEmbedding')).toBe(false);
     expect(canDisableSlot('topic')).toBe(false);
+  });
+});
+
+describe('channel decision settings', () => {
+  it('defaults to an enabled decision model independent of chat tiers', () => {
+    const stored = applyTierChoice({}, 'flash', FLASH);
+    expect(resolveSlotState(stored, defaults, 'channelRouting')).toEqual({
+      kind: 'follow',
+      tier: undefined,
+      value: { model: defaults.channelRouting.model, provider: defaults.channelRouting.provider },
+    });
+    expect(canDisableSlot('channelRouting')).toBe(true);
+    expect(stored.channelRouting).toBeUndefined();
+  });
+
+  it('keeps the chosen model while disabled and restores it when enabled', () => {
+    const chosen = applySlotChoice({}, 'channelRouting', { kind: 'custom', value: OTHER });
+    const off = applySlotChoice(chosen, 'channelRouting', { kind: 'off' });
+    expect(off.channelRouting).toEqual({ ...OTHER, enabled: false });
+    expect(resolveSlotState(off, defaults, 'channelRouting').kind).toBe('off');
+    const on = { ...off, channelRouting: { ...off.channelRouting, enabled: true } };
+    expect(resolveSlotState(on, defaults, 'channelRouting')).toEqual({
+      kind: 'custom',
+      value: OTHER,
+    });
+  });
+
+  it('restores the recommended decision model without following a chat tier', () => {
+    const chosen = applySlotChoice({}, 'channelRouting', { kind: 'custom', value: OTHER });
+    const restored = restoreAllSlots(chosen, defaults, ['channelRouting']);
+    expect(restored.channelRouting).toEqual({ enabled: true });
+    expect(resolveSlotState(restored, defaults, 'channelRouting').kind).toBe('follow');
   });
 });

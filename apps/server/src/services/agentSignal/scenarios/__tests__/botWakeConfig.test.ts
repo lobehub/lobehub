@@ -31,8 +31,8 @@ describe('parseBotWakeSettings', () => {
 
     expect(parsed.ruleMode).toBe('enforce');
     expect(parsed.rules.classifier.mode).toBe('enforce');
-    // A follow-up must be clearly for the bot: 0.5-0.7 is mostly someone talking to someone else.
-    expect(parsed.rules.classifier.threshold).toBe(0.7);
+    // A follow-up must be clearly for the bot: 0.5-0.75 is mostly someone talking to someone else.
+    expect(parsed.rules.classifier.threshold).toBe(0.75);
     expect(
       parseBotWakeSettings({ botWake: { classifier: { threshold: 0.8 } } }).rules.classifier,
     ).toEqual({ mode: 'enforce', threshold: 0.8 });
@@ -44,7 +44,7 @@ describe('parseBotWakeSettings', () => {
     expect(parseBotWakeSettings({ [K.enabled]: true }).rules.duties).toEqual({
       mode: 'enforce',
       text: undefined,
-      threshold: 0.8,
+      threshold: 0.65,
     });
     expect(
       parseBotWakeSettings({ [K.duties]: '   ', [K.enabled]: true }).rules.duties.text,
@@ -67,7 +67,7 @@ describe('parseBotWakeSettings', () => {
     // A malformed value falls back to its default, keeping the rest.
     expect(
       parseBotWakeSettings({ [K.duties]: 42, [K.dutiesThreshold]: 3, [K.windowSeconds]: 60 }).rules,
-    ).toMatchObject({ duties: { text: undefined, threshold: 0.8 }, windowSeconds: 60 });
+    ).toMatchObject({ duties: { text: undefined, threshold: 0.65 }, windowSeconds: 60 });
     // A hand-written nested config spells them as an object.
     expect(
       parseBotWakeSettings({ botWake: { duties: { text: 'Triage bugs.', threshold: 0.9 } } }).rules
@@ -492,6 +492,14 @@ describe('flattenBotWakeSettings', () => {
       flattenBotWakeSettings({ [K.enabled]: true, [K.schedulerMode]: 'enforce' })?.[K.pace],
     ).toBe('custom');
     expect(flattenBotWakeSettings({ [K.pace]: 'calm' })?.[K.pace]).toBe('calm');
+    // The threshold the form used to save by default is untouched; a tuned one is custom, or the
+    // next save would let the preset replace it.
+    expect(
+      flattenBotWakeSettings({ [K.enabled]: true, [K.classifierThreshold]: 0.5 })?.[K.pace],
+    ).toBe('balanced');
+    expect(
+      flattenBotWakeSettings({ [K.enabled]: true, [K.classifierThreshold]: 0.9 })?.[K.pace],
+    ).toBe('custom');
   });
 
   it('runs a preset pace on its own numbers, and a custom or absent one on the saved numbers', () => {
@@ -512,6 +520,23 @@ describe('flattenBotWakeSettings', () => {
       expect(parsed.rules.windowSeconds).toBe(90);
       expect(parsed.scheduler.mode).toBe('enforce');
     }
+  });
+
+  // A balanced bot saved when the default was 0.5 woke on "yep" and "我试试" in the follow-up
+  // window: the form saves the threshold, so a preset pace has to override it.
+  it('runs a preset pace on its own classifier threshold, and a custom one on the saved one', () => {
+    const K = BOT_WAKE_SETTING_KEYS;
+    const saved = { [K.enabled]: true, [K.classifierThreshold]: 0.5 };
+
+    for (const pace of ['calm', 'balanced', 'active']) {
+      expect(parseBotWakeSettings({ ...saved, [K.pace]: pace }).rules.classifier.threshold).toBe(
+        0.75,
+      );
+    }
+    expect(parseBotWakeSettings({ ...saved, [K.pace]: 'custom' }).rules.classifier.threshold).toBe(
+      0.5,
+    );
+    expect(parseBotWakeSettings({ [K.enabled]: true }).rules.classifier.threshold).toBe(0.75);
   });
 
   it('keeps the migrated row reading the same as the nested one', () => {

@@ -1,11 +1,13 @@
 import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotkeys';
-import type { BuiltinRememberApproval } from '@lobechat/types';
+import type { BuiltinRememberApproval, DynamicInterventionResolver } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
 import { Button, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import { CircleStop, CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { clientInterventionAudits } from '@/store/chat/slices/agentRun/actions/transports/client/interventionAudits';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
@@ -13,13 +15,24 @@ import { useConversationResourceAccess } from '../../../../../hooks/useConversat
 import { useConversationStore } from '../../../../../store';
 import {
   type ApprovalChoice,
+  approveChoiceLabelKeys,
   canRememberViaAllowList,
+  dynamicAuditType,
   getApprovalChoices,
   isChoiceSubmitBlocked,
+  isCoveredByRemember,
   resolveRememberAction,
 } from './approvalGate';
 import { type ApprovalMode } from './index';
 import { isSubmitShortcutBlockedByTarget } from './submitShortcutGuard';
+
+/** The audit this client runs for a tool's dynamic approval, to re-check calls after a remember. */
+const rememberAuditFor = (config: unknown) => {
+  const type = dynamicAuditType(config);
+  return type
+    ? (clientInterventionAudits as Record<string, DynamicInterventionResolver>)[type]
+    : undefined;
+};
 
 interface ApprovalActionsProps {
   apiName: string;
@@ -159,7 +172,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     rememberOption,
     toolArgs,
   }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'plugin']);
     const [choice, setChoice] = useState<Choice>('approve');
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
@@ -199,12 +212,17 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     const effectiveChoice: Choice = choices.includes(choice) ? choice : 'approve';
     const rememberAction = resolveRememberAction({ toolRemember: hasToolRemember });
 
-    const [approveToolCall, rejectAndContinueToolCall, stopPendingApprovalForCard] =
-      useConversationStore((s) => [
-        s.approveToolCall,
-        s.rejectAndContinueToolCall,
-        s.stopPendingApprovalForCard,
-      ]);
+    const [
+      approveToolCall,
+      approveToolCallAndCovered,
+      rejectAndContinueToolCall,
+      stopPendingApprovalForCard,
+    ] = useConversationStore((s) => [
+      s.approveToolCall,
+      s.approveToolCallAndCovered,
+      s.rejectAndContinueToolCall,
+      s.stopPendingApprovalForCard,
+    ]);
     const [stopping, setStopping] = useState(false);
 
     /**
@@ -244,12 +262,24 @@ const ApprovalActions = memo<ApprovalActionsProps>(
           // after this approval already sees it.
           if (remember && rememberAction === 'tool') await rememberOption?.onRemember();
           const editedArguments = await onBeforeApprove?.();
-          await approveToolCall(messageId, assistantGroupId ?? '', {
-            editedArguments,
-            ...(remember && rememberAction === 'allow-list'
-              ? { rememberToolKey: `${identifier}/${apiName}` }
-              : {}),
-          });
+          if (remember) {
+            const audit = rememberAuditFor(interventionConfig);
+            await approveToolCallAndCovered(messageId, assistantGroupId ?? '', {
+              editedArguments,
+              isCovered: (sibling) =>
+                isCoveredByRemember({
+                  audit,
+                  config: interventionConfig,
+                  rememberAction,
+                  toolArgs: safeParseJSON(sibling.requestArgs) ?? {},
+                }),
+              ...(rememberAction === 'allow-list'
+                ? { rememberToolKey: `${identifier}/${apiName}` }
+                : {}),
+            });
+          } else {
+            await approveToolCall(messageId, assistantGroupId ?? '', { editedArguments });
+          }
         }
       } finally {
         setLoading(false);
@@ -257,10 +287,12 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     }, [
       apiName,
       approveToolCall,
+      approveToolCallAndCovered,
       assistantGroupId,
       canUseResource,
       effectiveChoice,
       identifier,
+      interventionConfig,
       isMessageCreating,
       loading,
       messageId,
@@ -363,9 +395,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
 
     const rejectNumber = choices.indexOf('reject') + 1;
 
-    const approveLabel: Record<'approve' | 'approve-remember', string> = {
-      'approve': t('tool.intervention.optionApprove'),
-      'approve-remember': t('tool.intervention.optionApproveRemember'),
+    const approveLabelFor = (c: 'approve' | 'approve-remember') => {
+      const keys = approveChoiceLabelKeys({ apiName, choice: c, identifier });
+      return t(keys.tool, { defaultValue: t(keys.shared), ns: 'plugin' });
     };
 
     // View-only members see the pending intervention but get no approval
@@ -416,7 +448,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                 onClick={() => setChoice(c)}
               >
                 <span className={styles.number}>{index + 1}.</span>
-                <span className={styles.optionLabel}>{approveLabel[c]}</span>
+                <span className={styles.optionLabel}>{approveLabelFor(c)}</span>
               </div>
             );
           })}

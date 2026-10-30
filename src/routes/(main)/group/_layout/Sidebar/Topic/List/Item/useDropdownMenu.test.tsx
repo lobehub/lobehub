@@ -6,6 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
+const favoriteMenuItemMock = vi.hoisted(() =>
+  vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
+);
+vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
+
 const permissionMock = vi.hoisted(() => ({
   create_content: true,
   edit_own_content: true,
@@ -100,6 +105,7 @@ describe('group useTopicItemDropdownMenu', () => {
     const { result } = renderHook(() =>
       useTopicItemDropdownMenu({
         id: 'topic-1',
+        title: 'Topic 1',
         toggleEditing: vi.fn(),
       }),
     );
@@ -123,7 +129,7 @@ describe('group useTopicItemDropdownMenu', () => {
     const writeText = vi.fn();
     vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as unknown as Clipboard);
     const { result } = renderHook(() =>
-      useTopicItemDropdownMenu({ id: 'topic-1', toggleEditing: vi.fn() }),
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1', toggleEditing: vi.fn() }),
     );
 
     copyLink(result.current());
@@ -136,11 +142,31 @@ describe('group useTopicItemDropdownMenu', () => {
     const writeText = vi.fn();
     vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ writeText } as unknown as Clipboard);
     const { result } = renderHook(() =>
-      useTopicItemDropdownMenu({ id: 'topic-1', toggleEditing: vi.fn() }),
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1', toggleEditing: vi.fn() }),
     );
 
     copyLink(result.current());
 
     expect(writeText).toHaveBeenCalledWith('https://example.com/lobehub/group/group-1/topic-1');
+  });
+
+  it('favorites the topic by its group chat link', () => {
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic 1', toggleEditing: vi.fn() }),
+    );
+
+    expect(result.current().map((item) => item && 'key' in item && item.key)).toContain(
+      'toggleFavorite',
+    );
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        path: '/group/group-1/topic-1',
+        snapshotReady: true,
+        targetId: 'topic-1',
+        title: 'Topic 1',
+        type: 'topic',
+      },
+      { showHotkey: false },
+    );
   });
 });

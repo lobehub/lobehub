@@ -201,6 +201,14 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/trash'),
+        'Desktop > Workspace > Settings > Trash',
+      ),
+      handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+      path: 'trash',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/devices'),
         'Desktop > Workspace > Settings > Devices',
       ),

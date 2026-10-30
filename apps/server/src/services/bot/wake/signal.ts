@@ -17,7 +17,7 @@ export interface WakeMessageLike {
   id: string;
   isMention?: boolean;
   /** `edited` is set when the message was dispatched from an edit rather than its first send. */
-  metadata?: { edited?: boolean; editedAt?: Date };
+  metadata?: { dateSent?: Date; edited?: boolean; editedAt?: Date };
   raw?: unknown;
   text?: string;
 }

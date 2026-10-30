@@ -51,6 +51,7 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 
 import AssigneeAvatar from '../../features/AssigneeAvatar';
 import { useTopicDrawerArtifactPortal } from '../../hooks/useTopicDrawerArtifactPortal';
+import TaskAcceptanceWaitNotice from '../TaskAcceptanceWaitNotice';
 import FeedbackInput from './FeedbackInput';
 
 const SHARE_ICON_SIZE = { blockSize: 32, size: 16 } as const;
@@ -139,7 +140,13 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
             <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
               <ChatList disableActionsBar itemContent={itemContent} />
             </Flexbox>
-            <Flexbox paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+            <Flexbox gap={8} paddingBlock={'0 12px'} paddingInline={12} style={{ flexShrink: 0 }}>
+              {/* A run whose agent stopped but whose acceptance round has not
+                  settled still reads as running; say what it waits on. */}
+              <TaskAcceptanceWaitNotice
+                activity={drawerActivity}
+                runningOperation={currentRunningOperation}
+              />
               <FeedbackInput
                 defaultExpanded={defaultInputExpanded}
                 disableCollapse={disableInputCollapse}
@@ -155,10 +162,16 @@ export const TopicChatDrawerBody = memo<TopicChatDrawerBodyProps>(
 
 TopicChatDrawerBody.displayName = 'TopicChatDrawerBody';
 
-const TopicChatDrawer = memo(() => {
+/** Configures how the floating run drawer presents itself on its host surface. */
+export interface TopicChatDrawerProps {
+  /** Whether each opening starts in the expanded reading size. @default false */
+  defaultExpanded?: boolean;
+}
+
+const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false }) => {
   const { t } = useTranslation(['chat', 'common']);
   const navigate = useWorkspaceAwareNavigate();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const topicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
   const agentId = useTaskStore(taskDetailSelectors.topicDrawerAgentId);
@@ -197,6 +210,14 @@ const TopicChatDrawer = memo(() => {
   useFetchTaskDetail(topicId ? activeTaskId : undefined);
 
   const open = !!topicId && !!agentId;
+
+  // Each opening starts from the host's default size; a toggle only lasts for
+  // the run the user is looking at.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setExpanded(defaultExpanded);
+  }
 
   const shareContext = useMemo<Partial<ConversationContext>>(
     () => ({ agentId: agentId ?? undefined, topicId: topicId ?? undefined }),

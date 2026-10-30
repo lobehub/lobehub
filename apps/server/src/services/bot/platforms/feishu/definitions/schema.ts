@@ -5,6 +5,7 @@ import {
   MIN_BOT_HISTORY_LIMIT,
 } from '@lobechat/const';
 
+import { larkBotWakeFields } from '../../botWakeFields';
 import {
   allowFromField,
   displayToolCallsField,
@@ -125,6 +126,7 @@ export const sharedSchema: FieldSchema[] = [
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...larkBotWakeFields,
       ...replyStyleFields,
     ],
     type: 'object',

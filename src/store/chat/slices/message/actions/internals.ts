@@ -2,6 +2,7 @@ import { type ConversationContext, type TraceEventPayloads } from '@lobechat/typ
 import debug from 'debug';
 import isEqual from 'fast-deep-equal';
 
+import { invalidateTopicPreview } from '@/services/message/topicPreview';
 import { traceService } from '@/services/trace';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
@@ -62,6 +63,7 @@ export class MessageInternalsActionImpl {
     );
 
     const messagesKey = messageMapKey(ctx);
+    if (ctx.topicId) invalidateTopicPreview(ctx.topicId);
 
     // Get raw messages from dbMessagesMap and apply reducer
     const rawMessages = this.#get().dbMessagesMap[messagesKey] || [];

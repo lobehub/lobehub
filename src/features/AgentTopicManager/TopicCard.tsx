@@ -3,14 +3,7 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
 import { Block, Checkbox, createStaticStyles, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
-import {
-  CircleDollarSign,
-  FolderIcon,
-  GitBranchIcon,
-  MessageSquare,
-  Star,
-  Zap,
-} from 'lucide-react';
+import { CircleDollarSign, FolderIcon, GitBranchIcon, MessageSquare, Pin, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -171,7 +164,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
 
       <Flexbox horizontal align={'center'} className={styles.titleRow} gap={6}>
         {topic.favorite && (
-          <Icon icon={Star} size={13} style={{ color: cssVar.colorWarning, flexShrink: 0 }} />
+          <Icon icon={Pin} size={13} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }} />
         )}
         {BotPlatformIcon && (
           <BotPlatformIcon

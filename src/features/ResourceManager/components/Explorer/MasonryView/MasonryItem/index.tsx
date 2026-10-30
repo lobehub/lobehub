@@ -230,7 +230,6 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     onOpen,
     metadata,
     sourceType,
-    slug,
     userId,
     visibility,
   }) => {
@@ -266,9 +265,12 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       libraryId: knowledgeBaseId,
       onOpen,
       openInPanel: true,
-      slug,
     });
-    const handleItemDoubleClick = useFileItemDoubleClick({ id, isPage });
+    const handleItemDoubleClick = useFileItemDoubleClick({
+      id,
+      isPage,
+      libraryId: knowledgeBaseId,
+    });
 
     // Memoize drag data to prevent recreation
     const dragData = useMemo(

@@ -1003,6 +1003,44 @@ components:
             - since
             - until
           type: object
+        quota:
+          additionalProperties: false
+          properties:
+            limit:
+              type:
+                - number
+                - "null"
+            remaining:
+              type:
+                - number
+                - "null"
+            resetsAt:
+              format: date-time
+              type:
+                - string
+                - "null"
+            source:
+              enum:
+                - personal
+                - workspace_pool
+                - member_budget
+              type: string
+            used:
+              type: number
+            usedRatio:
+              type:
+                - number
+                - "null"
+          required:
+            - limit
+            - remaining
+            - resetsAt
+            - source
+            - used
+            - usedRatio
+          type:
+            - object
+            - "null"
         remainingBalance:
           type:
             - number
@@ -1037,6 +1075,7 @@ components:
         - currency
         - daily
         - period
+        - quota
         - remainingBalance
         - scope
         - spent
@@ -18050,6 +18089,297 @@ paths:
           description: Internal server error
       tags:
         - notifications
+  /api/v1/notifications/settings:
+    get:
+      operationId: getNotificationSettings
+      summary: Get notification delivery settings
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: query
+          name: scope
+          schema:
+            default: personal
+            type: string
+            enum:
+              - personal
+              - workspace
+    patch:
+      operationId: updateNotificationSettings
+      summary: Update notification delivery settings
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: query
+          name: scope
+          schema:
+            default: personal
+            type: string
+            enum:
+              - personal
+              - workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: object
+                  properties:
+                    scheduledTaskSummary:
+                      type: boolean
+                  additionalProperties: false
+                email:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    items:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          type: boolean
+                  additionalProperties: false
+                im:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    items:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          type: boolean
+                    platforms:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        properties:
+                          enabled:
+                            type: boolean
+                          items:
+                            type: object
+                            propertyNames:
+                              type: string
+                            additionalProperties:
+                              type: object
+                              propertyNames:
+                                type: string
+                              additionalProperties:
+                                type: boolean
+                          tenantId:
+                            type: string
+                        additionalProperties: false
+                  additionalProperties: false
+                inbox:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    items:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          type: boolean
+                  additionalProperties: false
+                push:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    items:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          type: boolean
+                  additionalProperties: false
+              additionalProperties: false
   /api/v1/notifications/unread-count:
     get:
       operationId: getUnreadNotificationCount

@@ -1,3 +1,4 @@
+import { GoalIdentifier, hasUnfinishedGoalProposal } from '@lobechat/builtin-tool-goal';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
@@ -25,7 +26,10 @@ const log = debug('lobe-server:ai-agent-service');
  * Turn-scoped builtin tools to append to the candidate plugin ids: the IM
  * message tool for bot conversations, the task tool for a project coordinator
  * (it delegates by creating and assigning tasks), and multimodal understanding
- * when this turn or its history carries media the model cannot read itself.
+ * when this turn or its history carries media the model cannot read itself,
+ * and the goal tool while the conversation's latest goal proposal has not
+ * created a goal (rejected with feedback, pending, or failed), so the resumed
+ * turn or a plain "try again" can revise and resubmit it without `/goal`.
  */
 export const resolveTurnScopedPluginIds = async (params: {
   attachedFileTypes: string[];
@@ -65,8 +69,11 @@ export const resolveTurnScopedPluginIds = async (params: {
     multimodalUnderstandingConfigured &&
     (needsAudioUnderstanding || needsImageUnderstanding || needsVideoUnderstanding);
 
+  const continuesGoalProposal = hasUnfinishedGoalProposal(await loadHistoryMessages());
+
   return [
     ...(isBotConversation ? [MessageToolIdentifier] : []),
+    ...(continuesGoalProposal ? [GoalIdentifier] : []),
     ...(isProjectCoordinator ? [TaskIdentifier] : []),
     ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
   ];

@@ -31,6 +31,9 @@ describe('resolveSaveModules', () => {
     'botWakeCustomInstructions',
     'displayToolCalls',
     'reactionMode',
+    'replyStyle',
+    'channelReplyStyles',
+    'replyEmojis',
     'charLimit',
   ]);
 
@@ -45,8 +48,16 @@ describe('resolveSaveModules', () => {
       'wake-keywords',
       'wake-channels',
       'wake-pace',
+      'reply-style',
       'advanced',
     ]);
+  });
+
+  it('saves how the bot talks with its own block, on the reply tab', () => {
+    const style = resolveSaveModules(discord, true).find((m) => m.id === 'reply-style')!;
+
+    expect(style.keys).toEqual(['replyStyle', 'channelReplyStyles', 'replyEmojis']);
+    expect(tabOfModule('reply-style')).toBe('reply');
   });
 
   it('leaves the replies out: they save themselves as soon as they change', () => {

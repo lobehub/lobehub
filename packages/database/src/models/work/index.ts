@@ -19,6 +19,8 @@ import {
 
 import type { LobeChatDatabase } from '../../type';
 import {
+  findCanvasIdByWorkId,
+  findCanvasIdsByDeploymentIds,
   findCanvasWork,
   findCanvasWorkVersion,
   findCanvasWorkVersionByToolCall,
@@ -97,6 +99,11 @@ export class WorkModel {
     registerCanvasWork(this.ctx, params);
 
   findCanvas = (canvasId: string) => findCanvasWork(this.ctx, canvasId);
+
+  findCanvasIdByWorkId = (workId: string) => findCanvasIdByWorkId(this.ctx, workId);
+
+  findCanvasIdsByDeploymentIds = (deploymentIds: string[]) =>
+    findCanvasIdsByDeploymentIds(this.ctx, deploymentIds);
 
   recordCanvasPublish = (
     canvasId: string,

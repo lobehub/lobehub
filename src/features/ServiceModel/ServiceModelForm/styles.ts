@@ -5,10 +5,11 @@ import * as stylex from '@stylexjs/stylex';
 export const PICKER_WIDTH = 280;
 
 export const styles = stylex.create({
-  /** 「高级」 and the summary under it: a section inside the card, not a group title. */
+  /** A tier's 「高级」 label: one quiet line under the tier, never a peer of its title. */
   sectionTitle: {
-    color: cssVar.colorText,
-    fontSize: cssVar.fontSize,
+    color: cssVar.colorTextSecondary,
+    flex: 'none',
+    fontSize: cssVar.fontSizeSM,
     fontWeight: 500,
     lineHeight: 1.5,
   },
@@ -17,12 +18,9 @@ export const styles = stylex.create({
     fontSize: cssVar.fontSizeSM,
     lineHeight: 1.5,
   },
-  /** Purpose headings inside 高级: one step quieter than a task name. */
-  groupTitle: {
-    color: cssVar.colorTextSecondary,
-    fontSize: cssVar.fontSizeSM,
-    fontWeight: 500,
-    lineHeight: 1.5,
+  /** A tier's 「高级」 under its picker; the next tier's divider closes it. */
+  advanced: {
+    paddingBlockEnd: 16,
   },
   /** Compact rows: the picker is 32px, so 40 leaves 4px above and below. */
   row: {

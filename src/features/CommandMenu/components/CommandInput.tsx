@@ -1,4 +1,3 @@
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Tag } from '@lobehub/ui';
 import { Command } from 'cmdk';
@@ -6,7 +5,7 @@ import { ArrowLeft, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -70,9 +69,9 @@ const CommandInput = memo<CommandInputProps>(({ onInputChange, onTypeFilterChang
             <Tag
               className={styles.contextTag}
               icon={
-                <Avatar
-                  emojiScaleWithBackground
-                  avatar={activeAgentMeta?.avatar || DEFAULT_AVATAR}
+                <AgentAvatar
+                  agentId={activeAgentId}
+                  avatar={activeAgentMeta?.avatar}
                   background={activeAgentMeta?.backgroundColor}
                   name={agentDisplayName(activeAgentMeta, t('defaultAgent'))}
                   shape="square"
@@ -107,8 +106,8 @@ const CommandInput = memo<CommandInputProps>(({ onInputChange, onTypeFilterChang
           <Tag
             closable
             icon={
-              <Avatar
-                emojiScaleWithBackground
+              <AgentAvatar
+                agentId={selectedAgent.id}
                 avatar={selectedAgent.avatar}
                 name={agentDisplayName(selectedAgent)}
                 shape="square"
