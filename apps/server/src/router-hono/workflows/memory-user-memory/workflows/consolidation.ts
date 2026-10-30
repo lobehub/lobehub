@@ -186,14 +186,20 @@ export const consolidationHandler = async (context: WorkflowContext) => {
   });
   let contexts = 0;
   for (const [g, [key, ids]] of Object.entries(groups).entries()) {
+    const isNew = key.startsWith('new:');
+    // Later chunks of one group must see the contexts earlier chunks created, as in backfill.
+    let groupContexts: string[] = isNew ? [] : [key];
+    const touched = new Set<string>();
     for (let c = 0; c * SYNTH_CHUNK < ids.length; c += 1) {
       const chunk = ids.slice(c * SYNTH_CHUNK, (c + 1) * SYNTH_CHUNK);
-      const isNew = key.startsWith('new:');
+      const known = groupContexts;
       const res = await runStep(context, `${STEP}:synthesize:${g}:${c}`, () =>
-        synthesizeAndApply(service(), isNew ? key.slice(4) : key, chunk, isNew ? [] : [key]),
+        synthesizeAndApply(service(), isNew ? key.slice(4) : key, chunk, known),
       );
-      contexts += res.contextIds.length;
+      for (const id of res.contextIds) touched.add(id);
+      groupContexts = [...new Set([...groupContexts, ...res.contextIds])];
     }
+    contexts += touched.size;
   }
   return { contexts, mode: 'incremental', processed: pending.ids.length, runId };
 };

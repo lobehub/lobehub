@@ -282,4 +282,23 @@ describe('hourlyWorkflowHandler', () => {
       extraHeaders: {},
     });
   });
+
+  it('starts the nightly consolidation on the empty page that ends a real cursor chain', async () => {
+    mocks.config.consolidationNightlyHourUtc = new Date().getUTCHours();
+    // The real executor returns a cursor for every nonempty page, so the chain ends on an empty one.
+    mocks.getUsersForHourlyExtraction.mockResolvedValue({ ids: [] });
+
+    await hourlyWorkflowHandler({
+      requestPayload: {
+        cursor: { createdAt: new Date().toISOString(), id: 'user-last' },
+        hourlyTaskId: '00000000-0000-4000-8000-000000000001',
+      },
+      run: createStepRunner(),
+    } as never);
+
+    expect(mocks.triggerConsolidation.mock.calls.map((call) => call[0])).toEqual([
+      'user-a',
+      'user-b',
+    ]);
+  });
 });

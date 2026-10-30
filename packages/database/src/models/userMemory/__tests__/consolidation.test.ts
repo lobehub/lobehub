@@ -217,6 +217,76 @@ describe('UserMemoryConsolidationModel', () => {
     expect(ctx).toMatchObject({ description: 'v1', now: 'v1' });
     expect(await model.listPendingLegacyContexts()).toHaveLength(1);
   });
+
+  it('reverts a run that updated the same context and dossier in several chunks', async () => {
+    const a = await createLegacy('scheduler backend', '2026-05-01');
+    const first = await model.applyContextPlan('run_5', {
+      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
+      nextSteps: [],
+      now: 'v1',
+      openQuestions: [],
+      title: 'Task system',
+    });
+    const chunk = async (title: string, day: string, version: string) => {
+      const legacy = await createLegacy(title, day);
+      await model.applyContextPlan('run_6', {
+        dossiers: [
+          {
+            existingDossierId: first.dossierIds[0],
+            memberIds: [legacy.context.id],
+            now: version,
+            title: 'Scheduler',
+          },
+        ],
+        existingContextId: first.contextId,
+        nextSteps: [],
+        now: version,
+        openQuestions: [],
+        title: 'Task system',
+      });
+    };
+    await chunk('scheduler cron mode', '2026-06-01', 'v2');
+    await chunk('scheduler retries', '2026-06-02', 'v3');
+
+    await model.revertRun('run_6');
+    const [dossier] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(dossier).toMatchObject({ activityCount: 1, now: 'v1', summary: 'v1' });
+    const [ctx] = await serverDB
+      .select()
+      .from(userMemoriesContexts)
+      .where(eq(userMemoriesContexts.id, first.contextId!));
+    expect(ctx).toMatchObject({ description: 'v1', now: 'v1' });
+  });
+
+  it('stores the description embedding and keeps it when an update has none', async () => {
+    const vector = Array.from({ length: 1024 }, () => 0.01);
+    const a = await createLegacy('scheduler backend', '2026-05-01');
+    const first = await model.applyContextPlan('run_7', {
+      descriptionVector: vector,
+      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
+      nextSteps: [],
+      now: 'v1',
+      openQuestions: [],
+      title: 'Task system',
+    });
+    const b = await createLegacy('scheduler cron mode', '2026-06-01');
+    await model.applyContextPlan('run_8', {
+      dossiers: [{ memberIds: [b.context.id], now: 'v2', title: 'Cron' }],
+      existingContextId: first.contextId,
+      nextSteps: [],
+      now: 'v2',
+      openQuestions: [],
+      title: 'Task system',
+    });
+    const [ctx] = await serverDB
+      .select()
+      .from(userMemoriesContexts)
+      .where(eq(userMemoriesContexts.id, first.contextId!));
+    expect(ctx.descriptionVector).toHaveLength(1024);
+  });
 });
 
 describe('deriveContextStatus', () => {

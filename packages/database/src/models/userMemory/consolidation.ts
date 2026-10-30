@@ -71,6 +71,8 @@ export interface ConsolidationDossierPlan {
 }
 
 export interface ConsolidationContextPlan {
+  /** Embedding of `now`, the context description semantic search ranks by. */
+  descriptionVector?: number[] | null;
   dossiers: ConsolidationDossierPlan[];
   /** Existing consolidated context to extend; omitted for a new one. */
   existingContextId?: string;
@@ -384,6 +386,7 @@ export class UserMemoryConsolidationModel {
           .select({
             currentStatus: userMemoriesContexts.currentStatus,
             description: userMemoriesContexts.description,
+            descriptionVector: userMemoriesContexts.descriptionVector,
             firstSeenAt: userMemoriesContexts.firstSeenAt,
             lastEvidenceAt: userMemoriesContexts.lastEvidenceAt,
             nextSteps: userMemoriesContexts.nextSteps,
@@ -410,6 +413,8 @@ export class UserMemoryConsolidationModel {
             .set({
               currentStatus: deriveContextStatus(last, now),
               description: plan.now,
+              // Without a fresh embedding, the old vector still ranks better than none.
+              ...(plan.descriptionVector ? { descriptionVector: plan.descriptionVector } : {}),
               lastEvidenceAt: last,
               nextSteps: plan.nextSteps,
               now: plan.now,
@@ -449,6 +454,7 @@ export class UserMemoryConsolidationModel {
             capturedAt: now,
             currentStatus: deriveContextStatus(lastEvidence, now),
             description: plan.now,
+            descriptionVector: plan.descriptionVector ?? null,
             firstSeenAt: firstSeen,
             lastEvidenceAt: lastEvidence,
             metadata: runTag(runId),
@@ -469,6 +475,7 @@ export class UserMemoryConsolidationModel {
       }
 
       // ----- dossiers + evidence -----
+      const updatedDossiers = new Set<string>();
       for (const d of placed) {
         const dates = d.members.map((m) => m.capturedAt.getTime());
         const dFirst = new Date(Math.min(...dates));
@@ -492,6 +499,8 @@ export class UserMemoryConsolidationModel {
             );
           if (!existing) dossierId = undefined;
           else {
+            const logBefore = !updatedDossiers.has(dossierId);
+            updatedDossiers.add(dossierId);
             await tx
               .update(userMemoriesDossiers)
               .set({
@@ -505,13 +514,16 @@ export class UserMemoryConsolidationModel {
                 updatedAt: now,
               })
               .where(eq(userMemoriesDossiers.id, dossierId));
-            await op({
-              after: { now: d.now },
-              before: existing,
-              op: 'status',
-              targets: { dossier: dossierId },
-            });
-            result.dossiersUpdated += 1;
+            // A second group placed on the same dossier would log an intermediate before-image.
+            if (logBefore) {
+              await op({
+                after: { now: d.now },
+                before: existing,
+                op: 'status',
+                targets: { dossier: dossierId },
+              });
+              result.dossiersUpdated += 1;
+            }
           }
         }
         if (!dossierId) {
@@ -634,16 +646,26 @@ export class UserMemoryConsolidationModel {
             eq(userMemoriesOperations.state, 'applied'),
             sql`${userMemoriesOperations.metadata} ->> 'consolidationRunId' = ${runId}`,
           ),
-        );
+        )
+        .orderBy(asc(userMemoriesOperations.createdAt));
+      // A run can update one context / dossier in several chunks (one transaction each, so
+      // createdAt increases). Only the earliest before-image is the state before the run.
+      const restoredTargets = new Set<string>();
       for (const u of updates) {
         const before = (u.before ?? {}) as Record<string, unknown>;
         const target = u.targets as Record<string, string>;
+        const targetKey = target.dossier
+          ? `dossier:${target.dossier}`
+          : `context:${target.context}`;
+        if (restoredTargets.has(targetKey)) continue;
+        restoredTargets.add(targetKey);
         if (target.context && !target.dossier) {
           await tx
             .update(userMemoriesContexts)
             .set({
               currentStatus: (before.currentStatus as string) ?? null,
               description: (before.description as string) ?? null,
+              descriptionVector: (before.descriptionVector as number[]) ?? null,
               lastEvidenceAt: before.lastEvidenceAt
                 ? new Date(before.lastEvidenceAt as string)
                 : null,

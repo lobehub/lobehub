@@ -1,3 +1,5 @@
+import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
 import type { ModelRuntime } from '@lobechat/model-runtime';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -11,12 +13,18 @@ import {
 } from '@/database/models/userMemory/consolidation';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import type { LobeChatDatabase } from '@/database/type';
+import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import {
   type MemoryAgentConfig,
   parseMemoryExtractionConfig,
 } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
+import {
+  embedUserMemoryTexts,
+  type UserMemoryEmbeddingRuntime,
+} from '@/server/services/memory/userMemory/embedding';
 import {
   type ProviderKeyVaultMap,
   resolveRuntimeAgentConfig,
@@ -90,6 +98,7 @@ export class MemoryConsolidationService {
   private readonly runId: string;
   readonly model: UserMemoryConsolidationModel;
   private runtime?: { model: string; runtime: ModelRuntime };
+  private embeddingRuntime?: { model: string; runtime: UserMemoryEmbeddingRuntime };
 
   constructor(
     db: LobeChatDatabase,
@@ -270,8 +279,39 @@ export class MemoryConsolidationService {
 
   // ---------- writes ----------
 
-  applyPlan(plan: ConsolidationContextPlan) {
-    return this.model.applyContextPlan(this.runId, plan);
+  async applyPlan(plan: ConsolidationContextPlan) {
+    const descriptionVector = await this.embedDescription(plan.now);
+    return this.model.applyContextPlan(this.runId, { ...plan, descriptionVector });
+  }
+
+  /**
+   * Semantic search ranks contexts by `descriptionVector`, so a synthesized description needs one
+   * like the legacy contexts it replaces. Best effort: a failed embedding must not lose the run.
+   */
+  private async embedDescription(text: string) {
+    try {
+      if (!this.embeddingRuntime) {
+        const { provider, model } =
+          getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
+        const runtime = await initModelRuntimeFromDB(
+          this.db,
+          this.userId,
+          ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
+        );
+        this.embeddingRuntime = { model, runtime };
+      }
+      const [vector] = await embedUserMemoryTexts({
+        input: [text],
+        model: this.embeddingRuntime.model,
+        runtime: this.embeddingRuntime.runtime,
+        source: 'memory:consolidation',
+        userId: this.userId,
+      });
+      return vector ?? null;
+    } catch (error) {
+      log('embedding context description failed: %O', error);
+      return null;
+    }
   }
 
   markRouted(routes: Record<string, ConsolidationRoute>) {
