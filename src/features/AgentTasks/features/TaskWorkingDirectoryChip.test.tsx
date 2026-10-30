@@ -46,4 +46,22 @@ describe('TaskWorkingDirectoryChip', () => {
 
     expect(screen.getByText('/repos/notification-center')).toBeInTheDocument();
   });
+
+  // Following the agent is the environment switch's job; an unset directory
+  // here is the machine's default folder, shown and checked as a real one.
+  it('checks the fallback folder instead of offering a "follow" row', () => {
+    render(
+      <TaskWorkingDirectoryChip
+        deviceId="device-1"
+        fallback={{ path: '/repos/default-home' }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('taskExecution.followAgent')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\/repos\/default-home/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
 });
