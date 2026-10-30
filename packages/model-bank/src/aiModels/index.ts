@@ -44,6 +44,7 @@ import { default as minimaxcodingplan } from './minimaxCodingPlan';
 import { default as mistral } from './mistral';
 import { default as modelscope } from './modelscope';
 import { default as moonshot } from './moonshot';
+import { naceModels as nace } from './nace';
 import { default as nebius } from './nebius';
 import { default as newapi } from './newapi';
 import { default as novita } from './novita';
@@ -157,6 +158,7 @@ const staticModelMap: ModelsMap = {
   mistral,
   modelscope,
   moonshot,
+  nace,
   nebius,
   newapi,
   novita,
@@ -276,6 +278,7 @@ export { default as minimaxcodingplan } from './minimaxCodingPlan';
 export { default as mistral } from './mistral';
 export { default as modelscope } from './modelscope';
 export { default as moonshot } from './moonshot';
+export { naceModels as nace } from './nace';
 export { default as nebius } from './nebius';
 export { default as newapi } from './newapi';
 export { default as novita } from './novita';

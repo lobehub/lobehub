@@ -45,6 +45,7 @@ import MinimaxCodingPlanProvider from './minimaxCodingPlan';
 import MistralProvider from './mistral';
 import ModelScopeProvider from './modelscope';
 import MoonshotProvider from './moonshot';
+import { NaceProvider } from './nace';
 import NebiusProvider from './nebius';
 import NewAPIProvider from './newapi';
 import NovitaProvider from './novita';
@@ -188,6 +189,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   NvidiaProvider,
   TogetherAIProvider,
   TypeSafeProvider,
+  NaceProvider,
   FireworksAIProvider,
   GroqProvider,
   PerplexityProvider,
