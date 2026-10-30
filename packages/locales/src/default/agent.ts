@@ -717,6 +717,13 @@ export default {
   'channel.records.mark.false_wake': "Shouldn't have woken",
   'channel.records.mark.missed_wake': 'Should have woken',
   'channel.records.mark.failed': "Couldn't save your mark. Try again.",
+  'channel.records.column.time': 'Time',
+  'channel.records.column.message': 'Message',
+  'channel.records.column.outcome': 'Result',
+  'channel.records.column.reason': 'Why',
+  'channel.records.column.mark': 'Right?',
+  'channel.records.mark.wrong': 'Wrong call',
+  'channel.records.openMessage': 'Open the message',
   'channel.records.mark.undo': 'Click again to remove the mark',
   'channel.records.empty.title': 'No records yet',
   'channel.records.empty.desc':

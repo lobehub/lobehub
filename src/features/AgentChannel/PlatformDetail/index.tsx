@@ -65,6 +65,7 @@ import {
   tabOfModule,
 } from './saveModules';
 import { getSchemaFields, groupSettingsFields, REPLY_KEYS } from './settingsGroups';
+import { useFoldPreviewOnRecords } from './useFoldPreviewOnRecords';
 import { useNarrowLayout } from './useNarrowLayout';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -277,6 +278,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     );
     const activeTab =
       pickedTab && tabs.includes(pickedTab) ? pickedTab : defaultTab(tabs, !!currentConfig);
+    useFoldPreviewOnRecords(activeTab, previewOpen, setPreviewOpen);
     // The blocks the page saves one by one. A platform with its own credential body (WeChat)
     // connects through its own flow, so it has no credentials block.
     const saveModules = useMemo(() => {

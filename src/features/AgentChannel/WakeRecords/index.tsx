@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AsyncError from '@/components/AsyncError';
 
-import { RecordItem } from './RecordItem';
+import { RecordTable } from './RecordTable';
 import { Summary } from './Summary';
 import { useWakeDecisions, type WakeRecordFilters } from './useWakeRecords';
 
@@ -136,11 +136,7 @@ export const WakeRecords = ({ botId, disabled }: WakeRecordsProps) => {
         }
         onRetry={() => void mutate()}
       >
-        <Flexbox {...stylex.props(styles.list)}>
-          {items.map((item) => (
-            <RecordItem disabled={disabled} item={item} key={item.id} onMark={markDecision} />
-          ))}
-        </Flexbox>
+        <RecordTable disabled={disabled} items={items} onMark={markDecision} />
         {loadMoreFailed ? (
           <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
         ) : hasMore || loadingMore ? (
