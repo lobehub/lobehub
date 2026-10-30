@@ -712,7 +712,7 @@ export class UserMemoryConsolidationModel {
         SELECT DISTINCT o.metadata ->> 'consolidationRunId' AS run_id
         FROM ${userMemoriesOperations} o
         WHERE o.user_id = ${this.userId} AND o.state = 'applied'
-          AND o.metadata ->> 'consolidationRunId' IS DISTINCT FROM ${runId}
+          AND COALESCE(o.metadata ->> 'consolidationRunId', '') <> ${runId}
           AND jsonb_exists(o.metadata, 'consolidationRunId')
           AND o.created_at > (SELECT min(created_at) FROM mine)
           AND (o.targets ->> 'context' IN (SELECT id FROM touched)
