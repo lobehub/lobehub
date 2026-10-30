@@ -203,7 +203,7 @@ describe('TaskSubtreeRepository', () => {
       expect(taken).toMatchObject({
         automationMode: null,
         createdByUserId: userId2,
-        status: 'paused',
+        status: 'backlog',
         visibility: 'private',
       });
       expect((await bob.findById(child.id))?.createdByUserId).toBe(userId2);

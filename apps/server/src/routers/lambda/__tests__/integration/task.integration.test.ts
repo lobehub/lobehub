@@ -1917,7 +1917,7 @@ describe('Task Router Integration', () => {
         assigneeUserId: null,
         automationMode: null,
         createdByUserId: otherUserId,
-        status: 'paused',
+        status: 'backlog',
         visibility: 'private',
       });
 

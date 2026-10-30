@@ -294,7 +294,8 @@ export const lockWholeSubtree = async (
  * Automation stops: runs are attributed to the creator, so the previous
  * creator's queued schedule/heartbeat ticks no longer match the row, and an
  * armed `scheduled` task would otherwise look live with nothing driving it.
- * The new creator re-arms it if they want it.
+ * It returns to `backlog` (`paused` reads as "awaiting review" in the UI); the
+ * new creator re-arms it if they want it.
  */
 export const takeOverSubtree = async (ctx: TaskModelContext, taskIds: string[]): Promise<void> => {
   if (taskIds.length === 0) return;
@@ -303,7 +304,7 @@ export const takeOverSubtree = async (ctx: TaskModelContext, taskIds: string[]):
     .set({
       automationMode: null,
       createdByUserId: ctx.userId,
-      status: sql`CASE WHEN ${tasks.status} = 'scheduled' THEN 'paused' ELSE ${tasks.status} END`,
+      status: sql`CASE WHEN ${tasks.status} = 'scheduled' THEN 'backlog' ELSE ${tasks.status} END`,
       updatedAt: new Date(),
     })
     .where(and(inArray(tasks.id, taskIds), taskOwnership(ctx)));
