@@ -738,13 +738,13 @@ export function registerGoalCommand(program: Command) {
             agentId: options.agent ?? process.env.LOBEHUB_AGENT_ID,
             createdByAgentId: process.env.LOBEHUB_AGENT_ID,
           });
-      await ensureCreatedGoalTaskModel(client, result.data!.goal, taskModel);
       const undrawn = missingSeedDependencies(result.data!, seedTasks);
       if (undrawn.length)
         log.warn(
           `The server did not draw these dependsOn edges (it may predate dependsOn); add them with \`lh goal add-edge\`: ${undrawn.join('; ')}`,
         );
       const turnToken = 'turnToken' in result ? result.turnToken : undefined;
+      await ensureCreatedGoalTaskModel(client, result.data!.goal, taskModel, turnToken);
       // `goal.create` returns the whole graph snapshot, so the id is on its
       // goal — `result.data.id` is undefined, and the CLI cannot resolve the
       // router's types to catch that, which is how it reached a printed URL.

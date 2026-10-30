@@ -32,13 +32,23 @@ export const parseGoalModelConfig = (
  * server that predates the field drops it, which shows as a goal without the
  * model, and only then does the follow-up mutation apply it. That late write
  * can miss a Task already started; a refusal keeps the goal and says how to retry.
+ * It is skipped while a planning turn is open: the turn's snapshot covers the goal
+ * config, so writing now would make the printed token's first plan stale.
  */
 export const ensureCreatedGoalTaskModel = async (
   client: TrpcClient,
   goal: { config?: { taskModel?: string | null } | null; id: string },
   modelConfig: { model: string; provider: string } | null | undefined,
+  turnToken?: string,
 ) => {
   if (!modelConfig || goal.config?.taskModel === modelConfig.model) return;
+  if (turnToken) {
+    log.warn(
+      `This server did not apply --task-model. Submit the plan first, then run: lh goal set-task-model ${goal.id} --model ${modelConfig.model} --provider ${modelConfig.provider}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
   try {
     await client.goal.setTaskModel.mutate({ id: goal.id, modelConfig });
   } catch (error) {
