@@ -10,6 +10,11 @@ export interface BuildBotContextParams {
    */
   deviceAllowlist?: string[];
   /**
+   * Whether this conversation is outside the channels the owner limited device
+   * use to (`isDeviceChannelRestricted`). Omitted: no channel restriction.
+   */
+  deviceChannelRestricted?: boolean;
+  /**
    * Configured owner ID for this bot install (e.g. `agent_bot_providers.settings.userId`
    * or messenger link's `platformUserId`). Owner identity is decided by
    * exact equality with `authorUserId` — never inferred, never defaulted.
@@ -42,6 +47,7 @@ export const buildBotContext = (params: BuildBotContextParams): ChatTopicBotCont
   return {
     applicationId: params.applicationId,
     isOwner,
+    ...(params.deviceChannelRestricted && { isDeviceChannelRestricted: true }),
     ...(isDeviceTrusted && { isDeviceTrusted }),
     platform: params.platform,
     platformThreadId: params.platformThreadId,

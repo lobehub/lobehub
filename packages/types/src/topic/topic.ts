@@ -51,6 +51,13 @@ export interface TopicUserMemoryExtractRunState {
 export interface ChatTopicBotContext {
   applicationId: string;
   /**
+   * Whether the conversation is outside the channels the owner limited device
+   * use to (`settings.deviceChannelPolicy = 'allowlist'` +
+   * `settings.deviceChannelAllowFrom`). Denies device access to everyone,
+   * the owner included. Absent means no channel restriction.
+   */
+  isDeviceChannelRestricted?: boolean;
+  /**
    * Whether the sender, not being the owner, is on the owner's device list
    * (`settings.devicePolicy = 'allowlist'` + `settings.deviceAllowFrom`).
    * Computed with `isOwner` in `buildBotContext`; absent means not trusted.

@@ -162,6 +162,8 @@ export interface BotHandlerContext {
    * it was before the pipeline existed.
    */
   isBotWakeRolledOut: () => Promise<boolean>;
+  /** Whether a thread is outside the channels the owner limited device use to. */
+  isDeviceChannelRestrictedFor: (thread: { id: string; isDM?: boolean }) => boolean;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
   /** Watch keywords the owner marked as the bot's names (`asName`); a subset of `watchKeywords`. */
   nameKeywords: ReadonlyArray<string>;

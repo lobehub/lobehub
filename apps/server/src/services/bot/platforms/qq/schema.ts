@@ -8,7 +8,7 @@ import {
   makeUserIdField,
   watchKeywordsField,
 } from '../const';
-import { deviceAccessFields } from '../deviceAccess';
+import { deviceAccessFields, deviceChannelFields } from '../deviceAccess';
 import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 import { DEFAULT_QQ_CONNECTION_MODE } from './const';
@@ -41,6 +41,7 @@ export const schema: FieldSchema[] = [
     properties: [
       makeUserIdField('qq'),
       ...deviceAccessFields,
+      ...deviceChannelFields,
       {
         key: 'connectionMode',
         default: DEFAULT_QQ_CONNECTION_MODE,

@@ -305,6 +305,27 @@ describe('dispatchHeteroAgent — remote platform agents', () => {
     expect(mocks.executeToolCall).not.toHaveBeenCalled();
   });
 
+  it('names the channel when the device is limited to other channels', async () => {
+    const { deps } = createDeps();
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(remoteConfig({ boundDeviceId: 'dev-1' }), {
+        canUseDevice: false,
+        deviceAccessReason: 'bot-channel-restricted',
+      }),
+      createInput('openclaw'),
+    );
+
+    expect(mocks.finalizeHeteroDispatchError).toHaveBeenCalledWith(
+      deps,
+      finalizeParams({
+        detail: 'Running agents on a bound device is not allowed in this channel.',
+        message: 'Device access denied',
+      }),
+    );
+  });
+
   it('fails when no device is available', async () => {
     const { deps } = createDeps();
 
