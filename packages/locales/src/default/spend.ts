@@ -59,6 +59,7 @@ export default {
   'table.columns.type.enums.embedding': 'Embedding',
   'table.columns.type.enums.imageGeneration': 'Image Generation',
   'table.columns.type.enums.speechRecognition': 'Voice Transcription',
+  'table.columns.type.enums.textToSpeech': 'Speech Synthesis',
   'table.columns.type.enums.videoGeneration': 'Video Generation',
   'table.columns.type.title': 'Type',
   'table.agentShareDesc':
