@@ -414,10 +414,9 @@ const publishReview = async (
   markdown: string,
   findings: Finding[],
 ) => {
-  const reviews = (await api('GET', `/repos/${repo}/pulls/${pr}/reviews?per_page=100`)) as {
-    body?: string | null;
-    id: number;
-  }[];
+  const reviews = await apiPages<{ body?: string | null; id: number }>(
+    `/repos/${repo}/pulls/${pr}/reviews`,
+  );
   const existing = [...reviews].reverse().find((review) => review.body?.includes(REVIEW_MARKER));
 
   if (existing) {
