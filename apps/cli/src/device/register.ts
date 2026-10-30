@@ -62,7 +62,7 @@ export async function registerDevice(
  * through `resolveDevicePlatform` so an Android host (whose kernel reports
  * `linux`) is not registered as a Linux desktop.
  */
-export function buildDeviceInfo(): { metadata: Record<string, string>; platform: string } {
+function buildDeviceInfo(): { metadata: Record<string, string>; platform: string } {
   const { metadata, platform } = resolveDevicePlatform();
   return {
     metadata: {
