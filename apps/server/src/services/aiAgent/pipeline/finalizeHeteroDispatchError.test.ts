@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/agentRuntime/CompletionLifecycle', () => ({
-  CompletionLifecycle: vi.fn(() => ({ completeOperation: mocks.completeOperation })),
+  CompletionLifecycle: class {
+    completeOperation = mocks.completeOperation;
+  },
 }));
 
 vi.mock('@/server/services/agentRuntime/hooks', () => ({
