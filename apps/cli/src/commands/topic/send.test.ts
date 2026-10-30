@@ -66,9 +66,16 @@ describe('lh topic send', () => {
       trigger: 'cli',
       userInterventionConfig: { approvalMode: 'headless' },
     };
-    // Tried as a queued follow-up first, so a busy topic is never interrupted.
-    expect(client.agentSteerQueue.append.mutate).toHaveBeenCalledWith({ request });
-    expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledWith(request);
+    // Tried as a queued follow-up first, so a busy topic is never interrupted,
+    // and started without superseding a run that begins in between.
+    expect(client.agentSteerQueue.append.mutate).toHaveBeenCalledWith({
+      id: expect.any(String),
+      request,
+    });
+    expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledWith({
+      ...request,
+      supersedeLiveRun: false,
+    });
     expect(logged.join('\n')).toContain('op-new');
   });
 
@@ -78,6 +85,30 @@ describe('lh topic send', () => {
     await run('topic', 'send', 'tpc-target', '-c', 'hello', '--json');
 
     expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
+    expect(JSON.parse(logged[0])).toMatchObject({ delivery: 'queued', topicId: 'tpc-target' });
+  });
+
+  // ROOT CAUSE:
+  //
+  // The queue answered "idle", then a person started a turn, and the direct
+  // start — an interactive one — interrupted that person's turn.
+  //
+  // Before: execAgent superseded whatever run owned the topic.
+  // After: the start refuses with CONFLICT and the message is queued instead.
+  it('queues the message when a turn starts between the idle check and the start', async () => {
+    client.agentSteerQueue.append.mutate
+      .mockResolvedValueOnce({ queued: false, reason: 'idle' })
+      .mockResolvedValueOnce({ id: 'q-1', queued: true });
+    client.aiAgent.execAgent.mutate.mockRejectedValueOnce(
+      Object.assign(new Error('busy'), { data: { code: 'CONFLICT' } }),
+    );
+
+    await run('topic', 'send', 'tpc-target', '-c', 'hello', '--json');
+
+    expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledTimes(1);
+    const [first, second] = client.agentSteerQueue.append.mutate.mock.calls.map(([input]) => input);
+    // The same entry id, so a retried append is stored at most once.
+    expect(second.id).toBe(first.id);
     expect(JSON.parse(logged[0])).toMatchObject({ delivery: 'queued', topicId: 'tpc-target' });
   });
 

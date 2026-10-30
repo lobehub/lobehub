@@ -19,6 +19,7 @@ import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupM
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
 import { AgentRelayHopLimitError } from '@/server/services/aiAgent/sourceAttribution';
+import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
 import type { ExecAgentInput } from './execSchemas';
 import {
@@ -215,6 +216,7 @@ export const execRouter = router({
       resumeApproval,
       resumeApprovals,
       resumeToolResult,
+      supersedeLiveRun = true,
     } = input;
 
     log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
@@ -263,19 +265,24 @@ export const execRouter = router({
       );
       if (bridged) return bridged;
 
+      const { supersedeLiveRun: _supersede, ...request } = foldLegacyUserMessageFields(input);
       const result = await startComposerRun(
         {
           aiAgentService: ctx.aiAgentService,
           clientIp: ctx.clientIp ?? undefined,
           db: ctx.serverDB,
+          supersedeLiveRun,
           userAgent: ctx.userAgent ?? undefined,
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         },
         {
-          ...foldLegacyUserMessageFields(input),
+          ...request,
           acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+          // A non-superseding start waits on the surface like a server-started
+          // follow-up, so a thread's live run is refused as well.
+          ...(supersedeLiveRun ? {} : { queuedSuccessor: true }),
         },
       );
 
@@ -285,6 +292,16 @@ export const execRouter = router({
 
       if (error instanceof TRPCError) {
         throw error;
+      }
+
+      // A send that must not interrupt found the topic owned by a live run;
+      // nothing was written, so the caller can queue it behind that run.
+      if (!supersedeLiveRun && error instanceof TopicStartReservationError) {
+        throw new TRPCError({
+          cause: error,
+          code: 'CONFLICT',
+          message: 'The conversation is busy with a running turn; queue the message behind it.',
+        });
       }
 
       // An agent → agent send past the relay bound: the sending agent has to

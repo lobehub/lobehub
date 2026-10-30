@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
@@ -6,6 +8,9 @@ import { getTrpcClient } from '../../api/client';
 import { resolveWorkspaceRef } from '../../api/workspaceRef';
 import { outputJson } from '../../utils/format';
 import { log } from '../../utils/logger';
+
+/** Rounds of queue-or-start before giving up on a topic that keeps getting busy. */
+const MAX_DELIVERY_ATTEMPTS = 3;
 
 export interface ConversationSendResult {
   agentId: string;
@@ -63,25 +68,37 @@ export const sendToConversation = async (
   const sourceOperationId = process.env.LOBEHUB_OPERATION_ID;
   if (sourceOperationId) request.sourceOperationId = sourceOperationId;
 
-  // A busy conversation takes the message behind its running turn: starting a
-  // run directly would interrupt the one in progress.
-  const queued = await client.agentSteerQueue.append.mutate({ request } as any);
-  if (queued.queued) {
-    return { agentId: topic.agentId, delivery: 'queued', threadId, topicId };
-  }
-  if (queued.reason !== 'idle') {
-    throw new Error(
-      queued.reason === 'full'
-        ? `Topic ${topicId} already has too many messages waiting behind its running turn; try again after it finishes.`
-        : `Could not queue the message behind the running turn of ${topicId}; try again.`,
-    );
-  }
+  // Queue behind a running turn, start a turn when idle — never interrupt. The
+  // start refuses (CONFLICT) if a turn began after the queue saw the topic idle;
+  // then the message goes back to the queue. One entry id across attempts, so a
+  // retried append is stored at most once.
+  const entryId = randomUUID();
+  let started: { error?: string; operationId?: string; success?: boolean } | undefined;
+  for (let attempt = 0; attempt < MAX_DELIVERY_ATTEMPTS && !started; attempt += 1) {
+    const queued = await client.agentSteerQueue.append.mutate({ id: entryId, request } as any);
+    if (queued.queued) {
+      return { agentId: topic.agentId, delivery: 'queued', threadId, topicId };
+    }
+    if (queued.reason !== 'idle') {
+      throw new Error(
+        queued.reason === 'full'
+          ? `Topic ${topicId} already has too many messages waiting behind its running turn; try again after it finishes.`
+          : `Could not queue the message behind the running turn of ${topicId}; try again.`,
+      );
+    }
 
-  const started = (await client.aiAgent.execAgent.mutate(request as any)) as {
-    error?: string;
-    operationId?: string;
-    success?: boolean;
-  };
+    try {
+      started = (await client.aiAgent.execAgent.mutate({
+        ...request,
+        supersedeLiveRun: false,
+      } as any)) as typeof started;
+    } catch (error) {
+      if ((error as { data?: { code?: string } })?.data?.code !== 'CONFLICT') throw error;
+    }
+  }
+  if (!started) {
+    throw new Error(`Topic ${topicId} kept starting new turns; try again in a moment.`);
+  }
   if (!started.success) {
     throw new Error(`Failed to start the agent of ${topicId}: ${started.error || 'unknown error'}`);
   }

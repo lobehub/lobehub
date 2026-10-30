@@ -15,6 +15,7 @@ import {
   GroupRoleTransformProcessor,
   HistoryTruncateProcessor,
   InputTemplateProcessor,
+  LH_COMMAND_TOOL_IDENTIFIERS,
   MessageCleanupProcessor,
   MessageContentProcessor,
   PlaceholderMessageFilterProcessor,
@@ -596,7 +597,13 @@ export class MessagesEngine {
       // Reaction feedback
       new ReactionFeedbackProcessor({ enabled: true }),
       // Who sent an agent → agent message, and how to reply (string content only)
-      new AgentSenderMessageProcessor(),
+      new AgentSenderMessageProcessor({
+        // Enabled now or activatable on demand: either way the agent can run `lh`.
+        canRunLhCommand: [
+          ...(toolsConfig?.manifests ?? []).map((manifest) => manifest.identifier),
+          ...(toolDiscoveryConfig?.availableTools ?? []).map((tool) => tool.identifier),
+        ].some((identifier) => LH_COMMAND_TOOL_IDENTIFIERS.includes(identifier)),
+      }),
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
         canReadAttachment,

@@ -29,7 +29,7 @@ const message = (id: string, role: string, content: any, metadata?: Record<strin
 
 describe('AgentSenderMessageProcessor', () => {
   it('tells the model who sent the message and how to reply to it', async () => {
-    const result = await new AgentSenderMessageProcessor().process(
+    const result = await new AgentSenderMessageProcessor({ canRunLhCommand: true }).process(
       createContext([
         message('msg_1', 'user', 'Please iterate the verifier.', {
           agentSender: { agentId: 'agt_a', hop: 1, name: 'Writer "W"', topicId: 'tpc_src' },
@@ -46,8 +46,31 @@ describe('AgentSenderMessageProcessor', () => {
     expect(result.metadata.agentSenderMessagesProcessed).toBe(1);
   });
 
-  it('offers no reply when the origin was not kept', async () => {
+  // ROOT CAUSE:
+  //
+  // The header told every receiving agent to run `lh message reply`, including
+  // one in chat mode or with a custom tool set that has no way to run a
+  // command — the report-back it promised could never happen.
+  //
+  // Before: the command was offered unconditionally.
+  // After: only with a tool that can run `lh`; otherwise relay via the user.
+  it('keeps the attribution but asks for a relay when the agent cannot run commands', async () => {
     const result = await new AgentSenderMessageProcessor().process(
+      createContext([
+        message('msg_1', 'user', 'hi', {
+          agentSender: { agentId: 'agt_a', name: 'Writer', topicId: 'tpc_src' },
+        }),
+      ]),
+    );
+
+    const content = result.messages[0].content as string;
+    expect(content).toContain('name="Writer" agent_id="agt_a" topic_id="tpc_src"');
+    expect(content).not.toContain('lh message reply');
+    expect(content).toContain('tell the user so they can pass it on');
+  });
+
+  it('offers no reply when the origin was not kept', async () => {
+    const result = await new AgentSenderMessageProcessor({ canRunLhCommand: true }).process(
       createContext([message('msg_1', 'user', 'hi', { agentSender: { agentId: 'agt_a' } })]),
     );
 
