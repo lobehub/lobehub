@@ -12,7 +12,9 @@ import type {
 } from '../schemas';
 import {
   agentAccountBindings,
+  agentDeviceAccountBindings,
   agentOperations,
+  agentProviderAccountLogins,
   agentProviderAccounts,
   agentQuotaCalibrations,
   agentQuotaSnapshots,
@@ -284,6 +286,144 @@ export class AgentAccountBindingModel {
 
   remove = async (id: string) =>
     this.db.delete(agentAccountBindings).where(and(eq(agentAccountBindings.id, id), this.mine()));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Logins — which devices an account is signed in on
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class AgentProviderAccountLoginModel {
+  private userId: string;
+  private db: LobeChatDatabase;
+  private workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+  }
+
+  private mine = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentProviderAccountLogins,
+    );
+
+  /** Record that `deviceId` holds a login for `accountId` (refreshes `lastSeenAt`). */
+  record = async (accountId: string, deviceId: string) => {
+    const now = new Date();
+    const [row] = await this.db
+      .insert(agentProviderAccountLogins)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { accountId, deviceId, lastSeenAt: now },
+        ),
+      )
+      .onConflictDoUpdate({
+        set: { lastSeenAt: now, updatedAt: now, userId: this.userId },
+        target: [agentProviderAccountLogins.accountId, agentProviderAccountLogins.deviceId],
+      })
+      .returning();
+    return row;
+  };
+
+  listByDevice = async (deviceId: string) =>
+    this.db
+      .select()
+      .from(agentProviderAccountLogins)
+      .where(and(this.mine(), eq(agentProviderAccountLogins.deviceId, deviceId)));
+
+  listByAccount = async (accountId: string) =>
+    this.db
+      .select()
+      .from(agentProviderAccountLogins)
+      .where(and(this.mine(), eq(agentProviderAccountLogins.accountId, accountId)));
+
+  /** Forget logins on a device; device account bindings on them go with them (FK cascade). */
+  removeOnDevice = async (deviceId: string, accountIds: string[]) => {
+    if (accountIds.length === 0) return;
+    await this.db
+      .delete(agentProviderAccountLogins)
+      .where(
+        and(
+          this.mine(),
+          eq(agentProviderAccountLogins.deviceId, deviceId),
+          inArray(agentProviderAccountLogins.accountId, accountIds),
+        ),
+      );
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Device account bindings — an agent's account choice on one device
+// ─────────────────────────────────────────────────────────────────────────────
+
+export class AgentDeviceAccountBindingModel {
+  private userId: string;
+  private db: LobeChatDatabase;
+  private workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+  }
+
+  private mine = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentDeviceAccountBindings,
+    );
+
+  find = async (agentId: string, deviceId: string) =>
+    (await this.db.query.agentDeviceAccountBindings.findFirst({
+      where: and(
+        this.mine(),
+        eq(agentDeviceAccountBindings.agentId, agentId),
+        eq(agentDeviceAccountBindings.deviceId, deviceId),
+      ),
+    })) ?? null;
+
+  listByAgent = async (agentId: string) =>
+    this.db
+      .select()
+      .from(agentDeviceAccountBindings)
+      .where(and(this.mine(), eq(agentDeviceAccountBindings.agentId, agentId)));
+
+  /**
+   * Choose the account an agent uses on a device. The (account, device) pair
+   * must be a recorded login there: the composite foreign key rejects the
+   * write otherwise.
+   */
+  set = async (agentId: string, deviceId: string, accountId: string) => {
+    const now = new Date();
+    const [row] = await this.db
+      .insert(agentDeviceAccountBindings)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { accountId, agentId, deviceId },
+        ),
+      )
+      .onConflictDoUpdate({
+        set: { accountId, updatedAt: now, userId: this.userId },
+        target: [agentDeviceAccountBindings.agentId, agentDeviceAccountBindings.deviceId],
+      })
+      .returning();
+    return row;
+  };
+
+  clear = async (agentId: string, deviceId: string) =>
+    this.db
+      .delete(agentDeviceAccountBindings)
+      .where(
+        and(
+          this.mine(),
+          eq(agentDeviceAccountBindings.agentId, agentId),
+          eq(agentDeviceAccountBindings.deviceId, deviceId),
+        ),
+      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

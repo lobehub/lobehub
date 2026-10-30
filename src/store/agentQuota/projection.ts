@@ -62,6 +62,32 @@ export const quotaBindingsResource = defineReplica<string, QuotaBinding[]>({
   version: 1,
 });
 
+/** The account an agent uses on one device; `accountId: null` = Auto there. */
+export type QuotaDeviceAccount = Awaited<ReturnType<typeof agentQuotaService.getDeviceAccount>>;
+
+/** Replica key of one agent's account choice on one device (gateway id). */
+export const quotaDeviceAccountKey = (agentId: string, deviceId: string) =>
+  `${agentId}|${deviceId}`;
+
+/** Inverse of `quotaDeviceAccountKey`; agent ids never contain `|`. */
+export const parseQuotaDeviceAccountKey = (key: string) => {
+  const index = key.indexOf('|');
+  return { agentId: key.slice(0, index), deviceId: key.slice(index + 1) };
+};
+
+/**
+ * One agent's account choice on one device, keyed `quotaDeviceAccountKey`. A
+ * login lives on one machine, so the Manual pick is made per device; a device
+ * without one falls back to the legacy agent-wide pin, then Auto.
+ */
+export const quotaDeviceAccountResource = defineReplica<string, QuotaDeviceAccount>({
+  key: (key) => key,
+  name: 'agentQuotaDeviceAccount',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
 /** The newest reading per limit bucket of one account, keyed by account id. */
 export const quotaReadingsResource = defineReplica<string, QuotaLatestReading[]>({
   key: (accountId) => accountId,

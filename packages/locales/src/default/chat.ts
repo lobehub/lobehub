@@ -33,6 +33,9 @@ export default {
   'heteroAgent.claudeQuota.manage.loginSuccess': 'Signed in as {{account}}',
   'heteroAgent.claudeQuota.manage.loginWaiting': 'Finish signing in in your browser…',
   'heteroAgent.claudeQuota.manage.notSignedIn': 'Not signed in on this device',
+  'heteroAgent.claudeQuota.manage.notSignedInOnDevice':
+    "That account isn't signed in on this device yet. Sign in there first.",
+  'heteroAgent.claudeQuota.manage.switchFailed': "Couldn't switch the account. Try again.",
   'heteroAgent.claudeQuota.manage.signIn': 'Sign in',
   'heteroAgent.claudeQuota.noRunnableAccount':
     "None of the Claude Code accounts in this agent's rotation are signed in on this device. Sign one in from Manage accounts, or add a signed-in account to the rotation.",

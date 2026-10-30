@@ -207,6 +207,11 @@ describe('QuotaAccountManager on the desktop', () => {
     vi.spyOn(heterogeneousAgentService, 'getClaudeCodeQuota').mockResolvedValue({
       status: 'unavailable',
     } as never);
+    vi.spyOn(agentQuotaService, 'getDeviceAccount').mockResolvedValue({ accountId: null });
+    vi.spyOn(agentQuotaService, 'syncDeviceLogins').mockResolvedValue(undefined as never);
+    vi.spyOn(useElectronStore.getState(), 'resolveGatewayDeviceId').mockImplementation(
+      async () => useElectronStore.getState().gatewayDeviceInfo?.deviceId,
+    );
   });
 
   afterEach(() => {
@@ -254,6 +259,66 @@ describe('QuotaAccountManager on the desktop', () => {
     await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
     expect(radioFor('away@example.com').getAttribute('aria-disabled')).toBe('true');
     expect(heterogeneousAgentService.listClaudeCodeAccounts).toHaveBeenCalled();
+  });
+
+  it('shows this device’s own pick over the agent-wide pin', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    vi.mocked(agentQuotaService.listBindings).mockResolvedValue([
+      binding('b1', 'here', 'pinned'),
+      binding('b2', 'away', 'pool'),
+    ]);
+    vi.mocked(agentQuotaService.getDeviceAccount).mockResolvedValue({ accountId: 'away' });
+
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
+
+    await waitFor(() => expect(checkedOption()).toContain('away@example.com'));
+    expect(agentQuotaService.getDeviceAccount).toHaveBeenCalledWith('agent-1', 'device-1');
+  });
+
+  // Regression: a pin made on another machine read as this device's choice,
+  // with its account marked "not signed in on this device".
+  it('reads an agent-wide pin this device cannot run as Auto', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    vi.mocked(agentQuotaService.listBindings).mockResolvedValue([
+      binding('b1', 'here', 'pool'),
+      binding('b2', 'away', 'pinned'),
+    ]);
+
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+
+    await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
+    await waitFor(() =>
+      expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto'),
+    );
+    expect(screen.getByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/)).toBeTruthy();
+  });
+
+  it('saves a switch for this device only, not for every device', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    const setDeviceAccount = vi
+      .spyOn(agentQuotaService, 'setDeviceAccount')
+      .mockResolvedValue(undefined as never);
+    const switchAccount = vi.spyOn(agentQuotaService, 'switchAccount');
+
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    await waitFor(() =>
+      expect(radioFor('here@example.com').getAttribute('aria-disabled')).not.toBe('true'),
+    );
+    fireEvent.click(radioFor('here@example.com'));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'heteroAgent.claudeQuota.manage.confirmSwitch' }),
+    );
+
+    await waitFor(() =>
+      expect(setDeviceAccount).toHaveBeenCalledWith('agent-1', 'this-desktop', 'here'),
+    );
+    expect(switchAccount).not.toHaveBeenCalled();
   });
 
   it('lists only Claude Code accounts, never another coding agent’s', async () => {
