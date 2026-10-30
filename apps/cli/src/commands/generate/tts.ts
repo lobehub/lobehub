@@ -101,6 +101,9 @@ export function registerTtsCommand(parent: Command) {
         model,
         params: Object.keys(params).length > 0 ? (params as SynthesizeParams) : undefined,
         provider,
+        // Also sent as the deprecated top-level field so servers that strip `params` keep
+        // the requested speed; newer servers give `params.speed` precedence.
+        speed: typeof params.speed === 'number' ? params.speed : undefined,
         voice: options.voice,
       });
 
