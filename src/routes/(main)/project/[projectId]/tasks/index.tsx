@@ -3,6 +3,7 @@
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { AgentTasksPage } from '@/features/AgentTasks';
+import { LinearSyncEntry } from '@/features/Projects/LinearSync';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
@@ -19,7 +20,12 @@ const ProjectTasks = () => {
     return <AsyncError error={error} variant={'page'} onRetry={() => void revalidate()} />;
   if (!detail) return null;
 
-  return <AgentTasksPage projectId={detail.project.id} />;
+  return (
+    <AgentTasksPage
+      headerActions={<LinearSyncEntry projectId={detail.project.id} />}
+      projectId={detail.project.id}
+    />
+  );
 };
 
 export default ProjectTasks;

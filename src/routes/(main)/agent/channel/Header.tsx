@@ -32,7 +32,6 @@ import NavHeader from '@/features/NavHeader';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 import { useAgentStore } from '@/store/agent';
 import type { BotProviderItem } from '@/store/agent/slices/bot/action';
-import { BOT_RUNTIME_STATUSES, type BotRuntimeStatus } from '@/types/botRuntimeStatus';
 
 import { resolveChannelHeaderView } from './headerView';
 import { isImportableChannel, planChannelImport } from './importPlan';
@@ -47,16 +46,7 @@ interface HeaderProps {
   /** Platform definitions are still loading. */
   platformsLoading?: boolean;
   providers?: BotProviderItem[];
-  runtimeStatus?: BotRuntimeStatus;
 }
-
-const STATUS_TAG_COLORS: Partial<Record<BotRuntimeStatus, string>> = {
-  [BOT_RUNTIME_STATUSES.connected]: 'success',
-  [BOT_RUNTIME_STATUSES.dormant]: 'warning',
-  [BOT_RUNTIME_STATUSES.failed]: 'error',
-  [BOT_RUNTIME_STATUSES.queued]: 'processing',
-  [BOT_RUNTIME_STATUSES.starting]: 'processing',
-};
 
 const Header = memo<HeaderProps>(
   ({
@@ -67,7 +57,6 @@ const Header = memo<HeaderProps>(
     platformId,
     platformsLoading = false,
     providers,
-    runtimeStatus,
   }) => {
     const { t } = useTranslation(['agent', 'chat', 'common']);
     const view = resolveChannelHeaderView(platformId, platformDef, platformsLoading);
@@ -224,31 +213,6 @@ const Header = memo<HeaderProps>(
       [agentId, connectBot, currentConfig, disabled, t, updateBotProvider, writeDisabled],
     );
 
-    const statusLabel = (() => {
-      switch (runtimeStatus) {
-        case BOT_RUNTIME_STATUSES.connected: {
-          return t('channel.statusConnected');
-        }
-        case BOT_RUNTIME_STATUSES.failed: {
-          return t('channel.statusFailed');
-        }
-        case BOT_RUNTIME_STATUSES.queued: {
-          return t('channel.statusQueued');
-        }
-        case BOT_RUNTIME_STATUSES.starting: {
-          return t('channel.statusStarting');
-        }
-        case BOT_RUNTIME_STATUSES.dormant: {
-          return t('channel.statusDormant');
-        }
-        case BOT_RUNTIME_STATUSES.disconnected: {
-          return t('channel.statusDisconnected');
-        }
-        default: {
-          return undefined;
-        }
-      }
-    })();
     const menuItems: DropdownItem[] = [];
 
     if (platformDef?.documentation?.portalUrl) {
@@ -306,14 +270,6 @@ const Header = memo<HeaderProps>(
                   {platformDef.access.rolloutMode === 'notice'
                     ? t('channel.paidFeature.noticeBadge')
                     : t('channel.paidFeature.badge')}
-                </Tag>
-              )}
-              {statusLabel && (
-                <Tag
-                  color={runtimeStatus ? STATUS_TAG_COLORS[runtimeStatus] : undefined}
-                  size={'small'}
-                >
-                  {statusLabel}
                 </Tag>
               )}
               {currentConfig?.enabled && (

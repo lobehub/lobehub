@@ -1,4 +1,4 @@
-import { and, eq, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, eq, exists, isNull, or, type SQL, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import {
@@ -66,19 +66,36 @@ export const taskOwnership = (ctx: TaskModelContext) =>
   );
 
 /**
- * Ownership predicate for task child tables (deps / docs / comments) that
- * use a `userId` column instead of `createdByUserId`. Pass `visibility` for
- * tables that mirror the parent task's visibility column; leave it omitted
- * for tables that stay workspace-shared (e.g. comments).
+ * Ownership predicate for task child tables (deps / docs / topics / comments /
+ * activities) that use a `userId` column instead of `createdByUserId`. Pass
+ * `visibility` for tables that mirror the parent task's visibility column;
+ * leave it omitted for tables that stay workspace-shared.
+ *
+ * A private row is visible to its author and to the creator of the task it
+ * belongs to. Rows written by other members while the task was public go
+ * private with it, and the creator must keep seeing them — the task is still
+ * theirs. Other members still see only public rows and their own.
  */
 export const childOwnership = (
   ctx: TaskModelContext,
   cols: {
+    taskId: AnyPgColumn;
     userId: AnyPgColumn;
     visibility?: AnyPgColumn;
     workspaceId: AnyPgColumn;
   },
-) => buildWorkspaceWhere({ userId: ctx.userId, workspaceId: ctx.workspaceId }, cols);
+) => {
+  const base = buildWorkspaceWhere({ userId: ctx.userId, workspaceId: ctx.workspaceId }, cols);
+  if (!ctx.workspaceId || !cols.visibility) return base;
+
+  const ownTask = exists(
+    ctx.db
+      .select({ one: sql`1` })
+      .from(tasks)
+      .where(and(eq(tasks.id, cols.taskId), eq(tasks.createdByUserId, ctx.userId))),
+  );
+  return or(base, and(eq(cols.workspaceId, ctx.workspaceId), ownTask)) as SQL;
+};
 
 /**
  * Workspace-wide ownership for `tasks.seq` / `identifier` allocation —
@@ -110,15 +127,17 @@ export const taskOwnershipSql = (ctx: TaskModelContext, alias?: string) => {
 
 export const depsOwnership = (ctx: TaskModelContext) =>
   childOwnership(ctx, {
+    taskId: taskDependencies.taskId,
     userId: taskDependencies.userId,
     visibility: taskDependencies.visibility,
     workspaceId: taskDependencies.workspaceId,
   });
 
-/** Only used by the demotion cascade in `TaskModel.updateVisibility` — regular
- *  taskTopics reads/writes live in `TaskTopicModel`. */
+/** The demotion cascade in `TaskModel.updateVisibility` and every
+ *  `TaskTopicModel` read/write share this predicate. */
 export const topicsOwnership = (ctx: TaskModelContext) =>
   childOwnership(ctx, {
+    taskId: taskTopics.taskId,
     userId: taskTopics.userId,
     visibility: taskTopics.visibility,
     workspaceId: taskTopics.workspaceId,
@@ -126,6 +145,7 @@ export const topicsOwnership = (ctx: TaskModelContext) =>
 
 export const docsOwnership = (ctx: TaskModelContext) =>
   childOwnership(ctx, {
+    taskId: taskDocuments.taskId,
     userId: taskDocuments.userId,
     visibility: taskDocuments.visibility,
     workspaceId: taskDocuments.workspaceId,
@@ -133,6 +153,7 @@ export const docsOwnership = (ctx: TaskModelContext) =>
 
 export const commentsOwnership = (ctx: TaskModelContext) =>
   childOwnership(ctx, {
+    taskId: taskComments.taskId,
     userId: taskComments.userId,
     visibility: taskComments.visibility,
     workspaceId: taskComments.workspaceId,
@@ -140,6 +161,7 @@ export const commentsOwnership = (ctx: TaskModelContext) =>
 
 export const activitiesOwnership = (ctx: TaskModelContext) =>
   childOwnership(ctx, {
+    taskId: taskActivities.taskId,
     userId: taskActivities.userId,
     visibility: taskActivities.visibility,
     workspaceId: taskActivities.workspaceId,

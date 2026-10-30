@@ -71,6 +71,8 @@ const ThreadSwitcher = memo<ThreadSwitcherProps>(({ title }) => {
   const [open, setOpen] = useState(false);
 
   const handleSwitch = (id: string) => {
+    // A pick, including the current thread, completes the switcher.
+    setOpen(false);
     if (id === activeThreadId) return;
     void switchThread(id);
   };

@@ -1,3 +1,9 @@
+export {
+  listClaudeCodeMemory,
+  resolveClaudeCodeMemoryDir,
+  resolveClaudeCodeProjectRoot,
+  toClaudeCodeProjectKey,
+} from './claudeCodeMemory';
 export { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 export {
   APP_UPDATE_UNSUPPORTED_MESSAGE,

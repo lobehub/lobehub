@@ -8,7 +8,7 @@ import { UserMinus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AddGroupMemberModal from '@/features/AddAgentMemberModal';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -22,7 +22,6 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { sx } from '@/styles/sx';
 
-import AddGroupMemberModal from '../AddGroupMemberModal';
 import moduleStyles from './GroupMember.module.css';
 import GroupMemberItem from './GroupMemberItem';
 
@@ -124,7 +123,8 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
                 onDoubleClick={() => handleMemberDoubleClick(item.id)}
               >
                 <GroupMemberItem
-                  avatar={item.avatar || DEFAULT_AVATAR}
+                  agentId={item.id}
+                  avatar={item.avatar || undefined}
                   background={item.backgroundColor ?? undefined}
                   isExternal={!item.virtual}
                   title={agentDisplayName(item, t('defaultSession', { ns: 'common' }))}

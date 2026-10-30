@@ -19,10 +19,6 @@ interface GoalSupervisionProps {
   initialMessage?: string;
   onCollapse: () => void;
   onInitialMessageConsumed?: () => void;
-  /** Hand the panel back to the agent's editable side conversation. */
-  onOpenChat?: () => void;
-  /** Open a topic picked from the conversation history. */
-  onSelectTopic?: (topicId: string) => void;
   topicId: string;
 }
 
@@ -55,8 +51,6 @@ export const GoalSupervision = ({
   initialMessage,
   onCollapse,
   onInitialMessageConsumed,
-  onOpenChat,
-  onSelectTopic,
   topicId,
 }: GoalSupervisionProps) => {
   const { t } = useTranslation('chat');
@@ -71,15 +65,14 @@ export const GoalSupervision = ({
     [],
   );
   return (
-    <GoalChatProvider agentId={agentId} goalId={goalId} initialTopicId={topicId}>
+    <GoalChatProvider pinned agentId={agentId} goalId={goalId} initialTopicId={topicId}>
       <Flexbox height={'100%'} style={{ overflow: 'hidden' }}>
-        {/* The side chat's header: the record is a topic like any other, so it
-            gets the same title, topic menu, new-conversation and history. */}
+        {/* The side chat's header, locked to the record: the goal is bound to
+            this topic, so the panel offers no new conversation and no history. */}
         <Toolbar
+          topicLocked
           fallbackTitle={agentTitle || t('goalProcess.manager.title')}
           onCollapse={onCollapse}
-          onNewTopic={onOpenChat}
-          onSelectTopic={onSelectTopic}
         />
         <Flexbox flex={1} style={{ minHeight: 0, overflow: 'hidden' }}>
           <ChatList disableActionsBar itemContent={itemContent} welcome={<WaitingForFirstRun />} />

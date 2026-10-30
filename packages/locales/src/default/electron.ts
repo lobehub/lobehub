@@ -1,4 +1,6 @@
 export default {
+  'navigation.resourceDrive': 'Drive',
+  'navigation.resourceWorks': 'Works',
   'startupUpdate.requiredTitle': 'Update required',
   'startupUpdate.requiredDescription': 'This version has a security issue. Update to continue.',
   'startupUpdate.checking': 'Checking for updates…',
@@ -10,7 +12,7 @@ export default {
 
   'navigation.agentShare': 'Share',
   'navigation.agents': 'Agents',
-  'navigation.channels': 'Channels',
+  'navigation.channels': 'IM Bots',
   'navigation.chat': 'Chat',
   'navigation.dashboard': 'Dashboards',
   'navigation.discover': 'Discover',
@@ -45,7 +47,7 @@ export default {
   'navigation.projects': 'Projects',
   'navigation.provider': 'Provider',
   'navigation.recentView': 'Recent pages',
-  'navigation.resources': 'Resources',
+  'navigation.resources': 'Docs',
   'navigation.resourceAll': 'All',
   'navigation.resourceAudios': 'Audio',
   'navigation.resourceDocuments': 'Documents',

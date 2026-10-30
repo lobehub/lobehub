@@ -13,6 +13,7 @@ import type {
   CallLLMPayload,
   InstructionExecutor,
 } from '../types';
+import { withLlmAttemptCount } from '../utils/llmCalls';
 import { getLLMRetryDelayMs, shouldRetryLLM } from '../utils/runtimeRetry';
 import { finalizeCallLlmTurn, persistInterruptedCallLlmResult } from './callLlmFinalizer';
 
@@ -76,6 +77,7 @@ const executePreparedCall = async (
   let errorHandled = false;
   let lastOutput: LLMAttemptOutput | undefined;
   let terminalError: unknown;
+  let attemptsMade = 0;
 
   try {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -93,10 +95,12 @@ const executePreparedCall = async (
         }),
       );
       lastOutput = execution.output;
+      attemptsMade = attempt;
 
       if (execution.ok) {
         return await finalizeCallLlmTurn({
           assistantMessageId: prepared.assistantMessageId,
+          attempts: attemptsMade,
           events,
           host,
           model: prepared.model,
@@ -162,10 +166,13 @@ const executePreparedCall = async (
           retryBudget,
         });
       });
-      throw error;
+      throw withLlmAttemptCount(error, attemptsMade);
     }
 
-    throw new Error('LLM execution retry loop exited unexpectedly');
+    throw withLlmAttemptCount(
+      new Error('LLM execution retry loop exited unexpectedly'),
+      attemptsMade,
+    );
   } catch (error) {
     terminalError = error;
     if (!errorHandled) {
@@ -186,7 +193,7 @@ const executePreparedCall = async (
         });
       });
     }
-    throw error;
+    throw withLlmAttemptCount(error, attemptsMade);
   } finally {
     await trace?.close(terminalError);
   }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { commentAnchorId, commentIdFromHash, holdInView } from './anchor';
+import { commentAnchorId, commentAnchorUrl, commentIdFromHash, holdInView } from './anchor';
 
 describe('comment anchors', () => {
   it('round-trips a comment id through the fragment', () => {
@@ -15,6 +15,44 @@ describe('comment anchors', () => {
     expect(commentIdFromHash('#check-c2')).toBeUndefined();
     // A bare prefix names no comment.
     expect(commentIdFromHash('#comment-')).toBeUndefined();
+  });
+
+  it('links to this page under the app origin, not the renderer shell', () => {
+    window.history.replaceState(null, '', '/lobehub/project/p1/acceptance/a1?round=2');
+
+    expect(commentAnchorUrl('c1', 'https://app.lobehub.com')).toBe(
+      'https://app.lobehub.com/lobehub/project/p1/acceptance/a1?round=2#comment-c1',
+    );
+  });
+});
+
+describe('comment links', () => {
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('links to the comment on the current report', () => {
+    window.history.replaceState(null, '', '/acceptance/acc_1?r=2');
+
+    expect(commentAnchorUrl('c1', window.location.origin)).toBe(
+      `${window.location.origin}/acceptance/acc_1?r=2#${commentAnchorId('c1')}`,
+    );
+  });
+
+  // The workspace-prefixed route is gated on membership; a shared link must open
+  // for anyone the report is public to.
+  it('drops the workspace prefix so the shared link opens outside the workspace', () => {
+    window.history.replaceState(null, '', '/acme/acceptance/acc_1/check/chk_1?r=2');
+
+    expect(commentAnchorUrl('c1', window.location.origin)).toBe(
+      `${window.location.origin}/acceptance/acc_1/check/chk_1?r=2#${commentAnchorId('c1')}`,
+    );
+  });
+
+  it('leaves a project-hosted report path alone', () => {
+    window.history.replaceState(null, '', '/project/prj_1/acceptance/acc_1');
+
+    expect(commentAnchorUrl('c1', window.location.origin)).toBe(
+      `${window.location.origin}/project/prj_1/acceptance/acc_1#${commentAnchorId('c1')}`,
+    );
   });
 });
 

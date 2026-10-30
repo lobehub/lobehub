@@ -15,7 +15,10 @@ import GoalReportFullscreen from './GoalReportFullscreen';
 const PREVIEW_MAX_HEIGHT = 480;
 
 const styles = createStaticStyles(({ css }) => ({
+  // `isolation` keeps the shadow and hit layers' z-index inside the card, so
+  // the result page's sticky follow-up dock still covers them on scroll.
   card: css`
+    isolation: isolate;
     position: relative;
 
     overflow: hidden;

@@ -25,6 +25,8 @@ entries:
 
 ## D-01 唯一事实源是 cssVar
 
+> 平台作用域：web / desktop。RN 项目的唯一事实源是项目主题（`useTheme()` token），写法见 50-visual；原则相同：组件里不写裸值。
+
 ```ts
 import { createStaticStyles } from '@lobehub/ui';
 

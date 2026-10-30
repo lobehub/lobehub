@@ -38,6 +38,7 @@ import { searchableMessage } from '../../../utils/searchableMessage';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type { PostgresFtsSearchContext } from '../postgres/context';
 import type { PostgresFtsSearchField } from '../postgres/dialect';
+import { timeRangeWhere } from '../postgres/timeRange';
 import type {
   FtsSearchBackendCandidate,
   FtsSearchBackendEntity,
@@ -323,6 +324,7 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
     where: (scope, filters, db) => [
       buildWorkspaceWhere(scope, documents),
       ...documentKindWhere(db, filters),
+      timeRangeWhere(documents, filters.timeRange),
     ],
   },
   files: {
@@ -496,6 +498,13 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
       // rows crowd out eligible hits that hydration would have kept.
       searchableMessage(),
       ...topicScopeWhere(messages, filters, true),
+      timeRangeWhere(messages, filters.timeRange),
+      filters.messageScope?.roles?.length
+        ? inArray(messages.role, filters.messageScope.roles)
+        : undefined,
+      filters.messageScope?.topicId
+        ? eq(messages.topicId, filters.messageScope.topicId)
+        : undefined,
     ],
   },
   personaDocuments: {
@@ -523,6 +532,7 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
     where: (scope, filters) => [
       buildWorkspaceWhere(scope, topics),
       ...topicScopeWhere(topics, filters, false),
+      timeRangeWhere(topics, filters.timeRange),
     ],
   },
   userMemories: {
@@ -599,14 +609,21 @@ export async function searchCandidates(
     .orderBy(sql`${score} DESC`);
   // An omitted limit is the unbounded contract: consumers filter and order the
   // whole candidate set themselves, so no cap may hide matches from them.
-  if (request.pagination.limit)
-    query = query.limit(request.pagination.limit * CANDIDATE_MULTIPLIER);
+  // A bounded pool reads one row past its cutoff so `total` can tell callers
+  // whether the cutoff dropped anything, without a separate COUNT.
+  const cutoff = request.pagination.limit
+    ? request.pagination.limit * CANDIDATE_MULTIPLIER
+    : undefined;
+  if (cutoff) query = query.limit(cutoff + 1);
 
   const rows = await query;
-  const candidates: FtsSearchBackendCandidate[] = rows.map((row) => ({
+  const kept = cutoff ? rows.slice(0, cutoff) : rows;
+  const candidates: FtsSearchBackendCandidate[] = kept.map((row) => ({
     id: String(row.id),
     score: row.score,
   }));
 
-  return { candidates, items: [], total: candidates.length };
+  // Past the cutoff the true count is unknown; any value above the returned
+  // length marks the pool as cut, which is all callers rely on.
+  return { candidates, items: [], total: rows.length };
 }

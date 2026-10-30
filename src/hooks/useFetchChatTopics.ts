@@ -4,6 +4,7 @@ import {
   type SidebarTopicListQuery,
 } from '@/hooks/chatTopicListQuery';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useTopicOnlyMine } from '@/hooks/useTopicOnlyMine';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -23,14 +24,16 @@ import { preferenceSelectors } from '@/store/user/selectors';
  * pre-paint hydrate reads imperatively: same inputs means the same SWR key and
  * the same persisted row, so SWR dedupes and the hydrate actually applies.
  */
-const useChatTopicListQuery = (): SidebarTopicListQuery => {
+const useChatTopicListQuery = (ownerId?: string): SidebarTopicListQuery => {
   const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
+  const onlyMine = useTopicOnlyMine(ownerId);
   const activeGroupId = useChatStore((s) => s.activeGroupId);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
   return deriveSidebarTopicListQuery({
     includeCompleted,
     isGroupSession: !!activeGroupId,
+    onlyMine,
     topicGroupMode,
   });
 };
@@ -43,7 +46,9 @@ const useChatTopicListQuery = (): SidebarTopicListQuery => {
  * Extend {@link useChatTopicListQuery} when adding more preference-driven topic
  * params; don't spread them across individual components.
  */
-export const useFetchChatTopics = () => useFetchTopics(useChatTopicListQuery());
+export const useFetchChatTopics = () => {
+  return useFetchTopics(useChatTopicListQuery());
+};
 
 /**
  * Same canonical list, for the secondary conversation panels that carry their
@@ -55,7 +60,7 @@ export const useFetchChatTopics = () => useFetchTopics(useChatTopicListQuery());
  * moment such a panel mounted next to it.
  */
 export const useFetchAgentChatTopics = (agentId?: string) => {
-  const query = useChatTopicListQuery();
+  const query = useChatTopicListQuery(agentId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const pageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
 

@@ -18,6 +18,7 @@ import { ChatList, ConversationProvider } from '@/features/Conversation';
 import { useMessageDeepLink } from '@/features/Conversation/ChatList/hooks/useMessageDeepLink';
 import ComposerDraftReceiver from '@/features/Conversation/ComposerDraftReceiver';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
+import { useTopicDetailSendGuard } from '@/features/Conversation/hooks/useTopicDetailSendGuard';
 import {
   ForwardMessageDispatcher,
   MessageForwardFooter,
@@ -107,6 +108,9 @@ const Conversation = memo(() => {
   // First in the chain: a send on an unconfirmed `/agent/<slug>` must not reach
   // the agent painted from the local copy before the server confirms it.
   const slugRouteSendGuard = useSlugRouteSendGuard();
+  // A run reads the topic's pinned model and routing from the store, so a send
+  // into a topic the store has not loaded yet waits for its detail.
+  const topicDetailSendGuard = useTopicDetailSendGuard(context.topicId);
 
   // A topic still awaiting its transfer backfill shows a placeholder instead
   // of an empty (not-yet-migrated) history, and blocks sending — the server
@@ -118,8 +122,14 @@ const Conversation = memo(() => {
   );
 
   const hooks = useMemo(
-    () => mergeConversationHooks(slugRouteSendGuard, businessAnalyticsHooks, chatFollowUpHooks),
-    [slugRouteSendGuard, businessAnalyticsHooks, chatFollowUpHooks],
+    () =>
+      mergeConversationHooks(
+        slugRouteSendGuard,
+        topicDetailSendGuard,
+        businessAnalyticsHooks,
+        chatFollowUpHooks,
+      ),
+    [slugRouteSendGuard, topicDetailSendGuard, businessAnalyticsHooks, chatFollowUpHooks],
   );
 
   return (
@@ -143,7 +153,7 @@ const Conversation = memo(() => {
             <TopicMigrationPlaceholder agentId={context.agentId} topicId={context.topicId} />
           ) : (
             <ChatList
-              headerSlot={<div aria-hidden {...stylex.props(styles.floatingHeaderSpacer)} />}
+              printable
               messageDeepLink={messageDeepLink}
               welcome={<AgentHome />}
               footerSlot={
@@ -166,6 +176,9 @@ const Conversation = memo(() => {
                     </span>
                   </Flexbox>
                 ) : undefined
+              }
+              headerSlot={
+                <div aria-hidden className={stylex.props(styles.floatingHeaderSpacer).className} />
               }
             />
           )}

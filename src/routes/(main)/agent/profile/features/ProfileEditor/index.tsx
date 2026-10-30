@@ -2,29 +2,31 @@
 
 import { isDesktop } from '@lobechat/const';
 import {
+  HETEROGENEOUS_TYPE_LABELS,
   isHeterogeneousProviderBindingSupported,
   isRemoteHeterogeneousType,
   isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
-import type { TabsItem } from '@lobehub/ui';
-import { Alert, Button, Flexbox, Tabs } from '@lobehub/ui';
+import { Alert, Button, Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ChevronDown, Wrench } from 'lucide-react';
+import { ChevronDown, MonitorSmartphone, Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { ModelIcon } from '@/components/LobeIcons';
+import { ApiAuthLocalOnlyNotice } from '@/features/HeterogeneousAgent/ExecutionEnvironment/ApiAuthLocalOnlyNotice';
+import { DeviceCliStatusCard } from '@/features/HeterogeneousAgent/ExecutionEnvironment/DeviceCliStatusCard';
+import { HeteroExecutionTargetSelect } from '@/features/HeterogeneousAgent/ExecutionEnvironment/HeteroExecutionTargetSelect';
+import { useProfileExecutionTarget } from '@/features/HeterogeneousAgent/ExecutionEnvironment/useProfileExecutionTarget';
 import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
 import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -74,10 +76,9 @@ const ProfileEditor = memo(() => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
-  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } = useEffectiveAgencyConfig(
-    agentId,
-    { topicId: null },
-  );
+  // Where this caller's new topics run. The environment picker and the panel
+  // below both follow it, so the panel never describes this client by default.
+  const executionTarget = useProfileExecutionTarget(agentId);
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
@@ -130,15 +131,8 @@ const ProfileEditor = memo(() => {
     isHeterogeneous &&
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
-  const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
   const localDesktopAvailable =
-    isDesktop &&
-    !!heterogeneousProvider &&
-    resolveExecutionTarget(effectiveAgencyConfig, {
-      clientExecutionAvailable: true,
-      isHetero: true,
-      workspaceScoped,
-    }) === 'local';
+    isDesktop && !!heterogeneousProvider && executionTarget.target === 'local';
   // Workspace agents are excluded even when the author could spawn them
   // locally: the binding UI would list workspace-scoped providers, but Desktop
   // main resolves the reference in the personal scope only (see
@@ -184,46 +178,85 @@ const ProfileEditor = memo(() => {
         : serverCapabilityEnabled && !serverCapabilityLoading && !serverDefaultAvailable
           ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
           : undefined;
-  const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
-    ? [
-        ...(showCloudHeterogeneousTab
-          ? [
-              {
-                key: 'cloud',
-                label: t('heterogeneousStatus.cloud.tabLabel'),
-                children: (
-                  <CloudHeterogeneousConfig
-                    provider={heterogeneousProvider}
-                    onEnvChange={updateHeterogeneousEnv}
-                  />
-                ),
-              },
-            ]
-          : []),
-        {
-          key: 'desktop',
-          label: t('heterogeneousStatus.desktop.tabLabel'),
-          disabled: !isDesktop,
-          children: (
-            <HeterogeneousAgentStatusCard
-              apiModeAvailable={apiModeAvailable}
-              apiModeWorkspaceBlocked={isWorkspaceAgent}
-              provider={heterogeneousProvider}
-              serverDefaultAvailable={serverDefaultAvailable}
-              serverDefaultLoading={serverCapabilityLoading}
-              serverDefaultModels={serverDefaultModels}
-              serverDefaultUnavailableReason={serverDefaultUnavailableReason}
-              onApiConfigChange={updateHeterogeneousApiConfig}
-              onAuthModeChange={updateHeterogeneousAuthMode}
-              onCommandChange={updateHeterogeneousCommand}
-              onServerDefaultRetry={() => {
-                void serverCapabilitySync.revalidate();
-              }}
-            />
-          ),
-        },
-      ]
-    : [];
+  const renderHeterogeneousPanelBody = () => {
+    if (!heterogeneousProvider) return null;
+
+    const { panel } = executionTarget;
+
+    switch (panel.kind) {
+      case 'cloud': {
+        return (
+          <CloudHeterogeneousConfig
+            provider={heterogeneousProvider}
+            onEnvChange={updateHeterogeneousEnv}
+          />
+        );
+      }
+      case 'device': {
+        return <DeviceCliStatusCard deviceId={panel.deviceId} provider={heterogeneousProvider} />;
+      }
+      case 'local':
+      case 'runtime': {
+        return (
+          <HeterogeneousAgentStatusCard
+            apiModeAvailable={apiModeAvailable}
+            apiModeWorkspaceBlocked={isWorkspaceAgent}
+            provider={heterogeneousProvider}
+            serverDefaultAvailable={serverDefaultAvailable}
+            serverDefaultLoading={serverCapabilityLoading}
+            serverDefaultModels={serverDefaultModels}
+            serverDefaultUnavailableReason={serverDefaultUnavailableReason}
+            onApiConfigChange={updateHeterogeneousApiConfig}
+            onAuthModeChange={updateHeterogeneousAuthMode}
+            onCommandChange={updateHeterogeneousCommand}
+            onServerDefaultRetry={() => {
+              void serverCapabilitySync.revalidate();
+            }}
+          />
+        );
+      }
+      case 'sandbox': {
+        return (
+          <Alert
+            showIcon
+            type={'info'}
+            title={t('heterogeneousStatus.sandbox.desc', {
+              name: HETEROGENEOUS_TYPE_LABELS[heterogeneousProvider.type],
+            })}
+          />
+        );
+      }
+      case 'pending': {
+        return null;
+      }
+    }
+  };
+
+  const renderHeterogeneousPanel = () => {
+    // Until the member's own override loads, the target may still flip.
+    if (!heterogeneousProvider || executionTarget.isPending) return null;
+
+    return (
+      <>
+        {/* Dispatch rejects API auth off this desktop, and only the local card
+            edits auth — so every other environment offers the way back. */}
+        {executionTarget.isApiAuthBlocked && (
+          <ApiAuthLocalOnlyNotice
+            onUseSubscription={
+              canEdit
+                ? () =>
+                    void updateHeterogeneousAuthMode(
+                      'subscription',
+                      heterogeneousProvider.apiConfig,
+                    )
+                : undefined
+            }
+          />
+        )}
+        {renderHeterogeneousPanelBody()}
+      </>
+    );
+  };
 
   return (
     <>
@@ -247,12 +280,25 @@ const ProfileEditor = memo(() => {
               onBoundDeviceChange={updateBoundDeviceId}
             />
           ) : isHeterogeneous && heterogeneousProvider ? (
-            // Local CLI agents: Claude Code supports cloud config; Codex is desktop-only for now.
-            <Tabs
-              defaultActiveKey={isDesktop || !showCloudHeterogeneousTab ? 'desktop' : 'cloud'}
-              items={heterogeneousTabItems}
-              size="small"
-            />
+            // CLI agents: pick where new topics run, then configure that environment.
+            <>
+              <WorkspaceAgentPolicyCard
+                fullWidth
+                icon={MonitorSmartphone}
+                title={t('settingAgent.devicePolicy.title')}
+              >
+                <HeteroExecutionTargetSelect
+                  agentId={agentId}
+                  deviceId={executionTarget.deviceId}
+                  isOverridden={executionTarget.isOverridden}
+                  isPending={executionTarget.isPending}
+                  isSelectable={executionTarget.isSelectable}
+                  providerType={heterogeneousProvider.type}
+                  target={executionTarget.target}
+                />
+              </WorkspaceAgentPolicyCard>
+              {renderHeterogeneousPanel()}
+            </>
           ) : isWorkspaceAgent ? (
             <>
               <Flexbox horizontal gap={8} wrap={'wrap'}>
@@ -317,8 +363,8 @@ const ProfileEditor = memo(() => {
               <AgentTool />
             </Flexbox>
           )}
-          {isHeterogeneous ? (
-            <WorkspaceAgentDevicePolicy agentId={agentId} showDevicePicker={!isRemoteHetero} />
+          {isRemoteHetero ? (
+            <WorkspaceAgentDevicePolicy agentId={agentId} showDevicePicker={false} />
           ) : null}
         </Flexbox>
       </Flexbox>

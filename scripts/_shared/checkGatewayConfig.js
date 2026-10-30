@@ -6,6 +6,9 @@
  * IMPORTANT: Keep this file as CommonJS (.js) for compatibility with startServer.js
  */
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- startServer.js loads this file through CommonJS.
+const { createHash } = require('node:crypto');
+
 const UPGRADE_DOC_URL =
   'https://lobehub.com/docs/self-hosting/platform/docker-compose#upgrading-an-existing-deployment';
 
@@ -16,18 +19,54 @@ const UPGRADE_DOC_URL =
 const PUBLIC_EXAMPLE_JWKS_KID = '6823046760c5d460';
 
 /** JWK members that only a private RSA key carries. */
-const PRIVATE_JWK_FIELDS = ['d', 'p', 'q', 'dp', 'dq', 'qi'];
+const PRIVATE_JWK_FIELDS = ['d', 'p', 'q', 'dp', 'dq', 'qi', 'oth'];
 
 const isUnset = (value) => !value || value.startsWith('YOUR_');
 
-/** First key of a JWKS JSON string, `null` for valid JSON without keys, `undefined` if unparsable. */
-const readFirstJwk = (raw) => {
+/** Keys of a JWKS JSON string, `null` for invalid JWKS shape, `undefined` if unparsable. */
+const readJwks = (raw) => {
   try {
-    const key = JSON.parse(raw)?.keys?.[0];
-    return key && typeof key === 'object' ? key : null;
+    const keys = JSON.parse(raw)?.keys;
+    return Array.isArray(keys) && keys.every((key) => key && typeof key === 'object') ? keys : null;
   } catch {
     return undefined;
   }
+};
+
+/** Match the kid that oidc-provider assigns to legacy keys that omit one. */
+const withDerivedKid = (key) => ({
+  ...key,
+  kid:
+    key.kid ??
+    createHash('sha256')
+      .update(JSON.stringify({ e: key.e, kty: 'RSA', n: key.n }))
+      .digest('base64url'),
+});
+
+const getRsaSigningKeys = (keys) =>
+  keys?.filter((key) => key.alg === 'RS256' && key.kty === 'RSA').map(withDerivedKid) || [];
+
+const hasAmbiguousKeyIds = (keys) => {
+  if (keys.length < 2) return false;
+  const keyIds = keys.map((key) => key.kid);
+  return (
+    keyIds.some((kid) => typeof kid !== 'string' || kid.length === 0) ||
+    new Set(keyIds).size !== keyIds.length
+  );
+};
+
+const publicKeySetCoversPrivateKeys = (privateKeys, publicKeys) => {
+  const publicByKid = new Map(publicKeys.map((key) => [key.kid, key]));
+  return privateKeys.every((privateKey) => {
+    const publicKey = publicByKid.get(privateKey.kid);
+    return (
+      publicKey &&
+      publicKey.kty === privateKey.kty &&
+      publicKey.alg === privateKey.alg &&
+      publicKey.n === privateKey.n &&
+      publicKey.e === privateKey.e
+    );
+  });
 };
 
 /**
@@ -36,9 +75,10 @@ const readFirstJwk = (raw) => {
  */
 function collectGatewayConfigIssues(env = process.env) {
   const issues = [];
-  const privateJwk = isUnset(env.JWKS_KEY) ? undefined : readFirstJwk(env.JWKS_KEY);
+  const privateJwks = isUnset(env.JWKS_KEY) ? undefined : readJwks(env.JWKS_KEY);
+  const privateRsaKeys = getRsaSigningKeys(privateJwks);
 
-  if (privateJwk?.kid === PUBLIC_EXAMPLE_JWKS_KID) {
+  if (privateRsaKeys.some((key) => key.kid === PUBLIC_EXAMPLE_JWKS_KID)) {
     issues.push({
       message:
         'JWKS_KEY is the example key that was published in .env.example. Anyone can forge tokens this server and its gateway accept. Generate a new key and replace it in .env.',
@@ -54,11 +94,14 @@ function collectGatewayConfigIssues(env = process.env) {
   if (isUnset(env.AGENT_GATEWAY_URL)) missing.push('AGENT_GATEWAY_URL');
   if (isUnset(env.AGENT_GATEWAY_SERVICE_TOKEN)) missing.push('GATEWAY_SERVICE_TOKEN');
   if (isUnset(env.JWKS_KEY)) missing.push('JWKS_KEY');
-  else if (privateJwk === undefined) missing.push('JWKS_KEY (not valid JWKS JSON)');
+  else if (!privateJwks || privateRsaKeys.length === 0)
+    missing.push('JWKS_KEY (not valid JWKS JSON)');
 
-  const publicJwk = isUnset(env.JWKS_PUBLIC_KEY) ? undefined : readFirstJwk(env.JWKS_PUBLIC_KEY);
+  const publicJwks = isUnset(env.JWKS_PUBLIC_KEY) ? undefined : readJwks(env.JWKS_PUBLIC_KEY);
+  const publicRsaKeys = getRsaSigningKeys(publicJwks);
   if (isUnset(env.JWKS_PUBLIC_KEY)) missing.push('JWKS_PUBLIC_KEY');
-  else if (publicJwk === undefined) missing.push('JWKS_PUBLIC_KEY (not valid JWKS JSON)');
+  else if (!publicJwks || publicRsaKeys.length === 0)
+    missing.push('JWKS_PUBLIC_KEY (not valid JWKS JSON)');
 
   if (missing.length > 0) {
     issues.push({
@@ -69,7 +112,7 @@ function collectGatewayConfigIssues(env = process.env) {
     });
   }
 
-  if (publicJwk && PRIVATE_JWK_FIELDS.some((field) => field in publicJwk)) {
+  if (publicJwks?.some((key) => PRIVATE_JWK_FIELDS.some((field) => field in key))) {
     issues.push({
       message:
         'JWKS_PUBLIC_KEY is passed to the gateway container, but it includes the private key. Anyone who can read the gateway environment could forge tokens. Replace it with the public half of JWKS_KEY.',
@@ -78,10 +121,27 @@ function collectGatewayConfigIssues(env = process.env) {
     });
   }
 
-  if (privateJwk?.n && publicJwk?.n && privateJwk.n !== publicJwk.n) {
+  const ambiguousVars = [];
+  if (hasAmbiguousKeyIds(privateRsaKeys)) ambiguousVars.push('JWKS_KEY');
+  if (hasAmbiguousKeyIds(publicRsaKeys)) ambiguousVars.push('JWKS_PUBLIC_KEY');
+  if (ambiguousVars.length > 0) {
     issues.push({
       message:
-        'JWKS_PUBLIC_KEY is not the public half of JWKS_KEY, so the gateway rejects every browser session and agent runs fall back to the browser. Derive it again from JWKS_KEY.',
+        'JWKS key rotation requires every RS256 RSA key to have a unique kid so verifiers can select exactly one key.',
+      name: 'JWKS key ids are ambiguous',
+      vars: ambiguousVars,
+    });
+  }
+
+  if (
+    privateRsaKeys.length > 0 &&
+    publicRsaKeys.length > 0 &&
+    ambiguousVars.length === 0 &&
+    !publicKeySetCoversPrivateKeys(privateRsaKeys, publicRsaKeys)
+  ) {
+    issues.push({
+      message:
+        'JWKS_PUBLIC_KEY does not contain every signing key in JWKS_KEY, so the gateway may reject newly signed browser sessions. Publish the complete public set before enabling a new signing key.',
       name: 'JWKS_PUBLIC_KEY does not match JWKS_KEY',
       vars: ['JWKS_PUBLIC_KEY'],
     });

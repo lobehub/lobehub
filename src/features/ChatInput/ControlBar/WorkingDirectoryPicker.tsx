@@ -169,7 +169,7 @@ const styles = createStaticStyles(({ css }) => ({
 const isValidWorkingDirEntry = (entry: WorkingDirEntry): boolean =>
   !!getWorkingDirectoryPathString(entry.path);
 
-type FolderEntry = { path: string; repoType?: 'git' | 'github' };
+type FolderEntry = { environmentId?: string; path: string; repoType?: 'git' | 'github' };
 
 /** This machine: browse the filesystem via the native Electron folder dialog. */
 const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: FolderEntry) => void }>(
@@ -209,7 +209,14 @@ const AddRemoteFolderRow = memo<{
 
   const handleClick = () => {
     onBeforeOpen();
-    openPickWorkingDirModal({ defaultPath: defaultCwd || undefined, deviceId, onPick });
+    // A folder picked on a device may go with a code environment. Only the
+    // association is kept — nothing clones or sets up on the device.
+    openPickWorkingDirModal({
+      defaultPath: defaultCwd || undefined,
+      deviceId,
+      onPick,
+      withEnvironment: true,
+    });
   };
   return (
     <Flexbox

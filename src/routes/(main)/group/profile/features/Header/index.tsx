@@ -8,14 +8,16 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import AddGroupMemberModal from '@/features/AddAgentMemberModal';
+import MobileHeaderNav from '@/features/NavHeader/MobileHeaderNav';
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { usePermission } from '@/hooks/usePermission';
 import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
-import AddGroupMemberModal from '@/routes/(main)/group/_layout/Sidebar/AddGroupMemberModal';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import AgentBuilderToggle from './AgentBuilderToggle';
 import { type ChromeTabItem } from './ChromeTabs';
@@ -130,8 +132,8 @@ const Header = memo(() => {
         gap={4}
         justify="space-between"
       >
-        {!showLeftPanel && <ToggleLeftPanelButton />}
-        <div {...stylex.props(styles.tabsWrapper)}>
+        {isMobileSurface() ? <MobileHeaderNav /> : !showLeftPanel && <ToggleLeftPanelButton />}
+        <div className={stylex.props(styles.tabsWrapper).className}>
           <ChromeTabs
             activeId={selectedTabId}
             addDisabled={!canEdit}

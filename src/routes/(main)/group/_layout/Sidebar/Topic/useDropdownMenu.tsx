@@ -202,15 +202,15 @@ export const useTopicActionsDropdownMenu = (
               disabled: !canEditTopic,
               icon: <Icon icon={Trash} />,
               key: 'deleteUnstarredWorkspace',
-              label: t('actions.removeUnstarredWorkspace'),
+              label: t('actions.removeUnpinnedWorkspace'),
               onClick: () => {
                 openWorkspaceDeleteAllModal({
-                  acknowledgeText: t('actions.confirmRemoveUnstarredWorkspaceAcknowledge'),
+                  acknowledgeText: t('actions.confirmRemoveUnpinnedWorkspaceAcknowledge'),
                   cancelText: t('cancel', { ns: 'common' }),
-                  confirmText: t('actions.removeUnstarredWorkspace'),
-                  description: t('actions.confirmRemoveUnstarredWorkspace'),
+                  confirmText: t('actions.removeUnpinnedWorkspace'),
+                  description: t('actions.confirmRemoveUnpinnedWorkspace'),
                   onConfirm: () => removeUnstarredTopic({ onlyOwn: false }),
-                  title: t('actions.removeUnstarredWorkspace'),
+                  title: t('actions.removeUnpinnedWorkspace'),
                 });
               },
             },

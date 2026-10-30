@@ -264,11 +264,7 @@ const TokenSection = memo<TokenSectionProps>(
 
         {tokenStatus.status === 'personalNotShared' && (
           <Text fontSize={12} type={'warning'}>
-            {t(
-              tokenStatus.sharedElsewhere
-                ? 'heterogeneousStatus.cloud.tokenSharedElsewhere'
-                : 'heterogeneousStatus.cloud.tokenNotShared',
-            )}
+            {t('heterogeneousStatus.cloud.tokenNotShared')}
           </Text>
         )}
 

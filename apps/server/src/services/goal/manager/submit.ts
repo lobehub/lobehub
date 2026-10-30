@@ -4,10 +4,10 @@ import { TRPCError } from '@trpc/server';
 import type { z } from 'zod';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { GoalBriefService } from '../goalBriefs';
@@ -86,7 +86,7 @@ const declareBatch = async (
     canarySize: plan.tasks.length,
     createdByAgentId: agentId,
     goalId: goal.id,
-    goalModel: new GoalModel(db, ctx.userId, ctx.workspaceId),
+    goalModel: new GoalRepository(db, ctx.userId, ctx.workspaceId),
     planSkillOwner: {
       db,
       goalTitle: goal.title,
@@ -117,7 +117,7 @@ export const submitPlan = async (
   const plan = goalPlanSchema.parse(input);
   const armed = plan.action === 'wait' ? GoalWaitService.arm(plan.until) : undefined;
   const result = await ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const goal = await model.lockById(goalId);
     const state = goal?.config?.managerState;
     if (!goal || !state)

@@ -41,6 +41,8 @@ export interface ResourceItem {
   // Identity
   id: string;
   knowledgeBaseId?: string;
+  /** Knowledge bases the row is filed into; the drive tags rows with them. */
+  knowledgeBaseIds?: string[];
   // Metadata
   metadata?: Record<string, any>;
   // Real ID or temp-resource-{timestamp}-{random}
@@ -74,6 +76,8 @@ export interface ResourceItem {
  */
 export interface ResourceQueryParams {
   category?: FilesTabs;
+  /** Drive listing: uploaded files and the folders that hold them, no pages. */
+  filesOnly?: boolean;
   includeContentPreview?: boolean;
   libraryId?: string;
   limit?: number;

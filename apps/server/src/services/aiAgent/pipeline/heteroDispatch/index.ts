@@ -81,7 +81,8 @@ export const dispatchHeteroAgent = async (
   const isRemoteHetero = isRemoteHeterogeneousType(heteroType);
   // Same structured shape as the built-in path (`op_{ts}_{agentId}_{topicId}_{rand}`)
   // so hetero ops aren't visually distinct bare nanoids in the trace/op tables.
-  const operationId = `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+  const operationId =
+    input.reservedOperationId ?? `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
   // Retain only public configuration dimensions. CLI args and API credentials must
   // never be copied into topic metadata or an inspector response. The receipt
@@ -114,6 +115,7 @@ export const dispatchHeteroAgent = async (
     deps.userId,
     deps.workspaceId,
   ).recordStart({
+    requireReservation: !!input.reservedOperationId,
     agentId: persistAgentId,
     appContext: { ...appContext, sourceMessageId: userMessageId },
     chatGroupId: appContext?.groupId ?? null,

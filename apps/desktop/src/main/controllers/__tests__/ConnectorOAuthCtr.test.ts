@@ -14,7 +14,7 @@ vi.mock('../RemoteServerConfigCtr', () => ({ default: class {} }));
 
 const callback = 'https://server.example/oauth/connector/callback';
 const authorizationUrl = `https://provider.example/authorize?state=expected-state&redirect_uri=${encodeURIComponent(callback)}`;
-const params = { authorizationUrl, connectorId: 'connector-1' };
+const params = { authorizationUrl, connectorId: 'connector-1', requestId: 'attempt-1' };
 
 const makePopup = () => {
   const popup = Object.assign(new EventEmitter(), {
@@ -43,6 +43,7 @@ describe('ConnectorOAuthCtr', () => {
   let parent: EventEmitter;
   let controller: ConnectorOAuthCtr;
   let remoteUrl: string;
+  let remoteLookup: Promise<string> | undefined;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -50,12 +51,13 @@ describe('ConnectorOAuthCtr', () => {
     popup = makePopup();
     parent = new EventEmitter();
     remoteUrl = 'https://server.example';
+    remoteLookup = undefined;
     vi.mocked(BrowserWindow).mockImplementation(function () {
       return popup as unknown as BrowserWindow;
     });
     controller = new ConnectorOAuthCtr({
       browserManager: { getMainWindow: () => ({ browserWindow: parent }) },
-      getController: () => ({ getRemoteServerUrl: async () => remoteUrl }),
+      getController: () => ({ getRemoteServerUrl: async () => remoteLookup ?? remoteUrl }),
     } as unknown as App);
   });
 
@@ -67,6 +69,35 @@ describe('ConnectorOAuthCtr', () => {
   const success = { connectorId: 'connector-1', success: true, type: 'lobe-connector-oauth' };
   const send = (data = success, senderFrame = popup.webContents.mainFrame) =>
     popup.webContents.ipc.emit(CONNECTOR_OAUTH_RESULT_CHANNEL, { senderFrame }, data);
+
+  it('cancels only the matching authorization and cleans up the native window', async () => {
+    const result = controller.authorize(params);
+    await Promise.resolve();
+    controller.cancel({ requestId: 'other-attempt' });
+    expect(popup.destroy).not.toHaveBeenCalled();
+    controller.cancel({ requestId: params.requestId });
+    await expect(result).resolves.toBe('dismissed');
+    expect(popup.destroy).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(parent.listenerCount('closed')).toBe(0);
+    // A stale callback or repeated cancellation cannot complete the request again.
+    send();
+    controller.cancel({ requestId: params.requestId });
+    expect(popup.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('does not open a native window if canceled while resolving the server URL', async () => {
+    let resolveRemote!: (url: string) => void;
+    remoteLookup = new Promise((resolve) => {
+      resolveRemote = resolve;
+    });
+    const result = controller.authorize(params);
+    controller.cancel({ requestId: params.requestId });
+    resolveRemote(remoteUrl);
+    await expect(result).resolves.toBe('dismissed');
+    expect(BrowserWindow).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
   it('opens an isolated native window and completes without window.opener', async () => {
     const result = controller.authorize(params);

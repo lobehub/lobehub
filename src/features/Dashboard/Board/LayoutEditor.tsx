@@ -18,89 +18,126 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { DashboardItemLayout } from '@lobechat/types';
-import { ActionIcon, Button, cx, Flexbox, Icon, toast } from '@lobehub/ui';
+import { ActionIcon, Button, cx, Flexbox, Icon, Text, toast } from '@lobehub/ui';
+import { GripVerticalIcon, MoveDiagonal2Icon, PencilIcon } from 'lucide-react';
 import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronUpIcon,
-  GripVerticalIcon,
-} from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+  type KeyboardEvent as ReactKeyboardEvent,
+  memo,
+  type PointerEvent as ReactPointerEvent,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DashboardBoardItem } from '@/services/dashboard';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import {
-  DASHBOARD_MAX_H,
   DASHBOARD_MIN_H,
-  DASHBOARD_WIDTH_PRESETS,
+  DASHBOARD_STACKED_QUERY,
   flowLayouts,
+  resizeByKey,
+  resizeByPointer,
 } from '../utils/layout';
 import WidgetCard from '../WidgetCard';
+import { openWidgetEditModal } from '../WidgetEditModal';
 import { cellStyle, gridStyles } from './style';
 
 type Size = { h: number; w: number };
 
-const stepWidth = (w: number, direction: 1 | -1) => {
-  const presets = [...DASHBOARD_WIDTH_PRESETS];
-  if (direction > 0) return presets.find((preset) => preset > w) ?? w;
-  return presets.reverse().find((preset) => preset < w) ?? w;
+interface ResizeHandleProps {
+  layout: DashboardItemLayout;
+  onResize: (size: Size) => void;
+}
+
+/** Whether the board is stacked in one column right now (narrow screen). */
+const isStacked = () =>
+  typeof window !== 'undefined' && window.matchMedia(DASHBOARD_STACKED_QUERY).matches;
+
+/**
+ * The card's bottom-right corner: drag to resize in whole columns and rows,
+ * or focus it and use the arrow keys. On a stacked (narrow) board it resizes
+ * height only, since every card spans the full width there.
+ */
+const ResizeHandle = ({ layout, onResize }: ResizeHandleProps) => {
+  const { t } = useTranslation('dashboard');
+  const [active, setActive] = useState(false);
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget;
+    const gridWidth = handle.closest('[data-dashboard-grid]')?.getBoundingClientRect().width ?? 0;
+    const start = { h: layout.h, w: layout.w };
+    const origin = { x: event.clientX, y: event.clientY };
+    const stacked = isStacked();
+
+    const handleMove = (moveEvent: PointerEvent) =>
+      onResize(
+        resizeByPointer(
+          start,
+          { dx: moveEvent.clientX - origin.x, dy: moveEvent.clientY - origin.y },
+          gridWidth,
+          { stacked },
+        ),
+      );
+    const handleEnd = () => {
+      setActive(false);
+      handle.removeEventListener('pointermove', handleMove);
+      handle.removeEventListener('pointerup', handleEnd);
+      handle.removeEventListener('pointercancel', handleEnd);
+    };
+
+    handle.setPointerCapture(event.pointerId);
+    setActive(true);
+    handle.addEventListener('pointermove', handleMove);
+    handle.addEventListener('pointerup', handleEnd);
+    handle.addEventListener('pointercancel', handleEnd);
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const next = resizeByKey(layout, event.key, { stacked: isStacked() });
+    if (!next) return;
+    event.preventDefault();
+    onResize(next);
+  };
+
+  return (
+    <button
+      data-resize-handle
+      aria-label={t('layout.resize')}
+      className={gridStyles.resizeHandle}
+      data-active={active}
+      title={t('layout.resize')}
+      type={'button'}
+      onKeyDown={handleKeyDown}
+      onPointerDown={handlePointerDown}
+    >
+      <Icon icon={MoveDiagonal2Icon} size={14} />
+    </button>
+  );
 };
 
 interface EditableCellProps {
+  /** The user created this widget and may edit its title and metric definition. */
+  editable: boolean;
   entry: DashboardBoardItem;
   layout: DashboardItemLayout;
   onResize: (size: Size) => void;
 }
 
-const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize }) => {
+const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize, editable }) => {
   const { t } = useTranslation('dashboard');
   const { attributes, isDragging, listeners, setNodeRef, transform, transition } = useSortable({
     id: entry.item.id,
   });
 
-  const resizeActions = (
-    <>
-      <ActionIcon
-        aria-label={t('layout.narrower')}
-        disabled={layout.w <= DASHBOARD_WIDTH_PRESETS[0]}
-        icon={ChevronLeftIcon}
-        size={'small'}
-        title={t('layout.narrower')}
-        onClick={() => onResize({ h: layout.h, w: stepWidth(layout.w, -1) })}
-      />
-      <ActionIcon
-        aria-label={t('layout.wider')}
-        disabled={layout.w >= DASHBOARD_WIDTH_PRESETS.at(-1)!}
-        icon={ChevronRightIcon}
-        size={'small'}
-        title={t('layout.wider')}
-        onClick={() => onResize({ h: layout.h, w: stepWidth(layout.w, 1) })}
-      />
-      <ActionIcon
-        aria-label={t('layout.shorter')}
-        disabled={layout.h <= DASHBOARD_MIN_H}
-        icon={ChevronUpIcon}
-        size={'small'}
-        title={t('layout.shorter')}
-        onClick={() => onResize({ h: layout.h - 1, w: layout.w })}
-      />
-      <ActionIcon
-        aria-label={t('layout.taller')}
-        disabled={layout.h >= DASHBOARD_MAX_H}
-        icon={ChevronDownIcon}
-        size={'small'}
-        title={t('layout.taller')}
-        onClick={() => onResize({ h: layout.h + 1, w: layout.w })}
-      />
-    </>
-  );
-
   return (
     <div
-      className={cx(gridStyles.cell, isDragging && gridStyles.cellDragging)}
+      className={cx(gridStyles.cell, gridStyles.editCell, isDragging && gridStyles.cellDragging)}
       data-layout-cell={entry.item.id}
       ref={setNodeRef}
       style={{
@@ -110,7 +147,6 @@ const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize }) => {
       }}
     >
       <WidgetCard
-        actions={resizeActions}
         className={gridStyles.editCard}
         widget={entry.widget}
         handle={
@@ -123,7 +159,24 @@ const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize }) => {
             <Icon icon={GripVerticalIcon} size={14} />
           </span>
         }
+        title={
+          <Flexbox horizontal align={'center'} gap={2} style={{ flex: 1, minWidth: 0 }}>
+            <Text ellipsis title={entry.widget.title} weight={500}>
+              {entry.widget.title}
+            </Text>
+            {editable && (
+              <ActionIcon
+                data-widget-edit
+                icon={PencilIcon}
+                size={'small'}
+                title={t('widgetEdit.action')}
+                onClick={() => openWidgetEditModal(entry.widget)}
+              />
+            )}
+          </Flexbox>
+        }
       />
+      <ResizeHandle layout={layout} onResize={onResize} />
     </div>
   );
 });
@@ -140,13 +193,17 @@ interface LayoutEditorProps {
 }
 
 /**
- * Edit a board's layout as a draft: drag to reorder, step width / height, then
- * save every cell to `dashboard_items.layout` in one request or discard.
+ * Edit a board's layout as a draft: drag cards to reorder, drag a corner to
+ * resize, then save every cell to `dashboard_items.layout` in one request or
+ * discard. A widget's own title and metric definition are edited from its
+ * pencil icon and save on their own, outside the draft.
  */
 const LayoutEditor = memo<LayoutEditorProps>(({ dashboardId, items, initialLayouts, onDone }) => {
   const { t } = useTranslation('dashboard');
   const saveDashboardLayout = useDashboardStore((s) => s.saveDashboardLayout);
   const saving = useDashboardStore(dashboardSelectors.isLayoutSaving(dashboardId));
+  // Only a widget's creator may edit it; everyone else sees its title as is.
+  const userId = useUserStore(userProfileSelectors.userId);
 
   const [order, setOrder] = useState(() => items.map((entry) => entry.item.id));
   const [sizes, setSizes] = useState<Record<string, Size>>(() =>
@@ -195,7 +252,12 @@ const LayoutEditor = memo<LayoutEditorProps>(({ dashboardId, items, initialLayou
         <Button disabled={saving} onClick={onDone}>
           {t('layout.cancel')}
         </Button>
-        <Button loading={saving} type={'primary'} onClick={() => void handleSave()}>
+        <Button
+          data-dashboard-layout-save
+          loading={saving}
+          type={'primary'}
+          onClick={() => void handleSave()}
+        >
           {t('layout.save')}
         </Button>
       </Flexbox>
@@ -208,10 +270,17 @@ const LayoutEditor = memo<LayoutEditorProps>(({ dashboardId, items, initialLayou
               if (!entry || !layout) return null;
               return (
                 <EditableCell
+                  editable={!!userId && entry.widget.userId === userId}
                   entry={entry}
                   key={id}
                   layout={layout}
-                  onResize={(size) => setSizes((current) => ({ ...current, [id]: size }))}
+                  onResize={(size) =>
+                    setSizes((current) =>
+                      current[id]?.w === size.w && current[id]?.h === size.h
+                        ? current
+                        : { ...current, [id]: size },
+                    )
+                  }
                 />
               );
             })}

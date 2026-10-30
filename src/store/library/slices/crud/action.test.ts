@@ -304,6 +304,30 @@ describe('knowledgeBase crud replicas', () => {
       expect(useKnowledgeBaseStore.getState().knowledgeBaseLoadingIds).not.toContain('p1');
     });
 
+    it('sets a cover inside settings optimistically and sends only the cover', async () => {
+      await seedList();
+      let resolve!: (value: unknown) => void;
+      vi.mocked(knowledgeBaseService.updateKnowledgeBaseList).mockImplementation(
+        () => new Promise((res) => (resolve = res)) as any,
+      );
+
+      const operation = useKnowledgeBaseStore
+        .getState()
+        .updateKnowledgeBaseCover('p1', 'preset:dusk');
+
+      expect(list('private')?.find((kb) => kb.id === 'p1')?.settings).toMatchObject({
+        cover: 'preset:dusk',
+      });
+      expect(knowledgeBaseService.updateKnowledgeBaseList).toHaveBeenCalledWith('p1', {
+        cover: 'preset:dusk',
+      });
+
+      await act(async () => {
+        resolve(undefined);
+        await operation;
+      });
+    });
+
     it('creates a KB and reconciles the list from the server', async () => {
       await seedList();
       vi.mocked(knowledgeBaseService.createKnowledgeBase).mockResolvedValue('kb-new' as any);

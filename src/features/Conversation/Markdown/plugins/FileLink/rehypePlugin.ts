@@ -1,6 +1,7 @@
 import { isDesktop, OFFICIAL_URL } from '@lobechat/const';
 import { SKIP, visit } from 'unist-util-visit';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 
@@ -37,10 +38,11 @@ const getCurrentOrigins = (): string[] => {
 };
 
 const parseAgainstOrigins = (href: string | undefined, origins: string[]) => {
-  if (origins.length === 0) return parseFileLinkHref(href);
+  const options = { activeWorkspaceSlug: getActiveWorkspaceSlug() };
+  if (origins.length === 0) return parseFileLinkHref(href, undefined, options);
 
   for (const origin of origins) {
-    const parsed = parseFileLinkHref(href, origin);
+    const parsed = parseFileLinkHref(href, origin, options);
     if (parsed) return parsed;
   }
 
@@ -49,7 +51,8 @@ const parseAgainstOrigins = (href: string | undefined, origins: string[]) => {
 
 /**
  * Rehype plugin that rewrites `<a href="{APP_URL}/f/:fileId">` anchors —
- * produced by assistant tool output such as code execution file export —
+ * produced by assistant tool output such as code execution file export — and
+ * Docs file links (`/resource/file/:fileId`, which `lh file upload` prints)
  * into a custom `<lobeFileLink>` element, so they open the in-app file
  * preview panel instead of navigating away. Must run before Link's generic
  * `rehypeLobeLink`, which would otherwise consume the same anchor first.
@@ -71,6 +74,8 @@ export const rehypeFileLink = () => (tree: any) => {
       fileId: parsed.fileId,
       linkHref: href,
       linkLabel: label,
+      linkScope: parsed.scope,
+      proxyHref: parsed.proxyHref,
     };
 
     return SKIP;

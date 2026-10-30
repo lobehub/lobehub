@@ -83,6 +83,10 @@ vi.mock('@/features/Home/Recents', () => ({
   default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
 }));
 
+vi.mock('@/features/Channels/ChannelList', () => ({
+  default: () => <div data-testid="sidebar-channels" />,
+}));
+
 vi.mock('./Agent', () => ({
   default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
 }));
@@ -167,12 +171,13 @@ describe('Home sidebar body', () => {
       child.hasAttribute('data-sidebar-bottom-spacer'),
     );
 
-    expect(spacerIndex).toBe(2);
+    expect(spacerIndex).toBe(3);
     expect(children[0]).toHaveTextContent('Pages');
     expect(children[1]).toHaveAttribute('data-testid', 'sidebar-accordion');
-    expect(children[3]).toHaveTextContent('Image');
-    expect(children[4]).toHaveTextContent('Tasks');
-    expect(children[5]).toHaveTextContent('Resource');
+    expect(children[2]).toHaveAttribute('data-testid', 'sidebar-channels');
+    expect(children[4]).toHaveTextContent('Image');
+    expect(children[5]).toHaveTextContent('Tasks');
+    expect(children[6]).toHaveTextContent('Resource');
   });
 
   it('keeps a top item that was dragged past the spacer in its new position', () => {
@@ -188,8 +193,21 @@ describe('Home sidebar body', () => {
     const children = Array.from(screen.getByTestId('sidebar-body').children);
 
     expect(children[0]).toHaveAttribute('data-testid', 'sidebar-accordion');
-    expect(children[1]).toHaveAttribute('data-sidebar-bottom-spacer');
-    expect(children[2]).toHaveTextContent('Image');
-    expect(children[3]).toHaveTextContent('Tasks');
+    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
+    expect(children[2]).toHaveAttribute('data-sidebar-bottom-spacer');
+    expect(children[3]).toHaveTextContent('Image');
+    expect(children[4]).toHaveTextContent('Tasks');
+  });
+
+  it('places Channels directly below Agents, outside the Agent accordion', () => {
+    mocks.globalState.status.sidebarItems = ['agent', 'recents'];
+
+    render(<Body />);
+
+    const children = Array.from(screen.getByTestId('sidebar-body').children);
+
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
+    expect(children[2]).toContainElement(screen.getByTestId('sidebar-item-recents'));
   });
 });

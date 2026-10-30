@@ -1,4 +1,3 @@
-import { acceptanceIdFromReviewResource } from '@lobechat/const';
 import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
@@ -7,27 +6,18 @@ import { NextResponse } from 'next/server';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { authEnv } from '@/envs/auth';
 import { isAcceptanceReviewClient } from '@/libs/oidc-provider/acceptanceReview';
-import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
+import { describeReviewTarget } from '@/server/services/acceptanceReview/reviewTarget';
 import { OIDCService } from '@/server/services/oidc';
 import type { OidcInteractionDetailsResponse, OidcInteractionErrorResponse } from '@/types/oidc';
 
 const log = debug('lobe-oidc:interaction');
 
-// The title is only revealed once the signed-in reviewer may read the acceptance.
+// Site and acceptance details are only revealed once the signed-in reviewer may review them.
 const acceptanceReviewOf = async (
   resource: unknown,
 ): Promise<OidcInteractionDetailsResponse['acceptanceReview']> => {
-  const acceptanceId = acceptanceIdFromReviewResource(
-    Array.isArray(resource) ? resource[0] : resource,
-  );
   const { userId } = await getUserAuth();
-  if (!acceptanceId || !userId) return { allowed: false };
-  const access = await resolveReviewAccess(await getServerDB(), userId, acceptanceId);
-  if (!access) return { allowed: false };
-  return {
-    allowed: true,
-    title: access.acceptance.metadata?.title || access.acceptance.requirement || undefined,
-  };
+  return describeReviewTarget(await getServerDB(), userId, resource);
 };
 
 export async function GET(request: NextRequest, props: { params: Promise<{ uid: string }> }) {

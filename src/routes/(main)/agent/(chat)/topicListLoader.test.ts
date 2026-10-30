@@ -24,6 +24,7 @@ const preHydrateAgentSlugMock = vi.hoisted(() =>
 );
 const preHydrateDeviceListMock = vi.hoisted(() => vi.fn(async () => true));
 const preHydrateVerifyRunsMock = vi.hoisted(() => vi.fn(async (_ids: string[]) => {}));
+
 const chatState = vi.hoisted(() => ({ dbMessagesMap: {} as Record<string, unknown[]> }));
 
 vi.mock('@lobechat/builtin-agents', () => ({
@@ -91,12 +92,14 @@ describe('agent chat topic list loader', () => {
     getSidebarTopicListParamsMock.mockReturnValue({ agentId: 'agt_1', pageSize: 20 });
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
+  /** @example The per-agent "only mine" filter is restored synchronously, so nothing gates the seed. */
+  it('seeds the topic page from the derived sidebar params', async () => {
+    await agentChatTopicListLoader(loaderArgs('agt_1'));
+
+    expect(getSidebarTopicListParamsMock).toHaveBeenCalledWith({ agentId: 'agt_1' });
+    expect(preHydrateTopicListMock).toHaveBeenCalledWith({ agentId: 'agt_1', pageSize: 20 });
   });
 
-  // Without it the input bar's device chip read "Unknown device" until the
-  // mount-time hydrate (or the network) answered.
   it('seeds the persisted device list before the route commits', async () => {
     await agentChatTopicListLoader(loaderArgs('agt_1'));
 

@@ -27,6 +27,9 @@ const {
       generationBatches: {
         findFirst: vi.fn(),
       },
+      generations: {
+        findMany: vi.fn(),
+      },
     },
     transaction: mockTransaction,
   };
@@ -708,6 +711,31 @@ describe('videoRouter', () => {
 
       expect(result).toEqual({ error: 'insufficient_balance' });
       // Should not proceed to createVideo
+      expect(mockCreateVideo).not.toHaveBeenCalled();
+    });
+    it('should link error batch generations to their errored async task', async () => {
+      setupMocks();
+      const { chargeBeforeGenerate } =
+        await import('@/business/server/video-generation/chargeBeforeGenerate');
+      // The billing layer links the generation to its errored async task after
+      // inserting it, so the row it returns carries no asyncTaskId.
+      vi.mocked(chargeBeforeGenerate).mockResolvedValueOnce({
+        errorBatch: {
+          data: {
+            batch: { id: 'batch-err' } as any,
+            generations: [{ asyncTaskId: null, id: 'gen-err' } as any],
+          },
+          success: true,
+        },
+      });
+      mockServerDB.query.generations.findMany.mockResolvedValueOnce([
+        { asyncTaskId: 'async-err', id: 'gen-err' },
+      ]);
+
+      const caller = videoRouter.createCaller(mockCtx);
+      const result = await caller.createVideo(defaultInput);
+
+      expect(result.data?.generations?.[0]).toEqual({ asyncTaskId: 'async-err', id: 'gen-err' });
       expect(mockCreateVideo).not.toHaveBeenCalled();
     });
   });

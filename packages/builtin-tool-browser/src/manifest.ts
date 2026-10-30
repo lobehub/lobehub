@@ -126,15 +126,15 @@ export const BrowserManifest: BuiltinToolManifest = {
     },
   ],
   // `client`: runs in the desktop renderer (local runtime). `server`: cloud
-  // agent runs proxy each call back to the bound device via deviceGateway.
-  // The browser panel lives in the desktop app; `lh connect` has none.
-  deviceClients: ['desktop'],
+  // agent runs proxy each call back to the bound device via deviceGateway —
+  // the desktop app's panel, or a headless agent-browser under `lh connect`.
+  deviceClients: ['cli', 'desktop'],
   executors: ['client', 'server'],
   identifier: BrowserIdentifier,
   meta: {
     avatar: '🌐',
     description:
-      'Drive the in-app browser sidebar: navigate, inspect pages via accessibility snapshots, click, fill forms, and capture screenshots — visible to the user in real time.',
+      'Drive a browser on the device: navigate, inspect pages via accessibility snapshots, click, fill forms, and capture screenshots. In the desktop app it is the sidebar browser the user watches live; under the CLI it is a headless browser.',
     title: 'Browser',
   },
   systemRole: systemPrompt,

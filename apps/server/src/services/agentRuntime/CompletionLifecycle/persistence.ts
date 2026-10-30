@@ -2,7 +2,7 @@
  * Terminal persistence: the `agent_operations` completion row, the topic
  * running mark, and the topic usage rollup.
  */
-import { isParkedStatus } from '@lobechat/agent-runtime';
+import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
 import { type AgentOperationStatus, isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
@@ -139,7 +139,7 @@ export async function persistCompletion(
       cost: state?.cost ?? null,
       error: state?.error ?? null,
       interruption: state?.interruption ?? null,
-      llmCalls: add(state?.usage?.llm?.apiCalls, rollup?.llmCalls ?? 0),
+      llmCalls: add(getLlmCallCount(state), rollup?.llmCalls ?? 0),
       // Backfill the executed model/provider when the terminal state carries
       // them. The in-process runtime sets neither on `state` (the op already
       // holds them from recordStart) so these stay undefined and recordCompletion
