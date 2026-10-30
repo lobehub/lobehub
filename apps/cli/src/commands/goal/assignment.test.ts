@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  applyCreatedGoalTaskModel,
+  ensureCreatedGoalTaskModel,
   parseGoalModelConfig,
   registerGoalAssignmentCommands,
 } from './assignment';
@@ -82,11 +82,42 @@ describe('goal model commands', () => {
     expect(mocks.setTaskModel).toHaveBeenNthCalledWith(2, { id: 'goal_1', modelConfig: null });
   });
 
+  it('skips the follow-up write when the server already applied the model at creation', async () => {
+    const client = await mocks.getTrpcClient();
+
+    await ensureCreatedGoalTaskModel(
+      client,
+      { config: { taskModel: 'gpt-5' }, id: 'goal_1' },
+      { model: 'gpt-5', provider: 'openai' },
+    );
+
+    expect(mocks.setTaskModel).not.toHaveBeenCalled();
+  });
+
+  it('applies the model afterwards on a server that dropped the field', async () => {
+    const client = await mocks.getTrpcClient();
+
+    await ensureCreatedGoalTaskModel(
+      client,
+      { config: {}, id: 'goal_1' },
+      { model: 'gpt-5', provider: 'openai' },
+    );
+
+    expect(mocks.setTaskModel).toHaveBeenCalledWith({
+      id: 'goal_1',
+      modelConfig: { model: 'gpt-5', provider: 'openai' },
+    });
+  });
+
   it('keeps a created goal when its task model is refused, with a retry hint', async () => {
     const client = await mocks.getTrpcClient();
     mocks.setTaskModel.mockRejectedValueOnce(new Error('model is fixed'));
 
-    await applyCreatedGoalTaskModel(client, 'goal_1', { model: 'gpt-5', provider: 'openai' });
+    await ensureCreatedGoalTaskModel(
+      client,
+      { id: 'goal_1' },
+      { model: 'gpt-5', provider: 'openai' },
+    );
 
     expect(mocks.warn).toHaveBeenCalledWith(
       expect.stringContaining('lh goal set-task-model goal_1'),

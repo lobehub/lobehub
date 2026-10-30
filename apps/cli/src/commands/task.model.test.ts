@@ -91,6 +91,27 @@ describe('task model flags', () => {
     });
   });
 
+  it('shows the model of an unassigned task without looking up an agent', async () => {
+    mocks.detail.mockResolvedValue({
+      data: {
+        config: { model: 'deepseek-flash', provider: 'lobehub' },
+        id: 'task_1',
+        identifier: 'T-1',
+        instruction: 'Run',
+        name: 'Run',
+        priority: 0,
+        status: 'backlog',
+      },
+    });
+
+    await run('view', 'T-1');
+
+    expect(mocks.agentConfig).not.toHaveBeenCalled();
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('lobehub/deepseek-flash (pinned)'),
+    );
+  });
+
   it('shows whether the task model overrides its agent in view', async () => {
     mocks.detail.mockResolvedValue({
       data: {

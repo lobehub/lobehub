@@ -21,7 +21,7 @@ import { log } from '../../utils/logger';
 import { resolveAppUrlBuilder } from '../task/url';
 import { registerGoalAccessCommands } from './access';
 import {
-  applyCreatedGoalTaskModel,
+  ensureCreatedGoalTaskModel,
   parseGoalModelConfig,
   registerGoalAssignmentCommands,
 } from './assignment';
@@ -722,6 +722,7 @@ export function registerGoalCommand(program: Command) {
         projectId: options.project,
         requirement: options.requirement,
         title,
+        taskModelConfig: taskModel ?? undefined,
         tasks: seedTasks.length ? seedTasks : undefined,
         visibility: options.visibility,
       };
@@ -749,7 +750,7 @@ export function registerGoalCommand(program: Command) {
             agentId: options.agent ?? process.env.LOBEHUB_AGENT_ID,
             createdByAgentId: process.env.LOBEHUB_AGENT_ID,
           });
-      await applyCreatedGoalTaskModel(client, result.data!.goal.id, taskModel);
+      await ensureCreatedGoalTaskModel(client, result.data!.goal, taskModel);
       const undrawn = missingSeedDependencies(result.data!, seedTasks);
       if (undrawn.length)
         log.warn(
