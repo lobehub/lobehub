@@ -24,6 +24,7 @@ import { default as deepseek } from './deepseek';
 import { default as fal } from './fal';
 import { default as fireworksai } from './fireworksai';
 import { default as giteeai } from './giteeai';
+import { default as gitgot } from './gitgot';
 import { default as github } from './github';
 import { default as githubcopilot } from './githubCopilot';
 import { default as glmcodingplan } from './glmCodingPlan';
@@ -138,6 +139,7 @@ const staticModelMap: ModelsMap = {
   fal,
   fireworksai,
   giteeai,
+  gitgot,
   github,
   githubcopilot,
   google,
@@ -258,6 +260,7 @@ export { default as deepseek } from './deepseek';
 export { default as fal, fluxSchnellParamsSchema } from './fal';
 export { default as fireworksai } from './fireworksai';
 export { default as giteeai } from './giteeai';
+export { default as gitgot } from './gitgot';
 export { default as github } from './github';
 export { default as githubcopilot } from './githubCopilot';
 export { default as glmcodingplan } from './glmCodingPlan';
