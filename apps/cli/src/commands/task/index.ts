@@ -297,14 +297,12 @@ export function registerTaskCommand(program: Command) {
       console.log(`${pc.dim('Instruction:')} ${t.instruction}`);
       if (t.description) console.log(`${pc.dim('Description:')} ${t.description}`);
       if (t.agentId) console.log(`${pc.dim('Agent:')} ${t.agentId}`);
-      if (t.agentId) {
-        // Comparing against the agent's current default tells an override apart
-        // from the snapshot every assigned task gets at creation.
-        const agentConfig = await client.agent.getAgentConfigById
-          .query({ agentId: t.agentId })
-          .catch(() => null);
-        console.log(`${pc.dim('Model:')} ${formatTaskModel(t.config, agentConfig)}`);
-      }
+      // Comparing against the agent's current default tells an override apart
+      // from the snapshot every assigned task gets at creation.
+      const agentConfig = t.agentId
+        ? await client.agent.getAgentConfigById.query({ agentId: t.agentId }).catch(() => null)
+        : null;
+      console.log(`${pc.dim('Model:')} ${formatTaskModel(t.config, agentConfig)}`);
       if (t.userId) console.log(`${pc.dim('User:')} ${t.userId}`);
       if (t.parent) {
         console.log(`${pc.dim('Parent:')} ${t.parent.identifier} ${t.parent.name || ''}`);

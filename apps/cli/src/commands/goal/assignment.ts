@@ -27,22 +27,24 @@ export const parseGoalModelConfig = (
 };
 
 /**
- * `lh goal create --task-model`: applied right after creation through the same
- * mutation as `set-task-model`, so the Agent model policy still applies. A
- * refusal leaves the goal created and says how to retry.
+ * `lh goal create --task-model` travels with the create call, so the server
+ * applies it before the first coordinator step. This CLI ships on its own: a
+ * server that predates the field drops it, which shows as a goal without the
+ * model, and only then does the follow-up mutation apply it. That late write
+ * can miss a Task already started; a refusal keeps the goal and says how to retry.
  */
-export const applyCreatedGoalTaskModel = async (
+export const ensureCreatedGoalTaskModel = async (
   client: TrpcClient,
-  goalId: string,
+  goal: { config?: { taskModel?: string | null } | null; id: string },
   modelConfig: { model: string; provider: string } | null | undefined,
 ) => {
-  if (!modelConfig) return;
+  if (!modelConfig || goal.config?.taskModel === modelConfig.model) return;
   try {
-    await client.goal.setTaskModel.mutate({ id: goalId, modelConfig });
+    await client.goal.setTaskModel.mutate({ id: goal.id, modelConfig });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log.warn(
-      `Goal created, but its task model was not set (${message}). Retry: lh goal set-task-model ${goalId} --model ${modelConfig.model} --provider ${modelConfig.provider}`,
+      `Goal created, but its task model was not set (${message}). Retry: lh goal set-task-model ${goal.id} --model ${modelConfig.model} --provider ${modelConfig.provider}`,
     );
     // The goal exists, so finish the output, but scripts must see the flag did not apply.
     process.exitCode = 1;
