@@ -60,6 +60,7 @@
   "table.columns.type.enums.embedding": "嵌入",
   "table.columns.type.enums.imageGeneration": "图像生成",
   "table.columns.type.enums.speechRecognition": "语音转写",
+  "table.columns.type.enums.textToSpeech": "语音合成",
   "table.columns.type.enums.videoGeneration": "视频生成",
   "table.columns.type.title": "类型",
   "table.desc": "展示文本生成、嵌入、图像生成等功能的计算积分使用详情。",
