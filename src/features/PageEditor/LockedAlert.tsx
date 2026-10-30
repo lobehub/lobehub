@@ -23,6 +23,7 @@ const LockedAlert = memo(() => {
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
   const lockHolderId = usePageEditorStore((s) => s.lockHolderId);
+  const inCollab = usePageEditorStore((s) => !!s.collab);
   const isLockedByOther = usePageLockedByOther();
   const isLockedBySelf = usePageLockedBySelf();
   // Our own save was just rejected by the lock — treat as locked even if the
@@ -32,7 +33,7 @@ const LockedAlert = memo(() => {
   );
   const holder = useAuthorInfo(lockHolderId ?? undefined);
 
-  if (!isWorkspacePage) return null;
+  if (!isWorkspacePage || inCollab) return null;
   if (!isLockedByOther && !isLockedBySelf && !saveBlockedByLock) return null;
 
   // Same user, different session (other tab / unreleased prior mount): show a

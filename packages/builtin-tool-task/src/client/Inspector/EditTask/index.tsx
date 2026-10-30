@@ -148,11 +148,11 @@ const MemberChip = memo<{ userId: string }>(({ userId }) => {
 MemberChip.displayName = 'MemberChip';
 
 export const EditTaskInspector = memo<BuiltinInspectorProps<EditTaskParams, EditTaskState>>(
-  ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
     const { t } = useTranslation('plugin');
 
     const params = args || partialArgs || ({} as Partial<EditTaskParams>);
-    const identifier = params.identifier;
+    const identifier = pluginState?.identifier ?? params.identifier;
 
     const segments: { content: ReactNode; key: string }[] = [];
 

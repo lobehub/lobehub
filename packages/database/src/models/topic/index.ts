@@ -173,6 +173,7 @@ export class TopicModel {
 
   update = this.withContext(update.update);
   settleRunningStatus = this.withContext(update.settleRunningStatus);
+  markRead = this.withContext(update.markRead);
   recomputeUsage = this.withContext(update.recomputeUsage);
   updateMetadata = this.withContext(update.updateMetadata);
   updateModelPin = this.withContext(update.updateModelPin);

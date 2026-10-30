@@ -119,6 +119,22 @@ describe('coordinatorReasonCopy', () => {
     expect(coordinatorReasonCopy('Automatic recovery could not start the next attempt')).toEqual({
       key: 'goalProcess.gate.reason.recoveryFailed',
     });
+    expect(
+      coordinatorReasonCopy(
+        'Automatic recovery could not start the next attempt: Task already has a running topic (tpc_1). Cancel it first or use --continue',
+      ),
+    ).toEqual({
+      key: 'goalProcess.gate.reason.recoveryFailedWithError',
+      params: {
+        error: 'Task already has a running topic (tpc_1). Cancel it first or use --continue',
+      },
+    });
+    expect(
+      coordinatorReasonCopy('Task T-12 failed verification the same way 2 times in a row'),
+    ).toEqual({
+      key: 'goalProcess.gate.reason.verifyStalled',
+      params: { count: '2', id: 'T-12' },
+    });
   });
 
   it('wraps a bare runtime error type in a localized sentence', () => {

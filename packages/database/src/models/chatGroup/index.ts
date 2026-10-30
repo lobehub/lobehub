@@ -545,6 +545,7 @@ export class ChatGroupModel {
     Array<{
       agentId: string;
       description: string | null;
+      name: string | null;
       role: string | null;
       title: string | null;
     }>

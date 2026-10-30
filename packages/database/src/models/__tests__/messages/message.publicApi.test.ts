@@ -116,6 +116,7 @@ describe('MessageModel public API', () => {
   it('keeps the runtime exports of the module entry', () => {
     expect(Object.keys(messageModule).sort()).toEqual([
       'HumanApprovalAlreadyResolvedError',
+      'MESSAGE_KEYWORD_SEARCH_MAX_LIMIT',
       'MessageModel',
       'redactCreatorPrivateBlob',
       'sanitizeVisitorError',

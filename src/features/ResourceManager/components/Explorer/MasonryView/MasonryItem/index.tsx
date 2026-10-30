@@ -24,6 +24,7 @@ import { type FileListItem } from '@/types/files';
 import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
+import LibraryTags from '../../LibraryTags';
 import AudioFileItem from './AudioFileItem';
 import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
@@ -110,6 +111,13 @@ const styles = stylex.create({
    * point of the badge is that a private card is recognisable at a glance while
    * scanning a library that mixes both scopes.
    */
+  libraryBadge: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockEnd: '8px',
+    insetInlineEnd: '8px',
+    maxWidth: 'calc(100% - 56px)',
+  },
   privateBadge: {
     position: 'absolute',
     zIndex: 2,
@@ -181,11 +189,11 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     chunkingStatus,
     onSelectedChange,
     knowledgeBaseId,
+    knowledgeBaseIds,
     size,
     onOpen,
     metadata,
     sourceType,
-    slug,
     userId,
     visibility,
   }) => {
@@ -221,9 +229,12 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       libraryId: knowledgeBaseId,
       onOpen,
       openInPanel: true,
-      slug,
     });
-    const handleItemDoubleClick = useFileItemDoubleClick({ id, isPage });
+    const handleItemDoubleClick = useFileItemDoubleClick({
+      id,
+      isPage,
+      libraryId: knowledgeBaseId,
+    });
 
     // Memoize drag data to prevent recreation
     const dragData = useMemo(
@@ -375,6 +386,12 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         >
           <DropdownMenu items={menuItems} />
         </div>
+
+        {!knowledgeBaseId && !!knowledgeBaseIds?.length && (
+          <div {...stylex.props(styles.libraryBadge)}>
+            <LibraryTags knowledgeBaseIds={knowledgeBaseIds} />
+          </div>
+        )}
 
         {isPrivate && (
           <Tooltip title={t('resources.visibility.privateTooltip', { ns: 'chat' })}>

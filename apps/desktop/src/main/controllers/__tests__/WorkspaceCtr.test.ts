@@ -4,8 +4,9 @@ import { type App } from '@/core/App';
 
 import WorkspaceCtr from '../WorkspaceCtr';
 
-const { ipcMainHandleMock } = vi.hoisted(() => ({
+const { ipcMainHandleMock, listClaudeCodeMemoryMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
+  listClaudeCodeMemoryMock: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -17,6 +18,10 @@ vi.mock('electron', () => ({
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
   readdir: vi.fn(),
+}));
+
+vi.mock('@lobechat/device-control/claude-code-memory', () => ({
+  listClaudeCodeMemory: listClaudeCodeMemoryMock,
 }));
 
 vi.mock('@lobechat/local-file-shell', () => ({
@@ -220,6 +225,24 @@ describe('WorkspaceCtr', () => {
       const result = await workspaceCtr.listProjectSkills({ scope: '/proj' });
 
       expect(result).toEqual({ root: '/proj', skills: [], source: null });
+    });
+  });
+
+  describe('listClaudeCodeMemory', () => {
+    it('approves the memory directory for the preview protocol', async () => {
+      const memoryDir = '/device-home/.claude/projects/-proj/memory';
+      listClaudeCodeMemoryMock.mockImplementation(async (_params, deps) => {
+        await deps.approveProjectRoot(memoryDir);
+        return { files: [], memoryDir };
+      });
+
+      const result = await workspaceCtr.listClaudeCodeMemory({ scope: '/proj' });
+
+      expect(result).toEqual({ files: [], memoryDir });
+      expect(listClaudeCodeMemoryMock).toHaveBeenCalledWith({ scope: '/proj' }, expect.anything());
+      expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith(
+        memoryDir,
+      );
     });
   });
 });

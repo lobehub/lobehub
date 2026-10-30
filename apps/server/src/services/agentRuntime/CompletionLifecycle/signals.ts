@@ -1,6 +1,7 @@
 /**
  * Completion Agent Signal source events.
  */
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 
@@ -157,7 +158,7 @@ export async function emitSignalEvents(
                 reason,
                 serializedContext: undefined,
                 topicId: runOrigin.topicId,
-                turnCount: state?.stepCount || 0,
+                turnCount: getLlmCallCount(state),
               },
               sourceId: `${operationId}:complete:${reason}`,
               sourceType: 'agent.execution.failed',
@@ -194,9 +195,9 @@ export async function emitSignalEvents(
                 // can project receipts. Undefined for every other agent.
                 selfIteration,
                 serializedContext: undefined,
-                steps: state?.stepCount || 0,
+                steps: getLlmCallCount(state),
                 topicId: runOrigin.topicId,
-                turnCount: state?.stepCount || 0,
+                turnCount: getLlmCallCount(state),
               },
               sourceId: `${operationId}:complete:${reason}`,
               sourceType: 'agent.execution.completed',

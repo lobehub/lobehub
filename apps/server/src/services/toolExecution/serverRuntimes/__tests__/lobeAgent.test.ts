@@ -968,6 +968,7 @@ describe('lobeAgentRuntime', () => {
       );
 
       expect(run).toHaveBeenCalledWith({
+        background: false,
         description: 'Research',
         instruction: 'Find the answer',
         timeout: 1000,
@@ -1064,6 +1065,7 @@ describe('lobeAgentRuntime', () => {
       );
 
       expect(run).toHaveBeenCalledWith({
+        background: false,
         description: 'Research',
         instruction: 'Find the answer',
         subAgentId: undefined,

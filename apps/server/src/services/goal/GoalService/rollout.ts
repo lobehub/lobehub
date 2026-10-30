@@ -12,8 +12,8 @@ import {
 import type { GoalGraphSnapshot, GoalTickResult } from '@lobechat/types';
 
 import { type ExpertiseCarrier, ExpertiseModel } from '@/database/models/expertise';
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
+import { GoalRepository } from '@/database/repositories/goal';
 
 import { BatchPlanSkillService } from '../batchPlanSkill';
 import { TERMINAL_NODE_STATUSES } from '../decideNextMove';
@@ -92,7 +92,7 @@ export const openPatternBreakGate = async (
   // the rest find the break already open and reuse its gate instead of
   // opening a second assay and decision that would re-park the goal later.
   const claim = await ctx.db.transaction(async (tx) => {
-    const goalModel = new GoalModel(tx, ctx.userId, ctx.workspaceId);
+    const goalModel = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const locked = await goalModel.lockById(goalId);
     const current = locked?.config?.rolloutState;
     if (!locked || !current) return undefined;
@@ -260,7 +260,7 @@ export const restartRolloutLoop = async (
     : { type: 'user' };
 
   const committed = await ctx.db.transaction(async (tx) => {
-    const goalModel = new GoalModel(tx, ctx.userId, ctx.workspaceId);
+    const goalModel = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const current = (await goalModel.lockById(goalId))?.config?.rolloutState;
     if (current?.phase !== 'pattern_break') return undefined;
     const resolved = await new GoalGraphModel(tx, ctx.userId, ctx.workspaceId).resolveDecision(

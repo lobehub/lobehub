@@ -6,6 +6,7 @@ import type { DecryptedMessengerAccountLink } from '@/database/models/messengerA
 import { gatewayEnv } from '@/envs/gateway';
 import type { BotRuntimeStatus } from '@/types/botRuntimeStatus';
 
+import { hasPassiveListeningRule } from '../agentSignal/scenarios/botWake/config';
 import { extractWatchKeywordEntries } from '../bot/platforms';
 import type {
   MessageGatewayCapabilities,
@@ -39,15 +40,26 @@ export function mapGatewayStatusToRuntimeStatus(
 
 /**
  * Derive edge-filtering capabilities for a bot-channel connection from its
- * settings. Monitoring is enabled purely by "has watch keywords configured":
- * feature-access gating stays server-side (BotMessageRouter), so access
+ * settings. Monitoring is enabled by "has any passive-listening rule": watch
+ * keywords, or an enabled bot-wake scenario (its policies judge messages nobody
+ * @-mentioned, which the gateway would otherwise drop at the edge).
+ * Feature-access gating stays server-side (BotMessageRouter), so access
  * changes never require a gateway reconnect and operators with existing
  * rules are never cut off by a stale edge config.
+ *
+ * Unverified: the gateway itself lives outside this repository. That it
+ * forwards un-mentioned channel messages once this flag is true is its
+ * contract, not something this code can prove.
  */
 export const resolveBotGatewayCapabilities = (
   settings?: Record<string, unknown> | null,
 ): MessageGatewayCapabilities => ({
-  messageMonitoring: { enabled: extractWatchKeywordEntries(settings ?? undefined).length > 0 },
+  messageMonitoring: {
+    enabled: hasPassiveListeningRule(
+      settings,
+      extractWatchKeywordEntries(settings ?? undefined).length,
+    ),
+  },
 });
 
 /**

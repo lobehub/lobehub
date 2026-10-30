@@ -13,6 +13,18 @@ export const normalizeAcceptanceGroupMode = (value: unknown): AcceptanceGroupMod
     ? value
     : DEFAULT_ACCEPTANCE_GROUP_MODE;
 
+/**
+ * Inside a project page every row belongs to that project, so project grouping
+ * would wrap the list in one header naming the page itself — show it flat.
+ */
+export const resolveAcceptanceGroupMode = (
+  value: unknown,
+  hostProjectId?: string,
+): AcceptanceGroupMode => {
+  const mode = normalizeAcceptanceGroupMode(value);
+  return hostProjectId && mode === 'project' ? 'none' : mode;
+};
+
 export interface AcceptanceListGroup {
   items: AcceptanceListItem[];
   key: string;

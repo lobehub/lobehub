@@ -14,6 +14,7 @@ interface WindowRow {
   createdAtIso: string;
   id: string;
   role: string;
+  steer: boolean;
 }
 
 /**
@@ -24,6 +25,11 @@ interface WindowRow {
  * back with a ::timestamptz cast.
  */
 const createdAtIso = sql<string>`to_char(${messages.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
+// A steered user message continues the running turn instead of opening a new one.
+const isSteer = sql<boolean>`coalesce((${messages.metadata}->>'steer')::boolean, false)`;
+
+const isRoundStart = (row: WindowRow) => row.role === 'user' && !row.steer;
 
 /**
  * `(createdAt, id)` strictly before the cursor — the "older than" half-open
@@ -74,7 +80,7 @@ const resolveBackwardRoundWindow = async (
   const olderThanCursor = cursor ? messageStrictlyBefore(cursor) : undefined;
 
   const rows = (await db
-    .select({ createdAtIso, id: messages.id, role: messages.role })
+    .select({ createdAtIso, id: messages.id, role: messages.role, steer: isSteer })
     .from(messages)
     .where(and(where, isNull(messages.messageGroupId), olderThanCursor))
     .orderBy(desc(messages.createdAt), desc(messages.id))
@@ -85,7 +91,7 @@ const resolveBackwardRoundWindow = async (
   let rounds = 0;
   let boundaryIndex = -1;
   for (let i = 0; i < rows.length; i += 1) {
-    if (rows[i].role === 'user') {
+    if (isRoundStart(rows[i])) {
       rounds += 1;
       boundaryIndex = i;
       if (rounds >= roundLimit) break;
@@ -95,10 +101,39 @@ const resolveBackwardRoundWindow = async (
     if (i + 1 >= countBudget && rounds >= 1) break;
   }
 
-  // No `user` turn in the visible window — an oversized newest round, or a tail
-  // with no user turn. Fall back to the oldest fetched row; that slice is a
-  // partial round the renderer roots as an orphan chain. Lazy step loading is
-  // the proper fix (a later stage).
+  // The newest round is larger than the budget: extend the window to its start
+  // so the page never begins mid-round (the renderer would root the cut-off
+  // steps as orphan chains).
+  if (boundaryIndex === -1 && rows.length > countBudget) {
+    const [roundStart] = (await db
+      .select({ createdAtIso, id: messages.id, role: messages.role, steer: isSteer })
+      .from(messages)
+      .where(
+        and(
+          where,
+          isNull(messages.messageGroupId),
+          olderThanCursor,
+          sql`${messages.role} = 'user'`,
+          sql`not ${isSteer}`,
+        ),
+      )
+      .orderBy(desc(messages.createdAt), desc(messages.id))
+      .limit(1)) as WindowRow[];
+
+    if (roundStart) {
+      const lowerBound = { createdAt: roundStart.createdAtIso, id: roundStart.id };
+      const [older] = await db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(and(where, isNull(messages.messageGroupId), messageStrictlyBefore(lowerBound)))
+        .limit(1);
+
+      return { hasMore: !!older, lowerBound };
+    }
+  }
+
+  // No round start anywhere older than the cursor: fall back to the oldest
+  // fetched row.
   if (boundaryIndex === -1) boundaryIndex = rows.length - 1;
 
   const boundaryRow = rows[boundaryIndex];

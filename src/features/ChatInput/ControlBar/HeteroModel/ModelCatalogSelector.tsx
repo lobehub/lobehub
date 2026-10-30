@@ -204,7 +204,8 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
     const isLogin = useUserStore(authSelectors.isLogin);
     useDeviceStore((s) => s.useFetchDevices)(isLogin || isDesktop);
     const isDeviceListLoading = !useDeviceStore(deviceSelectors.isDeviceListLoaded);
-    const cwd = useEffectiveWorkingDirectory(agentId, { topicId });
+    // Let the execution host choose its default; this desktop's fallback may not exist remotely.
+    const cwd = useEffectiveWorkingDirectory(agentId, { homeFallback: false, topicId });
     const provider = agencyConfig?.heterogeneousProvider;
     useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
     const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);

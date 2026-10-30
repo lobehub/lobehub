@@ -46,18 +46,18 @@ export const resolveActiveConversationCoordinate = ({
         (segment, index) =>
           segment === 'project' &&
           segments[index + 1] === params.projectId &&
-          segments[index + 2] === 'conversation',
+          segments[index + 2] === 'topic',
       )
     : -1;
   const projectSuffixLength =
-    projectSegmentIndex < 0 || segments[projectSegmentIndex + 2] !== 'conversation'
+    projectSegmentIndex < 0 || segments[projectSegmentIndex + 2] !== 'topic'
       ? -1
       : segments.length - projectSegmentIndex - 3;
   const projectConversation =
     !!params.projectId &&
     projectSegmentIndex >= 0 &&
     segments[projectSegmentIndex + 1] === params.projectId &&
-    segments[projectSegmentIndex + 2] === 'conversation' &&
+    segments[projectSegmentIndex + 2] === 'topic' &&
     (projectSuffixLength === 0 || (projectSuffixLength === 1 && params.topicId !== undefined));
   const isConversation = agentConversation || groupConversation || projectConversation;
   const agentBasePath =

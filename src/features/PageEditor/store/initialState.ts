@@ -25,6 +25,7 @@ export interface PublicState {
    */
   metaReadOnly?: boolean;
   onBack?: () => void;
+  onCollabReset?: () => void;
   onDelete?: () => void;
   onDocumentIdChange?: (newId: string) => void;
   onEmojiChange?: (emoji: string | undefined) => void;
@@ -34,7 +35,19 @@ export interface PublicState {
   title?: string;
 }
 
+export interface PageCollabState {
+  access: 'edit' | 'view';
+  /** The room's body reached the editor; until then the page shows the stored copy. */
+  bodyReady?: boolean;
+  pending: number;
+  /** Joins the room again after it failed to sync. */
+  retry?: () => void;
+  status: 'connecting' | 'error' | 'offline' | 'synced';
+}
+
 export interface State extends PublicState {
+  /** Present while the body is edited through a live collaboration room. */
+  collab?: PageCollabState;
   /**
    * Whether the comments panel beside the body is open. It is its own panel,
    * not a mode of the page-agent panel, so opening it never displaces the

@@ -127,6 +127,7 @@ export const buildServerCallLlmContext = async ({
       agent: {
         chatConfig: agentConfig.chatConfig,
         description: agentConfig.description,
+        name: agentConfig.name,
         slug: agentConfig.slug,
         title: agentConfig.title,
       },
@@ -137,6 +138,7 @@ export const buildServerCallLlmContext = async ({
       enabledToolIds: resolved.enabledToolIds,
       executionTarget,
       features: resolveServerConnectorFeatures(),
+      includeRecentAgents: state.origin?.trigger !== 'channel',
       isSubAgent: state.origin?.lineage?.isSubAgent === true,
       mentionedAgents: (state as any).initialContext?.initialContext?.mentionedAgents,
       messages: messagesForContext,

@@ -47,3 +47,28 @@ export const mergePartialPersistedMessages = (
     ...persistedMessages,
   ];
 };
+
+export const resolveSendResponseMessages = ({
+  currentMessages,
+  isPartial,
+  messages,
+  replacedMessageIds,
+  userMessageId,
+  userMessageMetadata,
+}: {
+  currentMessages: UIChatMessage[];
+  isPartial: boolean;
+  messages: UIChatMessage[];
+  replacedMessageIds: string[];
+  userMessageId: string;
+  userMessageMetadata: MessageMetadata | undefined;
+}): UIChatMessage[] => {
+  const persisted = attachSendTimeMetadataToUserMessage(
+    messages,
+    userMessageId,
+    userMessageMetadata,
+  );
+  return isPartial
+    ? mergePartialPersistedMessages(currentMessages, persisted, replacedMessageIds)
+    : persisted;
+};

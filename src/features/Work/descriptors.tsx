@@ -17,6 +17,7 @@ import {
   FileTextIcon,
   FileTypeIcon,
   LinkIcon,
+  PanelsTopLeftIcon,
   PresentationIcon,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -44,14 +45,15 @@ const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
  */
 export type WorkOpenTarget =
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
-  | { identifier: string; kind: 'task'; name?: string | null }
+  | { taskId: string; identifier?: string; kind: 'task'; name?: string | null }
   | { kind: 'external'; url: string }
   /**
    * In-app preview of a cloud-persisted file (the FilePreview chat portal).
    * `url` is the already-allowlisted download fallback for surfaces without a
    * chat portal (WorkGallery), so they don't recompute the file-metadata lookup.
    */
-  | { fileId: string; kind: 'filePreview'; url?: string };
+  | { fileId: string; kind: 'filePreview'; url?: string }
+  | { canvasId: string; kind: 'canvas'; version?: number };
 
 /**
  * Client-side allowlist for external Work URLs (defense in depth over the
@@ -159,6 +161,24 @@ const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
 export const WORK_TYPE_DESCRIPTORS: {
   [T in ListedWorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
+  canvas: {
+    getDescription: (item) => item.description?.trim() ?? null,
+    getIcon: () => PanelsTopLeftIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) => {
+      if (!item.resourceId) return null;
+      const eventVersion = 'event' in item ? item.event?.version : undefined;
+      const currentVersion = 'version' in item ? item.version?.version : undefined;
+      // Only an older card pins its version; the current card follows edits made after it opened.
+      const pinned = eventVersion && currentVersion && eventVersion < currentVersion;
+      return {
+        canvasId: item.resourceId,
+        kind: 'canvas',
+        ...(pinned ? { version: eventVersion } : {}),
+      };
+    },
+    getTitle: (item) => item.title,
+  },
   document: {
     getDescription: (item) => item.description?.trim() ?? null,
     getIcon: () => FileTextIcon,
@@ -236,16 +256,15 @@ export const WORK_TYPE_DESCRIPTORS: {
     getDescription: (item) => item.task.instruction?.trim() ?? null,
     getIcon: () => ClipboardListIcon,
     getIdentifier: (item) => item.task.identifier,
-    // Resolve the task detail by its human identifier (`TASK-1`, live-coalesced
-    // with the persisted works column) when present, else its id — the same
-    // identifier the chat portal and standalone route both accept. The
-    // task-deleted orphan case is gated by the call site (it also renders a
-    // badge), not stripped here. A task Work always has a resourceId, but it is
-    // nullable on the base type, so drop the affordance when both are missing.
-    getOpenTarget: (item) => {
-      const identifier = item.task.identifier ?? item.resourceId;
-      return identifier ? { identifier, kind: 'task', name: item.task.name } : null;
-    },
+    getOpenTarget: (item) =>
+      item.resourceId
+        ? {
+            taskId: item.resourceId,
+            identifier: item.resourceDeleted ? undefined : (item.task.identifier ?? undefined),
+            kind: 'task',
+            name: item.task.name,
+          }
+        : null,
     getTitle: (item) => item.task.name,
   },
 };

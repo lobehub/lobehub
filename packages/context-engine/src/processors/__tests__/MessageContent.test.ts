@@ -1,4 +1,4 @@
-import { createMediaFileRef } from '@lobechat/const/mediaRef';
+import { createMediaFileRef } from '../../const/mediaRef';
 import type { ChatAudioItem, ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 

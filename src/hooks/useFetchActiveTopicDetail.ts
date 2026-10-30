@@ -21,7 +21,7 @@ export const useFetchActiveTopicDetail = () => {
   const [activeTopicId, isMissingFromList, useFetchTopicDetail] = useChatStore((s) => [
     s.activeTopicId,
     !!s.activeTopicId &&
-      !!topicSelectors.currentTopicData(s) &&
+      !s.creatingTopicIds.includes(s.activeTopicId) &&
       !topicSelectors.currentTopics(s)?.some((topic) => topic.id === s.activeTopicId),
     s.useFetchTopicDetail,
   ]);
@@ -40,5 +40,8 @@ export const useFetchActiveTopicDetail = () => {
   );
   const watchRuns = idle && !!wakeable;
 
-  useFetchTopicDetail(isMissingFromList || watchRuns ? activeTopicId : undefined, watchRuns);
+  // Revalidate on entry even when a persisted row exists: SCM wakeability does
+  // not describe runs already active on the server after a reload. Only SCM
+  // wake targets need continued polling once that first read has settled.
+  useFetchTopicDetail(isMissingFromList || idle ? activeTopicId : undefined, watchRuns);
 };

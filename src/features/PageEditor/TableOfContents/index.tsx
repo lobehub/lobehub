@@ -13,6 +13,9 @@ import { collectHeadings, findActiveIndex, findBodyRoot, isSameOutline } from '.
 const ACTIVE_THRESHOLD = 96;
 const SCROLL_MARGIN = 24;
 const MIN_HEADINGS = 2;
+// Kept tight to the pane edge: the strip the rail takes is width wide tables lose.
+const RAIL_INSET = 4;
+const RAIL_PADDING_INLINE = 4;
 
 const prefersReducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -20,11 +23,12 @@ const prefersReducedMotion = () =>
 const styles = stylex.create({
   container: {
     alignItems: 'flex-end',
+    // PageEditor drops the table gutter at the same breakpoint.
     display: { 'default': 'flex', '@media (max-width: 1024px)': 'none' },
     flexDirection: 'column',
     // Vertically centered on the right edge, like Notion's outline rail.
     insetBlockStart: '50%',
-    insetInlineEnd: 12,
+    insetInlineEnd: RAIL_INSET,
     position: 'absolute',
     transform: 'translateY(-50%)',
     zIndex: 10,
@@ -66,7 +70,7 @@ const styles = stylex.create({
     flexDirection: 'column',
     gap: 10,
     paddingBlock: 8,
-    paddingInline: 8,
+    paddingInline: RAIL_PADDING_INLINE,
   },
   panel: {
     backgroundColor: cssVar.colorBgElevated,
@@ -96,14 +100,19 @@ const styles = stylex.create({
 const LINE_WIDTH: Record<TocHeading['level'], number> = { 1: 20, 2: 14, 3: 9 };
 const ITEM_INDENT: Record<TocHeading['level'], number> = { 1: 8, 2: 20, 3: 32 };
 
+/** Width of the strip the rail (including its hover area) takes from the pane's inline end. */
+export const TOC_RAIL_GUTTER = RAIL_INSET + RAIL_PADDING_INLINE * 2 + LINE_WIDTH[1];
+
 interface TableOfContentsProps {
   /** Element holding the page body; its first Lexical root is the outline source. */
   contentRef: RefObject<HTMLElement | null>;
+  /** Called when the rail appears or disappears, so the pane can keep content out of its way. */
+  onVisibleChange?: (visible: boolean) => void;
   /** Scrollable pane wrapping the body. */
   scrollRef: RefObject<HTMLElement | null>;
 }
 
-const TableOfContents = memo<TableOfContentsProps>(({ contentRef, scrollRef }) => {
+const TableOfContents = memo<TableOfContentsProps>(({ contentRef, onVisibleChange, scrollRef }) => {
   const { t } = useTranslation('file');
   const [headings, setHeadings] = useState<TocHeading[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -227,7 +236,15 @@ const TableOfContents = memo<TableOfContentsProps>(({ contentRef, scrollRef }) =
     [scrollRef],
   );
 
-  if (headings.length < MIN_HEADINGS) return null;
+  const visible = headings.length >= MIN_HEADINGS;
+
+  useEffect(() => {
+    onVisibleChange?.(visible);
+  }, [onVisibleChange, visible]);
+
+  useEffect(() => () => onVisibleChange?.(false), [onVisibleChange]);
+
+  if (!visible) return null;
 
   return (
     <nav

@@ -1,6 +1,7 @@
 import { TaskApiName, TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type {
   ListedWorkType,
+  RegisterCanvasWorkParams,
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
   RegisterTaskWorkParams,
@@ -97,6 +98,9 @@ class WorkService {
 
   registerTask = async (params: RegisterTaskWorkParams): Promise<WorkItem | null> =>
     lambdaClient.work.registerTask.mutate(params);
+
+  registerCanvas = async (params: RegisterCanvasWorkParams): Promise<WorkItem> =>
+    lambdaClient.work.registerCanvas.mutate(params);
 
   registerDocument = async (params: RegisterDocumentWorkParams): Promise<WorkItem | null> =>
     lambdaClient.work.registerDocument.mutate(params);

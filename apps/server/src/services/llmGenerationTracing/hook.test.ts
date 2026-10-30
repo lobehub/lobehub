@@ -199,4 +199,93 @@ describe('createLLMGenerationTracingHook', () => {
       scenario: 'unknown',
     });
   });
+
+  describe('decision calls', () => {
+    const payload = {
+      model: 'typesafe/jev-1.13',
+      questions: { addressed: { instructions: 'Is it for the bot?', type: 'boolean' } },
+      state: 'Newest message: hello',
+    } as any;
+    const options = {
+      metadata: { trigger: 'bot' },
+      tracing: {
+        agentId: 'agt-1',
+        promptVersion: 'decision-v1',
+        scenario: 'bot_wake_classifier',
+        schemaName: 'bot_wake_decision',
+      },
+    };
+
+    it('records a decision under the caller’s scenario, with the questions as its schema', async () => {
+      const hooks = createLLMGenerationTracingHook('user-1', 'openrouter');
+      expect(hooks.onDecideFinal).toBeDefined();
+
+      await hooks.onDecideFinal!(
+        {
+          latencyMs: 320,
+          providerReportedCost: 0.00002,
+          response: {
+            answers: { addressed: { probability: 0.91, type: 'boolean' } },
+            model: 'typesafe/jev-1.13',
+          },
+          usage: { cost: 0.00001, totalInputTokens: 140 } as any,
+        },
+        { options, payload },
+      );
+      await flushMicrotasks();
+
+      const call = record.mock.calls[0][0];
+      expect(call).toMatchObject({
+        agentId: 'agt-1',
+        // What the provider charged wins over the price-table estimate.
+        costUsd: 0.00002,
+        inputTokens: 140,
+        latencyMs: 320,
+        model: 'typesafe/jev-1.13',
+        promptVersion: 'decision-v1',
+        provider: 'openrouter',
+        scenario: 'bot_wake_classifier',
+        schemaName: 'bot_wake_decision',
+        success: true,
+        trigger: 'bot',
+        userId: 'user-1',
+      });
+      expect(call.payload).toMatchObject({
+        input: { state: 'Newest message: hello' },
+        output: { addressed: { probability: 0.91, type: 'boolean' } },
+        schema: payload.questions,
+      });
+      expect(call.promptHash).toHaveLength(6);
+    });
+
+    it('records a failed or aborted decision as a failure with the reason', async () => {
+      const hooks = createLLMGenerationTracingHook('user-1', 'openrouter');
+
+      await hooks.onDecideError!(
+        { error: { message: 'The operation was aborted' }, errorType: 'AgentRuntimeError' } as any,
+        { options, payload },
+      );
+      await flushMicrotasks();
+
+      expect(record.mock.calls[0][0]).toMatchObject({
+        errorCode: 'AgentRuntimeError',
+        errorDetail: expect.stringContaining('aborted'),
+        scenario: 'bot_wake_classifier',
+        success: false,
+      });
+    });
+
+    it('lets the caller learn the persisted row id, as generateObject does', async () => {
+      const hooks = createLLMGenerationTracingHook('user-1', 'openrouter');
+      const onPersisted = vi.fn();
+
+      await hooks.onDecideFinal!(
+        { latencyMs: 1, response: { answers: {}, model: 'm' } },
+        { options: { tracing: { onPersisted, scenario: 'bot_wake_classifier' } }, payload },
+      );
+      await flushMicrotasks();
+
+      expect(onPersisted).toHaveBeenCalledWith('trace-1');
+    });
+  });
 });

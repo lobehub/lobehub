@@ -5,7 +5,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
+import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
@@ -14,10 +14,11 @@ import { publicProcedure } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AcceptanceService } from '@/server/services/verify';
 
+import { canReadAcceptance } from '../_helpers/acceptanceReadScope';
 import { canManageAcceptance } from '../_helpers/acceptanceWriteScope';
 
 export const ACCEPTANCE_DECISION_FORBIDDEN =
-  'Only the creator, a workspace owner or a workspace admin can change this acceptance';
+  'Only the creator or a workspace member with edit access can change this acceptance';
 
 /** Reads addressed purely by acceptance id — visibility is checked in the handler. */
 export const publicAcceptanceProcedure = publicProcedure.use(serverDatabase);
@@ -90,18 +91,47 @@ export const resolveAcceptanceForWrite = async (
   };
 };
 
-export const canReadAcceptance = async (
-  ctx: { serverDB: LobeChatDatabase; userId?: string | null },
-  acceptance: AcceptanceItem,
-) => {
-  if (ctx.userId && ctx.userId === acceptance.userId) return true;
-  if (acceptance.visibility === 'public') return true;
-  if (!ctx.userId || !acceptance.workspaceId) return false;
-  // Membership in the acceptance's OWN workspace — not the viewer's currently
-  // active one, which may be a different workspace entirely.
-  const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
-    acceptance.workspaceId,
-    ctx.userId,
-  );
-  return Boolean(member);
+/**
+ * Resolve an acceptance for a REJECT, which reaches one step further than
+ * {@link resolveAcceptanceForWrite}: besides everyone who may manage it, a
+ * reader a decider granted reject access to may send it back.
+ *
+ * `delegated` marks that second case. The acting user is still the one whose
+ * decision is recorded, but the repair belongs to the owner — the agent that
+ * wrote the delivery, in the owner's conversation — so the caller dispatches it
+ * as the owner rather than as a visitor who can reach neither.
+ */
+export const resolveAcceptanceForReject = async (
+  ctx: { serverDB: LobeChatDatabase; userId: string },
+  id: string,
+): Promise<{ acceptance: AcceptanceItem; delegated: boolean; service: AcceptanceService }> => {
+  try {
+    return { ...(await resolveAcceptanceForWrite(ctx, id)), delegated: false };
+  } catch (error) {
+    // FORBIDDEN is only raised for a caller who can read the row; anything
+    // else (missing, unreadable) stays the answer it was.
+    if (!(error instanceof TRPCError) || error.code !== 'FORBIDDEN') throw error;
+    const acceptance = await ctx.serverDB.query.acceptances.findFirst({
+      where: eq(acceptances.id, id),
+    });
+    const granted =
+      acceptance &&
+      acceptance.subjectType !== 'site' &&
+      (await new AcceptanceCommentModel(ctx.serverDB).hasAccessGrant(
+        acceptance.id,
+        ctx.userId,
+        'collaborate',
+      ));
+    if (!acceptance || !granted) throw error;
+    return {
+      acceptance,
+      delegated: true,
+      service: new AcceptanceService(
+        ctx.serverDB,
+        acceptance.userId,
+        acceptance.workspaceId ?? undefined,
+        { actorUserId: ctx.userId },
+      ),
+    };
+  }
 };

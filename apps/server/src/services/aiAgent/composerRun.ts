@@ -18,6 +18,7 @@ export type ComposerRunRequest = Pick<
   | 'acceptsFileWorks'
   | 'acceptsMemberRuntimeEnd'
   | 'agentId'
+  | 'agentSender'
   | 'appContext'
   | 'autoStart'
   | 'clientIds'
@@ -31,6 +32,7 @@ export type ComposerRunRequest = Pick<
   | 'mentionedAgents'
   | 'parentMessageId'
   | 'prompt'
+  | 'queuedSuccessor'
   | 'replacesOperationId'
   | 'resumeApproval'
   | 'resumeApprovals'
@@ -143,6 +145,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     mentionedAgents: input.mentionedAgents,
     parentMessageId,
     prompt: input.prompt,
+    queuedSuccessor: input.queuedSuccessor,
     replacesOperationId: input.replacesOperationId,
     // When parentMessageId is provided, this is a regeneration/continue or a
     // human-approval resume — either way, skip user message creation.
@@ -153,6 +156,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     selectedSkillIds: input.selectedSkillIds,
     selectedToolIds: input.selectedToolIds,
     slug: input.slug,
+    agentSender: input.agentSender,
     sourceOperationId: input.sourceOperationId,
     steer: input.steer,
     trigger: input.trigger ?? RequestTrigger.Chat,

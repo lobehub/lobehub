@@ -9,6 +9,7 @@
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,6 +48,29 @@ vi.mock('@/database/models/chatGroup', () => ({
   ChatGroupModel: class {
     findById = vi.fn(async () => ({ content: 'group prompt', title: 'Group' }));
     getGroupAgentsWithMeta = vi.fn(async () => chatGroupState.roster);
+  },
+}));
+const { projectState } = vi.hoisted(() => ({
+  projectState: {
+    coordinatorAgentId: 'coordinator-1' as string | null,
+    inboxAgentId: 'lobe-ai',
+    knowledgeBaseIds: [] as string[],
+  },
+}));
+vi.mock('@/database/models/project', () => ({
+  ProjectModel: class {
+    findById = vi.fn(async (id: string) => ({
+      coordinatorAgentId: projectState.coordinatorAgentId,
+      id,
+    }));
+    getEnabledKnowledgeBaseIds = vi.fn(async () => projectState.knowledgeBaseIds);
+    // A cleared main agent reads back as LobeAI.
+    resolveCoordinatorAgents = vi.fn(async (items: Array<{ coordinatorAgentId: string | null }>) =>
+      items.map((item) => ({
+        ...item,
+        coordinatorAgentId: item.coordinatorAgentId ?? projectState.inboxAgentId,
+      })),
+    );
   },
 }));
 const { connectorToolState } = vi.hoisted(() => ({
@@ -182,6 +206,9 @@ const lastEngineOptions = () =>
 beforeEach(() => {
   deviceGatewayState.isConfigured = false;
   chatGroupState.roster = [];
+  projectState.coordinatorAgentId = 'coordinator-1';
+  projectState.inboxAgentId = 'lobe-ai';
+  projectState.knowledgeBaseIds = [];
   vi.mocked(getScopedOnlineDevices).mockReset().mockResolvedValue([]);
   vi.mocked(collectBorrowedConnectors).mockReset().mockReturnValue([]);
   vi.mocked(buildConnectorOwnershipPrompt).mockReset().mockReturnValue('');
@@ -312,11 +339,42 @@ describe('discoverTools — turn-scoped builtins', () => {
     expect(result.agentPlugins).toContain(LobeAgentManifest.identifier);
   });
 
+  it('gives a project coordinator the task tool and the project knowledge', async () => {
+    projectState.coordinatorAgentId = 'agent-1';
+    projectState.knowledgeBaseIds = ['kb-project'];
+
+    const result = await run({ appContext: { projectId: 'project-1' } }).promise;
+
+    expect(result.agentPlugins).toContain(TaskIdentifier);
+    expect(lastEngineOptions().hasEnabledKnowledgeBases).toBe(true);
+  });
+
+  it('gives LobeAI the task tool in a project whose main agent was cleared', async () => {
+    // The run agent is LobeAI: a cleared main agent resolves to it.
+    projectState.coordinatorAgentId = null;
+    projectState.inboxAgentId = 'agent-1';
+
+    const result = await run({ appContext: { projectId: 'project-1' } }).promise;
+
+    expect(result.agentPlugins).toContain(TaskIdentifier);
+  });
+
+  it('lets a project member search project knowledge without delegating work', async () => {
+    projectState.knowledgeBaseIds = ['kb-project'];
+
+    const result = await run({ appContext: { projectId: 'project-1' } }).promise;
+
+    expect(result.agentPlugins).not.toContain(TaskIdentifier);
+    expect(lastEngineOptions().hasEnabledKnowledgeBases).toBe(true);
+  });
+
   it('adds nothing turn-scoped for a plain text turn', async () => {
     const result = await run().promise;
 
     expect(result.agentPlugins).not.toContain(MessageToolIdentifier);
     expect(result.agentPlugins).not.toContain(LobeAgentManifest.identifier);
+    expect(result.agentPlugins).not.toContain(TaskIdentifier);
+    expect(lastEngineOptions().hasEnabledKnowledgeBases).toBe(false);
     expect(result.operationAgentGroup).toBeUndefined();
   });
 });
