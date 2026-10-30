@@ -753,6 +753,10 @@ export function registerBotCommand(program: Command) {
       "Owner's platform user ID (required for --dm-policy=pairing; auto-trusts the operator in the global allowlist)",
     )
     .option('--server-id <id>', 'Default server / guild / workspace ID for AI tool calls')
+    .option(
+      '--processing-message <on|off>',
+      'Post a "working on it" message before each reply (on by default)',
+    )
     .action(
       async (
         botId: string,
@@ -765,6 +769,7 @@ export function registerBotCommand(program: Command) {
           encryptKey?: string;
           groupPolicy?: string;
           platform?: string;
+          processingMessage?: string;
           publicKey?: string;
           secretToken?: string;
           serverId?: string;
@@ -817,6 +822,16 @@ export function registerBotCommand(program: Command) {
         }
         if (options.userId !== undefined) settingsPatch.userId = options.userId;
         if (options.serverId !== undefined) settingsPatch.serverId = options.serverId;
+        if (options.processingMessage !== undefined) {
+          if (options.processingMessage !== 'on' && options.processingMessage !== 'off') {
+            log.error(
+              `Invalid --processing-message "${options.processingMessage}". Must be one of: on, off`,
+            );
+            process.exit(1);
+            return;
+          }
+          settingsPatch.processingMessage = options.processingMessage === 'on';
+        }
 
         if (Object.keys(settingsPatch).length > 0) {
           input.settings = {

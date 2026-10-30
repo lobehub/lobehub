@@ -338,6 +338,26 @@ describe('bot command', () => {
       });
     });
 
+    it('turns the processing message off without touching other settings', async () => {
+      mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'public-key' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'bot',
+        'update',
+        'b1',
+        '--processing-message',
+        'off',
+      ]);
+
+      expect(mockTrpcClient.agentBotProvider.update.mutate).toHaveBeenCalledWith({
+        id: 'b1',
+        settings: { processingMessage: false },
+      });
+    });
+
     it('does not carry credentials from the old platform when changing platform', async () => {
       mockExistingBot({ botToken: BOT_CREDENTIAL_MASK, publicKey: 'discord-public-key' });
 

@@ -344,6 +344,8 @@
   "channel.platform.wechat.description": "让智能体进入日常微信聊天，适合个人助理和主要使用微信的用户群体。",
   "channel.platform.whatsapp.description": "在熟悉的移动聊天中提供支持和跟进，适合直接服务客户的团队。",
   "channel.platforms": "平台",
+  "channel.processingMessage": "「处理中」提示",
+  "channel.processingMessageHint": "回复前先发送一条「正在处理」的提示消息。关闭后只发送最终回复，适合角色扮演等需要沉浸感的 Bot。",
   "channel.publicKey": "公钥",
   "channel.publicKeyHint": "用于验证来自 Discord 的交互请求。为应用 General Information 页面上的 64 位十六进制字符串。",
   "channel.publicKeyInvalid": "公钥必须是 64 位十六进制字符串。请从 Discord 应用的 General Information 页面复制，不要填 OAuth 链接，也不要填 API Key。",

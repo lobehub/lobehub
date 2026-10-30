@@ -756,6 +756,9 @@ export default {
   'channel.displayToolCalls': 'Display Tool Calls',
   'channel.displayToolCallsHint':
     'Show tool call details during AI responses. When disabled, only the final response is displayed for a cleaner experience.',
+  'channel.processingMessage': 'Processing Message',
+  'channel.processingMessageHint':
+    'Post a short message saying the bot is working on it before the reply. Turn it off to send only the reply, e.g. for role-play bots.',
   'channel.reactionMode': 'Status Reactions',
   'channel.reactionModeHint':
     'How the bot updates the emoji reaction on your message while it works. Every change can notify members who have message alerts enabled.',
