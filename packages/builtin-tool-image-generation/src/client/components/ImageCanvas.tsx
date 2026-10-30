@@ -1,10 +1,11 @@
 'use client';
 
-import { Image } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, keyframes } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Image, keyframes } from '@lobehub/ui';
 import type { CSSProperties, ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useDevelopsOnMount } from './useDevelopsOnMount';
 
 // Three colour blobs wander on independent, co-prime loops so the aura never
 // visibly repeats.
@@ -183,6 +184,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   revealed: css`
     opacity: 1;
+  `,
+  revealedDevelop: css`
+    opacity: 1;
     animation: ${develop} 1100ms cubic-bezier(0.2, 0, 0, 1) both;
 
     @media (prefers-reduced-motion: reduce) {
@@ -257,6 +261,7 @@ export const ImageCanvas = memo<ImageCanvasProps>(
     const { t } = useTranslation('plugin');
     const [loadedUrl, setLoadedUrl] = useState<string>();
     const loaded = !!url && loadedUrl === url;
+    const develops = useDevelopsOnMount(url, startedAt);
     const generating = !url && !children;
     const elapsed = useElapsedSeconds(generating ? startedAt : undefined);
     // Computed once per mount: recomputing on every re-render would restart the loops.
@@ -272,21 +277,28 @@ export const ImageCanvas = memo<ImageCanvasProps>(
 
     return (
       <div className={styles.canvas} style={{ aspectRatio: ratio }}>
-        <div
-          aria-hidden
-          className={cx(styles.aura, loaded && styles.auraHidden, !!children && styles.auraStill)}
-        >
-          <div className={styles.layer} style={auraLayerStyle}>
-            <div className={styles.auraFocus}>
-              <span className={styles.blobA} />
-              <span className={styles.blobB} />
-              <span className={styles.blobC} />
+        {develops && (
+          <div
+            aria-hidden
+            className={cx(styles.aura, loaded && styles.auraHidden, !!children && styles.auraStill)}
+          >
+            <div className={styles.layer} style={auraLayerStyle}>
+              <div className={styles.auraFocus}>
+                <span className={styles.blobA} />
+                <span className={styles.blobB} />
+                <span className={styles.blobC} />
+              </div>
             </div>
+            <div className={styles.grain} />
           </div>
-          <div className={styles.grain} />
-        </div>
+        )}
         {url && (
-          <div className={cx(styles.reveal, loaded && styles.revealed)}>
+          <div
+            className={cx(
+              styles.reveal,
+              develops ? loaded && styles.revealedDevelop : styles.revealed,
+            )}
+          >
             <Image
               alt={alt}
               className={styles.image}

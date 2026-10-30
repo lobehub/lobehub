@@ -46,7 +46,7 @@ const TaskParentBar = memo(() => {
     if (!parent?.identifier) return;
 
     taskService
-      .getDetail(parent.identifier)
+      .getDetail(parent.id!)
       .then((res) => {
         if (!isActive) return;
         const detail = res.data as TaskDetailData;
@@ -62,7 +62,7 @@ const TaskParentBar = memo(() => {
     return () => {
       isActive = false;
     };
-  }, [parent?.identifier]);
+  }, [parent?.id, parent?.identifier]);
 
   if (!parent) return null;
 

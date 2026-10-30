@@ -1,42 +1,21 @@
 'use client';
 
-import {
-  Avatar,
-  Button,
-  createStaticStyles,
-  Empty,
-  Flexbox,
-  Input,
-  Select,
-  Spin,
-  TextArea,
-} from '@lobehub/ui';
+import { Avatar, Button, Empty, Flexbox, Input, Select, Spin, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type CredsApi } from '../useCredsApi';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  connectionOption: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  footer: css`
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-block-start: 24px;
-  `,
-  provider: css`
-    font-weight: 500;
-  `,
-  username: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  connectionOption: { display: 'flex', gap: '8px', alignItems: 'center' },
+  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
+  provider: { fontWeight: 500 },
+  username: { color: cssVar.colorTextSecondary },
+});
 
 interface OAuthCredFormProps {
   credsApi: CredsApi;
@@ -65,11 +44,11 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
 
     return {
       label: (
-        <span className={styles.connectionOption}>
+        <span {...stylex.props(styles.connectionOption)}>
           {conn.avatar && <Avatar avatar={conn.avatar} size={24} />}
           <span>
-            <span className={styles.provider}>{provider}</span>
-            {displayName && <span className={styles.username}> - {displayName}</span>}
+            <span {...stylex.props(styles.provider)}>{provider}</span>
+            {displayName && <span {...stylex.props(styles.username)}> - {displayName}</span>}
           </span>
         </span>
       ),
@@ -112,7 +91,7 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
     return (
       <Flexbox gap={16}>
         <Empty description={t('creds.oauth.noConnections')} />
-        <div className={styles.footer}>
+        <div {...stylex.props(styles.footer)}>
           <Button onClick={onBack}>{t('creds.form.back')}</Button>
         </div>
       </Flexbox>
@@ -156,7 +135,7 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
         />
       </Form.Field>
 
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>
         <Button
           disabled={disabled}

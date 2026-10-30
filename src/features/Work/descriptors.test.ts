@@ -98,4 +98,35 @@ describe('getWorkTypeDescriptor', () => {
       kind: 'document',
     });
   });
+
+  describe('canvas open target', () => {
+    const canvasItem = (eventVersion: number, currentVersion: number) =>
+      ({
+        event: { version: eventVersion },
+        id: 'work-canvas-1',
+        resourceId: 'cvs_1',
+        title: 'Report',
+        type: 'canvas',
+        version: { version: currentVersion },
+      }) as any;
+
+    it('follows the latest version when the card is the current version', () => {
+      const item = canvasItem(2, 2);
+
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        canvasId: 'cvs_1',
+        kind: 'canvas',
+      });
+    });
+
+    it('pins the version when the card shows an older version', () => {
+      const item = canvasItem(1, 2);
+
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        canvasId: 'cvs_1',
+        kind: 'canvas',
+        version: 1,
+      });
+    });
+  });
 });

@@ -41,6 +41,18 @@ interface LocalFilePreviewKeyParams {
   workingDirectory: string;
 }
 
+export const channelKeys = {
+  agentEnvironment: def(
+    'channel:agentEnvironment',
+    (channelId: string, memberId: string) =>
+      ['channel:agentEnvironment', channelId, memberId] as const,
+  ),
+  userCandidates: def(
+    'channel:userCandidates',
+    (channelId: string, search: string) => ['channel:userCandidates', channelId, search] as const,
+  ),
+};
+
 // ---- message ------------------------------------------------------------
 export interface MessageListQueryContext {
   agentId?: string | null;
@@ -128,18 +140,30 @@ export const topicKeys = {
     'topic:scheduledRunWatch',
     topicId,
   ]),
-  search: def('topic:search', (keywords: string, agentId?: string, groupId?: string) => [
+  search: def(
     'topic:search',
-    keywords,
-    agentId,
-    groupId,
-  ]),
+    (keywords: string, agentId?: string, groupId?: string, onlyMine?: boolean) => [
+      'topic:search',
+      keywords,
+      agentId,
+      groupId,
+      onlyMine,
+    ],
+  ),
 };
 
 // ---- acceptance comment -------------------------------------------------
 export const acceptanceCommentKeys = {
   list: def('acceptanceComment:list', (acceptanceId: string) => [
     'acceptanceComment:list',
+    acceptanceId,
+  ]),
+};
+
+// ---- acceptance collaboration -------------------------------------------
+export const acceptanceCollaborationKeys = {
+  conversation: def('acceptanceCollaboration:conversation', (acceptanceId: string) => [
+    'acceptanceCollaboration:conversation',
     acceptanceId,
   ]),
 };
@@ -209,42 +233,10 @@ export const isDocumentCommentKeyForEvent = (
   return false;
 };
 
-// ---- agent builder (opening-suggestion chips) ---------------------------
-// Persisted to the localStorage tier (see `CACHE_TIERS.local`) so revisits skip
-// the LLM generation instead of paying a skeleton + a generateJSON call every
-// page load. `contextSummary` is intentionally NOT part of the key so config
-// autosaves for the same target don't refetch; manual refresh revalidates the
-// same key in place (see `useBuilderSuggestions`). `locale` IS part of the key:
-// chips are generated in the UI language, so a persisted entry must not be
-// served after a language switch.
-export const agentBuilderKeys = {
-  suggestions: def(
-    'agentBuilder:suggestions',
-    (mode: string, builderAgentId: string, targetId: string | undefined, locale?: string) => [
-      'agentBuilder:suggestions',
-      mode,
-      builderAgentId,
-      targetId,
-      locale ?? null,
-    ],
-  ),
-};
-
 // ---- group --------------------------------------------------------------
 export const groupKeys = {
-  /** Agent picker for the "add member" modal. */
-  queryAgents: def('group:queryAgents', () => ['group:queryAgents']),
   /** Agent picker for the "create group" modal. */
   queryAgentsForCreate: def('group:queryAgentsForCreate', () => ['group:queryAgentsForCreate']),
-};
-
-// ---- session ------------------------------------------------------------
-export const sessionKeys = {
-  createSession: def('session:createSession', (groupId: string | undefined) => [
-    'session:createSession',
-    groupId,
-  ]),
-  list: def('session:list', (isLogin: boolean | undefined) => ['session:list', isLogin]),
 };
 
 // ---- thread -------------------------------------------------------------
@@ -273,7 +265,7 @@ export const recentKeys = {
  * "what needs you" feeds, and the topic link is a discovery poll.
  *
  * The goal list, the home roll-up, the graph snapshot and the metric series
- * used to live here — they are `@lobechat/replica` resources now (see
+ * used to live here — they are `local-replica` resources now (see
  * `src/store/goal/projection.ts`), so their sync keys are not SWR cache keys.
  */
 export const goalKeys = {
@@ -281,8 +273,6 @@ export const goalKeys = {
   pendingClarifications: def('goal:pendingClarifications', () => ['goal:pendingClarifications']),
   /** Gates and sign-offs waiting on the user across every goal, for the approval island. */
   pendingForIsland: def('goal:pendingForIsland', () => ['goal:pendingForIsland']),
-  /** Goals whose planning conversation is this topic (`subject_type = 'topic'`). */
-  topicGoals: def('goal:topicGoals', (topicId: string) => ['goal:topicGoals', topicId]),
 };
 
 // ---- work ---------------------------------------------------------------
@@ -312,7 +302,7 @@ export const workKeys = {
 
 // ---- brief --------------------------------------------------------------
 // The unresolved brief feed no longer has an SWR key: it moved onto
-// `@lobechat/replica` (`briefList`, partitioned by identity scope). Only the
+// `local-replica` (`briefList`, partitioned by identity scope). Only the
 // day-scoped news digest still reads through SWR.
 export const briefKeys = {
   /**
@@ -329,32 +319,11 @@ export const briefKeys = {
 
 // ---- agent config / available / search ----------------------------------
 export const agentConfigKeys = {
-  available: def('agent:available', () => ['agent:available']),
   search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
-  serverDefaultHeterogeneousCapability: def('agent:serverDefaultHeterogeneousCapability', () => [
-    'agent:serverDefaultHeterogeneousCapability',
-  ]),
-};
-
-// ---- aiModel ------------------------------------------------------------
-// The provider model list and the provider list live in `@lobechat/replica`
-// resources now (see `src/store/aiInfra/slices/*/projection.ts`); only the
-// paged disabled-models fetch and the per-model reasoning config are SWR keys.
-export const aiModelKeys = {
-  disabledModelsPage: def('aiModel:disabledModelsPage', (providerId: string, offset: number) => [
-    'aiModel:disabledModelsPage',
-    providerId,
-    offset,
-  ]),
-  reasoningConfig: def('aiModel:reasoningConfig', (provider: string, model: string) => [
-    'aiModel:reasoningConfig',
-    provider,
-    model,
-  ]),
 };
 
 // ---- image generation ---------------------------------------------------
-// The topic list and the per-topic batches live in `@lobechat/replica`
+// The topic list and the per-topic batches live in `local-replica`
 // resources now (see `src/store/image/slices/*/projection.ts`); only the
 // generation-status poll is still an SWR key.
 export const imageKeys = {
@@ -366,7 +335,7 @@ export const imageKeys = {
 };
 
 // ---- video generation ---------------------------------------------------
-// The topic list and the per-topic batches live in `@lobechat/replica`
+// The topic list and the per-topic batches live in `local-replica`
 // resources now (see `src/store/video/slices/*/projection.ts`); only the
 // generation-status poll is still an SWR key.
 export const videoKeys = {
@@ -460,21 +429,6 @@ export const deviceKeys = {
     (workspaceId: string | null, deviceId: string, path?: string, cursor?: string) =>
       ['device:browseDirectory', workspaceId, deviceId, path, cursor] as const,
   ),
-  listeningPorts: def(
-    'device:listeningPorts',
-    (workspaceId: string | null, deviceId: string, cwd?: string) =>
-      ['device:listeningPorts', workspaceId, deviceId, cwd] as const,
-  ),
-  tunnels: def('device:tunnels', (workspaceId: string | null, deviceId: string) => [
-    'device:tunnels',
-    workspaceId,
-    deviceId,
-  ]),
-  gitBranches: def('device:gitBranches', (deviceId: string, path: string) => [
-    'device:gitBranches',
-    deviceId,
-    path,
-  ]),
   gitLinkedPR: def(
     'device:gitLinkedPR',
     (deviceId: string, path: string, branch: string, pullRequestNumber?: number) => [
@@ -514,11 +468,6 @@ export const deviceKeys = {
       ...(baseRefName === undefined ? [] : [baseRefName]),
     ],
   ),
-  gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
-    'device:gitRemoteBranches',
-    deviceId,
-    dirPath,
-  ]),
   gitReviewPatches: def(
     'device:gitReviewPatches',
     (deviceId: string, dirPath: string, mode: string, baseRef: string) => [
@@ -791,6 +740,11 @@ export const inboxKeys = {
     'inbox:unreadCount',
     workspaceId,
   ]),
+  /** Desktop mention-banner watcher: unread `mention` rows of the active workspace. */
+  unreadMentions: def('inbox:unreadMentions', (workspaceId: string | null) => [
+    'inbox:unreadMentions',
+    workspaceId,
+  ]),
 };
 
 // ---- share (shared agent / topic / page) ---------------------------------
@@ -843,6 +797,21 @@ export const forkKeys = {
 
 // ---- local file ---------------------------------------------------------
 export const localFileKeys = {
+  claudeCodeMemory: def(
+    'localFile:claudeCodeMemory',
+    (
+      deviceId: string | undefined,
+      workingDirectory: string,
+      configDir?: string,
+      projectDirName?: string,
+    ) => [
+      'localFile:claudeCodeMemory',
+      deviceId ?? 'local',
+      workingDirectory,
+      configDir ?? '',
+      projectDirName ?? '',
+    ],
+  ),
   gitWorkingTreeFiles: def(
     'localFile:gitWorkingTreeFiles',
     (deviceId: string | undefined, dirPath: string) => [
@@ -888,6 +857,10 @@ export const favoriteKeys = {
 };
 
 // ---- changelog ----------------------------------------------------------
+export const canvasKeys = {
+  storage: def('canvas:storage', () => ['canvas:storage']),
+};
+
 export const changelogKeys = {
   modalIndex: def('changelog:modalIndex', () => ['changelog:modalIndex']),
   post: def('changelog:post', (id: string, locale: string) => ['changelog:post', id, locale]),
@@ -917,9 +890,6 @@ export const onboardingKeys = {
 // ---- agent home / profile / signal (kept off the `agent:` idb tier) -----
 export const agentHomeKeys = {
   topics: def('agentHome:topics', (agentId: string) => ['agentHome:topics', agentId]),
-};
-export const agentProfileKeys = {
-  detail: def('agentProfile:detail', (agentId: string) => ['agentProfile:detail', agentId]),
 };
 export const agentSignalKeys = {
   receipts: def('agentSignal:receipts', (agentId: string, topicId: string) => [
@@ -954,25 +924,6 @@ export const topicActionKeys = {
 };
 
 // ---- misc remaining domains ---------------------------------------------
-/**
- * Daily task-template recommendation cache schema version. Bump this when the
- * persisted recommendation row shape changes incompatibly so desktop clients
- * stop reading stale localStorage SWR entries.
- */
-export const TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION = 2;
-const TASK_TEMPLATE_DAILY_RECOMMEND_ROOT = `taskTemplate:listDailyRecommend:v${TASK_TEMPLATE_RECOMMENDATION_CACHE_VERSION}`;
-
-export const taskTemplateKeys = {
-  listDailyRecommend: def(
-    TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
-    (refreshSeed: unknown, recommendationCount: number, locale: string) => [
-      TASK_TEMPLATE_DAILY_RECOMMEND_ROOT,
-      refreshSeed,
-      recommendationCount,
-      locale,
-    ],
-  ),
-};
 export const resourceKeys = {
   list: def('resource:list', (params: unknown, workspaceId: string | null) => [
     'resource:list',
@@ -1000,6 +951,8 @@ export const imessageKeys = {
 };
 // Desktop/electron IPC fetches — roots keep their existing `electron:getXxx` value.
 export const electronKeys = {
+  /** Claude Code logins held on this machine (device-local, never persisted). */
+  claudeCodeAccounts: def('electron:claudeCodeAccounts', () => ['electron:claudeCodeAccounts']),
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
   desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
   gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),
@@ -1024,14 +977,12 @@ export const matchDomain =
  */
 export const swrKeys = {
   agent: agentConfigKeys,
-  agentBuilder: agentBuilderKeys,
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
-  agentProfile: agentProfileKeys,
   agentSignal: agentSignalKeys,
-  aiModel: aiModelKeys,
   auth: authKeys,
   brief: briefKeys,
+  canvas: canvasKeys,
   changelog: changelogKeys,
   cron: cronKeys,
   device: deviceKeys,
@@ -1061,13 +1012,12 @@ export const swrKeys = {
   recommendations: recommendationsKeys,
   resource: resourceKeys,
   serverConfig: serverConfigKeys,
-  session: sessionKeys,
   share: shareKeys,
   stats: statsKeys,
-  taskTemplate: taskTemplateKeys,
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,
+  acceptanceCollaboration: acceptanceCollaborationKeys,
   acceptanceComment: acceptanceCommentKeys,
   documentComment: documentCommentKeys,
   documentLike: documentLikeKeys,

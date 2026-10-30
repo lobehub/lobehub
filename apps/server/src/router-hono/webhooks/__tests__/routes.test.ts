@@ -1,6 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import app from '../index';
+
+const memoryHandler = vi.hoisted(() => vi.fn());
+const memoryPaths = [
+  '/api/webhooks/memory-extraction',
+  '/api/webhooks/memory-extraction/benchmark-locomo',
+  '/api/webhooks/memory-user-memory/persona/update-writing',
+  '/api/webhooks/memory-user-memory/pipelines/extract/chat-topic/cancel',
+];
 
 /**
  * These endpoints used to be Next.js route segments, where the directory layout
@@ -18,19 +26,76 @@ vi.mock('../handlers/githubSetup', () => ({ githubSetup: vi.fn() }));
 vi.mock('../handlers/linearCallback', () => ({ linearCallback: vi.fn() }));
 vi.mock('../handlers/linearInstall', () => ({ linearInstall: vi.fn() }));
 vi.mock('../handlers/logto', () => ({ logtoWebhook: vi.fn() }));
-vi.mock('../handlers/memoryExtraction', () => ({ memoryExtractionWebhook: vi.fn() }));
+vi.mock('../handlers/memoryExtraction', () => ({ memoryExtractionWebhook: memoryHandler }));
 vi.mock('../handlers/memoryExtractionBenchmarkLocomo', () => ({
-  memoryExtractionBenchmarkLocomo: vi.fn(),
+  memoryExtractionBenchmarkLocomo: memoryHandler,
 }));
 vi.mock('../handlers/memoryUserMemoryChatTopicCancel', () => ({
-  memoryUserMemoryChatTopicCancel: vi.fn(),
+  memoryUserMemoryChatTopicCancel: memoryHandler,
 }));
 vi.mock('../handlers/memoryUserMemoryPersonaUpdateWriting', () => ({
-  memoryUserMemoryPersonaUpdateWriting: vi.fn(),
+  memoryUserMemoryPersonaUpdateWriting: memoryHandler,
 }));
 vi.mock('../handlers/video', () => ({ videoWebhook: vi.fn() }));
 
 describe('webhooks hono routes', () => {
+  beforeEach(() => {
+    memoryHandler.mockReset();
+    memoryHandler.mockImplementation((c) => c.json({ executed: true }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('rejects memory requests before execution when authentication is unconfigured', async () => {
+    for (const value of [undefined, '', ' ,invalid,x-empty=']) {
+      vi.stubEnv('MEMORY_USER_MEMORY_WEBHOOK_HEADERS', value);
+
+      for (const path of memoryPaths) {
+        const response = await app.request(path, { method: 'POST' });
+
+        expect(response.status).toBe(503);
+        await expect(response.json()).resolves.toEqual({
+          error:
+            'Memory webhook authentication is not configured. Set MEMORY_USER_MEMORY_WEBHOOK_HEADERS.',
+        });
+      }
+    }
+
+    expect(memoryHandler).not.toHaveBeenCalled();
+  });
+
+  it('requires every configured memory authentication header before execution', async () => {
+    vi.stubEnv('MEMORY_USER_MEMORY_WEBHOOK_HEADERS', 'x-memory-secret=secret,x-scheduler=trusted');
+
+    for (const headers of [{}, { 'x-memory-secret': 'wrong' }, { 'x-memory-secret': 'secret' }]) {
+      for (const path of memoryPaths) {
+        const response = await app.request(path, { headers, method: 'POST' });
+
+        expect(response.status).toBe(403);
+      }
+    }
+
+    expect(memoryHandler).not.toHaveBeenCalled();
+  });
+
+  it('executes memory requests with all configured authentication headers', async () => {
+    vi.stubEnv('MEMORY_USER_MEMORY_WEBHOOK_HEADERS', 'x-memory-secret=secret,x-scheduler=trusted');
+
+    for (const path of memoryPaths) {
+      const response = await app.request(path, {
+        headers: { 'X-Memory-Secret': 'secret', 'x-scheduler': 'trusted' },
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toEqual({ executed: true });
+    }
+
+    expect(memoryHandler).toHaveBeenCalledTimes(memoryPaths.length);
+  });
+
   it('serves every migrated webhook at its original URL', () => {
     const paths = app.routes.filter((route) => route.method === 'POST').map((route) => route.path);
 

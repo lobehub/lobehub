@@ -2,16 +2,19 @@
 
 import { createStaticStyles, Flexbox, useTheme } from '@lobehub/ui';
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 
 import DragUploadZone from '@/components/DragUploadZone';
 import { PageEditor } from '@/features/PageEditor';
+import { RESOURCE_HOME_PATH } from '@/features/ResourceHome/paths';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import dynamic from '@/libs/next/dynamic';
 import { invalidateDocumentMutation } from '@/services/document/invalidation';
 import { useFileStore } from '@/store/file';
 import { documentSelectors } from '@/store/file/slices/document/selectors';
+import { pageSelectors, usePageStore } from '@/store/page';
 
 import FileEditor from './components/Editor';
 import Explorer from './components/Explorer';
@@ -48,6 +51,9 @@ const styles = createStaticStyles(({ css, cssVar }) => {
   };
 });
 
+/** A page or file opened over the Docs home by path. */
+const OPENED_ITEM_PATH = /\/resource\/(?:file|page)\/[^/]+\/?$/;
+
 export type ResourceManagerMode = 'editor' | 'explorer' | 'page';
 
 /**
@@ -61,11 +67,15 @@ interface ResourceManagerProps {
    * dashboard) while keeping the editor overlays, upload dock and drag zone.
    */
   content?: ReactNode;
+  /** Shown above the Explorer list, e.g. the library cover at a library's root. */
+  explorerHero?: ReactNode;
 }
 
-const ResourceManager = memo<ResourceManagerProps>(({ content }) => {
+const ResourceManager = memo<ResourceManagerProps>(({ content, explorerHero }) => {
   const theme = useTheme();
   const [, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useWorkspaceAwareNavigate();
   const [mode, currentViewItemId, libraryId, setMode, setCurrentViewItemId] =
     useResourceManagerStore((s) => [
       s.mode,
@@ -76,6 +86,12 @@ const ResourceManager = memo<ResourceManagerProps>(({ content }) => {
     ]);
 
   const currentDocument = useFileStore(documentSelectors.getDocumentById(currentViewItemId));
+  // The sidebar row the page was opened from already knows its title and emoji;
+  // without it the header reads "Untitled" until the page fetch lands.
+  const [listedTitle, listedEmoji] = usePageStore((s) => {
+    const row = pageSelectors.getDocumentById(currentViewItemId)(s);
+    return [row?.title, row?.metadata?.emoji as string | undefined] as const;
+  });
   const useFetchDocumentDetail = useFileStore((s) => s.useFetchDocumentDetail);
   const { allowed: canUpload } = usePermission('create_content');
   const uploadTopLevel = useTopLevelFileUpload();
@@ -105,6 +121,11 @@ const ResourceManager = memo<ResourceManagerProps>(({ content }) => {
   const handleBack = () => {
     setMode('explorer');
     setCurrentViewItemId(undefined);
+    // An item opened by path (`/resource/{file,page}/:id`) goes back to the Docs home.
+    if (OPENED_ITEM_PATH.test(location.pathname)) {
+      navigate(RESOURCE_HOME_PATH);
+      return;
+    }
     // Remove the file query parameter from URL
     setSearchParams((prev) => {
       prev.delete('file');
@@ -132,7 +153,7 @@ const ResourceManager = memo<ResourceManagerProps>(({ content }) => {
         <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
           {/* Explorer stays mounted to preserve its state, unless the caller
               swaps in its own base content (resource home dashboard) */}
-          {content ?? <Explorer />}
+          {content ?? <Explorer hero={explorerHero} />}
 
           {/* Editor overlay */}
           {mode === 'editor' && (
@@ -145,10 +166,10 @@ const ResourceManager = memo<ResourceManagerProps>(({ content }) => {
           {mode === 'page' && (
             <Flexbox className={styles.pageEditorOverlay}>
               <PageEditor
-                emoji={currentDocument?.metadata?.emoji as string | undefined}
+                emoji={(currentDocument?.metadata?.emoji as string | undefined) ?? listedEmoji}
                 knowledgeBaseId={libraryId}
                 pageId={currentViewItemId}
-                title={currentDocument?.title}
+                title={currentDocument?.title ?? (listedTitle || undefined)}
                 onBack={handleBack}
                 onEmojiChange={handleMetadataSaved}
                 onTitleChange={handleMetadataSaved}

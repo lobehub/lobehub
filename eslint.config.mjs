@@ -10,10 +10,21 @@ import {
   performanceRestrictedImportPaths,
   performanceRestrictedImportPatterns,
 } from './eslint.bundleBoundaries.mjs';
+import { stylexMigrationConfig } from './scripts/stylexMigration/eslint.mjs';
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
-const baseRestrictedImportOptions = restrictedImports.rules['no-restricted-imports'][1];
+const baseRestrictedImportOptions = {
+  ...restrictedImports.rules['no-restricted-imports'][1],
+  patterns: [
+    ...(restrictedImports.rules['no-restricted-imports'][1].patterns ?? []),
+    {
+      regex: '^@modelcontextprotocol/(?:sdk)(/|$)',
+      message:
+        'Use the v2 @modelcontextprotocol/client, @modelcontextprotocol/server or @modelcontextprotocol/node packages.',
+    },
+  ],
+};
 
 // On desktop the shell — every NavPanelPortal sidebar, the titlebar, the command
 // menu — renders as a sibling of TabHost, so React context binds these hooks to
@@ -358,7 +369,13 @@ export default eslint(
       },
     },
   },
-  restrictedImports,
+  {
+    ...restrictedImports,
+    rules: {
+      ...restrictedImports.rules,
+      'no-restricted-imports': ['error', baseRestrictedImportOptions],
+    },
+  },
   // Performance import boundaries. These restrictions preserve real import()
   // seams instead of relying on component-level conditional rendering.
   {
@@ -603,8 +620,10 @@ export default eslint(
           {
             message:
               'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+            // `hooks/useAgentModelSelection` reaches the store only through the
+            // editor-free `store/apiContext`; Home model switches share its path.
             regex:
-              '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
+              '^@/features/ChatInput(?:$|/(?!(?:hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
           },
         ],
       }),
@@ -815,23 +834,13 @@ export default eslint(
       'no-console': 0,
     },
   },
-  // agent-tracing CLI - console output is the primary interface
+  // CLIs and debug utilities - console output is the primary interface
   {
-    files: ['packages/agent-tracing/**/*'],
-    rules: {
-      'no-console': 0,
-    },
-  },
-  // lobehub-cli - console output is the primary interface
-  {
-    files: ['apps/cli/**/*'],
-    rules: {
-      'no-console': 0,
-    },
-  },
-  // model-runtime debug utilities - console output is the primary interface
-  {
-    files: ['packages/model-runtime/src/utils/debugStream.ts'],
+    files: [
+      'packages/agent-tracing/**/*',
+      'apps/cli/**/*',
+      'packages/model-runtime/src/utils/debugStream.ts',
+    ],
     rules: {
       'no-console': 0,
     },
@@ -851,6 +860,7 @@ export default eslint(
       '@eslint-react/no-unnecessary-use-prefix': 0,
     },
   },
+  ...stylexMigrationConfig,
   // CommonJS files rely on `require()` by design
   {
     files: ['**/*.cjs', 'apps/desktop/shell/**/*.js'],

@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { buildAnalyticsConfig, renderSpaHtml } from '.';
+import { stylexProxiedDevCssModuleId } from '../../../plugins/vite/stylexDevCss';
+import { buildAnalyticsConfig, fetchViteDevTemplate, renderSpaHtml } from '.';
 
 describe('renderSpaHtml', () => {
   it('injects server config, seo meta and strips the analytics placeholder', async () => {
@@ -34,6 +35,33 @@ describe('renderSpaHtml', () => {
     });
 
     expect(await res.text()).not.toContain('</script>');
+  });
+});
+
+describe('fetchViteDevTemplate', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('loads StyleX dev CSS from the Vite origin', async () => {
+    const html = [
+      '<html><head>',
+      '<script type="module" src="/@id/virtual:stylex:runtime"></script>',
+      '<link rel="stylesheet" href="/virtual:stylex.css" />',
+      '<script type="module" src="/@vite/client"></script>',
+      '</head><body></body></html>',
+    ].join('');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(html, { headers: { 'content-type': 'text/html' } })),
+    );
+
+    const result = await fetchViteDevTemplate('/', 'http://localhost:9876');
+
+    expect(result).not.toContain('virtual:stylex:runtime');
+    expect(result).toContain('http://localhost:9876/virtual:stylex.css');
+    expect(result).toContain(`http://localhost:9876/@id/${stylexProxiedDevCssModuleId}`);
+    expect(result).toContain('http://localhost:9876/@vite/client');
   });
 });
 

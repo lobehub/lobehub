@@ -20,6 +20,7 @@ import {
   PlaceholderVariablesProcessor,
   ReactionFeedbackProcessor,
   StaleToolResultTrimProcessor,
+  SubAgentResultMessageProcessor,
   SupervisorRoleRestoreProcessor,
   TaskCallbackMessageProcessor,
   TaskMessageProcessor,
@@ -55,9 +56,8 @@ import {
   OnboardingActionHintInjector,
   OnboardingContextInjector,
   OnboardingSyntheticStateInjector,
-  PageEditorContextInjector,
-  PageSelectionsInjector,
   PlanInjector,
+  ProjectContextInjector,
   ProjectInstructionsInjector,
   RuntimeAdditionalContextProvider,
   selectActivatedSkills,
@@ -197,7 +197,6 @@ export class MessagesEngine {
       userMemory,
       initialContext,
       stepContext,
-      pageContentContext,
       topicReferences,
       enableSystemDate,
       timezone,
@@ -221,8 +220,6 @@ export class MessagesEngine {
     const isAgentMode = enableAgentMode !== false;
     const isAgentManagementEnabled = !!agentManagementContext && isAgentMode;
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;
-    // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
-    const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
     const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
     // Runtime message state is authoritative, including an empty clear tombstone.
     const isPlanEnabled = planTodo?.enabled && planTodo?.plan;
@@ -442,7 +439,7 @@ export class MessagesEngine {
       // Active topic document → last user message, for continuing document work outside page scope
       new ActiveTopicDocumentContextInjector({
         activeTopicDocument: initialContext?.activeTopicDocument,
-        enabled: hasActiveTopicDocument && !isPageEditorEnabled,
+        enabled: hasActiveTopicDocument,
       }),
       // LobeHub skill URLs in the current message → route them to the Skill Store
       // instead of letting the model crawl the page and follow its CLI steps.
@@ -453,26 +450,12 @@ export class MessagesEngine {
       new SelectedToolInjector({ enabled: hasSelectedTools, selectedTools }),
       // Generic user-attached selections from chat/code/text contexts.
       new ContextSelectionsInjector({ enabled: true }),
-      // Legacy page editor selections.
-      new PageSelectionsInjector({ enabled: isPageEditorEnabled }),
       // Local-system file snapshots (replay send-time @file reads as real tool results)
       new LocalSystemToolSnapshotInjector({ enabled: true }),
-      // Page Editor context (inject current page content to last user message)
-      new PageEditorContextInjector({
-        enabled: isPageEditorEnabled,
-        pageContentContext:
-          pageContentContext ??
-          (initialContext?.pageEditor
-            ? {
-                markdown: initialContext.pageEditor.markdown,
-                metadata: {
-                  charCount: initialContext.pageEditor.metadata.charCount,
-                  lineCount: initialContext.pageEditor.metadata.lineCount,
-                  title: initialContext.pageEditor.metadata.title,
-                },
-                xml: stepContext?.stepPageEditor?.xml || initialContext.pageEditor.xml,
-              }
-            : undefined),
+      // Project context (members, linked knowledge, open tasks) for a run inside a project
+      new ProjectContextInjector({
+        contextPrompt: initialContext?.projectContext?.contextPrompt,
+        enabled: !!initialContext?.projectContext?.contextPrompt,
       }),
       // Task Manager page context (inject current tasks list/detail to last user message)
       new TaskManagerContextInjector({
@@ -519,6 +502,9 @@ export class MessagesEngine {
       // Flattens group/task messages, applies templates and variables
       // =============================================
 
+      // Background sub-agent results arrive as user messages from the
+      // sub-agent; mark them as its report before any user-text template
+      new SubAgentResultMessageProcessor(),
       // Input template processing
       new InputTemplateProcessor({ inputTemplate }),
       // AgentCouncil message flatten

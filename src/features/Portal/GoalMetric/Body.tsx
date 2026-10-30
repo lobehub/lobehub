@@ -22,6 +22,7 @@ import {
   type GoalNodeView,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KindDot } from '@/features/AgentGoals/ProcessControl/shared';
+import { TASK_HOLD_VISUALS } from '@/features/AgentGoals/ProcessControl/taskHold';
 import { formatElapsed, useElapsed } from '@/features/AgentGoals/ProcessControl/useElapsed';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
@@ -31,6 +32,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
+import { costBreakdownColumns, costBreakdownRows } from './costBreakdownRows';
 import Lifecycle from './Lifecycle';
 import {
   metricRowTaskId,
@@ -177,9 +179,10 @@ TaskStartDate.displayName = 'GoalMetricTaskStartDate';
 const STATE_VISUAL = {
   decision: TASK_STATUS_VISUALS.paused,
   done: TASK_STATUS_VISUALS.completed,
-  lost: TASK_STATUS_VISUALS.failed,
   queued: TASK_STATUS_VISUALS.backlog,
   retired: TASK_STATUS_VISUALS.canceled,
+  stalled: TASK_HOLD_VISUALS.stalled,
+  waitingQuota: TASK_HOLD_VISUALS.waitingQuota,
 } as const satisfies Record<Exclude<TaskRowState, 'running'>, unknown>;
 
 /**
@@ -366,10 +369,6 @@ const BudgetField = memo<{
 
 BudgetField.displayName = 'GoalMetricBudgetField';
 
-/** `12.4k` — token counts are read for magnitude, not audited digit by digit. */
-const formatTokens = (value: number): string =>
-  value >= 1000 ? `${Math.round(value / 100) / 10}k` : String(value);
-
 /**
  * Where the money went, one row per dispatched Task. The caps above answer
  * "how much is left"; without this the panel could not answer the question a
@@ -382,16 +381,8 @@ const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph
   const { t } = useTranslation('chat');
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
 
-  const rows = useMemo(() => {
-    const nodeByTaskId = new Map(
-      graph.nodes
-        .filter((view) => view.node.taskId)
-        .map((view) => [view.node.taskId!, view] as const),
-    );
-    return (spend?.byTask ?? [])
-      .map((row) => ({ ...row, view: nodeByTaskId.get(row.taskId) }))
-      .sort((a, b) => b.totalCost - a.totalCost || b.totalTokens - a.totalTokens);
-  }, [graph, spend]);
+  const rows = useMemo(() => costBreakdownRows(graph, spend), [graph, spend]);
+  const columns = useMemo(() => costBreakdownColumns(rows), [rows]);
 
   if (rows.length === 0)
     return (
@@ -423,15 +414,17 @@ const CostBreakdown = memo<{ graph: GoalGraphView; spend?: GoalSpend }>(({ graph
               <Text
                 className={styles.mono}
                 fontSize={12}
-                style={{ flex: 'none' }}
+                style={{ flex: 'none', textAlign: 'right', width: columns.tokens }}
                 type={'secondary'}
               >
-                {t('goalProcess.metricDetail.budget.tokensValue', {
-                  value: formatTokens(row.totalTokens),
-                })}
+                {row.tokensLabel}
               </Text>
-              <Text className={styles.mono} style={{ flex: 'none' }} weight={500}>
-                {formatUsd(row.totalCost)}
+              <Text
+                className={styles.mono}
+                style={{ flex: 'none', textAlign: 'right', width: columns.cost }}
+                weight={500}
+              >
+                {row.costLabel}
               </Text>
             </Flexbox>
           );

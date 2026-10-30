@@ -96,11 +96,38 @@ export const isBareLinkLabel = (label: string, href: string) => label === href;
 export const isEntityIdLabel = (label: string, reference: InternalLinkReference) =>
   reference.type === 'goal' && label === reference.goalId;
 
-/** Parse a LobeHub route into a semantic entity reference. */
+/**
+ * Parse a LobeHub route into a semantic entity reference.
+ *
+ * A link scoped to the active workspace (`/lobehub/page/...` while `lobehub`
+ * is active) addresses the same scope as an unprefixed one, so its slug is
+ * normalized away: it then opens in-context like any same-scope entity instead
+ * of escaping to a full-page navigation.
+ */
 export const parseInternalLink = (
   href: string | undefined,
   currentOrigin?: string,
   workspaceSlugs: readonly string[] = [],
+  activeWorkspaceSlug?: string | null,
+): InternalLinkReference | null => {
+  const reference = parseInternalLinkReference(href, currentOrigin, workspaceSlugs);
+  if (!reference?.workspaceSlug || reference.workspaceSlug !== activeWorkspaceSlug) {
+    return reference;
+  }
+
+  const { workspaceSlug, ...rest } = reference;
+  const prefix = `/${workspaceSlug}`;
+  const pathname = rest.pathname.startsWith(`${prefix}/`)
+    ? rest.pathname.slice(prefix.length)
+    : rest.pathname;
+
+  return { ...rest, pathname } as InternalLinkReference;
+};
+
+const parseInternalLinkReference = (
+  href: string | undefined,
+  currentOrigin: string | undefined,
+  workspaceSlugs: readonly string[],
 ): InternalLinkReference | null => {
   if (!href) return null;
 

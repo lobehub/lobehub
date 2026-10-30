@@ -14,8 +14,10 @@ import { useKnowledgeBaseItem } from '@/features/ResourceManager/hooks/useKnowle
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
+import LibraryHero from './LibraryHero';
+
 const MainContent = memo(() => {
-  const { id: knowledgeBaseId } = useParams<{ id: string }>();
+  const { id: knowledgeBaseId, slug } = useParams<{ id: string; slug?: string }>();
   const location = useLocation();
   const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
 
@@ -58,7 +60,8 @@ const MainContent = memo(() => {
 
   if (!data) return <NotFound />;
 
-  return <ResourceManager />;
+  // The cover header belongs to the library's root, not to every folder in it.
+  return <ResourceManager explorerHero={slug ? undefined : <LibraryHero library={data} />} />;
 });
 
 MainContent.displayName = 'LibraryMainContent';

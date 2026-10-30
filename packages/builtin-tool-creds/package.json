@@ -11,6 +11,7 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/shared-tool-ui": "workspace:*"
   },
   "devDependencies": {

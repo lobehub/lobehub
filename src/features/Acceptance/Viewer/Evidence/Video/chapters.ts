@@ -13,6 +13,7 @@ export interface ClaimMarker extends VideoMarker {
 }
 
 export interface TimedNote {
+  color?: string;
   comment?: string;
   end?: number;
   key: number | string;
@@ -38,7 +39,7 @@ export const toClaimMarkers = (
 // Notes carry only a label: the hover preview names them, the caption stays for claims.
 export const toNoteMarkers = (notes: TimedNote[]): VideoMarker[] =>
   notes.map((note) => ({
-    color: 'error',
+    color: note.color ?? 'error',
     key: `note-${note.key}`,
     label: note.comment,
     time: note.start,

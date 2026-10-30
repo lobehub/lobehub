@@ -1,7 +1,8 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
+import { Button, Empty, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
 import { TRPCClientError } from '@trpc/client';
 import { LogIn } from 'lucide-react';
@@ -19,26 +20,18 @@ import { createEditCredModal } from './EditCredModal';
 import { defaultCredsApi, useCredsApi } from './useCredsApi';
 import { createViewCredModal } from './ViewCredModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  `,
-  empty: css`
-    padding-block: 48px;
-    padding-inline: 0;
-  `,
-  signInPrompt: css`
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    align-items: center;
-    justify-content: center;
-
-    padding: 48px;
-  `,
-}));
+const styles = stylex.create({
+  container: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  empty: { paddingBlock: '48px', paddingInline: '0' },
+  signInPrompt: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '48px',
+  },
+});
 
 const CredsList: FC = () => {
   const { t } = useTranslation('setting');
@@ -90,7 +83,7 @@ const CredsList: FC = () => {
 
   if (!isAuthenticated) {
     return (
-      <div className={styles.signInPrompt}>
+      <div {...stylex.props(styles.signInPrompt)}>
         <Empty description={t('creds.signInRequired')} />
         <Button icon={LogIn} type={'primary'} onClick={() => signIn()}>
           {t('creds.signIn')}
@@ -102,22 +95,24 @@ const CredsList: FC = () => {
   // Org not created: guide users to complete Community Profile setup first.
   if (!isLoading && error instanceof TRPCClientError && error.data?.code === 'NOT_FOUND') {
     return (
-      <div className={styles.signInPrompt}>
+      <div {...stylex.props(styles.signInPrompt)}>
         <Empty description={t('creds.orgSetupRequired')} />
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       <AsyncBoundary
         data={data}
-        empty={<Empty className={styles.empty} description={t('creds.empty')} />}
         error={error}
         errorVariant={'block'}
         isEmpty={credentials.length === 0}
         isLoading={isLoading}
         loading={<ListSkeleton paddingInline={0} />}
+        empty={
+          <Empty className={stylex.props(styles.empty).className} description={t('creds.empty')} />
+        }
         onRetry={() => refetch()}
       >
         <Flexbox gap={0}>

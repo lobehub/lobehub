@@ -3,6 +3,9 @@
 import { isDesktop } from '@lobechat/const';
 import type { IEditor } from '@lobehub/editor';
 import {
+  ReactAlertPlugin,
+  ReactChartPlugin,
+  ReactFootnotePlugin,
   ReactImagePlugin,
   ReactLinkPlugin,
   ReactLiteXmlPlugin,
@@ -58,6 +61,9 @@ const STATIC_PLUGINS = [
   // comment editors, so a chip serialises identically in every canvas.
   Editor.withProps(ReactMentionPlugin, { markdownWriter: writeTopicCommentMentionMarkdown }),
   ReactTablePlugin,
+  ReactAlertPlugin,
+  ReactFootnotePlugin,
+  ReactChartPlugin,
 ];
 
 const EDITOR_INIT_DATA_SOURCE_TYPES = ['json', 'markdown'] as const;

@@ -6,6 +6,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 // ── Helpers ────────────────────────────────────────────────
@@ -55,7 +56,10 @@ export function registerDocCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(docs, fields);
+          outputJson(
+            withUrls(docs, await resolveUrlBuilder(client), resourcePath.document),
+            fields,
+          );
           return;
         }
 
@@ -93,7 +97,14 @@ export function registerDocCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(document, fields);
+        outputJson(
+          withUrl(
+            document,
+            await resolveUrlBuilder(client),
+            resourcePath.document(document as any),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -365,7 +376,7 @@ export function registerDocCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(docs, fields);
+        outputJson(withUrls(docs, await resolveUrlBuilder(client), resourcePath.document), fields);
         return;
       }
 

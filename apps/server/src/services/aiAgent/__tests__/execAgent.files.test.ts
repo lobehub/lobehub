@@ -432,6 +432,27 @@ describe('AiAgentService.execAgent - file upload handling', () => {
     });
   });
 
+  describe('when content from the conversation is attached', () => {
+    it('keeps the selections on the persisted row and on the run’s user message', async () => {
+      const contextSelections = [
+        { content: 'Quoted reply', format: 'text' as const, id: 'sel-1', source: 'text' as const },
+      ];
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Explain this',
+        userMessage: { metadata: { contextSelections } },
+      });
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].metadata).toMatchObject({ contextSelections });
+      // The run sees the same metadata the row was persisted with; the context
+      // engine injects selections from it.
+      const lastMessage = mockCreateOperation.mock.calls[0][0].initialMessages.at(-1);
+      expect(lastMessage.metadata).toEqual(userMessageCall![0].metadata);
+    });
+  });
+
   describe('when file upload fails', () => {
     it('should continue execution without the failed file', async () => {
       mockIngestAttachment.mockRejectedValue(new Error('Download failed'));

@@ -1,5 +1,5 @@
 import { escapeXml } from '@lobechat/prompts';
-import type { RuntimeMentionedAgent } from '@lobechat/types';
+import { agentIdentityLabel, type RuntimeMentionedAgent } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
@@ -52,7 +52,9 @@ export interface AvailableAgentInfo {
   description?: string;
   /** Agent ID */
   id: string;
-  /** Agent display name */
+  /** Personal name the agent is addressed by; wins over `title` as its label */
+  name?: string;
+  /** The role the agent plays */
   title: string;
 }
 
@@ -97,7 +99,7 @@ export interface AgentManagementContext {
    * Exposed so the model can use Agent Management tools (updateAgent, getAgentDetail,
    * installPlugin, etc.) to manage itself when the user asks to modify the current agent.
    */
-  currentAgent?: { id: string; title?: string };
+  currentAgent?: { id: string; name?: string; title?: string };
   /** Agents @mentioned by the user — supervisor should delegate to these via callAgent */
   mentionedAgents?: RuntimeMentionedAgent[];
 }
@@ -119,10 +121,11 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
 
   // Add current agent identity so the model can self-manage
   if (context.currentAgent) {
-    const titleAttr = context.currentAgent.title
-      ? ` title="${escapeXml(context.currentAgent.title)}"`
-      : '';
-    parts.push(`<current_agent id="${escapeXml(context.currentAgent.id)}"${titleAttr} />`);
+    // Both fields: `name` is what people call it by, `title` its role. Either may be blank.
+    const { id, name, title } = context.currentAgent;
+    const nameAttr = name?.trim() ? ` name="${escapeXml(name.trim())}"` : '';
+    const titleAttr = title?.trim() ? ` title="${escapeXml(title.trim())}"` : '';
+    parts.push(`<current_agent id="${escapeXml(id)}"${nameAttr}${titleAttr} />`);
   }
 
   // Add available models section
@@ -155,7 +158,9 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
     const agentsXml = context.availableAgents
       .map((agent) => {
         const desc = agent.description ? ` - ${escapeXml(agent.description)}` : '';
-        return `    <agent id="${escapeXml(agent.id)}">${escapeXml(agent.title)}${desc}</agent>`;
+        // "Nasa (Shadow Arvin)": the name a user would ask for, and the role.
+        const label = agentIdentityLabel(agent, agent.title);
+        return `    <agent id="${escapeXml(agent.id)}">${escapeXml(label)}${desc}</agent>`;
       })
       .join('\n');
     const hasMoreNote = context.availableAgentsHasMore

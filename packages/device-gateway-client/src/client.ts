@@ -5,6 +5,7 @@ import os from 'node:os';
 import type { DeviceMetricSample } from '@lobechat/types';
 import WebSocket from 'ws';
 
+import { toDeviceGatewayWebSocketUrl } from './endpoint';
 import { DeviceTunnelHost } from './tunnel';
 import type {
   AgentRunAckMessage,
@@ -341,8 +342,9 @@ export class GatewayClient extends EventEmitter {
   }
 
   private buildWsUrl(): string {
-    const wsProtocol = this.gatewayUrl.startsWith('https') ? 'wss' : 'ws';
-    const host = this.gatewayUrl.replace(/^https?:\/\//, '');
+    // Keeps a path prefix (`https://host/gw` → `wss://host/gw/ws`) and tolerates
+    // a trailing slash in a hand-entered address.
+    const url = toDeviceGatewayWebSocketUrl(this.gatewayUrl);
     const params = new URLSearchParams({
       connectionId: this.connectionId,
       deviceId: this.deviceId,
@@ -363,7 +365,8 @@ export class GatewayClient extends EventEmitter {
       params.set('userId', this.userId);
     }
 
-    return `${wsProtocol}://${host}/ws?${params.toString()}`;
+    url.search = params.toString();
+    return url.toString();
   }
 
   /**

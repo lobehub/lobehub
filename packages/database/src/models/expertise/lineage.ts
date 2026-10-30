@@ -109,7 +109,10 @@ export const listLessonSources = async (ctx: ExpertiseContext, lessonId: string,
  * merge would otherwise keep the counts and lose the evidence.
  */
 const resolveLineage = async (ctx: ExpertiseContext, lessonId: string): Promise<string[]> =>
-  (await resolveLineages(ctx, [lessonId])).get(lessonId) ?? [];
+  (await resolveLineages(ctx, [lessonId])).get(lessonId) ??
+  /* v8 ignore start -- unreachable: the `[]` arm; resolveLineages maps every id it is given */
+  [];
+/* v8 ignore stop */
 
 /**
  * {@link resolveLineage} for many rules at once: one read per generation instead of one walk
@@ -136,9 +139,17 @@ const resolveLineages = async (ctx: ExpertiseContext, lessonIds: string[]) => {
         ...(row.salvagedFromId ? [row.salvagedFromId] : []),
       ]);
     }
-    frontier = [...new Set(rows.flatMap((row) => parents.get(row.id) ?? []))].filter(
-      (id) => !parents.has(id),
-    );
+    frontier = [
+      ...new Set(
+        rows.flatMap(
+          (row) =>
+            parents.get(row.id) ??
+            /* v8 ignore start -- unreachable: the `[]` arm; the loop above just set an entry for every row */
+            [],
+          /* v8 ignore stop */
+        ),
+      ),
+    ].filter((id) => !parents.has(id));
   }
 
   return new Map(
@@ -185,7 +196,11 @@ export const countHitsBySource = async (ctx: ExpertiseContext, lessonIds: string
 
   return new Map(
     lessonIds.map((id) => {
-      const lineage = lineages.get(id) ?? [];
+      const lineage =
+        lineages.get(id) ??
+        /* v8 ignore start -- unreachable: the `[]` arm; resolveLineages maps every id in lessonIds */
+        [];
+      /* v8 ignore stop */
       const sum = (key: 'conversations' | 'materials' | 'rejections') =>
         lineage.reduce((total, member) => total + (byLesson.get(member)?.[key] ?? 0), 0);
       return [

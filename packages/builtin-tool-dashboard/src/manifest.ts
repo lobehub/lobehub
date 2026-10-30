@@ -43,7 +43,7 @@ const manifestSchema = {
   properties: {
     env: {
       description:
-        'Secrets / variables the script reads from its environment. Each is injected from a connected account (connector) at run time and redacted from logs.',
+        'Secrets / variables the script reads from its environment. Each is injected from a connected account (connector) at run time and redacted from logs. For a LobeHub Market connector the value is a placeholder that only works sent as the configured header (default Authorization: Bearer) to the provider API host, which must be in network.allow.',
       items: {
         additionalProperties: false,
         properties: {
@@ -56,6 +56,24 @@ const manifestSchema = {
             description:
               'For a connector holding several headers: which header to inject, e.g. "X-Api-Key" (case-insensitive). Required then; ignored for single-secret connectors.',
             type: 'string',
+          },
+          inject: {
+            additionalProperties: false,
+            description:
+              'LobeHub Market connectors only (github, linear, notion, vercel, …): their variable holds a placeholder and the sandbox sets the real token as `header` on requests to `host`. Defaults per provider (github → Authorization: Bearer on api.github.com); set it only for another host or header. Every host must be in network.allow.',
+            properties: {
+              header: { description: 'Defaults to "Authorization".', type: 'string' },
+              host: {
+                description: 'API host (or list), exact or "*.domain".',
+                oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
+              },
+              prefix: {
+                description: 'Prepended to the token; defaults to "Bearer " for Authorization.',
+                type: 'string',
+              },
+            },
+            required: ['host'],
+            type: 'object',
           },
           name: { description: 'Variable name, e.g. GITHUB_TOKEN.', type: 'string' },
           required: { type: 'boolean' },

@@ -8,7 +8,7 @@ import { CheckerDock, RunResult } from '@/features/Acceptance';
 import { useVerifyState } from '@/features/Acceptance/hooks';
 import { phaseCardBackground, phaseFromStatus } from '@/features/Acceptance/utils';
 
-import { dataSelectors, useConversationStore } from '../../store';
+import { contextSelectors, dataSelectors, useConversationStore } from '../../store';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -36,11 +36,15 @@ const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
   const operationId = item?.metadata?.verifyOperationId;
   // Sequence number among all verify messages in the thread (not the repair round).
   const ordinal = useConversationStore(dataSelectors.getVerifyOrdinal(id));
+  // A share page is a read-only snapshot. The verify reads are scoped to the
+  // run's owner, so an anonymous reader gets 401 and the global handler sends
+  // them to /signin; the card's plan actions are owner writes too. Skip the card.
+  const isSharePage = useConversationStore(contextSelectors.isSharePage);
 
-  const { data: state } = useVerifyState(operationId ?? null);
+  const { data: state } = useVerifyState(isSharePage ? null : (operationId ?? null));
   const phase = phaseFromStatus(state?.verifyStatus);
 
-  if (!operationId) return null;
+  if (!operationId || isSharePage) return null;
 
   return (
     <Flexbox paddingBlock={8}>

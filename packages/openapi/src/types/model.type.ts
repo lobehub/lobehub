@@ -15,6 +15,7 @@ const MODEL_TYPES = [
   'text2video',
   'text2music',
   'realtime',
+  'decision',
 ] as const;
 
 // `stt` was renamed to the standard `asr`. It is still accepted on input as a

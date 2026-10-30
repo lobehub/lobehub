@@ -94,9 +94,17 @@ Investigate whether the deliverable satisfies this check, judging against the ru
  * round's decision, which `feedback --actionable` does not print, so it has to
  * travel in the prompt itself.
  */
-export const buildAcceptanceRepairPrompt = (acceptanceId: string, rejectComment?: string) =>
+export const buildAcceptanceRepairPrompt = (
+  acceptanceId: string,
+  rejectComment?: string,
+  options?: { projectTask?: boolean },
+) =>
   `${rejectComment ? `The reviewer sent this delivery back with this reason:\n\n${rejectComment}\n\n` : ''}Use the LobeHub CLI to read the latest review feedback for acceptance ${acceptanceId}:
 
 lh acceptance feedback ${acceptanceId} --actionable
 
-Every entry it prints (per-check comments, circled-region annotations on the evidence screenshots, frames or spans marked on the evidence videos, and attachments) is the full set of feedback to handle this round. A video note names a timestamp such as \`frame at 0:07.20\`: open the recording at that moment (for example \`ffmpeg -ss 7.2 -i <video> -frames:v 1 frame.png\`) before acting on it, and where it disputes one of your own chapter claims, that claim was judged wrong. Fix the code item by item; then re-run verification and ingest the new result back into the SAME acceptance (reuse the existing check ids, and use supersedes for any check whose meaning changed). Keep the final report in the same language the previous rounds used.`;
+Every entry it prints (per-check comments, circled-region annotations on the evidence screenshots, frames or spans marked on the evidence videos, and attachments) supplies the review context. When a frozen feedback scope accompanies this request, handle only that scope; later comments remain for the next handoff. A video note names a timestamp such as \`frame at 0:07.20\`: open the recording at that moment (for example \`ffmpeg -ss 7.2 -i <video> -frames:v 1 frame.png\`) before acting on it. Fix the code item by item; then re-run verification and ${
+    options?.projectTask
+      ? `publish the repaired delivery to this Task's own acceptance, following the Task verification instructions. The standing Site acceptance ${acceptanceId} is the source discussion, not an ingest target. Include a link to that source in the repair report, and post the repair acceptance and accessible preview back to that discussion using the acceptance comment CLI.`
+      : 'ingest the new result back into the SAME acceptance (reuse the existing check ids, and use supersedes for any check whose meaning changed).'
+  } Do not resolve human review threads: the reviewer confirms whether the fix works. Keep the final report in the same language the previous rounds used.`;

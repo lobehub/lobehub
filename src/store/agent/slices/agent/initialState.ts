@@ -8,6 +8,7 @@ import { type AgentItem } from '@/types/agent';
 import { type MetaData } from '@/types/meta';
 
 import { readAllLocalAgentWorkingDirectories } from '../../utils/localAgentWorkingDirectoryStorage';
+import type { ServerDefaultHeterogeneousCapability } from './projection';
 
 export type LoadingState = Record<Partial<keyof MetaData> | string, boolean>;
 export type SaveStatus = 'idle' | 'saving' | 'saved';
@@ -34,7 +35,23 @@ export interface AgentSliceState {
    */
   agentNotFoundMap: Record<string, boolean>;
   agentSettingInstance?: AgentSettingsInstance | null;
+  /** Replica view of user-chosen slugs: `slug → agent id`. */
+  agentSlugIdMap: Record<string, string>;
+  /** Replica bookkeeping of `agentSlugIdMap`. */
+  agentSlugIdReplica: ReplicaState<string>;
+  /** Replica view of the recently updated agents the chat context can delegate to. */
   availableAgents?: AvailableAgentItem[];
+  /** Replica bookkeeping of `availableAgents`. */
+  availableAgentsReplica: ReplicaState<AvailableAgentItem[]>;
+  /**
+   * The agents changed (create / delete / sidebar refresh) since
+   * `availableAgents` was confirmed: the chat context reads a fresh list.
+   */
+  availableAgentsStale: boolean;
+  /** Replica view of the server-default heterogeneous capability. */
+  heteroServerDefaultCapability?: ServerDefaultHeterogeneousCapability;
+  /** Replica bookkeeping of `heteroServerDefaultCapability`. */
+  heteroServerDefaultCapabilityReplica: ReplicaState<ServerDefaultHeterogeneousCapability>;
   /**
    * Whether the agent panel is pinned (UI state)
    */
@@ -83,7 +100,13 @@ export const initialAgentSliceState: AgentSliceState = {
   agentDocumentsMap: {},
   agentMap: {},
   agentNotFoundMap: {},
+  agentSlugIdMap: {},
+  agentSlugIdReplica: createReplicaState(),
   availableAgents: undefined,
+  availableAgentsReplica: createReplicaState(),
+  availableAgentsStale: false,
+  heteroServerDefaultCapability: undefined,
+  heteroServerDefaultCapabilityReplica: createReplicaState(),
   isAgentPinned: false,
   lastUpdatedTime: null,
   localAgentWorkingDirectoryMap: readAllLocalAgentWorkingDirectories(),

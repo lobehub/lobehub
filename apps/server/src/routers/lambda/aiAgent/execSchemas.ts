@@ -1,6 +1,9 @@
 import {
+  ComposerUserMessageSchema,
+  ContextSelectionSchema,
   CreateThreadWithMessageSchema,
   initialTopicMetadataSchema,
+  PageSelectionSchema,
   RequestTrigger,
   UserInterventionConfigSchema,
 } from '@lobechat/types';
@@ -180,6 +183,8 @@ export const ExecAgentFieldsSchema = z.object({
        * identity survives the gateway step_start snapshot / refetch.
        */
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),
+      /** Bind a NEW topic to this project (ignored with topicId; resolved from the topic). */
+      projectId: z.string().optional(),
       /** Bind a NEW topic to this project working directory (ignored with topicId). */
       projectWorkingDirectoryId: z.string().optional(),
       scope: z.string().nullish(),
@@ -201,6 +206,16 @@ export const ExecAgentFieldsSchema = z.object({
   existingMessageIds: z.array(z.string()).optional().default([]),
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds: z.array(z.string()).optional(),
+  /**
+   * The composer-authored part of the new user message (rich-text editorData,
+   * attached content). The gateway path never calls `aiChat.sendMessageInServer`,
+   * so this is how the row the server persists matches a client-runtime send.
+   */
+  userMessage: ComposerUserMessageSchema.optional(),
+  /** @deprecated Sent by clients before `userMessage`; folded into `userMessage.metadata`. */
+  contextSelections: z.array(ContextSelectionSchema).optional(),
+  /** @deprecated Sent by clients before `userMessage`; folded into `userMessage.metadata`. */
+  pageSelections: z.array(PageSelectionSchema).optional(),
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId: z.string().optional(),
   /** Existing gateway operation this fresh turn atomically supersedes. */
@@ -283,9 +298,10 @@ export const ExecAgentFieldsSchema = z.object({
    * `'openapi'`, `'eval'`, …) to override.
    */
   /**
-   * The prompt was queued while the previous turn was still running. The
-   * persisted user message carries `metadata.steer` so it renders as a
-   * continuation of that turn instead of a new one.
+   * The send directly steered the turn it replaces (an interrupting "send
+   * now"). The persisted user message carries `metadata.steer` so it renders
+   * as a continuation of that turn instead of a new one. A follow-up that
+   * waited in queue and starts a turn of its own is not marked.
    */
   steer: z.boolean().optional(),
   trigger: z
@@ -409,3 +425,32 @@ export const ExecSubAgentTaskSchema = z.object({
   /** The Topic ID */
   topicId: z.string(),
 });
+
+/**
+ * Fold the deprecated top-level selection fields into `userMessage.metadata`,
+ * so everything downstream reads one shape. `userMessage` wins when a client
+ * sends both. Applied wherever a request enters: `execAgent`, a queued
+ * follow-up's append, and every queued entry read back from Redis (an entry
+ * stored before this shape existed still carries the old fields).
+ */
+export const foldLegacyUserMessageFields = <
+  T extends Partial<Pick<ExecAgentInput, 'contextSelections' | 'pageSelections' | 'userMessage'>>,
+>({
+  contextSelections,
+  pageSelections,
+  ...input
+}: T): Omit<T, 'contextSelections' | 'pageSelections'> => {
+  if (!contextSelections?.length && !pageSelections?.length) return input;
+
+  return {
+    ...input,
+    userMessage: {
+      ...input.userMessage,
+      metadata: {
+        ...(contextSelections?.length ? { contextSelections } : undefined),
+        ...(pageSelections?.length ? { pageSelections } : undefined),
+        ...input.userMessage?.metadata,
+      },
+    },
+  };
+};

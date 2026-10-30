@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { healthViewState, latestUsageView } from './viewState';
+import { currentUsage, healthViewState, latestUsageView } from './viewState';
 
 const series = (points: number) =>
   ({
@@ -68,5 +68,50 @@ describe('latestUsageView', () => {
       latest: null,
       loading: false,
     });
+  });
+});
+
+describe('currentUsage', () => {
+  const BUCKET = 5 * 60_000;
+  const to = 1000 * BUCKET;
+  const at = (observedAt: number) => ({
+    bucketMs: BUCKET,
+    cpuCount: 4,
+    from: to - 144 * BUCKET,
+    memoryTotalBytes: 100,
+    points: [
+      {
+        connected: true,
+        cpuPercent: 12,
+        load1: 2,
+        memoryPercent: 40,
+        memoryUsedBytes: 40,
+        observedAt,
+      },
+    ],
+    to,
+  });
+
+  it('reads the newest point while it is recent, with load relative to the cores', () => {
+    expect(currentUsage(at(to - BUCKET), to)).toEqual({
+      cpuPercent: 12,
+      loadPercent: 50,
+      memoryPercent: 40,
+    });
+  });
+
+  // A device that just reconnected still has last night's samples; the chip must not show them as now.
+  it('drops a reading older than one bucket plus the upload grace', () => {
+    expect(currentUsage(at(to - BUCKET - 11 * 60_000), to)).toBeNull();
+  });
+
+  // A persisted series painted on reload is fresh relative to its own `to`, but hours old now.
+  it('judges age by the wall clock, not by the series end', () => {
+    expect(currentUsage(at(to), to + 3 * 60 * 60_000)).toBeNull();
+  });
+
+  it('has nothing to read without data or samples', () => {
+    expect(currentUsage(undefined, to)).toBeNull();
+    expect(currentUsage(series(0), to)).toBeNull();
   });
 });

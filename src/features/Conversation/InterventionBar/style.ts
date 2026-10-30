@@ -5,6 +5,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 8px 10px;
     padding-inline: 10px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
+    /* ChatInput rounds its border without clipping, so this tinted strip would
+      paint square over the card's bottom corners. Sits inside the 1px border. */
+    border-end-start-radius: calc(${cssVar.borderRadiusLG} - 1px);
+    border-end-end-radius: calc(${cssVar.borderRadiusLG} - 1px);
+
     background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
 
     &:empty {

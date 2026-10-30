@@ -11,9 +11,12 @@ import { z } from 'zod';
  * read the user's messages.
  */
 
-export const ImSendRequestSchema = z.object({
-  /** The agent the user is talking to. */
-  agentId: z.string().min(1),
+const ImSendFieldsSchema = z.object({
+  /**
+   * The agent the user is talking to. With `groupId` it must be a member of
+   * that group; the group's supervisor still runs the turn.
+   */
+  agentId: z.string().min(1).optional(),
   /**
    * Client-minted id for the user message (`msg_…`). Makes the send idempotent:
    * retrying with the same id returns the original receipt instead of starting
@@ -24,10 +27,24 @@ export const ImSendRequestSchema = z.object({
     .regex(/^msg_[\w-]{8,64}$/, 'clientMessageId must look like msg_<8-64 url-safe chars>')
     .optional(),
   /** The message text. */
-  content: z.string().trim().min(1).max(100_000),
-  /** The conversation to continue; omit to start a new one for the agent. */
+  content: z.string().trim().max(100_000),
+  /** Already-uploaded files to attach to this turn. */
+  fileIds: z.array(z.string().min(1)).max(10).optional(),
+  /** The group chat the user is talking to; its supervisor orchestrates the members. */
+  groupId: z.string().min(1).optional(),
+  /** The conversation to continue; omit to start a new one for the agent or group. */
   topicId: z.string().min(1).nullish(),
 });
+
+// A union rather than .refine() so the generated spec and SDK require a target too.
+export const ImSendRequestSchema = z
+  .union([
+    ImSendFieldsSchema.extend({ agentId: z.string().min(1) }),
+    ImSendFieldsSchema.extend({ groupId: z.string().min(1) }),
+  ])
+  .refine((input) => input.content.length > 0 || !!input.fileIds?.length, {
+    message: 'A message needs text or an attachment',
+  });
 export type ImSendRequest = z.infer<typeof ImSendRequestSchema>;
 
 export const ImTopicParamSchema = z.object({
@@ -68,12 +85,23 @@ export const ImReadRequestSchema = z.object({
 export type ImReadRequest = z.infer<typeof ImReadRequestSchema>;
 
 export interface ImMessage {
+  /** The agent that wrote the message; null on user messages. */
+  agentId: string | null;
   content: string;
   createdAt: string;
   /** Set when the agent's turn failed; the client shows a retry affordance. */
   error: boolean;
+  files?: ImAttachment[];
   id: string;
   role: 'assistant' | 'user';
+}
+
+export interface ImAttachment {
+  fileType: string;
+  id: string;
+  name: string;
+  size: number;
+  url: string;
 }
 
 export interface ImSendResult {

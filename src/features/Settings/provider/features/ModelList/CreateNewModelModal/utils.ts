@@ -14,6 +14,7 @@ export const CUSTOM_MODEL_TYPES: AiModelType[] = [
   'asr',
   'text2music',
   'realtime',
+  'decision',
 ];
 
 export const hasDuplicateModelId = (id: string | undefined, existingModelIds: string[]) => {

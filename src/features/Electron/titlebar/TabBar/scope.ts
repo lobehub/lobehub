@@ -1,3 +1,5 @@
+import { parseRootSegment, RESERVED_ROOT_SEGMENTS } from '@/features/Workspace/rootSegments';
+
 import { normalizeTabUrl } from './url';
 
 export type TabScope =
@@ -14,47 +16,14 @@ export interface ScopedTabTarget {
   url: string;
 }
 
-const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
-
-// Every top-level segment mounted in `sharedMainAreaChildren` (mirrored under
-// `/:workspaceSlug`) plus the personal-only roots. Anything missing here is
-// treated as a workspace slug, so a route like `/project/...` would spawn a
-// phantom `workspace:project` tab bucket.
-const PERSONAL_TOP_LEVEL_SEGMENTS = new Set([
-  'agent',
-  'agents',
-  'apps',
-  'community',
-  'desktop-onboarding',
-  'devtools',
-  'eval',
-  'goal',
-  'group',
-  'image',
-  'invite',
-  'me',
-  'memory',
-  'onboarding',
-  'page',
-  'project',
-  'projects',
-  'resource',
-  'settings',
-  'share',
-  'task',
-  'tasks',
-  'verify',
-  'verify-im',
-  'video',
-]);
-
 export const PERSONAL_TAB_SCOPE: TabScope = { type: 'personal' };
 
 export const resolveTabScope = (url: string): TabScope => {
   const [pathname = '/'] = url.split(/[?#]/);
-  const firstSegment = FIRST_SEGMENT_REGEX.exec(pathname)?.[1];
+  const firstSegment = parseRootSegment(pathname);
 
-  if (!firstSegment || PERSONAL_TOP_LEVEL_SEGMENTS.has(firstSegment)) return PERSONAL_TAB_SCOPE;
+  // Any root that is not a workspace slug opens in the personal bucket.
+  if (!firstSegment || RESERVED_ROOT_SEGMENTS.has(firstSegment)) return PERSONAL_TAB_SCOPE;
 
   return { slug: firstSegment, type: 'workspace' };
 };

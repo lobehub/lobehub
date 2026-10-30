@@ -543,7 +543,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8}>
                 <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={16} />
-                <Text fontSize={13} weight={600}>
+                <Text fontSize={13} style={{ flex: 'none' }} weight={600}>
                   {t('createGoal.criteriaTitle')}
                 </Text>
                 <Text className={styles.sectionHint} fontSize={12}>

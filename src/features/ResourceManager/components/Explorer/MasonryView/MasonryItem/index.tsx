@@ -29,6 +29,7 @@ import { type FileListItem } from '@/types/files';
 import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
+import LibraryTags from '../../LibraryTags';
 import AudioFileItem from './AudioFileItem';
 import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
@@ -136,6 +137,14 @@ const styles = createStaticStyles(({ css }) => ({
    * point of the badge is that a private card is recognisable at a glance while
    * scanning a library that mixes both scopes.
    */
+  libraryBadge: css`
+    position: absolute;
+    z-index: 2;
+    inset-block-end: 8px;
+    inset-inline-end: 8px;
+
+    max-width: calc(100% - 56px);
+  `,
   privateBadge: css`
     position: absolute;
     z-index: 2;
@@ -216,6 +225,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     chunkingStatus,
     onSelectedChange,
     knowledgeBaseId,
+    knowledgeBaseIds,
     size,
     onOpen,
     metadata,
@@ -405,6 +415,12 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         >
           <DropdownMenu items={menuItems} />
         </div>
+
+        {!knowledgeBaseId && !!knowledgeBaseIds?.length && (
+          <div className={styles.libraryBadge}>
+            <LibraryTags knowledgeBaseIds={knowledgeBaseIds} />
+          </div>
+        )}
 
         {isPrivate && (
           <Tooltip title={t('resources.visibility.privateTooltip', { ns: 'chat' })}>

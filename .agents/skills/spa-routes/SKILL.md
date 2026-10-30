@@ -79,7 +79,8 @@ Each feature should:
 5. **Register the route in the correct definition layer**
    - **Shared Web/Electron route:** add the segment once in `desktopRouter.shared.tsx` with `dynamicElement` / `dynamicLayout`. Put its `preloadId` there as part of the shared lazy-loader definition.
    - **Web-only or Electron-only route:** add it to the corresponding thin `desktopRouter.config.tsx` adapter. Keep platform-only differences explicit and small.
-   - **Mobile-only flow:** use `mobileRouter.config.tsx`; mobile does not consume the shared desktop tree.
+   - **Mobile counterpart (required for every desktop main-area route):** see §3c. `mobileRouter.parity.test.ts` fails until the mobile router resolves the new URL to the same pattern, or the route is listed in `MOBILE_UNSUPPORTED` with a reason.
+   - **Mobile-only flow:** use `mobileRouter.config.tsx`.
 
 6. **Register a route skeleton (REQUIRED for every lazy route)**
    - Every lazy route inside the main area renders `RouteSegmentSkeleton` (`src/components/Skeleton/RouteSegment.tsx`) while its chunk loads. It resolves via `handle.meta.Skeleton` only (deepest match wins, walking up through parent routes). Omitting `Skeleton` renders a blank pane — use `NoRouteSkeleton` when that is intentional.
@@ -97,13 +98,13 @@ Each feature should:
 
 ## 3a. Shared desktop route definition and platform adapters
 
-| File                               | Role                                                                                                            |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `desktopRouter.shared.tsx`         | Single source of truth for common paths, nesting, metadata, lazy imports, and prioritized route preload groups. |
-| `desktopRouter.config.tsx`         | Thin Web adapter: mounts the common content tree at `/` and adds Web-only routes.                               |
-| `desktopRouter.config.desktop.tsx` | Thin Electron adapter: injects per-tab Home behavior, TabHost root stubs, and Electron-only onboarding.         |
+| File                               | Role                                                                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `desktopRouter.shared.tsx`         | Single source of truth for common paths, nesting, metadata, lazy imports, and prioritized route preload groups.                    |
+| `desktopRouter.config.tsx`         | Thin Web adapter: mounts the common content tree at `/` and adds Web-only routes.                                                  |
+| `desktopRouter.config.desktop.tsx` | Thin Electron adapter: injects per-tab Home behavior, TabHost root stubs, and the Electron-only `/desktop-onboarding` local setup. |
 
-Add or remove common routes only in `desktopRouter.shared.tsx`. Keep `desktopRouter.sync.test.tsx` passing so path behavior, lazy boundaries, preload ownership, and the intentional platform differences remain verified.
+Add or remove common routes only in `desktopRouter.shared.tsx`, or in a subtree module it imports (`taskWorkspaceRoutes.tsx`, `projectWorkspaceRoutes.tsx`, `agentPageRoutes.tsx`, `memoryRoutes.tsx`, `resourceRoutes.tsx`, `workspaceSettingsRoutes.tsx` for the padded `/:slug/settings/*` tabs) — the shared file is over the 1200-line limit, so large subtrees move out instead of growing it. Add any new subtree module to `readRouterSources` in `desktopRouter.sync.test.tsx`. Keep `desktopRouter.sync.test.tsx` passing so path behavior, lazy boundaries, preload ownership, and the intentional platform differences remain verified.
 
 ---
 
@@ -125,6 +126,22 @@ Known variants today:
 2. When adding a new SettingsTab, register it in **both** `componentMap.ts` (with `dynamic(...)`) and `componentMap.desktop.ts` (with a sync `import`). `componentMap.sync.test.ts` will fail the build otherwise.
 3. When adding a new desktop-only page wholesale-override, prefer a single base file with platform-aware code over introducing a new `.desktop.tsx` variant — only add a new variant when the two trees genuinely diverge (different store wiring, different popup guards, etc.).
 4. When deleting, remove **both** files together.
+
+---
+
+## 3c. Mobile counterparts of desktop routes
+
+The mobile web build has its own router (`mobileRouter.config.tsx`, `__MOBILE__`), but it mounts the **same page segments** as desktop. Do not copy a desktop route into the mobile files: reuse the subtree module and adjust only what differs with `overlayRoutes` (`routeOverlay.ts`; `withHandle`, `dropRoute`, or a mobile `element`).
+
+| Mobile file                         | Reuses                                                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `mobileAgentRoutes.tsx`             | `agentPageChildren` under the agent scope layout; group profile / permission                                             |
+| `mobileWorkspaceRoutes.tsx`         | `createTaskWorkspaceChildren`, `projectWorkspaceRoute`, `resourceRoute`, `memoryChildren`, inside the mobile page layout |
+| `mobileWorkspaceSettingsRoutes.tsx` | `workspaceSettingsContentRoute` children plus the mobile settings menu and full-bleed tabs                               |
+
+- A desktop subtree added to one of those modules reaches mobile automatically. A new top-level desktop surface needs one entry in the matching mobile file; wrap full-screen pages in `pageLayout` (`(mobile)/_page-layout`).
+- Mobile `NavHeader` draws back + the route's `NavPanelPortal` sidebar as a drawer, and falls back to the route `titleKey` when the page header has no title. A page that paints no `NavHeader` gets one from the route handle `mobileShellHeader: true | 'untitled'` (and `mobileShellTitle` for a record name). Do not add a second back button inside the page; opt out with `showTogglePanelButton={false}` when the page keeps its own.
+- Desktop-only surfaces go in `mobileUnsupportedRoutes` and `MOBILE_UNSUPPORTED` in `mobileRouter.parity.test.ts`, so they redirect home instead of being read as a `/:workspaceSlug`.
 
 ---
 

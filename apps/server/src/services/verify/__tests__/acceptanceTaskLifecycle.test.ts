@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   setDecision: vi.fn(),
   taskFindById: vi.fn(),
   taskResolve: vi.fn(),
+  taskWithdrawCompletionRequest: vi.fn(),
   taskServiceUpdateStatus: vi.fn(),
   taskUpdateStatusIfCurrent: vi.fn(),
   updatePolicyStatus: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock('@/database/models/task', () => ({
     return {
       findById: mocks.taskFindById,
       resolve: mocks.taskResolve,
+      withdrawCompletionRequest: mocks.taskWithdrawCompletionRequest,
       updateStatusIfCurrent: mocks.taskUpdateStatusIfCurrent,
     };
   }),
@@ -88,6 +90,8 @@ describe('AcceptanceService task lifecycle', () => {
     mocks.taskResolve.mockResolvedValue({ automationMode: null, id: 'task_1', status: 'running' });
     // The row read back after the completion write.
     mocks.taskFindById.mockResolvedValue({ id: 'task_1', status: 'completed' });
+    mocks.taskServiceUpdateStatus.mockResolvedValue({});
+    mocks.taskWithdrawCompletionRequest.mockResolvedValue(true);
   });
 
   describe('delivered → task completed', () => {
@@ -111,6 +115,28 @@ describe('AcceptanceService task lifecycle', () => {
       expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'delivered');
       expect(mocks.taskServiceUpdateStatus).toHaveBeenCalledWith({
         id: 'task_1',
+        status: 'completed',
+      });
+    });
+
+    it('hands the publishing run to the completion so the task does not interrupt it', async () => {
+      // An agent ingesting acceptance for the task it is running: interrupting
+      // that run mid-command surfaced as a refused tool call and stopped it.
+      mocks.listByAcceptance.mockResolvedValue([
+        {
+          id: 'run-1',
+          metadata: { origin: { operationId: 'op-self' } },
+          roundIndex: 1,
+          status: null,
+        },
+      ]);
+      mocks.taskServiceUpdateStatus.mockResolvedValue({ completionDeferred: true });
+      mocks.taskFindById.mockResolvedValue({ id: 'task_1', status: 'running' });
+
+      await expect(service().recomputeStatus('acc-1')).resolves.toBe('delivered');
+      expect(mocks.taskServiceUpdateStatus).toHaveBeenCalledWith({
+        id: 'task_1',
+        operationId: 'op-self',
         status: 'completed',
       });
     });
@@ -235,6 +261,30 @@ describe('AcceptanceService task lifecycle', () => {
       );
     });
 
+    it('withdraws a deferred completion when the reject lands while it is being deferred', async () => {
+      // The reject read the task before the marker existed, so it had nothing to withdraw.
+      const deferredTask = {
+        automationMode: null,
+        context: { completion: { requestedByOperationId: 'op-self' } },
+        id: 'task_1',
+        status: 'running',
+      };
+      mocks.taskResolve
+        .mockResolvedValueOnce({ automationMode: null, id: 'task_1', status: 'running' })
+        .mockResolvedValueOnce({ automationMode: null, id: 'task_1', status: 'running' })
+        .mockResolvedValue(deferredTask);
+      mocks.taskServiceUpdateStatus.mockImplementationOnce(async () => {
+        stored.status = 'rejected';
+        return { completionDeferred: true };
+      });
+      mocks.taskFindById.mockResolvedValueOnce(deferredTask);
+
+      await expect(service().completeTaskForDelivery('acc-1', 'task_1', 'op-self')).resolves.toBe(
+        'rejected',
+      );
+      expect(mocks.taskWithdrawCompletionRequest).toHaveBeenCalledWith('task_1', 'op-self');
+    });
+
     it('reports the completion as skipped when the task could not be completed', async () => {
       // completeTaskSubject swallows the failure; the row still reads running.
       mocks.taskServiceUpdateStatus.mockRejectedValueOnce(new Error('interrupt failed'));
@@ -246,6 +296,42 @@ describe('AcceptanceService task lifecycle', () => {
     it('completes the task when no reject intervenes', async () => {
       await expect(service().completeTaskForDelivery('acc-1', 'task_1')).resolves.toBe('completed');
       expect(mocks.taskUpdateStatusIfCurrent).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('accepted while the delivering run is still going', () => {
+    beforeEach(() => {
+      mocks.findById.mockResolvedValue(taskAcceptance('delivered'));
+      mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1 }]);
+      mocks.taskResolve.mockResolvedValue({
+        automationMode: null,
+        context: { completion: { requestedByOperationId: 'op-self' } },
+        id: 'task_1',
+        status: 'running',
+      });
+    });
+
+    it('keeps waiting for that run on accept instead of interrupting it', async () => {
+      await service().accept('acc-1');
+
+      expect(mocks.taskServiceUpdateStatus).toHaveBeenCalledWith({
+        id: 'task_1',
+        operationId: 'op-self',
+        status: 'completed',
+      });
+    });
+
+    it('keeps waiting for that run when a merged pull request accepts it', async () => {
+      await service().acceptFromScmMerge('acc-1', {
+        number: 1,
+        repoFullName: 'lobehub/lobehub',
+      } as any);
+
+      expect(mocks.taskServiceUpdateStatus).toHaveBeenCalledWith({
+        id: 'task_1',
+        operationId: 'op-self',
+        status: 'completed',
+      });
     });
   });
 
@@ -283,6 +369,40 @@ describe('AcceptanceService task lifecycle', () => {
 
       await service().reject('acc-1', 'Fix the header');
       expect(mocks.taskUpdateStatusIfCurrent).not.toHaveBeenCalled();
+      expect(mocks.taskWithdrawCompletionRequest).not.toHaveBeenCalled();
+    });
+
+    it('withdraws a completion still waiting for the delivering run to end', async () => {
+      // Otherwise onTopicComplete would complete a task whose delivery was rejected.
+      mocks.taskResolve.mockResolvedValue({
+        automationMode: null,
+        context: { completion: { requestedByOperationId: 'op-self' } },
+        id: 'task_1',
+        status: 'running',
+      });
+
+      await service().reject('acc-1', 'Fix the header');
+      expect(mocks.taskWithdrawCompletionRequest).toHaveBeenCalledWith('task_1', 'op-self');
+      expect(mocks.taskUpdateStatusIfCurrent).not.toHaveBeenCalled();
+    });
+
+    it('reopens the task when the delivering run completed it before the withdrawal', async () => {
+      mocks.taskResolve.mockResolvedValue({
+        automationMode: null,
+        context: { completion: { requestedByOperationId: 'op-self' } },
+        id: 'task_1',
+        status: 'running',
+      });
+      mocks.taskWithdrawCompletionRequest.mockResolvedValue(false);
+      mocks.taskFindById.mockResolvedValue({ id: 'task_1', status: 'completed' });
+
+      await service().reject('acc-1', 'Fix the header');
+      expect(mocks.taskUpdateStatusIfCurrent).toHaveBeenCalledWith(
+        'task_1',
+        'completed',
+        'paused',
+        { completedAt: null },
+      );
     });
 
     it('leaves a Goal graph task to its coordinator', async () => {

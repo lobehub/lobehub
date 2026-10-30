@@ -21,6 +21,7 @@ export const AiModelTypeSchema = z.enum([
   'video',
   'text2music',
   'realtime',
+  'decision',
 ] as const);
 
 export type AiModelType = z.infer<typeof AiModelTypeSchema>;
@@ -674,6 +675,16 @@ export interface AITTSModelCard extends AIBaseModelCard {
 export interface AIASRModelCard extends AIBaseModelCard {
   pricing?: Pricing;
   type: 'asr';
+}
+
+/**
+ * Decision models answer caller-defined typed questions with calibrated probabilities
+ * instead of generating text, and are called through `decide` rather than `chat`.
+ * @see https://openrouter.ai/docs/guides/community/jev
+ */
+export interface AIDecisionModelCard extends AIBaseModelCard {
+  pricing?: Pricing;
+  type: 'decision';
 }
 
 export interface AIRealtimeModelCard extends AIBaseModelCard {

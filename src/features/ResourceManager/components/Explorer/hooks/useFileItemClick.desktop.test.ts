@@ -88,7 +88,6 @@ describe('useFileItemClick (desktop shell)', () => {
       id: 'file_1',
       isFolder: false,
       isPage: false,
-      libraryId: 'kb_1',
       openInPanel: true,
     });
 
@@ -105,12 +104,67 @@ describe('useFileItemClick (desktop shell)', () => {
     expect(useResourceManagerStore.getState().detailPanelIsPage).toBe(false);
   });
 
-  it('waits out the double-click window before expanding a closed panel', async () => {
+  it('opens the file editor directly when clicking an explorer row inside a knowledge base', async () => {
     const { result } = renderFileClick({
       id: 'file_1',
       isFolder: false,
       isPage: false,
       libraryId: 'kb_1',
+      openInPanel: true,
+    });
+
+    await act(async () => {
+      result.current();
+    });
+    await flushPanelOpenDelay();
+
+    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=file_1');
+    expect(useResourceManagerStore.getState().mode).toBe('editor');
+    expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
+  });
+
+  it('clears a preview left open outside the knowledge base when opening the editor', async () => {
+    useResourceManagerStore.setState({ detailPanelId: 'file_other', detailPanelIsPage: true });
+    const { result } = renderFileClick({
+      id: 'file_1',
+      isFolder: false,
+      isPage: false,
+      libraryId: 'kb_1',
+      openInPanel: true,
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    expect(useResourceManagerStore.getState().mode).toBe('editor');
+    expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
+    expect(useResourceManagerStore.getState().detailPanelIsPage).toBe(false);
+  });
+
+  it('opens the page editor directly when clicking a page inside a knowledge base', async () => {
+    const { result } = renderFileClick({
+      id: 'page_1',
+      isFolder: false,
+      isPage: true,
+      libraryId: 'kb_1',
+      openInPanel: true,
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=page_1');
+    expect(useResourceManagerStore.getState().mode).toBe('page');
+    expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
+  });
+
+  it('waits out the double-click window before expanding a closed panel', async () => {
+    const { result } = renderFileClick({
+      id: 'file_1',
+      isFolder: false,
+      isPage: false,
       openInPanel: true,
     });
 
@@ -133,7 +187,6 @@ describe('useFileItemClick (desktop shell)', () => {
       id: 'file_2',
       isFolder: false,
       isPage: false,
-      libraryId: 'kb_1',
       openInPanel: true,
     });
 
@@ -149,7 +202,6 @@ describe('useFileItemClick (desktop shell)', () => {
       id: 'file_1',
       isFolder: false,
       isPage: false,
-      libraryId: 'kb_1',
       openInPanel: true,
     });
     const { result: doubleClickResult } = renderHook(
@@ -173,7 +225,6 @@ describe('useFileItemClick (desktop shell)', () => {
       id: 'page_1',
       isFolder: false,
       isPage: true,
-      libraryId: 'kb_1',
       openInPanel: true,
     });
 

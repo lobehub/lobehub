@@ -11,6 +11,7 @@ import { useChatStore } from '@/store/chat';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
+import CanvasWorkCard from './CanvasWorkCard';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from './descriptors';
 import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
 
@@ -132,6 +133,7 @@ interface WorkSummaryCardProps {
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
   ({ className, item, onOpen, variant = 'card' }) => {
     const { t } = useTranslation('chat');
+    const openCanvas = useChatStore((s) => s.openCanvas);
     const openDocument = useChatStore((s) => s.openDocument);
     const openFilePreview = useChatStore((s) => s.openFilePreview);
     const openTaskDetail = useChatStore((s) => s.openTaskDetail);
@@ -182,6 +184,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       if (!openTarget) return;
 
       switch (openTarget.kind) {
+        case 'canvas': {
+          openCanvas(openTarget.canvasId, openTarget.version);
+          return;
+        }
         case 'document': {
           openDocument(openTarget.documentId, openTarget.agentDocumentId);
           return;
@@ -197,10 +203,20 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           return;
         }
         case 'task': {
-          openTaskDetail(openTarget.identifier);
+          openTaskDetail(openTarget.taskId);
         }
       }
     };
+
+    if (item.type === 'canvas' && variant === 'card') {
+      return (
+        <CanvasWorkCard
+          className={className}
+          item={item}
+          onOpen={clickable ? handleOpen : undefined}
+        />
+      );
+    }
 
     if (variant === 'inline') {
       return (

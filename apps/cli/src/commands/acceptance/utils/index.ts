@@ -2,6 +2,7 @@ export * from './annotation';
 export * from './evidence';
 export * from './options';
 export * from './plan';
+export * from './project';
 export * from './reportContext';
 export * from './subject';
 export * from './values';

@@ -72,7 +72,7 @@ interface CreateTaskInlineEntryProps {
    */
   lockAssignee?: boolean;
   onCollapse?: () => void;
-  onCreated?: (task: { agentId?: string; identifier: string }) => void;
+  onCreated?: (task: { id: string; agentId?: string; identifier: string }) => void;
   parentTaskId?: string;
   placeholder?: string;
   projectId?: string;
@@ -460,6 +460,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
             title: t('taskIntent.created'),
           });
           onCreated?.({
+            id: result.id,
             agentId: result.assigneeAgentId ?? undefined,
             identifier: result.identifier,
           });

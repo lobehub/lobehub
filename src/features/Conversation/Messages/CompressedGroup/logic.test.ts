@@ -52,6 +52,12 @@ describe('getCompressedTurnCount', () => {
     expect(getCompressedTurnCount({ compressedMessages })).toBe(2);
   });
 
+  it('prefers the whole-group turn count of a capped read over the hydrated slice', () => {
+    const compressedMessages = [{ id: 'u300', role: 'user' }] as any;
+
+    expect(getCompressedTurnCount({ compressedMessages, compressedTurnCount: 2600 })).toBe(2600);
+  });
+
   it('falls back to the message count when no user message is present', () => {
     const compressedMessages = [
       { id: 'a1', role: 'assistant' },

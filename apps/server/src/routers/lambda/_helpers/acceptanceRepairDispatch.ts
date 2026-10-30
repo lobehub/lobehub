@@ -11,7 +11,8 @@ import { GoalService } from '@/server/services/goal';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import type { AcceptanceService } from '@/server/services/verify';
 
-import { agentNotifyRouter } from '../agentNotify';
+import type { agentNotifyRouter } from '../agentNotify';
+import { createAgentNotifyRouter } from '../agentNotify';
 
 const log = debug('lobe-server:acceptance-repair-dispatch');
 
@@ -27,7 +28,7 @@ const log = debug('lobe-server:acceptance-repair-dispatch');
  * - `failed`: the agent could not be started; the reject itself still stands.
  */
 export type AcceptanceRepairDispatch =
-  | { agentId: string; dispatched: true; operationId: string; topicId: string }
+  | { agentId: string; dispatched: true; operationId: string; taskId?: string; topicId: string }
   | {
       dispatched: false;
       error?: string;
@@ -35,6 +36,7 @@ export type AcceptanceRepairDispatch =
         | 'failed'
         | 'forbidden'
         | 'goal_coordinator'
+        | 'in_progress'
         | 'no_origin'
         | 'origin_unavailable'
         | 'skipped';
@@ -64,6 +66,7 @@ export const dispatchAcceptanceRepair = async (
   service: AcceptanceService,
   acceptance: AcceptanceItem,
   rejectComment?: string,
+  onOperationCreated?: (operationId: string) => Promise<void>,
 ): Promise<AcceptanceRepairDispatch> => {
   // A Goal Task's next attempt belongs to its coordinator, which reads the
   // rejected round through the prompt builder and claims the task. A plain
@@ -105,12 +108,14 @@ export const dispatchAcceptanceRepair = async (
 
   let operationId: string | undefined;
   try {
-    ({ operationId } = await agentNotifyRouter.createCaller(ctx).notify({
-      agentId,
-      content: buildAcceptanceRepairPrompt(acceptance.id, rejectComment),
-      role: 'user',
-      topicId: topic.id,
-    }));
+    ({ operationId } = await createAgentNotifyRouter(onOperationCreated)
+      .createCaller(ctx)
+      .notify({
+        agentId,
+        content: buildAcceptanceRepairPrompt(acceptance.id, rejectComment),
+        role: 'user',
+        topicId: topic.id,
+      }));
   } catch (error) {
     if (error instanceof TRPCError && error.code === 'FORBIDDEN') {
       return { dispatched: false, reason: 'forbidden' };

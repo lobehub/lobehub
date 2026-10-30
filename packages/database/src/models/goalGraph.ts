@@ -553,7 +553,9 @@ export class GoalGraphModel {
 
     const depthOfRow = (row: (typeof rows)[number]) =>
       Math.min(
+        /* v8 ignore start -- unreachable `?? Infinity`: the join keeps only nodes whose taskId is in taskIds, which are exactly depthOf's keys */
         row.nodeTaskId ? (depthOf.get(row.nodeTaskId) ?? Infinity) : Infinity,
+        /* v8 ignore stop */
         row.subjectType === 'task' && row.carrierTaskId
           ? (depthOf.get(row.carrierTaskId) ?? Infinity)
           : Infinity,
@@ -956,6 +958,7 @@ export class GoalGraphModel {
           and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
         )
         .returning();
+      /* v8 ignore next -- unreachable: ownedGoal() holds the goal row FOR UPDATE and every writer of a decision's status takes that lock first, so the pending row selected above is still pending */
       if (!decision) return undefined;
       await tx
         .update(goalNodes)
@@ -1035,6 +1038,7 @@ export class GoalGraphModel {
           and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
         )
         .returning();
+      /* v8 ignore next -- unreachable: ownedGoal() holds the goal row FOR UPDATE and every writer of a decision's status takes that lock first, so the pending row selected above is still pending */
       if (!decision) return undefined;
       await tx
         .update(goalNodes)

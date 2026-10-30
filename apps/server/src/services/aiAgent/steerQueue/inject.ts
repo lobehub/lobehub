@@ -66,7 +66,7 @@ const matchesRunningTurnSettings = (
 /**
  * Whether a follow-up can join the run that is already going: plain text for
  * the same agent, sent with the turn settings the run already has. Anything
- * that needs a turn configured for it — attachments, tool or skill selections,
+ * that needs a turn configured for it — attachments, attached selections, tool or skill selections,
  * @-mentions, another agent, a different device, executor, protocol or approval
  * setting — waits for the hand-back and starts as the next turn instead.
  */
@@ -74,6 +74,9 @@ export const canJoinRunningTurn = (entry: QueuedFollowUp, state: AgentState): bo
   const { request } = entry;
   if (!request.prompt.trim()) return false;
   if (request.fileIds?.length) return false;
+  // Attached content is injected per user message; a steer message joins a
+  // turn whose context is already built.
+  if (request.userMessage?.metadata) return false;
   if (request.selectedToolIds?.length || request.selectedSkillIds?.length) return false;
   if (request.mentionedAgents?.length) return false;
 
@@ -135,6 +138,7 @@ export const injectQueuedFollowUp = async (
     const message = await messageModel.create({
       agentId: state.origin?.agentId,
       content: request.prompt,
+      editorData: request.userMessage?.editorData,
       groupId,
       metadata: buildUserTurnMetadata({
         steer: true,

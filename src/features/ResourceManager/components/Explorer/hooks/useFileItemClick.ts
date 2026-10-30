@@ -11,10 +11,12 @@ export interface UseFileItemClickOptions {
   libraryId?: string | null;
   onOpen?: (id: string) => void;
   /**
-   * Explorer rows (list / masonry) preview files and pages in the inline right
-   * detail panel. The library sidebar tree is navigation and also stays mounted
-   * where no explorer (and so no panel) exists, e.g. the Permissions page, so it
-   * keeps opening the fullscreen editor.
+   * Explorer rows (list / masonry) outside a knowledge base preview files and
+   * pages in the inline right detail panel. Inside a knowledge base the content
+   * itself is the point of the visit, so a click opens the detail directly. The
+   * library sidebar tree is navigation and also stays mounted where no explorer
+   * (and so no panel) exists, e.g. the Permissions page, so it keeps opening the
+   * fullscreen editor.
    */
   openInPanel?: boolean;
   slug?: string | null;
@@ -56,6 +58,7 @@ export const useFileItemClick = ({
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
   const openDetailPanel = useResourceManagerStore((s) => s.openDetailPanel);
+  const closeDetailPanel = useResourceManagerStore((s) => s.closeDetailPanel);
 
   const handleClick = useCallback(() => {
     const selectFile = () => {
@@ -91,7 +94,7 @@ export const useFileItemClick = ({
       return;
     }
 
-    if (openInPanel) {
+    if (openInPanel && !libraryId) {
       // A plain click is a "look at this" gesture — the promise of the explorer
       // is to keep the working list visible. Fullscreen focus stays available as
       // the explicit double click (see `useFileItemDoubleClick`).
@@ -114,6 +117,10 @@ export const useFileItemClick = ({
       return;
     }
 
+    // The preview state is global: drop a panel left open elsewhere so leaving
+    // the editor doesn't reveal a stale preview.
+    cancelPendingPanelOpen();
+    closeDetailPanel();
     setCurrentViewItemId(id);
     setMode(isPage ? 'page' : 'editor');
     // Update URL query parameter for shareable links
@@ -132,6 +139,7 @@ export const useFileItemClick = ({
     setMode,
     setCurrentViewItemId,
     openDetailPanel,
+    closeDetailPanel,
     onOpen,
   ]);
 

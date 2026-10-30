@@ -97,36 +97,6 @@ export const findAssigneesByIds = async (
     .where(and(inArray(tasks.id, ids), taskOwnership(ctx)));
 };
 
-export const resolveMany = async (
-  ctx: TaskModelContext,
-  idsOrIdentifiers: string[],
-): Promise<TaskItem[]> => {
-  if (idsOrIdentifiers.length === 0) return [];
-  const identifiers = idsOrIdentifiers.map((value) => value.toUpperCase());
-  return ctx.db
-    .select()
-    .from(tasks)
-    .where(
-      and(
-        or(inArray(tasks.id, idsOrIdentifiers), inArray(tasks.identifier, identifiers)),
-        taskOwnership(ctx),
-      ),
-    );
-};
-
-export const findByIdentifier = async (
-  ctx: TaskModelContext,
-  identifier: string,
-): Promise<TaskItem | null> => {
-  const result = await ctx.db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.identifier, identifier), taskOwnership(ctx)))
-    .limit(1);
-
-  return result[0] || null;
-};
-
 /** The column write itself — the assignee rule lives in `update`. */
 export const writeRow = async (
   ctx: TaskModelContext,
@@ -186,6 +156,7 @@ export const countTasksBlockingAgentDemotion = async (
         or(eq(tasks.visibility, 'public'), ne(tasks.createdByUserId, agentOwnerUserId)),
       ),
     );
+  /* v8 ignore next -- unreachable: an ungrouped count() always returns exactly one non-null row */
   return Number(row?.count ?? 0);
 };
 
@@ -298,6 +269,67 @@ export const updateStatusIfCurrent = async (
     .returning();
 
   return task ?? null;
+};
+
+/** `context.completion.requestedByOperationId` — the run a deferred completion waits for. */
+const completionRequest = sql`${tasks.context} -> 'completion' ->> 'requestedByOperationId'`;
+const withoutCompletionRequest = sql`jsonb_set(${tasks.context}, '{completion,requestedByOperationId}', 'null'::jsonb)`;
+
+/**
+ * Completes a running task whose deferred completion `operationId` still holds,
+ * consuming the request in the same write. Returns null when the request was
+ * withdrawn (or the task left `running`) first.
+ */
+export const completeIfCompletionRequested = async (
+  ctx: TaskModelContext,
+  id: string,
+  operationId: string,
+): Promise<TaskItem | null> => {
+  const [task] = await ctx.db
+    .update(tasks)
+    .set({
+      completedAt: new Date(),
+      context: withoutCompletionRequest,
+      error: null,
+      status: 'completed',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(tasks.id, id),
+        eq(tasks.status, 'running'),
+        sql`${completionRequest} = ${operationId}`,
+        taskOwnership(ctx),
+      ),
+    )
+    .returning();
+
+  return task ?? null;
+};
+
+/**
+ * Withdraws a running task's deferred completion by `operationId`. Returns
+ * false when the run already consumed it (or the task left `running`).
+ */
+export const withdrawCompletionRequest = async (
+  ctx: TaskModelContext,
+  id: string,
+  operationId: string,
+): Promise<boolean> => {
+  const updated = await ctx.db
+    .update(tasks)
+    .set({ context: withoutCompletionRequest, updatedAt: new Date() })
+    .where(
+      and(
+        eq(tasks.id, id),
+        eq(tasks.status, 'running'),
+        sql`${completionRequest} = ${operationId}`,
+        taskOwnership(ctx),
+      ),
+    )
+    .returning({ id: tasks.id });
+
+  return updated.length > 0;
 };
 
 export const batchUpdateStatus = async (

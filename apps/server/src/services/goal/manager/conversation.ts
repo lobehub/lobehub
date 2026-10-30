@@ -6,9 +6,9 @@ import { eq, sql } from 'drizzle-orm';
 
 import { TopicTrigger } from '@/const/topic';
 import { AgentOperationModel } from '@/database/models/agentOperation';
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TopicModel } from '@/database/models/topic';
+import { GoalRepository } from '@/database/repositories/goal';
 import { goals } from '@/database/schemas/goal';
 
 import { TERMINAL_GOAL_STATUSES as finishedGoalStatuses } from '../goalTraceRecorder';
@@ -40,7 +40,7 @@ export const adoptConversationTurn = async (
   run: { operationId: string; topicId: string },
 ) =>
   ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const goal = await model.lockById(goalId);
     if (!goal?.config?.manager) throw new Error('Goal has no main Agent policy to adopt a turn');
     if (goal.config.managerState) throw new Error('Goal already has a planning turn');
@@ -117,7 +117,7 @@ export const moveConversationTo = async (
   agentId: string,
 ): Promise<GoalManagerState | undefined> =>
   ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const goal = await model.lockById(goalId);
     const state = goal?.config?.managerState;
     if (!goal || !state || !state.consumed || goal.agentId !== agentId) return;
@@ -170,7 +170,7 @@ export const bindTopic = async (
   turnToken?: string;
 }> =>
   ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const goal = await model.lockById(goalId);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     if (finishedGoalStatuses.has(goal.status))

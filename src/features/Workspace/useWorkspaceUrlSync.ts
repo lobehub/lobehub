@@ -7,47 +7,8 @@ import { useIsWorkspaceLoading } from '@/business/client/hooks/useIsWorkspaceLoa
 import { useSilentSwitchWorkspace } from '@/business/client/hooks/useSwitchWorkspace';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 
+import { parseRootSegment, RESERVED_ROOT_SEGMENTS } from './rootSegments';
 import { useWorkspaceSyncPathname } from './useWorkspaceSyncPathname';
-
-/**
- * Top-level route segments that share the namespace with `:workspaceSlug`.
- * Anything starting with one of these is NOT a workspace slug — even if the
- * first segment happens to resemble one.
- *
- * Kept in sync with `sharedMainAreaChildren` (paths) + the personal-only list
- * in router configs. If you add a new root path segment, add it here too.
- */
-const RESERVED_FIRST_SEGMENTS = new Set([
-  // Shared (mirrored under /:workspaceSlug too):
-  'agent',
-  'group',
-  'community',
-  'memory',
-  'page',
-  'projects',
-  'resource',
-  'image',
-  'video',
-  'eval',
-  'tasks',
-  'task',
-  // Personal-only:
-  'a',
-  'apps',
-  'settings',
-  'onboarding',
-  'me',
-  'share',
-  'devtools',
-  'desktop-onboarding',
-]);
-
-const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
-
-const parseFirstSegment = (pathname: string): string | null => {
-  const match = pathname.match(FIRST_SEGMENT_REGEX);
-  return match ? match[1] : null;
-};
 
 /**
  * Whether `pathname`'s first segment could be an (as-yet-unresolved) workspace
@@ -60,8 +21,8 @@ const parseFirstSegment = (pathname: string): string | null => {
  * the background.
  */
 export const isWorkspaceSlugCandidatePath = (pathname: string): boolean => {
-  const first = parseFirstSegment(pathname);
-  return !!first && !RESERVED_FIRST_SEGMENTS.has(first);
+  const first = parseRootSegment(pathname);
+  return !!first && !RESERVED_ROOT_SEGMENTS.has(first);
 };
 
 /**
@@ -93,9 +54,9 @@ export const useWorkspaceUrlSync = (): void => {
     // store to "personal" on first paint of a `/{slug}` URL.
     if (isLoading) return;
 
-    const first = parseFirstSegment(pathname);
+    const first = parseRootSegment(pathname);
 
-    if (first && !RESERVED_FIRST_SEGMENTS.has(first)) {
+    if (first && !RESERVED_ROOT_SEGMENTS.has(first)) {
       const ws = workspaces.find((w) => w.slug === first);
       if (ws) {
         if (activeId !== ws.id) void switchWorkspace(ws.id);

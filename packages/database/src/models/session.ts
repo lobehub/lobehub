@@ -1,11 +1,6 @@
 import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
-import type {
-  ChatSessionList,
-  LobeAgentConfig,
-  LobeAgentSession,
-  LobeGroupSession,
-} from '@lobechat/types';
-import { and, asc, desc, eq, exists, inArray, not, notExists, or } from 'drizzle-orm';
+import type { LobeAgentConfig } from '@lobechat/types';
+import { and, desc, eq, exists, inArray, not, notExists, or } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -19,8 +14,8 @@ import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
  * @deprecated Sessions are the legacy shell of an agent — see the `sessions`
- * schema note. Reads here still exist for the mobile session list and legacy
- * data; write paths should go through `AgentModel` / `TopicModel`.
+ * schema note. Reads here still support legacy data and recycle-bin behavior;
+ * write paths should go through `AgentModel` / `TopicModel`.
  */
 export class SessionModel {
   private userId: string;
@@ -131,26 +126,6 @@ export class SessionModel {
     }
 
     return Array.from(groupedResults.values());
-  };
-
-  queryWithGroups = async (): Promise<ChatSessionList> => {
-    // Query all sessions
-    const result = await this.query();
-
-    const groups = await this.db.query.sessionGroups.findMany({
-      orderBy: [asc(sessionGroups.sort), desc(sessionGroups.createdAt)],
-      where: buildWorkspaceWhere(
-        { userId: this.userId, workspaceId: this.workspaceId },
-        sessionGroups,
-      ),
-    });
-
-    const mappedSessions = result.map((item) => this.mapSessionItem(item as any));
-
-    return {
-      sessionGroups: groups as unknown as ChatSessionList['sessionGroups'],
-      sessions: mappedSessions,
-    };
   };
 
   findByIdOrSlug = async (
@@ -348,27 +323,6 @@ export class SessionModel {
     });
   };
 
-  duplicate = async (id: string, newTitle?: string) => {
-    const result = await this.findByIdOrSlug(id);
-
-    if (!result) return;
-
-    const { agent, clientId: _clientId, ...session } = result;
-    const sessionId = this.genId();
-
-    const { id: _, slug: __, ...config } = agent;
-
-    return this.create({
-      config,
-      id: sessionId,
-      session: {
-        ...session,
-        title: newTitle || session.title,
-      },
-      type: 'agent',
-    });
-  };
-
   // **************** Delete *************** //
 
   /**
@@ -473,34 +427,6 @@ export class SessionModel {
     });
   };
 
-  /** Agents linked to a session — lets `removeSession` route through the agent trash handler. */
-  findLinkedAgentIds = async (sessionId: string): Promise<string[]> => {
-    const links = await this.db
-      .select({ agentId: agentsToSessions.agentId })
-      .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.sessionId, sessionId), this.agentsToSessionsOwnership()));
-    return links.map((link) => link.agentId);
-  };
-
-  /**
-   * Whether `sessionId` is the agent's one and only shell and carries no other
-   * agent — i.e. removing the session means removing the agent. The schema
-   * allows an agent to be linked to several sessions (and a group shell to
-   * several agents); in either case only the selected shell may go. Link
-   * counting mirrors {@link clearOrphanAgent}: every link counts, so an agent
-   * is never treated as orphaned while anything still points at it.
-   */
-  isSoleShellOfAgent = async (sessionId: string, agentId: string): Promise<boolean> => {
-    const links = await this.db
-      .select({ agentId: agentsToSessions.agentId, sessionId: agentsToSessions.sessionId })
-      .from(agentsToSessions)
-      .where(or(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.sessionId, sessionId)));
-    return (
-      links.length > 0 &&
-      links.every((link) => link.agentId === agentId && link.sessionId === sessionId)
-    );
-  };
-
   clearOrphanAgent = async (agentIds: string[], trx: any): Promise<string[]> => {
     if (agentIds.length === 0) return [];
 
@@ -544,77 +470,5 @@ export class SessionModel {
       .set(data)
       .where(and(eq(sessions.id, id), this.ownership()))
       .returning();
-  };
-
-  // **************** Helper *************** //
-
-  private genId = () => idGenerator('sessions');
-
-  private mapSessionItem = ({
-    agentsToSessions,
-    title,
-    backgroundColor,
-    description,
-    avatar,
-    groupId,
-    type,
-    ...res
-  }: SessionItem & { agentsToSessions?: { agent: AgentItem }[] }):
-    LobeAgentSession | LobeGroupSession => {
-    const meta = {
-      avatar: avatar ?? undefined,
-      backgroundColor: backgroundColor ?? undefined,
-      description: description ?? undefined,
-      tags: undefined,
-      title: title ?? undefined,
-    };
-
-    if (type === 'group') {
-      // For group sessions, return without agent-specific fields
-      // Transform agentsToSessions to include both relationship and agent data
-      const members =
-        agentsToSessions?.map((item, index) => {
-          const member = {
-            // Start with agent properties for compatibility
-            ...item.agent,
-            // Override with ChatGroupAgentItem properties
-            agentId: item.agent.id,
-            chatGroupId: res.id,
-            enabled: true,
-            order: index,
-            role: 'participant',
-            // Keep agent timestamps for now (could be overridden if needed)
-          };
-          return member;
-        }) || [];
-
-      return {
-        ...res,
-        group: groupId,
-        members,
-        meta,
-        type: 'group',
-      } as LobeGroupSession;
-    }
-
-    // For agent sessions, include agent-specific fields
-    // TODO: Need a better implementation in the future, currently only taking the first one
-    const agent = agentsToSessions?.[0]?.agent;
-    return {
-      ...res,
-      config: agent ? (agent as any) : { model: '', plugins: [] }, // Ensure config exists for agent sessions
-      group: groupId,
-      meta: {
-        avatar: agent?.avatar ?? avatar ?? undefined,
-        backgroundColor: agent?.backgroundColor ?? backgroundColor ?? undefined,
-        description: agent?.description ?? description ?? undefined,
-
-        marketIdentifier: agent?.marketIdentifier ?? undefined,
-        tags: agent?.tags ?? undefined,
-        title: agent?.title ?? title ?? undefined,
-      },
-      model: agent?.model || '',
-      type: 'agent',
-    } as LobeAgentSession;
   };
 }

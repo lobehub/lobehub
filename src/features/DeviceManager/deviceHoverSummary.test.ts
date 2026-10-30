@@ -45,6 +45,7 @@ describe('buildDeviceHoverSummary', () => {
       lastConnectedAt: '2026-10-15T10:00:00.000Z',
       memoryTotalBytes: 32 * 1024 ** 3,
       online: true,
+      onlineUnknown: false,
       platformLabel: 'Linux',
       workingDir: '/home/dev/project',
     });
@@ -74,6 +75,14 @@ describe('buildDeviceHoverSummary', () => {
       platformLabel: undefined,
       workingDir: undefined,
     });
+  });
+
+  it('marks a persisted row presence-unknown instead of offline', () => {
+    const summary = buildDeviceHoverSummary(
+      makeDevice({ channels: [], online: false, onlineUnknown: true }),
+    );
+
+    expect(summary).toMatchObject({ online: false, onlineUnknown: true });
   });
 
   it('leaves specs empty before the metric series loads', () => {

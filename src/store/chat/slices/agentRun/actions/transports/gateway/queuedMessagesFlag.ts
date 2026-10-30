@@ -1,5 +1,6 @@
 import { aiAgentService } from '@/services/aiAgent';
 import { shareChatService } from '@/services/shareChat';
+import { isClientHeldQueuedMessage } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 
 interface FlagWrite {
@@ -61,7 +62,9 @@ const writeFlag = (
  */
 export const syncQueuedMessagesFlag = (get: () => ChatStore, contextKey: string): void => {
   const state = get();
-  const pending = (state.queuedMessages?.[contextKey]?.length ?? 0) > 0;
+  // Follow-ups the server holds are its own to join or start; only the ones
+  // this client still has to send make the run hand its turn back.
+  const pending = !!state.queuedMessages?.[contextKey]?.some(isClientHeldQueuedMessage);
 
   for (const id of state.operationsByContext?.[contextKey] ?? []) {
     const operation = state.operations?.[id];
@@ -97,7 +100,7 @@ export const syncQueuedMessagesFlag = (get: () => ChatStore, contextKey: string)
  * needs no request.
  */
 export const flagQueuedMessagesOnRunStart = (get: () => ChatStore, contextKey: string): void => {
-  if (!get().queuedMessages?.[contextKey]?.length) return;
+  if (!get().queuedMessages?.[contextKey]?.some(isClientHeldQueuedMessage)) return;
 
   syncQueuedMessagesFlag(get, contextKey);
 };

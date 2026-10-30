@@ -3,6 +3,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
+  AgentRunInitRequest,
   AgentSenderMetadata,
   ExecAgentResult,
   ExecGroupAgentParams,
@@ -13,9 +14,14 @@ import type {
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
 } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  ordinaryFileAccessScope,
+  RequestTrigger,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import { sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -48,12 +54,19 @@ import type {
   GroupActionMemberBridgeParams,
 } from '@/server/services/agentRuntime/types';
 import { ComposioService } from '@/server/services/composio';
+import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
+import {
+  type BackgroundSubAgentResult,
+  deliverBackgroundSubAgentResults,
+} from './backgroundSubAgentDelivery';
+import { resolveForegroundInterventionConfig } from './foregroundIntervention';
 import { createGraphAwareAgentFactory } from './helpers/agentFactory';
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
+import { runDeferredOperationInit } from './pipeline/deferredInit';
 import { execAgentTurn, type ExecAgentTurnDeps } from './pipeline/execTurn';
 import {
   createGroupMemberApprovalDeps,
@@ -64,6 +77,7 @@ import { resolveNewThread } from './pipeline/newThread';
 import { createGroupAgentTopic, type PrecreatedTopicDeps } from './pipeline/precreatedTopic';
 import { scheduleAgentRun } from './pipeline/scheduleAgentRun';
 import { runWithTopicStart, type TopicStartDeps } from './pipeline/topicStart';
+import { bindTopicWorkingDirectory } from './pipeline/topicWorkingDirectory';
 import type { RunFacts } from './runFacts';
 import { resolveAgentSenderFromOperation } from './sourceAttribution';
 import { startQueuedFollowUp } from './steerQueue';
@@ -163,10 +177,12 @@ export class AiAgentService {
       //
       // Arrow fields are auto-bound, so no `.bind(this)`.
       delegate: {
+        deliverBackgroundSubAgentResults: this.deliverBackgroundSubAgentResults,
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
         execGroupMember: this.execGroupMember,
         injectQueuedFollowUp: this.injectQueuedFollowUp,
+        runDeferredInit: this.runDeferredInit,
         startQueuedFollowUp: this.startQueuedFollowUp,
         verifyShareRunStillAuthorized: this.verifyShareRunStillAuthorized,
       },
@@ -530,8 +546,20 @@ export class AiAgentService {
    * 1. Create topic with groupId (if needed)
    * 2. Delegate to execAgent for the rest
    */
-  async execGroupAgent(params: ExecGroupAgentParams): Promise<ExecGroupAgentResult> {
-    const { agentId, groupId, message, topicId: inputTopicId, newTopic } = params;
+  async execGroupAgent(
+    params: ExecGroupAgentParams &
+      Pick<InternalExecAgentParams, 'clientIds' | 'fileIds' | 'interactiveStart'>,
+  ): Promise<ExecGroupAgentResult> {
+    const {
+      agentId,
+      clientIds,
+      fileIds,
+      groupId,
+      interactiveStart,
+      message,
+      topicId: inputTopicId,
+      newTopic,
+    } = params;
 
     log(
       'execGroupAgent: agentId=%s, groupId=%s, message=%s',
@@ -567,6 +595,9 @@ export class AiAgentService {
       agentId,
       appContext: { groupId, orchestrationRole: 'supervisor', topicId },
       autoStart: true,
+      clientIds,
+      fileIds,
+      interactiveStart,
       prompt: message,
       trigger: RequestTrigger.Chat,
     });
@@ -609,6 +640,45 @@ export class AiAgentService {
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
+
+  /**
+   * `AgentRuntimeDelegate.runDeferredInit` implementation — see
+   * `runDeferredOperationInit` in `./pipeline/deferredInit`.
+   *
+   * Arrow field (not a method) so it stays bound when handed to
+   * AgentRuntimeService.
+   */
+  runDeferredInit = async (params: {
+    operationId: string;
+    request: AgentRunInitRequest;
+    state: AgentState;
+  }) =>
+    runDeferredOperationInit(
+      {
+        agentDocumentsService: this.agentDocumentsService,
+        agentModel: this.agentModel,
+        bindTopicWorkingDirectory: (p) =>
+          bindTopicWorkingDirectory({ topicModel: this.topicModel }, p),
+        composioService: this.composioService,
+        connectorModel: this.connectorModel,
+        connectorToolModel: this.connectorToolModel,
+        db: this.db,
+        getMarketService: (runFacts) => this.getMarketService(runFacts),
+        messageModel: this.messageModel,
+        pluginModel: this.pluginModel,
+        readFileContent: async (fileId, shareGate) =>
+          (
+            await new DocumentService(this.db, this.userId, this.workspaceId).parseFile(
+              fileId,
+              shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
+            )
+          ).content ?? undefined,
+        topicModel: this.topicModel,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      },
+      params,
+    );
 
   /**
    * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see
@@ -702,6 +772,7 @@ export class AiAgentService {
    */
   execVirtualSubAgent = async (params: ExecVirtualSubAgentParams): Promise<ExecSubAgentResult> =>
     execAgentThreadRun(this.subAgentRunDeps, params, {
+      background: params.background,
       chatConfig: params.chatConfig,
       deviceId: params.deviceId,
       isSubAgent: true,
@@ -714,6 +785,74 @@ export class AiAgentService {
       provider: params.provider,
       resumeParentOnComplete: true,
     });
+
+  /**
+   * Hand a topic's finished background sub-agent results to their parent agent
+   * as a new turn — see `backgroundSubAgentDelivery`. Runtime delegate entry.
+   */
+  deliverBackgroundSubAgentResults = (params: {
+    settledOperationId?: string;
+    topicId: string;
+  }): Promise<void> =>
+    deliverBackgroundSubAgentResults(
+      {
+        agentOperationModel: this.agentOperationModel,
+        appendResultMessages: this.appendBackgroundResultMessages,
+        execAgent: (execParams) => this.execAgent(execParams),
+        messageModel: this.messageModel,
+        resolveInterventionConfig: () => resolveForegroundInterventionConfig(this.db, this.userId),
+        topicModel: this.topicModel,
+      },
+      params,
+    );
+
+  /**
+   * Land background sub-agent answers on the topic's main line as user
+   * messages whose sender is each sub-agent. Serialized per topic
+   * (with task callbacks too) so concurrent deliveries cannot anchor on the
+   * same leaf and fork the line; ids derive from the call, so a retried
+   * delivery skips what it already wrote. Returns the line's new leaf.
+   */
+  private appendBackgroundResultMessages = async (params: {
+    agentId: string;
+    results: BackgroundSubAgentResult[];
+    topicId: string;
+  }): Promise<string | undefined> => {
+    const { agentId, results, topicId } = params;
+
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${topicId}))`);
+      const messageModel = new MessageModel(tx, this.userId, this.workspaceId);
+      let leafId = await messageModel.getLastMainThreadSpineMessageId(topicId);
+
+      for (const item of results) {
+        const messageId = `subagent-cb-${item.callId}`;
+        if (await messageModel.findById(messageId)) continue;
+
+        await messageModel.create(
+          {
+            agentId,
+            content: item.result,
+            metadata: {
+              subAgentCallback: {
+                agentId: item.sender.agentId,
+                name: item.sender.name,
+                status: item.status,
+                threadId: item.threadId,
+              },
+            },
+            parentId: leafId,
+            role: 'user',
+            topicId,
+          },
+          messageId,
+        );
+        leafId = messageId;
+      }
+
+      return leafId;
+    });
+  };
 
   /**
    * Fork a single group member ("call agent member") under a `lobe-group-management`

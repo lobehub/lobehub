@@ -1,14 +1,4 @@
-/**
- * Tests for heterogeneousAgentExecutor DB persistence layer.
- *
- * Verifies the critical path: CC stream events → messageService DB writes.
- * Covers:
- *   - Tool 3-phase persistence (pre-register → create → backfill)
- *   - Tool result content updates
- *   - Multi-step assistant message creation with correct parentId chain
- *   - Content/reasoning/model/usage final writes
- *   - Sync snapshot + reset to prevent cross-step content contamination
- */
+/** CLI stream → tool persistence, turn chaining and final snapshot regression tests. */
 
 import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
@@ -102,10 +92,6 @@ vi.mock('@/services/agentQuota', () => ({
 // Gateway event handler — we spy on it but let it run (it calls getMessages)
 vi.mock('../transports/gateway/gatewayEventHandler', () => ({
   createGatewayEventHandler: vi.fn(() => vi.fn()),
-  // Faithful re-impl (the real one is unmocked to keep the import cycle out of
-  // this test): only 'interrupted' / 'waiting_for_async_tool' are non-clean.
-  isCompletedRuntimeEnd: (reason?: string | null) =>
-    reason !== 'interrupted' && reason !== 'waiting_for_async_tool',
 }));
 
 // isDesktop — defaults to `false` (matching the real test env / __ELECTRON__
@@ -163,13 +149,7 @@ function setupIpcCapture() {
     },
   };
 
-  /**
-   * Per-IPC-session adapter — mimics the desktop main pipeline:
-   *   raw stdout JSON → adapter.adapt() → AgentStreamEvent → broadcast.
-   * Test fixtures still feed raw CC/Codex events, so the existing ~2.8k lines
-   * of stream-shape tests stay intact while the renderer's input boundary
-   * becomes the new `heteroAgentEvent` channel.
-   */
+  /** Mirror main's raw-output → adapter → event pipeline. */
   const adapters = new Map<string, AgentEventAdapter>();
   /**
    * IPC-session → agent type. Defaults to `claude-code` so tests that don't
@@ -535,9 +515,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     mockGetNotificationSoundFile.mockResolvedValue(undefined);
     mockPlayCompletionSound.mockResolvedValue(undefined);
     ipc = setupIpcCapture();
-    // Register the IPC session's agent type from the params the executor
-    // hands to startSession, so the helper picks the right adapter when the
-    // test starts emitting raw events.
+    // The producer adapter follows the runtime selected by the executor.
     mockStartSession.mockImplementation(async (params: any) => {
       ipc.setAgentType('ipc-sess-1', params.agentType ?? 'claude-code');
       return {
@@ -548,13 +526,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     mockSendPrompt.mockResolvedValue(undefined);
     mockStopSession.mockResolvedValue(undefined);
     mockCancelSession.mockResolvedValue(undefined);
-    // Mirror the desktop main: `getSessionInfo` returns whatever the producer
-    // pipeline's adapter has extracted from the JSONL stream so far. Tests
-    // that never emit an init / thread.started event get `agentSessionId:
-    // undefined`, matching pre-Phase-0 behavior where the renderer-side
-    // adapter never observed one either. The renderer service hands the raw
-    // sessionId string straight to the mock — it's the underlying IPC handler
-    // that wraps `{ sessionId }`, and that's stubbed here.
+    // Return only the native session id observed by the producer adapter.
     mockGetSessionInfo.mockImplementation(async (sessionId: string) => ({
       agentSessionId: ipc.getAdapterSessionId(sessionId),
     }));
@@ -679,6 +651,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
   it.each([
     { provider: { command: 'pi', type: 'pi' }, expectedOperations: ['op-1', 'op-2'] },
+    {
+      provider: { command: '/custom/dsh', type: 'deepseek-harness' },
+      expectedOperations: ['op-1', 'op-2'],
+    },
     { provider: { command: 'claude', type: 'claude-code' }, expectedOperations: ['op-1', 'op-2'] },
     {
       provider: { command: 'pi', env: { LOBEHUB_OPERATION_ID: 'user-override' }, type: 'pi' },
@@ -707,14 +683,20 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         );
       }
 
-      const environments = mockStartSession.mock.calls.map(([params]) => params.env);
-      expect(environments).toEqual(
-        expectedOperations.map((operationId) => ({
-          LOBEHUB_AGENT_ID: 'agent-1',
-          ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
-          LOBEHUB_TOPIC_ID: 'topic-1',
-          LOBEHUB_WORKSPACE_ID: 'ws-1', // the caller's captured workspace, not live navigation
-        })),
+      const launches = mockStartSession.mock.calls.map(([params]) => params);
+      expect(launches).toEqual(
+        expectedOperations.map((operationId) =>
+          expect.objectContaining({
+            agentType: provider.type,
+            command: provider.command,
+            env: {
+              LOBEHUB_AGENT_ID: 'agent-1',
+              ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+              LOBEHUB_TOPIC_ID: 'topic-1',
+              LOBEHUB_WORKSPACE_ID: 'ws-1',
+            }, // captured workspace, not live navigation
+          }),
+        ),
       );
       const sent = mockSendPrompt.mock.calls.map(([p]) => [p.operationId, p.workspaceId]);
       expect(sent.flat()).toEqual(['op-1', 'ws-1', 'op-2', 'ws-1']);
@@ -1106,91 +1088,97 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(types.indexOf('updateToolMessage')).toBeGreaterThan(types.indexOf('createMessage'));
     });
 
-    it('replays an early AskUserQuestion intervention after the batched tool row exists', async () => {
-      const optimisticUpdateMessagePlugin = vi.fn(async () => {});
-      const updateTopicStatus = vi.fn(async () => {});
-      const store = createMockStore({
-        optimisticUpdateMessagePlugin,
-        updateTopicStatus,
-      });
-      const get = vi.fn(() => store);
-
-      let resolveSendPrompt!: () => void;
-      mockSendPrompt.mockReturnValue(
-        new Promise<void>((resolve) => {
-          resolveSendPrompt = resolve;
-        }),
-      );
-
-      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
-      await flush();
-
-      ipc.emitRawLine('ipc-sess-1', ccInit());
-      ipc.emitStreamEvent('ipc-sess-1', {
-        data: {
-          apiName: 'askUserQuestion',
-          arguments: JSON.stringify({
-            questions: [
-              {
-                header: 'Scope',
-                options: [
-                  { description: 'Keep it narrow', label: 'Small' },
-                  { description: 'Do all of it', label: 'All' },
-                ],
-                question: 'How much should I do?',
-              },
-            ],
+    it.each([false, true])(
+      'keeps question ownership and closes its upstream tool (subagent=%s)',
+      async (subagent) => {
+        const optimisticUpdateMessagePlugin = vi.fn(async () => {});
+        const store = createMockStore({
+          optimisticUpdateMessagePlugin,
+          updateTopicStatus: vi.fn(),
+        });
+        let resolveSendPrompt!: () => void;
+        mockSendPrompt.mockReturnValue(
+          new Promise<void>((resolve) => {
+            resolveSendPrompt = resolve;
           }),
-          deadline: Date.now() + 300_000,
-          identifier: 'claude-code',
-          toolCallId: 'toolu_ask',
-        },
-        type: 'agent_intervention_request',
-      });
-      await flush();
-
-      expect(optimisticUpdateMessagePlugin).not.toHaveBeenCalled();
-
-      ipc.emitRawLine(
-        'ipc-sess-1',
-        ccToolUse('msg_ask', 'toolu_ask', 'mcp__lobe_cc__ask_user_question', {
+        );
+        const executorPromise = executeHeterogeneousAgent(() => store, defaultParams);
+        await flush();
+        ipc.emitRawLine('ipc-sess-1', ccInit());
+        const args = {
           questions: [
             {
               header: 'Scope',
-              options: [
-                { description: 'Keep it narrow', label: 'Small' },
-                { description: 'Do all of it', label: 'All' },
-              ],
+              options: [{ label: 'Small' }, { label: 'All' }],
               question: 'How much should I do?',
             },
           ],
-        }),
-      );
-      await flush();
-
-      const toolCreateIndex = mockCreateMessage.mock.calls.findIndex(
-        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'toolu_ask',
-      );
-      expect(toolCreateIndex).toBeGreaterThanOrEqual(0);
-      expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
-        mockCreateMessage.mock.calls[toolCreateIndex][0].id,
-        { intervention: { status: 'pending' } },
-        { operationId: 'op-1' },
-      );
-      expect(mockCreateMessage.mock.invocationCallOrder[toolCreateIndex]).toBeLessThan(
-        optimisticUpdateMessagePlugin.mock.invocationCallOrder[0],
-      );
-      expect(updateTopicStatus).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'waitingForHuman', topicId: 'topic-1' }),
-      );
-
-      ipc.emitRawLine('ipc-sess-1', ccToolResult('toolu_ask', 'User answers:\n- Scope: Small'));
-      ipc.emitRawLine('ipc-sess-1', ccResult());
-      ipc.emitComplete('ipc-sess-1');
-      await flush();
-      resolveSendPrompt();
-      await executorPromise;
-    });
+        };
+        const child = { parentToolCallId: 'task-parent', subagentMessageId: 'child-turn' };
+        if (subagent) {
+          ipc.emitStreamEvent('ipc-sess-1', {
+            data: {
+              chunkType: 'tools_calling',
+              subagent: child,
+              toolsCalling: [
+                {
+                  apiName: 'askUserQuestion',
+                  arguments: JSON.stringify(args),
+                  id: 'toolu_ask',
+                  identifier: 'claude-code',
+                  type: 'default',
+                },
+              ],
+            },
+            type: 'stream_chunk',
+          });
+          await flush();
+        }
+        ipc.emitStreamEvent('ipc-sess-1', {
+          data: {
+            apiName: 'askUserQuestion',
+            arguments: JSON.stringify(args),
+            deadline: Date.now() + 300_000,
+            identifier: 'claude-code',
+            toolCallId: 'toolu_ask',
+          },
+          type: 'agent_intervention_request',
+        });
+        await flush();
+        const tools = mockCreateMessage.mock.calls.filter(
+          ([m]: any) => m.role === 'tool' && m.tool_call_id === 'toolu_ask',
+        );
+        expect(tools).toHaveLength(1);
+        const toolRow = tools[0][0];
+        const expectedContext = subagent
+          ? {
+              context: { ...defaultContext, scope: 'thread', threadId: toolRow.threadId },
+              operationId: 'op-1',
+            }
+          : { operationId: 'op-1' };
+        expect(subagent ? toolRow.threadId : !toolRow.threadId).toBeTruthy();
+        expect(optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
+          toolRow.id,
+          { intervention: { status: 'pending' } },
+          expectedContext,
+        );
+        ipc.emitStreamEvent('ipc-sess-1', {
+          data: { content: 'done', ...(subagent && { subagent: child }), toolCallId: 'toolu_ask' },
+          type: 'tool_result',
+        });
+        await flush();
+        expect(optimisticUpdateMessagePlugin).toHaveBeenLastCalledWith(
+          toolRow.id,
+          { intervention: expect.objectContaining({ status: 'aborted' }) },
+          expectedContext,
+        );
+        ipc.emitRawLine('ipc-sess-1', ccResult());
+        ipc.emitComplete('ipc-sess-1');
+        await flush();
+        resolveSendPrompt();
+        await executorPromise;
+      },
+    );
   });
 
   // ────────────────────────────────────────────────────
@@ -6003,18 +5991,20 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();
     });
 
-    // ── 4. error terminal → no notification, no drain (the onError branch) ──
-    it('an error terminal fires NO completion notification and NO queue drain', async () => {
-      desktopFlag.value = true; // even on desktop, the error terminal must stay silent
+    // ── 4. error terminal → failure notification, no drain (the onError branch) ──
+    it('an error terminal fires a FAILURE notification and NO queue drain', async () => {
+      desktopFlag.value = true;
       const store = createMockStore({
         drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
       });
 
       await runToError(store);
 
-      // No completion signal on the error path (onComplete skips notifyCompletion
-      // when isErrorTerminal).
-      expect(mockShowNotification).not.toHaveBeenCalled();
+      // One failure banner, never the "finished" one (no completion badge).
+      expect(mockShowNotification).toHaveBeenCalledTimes(1);
+      expect(mockShowNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining('the run failed') }),
+      );
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
       // No queue drain on the error path (gated by terminalEvent?.type !== 'error').
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();

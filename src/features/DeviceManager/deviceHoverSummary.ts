@@ -17,6 +17,8 @@ export interface DeviceHoverSummary {
   lastConnectedAt: string;
   memoryTotalBytes?: number;
   online: boolean;
+  /** A persisted row the server has not confirmed: `online` is a placeholder. */
+  onlineUnknown: boolean;
   platformLabel?: string;
   workingDir?: string;
 }
@@ -43,6 +45,7 @@ export const buildDeviceHoverSummary = (
     lastConnectedAt: channels[0]?.connectedAt ?? device.lastSeen,
     memoryTotalBytes: series?.memoryTotalBytes || undefined,
     online: device.online,
+    onlineUnknown: !!device.onlineUnknown,
     platformLabel: getPlatformLabel(device.platform),
     workingDir: device.defaultCwd || undefined,
   };

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
@@ -12,11 +12,14 @@ import type {
 } from '../schemas';
 import {
   agentAccountBindings,
+  agentOperations,
   agentProviderAccounts,
   agentQuotaCalibrations,
   agentQuotaSnapshots,
   agentQuotaUsageLedger,
   agentQuotaWindows,
+  agents,
+  topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import {
@@ -402,6 +405,50 @@ export class AgentQuotaUsageLedgerModel {
         ),
       )
       .orderBy(agentQuotaUsageLedger.occurredAt);
+
+  /**
+   * Agent runs still in flight that billed this account since `since` — who is
+   * spending it right now. A run is listed once, under its newest turn. `idle`
+   * is left out: a run that has not started has not billed anything.
+   */
+  listActiveRuns = async (accountId: string, since: Date) => {
+    const lastTurnAt = sql`max(${agentQuotaUsageLedger.occurredAt})`.mapWith(
+      agentQuotaUsageLedger.occurredAt,
+    );
+
+    return this.db
+      .select({
+        agentAvatar: agents.avatar,
+        agentBackgroundColor: agents.backgroundColor,
+        agentId: agentOperations.agentId,
+        agentTitle: agents.title,
+        lastTurnAt,
+        operationId: agentOperations.id,
+        startedAt: agentOperations.startedAt,
+        status: agentOperations.status,
+        topicId: agentOperations.topicId,
+        topicTitle: topics.title,
+      })
+      .from(agentQuotaUsageLedger)
+      .innerJoin(agentOperations, eq(agentQuotaUsageLedger.operationId, agentOperations.id))
+      .leftJoin(agents, eq(agentOperations.agentId, agents.id))
+      .leftJoin(topics, eq(agentOperations.topicId, topics.id))
+      .where(
+        and(
+          this.mine(),
+          eq(agentQuotaUsageLedger.accountId, accountId),
+          gte(agentQuotaUsageLedger.occurredAt, since),
+          inArray(agentOperations.status, [
+            'running',
+            'waiting_for_async_tool',
+            'waiting_for_client',
+            'waiting_for_human',
+          ]),
+        ),
+      )
+      .groupBy(agentOperations.id, agents.id, topics.id)
+      .orderBy(desc(lastTurnAt));
+  };
 
   /** Total USD spent on an account within [from, to). */
   sumCostUsd = async (accountId: string, from: Date, to: Date): Promise<number> => {

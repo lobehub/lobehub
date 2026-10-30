@@ -335,6 +335,13 @@ export const AnthropicStream = (
         streamStack,
       }),
     )
-    .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
+    .pipeThrough(
+      /**
+       * A Messages stream always ends with `message_delta` + `message_stop`. Some relays close the
+       * connection mid-response without either; without this flag the truncated output was
+       * treated as a normal completion, so half-written tool arguments got executed.
+       */
+      createSSEProtocolTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
+    )
     .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }));
 };

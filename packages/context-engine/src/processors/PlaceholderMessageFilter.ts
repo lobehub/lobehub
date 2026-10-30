@@ -1,4 +1,4 @@
-import { LOADING_FLAT } from '@lobechat/const';
+import { LOADING_FLAT } from '../const/message';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';

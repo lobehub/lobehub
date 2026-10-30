@@ -67,6 +67,31 @@ describe('mergeQueuedFollowUps', () => {
     expect(merged.mentionedAgents).toEqual([{ id: 'a1', name: 'A' }]);
   });
 
+  it('keeps every follow-up’s attached content in queue order, and rich text only when sent alone', () => {
+    const quote = (id: string) => ({ content: id, id, source: 'text' as const });
+    const page = { content: 'p2', id: 'p2', pageId: 'page-1' };
+    const doc = (text: string) => ({ root: { children: [{ text }], type: 'root' } });
+    const merged = mergeQueuedFollowUps([
+      followUp('second', 2, {
+        userMessage: {
+          editorData: doc('second'),
+          metadata: { contextSelections: [quote('q2')], pageSelections: [page] },
+        },
+      }),
+      followUp('first', 1, { userMessage: { metadata: { contextSelections: [quote('q1')] } } }),
+      followUp('third', 3, {}),
+    ]);
+
+    expect(merged.userMessage).toEqual({
+      metadata: { contextSelections: [quote('q1'), quote('q2')], pageSelections: [page] },
+    });
+    expect(mergeQueuedFollowUps([followUp('only', 1, {})]).userMessage).toBeUndefined();
+    expect(
+      mergeQueuedFollowUps([followUp('only', 1, { userMessage: { editorData: doc('only') } })])
+        .userMessage,
+    ).toEqual({ editorData: doc('only') });
+  });
+
   it('runs with the newest settings and drops per-send client ids once merged', () => {
     const merged = mergeQueuedFollowUps([
       followUp('a', 1, { clientIds: { userMessageId: 'u-a' } as any, deviceId: 'old' }),
@@ -97,7 +122,7 @@ describe('startQueuedFollowUp', () => {
     startComposerRun.mockResolvedValue({ operationId: 'op-2' });
   });
 
-  it('starts the drained follow-ups as one steered turn on the same surface', async () => {
+  it('starts the drained follow-ups as their own turn on the same surface', async () => {
     drain.mockResolvedValue([followUp('a', 1, {}), followUp('b', 2, {})]);
 
     await expect(
@@ -117,14 +142,35 @@ describe('startQueuedFollowUp', () => {
       expect.objectContaining({
         appContext: { threadId: 'thd-1', topicId: 'tpc-1' },
         prompt: 'a\n\nb',
-        steer: true,
+        queuedSuccessor: true,
       }),
     );
+    // A drained follow-up opens a turn of its own; only a steer of the run it
+    // waited behind would mark the user message.
+    expect(startComposerRun.mock.calls[0][1].steer).toBeUndefined();
     // Delivered: the slots the drain reserved are free again.
     expect(settle).toHaveBeenCalledWith(
       expect.objectContaining({ topicId: 'tpc-1' }),
       expect.any(String),
     );
+  });
+
+  it('reads a follow-up queued in the old shape (top-level selections) as attached content', async () => {
+    const quote = { content: 'Quoted reply', id: 'selection-1', source: 'text' as const };
+    const page = { content: 'Selected paragraph', id: 'page-1', pageId: 'page-1' };
+    // Stored by a client from before `userMessage`; it survives in Redis across a deploy.
+    drain.mockResolvedValue([
+      followUp('legacy', 1, { contextSelections: [quote], pageSelections: [page] } as any),
+    ]);
+
+    await startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }));
+
+    const request = startComposerRun.mock.calls[0][1];
+    expect(request.userMessage).toEqual({
+      metadata: { contextSelections: [quote], pageSelections: [page] },
+    });
+    expect(request).not.toHaveProperty('contextSelections');
+    expect(request).not.toHaveProperty('pageSelections');
   });
 
   it('puts the follow-ups back when the next turn cannot start', async () => {

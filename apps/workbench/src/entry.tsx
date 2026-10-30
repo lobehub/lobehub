@@ -1,3 +1,4 @@
+import '@/styles/stylex.css';
 import '@/spa/initialize';
 
 import { RouterProvider } from 'react-router/dom';

@@ -31,6 +31,7 @@ export {
   type StaleToolResultTrimConfig,
   StaleToolResultTrimProcessor,
 } from './StaleToolResultTrim';
+export { SubAgentResultMessageProcessor } from './SubAgentResultMessage';
 export { SupervisorRoleRestoreProcessor } from './SupervisorRoleRestore';
 export { TaskCallbackMessageProcessor } from './TaskCallbackMessage';
 export { TaskMessageProcessor } from './TaskMessage';

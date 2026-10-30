@@ -1,18 +1,36 @@
-import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
+import type { DeviceListItem, DeviceMetricSeries, WorkingDirEntry } from '@lobechat/types';
 
-import { refreshDeviceList } from '@/features/DeviceManager/const';
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { deviceService } from '@/services/device';
 import { type StoreSetter } from '@/store/types';
 
 import { nextWorkingDirs, removeWorkingDir, WORKING_DIRS_MAX } from './deviceCwd';
-import { DEVICE_LIST_KEY, type DeviceListParams, deviceListResource } from './projection';
+import {
+  DEVICE_LIST_KEY,
+  type DeviceListParams,
+  deviceListResource,
+  type DeviceMetricSeriesParams,
+  deviceMetricSeriesResource,
+} from './projection';
 import { deviceSelectors } from './selectors';
 import { type DeviceStore } from './store';
 
 type Setter = StoreSetter<DeviceStore>;
 
 const LIST_PARAMS = {} as DeviceListParams;
+
+/**
+ * Pickers, chips and guards across a page mount the list at different times.
+ * The app's SWR default (no dedupe) would let each late mount re-request it;
+ * inside this window they join the last request instead. Explicit refreshes,
+ * post-write revalidation and polling still go out.
+ */
+const DEVICE_LIST_DEDUPING_INTERVAL = 10_000;
+
+/** Devices upload every 5 minutes; polling faster only re-reads the same samples. */
+const METRIC_SERIES_REFRESH_INTERVAL = 5 * 60_000;
+/** The chip, the hover panel and the detail page mount one device's series together; let them share one request. */
+const METRIC_SERIES_DEDUPING_INTERVAL = 30_000;
 
 type UpdateDeviceInput = Parameters<typeof deviceService.updateDevice>[0];
 
@@ -32,6 +50,7 @@ export const deviceSlice = (set: Setter, get: () => DeviceStore, _api?: unknown)
 export class DeviceActionImpl {
   readonly #get: () => DeviceStore;
   readonly #list;
+  readonly #metricSeries;
 
   constructor(set: Setter, get: () => DeviceStore, _api?: unknown) {
     void _api;
@@ -43,6 +62,14 @@ export class DeviceActionImpl {
       set,
       stateKey: 'deviceListReplica',
       view: recordLens<DeviceStore, DeviceListItem[]>('deviceListMap'),
+    });
+    this.#metricSeries = createReplicaSlice(deviceMetricSeriesResource, {
+      actionPrefix: 'device/metricSeries',
+      fetcher: ({ deviceId, scope }) => deviceService.getMetricSeries(deviceId, scope),
+      get,
+      set,
+      stateKey: 'deviceMetricSeriesReplica',
+      view: recordLens<DeviceStore, DeviceMetricSeries>('deviceMetricSeriesMap'),
     });
   }
 
@@ -60,12 +87,14 @@ export class DeviceActionImpl {
       serverCall,
     );
 
+  /** Re-fetch the truth (server-normalized fields, other tabs' writes). */
+  #revalidateDeviceLists = () => this.#list.revalidate(DEVICE_LIST_KEY);
+
   /**
-   * Revalidate both device lists: this store's replica and the canonical
-   * workspace-scoped `useDeviceList` entry, which task controls read.
+   * Re-run the device list request of every mounted reader. Resolves once the
+   * response is folded into the store; read the rows with `deviceSelectors`.
    */
-  #revalidateDeviceLists = () =>
-    Promise.all([this.#list.revalidate(DEVICE_LIST_KEY), refreshDeviceList()]);
+  refreshDevices = (): Promise<unknown> => this.#list.revalidate(DEVICE_LIST_KEY);
 
   /**
    * Seed the persisted device list before the route commits, so the bound
@@ -203,10 +232,30 @@ export class DeviceActionImpl {
   /**
    * Fetch orchestration only; read the rows with `deviceSelectors.deviceList`.
    * The persisted copy paints first (presence unknown), then the server
-   * confirms it in the background.
+   * confirms it in the background. A surface that tracks presence live passes
+   * its own `refreshInterval`.
    */
-  useFetchDevices = (enabled = false): ReplicaSyncResult =>
-    this.#list.useSync(LIST_PARAMS, { enabled });
+  useFetchDevices = (enabled = false, schedule?: { refreshInterval?: number }): ReplicaSyncResult =>
+    this.#list.useSync(LIST_PARAMS, {
+      dedupingInterval: DEVICE_LIST_DEDUPING_INTERVAL,
+      enabled,
+      ...schedule,
+    });
+
+  /**
+   * Fetch orchestration for one device's health series; read it with
+   * `deviceSelectors.getMetricSeries`. `enabled: false` (an off-screen card,
+   * an offline device) stops fetching and keeps what the store holds.
+   */
+  useFetchDeviceMetricSeries = (
+    params: DeviceMetricSeriesParams,
+    enabled = true,
+  ): ReplicaSyncResult =>
+    this.#metricSeries.useSync(params, {
+      dedupingInterval: METRIC_SERIES_DEDUPING_INTERVAL,
+      enabled,
+      refreshInterval: METRIC_SERIES_REFRESH_INTERVAL,
+    });
 }
 
 export type DeviceAction = Pick<DeviceActionImpl, keyof DeviceActionImpl>;

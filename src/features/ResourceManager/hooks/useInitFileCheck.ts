@@ -12,16 +12,19 @@ import { useResourceManagerStore } from '../store';
 /**
  * Used for initial loading only, handle URL like:
  *
- * /resource?file=xxxxxx
+ * /resource/drive?file=xxxxxx
+ *
+ * `pathFileId` is the item a route path names (`/resource/file/:id`,
+ * `/resource/page/:id`); it wins over the `?file=` query.
  */
-export const useInitFileCheck = () => {
+export const useInitFileCheck = (pathFileId?: string | null) => {
   const [searchParams] = useSearchParams();
   const [setMode, setCurrentViewItemId] = useResourceManagerStore((s) => [
     s.setMode,
     s.setCurrentViewItemId,
   ]);
 
-  const fileId = searchParams.get('file');
+  const fileId = pathFileId ?? searchParams.get('file');
 
   const useFetchKnowledgeItem = useFileStore((s) => s.useFetchKnowledgeItem);
   const { data: fileData } = useFetchKnowledgeItem(fileId || undefined);

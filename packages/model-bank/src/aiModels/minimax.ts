@@ -14,6 +14,37 @@ const minimaxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      'MiniMax M3.1 Flash is a fast, low-cost multimodal model with native image and video understanding and tunable thinking depth.',
+    displayName: 'MiniMax M3.1 Flash',
+    enabled: true,
+    family: 'minimax',
+    generation: 'minimax-m3.1',
+    id: 'MiniMax-M3.1-Flash',
+    maxOutput: 524_288,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-19',
+    settings: {
+      disabledParams: ['temperature'],
+      extendParams: ['gpt6ReasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       "MiniMax M3 is MiniMax's first multimodal model, with native image and video understanding and strong coding and agentic capabilities.",
     displayName: 'MiniMax M3',
     enabled: true,
@@ -55,6 +86,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-01',
     settings: {
+      disabledParams: ['temperature'],
       extendParams: ['enableReasoning'],
     },
     type: 'chat',

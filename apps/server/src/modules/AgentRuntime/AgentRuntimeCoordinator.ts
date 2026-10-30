@@ -4,6 +4,7 @@ import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { createAgentStateManager, createStreamEventManager } from './factory';
+import type { GatewayInitMeta } from './GatewayStreamNotifier';
 import { type IAgentStateManager, type IStreamEventManager } from './types';
 import { hasVisibleOutputEndPublished } from './visibleOutputEnd';
 
@@ -104,6 +105,12 @@ export class AgentRuntimeCoordinator {
       userId?: string;
       workspaceId?: string;
     },
+    /**
+     * Routing facts (topicId, agentId, …) sent with the gateway `init` but not
+     * persisted: the hub's `op_lifecycle` carries them to every socket of the
+     * user, so a client that did not start the run can tell where it belongs.
+     */
+    initMeta?: GatewayInitMeta,
   ): Promise<void> {
     try {
       // Create operation metadata
@@ -114,7 +121,10 @@ export class AgentRuntimeCoordinator {
 
       if (metadata) {
         // Send agent runtime init event
-        await this.streamEventManager.publishAgentRuntimeInit(operationId, metadata);
+        await this.streamEventManager.publishAgentRuntimeInit(operationId, {
+          ...metadata,
+          ...initMeta,
+        });
         log('[%s] Agent operation created and initialized', operationId);
       }
     } catch (error) {

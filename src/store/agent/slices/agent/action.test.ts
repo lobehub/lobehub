@@ -41,15 +41,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
-// Mock sessionStore
-vi.mock('@/store/session', () => ({
-  useSessionStore: {
-    getState: vi.fn(() => ({
-      refreshSessions: vi.fn(),
-    })),
-  },
-}));
-
 // Mock SWR mutate
 vi.mock('swr', async (importOriginal) => {
   const modules = await importOriginal();
@@ -193,7 +184,7 @@ describe('AgentSlice Actions', () => {
         await result.current.createAgent({ config: { title: 'New Agent' } });
       });
 
-      expect(result.current.availableAgents).toBeUndefined();
+      expect(result.current.availableAgentsStale).toBe(true);
     });
 
     it('should seed a personal name matching the user language', async () => {
@@ -432,7 +423,7 @@ describe('AgentSlice Actions', () => {
   });
 
   describe('invalidateAvailableAgents', () => {
-    it('should clear cached available agents', () => {
+    it('should stop trusting cached available agents', () => {
       const { result } = renderHook(() => useAgentStore());
 
       act(() => {
@@ -454,7 +445,7 @@ describe('AgentSlice Actions', () => {
         result.current.invalidateAvailableAgents();
       });
 
-      expect(result.current.availableAgents).toBeUndefined();
+      expect(result.current.availableAgentsStale).toBe(true);
     });
   });
 
@@ -1128,9 +1119,6 @@ describe('AgentSlice Actions', () => {
       );
     });
 
-    // Note: refreshSessions is no longer called after optimistic update
-    // as the implementation now uses API returned data directly
-
     it('confirms the saved response in the replica without another request', async () => {
       const { result } = renderHook(() => useAgentStore());
       const scopedMutate = vi.fn().mockResolvedValue(undefined);
@@ -1275,7 +1263,7 @@ describe('AgentSlice Actions', () => {
         description: 'New Desc',
         title: 'New Title',
       });
-      expect(result.current.availableAgents).toBeUndefined();
+      expect(result.current.availableAgentsStale).toBe(true);
     });
 
     it('rolls back and rethrows when an optimistic projection owns the failure UI', async () => {
@@ -1293,9 +1281,6 @@ describe('AgentSlice Actions', () => {
 
       expect(result.current.agentMap['agent-1']?.title).toBe('Original');
     });
-
-    // Note: refreshSessions is no longer called after optimistic update
-    // as the implementation now uses API returned data directly
   });
 
   describe('useFetchAgentConfig', () => {

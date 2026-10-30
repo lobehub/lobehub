@@ -3,6 +3,7 @@ import AgentsRoutes from './agents.route';
 import AnthropicRoutes from './anthropic.route';
 import ApiKeysRoutes from './api-keys.route';
 import ChatRoutes from './chat.route';
+import ChatGroupsRoutes from './chat-groups.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
@@ -33,6 +34,7 @@ export default {
   'anthropic': AnthropicRoutes,
   'api-keys': ApiKeysRoutes,
   'chat': ChatRoutes,
+  'chat-groups': ChatGroupsRoutes,
   'eval': EvalRoutes,
   'plugins': PluginsRoutes,
   'files': FileRoutes,

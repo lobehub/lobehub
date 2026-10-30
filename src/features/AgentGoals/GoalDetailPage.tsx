@@ -7,17 +7,19 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
 import NotFound from '@/components/404';
-import AsyncError from '@/components/AsyncError';
 import ConversationSkeleton from '@/components/Skeleton/Conversation/List';
 import GoalDetailSkeleton from '@/components/Skeleton/GoalDetail';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useAgentRoutePath } from '@/features/AgentBreadcrumb/useAgentRoutePath';
+import { FavoriteButton, useCurrentFavoritePath } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
 import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import OtherScopeAsyncError from '@/features/Workspace/OtherScopeAsyncError';
+import { type ScopedLambdaClient } from '@/features/Workspace/useLocateInOtherScope';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useChatStore } from '@/store/chat';
@@ -56,6 +58,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+/** A goal 404s outside its own scope; reading it through another scope tells where it lives. */
+const probeGoalGraph = (client: ScopedLambdaClient, id: string, signal: AbortSignal) =>
+  client.goal.graph.query({ id }, { context: { showNotification: false }, signal });
+
 interface GoalDetailPageProps {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
   agentId?: string;
@@ -78,6 +84,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const canStart = useResourceManageable(snapshot?.goal.userId);
 
   const buildAgentPath = useAgentRoutePath(agentId ?? '');
+  const favoritePath = useCurrentFavoritePath();
 
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
@@ -157,7 +164,19 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // page (or switching goals) must not leak it into the conversation surface.
   useEffect(() => () => clearPortalStack(), [clearPortalStack, goalId]);
 
-  if (error && !snapshot) return <AsyncError error={error} variant={'page'} onRetry={mutate} />;
+  if (error && !snapshot)
+    return (
+      <OtherScopeAsyncError
+        error={error}
+        pendingFallback={<GoalDetailSkeleton />}
+        resourceKey={`goal:${goalId}`}
+        variant={'page'}
+        probe={(client: ScopedLambdaClient, signal: AbortSignal) =>
+          probeGoalGraph(client, goalId, signal)
+        }
+        onRetry={mutate}
+      />
+    );
   if (!snapshot)
     return isLoading ? (
       <GoalDetailSkeleton />
@@ -205,18 +224,6 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   // message landing, so the reply is never invisible behind a drill-down. A
   // managed goal whose main Agent has no supervision record yet gets one from
   // this very turn: the panel opens now and moves there once it exists.
-  // A topic picked from either panel's history: the supervision record opens as
-  // the record, any other topic as the side conversation on that topic.
-  const selectTopic = (topicId: string) => {
-    if (!supervisingAgentId || topicId === chat.topicId) return;
-    clearPortalStack();
-    chat.openConversation(
-      managerConversation?.topicId === topicId
-        ? { agentId: managerConversation.agentId, topicId }
-        : { agentId: supervisingAgentId, topicId },
-    );
-  };
-
   const revealConversation = () => {
     setGraphFullscreen(false);
     clearPortalStack();
@@ -252,6 +259,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 ) : (
                   <GoalWorkspaceBreadcrumb title={goal.title} />
                 )}
+                <FavoriteButton
+                  path={favoritePath}
+                  targetId={goal.id}
+                  title={goal.title}
+                  type={'goal'}
+                />
                 {/* Not nested under the breadcrumb: an agent-less goal still has to
                   be deletable, and this menu is the only place that can do it. */}
                 <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />
@@ -393,20 +406,17 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             hasWorkspaceSidePanel ? null : (
               <PortalContent />
             )
-          ) : supervisingAgentId &&
-            chat.topicId &&
-            chat.topicId === managerConversation?.topicId ? (
+          ) : managerConversation ? (
+            // A goal bound to its supervision record keeps the panel on that
+            // topic: no side conversation, no other topic can replace it.
             <GoalSupervision
-              agentId={supervisingAgentId}
+              agentId={managerConversation.agentId}
               goalId={goalId}
               initialMessage={chat.initialMessage}
-              key={`${goalId}:${supervisingAgentId}:${chat.request}`}
-              topicId={chat.topicId}
+              key={`${goalId}:${managerConversation.agentId}:${managerConversation.topicId}:${chat.request}`}
+              topicId={managerConversation.topicId}
               onCollapse={() => chat.setOpen(false)}
               onInitialMessageConsumed={chat.consumeInitialMessage}
-              // A question that should not land in the manager's own record.
-              onOpenChat={() => chat.openConversation({ agentId: supervisingAgentId })}
-              onSelectTopic={selectTopic}
             />
           ) : chat.awaitingRecord ? (
             // The supervision record is on its way: show it loading, not the
@@ -423,7 +433,6 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
               key={`${goalId}:${supervisingAgentId}:${chat.request}`}
               onCollapse={() => chat.setOpen(false)}
               onInitialMessageConsumed={chat.consumeInitialMessage}
-              onSelectTopic={managerConversation ? selectTopic : undefined}
             />
           ) : null}
         </RightPanel>

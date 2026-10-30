@@ -1,4 +1,4 @@
-import { toRecord } from '@lobechat/utils';
+import { toRecord } from './object';
 
 import { getErrorCodeSpec } from '../errors/specs';
 import { AgentRuntimeErrorType } from '../types/error';

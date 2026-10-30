@@ -110,7 +110,6 @@ beforeEach(() => {
       threadLoadingIds: [],
       threadMaps: {},
       threadStartMessageId: undefined,
-      threadsInit: false,
     },
     false,
   );

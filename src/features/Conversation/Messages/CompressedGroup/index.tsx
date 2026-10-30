@@ -109,6 +109,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
     () =>
       getCompressedTurnCount({
         compressedMessages,
+        compressedTurnCount: (message as UIChatMessage | undefined)?.compressedTurnCount,
         originalMessageCount: (
           (message as UIChatMessage | undefined)?.metadata as CompressionGroupMetadata | undefined
         )?.originalMessageCount,

@@ -2,13 +2,13 @@
 
 import { memo } from 'react';
 
-import { useSessionStore } from '@/store/session';
-
+import { useAgentSearch } from '../Layout/AgentSearchContext';
 import DefaultMode from './DefaultMode';
 import SearchMode from './SearchMode';
 
 const SessionListContent = memo(() => {
-  const isSearching = useSessionStore((s) => s.isSearching);
+  const { keywords } = useAgentSearch();
+  const isSearching = !!keywords.trim();
 
   return isSearching ? <SearchMode /> : <DefaultMode />;
 });

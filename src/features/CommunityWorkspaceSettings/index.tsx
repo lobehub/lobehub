@@ -1,9 +1,8 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import { Block, Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
-  Avatar,
   Button,
   Input,
   Table,
@@ -25,15 +24,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import {
-  memo,
-  type PropsWithChildren,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { memo, type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -47,6 +38,8 @@ import {
   updateCommunityWorkspaceProfile,
 } from '@/business/client/services/communityWorkspaceProfile';
 import EmojiPicker from '@/components/EmojiPicker';
+import SettingCard from '@/components/SettingCard';
+import UserAvatar from '@/components/UserAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
@@ -60,16 +53,6 @@ const ORGANIZATION_URL_PREFIX = `${OFFICIAL_URL.replace(/^https?:\/\//, '')}/com
 const NAMESPACE_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  footer: css`
-    padding-block: 12px;
-    padding-inline: 20px;
-    border-block-start: 1px solid ${cssVar.colorFillTertiary};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  hint: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
   memberNameLink: css`
     color: inherit;
 
@@ -90,40 +73,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  */
 const isDefaultMarketNamespace = (namespace: string | null): boolean =>
   !!namespace && /[A-Z]/.test(namespace);
-
-interface SettingCardProps {
-  action?: ReactNode;
-  children?: ReactNode;
-  description?: ReactNode;
-  hint?: ReactNode;
-  title: ReactNode;
-}
-
-const SettingCard = memo<SettingCardProps>(({ title, description, children, hint, action }) => (
-  <Block variant="outlined">
-    <Flexbox gap={12} padding={20}>
-      <Flexbox gap={4}>
-        <Text strong as="h3" style={{ fontSize: 16, margin: 0 }}>
-          {title}
-        </Text>
-        {description && (
-          <Text style={{ fontSize: 13 }} type="secondary">
-            {description}
-          </Text>
-        )}
-      </Flexbox>
-      {children}
-    </Flexbox>
-    {(hint || action) && (
-      <Flexbox horizontal align="center" className={styles.footer} gap={12} justify="space-between">
-        <span className={styles.hint}>{hint ?? ''}</span>
-        {action}
-      </Flexbox>
-    )}
-  </Block>
-));
-
-SettingCard.displayName = 'CommunityWorkspaceSettingCard';
 
 const PageContainer = memo<PropsWithChildren>(({ children }) => (
   <Flexbox height="100%" style={{ overflowX: 'hidden', overflowY: 'auto' }} width="100%">
@@ -194,7 +143,7 @@ const MembersCard = memo<{ canManage: boolean }>(({ canManage }) => {
 
           return (
             <Flexbox horizontal align="center" gap={12}>
-              <Avatar avatar={member.avatarUrl || undefined} size={36} title={name} />
+              <UserAvatar avatar={member.avatarUrl} name={name} size={36} />
               <Flexbox gap={2}>
                 {profileUrl ? (
                   <a

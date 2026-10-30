@@ -9,6 +9,7 @@ import {
   type ShareToolGrant,
 } from '@lobechat/const';
 
+import { isGovernedByBuiltinAllowlist } from './allowlist';
 import type { AgentShareGate, ShareDataToolPermissions } from './types';
 
 /**
@@ -56,6 +57,22 @@ export const getShareGrantActivatedPluginIds = (gate: AgentShareGate): string[] 
 
   return hasShareToolGrant(grants, AgentDocumentsIdentifier) ? [AgentDocumentsIdentifier] : [];
 };
+
+/**
+ * The non-builtin identifiers (MCP servers, Composio and LobeHub Skills
+ * connections, installed plugins) a share grants, at any API scope.
+ *
+ * Tool discovery reads these sources for the creator's whole account, and
+ * reading one can decrypt its credentials or call its provider. A share run
+ * must only touch what the creator granted, so discovery narrows each source
+ * to this set before reading it — not just at the final tool-set gate.
+ */
+export const getShareGrantedExtensionIds = (gate: AgentShareGate): Set<string> =>
+  new Set(
+    [...resolveShareToolGrants(gate.shareConfig.toolGrants).keys()].filter(
+      (identifier) => !isGovernedByBuiltinAllowlist(identifier),
+    ),
+  );
 
 /**
  * Whether the share grants `lobe-cloud-sandbox` (at any API scope). Drives

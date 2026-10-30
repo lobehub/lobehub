@@ -15,6 +15,14 @@ export function timeAgo(date: Date | string): string {
   return `${seconds}s ago`;
 }
 
+/** Absolute local time (`2026-10-15 14:03`) for history listings, where "3d ago" loses the day. */
+export function formatTimestamp(date: Date | string): string {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '-';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
 /**
  * Counterpart to `timeAgo` for deadlines. `timeAgo` only formats the past, so
  * feeding it a future timestamp (an invitation expiry, a lease) renders a

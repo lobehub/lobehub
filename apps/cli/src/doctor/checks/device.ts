@@ -1,13 +1,13 @@
 import { GatewayClient } from '@lobechat/device-gateway-client';
 
 import { CLI_PRIMARY_BIN } from '../../constants/identity';
-import { getRunningDaemonPid, readStatus, removePid, removeStatus } from '../../daemon/manager';
-import { readConnectServiceStatus } from '../../service/connect';
+import { readConnectRuntimes } from '../../daemon/connectStatus';
+import { readStatus, removePid, removeStatus } from '../../daemon/manager';
+import { describeDeviceGateway, describeDeviceGatewayFailure } from '../../device/gatewayEndpoint';
 import { resolveLocalDeviceId } from '../../utils/device';
-import { probeCredential, probeDevices } from '../probes';
+import { probeCredential, probeDeviceGateway, probeDevices } from '../probes';
 import { redactUrlCredentials, redactUrlsInMessage } from '../redact';
 import type { CheckOutcome, DoctorCheck } from '../types';
-import { resolveEndpoints } from './endpoints';
 
 /**
  * Is there a `lh connect` daemon on this machine, and is the state it left
@@ -29,21 +29,42 @@ const daemon: DoctorCheck = {
     removeStatus();
     return 'removed the stale daemon pid/status files';
   },
-  run: (): CheckOutcome => {
-    // Also self-heals: a pid file whose process is gone (or was recycled by the
-    // OS) is deleted as a side effect of asking.
-    const pid = getRunningDaemonPid();
-    const status = readStatus();
-    const service = readServiceStatus();
+  run: async (): Promise<CheckOutcome> => {
+    const { runtimes, unavailableScopes } = await readConnectRuntimes();
+    const running = runtimes.filter((runtime) => runtime.pid);
+    const runtime = running[0];
+    const pid = runtime?.pid;
+    const status = runtime ? runtime.status : readStatus();
+    const service = runtimes.flatMap((item) => (item.service ? [item.service] : []));
+    const label = runtime?.service ? `${runtime.manager}-level systemd service` : 'Daemon';
     const evidence = {
       connectionStatus: status?.connectionStatus,
       deviceId: status?.deviceId,
-      gatewayUrl: status?.gatewayUrl,
+      gatewaySource: status?.gatewaySource,
+      gatewayUrl: redactUrlCredentials(status?.gatewayUrl),
       pid,
       service,
+      unavailableScopes,
     };
 
+    if (running.length > 1)
+      return {
+        detail: 'Multiple managed connect processes are running.',
+        evidence,
+        fix: `Inspect '${CLI_PRIMARY_BIN} connect status' and stop the duplicate through its manager.`,
+        status: 'warn',
+      };
+
     if (!pid) {
+      if (service.length || unavailableScopes.length)
+        return {
+          detail: service.length
+            ? 'A connect service is installed, but no running process was reported.'
+            : 'Connect service status could not be fully inspected.',
+          evidence,
+          fix: `Run '${CLI_PRIMARY_BIN} connect service status' before starting another connector.`,
+          status: 'warn',
+        };
       if (status)
         return {
           detail: 'A daemon status file is left over, but no daemon is running.',
@@ -63,7 +84,7 @@ const daemon: DoctorCheck = {
     // A live process is not a connection: success needs the daemon's own report.
     if (!status?.connectionStatus)
       return {
-        detail: `Daemon ${pid} is running but has not reported a connection state.`,
+        detail: `${label} ${pid} is running but has not reported a connection state.`,
         evidence,
         fix: `Check the daemon log: ${CLI_PRIMARY_BIN} connect logs`,
         status: 'warn',
@@ -71,14 +92,17 @@ const daemon: DoctorCheck = {
 
     if (status.connectionStatus !== 'connected')
       return {
-        detail: `Daemon ${pid} is running but its last known state is "${status.connectionStatus}".`,
+        detail: `${label} ${pid} is running but its last known state is "${status.connectionStatus}".`,
         evidence,
         fix: `Check the daemon log: ${CLI_PRIMARY_BIN} connect logs`,
         status: 'warn',
       };
 
+    const via = evidence.gatewayUrl
+      ? ` via ${evidence.gatewayUrl}${evidence.gatewaySource ? ` (${evidence.gatewaySource})` : ''}`
+      : '';
     return {
-      detail: `Daemon ${pid} connected as device ${status.deviceId ?? 'unknown'}.`,
+      detail: `${label} ${pid} connected as device ${status.deviceId ?? 'unknown'}${via}.`,
       evidence,
       status: 'ok',
     };
@@ -86,19 +110,11 @@ const daemon: DoctorCheck = {
   title: 'connect daemon',
 };
 
-function readServiceStatus(): unknown {
-  try {
-    return readConnectServiceStatus();
-  } catch {
-    // Not installed, or not a systemd platform — neither is a finding.
-    return undefined;
-  }
-}
-
 /**
  * Can this machine authenticate to the device gateway at all — separating
- * "wrong URL", "rejected token" and "nothing answers", which all present as a
- * bare DEVICE_OFFLINE to whoever called the tool.
+ * "no address", "wrong URL", "rejected token" and "nothing answers", which all
+ * present as a bare DEVICE_OFFLINE to whoever called the tool. The address is
+ * resolved the way `lh connect` resolves it, against the credential's server.
  */
 const gatewayHandshake: DoctorCheck = {
   dependsOn: ['credentials.validity', 'endpoints.resolution'],
@@ -115,10 +131,23 @@ const gatewayHandshake: DoctorCheck = {
         status: 'fail',
       };
 
-    const { gatewayUrl } = resolveEndpoints();
+    const serverUrl = redactUrlCredentials(credential.serverUrl);
+    const gateway = await probeDeviceGateway(ctx, credential.serverUrl);
+    if (!gateway.ok) {
+      const { detail, fix } = describeDeviceGatewayFailure(gateway, credential.serverUrl);
+      return { detail, evidence: { reason: gateway.reason, serverUrl }, fix, status: 'fail' };
+    }
+
+    const { source, url: gatewayUrl } = gateway.endpoint;
     // The URL is used verbatim to connect and redacted everywhere it is shown.
     const shownUrl = redactUrlCredentials(gatewayUrl);
-    const evidence = { gatewayUrl: shownUrl, tokenType: credential.tokenType };
+    const shownGateway = describeDeviceGateway(gateway.endpoint);
+    const evidence = {
+      gatewaySource: source,
+      gatewayUrl: shownUrl,
+      serverUrl,
+      tokenType: credential.tokenType,
+    };
 
     const outcome = await new Promise<CheckOutcome>((resolve) => {
       const client = new GatewayClient({
@@ -162,13 +191,16 @@ const gatewayHandshake: DoctorCheck = {
         }),
       );
       client.on('connected', () =>
-        settle({ detail: `Authenticated to ${shownUrl}.`, evidence, status: 'ok' }),
+        settle({ detail: `Authenticated to ${shownGateway}.`, evidence, status: 'ok' }),
       );
       client.on('auth_failed', (reason: string) =>
         settle({
-          detail: `${shownUrl} rejected the credential: ${reason}.`,
+          detail: `${shownGateway} rejected the credential: ${reason}.`,
           evidence,
-          fix: 'The gateway and the server must trust the same issuer — check the gateway URL matches this server.',
+          fix:
+            source === 'server'
+              ? `The gateway ${serverUrl} advertises does not trust its tokens — the server's DEVICE_GATEWAY_PUBLIC_URL likely points at another deployment.`
+              : 'The gateway and the server must trust the same issuer — check the gateway URL matches this server.',
           status: 'fail',
         }),
       );

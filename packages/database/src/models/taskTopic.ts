@@ -377,7 +377,9 @@ export class TaskTopicModel {
       .select({ value: count() })
       .from(taskTopics)
       .where(and(...conditions));
+    /* v8 ignore start -- unreachable: an ungrouped count() always returns one row */
     return rows[0]?.value ?? 0;
+    /* v8 ignore stop */
   }
 
   async findByTaskId(taskId: string): Promise<TaskTopicItem[]> {
@@ -407,7 +409,9 @@ export class TaskTopicModel {
   async findWithDetails(taskId: string) {
     return this.db
       .select({
+        agentId: topics.agentId,
         createdAt: topics.createdAt,
+        groupId: topics.groupId,
         handoff: taskTopics.handoff,
         id: topics.id,
         metadata: topics.metadata,
@@ -511,10 +515,12 @@ export class TaskTopicModel {
     const byTask = rows.map((row) => ({
       runs: row.runs,
       taskId: row.taskId,
+      /* v8 ignore start -- unreachable: every sum is wrapped in coalesce(…, 0), never NULL */
       totalCost: Number(row.totalCost ?? 0),
       totalInputTokens: Number(row.totalInputTokens ?? 0),
       totalOutputTokens: Number(row.totalOutputTokens ?? 0),
       totalTokens: Number(row.totalTokens ?? 0),
+      /* v8 ignore stop */
     }));
 
     return {

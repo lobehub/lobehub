@@ -30,6 +30,7 @@ export const ChatErrorType = {
   SystemTimeNotMatchError: 'SystemTimeNotMatchError',
   ServerAgentRuntimeError: 'ServerAgentRuntimeError',
   DeviceGatewayNotConfigured: 'DeviceGatewayNotConfigured', // Heterogeneous agent has no reachable run device / gateway
+  DeviceResponseTimeout: 'DeviceResponseTimeout', // Run reached the device, which did not answer in time
 
   // ******* Desktop Backend-Proxy Network Errors ******* //
   // Emitted by the Electron backend proxy when the upstream fetch fails at the

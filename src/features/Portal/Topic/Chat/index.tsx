@@ -19,6 +19,7 @@ import SkeletonList from '@/features/Conversation/components/SkeletonList';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
+import { useTopicRunEvents } from '@/hooks/useTopicRunEvents';
 import HeterogeneousChatInput from '@/routes/(main)/agent/features/Conversation/HeterogeneousChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -66,6 +67,7 @@ const TopicChat = memo(() => {
       : undefined,
   );
   useGatewayReconnect(portalTopicId, runningOperation);
+  useTopicRunEvents(portalTopicId, activeAgentId);
 
   const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(activeAgentId));
   const hooks: ConversationHooks = useChatFollowUp({

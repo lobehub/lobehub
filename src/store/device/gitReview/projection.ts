@@ -131,6 +131,11 @@ export interface GitLinkedPRParams {
   branch: string;
   deviceId?: string;
   path: string;
+  /**
+   * The PR a topic recorded for this branch, so the lookup follows that PR even
+   * after another one opens on the branch. Absent for the composer's lookup.
+   */
+  pullRequestNumber?: number;
 }
 
 export interface GitPullRequestParams {
@@ -148,8 +153,11 @@ export interface GitPullRequestMergeContextParams extends GitPullRequestParams {
 export const gitReviewPatchesKey = ({ baseRef, deviceId, mode, path }: GitReviewPatchesParams) =>
   joinKey(deviceId ?? LOCAL, path, mode, baseRef ?? '');
 
-export const gitLinkedPRKey = ({ branch, deviceId, path }: GitLinkedPRParams) =>
-  joinKey(deviceId ?? LOCAL, path, branch);
+/** Without a PR number this is the composer's key, so both readers share one row. */
+export const gitLinkedPRKey = ({ branch, deviceId, path, pullRequestNumber }: GitLinkedPRParams) =>
+  pullRequestNumber === undefined
+    ? joinKey(deviceId ?? LOCAL, path, branch)
+    : joinKey(deviceId ?? LOCAL, path, branch, pullRequestNumber);
 
 export const gitPullRequestKey = ({ deviceId, number, path }: GitPullRequestParams) =>
   joinKey(deviceId ?? LOCAL, path, number);
@@ -188,7 +196,8 @@ export const gitLinkedPRResource = defineReplica<
   name: 'deviceGitLinkedPR',
   persist: { maxEntries: 50 },
   storage: 'indexedDB',
-  syncKey: ({ branch, deviceId, path }) => deviceKeys.gitLinkedPR(deviceId ?? LOCAL, path, branch),
+  syncKey: ({ branch, deviceId, path, pullRequestNumber }) =>
+    deviceKeys.gitLinkedPR(deviceId ?? LOCAL, path, branch, pullRequestNumber),
   version: 1,
 });
 

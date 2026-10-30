@@ -103,7 +103,11 @@ local function joinBatch(expiry, items)
   return tostring(expiry) .. SEP .. table.concat(items, SEP)
 end
 local function pushFront(qkey, items)
+  if #items == 0 then return end
   for i = #items, 1, -1 do redis.call('LPUSH', qkey, unbind(items[i])) end
+  -- A drain that took the whole list deleted the queue key; the push recreated
+  -- it without a TTL, and an abandoned follow-up must still expire.
+  redis.call('EXPIRE', qkey, ${QUEUE_TTL_SECONDS})
 end
 local function reclaimLapsed(qkey, pkey, now)
   local all = redis.call('HGETALL', pkey)
@@ -148,6 +152,57 @@ return length
 
 /** KEYS[1] = queue */
 const LIST_SCRIPT = `return redis.call('LRANGE', KEYS[1], 0, -1)`;
+
+/**
+ * Waiting entries and those in drained batches, read in one step so an entry
+ * moving between the two is never missed. A batch whose lease lapsed goes back
+ * to the queue first: nothing is delivering it any more.
+ *
+ * KEYS[1] = queue; KEYS[2] = drained batches; ARGV[1] = now ms.
+ * Returns `{ waiting, delivering }`.
+ */
+const SNAPSHOT_SCRIPT = `${LUA_HELPERS}
+reclaimLapsed(KEYS[1], KEYS[2], tonumber(ARGV[1]))
+local delivering = {}
+for _, batch in ipairs(redis.call('HVALS', KEYS[2])) do
+  local _, items = splitBatch(batch)
+  for _, item in ipairs(items) do table.insert(delivering, item) end
+end
+return { redis.call('LRANGE', KEYS[1], 0, -1), delivering }
+`;
+
+/**
+ * Where one entry is, in one step — and with ARGV[2] = 'remove', takes it out
+ * when it is still waiting. Returns `removed`, `queued`, `delivering` (a run
+ * took it and has not settled), `taken` (delivered) or `absent`.
+ *
+ * A batch whose lease lapsed goes back to the queue first, as in a drain.
+ *
+ * KEYS[1] = queue; KEYS[2] = taken ids; KEYS[3] = drained batches;
+ * ARGV[1] = id; ARGV[2] = 'remove' | 'peek'; ARGV[3] = now ms
+ */
+const ENTRY_STATE_SCRIPT = `${LUA_HELPERS}
+reclaimLapsed(KEYS[1], KEYS[3], tonumber(ARGV[3]))
+for _, item in ipairs(redis.call('LRANGE', KEYS[1], 0, -1)) do
+  if header(item) == ARGV[1] then
+    if ARGV[2] == 'remove' then
+      redis.call('LREM', KEYS[1], 1, item)
+      return 'removed'
+    end
+    return 'queued'
+  end
+end
+for _, batch in ipairs(redis.call('HVALS', KEYS[3])) do
+  local _, items = splitBatch(batch)
+  for _, item in ipairs(items) do
+    if header(item) == ARGV[1] then return 'delivering' end
+  end
+end
+if redis.call('SISMEMBER', KEYS[2], ARGV[1]) == 1 then return 'taken' end
+return 'absent'
+`;
+
+export type SteerQueueEntryState = 'absent' | 'delivering' | 'queued' | 'removed' | 'taken';
 
 /**
  * Entries a run would take: queued ones it owns, plus any in a lapsed batch
@@ -296,9 +351,10 @@ const parseEntries = <T extends SteerQueueEntry>(raw: unknown): T[] => {
  * settles goes back to the queue when its lease lapses, so a crash, a lost
  * response or an outage between the two never loses an accepted follow-up.
  *
- * `append` returns `undefined` when the follow-up was definitely not stored: the
- * caller then tells the client to send the message itself, as it did before
- * this queue.
+ * `append` returns `notStored` when it took back a write whose command failed —
+ * definitely not stored, so the client sends the message itself, as it did
+ * before this queue — and `undefined` without a Redis client. Redis is a
+ * deployment requirement, so that is an outage, where the state is unknown.
  */
 export const steerQueue = {
   /**
@@ -345,7 +401,7 @@ export const steerQueue = {
       // Nothing to take back: the write never landed, or a drain already took
       // it and may be starting it. Only a removal proves "not stored".
       if (removed === 0) throw new SteerQueueWriteUnknownError(error);
-      return;
+      return 'notStored' as const;
     }
   },
 
@@ -458,6 +514,56 @@ export const steerQueue = {
     if (!redis) return [];
 
     return parseEntries<T>(await redis.eval<unknown>(LIST_SCRIPT, 1, keyOf(scope)));
+  },
+
+  /**
+   * The entries not delivered yet, read atomically: `waiting` ones, and
+   * `delivering` ones a drain took that are not settled — on their way into a
+   * run, or back to the queue should that fail. A lapsed batch is returned to
+   * the queue first.
+   *
+   * @throws when Redis is unavailable — an outage is not an empty queue
+   */
+  async snapshot<T extends SteerQueueEntry>(
+    scope: SteerQueueScope,
+  ): Promise<{ delivering: T[]; waiting: T[] }> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to read queued follow-ups');
+
+    const raw = await redis.eval<unknown>(
+      SNAPSHOT_SCRIPT,
+      2,
+      keyOf(scope),
+      drainedKeyOf(scope),
+      Date.now(),
+    );
+    const [waiting, delivering] = Array.isArray(raw) ? raw : [];
+    return { delivering: parseEntries<T>(delivering), waiting: parseEntries<T>(waiting) };
+  },
+
+  /**
+   * Where one entry is (see {@link SteerQueueEntryState}); with `remove`, takes
+   * it out in the same step when it is still waiting. `undefined` without Redis:
+   * then nothing about it is known.
+   */
+  async entryState(
+    scope: SteerQueueScope,
+    id: string,
+    options?: { remove?: boolean },
+  ): Promise<SteerQueueEntryState | undefined> {
+    const redis = await getClient();
+    if (!redis) return;
+
+    return (await redis.eval<string>(
+      ENTRY_STATE_SCRIPT,
+      3,
+      keyOf(scope),
+      takenKeyOf(scope),
+      drainedKeyOf(scope),
+      id,
+      options?.remove ? 'remove' : 'peek',
+      Date.now(),
+    )) as SteerQueueEntryState;
   },
 
   /**

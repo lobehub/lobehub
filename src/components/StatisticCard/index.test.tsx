@@ -33,6 +33,9 @@ describe('StatisticCard', () => {
     );
 
     expect(screen.getByText('Total Cost')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Total Cost' }).parentElement?.className).toContain(
+      'index__styles.title',
+    );
     expect(screen.getByText('$')).toBeInTheDocument();
     expect(screen.getByText('1,234.50')).toBeInTheDocument();
     expect(screen.getByText('k')).toBeInTheDocument();

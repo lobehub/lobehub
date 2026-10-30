@@ -69,6 +69,7 @@ import {
   acceptsFileWorks,
   acceptsMemberRuntimeEnd,
   controlCompletedToolResult,
+  getOperationEditingGroupId,
   getOperationStatus,
   injectQueuedFollowUp,
   interruptOperation,
@@ -194,6 +195,11 @@ export class AgentRuntimeService {
     });
     this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId, {
       includeShareVisitor,
+      onTopicRunSettled: ({ operationId, topicId }) =>
+        this.delegate.deliverBackgroundSubAgentResults?.({
+          settledOperationId: operationId,
+          topicId,
+        }) ?? Promise.resolve(),
     });
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 
@@ -379,6 +385,10 @@ export class AgentRuntimeService {
 
   acceptsMemberRuntimeEnd(...args: MethodArgs<typeof acceptsMemberRuntimeEnd>) {
     return acceptsMemberRuntimeEnd(this.context, ...args);
+  }
+
+  getOperationEditingGroupId(...args: MethodArgs<typeof getOperationEditingGroupId>) {
+    return getOperationEditingGroupId(this.context, ...args);
   }
 
   setQueuedMessages(...args: MethodArgs<typeof setQueuedMessages>) {

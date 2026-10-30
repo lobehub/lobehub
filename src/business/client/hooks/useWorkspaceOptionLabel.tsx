@@ -1,8 +1,9 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { type ReactNode, useCallback } from 'react';
+
+import WorkspaceAvatar from '@/components/WorkspaceAvatar';
 
 import type { WorkspaceListItem } from './useActiveWorkspace';
 
@@ -15,7 +16,7 @@ export const useWorkspaceOptionLabel = (): ((workspace: WorkspaceListItem) => Re
   useCallback(
     (workspace: WorkspaceListItem) => (
       <Flexbox horizontal align={'center'} gap={10} style={{ flex: 1, minWidth: 0 }}>
-        <Avatar avatar={workspace.avatar || DEFAULT_AVATAR} shape={'square'} size={24} />
+        <WorkspaceAvatar avatar={workspace.avatar} name={workspace.name} size={24} />
         <Text ellipsis style={{ flex: '0 1 auto', minWidth: 0 }}>
           {workspace.name}
         </Text>

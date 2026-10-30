@@ -1,4 +1,11 @@
 export default {
+  'systemAgent.channelRouting.title': 'Channel decision model',
+  'systemAgent.channelRouting.modelDesc':
+    'Choose which Agents reply to messages without @mentions. When off, all eligible Agents reply.',
+
+  'chatPreference.assist.desc':
+    'Personal preferences: they only apply to you, in your personal space and every workspace.',
+  'chatPreference.assist.title': 'Chat Assist',
   'devices.cliUpdate.restart': 'Restart CLI',
   'devices.cliUpdate.update': 'Update and restart',
   'devices.cliUpdate.confirmDesc':
@@ -66,7 +73,6 @@ export default {
   'completionSound.banner.previewBody': 'This is how a finished chat will sound in the background.',
   'completionSound.banner.systemMuted':
     'macOS has notification sounds turned off for LobeHub, so background notifications stay silent. Turn them back on in System Settings › Notifications › LobeHub.',
-
   '_cloud.officialProvider': '{{name}} Official Model Service',
   'about.title': 'About',
   'agentImport.action': 'Copy to Workspace...',
@@ -483,6 +489,7 @@ export default {
   'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Same as primary model',
   'heterogeneousStatus.apiMode.provider': 'Provider',
   'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
+  'heterogeneousStatus.apiMode.useSubscription': 'Use subscription',
   'heterogeneousStatus.apiMode.workspaceUnsupported': 'Not available for workspace agents',
   'heterogeneousStatus.apiMode.serverDefault.checking': 'Checking deployment provider...',
   'heterogeneousStatus.apiMode.serverDefault.disabled':
@@ -513,8 +520,7 @@ export default {
   'heterogeneousStatus.runtime.keyMissing': 'Configure the DeepSeek provider API key',
   'heterogeneousStatus.runtime.configure': 'Provider Settings',
 
-  // Heterogeneous agent — Cloud tab (web environment config)
-  'heterogeneousStatus.cloud.tabLabel': 'Cloud',
+  // Heterogeneous agent — cloud sandbox config
   'heterogeneousStatus.cloud.tokenLabel': 'Claude Code Token',
   'heterogeneousStatus.cloud.tokenDesc':
     'Your Claude Code OAuth token. Saved securely to Credentials once submitted. Run `claude setup-token` in your terminal to generate one.',
@@ -551,8 +557,30 @@ export default {
   'heterogeneousStatus.cloud.repoPlaceholder': 'owner/repo or https://github.com/owner/repo',
   'heterogeneousStatus.cloud.repoAdd': 'Add',
 
-  // Heterogeneous agent — Desktop tab
-  'heterogeneousStatus.desktop.tabLabel': 'Desktop',
+  // Heterogeneous agent — execution environment and its bound device
+  'heterogeneousStatus.device.afterInstall':
+    'After installing, run `{{command}}` on that device once to sign in, then check again.',
+  'heterogeneousStatus.device.detecting': 'Checking {{name}} CLI on {{device}}…',
+  'heterogeneousStatus.device.installDesc':
+    'Run one of these commands in a terminal on {{device}}:',
+  'heterogeneousStatus.device.installTitle': 'Install on {{device}}',
+  'heterogeneousStatus.device.label': 'Device',
+  'heterogeneousStatus.device.missing':
+    'The bound device is no longer available. Choose another execution environment above.',
+  'heterogeneousStatus.device.offline': '{{device}} is offline. Check again once it reconnects.',
+  'heterogeneousStatus.device.openDocs': 'Installation guide',
+  'heterogeneousStatus.device.scanFailed':
+    'Couldn’t check {{name}} CLI on {{device}}. Update LobeHub on that device and try again.',
+  'heterogeneousStatus.device.scanFailedTag': 'Unknown',
+  'heterogeneousStatus.device.showDetails': 'Show details',
+  'heterogeneousStatus.device.unavailable': '{{name}} CLI not found on {{device}}',
+  'heterogeneousStatus.sandbox.desc':
+    '{{name}} runs in the cloud sandbox. Nothing needs to be installed on your devices.',
+  'heterogeneousStatus.target.desc':
+    'New topics run here. Existing topics stay on the device they ran on.',
+  'heterogeneousStatus.target.fixed': 'This environment is fixed. Members can’t change it.',
+  'heterogeneousStatus.target.overridden':
+    'Applies only to you. Other members keep the Agent default.',
 
   // Connected agent profile config panel (openclaw / hermes)
   'platformAgentConfig.title': 'Connection',
@@ -828,6 +856,7 @@ export default {
   'devices.share.visibilityTag.private': 'Private',
   'devices.share.visibilityTag.public': 'Workspace',
   'devices.status.offline': 'Offline',
+  'devices.status.checking': 'Checking status…',
   'devices.status.online': 'Online',
   'devices.status.onlineConnections_one': 'Online · {{count}} connection',
   'devices.status.onlineConnections_other': 'Online · {{count}} connections',
@@ -1106,6 +1135,10 @@ export default {
   'settingAgent.artwork.uploadFailed': 'Could not upload the image. Try again.',
   'settingAgent.backgroundColor.title': 'Background Color',
   'settingAgent.description.desc': 'A brief introduction to your agent, not for character setting',
+  'settingAgent.description.hint': 'Other agents read this when they look up who to hand work to.',
+  'settingAgent.description.inputPlaceholder':
+    'What it handles and when to use it, e.g. Reviews pull requests and runs the test suite',
+  'settingAgent.description.label': 'Description',
   'settingAgent.description.placeholder': 'Enter agent description',
   'settingAgent.description.title': 'Agent Description',
   'settingAgent.export.dialogTitle': 'Export Agent Profile',
@@ -1180,6 +1213,10 @@ export default {
   'settingAgent.agentTools.tabUser': 'User Tools',
   'settingAgent.agentTools.tabWorkspace': 'Workspace Tools',
   'settingAgent.devicePolicy.noPublicDevice': 'No public devices',
+  'settingAgent.devicePolicy.privateDeviceFixed':
+    'A fixed environment can only use public workspace devices',
+  'settingAgent.devicePolicy.privateDevicePublicAgent':
+    'Private devices are for private agents only — other members cannot reach them',
   'settingAgent.devicePolicy.selectTarget': 'Select environment',
   'settingAgent.devicePolicy.title': 'Execution environment',
   'settingAgent.modelPolicy.fixedTip':
@@ -1394,7 +1431,7 @@ export default {
   'settingImage.defaultCount.desc':
     'Set the default number of images generated when creating a new task in the image generation panel.',
   'settingImage.defaultCount.label': 'Default Image Count',
-  'settingImage.defaultCount.title': 'Generation',
+  'settingImage.defaultCount.title': 'Image Generation',
   'settingModel.enableContextCompression.desc':
     'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
   'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
@@ -1477,6 +1514,8 @@ export default {
   'settingsSearch.tabKeywords.appearance':
     'appearance, theme, dark mode, light mode, font, language, color, background',
   'settingsSearch.tabKeywords.billing': 'billing, payment, invoice, card, transaction',
+  'settingsSearch.tabKeywords.chatPreference':
+    'chat preferences, follow-up suggestions, input suggestions, autocomplete',
   'settingsSearch.tabKeywords.connector': 'connectors, integrations, mcp',
   'settingsSearch.tabKeywords.credits': 'credits, balance, top up, recharge, buy credits',
   'settingsSearch.tabKeywords.creds': 'credentials, secrets, oauth',
@@ -1518,10 +1557,36 @@ export default {
   'settingSystem.oauth.signout.confirm': 'Confirm sign out?',
   'settingSystem.oauth.signout.success': 'Sign out successful',
   'settingSystem.title': 'System Settings',
-  'serviceModel.modelAssignments.title': 'General',
+  'serviceModel.advanced.collapse': 'Collapse',
+  'serviceModel.advanced.expand': 'Expand',
+  'serviceModel.advanced.restoreAll': 'Restore all',
+  'serviceModel.advanced.summary.custom': '{{count}} customized',
+  'serviceModel.advanced.summary.off': '{{count}} off',
+  'serviceModel.advanced.summary.followTier': 'the rest follow {{tier}}',
+  'serviceModel.advanced.summary.separator': ', ',
+  'serviceModel.advanced.summary.total': '{{count}} tasks',
+  'serviceModel.advanced.title': 'Advanced',
   'serviceModel.contextLimit.placeholder': 'Context limit',
-  'serviceModel.memoryModels.title': 'Memory',
-  'serviceModel.optionalFeatures.title': 'Optional Features',
+  'serviceModel.customModel': 'Choose a model',
+  'serviceModel.desc':
+    'Models LobeHub uses for background tasks. They follow the system recommendation by default and upgrade automatically when new models arrive.',
+  'serviceModel.off': 'Off',
+  'serviceModel.systemRecommended': 'System recommended',
+  'serviceModel.tierPicker': 'Model',
+  'serviceModel.title': 'Service Model',
+  'serviceModel.tier.embedding.desc': 'Memory retrieval',
+  'serviceModel.tier.embedding.title': 'Embedding Model',
+  'serviceModel.tier.flash.desc':
+    'Frequent tasks such as naming, translation, compression and memory',
+  'serviceModel.tier.flash.title': 'Flash Model',
+  'serviceModel.tier.main.desc': 'Quality-sensitive tasks such as writing and reasoning',
+  'serviceModel.tier.main.title': 'Main Model',
+  'serviceModel.tier.verify.desc':
+    'Task and goal acceptance. It reads screenshot evidence, so only vision models are listed',
+  'serviceModel.tier.verify.title': 'Acceptance Model',
+  'serviceModel.voice.desc':
+    'Turns voice messages into text for external agents that only accept text',
+  'serviceModel.voice.title': 'Voice',
   'serviceModel.topicAutoSummary.desc':
     'Summarizes topics created in the rolling 24-hour window after one hour without message activity.',
   'settingSystemTools.appEnvironment.chromium.desc': 'Chromium browser engine version',
@@ -1643,6 +1708,8 @@ When I am ___, I need ___
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
   'skillView.connectors': 'Connectors',
+  'skillView.connectorsDesc':
+    'Connect the apps and tools your agents can use. Open one to see its account and tools.',
   'skillView.skills': 'Skills',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',
@@ -1830,6 +1897,7 @@ When I am ___, I need ___
   'systemAgent.translation.label': 'Model',
   'systemAgent.translation.modelDesc': 'Model used to translate messages',
   'systemAgent.translation.title': 'Message Translation',
+  'systemAgent.verify.title': 'Task Acceptance',
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
   'tab.advanced.appUpdates.title': 'App updates',
@@ -1856,6 +1924,7 @@ When I am ___, I need ___
   'tab.apikey': 'API Keys',
   'tab.appearance': 'Appearance',
   'tab.chatAppearance': 'Chat Appearance',
+  'tab.chatPreference': 'Chat Preferences',
   'tab.common': 'Appearance',
   'tab.connector': 'Connectors',
   'tab.creds': 'Credentials',
@@ -1907,6 +1976,7 @@ When I am ___, I need ___
   'trash.actions.purge': 'Delete forever',
   'trash.actions.restore': 'Restore',
   'trash.columns.deletedAt': 'Deleted',
+  'trash.columns.deletedBy': 'Deleted by',
   'trash.columns.expiresIn': 'Auto-deletes',
   'trash.columns.name': 'Name',
   'trash.columns.type': 'Type',
@@ -1942,18 +2012,28 @@ When I am ___, I need ___
   'trash.projectUnavailable.title': 'This project is no longer available',
   'trash.purgeConfirm.content': 'Permanently delete "{{title}}"? This cannot be undone.',
   'trash.purgeConfirm.title': 'Delete forever',
+  'trash.restore.failed.conflict':
+    'This message already has a newer thread. Move that thread to trash first, then restore this one.',
   'trash.restore.failed.notFound': 'This item no longer exists.',
   'trash.restore.failed.parentTrashed':
-    'Its agent, topic or previous message is still in the trash. Restore that first.',
+    'Its agent, topic, channel or previous message is still in the trash. Restore that first.',
   'trash.restore.success': 'Restored',
+  'trash.purge.blocked':
+    '{{count}} item(s) are still finishing their work and stayed in the trash. Try again in a moment.',
   'trash.purge.success': 'Deleted permanently',
   'trash.title': 'Trash',
+  'trash.side.private': 'Private',
+  'trash.side.public': 'Public',
   'trash.type.agent': 'Agent',
+  'trash.type.channel': 'Channel',
+  'trash.type.channelThread': 'Channel thread',
   'trash.type.dashboard': 'Dashboard',
   'trash.type.message': 'Message',
   'trash.type.topic': 'Topic',
   'trash.type.widget': 'Widget',
   'trash.untitled': 'Untitled',
+  'trash.workspaceDesc':
+    'Public shows the shared content members deleted. Private shows only the private content you deleted, and no one else can see it. Deleted items stay here for {{days}} days and can be restored. After that they are removed permanently.',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',
@@ -2573,6 +2653,7 @@ When I am ___, I need ___
   'workspace.auditLog.actions.member.invited': 'Member invited',
   'workspace.auditLog.actions.member.joined': 'Member joined',
   'workspace.auditLog.actions.member.left': 'Member left',
+  'workspace.auditLog.actions.member.profile_updated': 'Member profile changed',
   'workspace.auditLog.actions.member.promoted_to_owner': 'Promoted to owner',
   'workspace.auditLog.actions.member.removed': 'Member removed',
   'workspace.auditLog.actions.member.role_updated': 'Member role changed',
@@ -3046,6 +3127,7 @@ When I am ___, I need ___
     'This URL is reserved for a protected brand. If you own this brand, apply from your organization email and we’ll review your request shortly.',
   'workspace.slugBrandApply.modalTitle': 'Request a protected brand URL',
   'workspace.member.demote': 'Demote to member',
+  'workspace.member.editProfile': 'Edit profile...',
   'workspace.member.demoteConfirm.content': 'This member will lose owner privileges.',
   'workspace.member.demoteConfirm.title': 'Demote owner?',
   'workspace.member.invite': 'Invite members',
@@ -3057,6 +3139,15 @@ When I am ___, I need ___
   'workspace.member.manageAccessModal.save': 'Save Changes',
   'workspace.member.manageAccessModal.success': 'Access updated',
   'workspace.member.manageAccessModal.title': 'Change role for {{username}}',
+  'workspace.member.profileModal.failed': 'Failed to update profile',
+  'workspace.member.profileModal.jobTitle': 'Job title',
+  'workspace.member.profileModal.jobTitlePlaceholder': 'e.g. Product Designer',
+  'workspace.member.profileModal.responsibilities': 'Responsibilities',
+  'workspace.member.profileModal.responsibilitiesPlaceholder':
+    'What this person owns and works on, so teammates and AI know who to ask',
+  'workspace.member.profileModal.save': 'Save',
+  'workspace.member.profileModal.success': 'Profile updated',
+  'workspace.member.profileModal.title': 'Edit profile for {{username}}',
   'workspace.member.promote': 'Promote to owner',
   'workspace.member.transferPrimaryConfirm.billingNotice.acknowledge':
     'I understand the saved payment method will keep being charged until the new Owner replaces it.',
@@ -3110,6 +3201,8 @@ When I am ___, I need ___
     'This invitation has expired. Ask the team owner to send a new one.',
   'workspace.invitePage.expiredTitle': 'Invitation Expired',
   'workspace.invitePage.expiresLabel': 'Expires',
+  'workspace.invitePage.driveCleanupInProgress':
+    'Your previous personal drive in this workspace is being cleaned up. Try again in a few minutes.',
   'workspace.invitePage.featureNotEnabledNotice':
     'Workspaces are in a limited beta and not open to new members right now. Please try again later, or ask the person who invited you to reach out to support.',
   'workspace.invitePage.goHome': 'Go Home',
@@ -3175,6 +3268,7 @@ When I am ___, I need ___
   'workspace.waitlistPage.useCasePlaceholder':
     'Who is involved, how you collaborate, what you want solved?',
   'workspace.members.columns.joinedAt': 'Joined',
+  'workspace.members.columns.jobTitle': 'Position',
   'workspace.members.columns.name': 'Name',
   'workspace.members.columns.role': 'Role',
   'workspace.members.empty': 'No members yet',
@@ -3248,7 +3342,7 @@ When I am ___, I need ___
   'workspace.members.seatUsage_one': '{{used}} / {{capacity}} seat',
   'workspace.members.seatUsage_other': '{{used}} / {{capacity}} seats',
   'workspace.members.subtitle': 'Manage workspace members and invitations',
-  'workspace.members.tabs.members': 'Team Members',
+  'workspace.members.tabs.members': 'Members',
   'workspace.members.tabs.pending': 'Pending Invitations',
   'workspace.members.title': 'Members',
   'workspace.members.totalCount_one': '{{total}} member',
@@ -3588,6 +3682,11 @@ When I am ___, I need ___
     '💡 You can skip ahead; the analysis keeps running in the background',
   'workspace.onboarding.flow.learnYourTeam.error':
     "Couldn't finish the team analysis. Retry or skip for now.",
+  'workspace.onboarding.flow.learnYourTeam.budget.title':
+    'Not enough workspace credits for the team analysis',
+  'workspace.onboarding.flow.learnYourTeam.budget.desc':
+    "The team analysis uses this workspace's credits, and the balance can't cover it. Top up or upgrade the plan, then retry, or skip the analysis and finish the setup.",
+  'workspace.onboarding.flow.learnYourTeam.budget.skip': 'Skip analysis',
   'workspace.onboarding.flow.learnYourTeam.progress.review':
     'Reading team data from connected apps',
   'workspace.onboarding.flow.learnYourTeam.progress.build':
@@ -3629,11 +3728,11 @@ When I am ___, I need ___
     'Connect a bot your team owns to {{name}}. Everyone in the group can @{{name}} to hand off work — nobody has to link an account.',
   'workspace.onboarding.flow.channels.quote': "Add me to your team's group chats,",
   'workspace.onboarding.flow.channels.highlight': 'and anyone can hand me work.',
-  'workspace.onboarding.flow.channels.showMore': 'More channels ({{count}})',
+  'workspace.onboarding.flow.channels.showMore': 'More IM bots ({{count}})',
   'workspace.onboarding.flow.channels.showLess': 'Show less',
-  'workspace.onboarding.flow.channels.more': 'You can change channels anytime in Agent → Channels.',
+  'workspace.onboarding.flow.channels.more': 'You can change IM bots anytime in Agent → IM Bots.',
   'workspace.onboarding.flow.channels.connect.back': 'Back to list',
-  'workspace.onboarding.flow.channels.connect.category': 'Bot channel',
+  'workspace.onboarding.flow.channels.connect.category': 'IM Bot',
   'workspace.onboarding.flow.channels.connect.description':
     "Use your own {{platform}} app to bring {{name}} into your team's chats as a bot.",
   'workspace.onboarding.flow.channels.connect.guide': 'Setup guide',
@@ -3650,7 +3749,7 @@ When I am ___, I need ___
   'workspace.onboarding.flow.channels.connect.attempt': 'Attempt {{count}}',
   'workspace.onboarding.flow.channels.connect.connectedTitle': '{{name}} connected',
   'workspace.onboarding.flow.channels.connect.connectedDesc':
-    'Members can now @{{name}} in your group to hand off work. Change it anytime in Agent → Channels.',
+    'Members can now @{{name}} in your group to hand off work. Change it anytime in Agent → IM Bots.',
   'workspace.onboarding.flow.channels.connect.edit': 'Edit credentials',
   'workspace.onboarding.flow.channels.connect.failedTitle': "Couldn't connect {{name}}",
   'workspace.onboarding.flow.channels.connect.errorCode': 'Error code: {{code}}',
@@ -4135,6 +4234,31 @@ When I am ___, I need ___
   'tools.composio.tools': 'tools',
 
   'tools.composio.verifyAuth': 'I have completed authentication',
+  'tools.connectorFeedback.askAdmin': 'Ask an admin to connect',
+  'tools.connectorFeedback.askAdminCopied':
+    'Request copied. Send it to a workspace owner or admin.',
+  'tools.connectorFeedback.askAdminMessage':
+    'Could you connect {{name}} for our LobeHub workspace? {{url}}',
+  'tools.connectorFeedback.connectFailed': 'Connection failed: {{reason}}',
+  'tools.connectorFeedback.manageOnly': 'Only workspace owners and admins can change connectors',
+  'tools.connectorFeedback.reason.authIncomplete':
+    'the authorization window closed before access to {{name}} was granted',
+  'tools.connectorFeedback.reason.forbidden':
+    'only workspace owners and admins can change connectors here',
+  'tools.connectorFeedback.reason.network': 'the network connection was interrupted',
+  'tools.connectorFeedback.reason.unknown': 'something went wrong',
+  'tools.connectorFeedback.removeFailed':
+    'Remove failed: {{reason}}. The connector is still here, so you can try again.',
+  'tools.connectorFeedback.removeFailedFinal': 'Remove failed: {{reason}}',
+  'tools.connectorFeedback.restricted':
+    'Connectors in this workspace are managed by its owners and admins.',
+  'tools.connectorPolicy.desc':
+    'Choose who can connect, re-authorize and remove the connectors shared in this workspace.',
+  'tools.connectorPolicy.options.allMembers': 'All members',
+  'tools.connectorPolicy.options.onlyAdmins': 'Owners and admins',
+  'tools.connectorPolicy.title': 'Who can manage connectors',
+  'tools.connectorPolicy.updateFailed':
+    "Couldn't update who can manage connectors. Please try again.",
 
   'tools.lobehubSkill.authorize': 'Authorize',
 
@@ -4212,7 +4336,7 @@ When I am ___, I need ___
   'tools.title': 'Skills',
   'tab.environments': 'Environments',
   'environments.desc':
-    'What a sandbox run needs around it: a repository, its setup, its variables. Each copy built from one keeps its own files between sessions.',
+    "How to set up a project: the repository to check out, the setup command, the variables. Pick one from the environment menu under the chat input, and the conversation's working directory — a temporary sandbox or a folder on your drive — is initialized from it once.",
   'environments.create': 'New environment',
   'environments.cancel': 'Cancel',
   'environments.createFailed': 'Could not create the environment',
@@ -4228,34 +4352,36 @@ When I am ___, I need ___
   'environments.remove': 'Delete environment',
   'environments.removeConfirmTitle': 'Delete environment {{name}}?',
   'environments.removeConfirmContent':
-    "Its specification, variables, its copy's folder and the saved snapshot go with it, and cannot be recovered.",
+    'Its specification and variables are deleted and cannot be recovered. Folders it initialized keep their files; copies built by an earlier version are removed with it.',
   'environments.storage.used': '{{used}} of {{total}}',
   'environments.storage.unmeasured': 'Storage not measured yet · {{total}} available',
   'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',
   'environments.storage.over':
     'Over the storage limit. Saving a file is refused until you delete something.',
   'environments.duplicateName': 'You already have an environment with this name',
+  'environments.inProject':
+    'A project still uses this environment — remove it from the project first',
   'environments.hasInstances': 'Remove its other copies first',
   'environments.loadFailed.title': 'Could not check your plan',
   'environments.loadFailed.desc':
     'We could not reach the service that says whether this account has a persistent workspace. Nothing is wrong with your environments.',
   'environments.loadFailed.retry': 'Try again',
-  'environments.unavailable.title': 'Persistent sandbox is not available here',
+  'environments.unavailable.title': 'Drive storage is not available here',
   'environments.unavailable.desc':
-    'Environments describe a persistent cloud workspace, and this deployment does not provide one.',
-  'environments.upgrade.title': 'Upgrade to Pro to unlock sandbox environments',
+    'Drives are persistent cloud storage for sandbox runs, and this deployment does not provide them.',
+  'environments.upgrade.title': 'Upgrade to Pro to unlock drive storage',
   'environments.upgrade.desc':
-    'Give cloud-sandbox runs a persistent working directory. An environment describes what the sandbox needs — repositories, setup, variables — and its copies keep everything between sessions.',
+    'Give cloud-sandbox runs a drive that outlives them: conversations working in a drive folder keep their files after the sandbox is recycled.',
   'environments.upgrade.cta': 'Upgrade to Pro',
-  'environments.upgrade.benefits.environments.title': 'Sandbox setup written once',
+  'environments.upgrade.benefits.environments.title': 'A public drive and your own',
   'environments.upgrade.benefits.environments.desc':
-    'Repositories, setup command and variables live in the environment; every sandbox built from it starts ready.',
+    'In a workspace every member shares the public drive, and each member also has a personal drive only they can reach.',
   'environments.upgrade.benefits.persist.title': 'Files survive the sandbox',
   'environments.upgrade.benefits.persist.desc':
-    'The working directory is kept when the sandbox is recycled; the next run continues where the last stopped.',
-  'environments.upgrade.benefits.instances.title': 'One copy per task',
+    'The folder is kept when the sandbox is recycled; the next run continues where the last one stopped.',
+  'environments.upgrade.benefits.instances.title': 'Folders initialized from code environments',
   'environments.upgrade.benefits.instances.desc':
-    'Parallel conversations each run in their own copy of the environment, so nothing overwrites anything else.',
+    'When creating a folder, pick a code environment to clone its repository and install what it needs.',
   'environments.github.refreshFailed':
     'Could not refresh GitHub repositories. Showing the previous list. Try again.',
   'environments.github.loadFailed': 'Could not load GitHub repositories. Try again.',
@@ -4277,7 +4403,7 @@ When I am ___, I need ___
   'environments.form.descriptionPlaceholder': 'What this environment is for',
   'environments.form.sources': 'Source code',
   'environments.form.sourcesHint':
-    'Cloned over HTTPS before anything else runs. Private repositories are not supported yet — a specification holds no credentials.',
+    'Cloned over HTTPS before anything else runs. A private repository clones through the GitHub App installation that grants it; the environment itself stores no credentials.',
   'environments.form.ref': 'Branch or tag',
   'environments.form.refDefault': 'Repository default branch',
   'environments.form.path': 'Folder',
@@ -4288,7 +4414,7 @@ When I am ___, I need ___
     'Runs once in the checkout, with network access, before the conversation starts.',
   'environments.form.env': 'Environment variables',
   'environments.form.envHint':
-    'Non-secret values only — these are stored as plain text and copied into every copy of this environment.',
+    'Non-secret values only — stored as plain text and exported while the repository is cloned, while the setup command runs, and into every command the conversation runs.',
   'environments.form.addEnv': 'New variable',
   'environments.form.envCount_one': '{{count}} variable',
   'environments.form.envCount_other': '{{count}} variables',
@@ -4314,6 +4440,10 @@ When I am ___, I need ___
   'environments.form.changeRepository': 'Change repository',
   'environments.form.disconnect': 'Disconnect',
   'environments.detail.tabs.overview': 'Overview',
+  'environments.detail.initializerDesc':
+    'Applied once to a working directory picked for a conversation: the repository is cloned there and the setup command runs.',
+  'environments.detail.noRepository': 'No repository',
+  'environments.detail.noSetup': 'No setup command',
   'environments.instances.copy': 'Duplicate copy',
   'environments.instances.copyTitle': 'Duplicate {{name}}',
   'environments.instances.copyFailed': 'Could not duplicate this copy',
@@ -4325,7 +4455,7 @@ When I am ___, I need ___
     'This copy is being built, so it cannot be duplicated until the build finishes',
   'environments.instances.title': 'Copies',
   'environments.instances.desc':
-    'A copy is a working copy of this environment, with its own folder and its own installed packages. Conversations run inside a copy, and several can run side by side without touching each other.',
+    'Folders on your drive initialized from this environment. Each keeps its own files and installed packages, so conversations in different folders never overwrite each other.',
   'environments.instances.empty': 'No copies yet',
   'environments.instances.emptyHint':
     'Create one, then pick it under "Working Directory" in the chat input.',
@@ -4399,10 +4529,11 @@ When I am ___, I need ___
   'environments.sessions.reason.build_failed': 'Build failed',
   'environments.sessions.reason.build_timeout': 'Build timed out',
   'environments.sessions.reason.build_gone': 'Build interrupted',
-  'environments.form.desc':
-    'What a copy is built from — where the code comes from and what makes it usable.',
+  'environments.form.desc': 'Where the code comes from and what makes it usable.',
   'environments.form.appliesOnBuild':
     'Applied when a copy is created. Existing copies keep the definition they were made with — a rebuild replays that one, so use a new copy to pick this up.',
+  'environments.form.appliesOnInit':
+    'Takes effect the next time the environment is applied to a working directory. Folders it was already applied to keep what they have.',
   'environments.refresh': 'Refresh',
   'environments.emptyPublished': 'Nothing published to this workspace yet',
   'environments.visibility.tabs.workspace': 'Workspace',
@@ -4414,7 +4545,7 @@ When I am ___, I need ___
   'environments.visibility.publicTag': 'Published',
   'environments.visibility.changeFailed': "Could not change this environment's visibility",
   'environments.visibility.readonlyHint':
-    'Published to this workspace by its creator: you can run in this environment, but only they can change what it builds.',
+    'Published to this workspace by its creator: you can initialize with this environment, but only they can change it.',
   'environments.files.browse': 'Browse files',
   'environments.files.back': 'Back',
   'environments.files.empty': 'This directory is empty',
@@ -4485,4 +4616,132 @@ When I am ___, I need ___
   'environments.files.openHint': 'Double-click a folder to open it, or a file to view it',
   'environments.files.unusedInstance':
     'Nothing here yet. The code appears once the copy is built or a conversation runs in it.',
+  'environments.files.folderNotEmpty':
+    'This folder already has files in it. Only a new or empty folder can be initialized from an environment.',
+  'environments.files.folderTaken': 'An environment directory with this name already exists.',
+  'environments.files.readOnly':
+    'Environment directories are read-only: only their own sessions write to them.',
+  'environments.files.notFound': 'That folder doesn’t exist.',
+  'tab.drive': 'Storage',
+  'drive.tabs.public': 'Public drive',
+  'drive.tabs.personal': 'Personal drive',
+  'drive.scope.public': 'Visible to all members',
+  'drive.scope.personal': 'Only you',
+  'drive.usage.title': 'Storage usage',
+  'drive.usage.poolTitle': 'Workspace storage pool',
+  'drive.usage.used': '{{used}} of {{total}} used',
+  'drive.usage.unmeasured': 'Not measured yet · {{total}} in total',
+  'drive.usage.unmeasuredShort': 'Not measured yet',
+  'drive.usage.remaining': '{{size}} left · {{percent}}% used',
+  'drive.usage.overBy': '{{size}} over the quota',
+  'drive.usage.others': 'Other members',
+  'drive.usage.refresh': 'Measure again',
+  'drive.usage.membersTitle': "Members' personal drives",
+  'drive.usage.membersHint': 'Usage only — contents stay private',
+  'drive.usage.memberUnmeasured': 'Not measured',
+  'drive.usage.showAllMembers': 'Show all {{count}} members',
+  'drive.usage.showFewerMembers': 'Show fewer',
+  'drive.usage.over':
+    'Storage is over quota. Free up space or upgrade before more files can be saved.',
+  'drive.usage.enableOverage': 'Turn on pay-as-you-go',
+  'drive.usage.overageModalTitle': 'Keep saving past the quota',
+  'drive.usage.overageAskAdmin': 'Ask a workspace admin to turn on pay-as-you-go to keep saving.',
+  'drive.usage.overBilled':
+    'Over the quota. Files keep saving, and the extra is billed as pay-as-you-go overage.',
+  'drive.retained.title': "Departed members' personal drives",
+  'drive.retained.hint':
+    'Kept for 30 days after a member leaves, then deleted automatically. They count toward the workspace pool until then. Only the amount is shown, never the files.',
+  'drive.retained.expiresIn': 'Deleted in {{count}} days',
+  'drive.retained.expiresToday': 'Deleted today',
+  'drive.retained.lastError': 'Last attempt failed: {{error}}',
+  'drive.retained.move': 'Move to public drive',
+  'drive.retained.moveConfirm.title': "Move {{name}}'s drive to the public drive?",
+  'drive.retained.moveConfirm.desc':
+    'Its files are moved into departed-members on the public drive, where every member can open them, and the personal drive is emptied. Only text files up to 1 MB can be moved; a drive holding anything else is left untouched.',
+  'drive.retained.moved': 'Moved to {{path}} on the public drive',
+  'drive.retained.delete': 'Delete',
+  'drive.retained.deleteConfirm.title': "Delete {{name}}'s personal drive?",
+  'drive.retained.deleteConfirm.desc': 'Everything on it is deleted and cannot be recovered.',
+  'drive.retained.deleted': 'Drive deleted',
+  'drive.usage.manage': 'Manage in Storage',
+  'drive.explorer.newFolder': 'New folder',
+  'drive.explorer.columns.name': 'Name',
+  'drive.explorer.columns.modified': 'Date modified',
+  'drive.explorer.columns.size': 'Size',
+  'drive.explorer.columns.kind': 'Kind',
+  'drive.explorer.kind.folder': 'Folder',
+  'drive.explorer.kind.gitRepository': 'Git repository',
+  'drive.explorer.kind.file': 'File',
+  'drive.explorer.kind.fileWithExtension': '{{extension}} file',
+  'drive.explorer.rename': 'Rename',
+  'drive.explorer.delete': 'Delete',
+  'drive.explorer.moreActions': 'More actions',
+  'drive.explorer.deleteTitle': 'Delete “{{name}}”?',
+  'drive.explorer.deleteFolderContent':
+    'The folder and everything in it are removed from the drive. Conversations working in it switch to a temporary sandbox.',
+  'drive.explorer.deleteFileContent': 'The file is removed from the drive.',
+  'drive.explorer.readOnly': 'Environment directories are read-only',
+  'drive.explorer.readOnlyHint':
+    'Only its own sandbox sessions write to an environment directory, so you can browse it here but not change it.',
+  'drive.explorer.empty': 'This folder is empty',
+  'drive.explorer.emptyRoot.public':
+    'No folders on the public drive yet. Create one to work in it with your team.',
+  'drive.explorer.emptyRoot.personal':
+    'Your drive is empty. Create a folder, then pick it as a conversation’s working folder.',
+  'drive.explorer.loadFailed': 'Could not load this folder.',
+  'drive.loadFailed': 'Could not load storage. Check your connection and try again.',
+  'environments.instances.needsDrive':
+    'Copies are folders on a drive, and this account has no drive yet.',
+  'environments.instances.openDriveSettings': 'Go to Storage settings',
+  'environments.instances.rebuildPersonalDesc':
+    '{{names}} is still on the public drive and is hidden. Private environments now keep their folders on your personal drive.',
+  'environments.instances.rebuildPersonal': 'Rebuild on personal drive',
+  'environments.instances.publishPublic': 'Initialize on the public drive',
+  'environments.instances.publishPublicDesc':
+    'Published to the workspace, but its folders are on your personal drive, where members cannot reach them. Members can run it once it has a folder on the public drive.',
+  'environments.instances.publishPublicFailed': 'Could not create a copy on the public drive',
+  'environments.instances.publishPublicStarted': 'Building a copy on the public drive',
+  'environments.instances.rebuildPersonalStarted': 'Building a new copy on your personal drive',
+  'environments.instances.rebuildPersonalFailed':
+    'Could not create the copy on your personal drive',
+  'environments.instances.rebuildPersonalRequired':
+    'This directory is on the public drive. Rebuild it on your personal drive first.',
+  'environments.instances.rebuildPersonalTag': 'Needs rebuild on personal drive',
+  'environments.instances.rebuildPersonalTagHint': 'Hidden on the public drive and no longer used.',
+  'subscriptionAccounts.actions.rename': 'Rename',
+  'subscriptionAccounts.actions.viewDetails': 'Details',
+  'subscriptionAccounts.activeRuns.empty': 'No agent is using this account right now.',
+  'subscriptionAccounts.activeRuns.loadFailed': "Couldn't load the agents using this account.",
+  'subscriptionAccounts.activeRuns.running': 'Running',
+  'subscriptionAccounts.activeRuns.title': 'Agents using it now',
+  'subscriptionAccounts.activeRuns.untitledAgent': 'Untitled agent',
+  'subscriptionAccounts.activeRuns.untitledTopic': 'Untitled topic',
+  'subscriptionAccounts.activeRuns.waiting': 'Waiting',
+  'subscriptionAccounts.filterEmpty': 'No account matches the filter.',
+  'subscriptionAccounts.searchPlaceholder': 'Search accounts…',
+  'subscriptionAccounts.usageTitle': 'Usage history',
+  'subscriptionAccounts.columns.account': 'Account',
+  'subscriptionAccounts.columns.plan': 'Plan',
+  'subscriptionAccounts.columns.quota': 'Quota',
+  'subscriptionAccounts.columns.rotation': 'Balancing',
+  'subscriptionAccounts.columns.status': 'Status',
+  'subscriptionAccounts.empty.desc':
+    'Sign in to Claude Code, Codex or Kimi Code on a connected device. The account appears here once it reports its quota.',
+  'subscriptionAccounts.empty.title': 'No subscription accounts yet',
+  'subscriptionAccounts.filter.all': 'All',
+  'subscriptionAccounts.loadFailed': "Couldn't load subscription accounts",
+  'subscriptionAccounts.meter.session': '5-hour',
+  'subscriptionAccounts.meter.weekly': 'Weekly',
+  'subscriptionAccounts.refresh': 'Refresh',
+  'subscriptionAccounts.renamePlaceholder': 'Account name',
+  'subscriptionAccounts.rotationTooltip': 'Include in automatic balancing',
+  'subscriptionAccounts.status.available': 'Available · updated {{time}}',
+  'subscriptionAccounts.status.disabled': 'Out of rotation',
+  'subscriptionAccounts.status.exhausted': 'Used up · resets {{time}}',
+  'subscriptionAccounts.status.exhaustedNoReset': 'Used up',
+  'subscriptionAccounts.status.noData': 'No quota reported yet',
+  'subscriptionAccounts.summary': '{{inRotation}} of {{count}} in rotation',
+  'subscriptionAccounts.updateFailed': "Couldn't update the account. Try again.",
+  'tab.subscriptionAccounts': 'Subscription Accounts',
+  'workspaceSetting.group.resource': 'Resources',
 };

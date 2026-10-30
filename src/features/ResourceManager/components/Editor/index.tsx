@@ -12,6 +12,7 @@ import FileDetailComponent from '@/features/ResourceManager/FileDetail';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { downloadFile } from '@/utils/client/downloadFile';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import FileContent from './FileContent';
 
@@ -69,6 +70,9 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
     <Flexbox horizontal height={'100%'} style={{ minHeight: 0 }} width={'100%'}>
       <Flexbox flex={1} height={'100%'} style={{ minHeight: 0 }}>
         <NavHeader
+          // The page's own back leads to its list; mobile drops the shell's
+          // history back so there is one.
+          showTogglePanelButton={!isMobileSurface()}
           left={
             <Flexbox
               horizontal

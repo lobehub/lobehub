@@ -11,6 +11,7 @@ import {
   LayersIcon,
   type LucideIcon,
   MemoryStickIcon,
+  MessagesSquareIcon,
   MonitorIcon,
   PowerIcon,
   ServerIcon,
@@ -21,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
+import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
 import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
@@ -132,7 +134,13 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
             width: 6,
           }}
         />
-        <span>{online ? t('devices.status.online') : t('devices.status.offline')}</span>
+        <span>
+          {summary.onlineUnknown
+            ? t('devices.status.checking')
+            : online
+              ? t('devices.status.online')
+              : t('devices.status.offline')}
+        </span>
       </InfoRow>
       {online && (
         <InfoRow icon={CableIcon} label={t('devices.detail.connections')}>
@@ -142,6 +150,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={CalendarClockIcon} label={t('devices.detail.lastConnected')}>
         {dayjs(summary.lastConnectedAt).fromNow()}
       </InfoRow>
+      {online && (
+        <InfoRow icon={MessagesSquareIcon} label={t('devices.card.runningTopics')}>
+          <DeviceRunningSummaryValue deviceId={device.deviceId} />
+        </InfoRow>
+      )}
       {online && (
         <div className={styles.usage}>
           {usage.loading ? (

@@ -79,6 +79,11 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('file.newTab'),
           },
+          {
+            accelerator: 'Ctrl+Shift+N',
+            click: (_item, targetWindow) => this.openNewWindow(targetWindow),
+            label: t('file.newWindow'),
+          },
           { type: 'separator' },
           {
             accelerator: 'Alt+Ctrl+A',

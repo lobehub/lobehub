@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { lobeHubCliGuide } from './lobeHubCliGuide';
+import { lobeHubCliGuide, lobeHubCliGuideBlock } from './lobeHubCliGuide';
 import { buildHeterogeneousPrompt, HeterogeneousPromptEngine } from './promptEngine';
 
 describe('HeterogeneousPromptEngine', () => {
@@ -43,7 +43,7 @@ describe('HeterogeneousPromptEngine', () => {
 
     expect(blocks).toEqual([
       { text: 'Workspace context', type: 'text' },
-      { text: lobeHubCliGuide, type: 'text' },
+      lobeHubCliGuideBlock,
       { text: 'Draft a doc', type: 'text' },
     ]);
   });

@@ -124,6 +124,11 @@ export class AgentListActionImpl {
     await this.#agentList.revalidate(AGENT_LIST_KEY);
   };
 
+  fetchAgentList = async (): Promise<void> => {
+    getAgentStoreState().invalidateAvailableAgents();
+    await this.#agentList.fetch(LIST_PARAMS, { fresh: true });
+  };
+
   /** Rename / re-avatar an agent: the sidebar row changes now, rolls back on failure. */
   updateAgentMeta = async (id: string, patch: SidebarAgentMetaPatch): Promise<void> => {
     await this.#agents.optimistic(

@@ -67,6 +67,15 @@ export const FeatureFlagsSchema = z.object({
   agent_llm_relay: FeatureFlagValue.optional(),
 
   /**
+   * Rollout gate for the bot-wake pipeline: recording every inbound bot message as a signal with
+   * its wake decision, follow-up wakes that may end in silence (`NO_REPLY`), and the scheduler,
+   * policies and classifier behind them. Evaluated per bot owner, so array values are the user
+   * ids of bot owners. Off means the bot behaves exactly as it did before the pipeline existed
+   * and nothing is written. Server-only: no client reads it.
+   */
+  bot_wake: FeatureFlagValue.optional(),
+
+  /**
    * Dashboards: monitoring widgets built by the `lobe-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
@@ -74,6 +83,15 @@ export const FeatureFlagsSchema = z.object({
    * are user ids.
    */
   dashboard: FeatureFlagValue.optional(),
+
+  /**
+   * Multi-agent Channels: the sidebar section, Channel pages and every Channel API, including
+   * Agent history reads (`lobe-channel`, `lh channel`). Off: none of it is reachable. Work that
+   * was already queued still finishes. Array values are user ids, checked per member.
+   */
+  channel: FeatureFlagValue.optional(),
+
+  topic_preview: FeatureFlagValue.optional(),
 
   // internal flag
   agent_onboarding: FeatureFlagValue.optional(),
@@ -145,8 +163,17 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
 
+  // Off until an admin publishes a bot-owner allowlist or flips it to true.
+  bot_wake: false,
+
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
+
+  // Off until an admin publishes a user allowlist or flips it to true.
+  channel: false,
+
+  // Off until the backend replaces the preview read; allowlist first.
+  topic_preview: false,
 
   agent_onboarding: isDev,
   dev_dock: isDev,
@@ -181,8 +208,11 @@ export const mapFeatureFlagsEnvToState = (
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId),
     enableGatewayMux: evaluateFeatureFlag(config.agent_gateway_mux, userId),
     enableGatewayMuxMobile: evaluateFeatureFlag(config.agent_gateway_mux_mobile, userId),
+    enableBotWake: evaluateFeatureFlag(config.bot_wake, userId),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId),
+    enableChannels: evaluateFeatureFlag(config.channel, userId),
+    enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),

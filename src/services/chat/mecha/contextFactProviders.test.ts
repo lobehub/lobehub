@@ -17,11 +17,16 @@ vi.mock('@/libs/trpc/client', () => ({
 }));
 
 vi.mock('@/services/agent', () => ({
+  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
   agentService: { queryAgents: vi.fn() },
 }));
 
 beforeEach(() => {
-  useAgentStore.setState({ agentDocumentsMap: {}, availableAgents: undefined } as any);
+  useAgentStore.setState({
+    agentDocumentsMap: {},
+    availableAgents: undefined,
+    availableAgentsStale: false,
+  } as any);
   useToolStore.setState({
     composioServers: [],
     installedPlugins: [],
@@ -50,6 +55,17 @@ describe('createBrowserContextFactProviders', () => {
     useAgentStore.setState({ availableAgents: undefined } as any);
     await expect(providers.listRecentAgents!(12)).resolves.toEqual([{ id: 'agent-2' }]);
     expect(agentService.queryAgents).toHaveBeenCalledWith({ limit: 12 });
+  });
+
+  it('reads a fresh agent list once the agents changed', async () => {
+    const providers = createBrowserContextFactProviders();
+    vi.mocked(agentService.queryAgents).mockResolvedValue([{ id: 'agent-new' }] as any);
+
+    useAgentStore.setState({ availableAgents: [{ id: 'agent-1' }] } as any);
+    useAgentStore.getState().invalidateAvailableAgents();
+
+    await expect(providers.listRecentAgents!(12)).resolves.toEqual([{ id: 'agent-new' }]);
+    expect(agentService.queryAgents).toHaveBeenCalledTimes(1);
   });
 
   it('treats only active Composio connections and every installed LobeHub skill provider as connected', async () => {

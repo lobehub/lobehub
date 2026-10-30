@@ -25,6 +25,8 @@ const MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?
 const MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 const isMiniMaxM3Model = (model: string) => model.toLowerCase() === 'minimax-m3';
+// M3.1 Flash always thinks: it rejects disabled thinking and takes `reasoning_effort` instead.
+const isMiniMaxM3FlashModel = (model: string) => model.toLowerCase() === 'minimax-m3.1-flash';
 
 type MiniMaxSDKType = 'anthropic' | 'openai';
 
@@ -137,8 +139,12 @@ export const buildMiniMaxAnthropicPayload = async (
     )) ??
     64_000;
 
+  const isFlash = isMiniMaxM3FlashModel(payload.model);
   const basePayload = await buildDefaultAnthropicPayload({
     ...payload,
+    ...(isFlash && payload.reasoning_effort
+      ? { effort: payload.reasoning_effort as ChatStreamPayload['effort'] }
+      : {}),
     enabledSearch: false,
     max_tokens: resolvedMaxTokens,
     messages: normalizeMessagesForAnthropic(payload.messages),
@@ -154,8 +160,11 @@ export const buildMiniMaxAnthropicPayload = async (
       topPRange: { max: 1, min: 0.01 },
     },
   );
+  // Open-weight M3 models do not support temperature
   const finalTemperature =
-    resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0
+    isFlash ||
+    isMiniMaxM3Model(payload.model) ||
+    (resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0)
       ? undefined
       : resolvedParams.temperature;
 
@@ -177,7 +186,8 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
     ...params
   } = payload;
 
-  const isM3 = isMiniMaxM3Model(payload.model);
+  const isFlash = isMiniMaxM3FlashModel(payload.model);
+  const isM3 = isMiniMaxM3Model(payload.model) || isFlash;
 
   // Interleaved thinking
   const processedMessages = messages.map((message: any) => {
@@ -236,21 +246,23 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
     },
   );
 
-  // Minimax doesn't support temperature <= 0
+  // Minimax doesn't support temperature <= 0; open-weight M3 models do not support temperature
   const finalTemperature =
-    !isM3 && resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0
+    isM3 || (resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0)
       ? undefined
       : resolvedParams.temperature;
 
-  const finalThinking = isM3
-    ? thinking?.type === 'disabled'
-      ? { thinking: { type: 'disabled' } }
-      : thinking?.type === 'enabled' || thinking?.type === 'adaptive'
-        ? { thinking: { type: 'adaptive' } }
-        : {}
-    : thinking
-      ? { thinking }
-      : {};
+  const finalThinking = isFlash
+    ? {}
+    : isM3
+      ? thinking?.type === 'disabled'
+        ? { thinking: { type: 'disabled' } }
+        : thinking?.type === 'enabled' || thinking?.type === 'adaptive'
+          ? { thinking: { type: 'adaptive' } }
+          : {}
+      : thinking
+        ? { thinking }
+        : {};
 
   const outputLimitParam = isM3
     ? { max_completion_tokens: resolvedParams.max_tokens }

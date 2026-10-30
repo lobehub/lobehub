@@ -8,6 +8,7 @@ import type { StoreSetter } from '@/store/types';
 import type { UserStore } from '@/store/user';
 import type { LobeAgentSettings } from '@/types/session';
 import type {
+  PersonalSystemAgentKey,
   SystemAgentItem,
   UserGeneralConfig,
   UserKeyVaults,
@@ -44,6 +45,11 @@ export class UserSettingsActionImpl {
    * requests could commit out of order and leave an older list in the DB.
    */
   #toolChannelsWrite: Promise<unknown> = Promise.resolve();
+  /** Tail of the in-flight `replaceServiceModelSettings` writes, kept in call order. */
+  #serviceModelWrite: Promise<unknown> = Promise.resolve();
+
+  /** Latest queued write per personal system-agent entry; see updatePersonalSystemAgent. */
+  readonly #personalSystemAgentWrites = new Map<PersonalSystemAgentKey, Promise<unknown>>();
 
   constructor(set: Setter, get: () => UserStore, _api?: unknown) {
     void _api;
@@ -101,6 +107,43 @@ export class UserSettingsActionImpl {
     this.#set({ updateSettingsSignal: newSignal }, false, 'signalForUpdateSettings');
 
     return newSignal;
+  };
+
+  /**
+   * Replace the Service Model columns with exactly the given stored values.
+   * Unlike `setSettings`, which can only merge, this can drop keys: removing a
+   * slot's model is how a slot goes back to following its tier or the system
+   * recommendation. The server replaces these jsonb columns wholesale.
+   */
+  replaceServiceModelSettings = async (
+    columns: Pick<PartialDeep<UserSettings>, 'defaultAgent' | 'systemAgent'>,
+  ): Promise<void> => {
+    this.#set(
+      { settings: { ...this.#get().settings, ...columns } },
+      false,
+      'optimistic_replaceServiceModelSettings',
+    );
+
+    // A failed earlier write must not block later ones; its caller still
+    // receives the rejection through its own `write` promise.
+    const write = this.#serviceModelWrite
+      .catch(() => {})
+      .then(() => userService.updateUserSettings(columns));
+    this.#serviceModelWrite = write;
+
+    try {
+      await write;
+    } catch (error) {
+      // Drop the unsaved optimistic value; the caller keeps the rejection for retry.
+      await this.#get()
+        .refreshUserState()
+        .catch(() => {});
+      throw error;
+    }
+    for (const key of Object.keys(columns)) this.#pendingSettingKeys.delete(key);
+    // Only the latest write refreshes: an intermediate refresh would pull a
+    // value that a queued write is about to replace.
+    if (this.#serviceModelWrite === write) await this.#get().refreshUserState();
   };
 
   resetSettings = async (): Promise<void> => {
@@ -283,6 +326,45 @@ export class UserSettingsActionImpl {
 
     await userService.updateToolIntervention(config);
     await this.#get().refreshUserState();
+  };
+
+  /**
+   * Personal chat-assist entries (follow-up chips, input completion) go through
+   * a dedicated per-entry merge: inside a workspace the generic settings write
+   * would be rejected for members, since it carries the whole `systemAgent`
+   * column, and it would rewrite sibling entries from this tab's snapshot.
+   */
+  updatePersonalSystemAgent = async (
+    key: PersonalSystemAgentKey,
+    value: { enabled?: boolean; model?: string; provider?: string },
+  ): Promise<void> => {
+    this.#set(
+      { settings: merge(this.#get().settings, { systemAgent: { [key]: value } }) },
+      false,
+      'optimistic_updatePersonalSystemAgent',
+    );
+
+    // Writes to one entry run in call order, so a slower earlier save (model A)
+    // cannot land after a later one (model B). A failed earlier write must not
+    // block later ones; its caller still receives its own rejection.
+    const write = (this.#personalSystemAgentWrites.get(key) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => userService.updatePersonalSystemAgent(key, value));
+    this.#personalSystemAgentWrites.set(key, write);
+
+    try {
+      await write;
+    } catch (error) {
+      // Chat reads these settings directly, so drop the unsaved optimistic
+      // value. The rejection still reaches the caller for its retry state.
+      await this.#get()
+        .refreshUserState()
+        .catch(() => {});
+      throw error;
+    }
+    // Only the latest write refreshes: an intermediate refresh would pull a
+    // value that a queued write is about to replace.
+    if (this.#personalSystemAgentWrites.get(key) === write) await this.#get().refreshUserState();
   };
 
   updateToolChannels = async (channels: {

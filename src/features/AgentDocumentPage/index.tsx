@@ -2,7 +2,7 @@
 
 import { EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
@@ -74,6 +74,14 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
     [chatAgentId, docChatTopicId, documentId],
   );
 
+  // The topic panel owns its own visibility instead of the global
+  // `showRightPanel`: it starts collapsed on every document. The header button
+  // opens it, and the panel toolbar collapses it, mirroring the task Copilot.
+  const [topicPanelExpand, setTopicPanelExpand] = useState(false);
+  const toggleTopicPanel = useCallback(() => setTopicPanelExpand((expand) => !expand), []);
+  const collapseTopicPanel = useCallback(() => setTopicPanelExpand(false), []);
+  const hasTopicPanel = !!chatAgentId && !!docChatTopicId;
+
   const backToChat = useCallback(
     () => navigate(agentId ? `/agent/${agentId}` : '/agent'),
     [agentId, navigate],
@@ -113,9 +121,11 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
         fileBacked={isFile}
         itemError={itemError}
         title={title}
+        topicPanelExpand={hasTopicPanel ? topicPanelExpand : undefined}
         updatedAt={item?.updatedAt}
         onBack={backToChat}
         onDeleted={backToDocs}
+        onToggleTopicPanel={toggleTopicPanel}
       />
     ),
     [
@@ -128,6 +138,9 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
       itemError,
       isFile,
       title,
+      hasTopicPanel,
+      topicPanelExpand,
+      toggleTopicPanel,
     ],
   );
 
@@ -175,8 +188,14 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
           />
         )}
       </Flexbox>
-      {chatAgentId && docChatTopicId && (
-        <RightPanel expand defaultWidth={400} maxWidth={720} minWidth={320}>
+      {hasTopicPanel && (
+        <RightPanel
+          defaultWidth={400}
+          expand={topicPanelExpand}
+          maxWidth={720}
+          minWidth={320}
+          onExpandChange={setTopicPanelExpand}
+        >
           <Flexbox flex={1} height={'100%'} justify={'flex-end'} style={{ minHeight: 0 }}>
             <FloatingChatPanel
               agentDocumentId={item?.id}
@@ -185,6 +204,7 @@ const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
               key={`${chatAgentId}:${docChatTopicId}:${documentId}`}
               mode="embedded"
               topicId={docChatTopicId}
+              onCollapse={collapseTopicPanel}
             />
           </Flexbox>
         </RightPanel>

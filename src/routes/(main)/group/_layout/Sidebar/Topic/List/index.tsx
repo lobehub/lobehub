@@ -19,7 +19,7 @@ import AllTopicsDrawer from '../AllTopicsDrawer';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
 
-const TopicList = memo(() => {
+const TopicList = memo<{ showEmptyAction?: boolean }>(({ showEmptyAction = true }) => {
   const { t } = useTranslation('topic');
   const router = useQueryRoute();
   const topicLength = useChatStore((s) => topicSelectors.currentTopicLength(s));
@@ -40,7 +40,7 @@ const TopicList = memo(() => {
 
   return (
     <>
-      {topicLength === 0 && activeGroupId && (
+      {showEmptyAction && topicLength === 0 && activeGroupId && (
         <EmptyNavItem
           title={t('actions.addNewTopic')}
           onClick={() => {

@@ -15,6 +15,7 @@ import { GoalProbeDistill, needsProbeDistill } from '../probeDistill';
 import { resolveMaxConcurrentTasks } from '../recoveryPolicy';
 import { withoutGoalReport } from '../report';
 import { GoalReportService } from '../reportService';
+import { GoalSubscriptionService } from '../subscriptions';
 import { GoalSupervisorService } from '../supervisor';
 import {
   type GoalTickOptions,
@@ -87,6 +88,10 @@ export const tickOnce = async (
       message: `Goal is a draft; start it with lh goal start ${goalId}`,
       outcome: 'no_progress',
     };
+  // An unmanaged Goal consumes its subscriptions' pending wakes here; a managed
+  // one hands them to its planner's turn.
+  if (!graph.goal.config?.manager)
+    await new GoalSubscriptionService(ctx.db, ctx.userId, ctx.workspaceId).acknowledge(goalId);
   if (graph.goal.config?.manager) {
     // The system's own planner leads whenever the Goal has one: a main Agent is
     // the fallback for problems that planner cannot express, not a replacement
@@ -212,6 +217,17 @@ export const tickOnce = async (
         ctx.workspaceId,
       ).reconsiderAcceptance(graph, move.message);
       if (replanning) return observe(replanning);
+      const subscriptions = await new GoalSubscriptionService(
+        ctx.db,
+        ctx.userId,
+        ctx.workspaceId,
+      ).list(goalId);
+      if (subscriptions.some((entry) => entry.subscription.enabled)) {
+        // A measured shortfall is an observation wait, not a user's pause.
+        // The Widget schedule continues, and its durable pending effect or
+        // cyclic window scan requests the next coordinator evaluation.
+        return observe({ goalId, message: move.message, outcome: 'waiting_external' });
+      }
       await ctx.setPauseReason(goalId, 'measured_acceptance');
       await ctx.transitionStatus(graph.goal, 'paused', move.message);
       effects.push({ type: 'goal_status', detail: 'paused' });

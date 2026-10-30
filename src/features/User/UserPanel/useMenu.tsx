@@ -12,7 +12,7 @@ import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
 import DataImporter from '@/features/DataImporter';
-import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -55,7 +55,11 @@ export const useMenu = () => {
   const { userPanel } = useNavLayout();
   const businessMenuItems = useBusinessMenuItems(isLogin);
   const hasActiveWorkspace = useHasActiveWorkspace();
+  const navigate = useWorkspaceAwareNavigate();
 
+  // Navigation items navigate from the row's `onClick` instead of wrapping the
+  // label in a link: a link only covers the label text, so clicks on the icon
+  // or the row padding closed the panel without navigating.
   const settings: MenuProps['items'] = [
     {
       extra: isDesktop ? (
@@ -66,23 +70,19 @@ export const useMenu = () => {
       icon: <Icon icon={Settings2} />,
       key: 'setting',
       label: (
-        <WorkspaceLink to="/settings">
-          <NewVersionBadge showBadge={hasNewVersion}>
-            {t(hasActiveWorkspace ? 'userPanel.workspaceSetting' : 'userPanel.setting')}
-          </NewVersionBadge>
-        </WorkspaceLink>
+        <NewVersionBadge showBadge={hasNewVersion}>
+          {t(hasActiveWorkspace ? 'userPanel.workspaceSetting' : 'userPanel.setting')}
+        </NewVersionBadge>
       ),
+      onClick: () => navigate('/settings'),
     },
     ...(userPanel.showMemory
       ? [
           {
             icon: <Icon icon={BrainCircuit} />,
             key: 'memory',
-            label: (
-              <WorkspaceLink escape to="/memory">
-                {t('tab.memory')}
-              </WorkspaceLink>
-            ),
+            label: t('tab.memory'),
+            onClick: () => navigate('/memory', { escape: true }),
           },
         ]
       : []),
@@ -108,11 +108,8 @@ export const useMenu = () => {
     {
       icon: <Icon icon={Download} />,
       key: 'get-app',
-      label: (
-        <WorkspaceLink escape to="/apps">
-          {t('getApp')}
-        </WorkspaceLink>
-      ),
+      label: t('getApp'),
+      onClick: () => navigate('/apps', { escape: true }),
     },
   ];
 

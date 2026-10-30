@@ -192,8 +192,10 @@ class GroupManagementExecutionRuntime {
   };
 
   // ==================== Not yet implemented on the server ====================
-  // Mirror the client stubs: return inline (non-deferred) results so the
-  // supervisor LLM keeps orchestrating instead of parking.
+  // Mirror the client stubs. These actions have no server orchestration yet —
+  // they must surface explicit `success: false` errors (not success-shaped
+  // text) so the supervisor LLM can adapt instead of treating the stub output
+  // as a completed action.
 
   interrupt = async (params: InterruptParams): Promise<BuiltinServerRuntimeOutput> => ({
     content: `Interrupt is not yet supported in server orchestration (task ${params.taskId}).`,
@@ -210,10 +212,12 @@ class GroupManagementExecutionRuntime {
     success: true,
   });
 
-  vote = async (params: VoteParams): Promise<BuiltinServerRuntimeOutput> => ({
-    content: `Voting is not yet implemented (question: "${params.question}").`,
-    success: true,
-  });
+  vote = async (params: VoteParams): Promise<BuiltinServerRuntimeOutput> =>
+    buildError(
+      "Voting is not yet implemented. Collect members' opinions with `broadcast` instead, " +
+        'then tally the responses yourself.',
+      'VOTE_NOT_IMPLEMENTED',
+    );
 }
 
 const runtime = new GroupManagementExecutionRuntime();

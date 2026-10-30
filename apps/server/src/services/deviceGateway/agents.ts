@@ -10,6 +10,7 @@ import {
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
+  ClaudeCodeAccountRouting,
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
   KimiCodeQuotaSnapshot,
@@ -156,6 +157,8 @@ export async function dispatchAgentRun(
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    /** Claude Code account the device must spawn on; see the request message. */
+    claudeAccountRouting?: ClaudeCodeAccountRouting;
     /** Restricts the run to connections of these clients; omitted means any client. */
     clientKinds?: DeviceClient[];
     cwd?: string;

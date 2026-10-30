@@ -107,7 +107,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
         .composioAsLobeTools(toolStoreState)
         .map((tool) => tool.manifest as LobeToolManifest),
       connectors: buildClientConnectorManifests(
-        connectorSelectors.customConnectors(toolStoreState),
+        connectorSelectors.executableMcpConnectors(toolStoreState),
       ) as LobeToolManifest[],
       installedPlugins: pluginSelectors.installedPluginManifestList(
         toolStoreState,

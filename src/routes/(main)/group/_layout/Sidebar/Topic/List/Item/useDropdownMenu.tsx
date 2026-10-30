@@ -156,7 +156,10 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.copyLink'),
         onClick: () => {
           if (!activeGroupId) return;
-          const url = `${appOrigin}${GROUP_CHAT_TOPIC_URL(activeGroupId, id)}`;
+          const url = `${appOrigin}${buildWorkspaceAwarePath(
+            GROUP_CHAT_TOPIC_URL(activeGroupId, id),
+            activeWorkspaceSlug,
+          )}`;
           navigator.clipboard.writeText(url);
           toast.success(t('actions.copyLinkSuccess'));
         },

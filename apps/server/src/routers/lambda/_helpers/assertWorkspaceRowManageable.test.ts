@@ -48,6 +48,38 @@ describe('assertWorkspaceRowManageable', () => {
     }
   });
 
+  it('rejects a workspace admin by default', () => {
+    expect(() =>
+      assertWorkspaceRowManageable(
+        { userId: 'me', workspaceId: 'ws1', workspaceRole: 'admin' },
+        'someone-else',
+        'topic',
+      ),
+    ).toThrow('Only the creator or a workspace owner can modify this topic');
+  });
+
+  it('allows a workspace admin when the call site opts in', () => {
+    expect(() =>
+      assertWorkspaceRowManageable(
+        { userId: 'me', workspaceId: 'ws1', workspaceRole: 'admin' },
+        'someone-else',
+        'topic',
+        { allowAdmin: true },
+      ),
+    ).not.toThrow();
+  });
+
+  it('still rejects a member when admins are allowed', () => {
+    expect(() =>
+      assertWorkspaceRowManageable(
+        { userId: 'me', workspaceId: 'ws1', workspaceRole: 'member' },
+        'someone-else',
+        'topic',
+        { allowAdmin: true },
+      ),
+    ).toThrow('Only the creator or a workspace owner or admin can modify this topic');
+  });
+
   it('rejects when the row has no creator recorded', () => {
     expect(() =>
       assertWorkspaceRowManageable(

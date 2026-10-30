@@ -12,6 +12,8 @@ export default defineConfig({
     'src/modelProviders/lobehub.ts',
     'src/types/index.ts',
     'src/aiModels/*.ts',
+    // Providers split into a directory (`openai/`, `google/`, …) export their `index.ts`.
+    'src/aiModels/*/index.ts',
   ],
   fixedExtension: false,
   format: ['esm'],
