@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "Този модел поддържа разпознаване на видео",
   "ModelSelect.featureTag.vision": "Този модел поддържа визуално разпознаване.",
   "ModelSelect.removed": "Моделът не е в списъка. Ще бъде автоматично премахнат, ако бъде деселектиран.",
+  "ModelSelect.routing": "Маршрутизиране",
+  "ModelSelect.routingTooltip": "Група за маршрутизиране: няколко доставчици обслужват този модел, и всяка заявка отива към този, който отговори.",
   "ModelSelect.staleModel.current": "Текуща селекция",
   "ModelSelect.staleModel.notEnabled.action": "Активирайте този модел",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Неуспешно активиране на модела. Моля, опитайте отново.",

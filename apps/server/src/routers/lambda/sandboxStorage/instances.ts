@@ -1,28 +1,38 @@
-import { isDefaultInstance } from '@lobechat/utils/environmentInstance';
+import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 import { z } from 'zod';
 
 import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
+import { forgetDriveFolders, sandboxStorageBinding } from '@/server/services/sandbox';
 import { stopSandboxInstance } from '@/server/services/sandbox/stopInstance';
 
 import { rethrowDuplicateInstanceDirectory } from './constraintErrors';
 import {
-  createDerivedInstance,
-  deleteInstanceSnapshot,
-  isBuildable,
-  sandboxBinding,
-} from './instanceOperations';
+  assertFolderFree,
+  assertNotLeftOnPublicDrive,
+  driveForEnvironment,
+  resolveInstanceDrive,
+} from './driveScope';
+import { createDerivedInstance, deleteInstanceSnapshot, isBuildable } from './instanceOperations';
 import { instanceProcedure, mapStorageError } from './procedures';
-import { idSchema, nameSchema, relativePathSchema, topicIdSchema } from './schemas';
+import {
+  driveSchema,
+  idSchema,
+  instanceDirectorySchema,
+  nameSchema,
+  topicIdSchema,
+} from './schemas';
 
 /**
  * The topic the execution plane keys its file-browser console sessions to.
  * The same literal market uses (`MANAGEMENT_TOPIC_ID`); it is not a topic of
  * ours, so it is never looked up and the run is shown as a console session.
  */
-const MANAGEMENT_TOPIC_ID = 'sandbox-workspace-console';
+export const MANAGEMENT_TOPIC_ID = 'sandbox-workspace-console';
+
+/** The index that keeps two instances out of the same directory. */
 
 export const instancesRouter = router({
   /**
@@ -36,12 +46,18 @@ export const instancesRouter = router({
       z.object({
         id: idSchema,
         name: nameSchema,
-        workingDirectory: relativePathSchema,
+        workingDirectory: instanceDirectorySchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const source = await ctx.instanceModel.findOwnedById(input.id);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+      // Beside the source, on the same drive: the copy starts from the
+      // source's snapshot, which lives on that drive's volume.
+      const sourceDrive = await resolveInstanceDrive(ctx, source);
+      const { claim, client } = sourceDrive;
+      await assertNotLeftOnPublicDrive(ctx, source, sourceDrive);
+      await assertFolderFree(client, input.workingDirectory);
 
       // A held instance is mid-write, so a copy would capture a tree halfway
       // through a change. The execution plane refuses it too; asking first
@@ -50,7 +66,7 @@ export const instancesRouter = router({
       // that did not answer is not read as "free" — here that means refusing,
       // because unlike a rebuild there is no runtime lease standing behind a
       // copy to catch the second writer.
-      const occupancy = await ctx.client
+      const occupancy = await client
         .readOccupancy({ names: [source.id] })
         .catch(() => ({ held: [], unavailable: true }));
       if (occupancy.unavailable || occupancy.held.some((entry) => entry.id === source.id)) {
@@ -63,7 +79,7 @@ export const instancesRouter = router({
       // state as a brand-new instance, which the UI already handles.
       const created = await ctx.instanceModel
         .create({
-          ...sandboxBinding(ctx.claim.key),
+          ...sandboxStorageBinding(claim.key),
           // The copy's files are the source's, so its definition is too. Left
           // to default, it would snapshot whatever the environment says now
           // and describe a checkout the copied tree does not contain.
@@ -76,7 +92,7 @@ export const instancesRouter = router({
 
       if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
-      await ctx.client
+      await client
         .copyInstance({
           from: source.id,
           // The copy's own folder. Sharing the source's would let either
@@ -117,24 +133,54 @@ export const instancesRouter = router({
       if (!environment)
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
 
-      return createDerivedInstance(ctx.instanceModel, ctx.claim.key, environment);
+      const access = await ctx.drives.client(driveForEnvironment(environment, ctx.workspaceId));
+      if (!access) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'This account has no persistent sandbox workspace',
+        });
+      }
+
+      return createDerivedInstance(ctx.instanceModel, access.client, access.claim.key, environment);
     }),
   /**
-   * An instance of an environment: its own directory, its own captured
-   * state. Created empty — nothing is built until a conversation runs in it.
+   * Initialize a folder from an environment: an environment directory at the
+   * drive's root, with its own captured state. Created unbuilt — the caller
+   * starts the build next, the same split as for any other new instance.
+   *
+   * Only a new folder, or an empty one. Building into a folder that already
+   * holds work would mix a checkout into it, and a later rebuild would throw
+   * that work away with the old checkout.
    */
   createInstance: instanceProcedure
     .input(
       z.object({
         environmentId: idSchema,
         name: nameSchema,
-        workingDirectory: relativePathSchema,
+        workingDirectory: instanceDirectorySchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // The environment decides the drive, not the drive being browsed: a
+      // private environment's directory goes on its owner's personal drive,
+      // where no other member can reach the home directory it captures.
+      const environment = await ctx.environmentModel.findOwnedById(input.environmentId);
+      if (!environment)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      const drive = driveForEnvironment(environment, ctx.workspaceId);
+      const access = await ctx.drives.client(drive);
+      if (!access) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'This account has no persistent sandbox workspace',
+        });
+      }
+
+      await assertFolderFree(access.client, input.workingDirectory);
+
       const created = await ctx.instanceModel
         .create({
-          ...sandboxBinding(ctx.claim.key),
+          ...sandboxStorageBinding(access.claim.key),
           environmentId: input.environmentId,
           name: input.name,
           workingDirectory: input.workingDirectory,
@@ -142,8 +188,9 @@ export const instancesRouter = router({
         .catch(rethrowDuplicateInstanceDirectory);
 
       if (!created) throw new TRPCError({ code: 'NOT_FOUND', message: 'Environment not found' });
+      forgetDriveFolders(access.claim.key);
 
-      return created;
+      return { ...created, drive };
     }),
   /**
    * One instance, from the database alone. Separate from `listInstances`
@@ -151,9 +198,14 @@ export const instancesRouter = router({
    * and `listInstances` pays a sandbox cold start to answer how big everything
    * is — seconds, for a label.
    */
-  getInstance: instanceProcedure
-    .input(z.object({ id: idSchema }))
-    .query(async ({ ctx, input }) => (await ctx.instanceModel.findById(input.id)) ?? null),
+  getInstance: instanceProcedure.input(z.object({ id: idSchema })).query(async ({ ctx, input }) => {
+    const instance = await ctx.instanceModel.findById(input.id);
+    if (!instance) return null;
+
+    // Which of the caller's drives it is on, for the composer's label —
+    // `null` on a drive that is not theirs, which the run refuses.
+    return { ...instance, drive: ctx.drives.driveOf(instance.providerScope) ?? null };
+  }),
   /**
    * Instances, each joined with the state the execution plane actually
    * holds for it. An instance that was created but never used has no snapshot
@@ -162,6 +214,12 @@ export const instancesRouter = router({
   listInstances: instanceProcedure
     .input(
       z.object({
+        /**
+         * Only the instances on this drive — what a picker browsing one drive
+         * asks for. Without it, every instance on any of the caller's drives,
+         * which is what the environments page lists.
+         */
+        drive: driveSchema,
         environmentId: idSchema.optional(),
         topicId: topicIdSchema,
         /**
@@ -174,35 +232,82 @@ export const instancesRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const instances = await ctx.instanceModel.query({ environmentId: input.environmentId });
+      // An instance on a drive that is not the caller's — a colleague's
+      // personal drive, under an environment they have since published — is
+      // not one the caller can run in, list the files of, or size.
+      const located = (await ctx.instanceModel.query({ environmentId: input.environmentId }))
+        .map((instance) => ({ drive: ctx.drives.driveOf(instance.providerScope), instance }))
+        .filter(
+          (entry): entry is { drive: SandboxDrive; instance: typeof entry.instance } =>
+            !!entry.drive && (!input.drive || entry.drive === ctx.drive),
+        );
+      const instances = located.map((entry) => entry.instance);
+      const driveById = new Map(located.map((entry) => [entry.instance.id, entry.drive]));
 
-      const [snapshots, occupancy] = await Promise.all([
-        input.withSizes
-          ? ctx.client
-              .listInstances({ topicId: input.topicId })
-              .then((result) => result.instances)
-              // If the store fails, the instances still exist and can still be
-              // renamed or selected — only their sizes are unknown, so say so
-              // rather than failing a settings page.
-              .catch(() => null)
+      // Private environments' directories left on the public drive: listed
+      // for their owner — the only member who sees a private environment —
+      // with the instruction to rebuild them, and run by nobody.
+      const publicAccess =
+        ctx.workspaceId && located.some((entry) => entry.drive === 'public')
+          ? await ctx.drives.client('public')
+          : undefined;
+      const rebuildRequired = new Set(
+        publicAccess
+          ? (
+              await ctx.instanceModel.listStorageDirectories(
+                sandboxStorageBinding(publicAccess.claim.key),
+              )
+            )
+              .filter((entry) => entry.isPrivate)
+              .map((entry) => entry.id)
           : [],
-        // Always, and separately from the sizes: this is a Redis read on the
-        // control plane, so it costs the same on every deployment, whereas the
-        // listing above opens the volume. An instance held by another
-        // conversation cannot be run in — the lease answers the second writer
-        // with a 409 — so a picker that does not know is a picker that offers
-        // a choice the first message will refuse.
-        instances.length > 0
-          ? ctx.client
-              .readOccupancy({
-                names: instances.map((instance) => instance.id),
-                topicId: input.topicId,
-              })
-              // Same rule the lease store itself follows: a failure is "not
-              // known", never "free".
-              .catch(() => ({ held: [], unavailable: true }))
-          : { held: [], unavailable: false },
-      ]);
+      );
+
+      // One client per drive, since each drive's snapshots and leases are
+      // read through a claim for that drive.
+      const drives = [...new Set(located.map((entry) => entry.drive))];
+      const perDrive = await pMap(
+        drives,
+        async (drive) => {
+          const access = await ctx.drives.client(drive);
+          const names = located
+            .filter((entry) => entry.drive === drive)
+            .map((entry) => entry.instance.id);
+
+          const [snapshots, occupancy] = await Promise.all([
+            input.withSizes && access
+              ? access.client
+                  .listInstances({ topicId: input.topicId })
+                  .then((result) => result.instances)
+                  // If the store fails, the instances still exist and can
+                  // still be renamed or selected — only their sizes are
+                  // unknown, so say so rather than failing a settings page.
+                  .catch(() => null)
+              : input.withSizes
+                ? null
+                : [],
+            // Always, and separately from the sizes: this is a Redis read on
+            // the control plane, so it costs the same on every deployment,
+            // whereas the listing above opens the volume. An instance held by
+            // another conversation cannot be run in — the lease answers the
+            // second writer with a 409 — so a picker that does not know is a
+            // picker that offers a choice the first message will refuse.
+            access && names.length > 0
+              ? access.client
+                  .readOccupancy({ names, topicId: input.topicId })
+                  // Same rule the lease store itself follows: a failure is
+                  // "not known", never "free".
+                  .catch(() => ({ held: [], unavailable: true }))
+              : { held: [], unavailable: !access && names.length > 0 },
+          ]);
+
+          return { access, drive, occupancy, snapshots };
+        },
+        { concurrency: 5 },
+      );
+      const clientByDrive = new Map(
+        perDrive.flatMap((entry) => (entry.access ? [[entry.drive, entry.access.client]] : [])),
+      );
 
       // A build is polled by whoever has the Instances tab open, and nobody
       // has it open most of the time — switch tabs mid-build and the verdict
@@ -214,7 +319,9 @@ export const instancesRouter = router({
       const settled = await pMap(
         instances.filter((instance) => instance.buildId),
         async (instance) => {
-          const status = await ctx.client
+          const client = clientByDrive.get(driveById.get(instance.id)!);
+          if (!client) return null;
+          const status = await client
             .buildStatus({ buildId: instance.buildId!, name: instance.id, topicId: input.topicId })
             .catch(() => null);
           if (!status || status.state === 'running') return null;
@@ -234,8 +341,14 @@ export const instancesRouter = router({
       );
       const settledById = new Map(settled.filter((entry) => !!entry));
 
-      const byId = new Map((snapshots ?? []).map((snapshot) => [snapshot.id, snapshot]));
-      const heldBy = new Map(occupancy.held.map((entry) => [entry.id, entry.own]));
+      const byId = new Map(
+        perDrive.flatMap((entry) =>
+          (entry.snapshots ?? []).map((snapshot) => [snapshot.id, snapshot] as const),
+        ),
+      );
+      const heldBy = new Map(
+        perDrive.flatMap((entry) => entry.occupancy.held.map((held) => [held.id, held.own])),
+      );
 
       return {
         instances: instances.map((instance) => ({
@@ -246,6 +359,8 @@ export const instancesRouter = router({
           buildable: isBuildable(instance.configurationSnapshot),
           buildError: settledById.get(instance.id)?.buildError ?? instance.buildError,
           createdAt: instance.createdAt,
+          /** Which of the caller's drives the directory is on. */
+          drive: driveById.get(instance.id)!,
           environmentId: instance.environmentId,
           id: instance.id,
           // Held by a running sandbox, and by whom. `own` is this topic's own
@@ -254,12 +369,18 @@ export const instancesRouter = router({
           inUse: heldBy.has(instance.id),
           inUseByThisTopic: heldBy.get(instance.id) === true,
           name: instance.name,
+          /**
+           * A private environment's directory on the public drive, from
+           * before members had drives of their own: hidden there, never run
+           * in, and to be initialized again on the owner's personal drive.
+           */
+          rebuildRequired: rebuildRequired.has(instance.id),
           snapshot: byId.get(instance.id) ?? null,
           status: settledById.get(instance.id)?.status ?? instance.status,
           workingDirectory: instance.workingDirectory,
         })),
-        occupancyUnavailable: occupancy.unavailable,
-        snapshotsUnavailable: snapshots === null,
+        occupancyUnavailable: perDrive.some((entry) => entry.occupancy.unavailable),
+        snapshotsUnavailable: perDrive.some((entry) => entry.snapshots === null),
       };
     }),
   /**
@@ -283,7 +404,9 @@ export const instancesRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const instances = await ctx.instanceModel.query({ environmentId: input.environmentId });
+      const instances = (
+        await ctx.instanceModel.query({ environmentId: input.environmentId })
+      ).filter((instance) => ctx.drives.driveOf(instance.providerScope));
       if (instances.length === 0) return { sessions: [], unavailable: false };
 
       // Bounded: an environment's instance count is whatever the member made,
@@ -292,8 +415,10 @@ export const instancesRouter = router({
       const pages = await pMap(
         instances,
         (instance) =>
-          ctx.client
-            .listEnvironmentSessions({ limit: input.limit, name: instance.id })
+          resolveInstanceDrive(ctx, instance)
+            .then(({ client }) =>
+              client.listEnvironmentSessions({ limit: input.limit, name: instance.id }),
+            )
             // One instance's history failing must not blank the others; the
             // caller is told the list is incomplete rather than shown "no runs".
             .catch(() => null),
@@ -356,9 +481,9 @@ export const instancesRouter = router({
       };
     }),
   /**
-   * Remove one copy of an environment. The default instance is refused: it is
-   * what the environment is, so it goes when the environment does, and a
-   * broken one is rebuilt rather than deleted.
+   * Remove an environment directory: what its builds left on the drive, and
+   * the row. Any of them, the first included — an environment owns no folder
+   * of its own any more, so none is left to stand for it.
    */
   removeInstance: instanceProcedure
     .input(z.object({ id: idSchema, topicId: topicIdSchema }))
@@ -366,16 +491,13 @@ export const instancesRouter = router({
       const instance = await ctx.instanceModel.findOwnedById(input.id);
       if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
 
-      const siblings = await ctx.instanceModel.query({ environmentId: instance.environmentId });
-      if (isDefaultInstance(instance, siblings)) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'DEFAULT_INSTANCE' });
-      }
-
       // Snapshot first, and only drop the row once it is gone: a row removed
       // while the snapshot survives leaves storage nobody can see, name, or
       // reclaim. The execution plane refuses while a session is using it, and
       // that refusal is the one the user needs to see.
-      await deleteInstanceSnapshot(ctx.client, instance.id, input.topicId);
+      const { claim, client } = await resolveInstanceDrive(ctx, instance);
+      await deleteInstanceSnapshot(client, instance.id, input.topicId);
+      forgetDriveFolders(claim.key);
 
       return ctx.instanceModel.delete(input.id);
     }),
@@ -392,9 +514,16 @@ export const instancesRouter = router({
    */
   stopInstance: instanceProcedure
     .input(z.object({ id: idSchema }))
-    .mutation(async ({ ctx, input }) =>
-      stopSandboxInstance({ ...ctx, id: input.id }).catch(mapStorageError),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const instance = await ctx.instanceModel.findOwnedById(input.id);
+      if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+
+      // On the drive the instance is on, then the shared stop: it interrupts
+      // the conversation holding the copy before releasing it.
+      const { client } = await resolveInstanceDrive(ctx, instance);
+
+      return stopSandboxInstance({ ...ctx, client, id: input.id }).catch(mapStorageError);
+    }),
   renameInstance: instanceProcedure
     .input(z.object({ id: idSchema, name: nameSchema }))
     .mutation(async ({ ctx, input }) => {

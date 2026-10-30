@@ -4,12 +4,37 @@
 // Exit 1 when any FAIL. Suppress a finding with a comment on the same or previous line:
 //   // lobe-design-ignore LOBE-RAW-COLOR: <reason>
 // Every rule names the reference rule it enforces, so a finding routes to exactly one stage.
-import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { extname, join, relative } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findProjectRoot, projectContext } from './platform.mjs';
 
 // lobe-ui 应用不依赖 antd / antd-style：组件与样式 API 都从 @lobehub/ui 取。
 const ANTD_SOURCE = /^(?:antd|antd-style)(?:\/[^'"]*)?$/;
+// 平台作用域：每条规则声明 platforms（缺省 = 全平台）。web 专属的是 CSS / DOM / lobe-ui(DOM) / antd 相关检查；
+// RN / mobile 项目跳过它们（见 scripts/platform.mjs 与 references/init.md I-10）。
+export const WEB = ['web', 'desktop'];
+export const ALL = ['web', 'desktop', 'mobile'];
+// LOBE-RN-DOM-UI（5.6.0）：只报「组件导入」——从组件入口导入 PascalCase 名字（具名 / 默认 / 命名空间）。
+// 平台无关的工具（hooks、Markdown 插件、styles / 颜色种子、utils、types、locale）不报：RN 复用它们是正当的。
+const DOM_UI_SRC = /^(?:@lobehub\/ui|antd)(?:\/(.*))?$/;
+const DOM_UTIL_SEG = /^(?:hooks?|utils?|plugins?|styles?|types?|locales?|i18n|helpers?|constants?|theme|colou?rs?|seeds?|interface|const|tokens?)$|^use[A-Z]|\.(?:css|less|json)$/;
+const DOM_UI_ENTRIES = new Set(['form', 'pro-table', 'dashboard', 'mobile', 'awesome', 'chat', 'icons', 'base-ui', 'mdx', 'brand']);
+const isPascal = (n) => /^[A-Z][A-Za-z0-9]*$/.test(n);
+export function isDomComponentImport(src, clause) {
+  const m = src.match(DOM_UI_SRC);
+  if (!m || !clause?.trim()) return false; // 副作用导入（css）不算组件
+  const segs = (m[1] ?? '').split('/').filter(Boolean);
+  const rest = /^(?:es|lib|esm|cjs)$/.test(segs[0] ?? '') ? segs.slice(1) : segs;
+  if (rest.some((x) => DOM_UTIL_SEG.test(x))) return false;
+  // 子路径必须是组件入口：已知入口（form / pro-table…）或 es/<PascalCase>[/index]
+  if (rest.length && !(DOM_UI_ENTRIES.has(rest[0]) || (isPascal(rest[0]) && rest.slice(1).every((x) => x === 'index'))) ) return false;
+  const named = clause.match(/\{([^}]*)\}/)?.[1] ?? '';
+  const head = clause.replace(/\{[^}]*\}/, '').split(',').map((x) => x.trim()).filter(Boolean);
+  if (head.some((h) => /^\*\s+as\s+/.test(h) || isPascal(h))) return true; // 默认 / 命名空间
+  return named.split(',').map((x) => x.trim()).filter((x) => x && !/^type\s/.test(x)).some((x) => { const n = x.split(/\s+as\s+/)[0]; return n === 'default' || isPascal(n); });
+}
+
 const PURPLE_NAMES = /\b(purple|violet|indigo|fuchsia)\b/i;
 
 function hexHue(hex) {
@@ -73,21 +98,6 @@ function fontFamilyViolation(l) {
   return !branches.every((b) => FONT_OK.test(b.trim().replace(/[;,]$/, '')));
 }
 
-// LOBE-RAW-COLOR：只报会被渲染出来的颜色。全透明（alpha 为 0，如 rgba(0,0,0,0) / #0000）不报，
-// 它等同 transparent，常作「无背景」哨兵值；作为 === / !== 比较操作数的颜色字符串也不报，它是输入判断不是样式。
-const RAW_HEX = /(^|[^&\w])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
-const RAW_RGB = /\brgba?\(\s*\d[^)]*\)?/g;
-const COLOR_COMPARE = /[!=]==?\s*(['"`])(?:#|rgba?\()[^'"`]*\1|(['"`])(?:#|rgba?\()[^'"`]*\2\s*[!=]==?/g;
-function rawColorViolation(l) {
-  if (/^\s*import\b/.test(l)) return false;
-  const rest = l.replace(COLOR_COMPARE, '');
-  const hexes = [...rest.matchAll(RAW_HEX)].map((m) => m[2]);
-  const rgbs = [...rest.matchAll(RAW_RGB)].map((m) => m[0]);
-  const transparentHex = (h) => (h.length === 4 && h[3] === '0') || (h.length === 8 && h.slice(6) === '00');
-  const transparentRgb = (c) => { const p = c.replace(/^rgba?\(|\)$/g, '').split(/[\s,/]+/).filter(Boolean); return p.length === 4 && parseFloat(p[3]) === 0; };
-  return hexes.some((h) => !transparentHex(h)) || rgbs.some((c) => !transparentRgb(c));
-}
-
 // LOBE-OUTLINE-NONE：只在可能被键盘聚焦的元素上报。看所在样式块（css`` 模板，或前后 12 行）：
 // - 块里是不可聚焦的 SVG 图形（path / Geography 等）且没有 tabIndex、交互元素时，不报；
 // - 块里有 :focus-visible / focus 态的可见替代（box-shadow、border、非 none 的 outline）时，不报。
@@ -119,23 +129,23 @@ function outlineNoneHits(text) {
 
 export const RULES = [
   // ---- 30-structure (C-/D-01/K-10) ----
-  { id: 'LOBE-ANTD-IMPORT', level: 'FAIL', ref: 'C-01', stage: '30-structure', kind: 'text',
+  { id: 'LOBE-ANTD-IMPORT', platforms: WEB, level: 'FAIL', ref: 'C-01', stage: '30-structure', kind: 'text',
     msg: 'lobe-ui 应用不用 antd / antd-style：组件从 @lobehub/ui 导入（提示用 toast），createStaticStyles / cssVar / cx / useTheme 也从 @lobehub/ui 导入',
     test: (t) => [...t.matchAll(/import\s+(?:type\s+)?[^;'"]*?\bfrom\s*['"]([^'"]+)['"]/g)]
       .filter((m) => ANTD_SOURCE.test(m[1]))
       .map((m) => ({ index: m.index, match: m[0].replace(/\s+/g, ' ') })) },
-  { id: 'LOBE-FORM-ENTRY', level: 'FAIL', ref: 'C-02', stage: '30-structure', kind: 'text',
+  { id: 'LOBE-FORM-ENTRY', platforms: WEB, level: 'FAIL', ref: 'C-02', stage: '30-structure', kind: 'text',
     msg: 'Form 从 @lobehub/ui/form 导入（根入口的 Form 不带校验）',
     test: (t) => [...t.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]@lobehub\/ui['"]/g)]
       .filter((m) => m[1].split(',').map((s) => s.trim().split(/\s+as\s+/)[0]).includes('Form'))
       .map((m) => ({ index: m.index, match: m[0].replace(/\s+/g, ' ') })) },
-  { id: 'LOBE-ANT-ICONS', level: 'FAIL', ref: 'C-01', stage: '30-structure', kind: 'line',
+  { id: 'LOBE-ANT-ICONS', platforms: WEB, level: 'FAIL', ref: 'C-01', stage: '30-structure', kind: 'line',
     msg: '图标用 lucide-react + Icon，不用 @ant-design/icons', test: (l) => /from\s*['"]@ant-design\/icons/.test(l) },
-  { id: 'LOBE-CREATE-STYLES', level: 'FAIL', ref: 'D-01', stage: '30-structure', kind: 'line',
+  { id: 'LOBE-CREATE-STYLES', platforms: WEB, level: 'FAIL', ref: 'D-01', stage: '30-structure', kind: 'line',
     msg: '样式用 createStaticStyles + cssVar（从 @lobehub/ui 导入），不用 createStyles', test: (l) => /\bcreateStyles\b/.test(l) },
-  { id: 'LOBE-I18N-PROVIDER', level: 'WARN', ref: 'C-01', stage: '30-structure', kind: 'line',
+  { id: 'LOBE-I18N-PROVIDER', platforms: WEB, level: 'WARN', ref: 'C-01', stage: '30-structure', kind: 'line',
     msg: '不要嵌套 I18nProvider；文案通过 ConfigProvider 的 resources 提供', test: (l) => /<I18nProvider\b/.test(l) },
-  { id: 'LOBE-CSS-LINE-COMMENT', level: 'FAIL', ref: 'K-10', stage: '30-structure', kind: 'text', raw: true,
+  { id: 'LOBE-CSS-LINE-COMMENT', platforms: WEB, level: 'FAIL', ref: 'K-10', stage: '30-structure', kind: 'text', raw: true,
     msg: 'css 模板里 // 不是注释；改用 /* */',
     test: (t) => {
       const out = [];
@@ -145,19 +155,20 @@ export const RULES = [
       }
       return out;
     } },
-  { id: 'LOBE-ANT-CLASS', level: 'WARN', ref: 'D-10', stage: '30-structure', kind: 'line',
+  { id: 'LOBE-ANT-CLASS', platforms: WEB, level: 'WARN', ref: 'D-10', stage: '30-structure', kind: 'line',
     msg: '写了 .ant- 类名（lobe-ui 不渲染这类类名）；用 className / classNames 槽位、组件文档里的 data-* 属性，不对就修上游', test: (l) => /\.ant-[a-z]/.test(l) },
-  { id: 'LOBE-ANT-VAR-OVERRIDE', level: 'FAIL', ref: 'D-07', stage: '30-structure', kind: 'line',
+  { id: 'LOBE-ANT-VAR-OVERRIDE', platforms: WEB, level: 'FAIL', ref: 'D-07', stage: '30-structure', kind: 'line',
     msg: '用 !important 覆盖了主题变量；品牌走 data-primary-color / data-neutral-color（setLobeTheme / LobeThemeScript / ThemeScope）', test: (l) => /--(?:ant|lobe)-[\w-]+\s*:[^;]*!important/.test(l) },
-  { id: 'LOBE-REIMPLEMENT-ATOM', level: 'WARN', ref: 'C-11', stage: '30-structure', kind: 'line', since: '3.0.0',
+  { id: 'LOBE-REIMPLEMENT-ATOM', platforms: WEB, level: 'WARN', ref: 'C-11', stage: '30-structure', kind: 'line', since: '3.0.0',
     msg: '在项目里重新实现了原子层组件（Button/Modal/Table/Input…）；原子层必须从 @lobehub/ui 取用，业务组合才自建',
     test: (l) => /^\s*(export\s+)?(const|function)\s+(Button|Modal|Drawer|Table|Input|Select|Checkbox|Radio|Switch|Tabs|Tooltip|Popover|Tag|Badge|Avatar|Skeleton|Pagination|Divider|Progress|Spin|Empty)\b/.test(l) },
 
   // ---- 50-visual (D-/K-/A-) ----
   { id: 'LOBE-RAW-COLOR', level: 'FAIL', ref: 'D-10', stage: '50-visual', kind: 'line',
     msg: '裸 hex / rgba；改用 cssVar token，找不到就按 D-11 写缺口',
-    test: (l) => rawColorViolation(l) },
-  { id: 'LOBE-FONT-FAMILY', level: 'FAIL', ref: 'K-02', stage: '50-visual', kind: 'line',
+    msgMobile: '裸 hex / rgba；改用项目主题 token（RN：useTheme() / theme.colorXxx，来自项目自己的主题或 @lobehub/ui-rn），找不到就按 D-11 写缺口',
+    test: (l) => !/^\s*import\b/.test(l) && (/(^|[^&\w])#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/.test(l) || /\brgba?\(\s*\d/.test(l)) },
+  { id: 'LOBE-FONT-FAMILY', platforms: WEB, level: 'FAIL', ref: 'K-02', stage: '50-visual', kind: 'line',
     msg: '组件里写了 font-family；字体由主题提供（theme.css，自定义字体走 ConfigProvider customFonts；代码用 cssVar.fontFamilyCode）',
     test: (l) => fontFamilyViolation(l) },
   { id: 'LOBE-TRANSITION-ALL', level: 'WARN', ref: 'K-06', stage: '50-visual', kind: 'line',
@@ -182,18 +193,18 @@ export const RULES = [
   { id: 'LOBE-PURPLE-GRADIENT', level: 'FAIL', ref: 'A-04', stage: '50-visual', kind: 'line',
     msg: '紫 / 靛起手渐变（AI 味）；品牌时刻用 gradientAnimation，其余用中性底',
     test: (l) => /gradient\(/.test(l) && (PURPLE_NAMES.test(l) || [...l.matchAll(/#[0-9a-fA-F]{3,8}\b/g)].some((m) => isPurpleish(m[0]))) },
-  { id: 'LOBE-GRADIENT-TEXT', level: 'FAIL', ref: 'A-04', stage: '50-visual', kind: 'line',
+  { id: 'LOBE-GRADIENT-TEXT', platforms: WEB, level: 'FAIL', ref: 'A-04', stage: '50-visual', kind: 'line',
     msg: '渐变文字（AI 味）；标题用实色，强调靠字号和字重', test: (l) => /background-clip\s*:\s*text|[bB]ackgroundClip\s*:\s*['"]text/.test(l) },
-  { id: 'LOBE-EYEBROW', level: 'FAIL', ref: 'A-04', stage: '50-visual', kind: 'line',
+  { id: 'LOBE-EYEBROW', platforms: WEB, level: 'FAIL', ref: 'A-04', stage: '50-visual', kind: 'line',
     msg: 'eyebrow / kicker 小标签（AI 味）；删掉或并入标题', test: (l) => /class(Name)?=\s*[{'"`][^>]*\b(eyebrow|kicker)\b/i.test(l) },
   { id: 'LOBE-UPPERCASE', level: 'WARN', ref: 'K-02', stage: '50-visual', kind: 'line',
     msg: '中文界面不用 uppercase 标签', test: (l) => /text-transform\s*:\s*uppercase|textTransform\s*:\s*['"]uppercase/.test(l) },
-  { id: 'LOBE-GLOW', level: 'FAIL', ref: 'A-04', stage: '50-visual', kind: 'line',
+  { id: 'LOBE-GLOW', platforms: WEB, level: 'FAIL', ref: 'A-04', stage: '50-visual', kind: 'line',
     msg: '0 偏移彩色光晕阴影（AI 味）；阴影按档位',
     test: (l) => /box-?[sS]hadow\s*:\s*['"`]?\s*0(px)?\s+0(px)?\s+\d+px[^;'"`]*(#[0-9a-fA-F]{3,8}|rgba?\(\s*(?!0\s*,\s*0\s*,\s*0)|cssVar\.color(Primary|Info|Success|Warning|Error))/.test(l) },
-  { id: 'LOBE-BLUR-CARD', level: 'WARN', ref: 'K-04', stage: '50-visual', kind: 'line',
+  { id: 'LOBE-BLUR-CARD', platforms: WEB, level: 'WARN', ref: 'K-04', stage: '50-visual', kind: 'line',
     msg: 'backdrop-filter：确认它是浮层或贴顶表面，否则删掉（玻璃只给浮层）', test: (l) => /backdrop-filter|backdropFilter/.test(l) },
-  { id: 'LOBE-SIDE-STRIPE', level: 'WARN', ref: 'A-04', stage: '50-visual', kind: 'line',
+  { id: 'LOBE-SIDE-STRIPE', platforms: WEB, level: 'WARN', ref: 'A-04', stage: '50-visual', kind: 'line',
     msg: '>1px 的彩色侧边竖条；用 Alert type 或 图标 + 文字', test: (l) => /border-(left|inline-start)\s*:\s*([2-9]|\d{2,})px/.test(l) },
   { id: 'LOBE-EMOJI-ICON', level: 'WARN', ref: 'A-04', stage: '50-visual', kind: 'line',
     msg: 'emoji 当图标 / 列表符号；用 lucide-react + Icon', test: (l) => />\s*\p{Extended_Pictographic}/u.test(l) },
@@ -201,17 +212,18 @@ export const RULES = [
     msg: '占位文案；用贴近真实业务的数据', test: (l) => /lorem ipsum|示例数据|功能名称|示例文本/i.test(l) },
 
   // ---- 70-detail (K-05/K-07/W-) ----
-  { id: 'LOBE-OUTLINE-NONE', level: 'FAIL', ref: 'K-07', stage: '70-detail', kind: 'text',
+  { id: 'LOBE-OUTLINE-NONE', platforms: WEB, level: 'FAIL', ref: 'K-07', stage: '70-detail', kind: 'text',
     msg: 'outline: none 抹掉了全局焦点环；需要退出时用 data-lobe-focus-ring="off" 并补等价指示（不可聚焦的 SVG 图形、同一块里有 :focus-visible 替代指示时不报）',
     test: (t) => outlineNoneHits(t) },
-  { id: 'LOBE-IMG-ALT', level: 'FAIL', ref: 'K-07', stage: '70-detail', kind: 'text',
+  { id: 'LOBE-IMG-ALT', platforms: WEB, level: 'FAIL', ref: 'K-07', stage: '70-detail', kind: 'text',
     msg: '<img> 缺少 alt', test: (t) => [...t.matchAll(/<img\b(?![^>]*\balt=)[^>]*>/g)].map((m) => ({ index: m.index, match: m[0] })) },
-  { id: 'LOBE-DIV-CLICK', level: 'WARN', ref: 'K-07', stage: '70-detail', kind: 'text',
+  { id: 'LOBE-DIV-CLICK', platforms: WEB, level: 'WARN', ref: 'K-07', stage: '70-detail', kind: 'text',
     msg: 'div/span 绑定 onClick 但没有 role；优先用 button，或补 role + 键盘处理',
     test: (t) => [...t.matchAll(/<(div|span)\b(?![^>]*\brole=)[^>]*\bonClick=/g)].map((m) => ({ index: m.index, match: m[0] })) },
   { id: 'LOBE-ICON-BUTTON-LABEL', level: 'WARN', ref: 'K-07', stage: '70-detail', kind: 'text',
     msg: '只有图标的按钮缺少 title / aria-label',
-    test: (t) => openTags(t, /<(ActionIcon|Button)\b/g).filter((o) => /\bicon=/.test(o.tag) && !/\b(title|aria-label)=/.test(o.tag) && (o.selfClosing || /^\s*<\//.test(t.slice(o.end)))).map((o) => ({ index: o.index, match: o.tag.slice(0, 80) })) },
+    msgMobile: '只有图标的按钮缺少 accessibilityLabel；不是按钮的可点元素再补 accessibilityRole="button"',
+    test: (t) => openTags(t, /<(ActionIcon|Button)\b/g).filter((o) => /\bicon=/.test(o.tag) && !/\b(title|aria-label|accessibilityLabel)=/.test(o.tag) && (o.selfClosing || /^\s*<\//.test(t.slice(o.end)))).map((o) => ({ index: o.index, match: o.tag.slice(0, 80) })) },
   { id: 'LOBE-VAGUE-ERROR', level: 'WARN', ref: 'W-05', stage: '70-detail', kind: 'line',
     msg: '模糊错误文案；说清发生了什么 / 为什么 / 怎么办', test: (l) => /['"`>]\s*(操作失败|出错了|发生错误|请求失败|something went wrong|error occurred)\s*[!！。.]?\s*['"`<]/i.test(l) },
   { id: 'LOBE-BARE-EMPTY', level: 'WARN', ref: 'W-04', stage: '70-detail', kind: 'line',
@@ -258,9 +270,9 @@ export const RULES = [
     msg: '定义了动画 / @keyframes 但文件内没有处理 prefers-reduced-motion',
     test: (t) => {
       const i = t.search(/@keyframes|\banimation\s*:|\bkeyframes`/);
-      return i >= 0 && !/prefers-reduced-motion|useReducedMotion|reducedMotion/.test(t) ? [{ index: i, match: 'animation / @keyframes' }] : [];
+      return i >= 0 && !/prefers-reduced-motion|useReducedMotion|reducedMotion|isReduceMotionEnabled|ReduceMotion/.test(t) ? [{ index: i, match: 'animation / @keyframes' }] : [];
     } },
-  { id: 'LOBE-GRADIENT-ANIMATION-OVERUSE', level: 'WARN', ref: 'A-07', stage: '50-visual', kind: 'text', since: '2.1.0',
+  { id: 'LOBE-GRADIENT-ANIMATION-OVERUSE', platforms: WEB, level: 'WARN', ref: 'A-07', stage: '50-visual', kind: 'text', since: '2.1.0',
     msg: 'gradientAnimation 一页 > 2 处，品牌时刻失去意义',
     test: (t) => {
       const hits = [...t.matchAll(/\bgradientAnimation\b/g)].filter((m) => !/^\s*import\b/.test(t.slice(t.lastIndexOf('\n', m.index) + 1, m.index + 1)));
@@ -283,46 +295,51 @@ export const RULES = [
     msg: '写死了 ≥ 480px 的 width / min-width，390px 视口会横向溢出；用 max-width / 百分比 / responsive 断点',
     test: (l) => !/matchMedia|@media|\(\s*(min|max)-width/.test(l)
       && [...l.matchAll(/(?<![-\w])(width|min-width|minWidth)\s*:\s*['"`]?(\d+)px\b/g)].some((m) => +m[2] >= 480) },
+  // ---- 5.5.0：RN / mobile 专属 ----
+  { id: 'LOBE-RN-DOM-UI', level: 'WARN', ref: 'C-01', stage: '30-structure', kind: 'text', since: '5.5.0', platforms: ['mobile'],
+    msg: 'RN 界面里导入了 DOM 组件库（@lobehub/ui / antd）；RN 的原子层用项目组件库（如 @lobehub/ui-rn）与 react-native 原语',
+    test: (t) => [...t.matchAll(/import\s+(type\s+)?([^;'"]*?)\s*\bfrom\s*['"]([^'"]+)['"]/g)]
+      .filter((m) => !m[1] && isDomComponentImport(m[3], m[2]))
+      .map((m) => ({ index: m.index, match: m[0].replace(/\s+/g, ' ') })) },
 ];
 // Meta rule: implemented inside lintText (needs every line), listed here so --rules / --only see it.
 RULES.push({ id: 'LOBE-IGNORE-NO-REASON', level: 'FAIL', ref: 'L-06', stage: 'learnings', kind: 'meta', since: '2.1.0',
   msg: '豁免注释没有写理由，豁免不生效', test: () => [] });
-for (const r of RULES) r.since ??= '2.0.0';
+for (const r of RULES) { r.since ??= '2.0.0'; r.platforms ??= ALL; }
 
 const EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.css', '.less', '.scss']);
 // zh-CN 语言包（locales/zh-CN/*.json、zh_CN.json、zh-Hans…）只跑 locale: true 的文案规则
 export const isZhLocaleJson = (p) => extname(p) === '.json' && /(?:^|[\\/._-])zh[-_]?(?:cn|hans)(?:[\\/._-]|$)/i.test(p);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', '.backup']);
 
-// 显式传入的路径可以是软链；遍历中遇到的软链目录跳过（如 .claude/skills → .agents/skills），避免重复扫描或扫出目标树
-function walk(p, out = [], top = true) {
-  if (!top && lstatSync(p).isSymbolicLink() && statSync(p).isDirectory()) return out;
+function walk(p, out = []) {
   const st = statSync(p);
   if (st.isDirectory()) {
-    for (const name of readdirSync(p)) if (!SKIP_DIRS.has(name)) walk(join(p, name), out, false);
+    for (const name of readdirSync(p)) if (!SKIP_DIRS.has(name)) walk(join(p, name), out);
   } else if ((EXTS.has(extname(p)) || isZhLocaleJson(p)) && !/\.(test|spec|stories)\.[jt]sx?$/.test(p)) out.push(p);
   return out;
 }
 
 const isCommentLine = (l) => /^\s*(\/\/|\/\*|\*)/.test(l);
 // A suppression only counts when it carries a reason: `lobe-design-ignore ID[,ID]: <reason>`.
-// 只认真正的注释：标记前要有 // 或 /*（或块注释续行的 *），且注释起点之前的引号成对（不在字符串里）。
-// 理由要有实际文字：冒号后到行尾 / */ 之间至少一个字母或数字。
-const IGNORE_RE = /lobe-design-ignore(-file)?[ \t]+([A-Z0-9-]+(?:[ \t]*,[ \t]*[A-Z0-9-]+)*)([ \t]*:([^\n]*))?/g;
-const inComment = (line, idx) => {
-  const prefix = line.slice(0, idx);
-  if (/^\s*\*/.test(prefix)) return true;
-  const opener = Math.max(prefix.lastIndexOf('//'), prefix.lastIndexOf('/*'));
-  if (opener === -1) return false;
-  const code = prefix.slice(0, opener).replace(/\\./g, '');
-  return ["'", '"', '`'].every((q) => code.split(q).length % 2 === 1);
-};
-export const ignores = (line) => [...(line ?? '').matchAll(IGNORE_RE)]
-  .filter((m) => inComment(line, m.index))
-  .map((m) => ({ file: !!m[1], ids: m[2].split(/\s*,\s*/), reason: m[3] !== undefined && /[\p{L}\p{N}]/u.test(m[4].split('*/')[0]) }));
+const IGNORE_RE = /lobe-design-ignore(-file)?\s+([A-Z0-9-]+(?:\s*,\s*[A-Z0-9-]+)*)(\s*:\s*\S.*)?/g;
+const ignores = (line) => [...(line ?? '').matchAll(IGNORE_RE)].map((m) => ({ file: !!m[1], ids: m[2].split(/\s*,\s*/), reason: !!m[3] }));
 const ignoredOn = (line, id) => ignores(line).some((g) => !g.file && g.reason && g.ids.includes(id));
 
-export function lintText(text, file = '<text>') {
+// 单文件平台：文件内 `lobe-design-platform: mobile` 注释 > *.native|ios|android.* 后缀 > opts.platform > web
+const PLATFORM_PRAGMA = /lobe-design-platform\s*:\s*(web|desktop|mobile)\b/;
+export function filePlatform(text, file, platform) {
+  const m = text.match(PLATFORM_PRAGMA);
+  if (m) return m[1];
+  if (/\.(native|ios|android)\.[jt]sx?$/.test(file)) return 'mobile';
+  return platform ?? 'web';
+}
+// 规则是否被项目层适用性关掉（按 lint id 或它引用的规则编号）
+export const ruleOff = (rule, off) => !!off && (off.has(rule.id) || off.has(rule.ref));
+export const ruleApplies = (rule, platform, off) => rule.platforms.includes(platform) && !ruleOff(rule, off);
+
+export function lintText(text, file = '<text>', { platform, off } = {}) {
+  const plat = filePlatform(text, file, platform);
   const lines = text.split('\n');
   const lineOf = (idx) => text.slice(0, idx).split('\n').length;
   const findings = [];
@@ -334,11 +351,13 @@ export function lintText(text, file = '<text>') {
     const cur = lines[lineNo - 1] ?? '', prev = lines[lineNo - 2] ?? '';
     if (ignoredOn(cur, rule.id) || ignoredOn(prev, rule.id)) return;
     if (fileIgnored.has(rule.id)) return;
-    findings.push({ file, line: lineNo, level: rule.level, id: rule.id, ref: rule.ref, stage: rule.stage, msg: rule.msg, match: String(match).trim().slice(0, 100) });
+    const msg = plat === 'mobile' && rule.msgMobile ? rule.msgMobile : rule.msg;
+    findings.push({ file, line: lineNo, level: rule.level, id: rule.id, ref: rule.ref, stage: rule.stage, msg, match: String(match).trim().slice(0, 100) });
   };
   const json = extname(file) === '.json';
   for (const rule of RULES) {
     if (json && !rule.locale) continue;
+    if (rule.kind === 'meta' || !ruleApplies(rule, plat, off)) continue;
     if (rule.kind === 'line') {
       lines.forEach((l, i) => { if (!isCommentLine(l) && rule.test(l)) push(rule, i + 1, l); });
     } else {
@@ -352,14 +371,25 @@ export function lintText(text, file = '<text>') {
   return findings.sort((a, b) => a.line - b.line);
 }
 
-export function lintPaths(paths) {
+// opts: { platform: 'auto'|'web'|'desktop'|'mobile', root }。auto（默认）= 从目标路径向上找项目根，
+// 读 .agents/ux/product.md 的平台与适用性（不适用 / lint-off），没有就看 package.json 依赖。
+export function lintPaths(paths, { platform = 'auto', root } = {}) {
   const files = paths.flatMap((p) => walk(p));
-  const findings = files.flatMap((f) => lintText(readFileSync(f, 'utf8'), f));
-  return { files, findings };
+  const projRoot = root ?? (paths[0] ? findProjectRoot(paths[0]) : null);
+  const ctx = projectContext(projRoot, { platform });
+  // product.md 的 lint-allow：按路径（相对项目根）关掉指定规则
+  const offFor = (f) => {
+    if (!ctx.allow.length || !projRoot) return ctx.off;
+    const rel = relative(projRoot, f).split(sep).join('/');
+    const ids = ctx.allow.filter((a) => a.globs.some((g) => g.test(rel))).flatMap((a) => a.rules);
+    return ids.length ? new Set([...ctx.off, ...ids]) : ctx.off;
+  };
+  const findings = files.flatMap((f) => lintText(readFileSync(f, 'utf8'), f, { ...ctx, off: offFor(f) }));
+  return { files, findings, ctx };
 }
 
-function report({ files, findings }, cwd) {
-  const out = [`LOBE-DESIGN · LINT   ${files.length} file(s)`];
+function report({ files, findings, ctx }, cwd) {
+  const out = [`LOBE-DESIGN · LINT   ${files.length} file(s)   platform=${ctx.platform}（${ctx.source}）${ctx.off.size ? `   项目层不适用：${[...ctx.off].join(', ')}` : ''}${ctx.allow?.length ? `   lint-allow：${ctx.allow.map((a) => a.raw).join(' | ')}` : ''}`];
   for (const level of ['FAIL', 'WARN']) {
     const list = findings.filter((f) => f.level === level);
     if (!list.length) continue;
@@ -382,6 +412,18 @@ const HELP = `lobe-design lint — LobeUI 架构 / 审美（反 AI 味）/ a11y 
   --json              以 JSON 输出 findings
   --stage <id>        只跑某个 stage 的规则（30-structure | 40-flow | 50-visual | 70-detail | 75-copy）
   --only <ID,ID>      只跑指定规则
+  --platform <p>      auto（默认）| web | desktop | mobile。auto 读项目根 .agents/ux/product.md 的「平台：」，
+                      没有就看 package.json（react-native / expo / @lobehub/ui-rn → mobile）
+  --root <dir>        项目根（默认从目标路径向上找 package.json / .agents/ux）
+
+平台与项目层适用性
+  每条规则声明 platforms（--rules 可见）。mobile 跳过 web 专属检查（cssVar / createStaticStyles / antd /
+  CSS 类名 / outline / font-family / <img> / div onClick 等），K-07 图标按钮接受 accessibilityLabel，
+  @lobehub/ui-rn 是 RN 的原子层，不算「重新实现」。
+  product.md 里 \`lint-allow: LOBE-RN-DOM-UI src/components/hooks/**, src/shared/markdown/*.ts\` 按路径（相对项目根，
+  * 不跨目录、** 跨目录）关掉指定规则，可写多行；行内至少要有一个规则 id。
+  product.md 里标「不适用 / N/A」的规则编号（C-01、C-01..C-11）或 lint id，以及 \`lint-off: LOBE-XXX, D-01\` 行，
+  都会关掉对应规则。单文件可写注释 lobe-design-platform: mobile；*.native|ios|android.tsx 视为 mobile。
   --rules             列出全部规则（级别 / id / 引用的 reference 规则 / stage / 引入版本）
   -h, --help          显示本帮助
 
@@ -400,22 +442,21 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const args = process.argv.slice(2);
   if (args.includes('-h') || args.includes('--help')) { console.log(HELP); process.exit(0); }
   if (args.includes('--rules')) {
-    for (const r of RULES) console.log(`${r.level.padEnd(4)} ${r.id.padEnd(32)} ${r.ref.padEnd(5)} ${r.stage.padEnd(13)} v${r.since.padEnd(6)} ${r.msg}`);
+    for (const r of RULES) console.log(`${r.level.padEnd(4)} ${r.id.padEnd(32)} ${r.ref.padEnd(5)} ${r.stage.padEnd(13)} v${r.since.padEnd(6)} ${(r.platforms === ALL ? 'all' : r.platforms.join('/')).padEnd(12)} ${r.msg}`);
     console.log(`TOTAL: ${RULES.length} rules`);
     process.exit(0);
   }
   const optVal = (k) => (args.includes(k) ? args[args.indexOf(k) + 1] : undefined);
   const stage = optVal('--stage'), only = optVal('--only')?.split(',');
-  const paths = args.filter((a, i) => !a.startsWith('-') && !['--stage', '--only'].includes(args[i - 1]));
+  const platform = optVal('--platform') ?? 'auto', rootOpt = optVal('--root');
+  if (!['auto', 'web', 'desktop', 'mobile'].includes(platform)) { console.error(`用法错误：未知平台：${platform}（auto | web | desktop | mobile）`); process.exit(2); }
+  const paths = args.filter((a, i) => !a.startsWith('-') && !['--stage', '--only', '--platform', '--root'].includes(args[i - 1]));
   if (!paths.length) { console.error('用法错误：缺少目标路径。\n\n' + HELP); process.exit(2); }
   const missing = paths.filter((p) => !existsSync(p));
   if (missing.length) { console.error(`用法错误：路径不存在：${missing.join(', ')}`); process.exit(2); }
   const unknown = (only ?? []).filter((id) => !RULES.some((r) => r.id === id));
   if (unknown.length) { console.error(`用法错误：未知规则：${unknown.join(', ')}（--rules 查看全部）`); process.exit(2); }
-  // stage 拼错会把所有结果过滤掉并 exit 0，等于跳过检查；只接受规则里出现过的 stage
-  const stages = [...new Set(RULES.map((r) => r.stage))];
-  if (stage !== undefined && !stages.includes(stage)) { console.error(`用法错误：未知 stage：${stage}（可用：${stages.join(', ')}）`); process.exit(2); }
-  const res = lintPaths(paths);
+  const res = lintPaths(paths, { platform, root: rootOpt });
   res.findings = res.findings.filter((f) => (!stage || f.stage === stage) && (!only || only.includes(f.id)));
   if (args.includes('--json')) {
     console.log(JSON.stringify(res.findings, null, 2));

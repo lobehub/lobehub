@@ -61,6 +61,8 @@ export interface HeterogeneousAgentRateLimitInfo {
 // heterogeneous-agents quota entry; re-export them for existing IPC callers.
 export type {
   ClaudeCodeAccountIdentity,
+  ClaudeCodeAccountResolution,
+  ClaudeCodeLocalAccount,
   ClaudeCodeQuotaReading,
   ClaudeCodeQuotaSnapshot,
   ClaudeCodeQuotaUnavailableReason,

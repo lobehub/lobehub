@@ -223,6 +223,19 @@ describe('AgentHeader', () => {
     expect(view.container.textContent).toContain('@brave-otter-lamp');
   });
 
+  it('shows the description other agents read', () => {
+    mocks.agentStoreState.agentMap = {
+      'agent-a': {
+        description: 'Reviews pull requests and runs the test suite',
+        name: 'Alice',
+        title: 'Code Reviewer',
+      },
+    };
+    const view = render(<AgentHeader />);
+
+    expect(view.container.textContent).toContain('Reviews pull requests and runs the test suite');
+  });
+
   // Regression: the headline used to fall back to the name field's PLACEHOLDER,
   // so every unnamed agent read as though it were called "Give it a name, …".
   it('never renders the input placeholder as a headline', () => {

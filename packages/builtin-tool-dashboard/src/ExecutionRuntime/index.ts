@@ -3,7 +3,10 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import {
   type AddWidgetToDashboardParams,
   type AddWidgetToDashboardState,
+  type CreateDashboardParams,
+  type CreateDashboardState,
   type CreateWidgetDraftParams,
+  DASHBOARD_DESCRIPTION_MAX_LENGTH,
   DASHBOARD_TITLE_MAX_LENGTH,
   type DashboardSummary,
   type DashboardWidgetRecord,
@@ -15,6 +18,8 @@ import {
   type ListDashboardsState,
   type RequestPublishParams,
   type RequestPublishState,
+  type UpdateDashboardParams,
+  type UpdateDashboardState,
   type UpdateWidgetDraftParams,
   type WidgetDraftState,
   type WidgetRunRecord,
@@ -33,6 +38,19 @@ export interface DashboardToolService {
     widgetId: string,
   ) => Promise<{ projectId?: string | null; title: string }>;
   /**
+   * Create an empty board on the conversation's level (its project in a
+   * project topic, else the home level).
+   */
+  createDashboard: (
+    title: string,
+    description?: string,
+  ) => Promise<{
+    description?: string | null;
+    id: string;
+    projectId?: string | null;
+    title: string;
+  }>;
+  /**
    * Create a board and place the widget on it atomically: when the widget
    * cannot be placed nothing is created. The board lives on the
    * conversation's project in a project topic, else on the home level.
@@ -40,6 +58,7 @@ export interface DashboardToolService {
   createDashboardWithWidget: (
     title: string,
     widgetId: string,
+    description?: string,
   ) => Promise<{ id: string; projectId?: string | null; title: string }>;
   /** Validate the content, create the widget and record its first draft. */
   createWidgetDraft: (input: {
@@ -68,6 +87,14 @@ export interface DashboardToolService {
     widgetId: string,
     input: WidgetVersionContent & { changeNote?: string | null; parentVersionId?: string | null },
   ) => Promise<WidgetVersionRecord>;
+  /**
+   * Rename a board or rewrite its description. Only boards listDashboards
+   * offers are reachable; an empty description clears it.
+   */
+  updateDashboard: (
+    dashboardId: string,
+    patch: { description?: string | null; title?: string },
+  ) => Promise<{ description?: string | null; projectId?: string | null; title: string }>;
   updateWidget: (
     widgetId: string,
     patch: { description?: string; title?: string },
@@ -103,14 +130,16 @@ const ERROR_HINTS: Record<string, string> = {
   INVALID_OUTPUT:
     'The JSON does not match the output contract for this outputType; compare field names and types with the contract.',
   MISSING_ENV:
-    "A required variable has no source. If the message lists a connector's headers, set manifest.env[].field to the right one with updateWidgetDraft; otherwise tell the user which connector to connect for this agent or workspace — never ask for the secret in chat.",
+    "A declared variable could not be filled. If the message lists a connector's headers, set manifest.env[].field to the right one; if it asks to add a host to manifest.network.allow (a LobeHub Market connector such as github sends its token only as a header to its API host), add exactly that host; if it asks for manifest.env[].inject.host, set the provider's API host. Apply fixes with updateWidgetDraft and dry-run again. Only when it says to connect or reconnect a connector, tell the user which connector to connect for this agent or workspace — never ask for the secret in chat.",
   NON_ZERO_EXIT: 'The script failed; read stderr, fix the script and dry-run again.',
   OUTPUT_TOO_LARGE: 'Trim the output: fewer rows / items / points (use view.limit for display).',
   OUTPUT_TYPE_MISMATCH: 'The printed "type" differs from the widget outputType; align them.',
   PARTIAL_OUTPUT:
     'The script reported an incomplete result (meta.complete=false). Fine if intended; otherwise fix the failing source.',
   SANDBOX_BAD_REQUEST:
-    'The sandbox rejected the request; check runtime and manifest.timeoutMs (max 120000).',
+    'The sandbox rejected the request; check runtime and manifest.timeoutMs (max 120000). "secret_not_found" means a LobeHub Market connector is not connected on Market for this account: ask the user to reconnect it.',
+  SANDBOX_BUSY:
+    "The account's sandbox slots stayed busy with other widget runs (already retried for a while). Not a script problem: wait a minute and dry-run again; do not change the script.",
   SANDBOX_ERROR: 'The sandbox itself failed, not the script. Retry the dry run once.',
   SANDBOX_NOT_CONFIGURED:
     'Script execution is not configured on this server. Tell the user; do not retry.',
@@ -125,6 +154,25 @@ const errorMessage = (error: unknown) =>
 const fail = (error: unknown, action: string): BuiltinServerRuntimeOutput => {
   const message = errorMessage(error);
   return { content: `Failed to ${action}: ${message}`, error: { message }, success: false };
+};
+
+/** Refuse an over-long board title / description before anything is written. */
+const checkDashboardMeta = (
+  meta: { description?: string; title?: string },
+  fields: {
+    description: string;
+    title: string;
+  },
+) => {
+  if (meta.title !== undefined && meta.title.length > DASHBOARD_TITLE_MAX_LENGTH) {
+    return `${fields.title} must be at most ${DASHBOARD_TITLE_MAX_LENGTH} characters (got ${meta.title.length})`;
+  }
+  if (
+    meta.description !== undefined &&
+    meta.description.length > DASHBOARD_DESCRIPTION_MAX_LENGTH
+  ) {
+    return `${fields.description} must be at most ${DASHBOARD_DESCRIPTION_MAX_LENGTH} characters (got ${meta.description.length})`;
+  }
 };
 
 const formatRunHead = (run: WidgetRunRecord, version?: number) =>
@@ -179,7 +227,8 @@ export class DashboardExecutionRuntime {
         ? dashboards.map((board) => {
             const placed = board.widgets.map((w) => `"${w.title}" (${w.id})`).join(', ');
             const level = board.projectId ? ' [project]' : '';
-            return `- "${board.title}" (${board.id})${level}: ${placed || 'no widgets'}`;
+            const description = board.description ? ` — ${board.description}` : ' — no description';
+            return `- "${board.title}" (${board.id})${level}${description}: ${placed || 'no widgets'}`;
           })
         : ['- none yet (addWidgetToDashboard with newDashboardTitle creates one)'];
       const widgetLines = widgets.length
@@ -395,22 +444,22 @@ export class DashboardExecutionRuntime {
     params: AddWidgetToDashboardParams,
   ): Promise<BuiltinServerRuntimeOutput> {
     const newTitle = params.newDashboardTitle?.trim();
+    const newDescription = params.newDashboardDescription?.trim() || undefined;
     if (!params.dashboardId && !newTitle) {
       return fail(
         new Error('Pass dashboardId (from listDashboards) or newDashboardTitle'),
         'add widget to dashboard',
       );
     }
-    // The API refuses titles beyond 200 characters — refuse here too, before
-    // a board is created, so a retry cannot pile malformed boards up.
-    if (newTitle && newTitle.length > DASHBOARD_TITLE_MAX_LENGTH) {
-      return fail(
-        new Error(
-          `newDashboardTitle must be at most ${DASHBOARD_TITLE_MAX_LENGTH} characters (got ${newTitle.length})`,
-        ),
-        'add widget to dashboard',
+    // The API refuses over-long titles and descriptions — refuse here too,
+    // before a board is created, so a retry cannot pile malformed boards up.
+    const invalid =
+      !params.dashboardId &&
+      checkDashboardMeta(
+        { description: newDescription, title: newTitle },
+        { description: 'newDashboardDescription', title: 'newDashboardTitle' },
       );
-    }
+    if (invalid) return fail(new Error(invalid), 'add widget to dashboard');
     try {
       const createdDashboard = !params.dashboardId;
       // A new board is created together with the placement, so a widget that
@@ -424,7 +473,7 @@ export class DashboardExecutionRuntime {
             id: params.dashboardId,
             ...(await this.service.addToDashboard(params.dashboardId, params.widgetId)),
           }
-        : await this.service.createDashboardWithWidget(newTitle!, params.widgetId);
+        : await this.service.createDashboardWithWidget(newTitle!, params.widgetId, newDescription);
       const state: AddWidgetToDashboardState = {
         createdDashboard,
         dashboardId,
@@ -440,6 +489,78 @@ export class DashboardExecutionRuntime {
       };
     } catch (error) {
       return fail(error, 'add widget to dashboard');
+    }
+  }
+
+  async createDashboard(params: CreateDashboardParams): Promise<BuiltinServerRuntimeOutput> {
+    const title = params.title?.trim();
+    const description = params.description?.trim() || undefined;
+    if (!title) return fail(new Error('title is required'), 'create dashboard');
+    const invalid = checkDashboardMeta(
+      { description, title },
+      { description: 'description', title: 'title' },
+    );
+    if (invalid) return fail(new Error(invalid), 'create dashboard');
+
+    try {
+      const board = await this.service.createDashboard(title, description);
+      const state: CreateDashboardState = {
+        dashboardId: board.id,
+        description: board.description ?? null,
+        projectId: board.projectId ?? null,
+        title: board.title,
+      };
+      return {
+        content: `Created dashboard "${board.title}" (${board.id})${
+          board.projectId ? ' in this project' : ''
+        }. Place widgets on it with addWidgetToDashboard and dashboardId ${board.id}.`,
+        state,
+        success: true,
+      };
+    } catch (error) {
+      return fail(error, 'create dashboard');
+    }
+  }
+
+  async updateDashboard(params: UpdateDashboardParams): Promise<BuiltinServerRuntimeOutput> {
+    const title = params.title?.trim();
+    const description = params.description?.trim();
+    if (!params.dashboardId) {
+      return fail(new Error('dashboardId is required (from listDashboards)'), 'update dashboard');
+    }
+    if (title === undefined && description === undefined) {
+      return fail(new Error('Pass title and/or description to change'), 'update dashboard');
+    }
+    if (title === '') return fail(new Error('title cannot be empty'), 'update dashboard');
+    const invalid = checkDashboardMeta(
+      { description, title },
+      { description: 'description', title: 'title' },
+    );
+    if (invalid) return fail(new Error(invalid), 'update dashboard');
+
+    try {
+      const board = await this.service.updateDashboard(params.dashboardId, {
+        // An empty description clears it instead of storing a blank string.
+        ...(description !== undefined && { description: description || null }),
+        ...(title !== undefined && { title }),
+      });
+      const state: UpdateDashboardState = {
+        dashboardId: params.dashboardId,
+        description: board.description ?? null,
+        projectId: board.projectId ?? null,
+        title: board.title,
+      };
+      const changed = [title !== undefined && 'title', description !== undefined && 'description']
+        .filter(Boolean)
+        .join(' and ');
+
+      return {
+        content: `Updated the ${changed} of dashboard "${board.title}" (${params.dashboardId}).`,
+        state,
+        success: true,
+      };
+    } catch (error) {
+      return fail(error, 'update dashboard');
     }
   }
 

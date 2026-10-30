@@ -393,8 +393,9 @@ describe('AgentSignalReviewContextModel', () => {
       ]);
     });
 
-    it('excludes agent-share visitor topics from the creator-facing activity window', async () => {
+    it('excludes agent-share visitor and Channel run topics from the activity window', async () => {
       const visitorTopicId = 'agent-signal-review-context-visitor-topic';
+      const channelTopicId = 'agent-signal-review-context-channel-topic';
 
       await serverDB.insert(users).values({ id: userId });
       await serverDB.insert(agents).values([
@@ -421,6 +422,8 @@ describe('AgentSignalReviewContextModel', () => {
           title: 'Visitor topic',
           userId,
         },
+        // Channel run topic: carries other members' Channel content.
+        { agentId, id: channelTopicId, title: 'Channel run', trigger: 'channel', userId },
       ]);
       await serverDB.insert(messages).values([
         {
@@ -439,6 +442,15 @@ describe('AgentSignalReviewContextModel', () => {
           id: 'agent-signal-review-context-visitor-message',
           role: 'assistant',
           topicId: visitorTopicId,
+          userId,
+        },
+        {
+          agentId,
+          content: 'channel reply',
+          createdAt: new Date('2026-05-03T12:00:00.000Z'),
+          id: 'agent-signal-review-context-channel-message',
+          role: 'assistant',
+          topicId: channelTopicId,
           userId,
         },
       ]);

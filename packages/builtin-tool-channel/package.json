@@ -1,0 +1,20 @@
+{
+  "name": "@lobechat/builtin-tool-channel",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts",
+    "./client": "./src/client/index.ts"
+  },
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^6.0.4",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

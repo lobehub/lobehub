@@ -30,8 +30,8 @@ interface LibraryStatusIconProps {
 
 /**
  * One semantic icon mapping for every library identity surface:
- * private → lock, member-restricted workspace library → folder + lock,
- * ordinary workspace library → folder.
+ * private → lock, member-restricted workspace library → library icon + lock,
+ * ordinary workspace library → library icon.
  */
 const LibraryStatusIcon = memo<LibraryStatusIconProps>(
   ({ memberRestricted, size = 20, visibility }) => {

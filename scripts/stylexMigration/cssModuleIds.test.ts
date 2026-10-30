@@ -12,8 +12,8 @@ export const findLocalIdSelectors = (css: string) => {
   const withoutComments = css.replaceAll(/\/\*[\S\s]*?\*\//g, '');
   const selectors = withoutComments
     .replaceAll(/:global\([^)]*\)/g, '')
-    .replaceAll(/{[^}]*}/g, '{}');
-  return [...new Set([...selectors.matchAll(/#([A-Z_a-z][\w-]*)/g)].map((m) => `#${m[1]}`))];
+    .replaceAll(/\{[^}]*\}/g, '{}');
+  return [...new Set([...selectors.matchAll(/#([A-Z_][\w-]*)/gi)].map((m) => `#${m[1]}`))];
 };
 
 describe('CSS module id selectors', () => {

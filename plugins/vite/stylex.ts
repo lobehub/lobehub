@@ -1,9 +1,10 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import stylex from '@stylexjs/unplugin/vite';
-import type { PluginOption, UserConfig } from 'vite';
+import type { Plugin, PluginOption, UserConfig } from 'vite';
 
 import { stylexProxiedDevCssPlugin } from './stylexDevCss';
 import { createStylexEntryCss } from './stylexEntryCss';
@@ -72,10 +73,7 @@ export function stylexPlugin({ overlaySrcDirs }: StylexPluginOptions = {}): Plug
     },
   });
 
-  const plugins = (Array.isArray(plugin) ? plugin : [plugin]) as Array<{
-    config?: unknown;
-    configureServer?: unknown;
-  }>;
+  const plugins = (Array.isArray(plugin) ? plugin : [plugin]) as Plugin[];
   for (const item of plugins) {
     // @lobehub/ui depends on @stylexjs/stylex but ships precompiled CSS. This hook
     // would pull that package out of dependency pre-bundling.
@@ -83,6 +81,20 @@ export function stylexPlugin({ overlaySrcDirs }: StylexPluginOptions = {}): Plug
     // The unplugin polls a shared CSS store from configureServer and keeps Vitest's
     // Vite server alive after the run.
     if (isTest) delete item.configureServer;
+    if (!isTest && typeof item.buildStart === 'function' && typeof item.transform === 'function') {
+      const buildStart = item.buildStart;
+      const transform = item.transform;
+      const require = createRequire(path.join(repoRoot, 'package.json'));
+      item.buildStart = async function (options) {
+        await buildStart.call(this, options);
+        // commonJS token references are placeholders until their defineConsts
+        // modules are collected. Register them before dev CSS can be requested.
+        for (const tokenModule of stylexTokenModules) {
+          const filename = require.resolve(tokenModule);
+          await Reflect.apply(transform, this, [readFileSync(filename, 'utf8'), filename]);
+        }
+      };
+    }
   }
 
   const [locateEntryCss, verifyEntryCss] = entryCss.plugins;

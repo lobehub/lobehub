@@ -39,6 +39,7 @@ const styles = stylex.create({
     minHeight: 0,
     overflow: 'hidden',
   },
+  bodyScrollable: { overflowY: 'auto', overscrollBehavior: 'contain' },
   card: {
     backgroundColor: cssVar.colorBgContainer,
     backgroundImage: 'none',
@@ -86,6 +87,8 @@ export interface WidgetCardProps {
   onOpen?: () => void;
   /** A manual refresh of this widget is in flight from this client. */
   runningLocally?: boolean;
+  /** Replaces the plain title, e.g. an inline input while editing a board. */
+  title?: ReactNode;
   /** Long-term trend from `metric_points`, when the host loaded it. */
   trend?: DashboardTrendSeries[];
   view?: WidgetView | null;
@@ -101,7 +104,7 @@ export interface WidgetCardProps {
  * the card says so instead of rendering an empty value.
  */
 const WidgetCard = memo<WidgetCardProps>(
-  ({ widget, trend, view, actions, handle, onOpen, runningLocally, className }) => {
+  ({ widget, trend, view, actions, handle, onOpen, runningLocally, className, title }) => {
     const { t } = useTranslation('dashboard');
     const health = getWidgetHealth(widget, { runningLocally });
     const updatedAt = getWidgetUpdatedAt(widget);
@@ -109,6 +112,10 @@ const WidgetCard = memo<WidgetCardProps>(
     const bodyState = getWidgetCardBody(health);
     // The running badge would repeat the spinning refresh button and the pulsing dot.
     const badges = health.badges.filter((badge) => badge !== 'running');
+
+    // Lists and tables are the only outputs taller than their card; the rest size to it.
+    const scrollable =
+      bodyState === 'output' && (output?.type === 'list' || output?.type === 'table');
 
     let body: ReactNode;
     if (bodyState === 'output' && output) {
@@ -158,14 +165,16 @@ const WidgetCard = memo<WidgetCardProps>(
           gap={6}
         >
           {handle}
-          <Text
-            ellipsis
-            className={stylex.props(styles.title).className}
-            title={widget.title}
-            weight={500}
-          >
-            {widget.title}
-          </Text>
+          {title ?? (
+            <Text
+              ellipsis
+              className={stylex.props(styles.title).className}
+              title={widget.title}
+              weight={500}
+            >
+              {widget.title}
+            </Text>
+          )}
           <StatusBadges badges={badges} health={health} />
           {actions && (
             // Header actions must not open the drill-down.
@@ -180,7 +189,7 @@ const WidgetCard = memo<WidgetCardProps>(
             </Flexbox>
           )}
         </Flexbox>
-        <div {...stylex.props(styles.body)}>{body}</div>
+        <div {...stylex.props(styles.body, scrollable && styles.bodyScrollable)}>{body}</div>
         {updatedAt && (
           <Flexbox
             horizontal

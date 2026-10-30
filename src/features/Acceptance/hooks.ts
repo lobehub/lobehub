@@ -1,4 +1,4 @@
-import type { AcceptanceSubjectType } from '@lobechat/types';
+import type { CreatableAcceptanceSubjectType } from '@lobechat/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
@@ -100,7 +100,7 @@ export interface AcceptanceBySubjectSync {
  * polls fastest until one exists and then keeps it live until it settles.
  */
 export const useAcceptanceBySubject = (
-  subjectType: AcceptanceSubjectType,
+  subjectType: CreatableAcceptanceSubjectType,
   subjectId: string | null,
 ): AcceptanceBySubjectSync => {
   const useFetchAcceptanceBySubject = useVerifyStore((s) => s.useFetchAcceptanceBySubject);
@@ -277,7 +277,7 @@ export const useAcceptanceListInfinite = (
  * that lands while the tab sits open has to show up without a reload.
  */
 export const useAcceptanceStatuses = (
-  subjectType: AcceptanceSubjectType,
+  subjectType: CreatableAcceptanceSubjectType,
   subjectIds: string[],
   enabled = true,
 ) =>

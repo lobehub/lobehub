@@ -37,6 +37,7 @@ function expected(): Array<[name: string, type: 'mutation' | 'query', middleware
     ['getAgentInterventionReviewBySource', 'mutation', 11],
     ['getHeteroInterventionReview', 'mutation', 11],
     ['getOperationStatus', 'query', 12],
+    ['getOperationStreamHistory', 'query', 11],
     ['getPendingInterventions', 'query', 12],
     ['getServerDefaultHeterogeneousCapability', 'query', 10],
     ['getSubAgentTaskStatus', 'query', 12],

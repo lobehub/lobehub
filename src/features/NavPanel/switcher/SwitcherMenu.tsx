@@ -138,6 +138,7 @@ const SwitcherMenu = memo<SwitcherMenuProps>(
                     <SwitcherRow
                       item={item}
                       key={`recent-${item.id}`}
+                      kind={kind}
                       privateLabel={t('navPanel.privateAgents')}
                       onSelect={handleSelect}
                     />
@@ -154,6 +155,7 @@ const SwitcherMenu = memo<SwitcherMenuProps>(
                   active={item.id === activeId}
                   item={item}
                   key={item.id}
+                  kind={kind}
                   privateLabel={t('navPanel.privateAgents')}
                   onSelect={handleSelect}
                 />

@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "ナレッジベースに追加",
   "addToKnowledgeBase.totalFiles": "選択されたファイルは {{count}} 件です",
   "createNew.confirm": "新規作成",
+  "createNew.cover.label": "カバー",
   "createNew.description.label": "ライブラリの説明（任意）",
   "createNew.description.placeholder": "説明を追加すると、LLM がライブラリをより正確に理解できます",
   "createNew.edit.confirm": "変更を保存",

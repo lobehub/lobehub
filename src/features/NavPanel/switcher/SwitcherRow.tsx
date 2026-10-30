@@ -4,6 +4,8 @@ import * as stylex from '@stylexjs/stylex';
 import { CheckIcon } from 'lucide-react';
 import { memo } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
+
 import type { SwitcherItem } from './switcherItems';
 
 const styles = stylex.create({
@@ -22,11 +24,12 @@ const styles = stylex.create({
 interface SwitcherRowProps {
   active?: boolean;
   item: SwitcherItem;
+  kind?: 'agent' | 'project';
   onSelect: (id: string) => void;
   privateLabel?: string;
 }
 
-const SwitcherRow = memo<SwitcherRowProps>(({ active, item, onSelect, privateLabel }) => (
+const SwitcherRow = memo<SwitcherRowProps>(({ active, item, kind, onSelect, privateLabel }) => (
   <Block
     clickable
     horizontal
@@ -42,7 +45,24 @@ const SwitcherRow = memo<SwitcherRowProps>(({ active, item, onSelect, privateLab
     }
     onClick={() => onSelect(item.id)}
   >
-    <Avatar avatar={item.avatar} background={item.background} shape={'square'} size={28} />
+    {kind === 'agent' ? (
+      <AgentAvatar
+        agentId={item.id}
+        avatar={item.avatar}
+        background={item.background}
+        name={item.title}
+        size={24}
+        title={item.title}
+      />
+    ) : (
+      <Avatar
+        avatar={item.avatar}
+        background={item.background}
+        shape={'square'}
+        size={24}
+        title={item.title}
+      />
+    )}
     <Text
       ellipsis
       color={active ? cssVar.colorText : cssVar.colorTextSecondary}

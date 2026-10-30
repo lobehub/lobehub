@@ -20,6 +20,8 @@ export interface TopicData extends ReplicaPagedData<ChatTopic, number> {
    * dropping the loading-more row while `hasMore` remains true.
    */
   loadMoreError?: unknown;
+  /** Only the caller's own topics (workspace "only mine" filter; part of the query identity). */
+  onlyMine?: boolean;
   /**
    * Last fetched/used page size for this topic container.
    * Used to detect "pageSize expansion" (user increases pageSize) without being affected by SWR revalidation

@@ -180,7 +180,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
               </Suspense>
             )
           )}
-          <BriefCardArtifacts artifacts={brief.artifacts} />
+          <BriefCardArtifacts agentId={agentId} artifacts={brief.artifacts} />
           {agentId && topicId && (
             <NewsChatActions
               agentId={agentId}

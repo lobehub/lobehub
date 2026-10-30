@@ -1,7 +1,7 @@
 'use client';
 
 import { createStaticStyles, cx, Flexbox, Popover } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -91,7 +91,11 @@ const ThreadSwitcher = memo<ThreadSwitcherProps>(({ title }) => {
   const threads = useChatStore(threadSelectors.currentTopicThreads);
   const switchThread = useChatStore((s) => s.switchThread);
 
+  const [open, setOpen] = useState(false);
+
   const handleSwitch = (id: string) => {
+    // A pick, including the current thread, completes the switcher.
+    setOpen(false);
     if (id === activeThreadId) return;
     void switchThread(id);
   };
@@ -125,9 +129,11 @@ const ThreadSwitcher = memo<ThreadSwitcherProps>(({ title }) => {
       classNames={{ trigger: styles.trigger }}
       content={content}
       nativeButton={false}
+      open={open}
       placement={'bottomLeft'}
       styles={{ content: { padding: 4 } }}
       trigger={'click'}
+      onOpenChange={setOpen}
     >
       {title}
     </Popover>

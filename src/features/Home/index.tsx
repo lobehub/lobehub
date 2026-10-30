@@ -1,13 +1,18 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { cx, Flexbox } from '@lobehub/ui';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
-// Deep import, not the feature barrel: the inbox renderer loads lazily with
-// HomeInbox, and Home must not pull it into its own chunk for one provider.
+// Deep import, not the feature barrel: Home only needs the provider here.
 import { EntityLinkHostProvider } from '@/features/EntityLink/host';
+/**
+ * Static on purpose: HomeModeContent already imports the inbox statically, so a
+ * `lazy` wrapper saved no bytes and only suspended the rail for one frame on
+ * every refresh, painting it empty before the cards arrived.
+ */
+import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -57,9 +62,6 @@ const clearOnboardingHomeModeParam = () => {
 // actually opened.
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
 const AcceptancePortalDrawer = lazy(() => import('./AcceptancePortalDrawer'));
-// The inbox renders markdown, briefs and an editor; keeping it lazy leaves the
-// greeting and the input box as the only static content of the home route.
-const HomeInbox = lazy(() => import('@/features/HomeInbox'));
 
 const Home = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -88,6 +90,15 @@ const Home = memo(() => {
   if (acceptancePortalOpen && !acceptanceDrawerMounted) setAcceptanceDrawerMounted(true);
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail, usageActive });
   const railCollapsed = !railVisible;
+  /**
+   * An enabled rail can settle with no cards; the main column then reclaims its
+   * space without changing the preference. Only the loaded inbox may report it:
+   * judging by an empty DOM node also matched while the lazy inbox was
+   * suspended and while its feeds were still loading, so every refresh painted one column first and
+   * slid back once the cards arrived.
+   */
+  const [railEmpty, setRailEmpty] = useState(false);
+  const contentCollapsed = railCollapsed || (isLogin && railEmpty);
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
   useEffect(() => {
@@ -128,16 +139,14 @@ const Home = memo(() => {
   return (
     <Flexbox className={styles.grid} style={homeLayoutVars}>
       <div
-        data-rail-collapsed={railCollapsed}
-        className={[styles.hero, portraitVisible && styles.heroWithSpeech, styles.heroCollapsed]
-          .filter(Boolean)
-          .join(' ')}
+        className={cx(styles.hero, portraitVisible && styles.heroWithSpeech, styles.heroCollapsed)}
+        data-rail-collapsed={contentCollapsed}
       >
         <div className={styles.header}>
           <HomeHeader />
         </div>
         {portraitVisible && (
-          <div className={styles.speech} data-collapsed={railCollapsed}>
+          <div className={styles.speech} data-collapsed={contentCollapsed}>
             {/* Keep the agent's line and artwork together in both header layouts. */}
             <div className={styles.bubbleSlot}>
               <PortraitBubble promo={promo} />
@@ -150,8 +159,8 @@ const Home = memo(() => {
       </div>
 
       <Flexbox
-        className={`${styles.main} ${styles.content} ${styles.contentCollapsed}`}
-        data-rail-collapsed={railCollapsed}
+        className={cx(styles.main, styles.content, styles.contentCollapsed)}
+        data-rail-collapsed={contentCollapsed}
         data-testid={'home-main'}
         gap={24}
       >
@@ -180,13 +189,11 @@ const Home = memo(() => {
           id={'home-rail'}
           inert={railCollapsed}
         >
-          <Suspense fallback={null}>
-            {/* The inbox reads assistant replies, which carry internal entity
-                links; only the acceptance drawer can show a detail here. */}
-            <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
-              <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
-            </EntityLinkHostProvider>
-          </Suspense>
+          {/* The inbox reads assistant replies, which carry internal entity
+              links; only the acceptance drawer can show a detail here. */}
+          <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} onRailEmptyChange={setRailEmpty} />
+          </EntityLinkHostProvider>
         </aside>
       )}
 

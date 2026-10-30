@@ -162,14 +162,63 @@ export class EnvironmentInstanceModel {
    */
   findByWorkingDirectory = async (
     workingDirectory: string,
+    /** The storage to look on; every storage when omitted. */
+    providerScope?: string,
   ): Promise<EnvironmentInstanceItem | undefined> => {
     const [row] = await this.db
       .select()
       .from(environmentInstances)
-      .where(and(eq(environmentInstances.workingDirectory, workingDirectory), this.visible()))
+      .where(
+        and(
+          eq(environmentInstances.workingDirectory, workingDirectory),
+          providerScope ? eq(environmentInstances.providerScope, providerScope) : undefined,
+          this.visible(),
+        ),
+      )
       .limit(1);
 
     return row;
+  };
+
+  /**
+   * Every instance directory on one storage, whoever's environment it belongs
+   * to, with whether that environment is a workspace member's private one.
+   *
+   * Not filtered by visibility, because the question is about the folders
+   * rather than the rows: every environment directory on a drive is read-only
+   * to its file routes, whoever may run in it. A private one on a workspace's
+   * public drive is a leftover from before members had drives of their own —
+   * its home directory can hold its owner's credentials, so it stays hidden
+   * from everyone until it is rebuilt on its owner's personal drive. Only the
+   * id and the directory leave — nothing a hidden row says about itself.
+   */
+  listStorageDirectories = async (
+    binding: Pick<EnvironmentInstanceBinding, 'provider' | 'providerResourceId' | 'providerScope'>,
+  ): Promise<{ id: string; isPrivate: boolean; workingDirectory: string }[]> => {
+    const rows = await this.db
+      .select({
+        environmentVisibility: environments.visibility,
+        environmentWorkspaceId: environments.workspaceId,
+        id: environmentInstances.id,
+        workingDirectory: environmentInstances.workingDirectory,
+      })
+      .from(environmentInstances)
+      .innerJoin(environments, eq(environments.id, environmentInstances.environmentId))
+      .where(
+        and(
+          eq(environmentInstances.kind, 'sandbox'),
+          isNull(environmentInstances.deviceId),
+          eq(environmentInstances.provider, binding.provider ?? ''),
+          eq(environmentInstances.providerScope, binding.providerScope ?? ''),
+          eq(environmentInstances.providerResourceId, binding.providerResourceId ?? ''),
+        ),
+      );
+
+    return rows.map(({ environmentVisibility, environmentWorkspaceId, id, workingDirectory }) => ({
+      id,
+      isPrivate: !!environmentWorkspaceId && environmentVisibility === 'private',
+      workingDirectory,
+    }));
   };
 
   /**

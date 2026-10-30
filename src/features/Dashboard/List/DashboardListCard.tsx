@@ -1,11 +1,10 @@
 'use client';
 
 import type { WidgetLevelFilter } from '@lobechat/types';
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import { LayoutDashboardIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +12,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import type { DashboardListItem } from '@/services/dashboard';
 
 import DashboardActionsMenu from '../DashboardActionsMenu';
+import DashboardAvatar from '../DashboardAvatar';
 
 export const dashboardListStyles = stylex.create({
   // The card is a `stylex.defaultMarker()` element: `menu` shows while it is hovered.
@@ -90,9 +90,7 @@ const DashboardListCard = memo<DashboardListCardProps>(({ dashboard, href, level
       <WorkspaceLink style={{ color: 'inherit', display: 'block' }} to={href}>
         <Flexbox gap={12}>
           <Flexbox horizontal align={'center'} gap={12} style={{ paddingInlineEnd: 24 }}>
-            <Center className={stylex.props(dashboardListStyles.icon).className}>
-              <Icon icon={LayoutDashboardIcon} size={18} />
-            </Center>
+            <DashboardAvatar icon={dashboard.icon} size={36} title={dashboard.title} />
             <Text ellipsis fontSize={15} weight={600}>
               {dashboard.title}
             </Text>

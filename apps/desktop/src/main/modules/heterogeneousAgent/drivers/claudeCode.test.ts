@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { buildHeterogeneousPrompt, lobeHubCliGuide } from '@lobechat/heterogeneous-agents/protocol';
+import { describe, expect, it, vi } from 'vitest';
 
 import type {
   HeterogeneousAgentBuildPlanHelpers,
@@ -39,6 +40,37 @@ describe('claudeCodeDriver', () => {
     expect(plan.operationTokenEnvKey).toBe('ANTHROPIC_AUTH_TOKEN');
     expect(plan.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
   });
+  const planWithGuide = async (cliVersion?: string) => {
+    const buildAgentInput = vi.fn(stubHelpers.buildAgentInput);
+    const { args } = await claudeCodeDriver.buildSpawnPlan(
+      buildParams({
+        cliVersion,
+        helpers: { buildAgentInput },
+        promptInput: buildHeterogeneousPrompt({ isNewSession: true, prompt: 'fix the test' }),
+      }),
+    );
+    return { args, sentBlocks: buildAgentInput.mock.calls[0][1] as Array<{ text: string }> };
+  };
+
+  it("loads the `lh` guide as a skill instead of sending it in the user's turn", async () => {
+    const { args, sentBlocks } = await planWithGuide('2.1.301');
+
+    expect(args).toContain('--plugin-dir');
+    expect(sentBlocks).toEqual([{ text: 'fix the test', type: 'text' }]);
+  });
+
+  // Regression: a Claude Code without plugin skills rejects `--plugin-dir` and
+  // never starts, so an old or undetected build keeps the in-message guide.
+  it.each(['1.2.3', '2.0.19', undefined])(
+    'keeps the guide in the prompt for Claude Code %s',
+    async (cliVersion) => {
+      const { args, sentBlocks } = await planWithGuide(cliVersion);
+
+      expect(args).not.toContain('--plugin-dir');
+      expect(sentBlocks.map((block) => block.text)).toEqual([lobeHubCliGuide, 'fix the test']);
+    },
+  );
+
   it('omits --mcp-config when mcpConfigPath is undefined', async () => {
     const { args } = await claudeCodeDriver.buildSpawnPlan(buildParams());
     expect(args).not.toContain('--mcp-config');

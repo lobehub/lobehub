@@ -1,4 +1,4 @@
-import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '@lobechat/const/currency';
+import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '../../../const/currency';
 import type { ModelTokensUsage } from '@lobechat/types';
 import debug from 'debug';
 import type {

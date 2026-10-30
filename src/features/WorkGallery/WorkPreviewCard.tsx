@@ -1,15 +1,17 @@
 'use client';
 
-import type { WorkSummaryItem } from '@lobechat/types';
-import { formatTokenNumber } from '@lobechat/utils/format';
-import { Avatar, cx, Flexbox, Tag } from '@lobehub/ui';
+import type { CanvasStorageItem, WorkSummaryItem } from '@lobechat/types';
+import { formatSize, formatTokenNumber } from '@lobechat/utils/format';
+import { ActionIcon, Avatar, cx, DropdownMenu, Flexbox, Tag } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { memo } from 'react';
+import { MoreHorizontalIcon } from 'lucide-react';
+import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useCanvasCardMenu } from '@/features/CanvasStorage/useCanvasCardMenu';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
@@ -53,6 +55,7 @@ const styles = stylex.create({
     whiteSpace: 'nowrap',
   },
   metaRow: { minWidth: '0' },
+  more: { flex: 'none', marginInlineStart: 'auto' },
   meta: { flex: 'none', fontSize: '10px', color: cssVar.colorTextTertiary },
   originTopic: {
     overflow: 'hidden',
@@ -84,10 +87,17 @@ const styles = stylex.create({
 interface WorkPreviewCardProps {
   item: WorkSummaryItem;
   onOpen: (item: WorkSummaryItem) => void;
+  /** File storage a canvas Work holds, when it is the caller's own canvas. */
+  storage?: CanvasStorageItem;
 }
+
+const stopPropagation = (event: MouseEvent) => event.stopPropagation();
 
 const workTypeKey = (item: WorkSummaryItem) => {
   switch (item.resourceType) {
+    case 'canvas': {
+      return 'work.type.canvas';
+    }
     case 'document': {
       return 'work.type.document';
     }
@@ -117,7 +127,7 @@ const workTypeKey = (item: WorkSummaryItem) => {
  * never reach it: `listByWorkspace` filters them out server-side, so the card
  * has no "resource deleted" state.
  */
-const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
+const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) => {
   const { t, i18n } = useTranslation(['chat', 'common', 'file']);
   const agent = useAgentDisplayMeta(item.originAgentId);
   const descriptor = getWorkTypeDescriptor(item);
@@ -145,6 +155,8 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
   });
   const totalTokens = getWorkVersionTotalTokens(item.event.cumulativeUsage);
   const cost = formatWorkVersionCost(item.totalCost);
+  const size = storage ? formatSize(storage.totalSize) : null;
+  const menuItems = useCanvasCardMenu(item, storage);
 
   return (
     <Flexbox
@@ -180,6 +192,18 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
             <Tag size={'small'} style={{ marginInlineStart: 'auto' }}>
               {item.status}
             </Tag>
+          )}
+          {menuItems.length > 0 && (
+            <div className={stylex.props(styles.more).className} onClick={stopPropagation}>
+              <DropdownMenu items={menuItems} placement={'bottomRight'}>
+                <ActionIcon
+                  icon={MoreHorizontalIcon}
+                  size={'small'}
+                  title={t('more', { ns: 'common' })}
+                  onClick={stopPropagation}
+                />
+              </DropdownMenu>
+            </div>
           )}
         </Flexbox>
         <div {...stylex.props(styles.title)}>{title}</div>
@@ -222,9 +246,9 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
               )}
             </Flexbox>
           )}
-          {(totalTokens || cost) && (
-            <span {...stylex.props(styles.usage)}>
-              {[totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
+          {(size || totalTokens || cost) && (
+            <span className={stylex.props(styles.usage).className}>
+              {[size, totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
                 .filter(Boolean)
                 .join(' · ')}
             </span>

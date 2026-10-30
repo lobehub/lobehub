@@ -1,7 +1,7 @@
-import { createMediaFileRef } from '@lobechat/const/mediaRef';
+import { createMediaFileRef } from '../const/mediaRef';
 import { filesPrompts } from '@lobechat/prompts';
 import type { ChatAudioItem, MessageContentPart } from '@lobechat/types';
-import { normalizeAudioDurationMs } from '@lobechat/utils/audio';
+import { normalizeAudioDurationMs } from '../utils/audio';
 import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 import { isDesktopLocalStaticServerUrl } from '@lobechat/utils/url';

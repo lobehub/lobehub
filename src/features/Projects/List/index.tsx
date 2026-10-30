@@ -1,5 +1,6 @@
 'use client';
 
+import { agentDisplayName } from '@lobechat/types';
 import { Center, ContextMenuTrigger, Empty, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
@@ -24,12 +25,15 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import { PROJECT_STATUS_VISUALS, resolveProjectStatus } from '@/components/ExecutionStatus';
+import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
 import ProjectDisabled from '@/features/Projects/ProjectDisabled';
+import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import TopicCreatorAvatar from '@/features/TopicCreatorAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -37,7 +41,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useLoadedProjectList, useProjectStore } from '@/store/project';
 import type { ProjectListItem } from '@/store/project/store';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import { resolveProjectListState } from '../projectListState';
 
@@ -52,7 +56,7 @@ const styles = stylex.create({
     },
     transition: `opacity ${cssVar.motionDurationFast}`,
   },
-  identifier: { flex: 'none', minWidth: '72px', color: cssVar.colorTextTertiary },
+  identifier: { flex: 'none', color: cssVar.colorTextTertiary },
   link: {
     display: 'flex',
     flex: '1',
@@ -61,7 +65,7 @@ const styles = stylex.create({
     minWidth: '0',
     color: 'inherit',
   },
-  owner: { flex: 'none', width: '20px' },
+  owner: { display: 'flex', flex: 'none', width: '20px' },
   row: {
     paddingBlockStart: '7px',
     paddingBlockEnd: '7px',
@@ -97,12 +101,42 @@ const ProjectOwnerAvatar = memo<{ userId: string }>(({ userId }) => {
 
 ProjectOwnerAvatar.displayName = 'ProjectOwnerAvatar';
 
+const ProjectCoordinatorAvatar = memo<{ project: ProjectListItem }>(({ project }) => {
+  const { coordinatorAgent } = project;
+  const label = coordinatorAgent ? agentDisplayName(coordinatorAgent) : undefined;
+
+  return (
+    <span className={stylex.props(styles.owner).className}>
+      {coordinatorAgent && label ? (
+        <Tooltip title={label}>
+          <span style={{ display: 'inline-flex' }}>
+            <AgentAvatar
+              agentId={project.coordinatorAgentId}
+              avatar={coordinatorAgent.avatar}
+              background={coordinatorAgent.backgroundColor || cssVar.colorBgContainer}
+              name={label}
+              shape={'circle'}
+              size={20}
+              variant={'outlined'}
+            />
+          </span>
+        </Tooltip>
+      ) : (
+        // Rows without joined meta (a cleared main agent, which resolves to LobeAI,
+        // or a row inserted from a create response before the list refreshes).
+        <AssigneeAvatar tooltip agentId={project.coordinatorAgentId} size={20} />
+      )}
+    </span>
+  );
+});
+
+ProjectCoordinatorAvatar.displayName = 'ProjectCoordinatorAvatar';
+
 const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
   const { t } = useTranslation(['project', 'common']);
   const [deleting, setDeleting] = useState(false);
   const deleteProject = useProjectStore((s) => s.deleteProject);
-  const currentUserId = useUserStore(userProfileSelectors.userId);
-  const canDelete = currentUserId === project.userId;
+  const canDelete = useCanManageProject();
   const status = resolveProjectStatus(project.status);
   const statusVisual = PROJECT_STATUS_VISUALS[status];
 
@@ -151,15 +185,19 @@ const ProjectRow = memo<{ project: ProjectListItem }>(({ project }) => {
         <Tooltip title={t(`acceptance.status.${status}`)}>
           <Icon color={statusVisual.color} icon={statusVisual.icon} size={16} />
         </Tooltip>
-        <Flexbox flex={1} style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
           <Text ellipsis weight={500}>
             {project.name}
           </Text>
+          <Text className={stylex.props(styles.identifier).className} fontSize={12}>
+            {project.identifier}
+          </Text>
         </Flexbox>
-        <Text className={stylex.props(styles.identifier).className} fontSize={12}>
-          {project.identifier}
-        </Text>
-        <ProjectOwnerAvatar userId={project.userId} />
+        <Flexbox horizontal align={'center'} flex={'none'} gap={4}>
+          <ProjectOwnerAvatar userId={project.userId} />
+          <ProjectCoordinatorAvatar project={project} />
+        </Flexbox>
+
         <Text
           className={stylex.props(styles.updatedAt).className}
           fontSize={12}
@@ -226,11 +264,12 @@ const ProjectListPage = memo(() => {
           <SearchBar
             allowClear
             placeholder={t('list.searchPlaceholder')}
-            style={{ maxWidth: 280 }}
+            // Natural width as before on wide screens; only shrinks when the row is tight.
+            style={{ flex: '0 1 auto', maxWidth: 280, minWidth: 0 }}
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
-          <Button icon={PlusIcon} onClick={() => openCreateProjectModal()}>
+          <Button icon={PlusIcon} style={{ flex: 'none' }} onClick={() => openCreateProjectModal()}>
             {t('create.action')}
           </Button>
         </Flexbox>

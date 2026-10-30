@@ -9,6 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatWidgetValue } from '../../utils/format';
+import { useIncrementalRows } from './useIncrementalRows';
 
 const styles = stylex.create({
   link: { color: { 'default': 'inherit', ':hover': cssVar.colorPrimary } },
@@ -21,17 +22,21 @@ const styles = stylex.create({
 });
 
 interface ListViewProps {
-  /** Rows to show before the "+N more" note; unlimited when omitted. */
+  /** Reveal rows in batches as the card is scrolled instead of mounting them all. */
+  incremental?: boolean;
+  /** Hard cap shown before the "+N more" note; unlimited when omitted. */
   limit?: number;
   output: WidgetListOutput;
 }
 
-const ListView = memo<ListViewProps>(({ output, limit }) => {
+const ListView = memo<ListViewProps>(({ output, limit, incremental }) => {
   const { t } = useTranslation('dashboard');
   // Normalize once: an older server may send a list output without `items`.
   const allItems = output.items ?? [];
-  const items = limit ? allItems.slice(0, limit) : allItems;
-  const hidden = allItems.length - items.length;
+  const capped = limit ? allItems.slice(0, limit) : allItems;
+  const { count, hasMore, sentinelRef } = useIncrementalRows(capped.length, !!incremental);
+  const items = capped.slice(0, count);
+  const hidden = allItems.length - capped.length;
 
   if (allItems.length === 0) {
     return (
@@ -82,7 +87,8 @@ const ListView = memo<ListViewProps>(({ output, limit }) => {
           )}
         </Flexbox>
       ))}
-      {hidden > 0 && (
+      {hasMore && <div key={count} ref={sentinelRef} style={{ flex: 'none', height: 1 }} />}
+      {hidden > 0 && !hasMore && (
         <Text fontSize={12} style={{ paddingTop: 6 }} type={'secondary'}>
           {t('widget.view.more', { count: hidden })}
         </Text>

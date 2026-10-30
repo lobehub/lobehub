@@ -6,6 +6,7 @@ import type {
 } from '@lobechat/types';
 
 import { INBOX_SESSION_ID } from '@/const/session';
+import { TopicTrigger } from '@/const/topic';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type BatchTaskResult } from '@/types/service';
 import {
@@ -112,10 +113,12 @@ export class TopicService {
       editingAgentId: params.editingAgentId,
       editingGroupId: params.editingGroupId,
       excludeStatuses: params.excludeStatuses,
-      excludeTriggers: params.excludeTriggers,
+      // Filter before pagination so internal Channel runs consume neither rows nor totals.
+      excludeTriggers: [...new Set([TopicTrigger.Channel, ...(params.excludeTriggers ?? [])])],
       groupId: params.groupId,
       includeTriggers: params.includeTriggers,
       isInbox: params.isInbox,
+      onlyMine: params.onlyMine,
       pageSize: params.pageSize,
       sortBy: params.sortBy,
       triggers: params.triggers,
@@ -168,12 +171,21 @@ export class TopicService {
     return result.data.hasFiles;
   };
 
-  searchTopics = (keywords: string, agentId?: string, groupId?: string): Promise<ChatTopic[]> => {
-    return lambdaClient.topic.searchTopics.query({
+  searchTopics = async (
+    keywords: string,
+    agentId?: string,
+    groupId?: string,
+    onlyMine?: boolean,
+  ): Promise<ChatTopic[]> => {
+    const topics = await lambdaClient.topic.searchTopics.query({
       agentId,
       groupId,
       keywords,
-    }) as any;
+      onlyMine: onlyMine || undefined,
+    });
+    return topics.filter(
+      (topic) => topic.trigger !== TopicTrigger.Channel,
+    ) as unknown as ChatTopic[];
   };
 
   updateTopic = (id: string, data: Partial<ChatTopic>) => {
@@ -193,6 +205,11 @@ export class TopicService {
 
   updateTopicMetadata = (id: string, metadata: UpdateTopicMetadataInput) => {
     return lambdaClient.topic.updateTopicMetadata.mutate({ id, metadata });
+  };
+
+  /** `unread` → `active` only while the topic is still unread; `null` when it was not. */
+  markTopicRead = (id: string) => {
+    return lambdaClient.topic.markTopicRead.mutate({ id });
   };
 
   settleRunningOperation = (

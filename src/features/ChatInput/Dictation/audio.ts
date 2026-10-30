@@ -127,7 +127,7 @@ export interface RealtimeAudioCapture {
   stop: () => Promise<void>;
 }
 
-const stopStream = (stream: MediaStream) => {
+export const stopMediaStream = (stream: MediaStream) => {
   for (const track of stream.getTracks()) track.stop();
 };
 
@@ -143,6 +143,49 @@ export const requestDictationMicrophone = async (): Promise<MediaStream> => {
       noiseSuppression: true,
     },
   });
+};
+
+let sharedContext: Promise<AudioContext> | undefined;
+const activeCaptures = new Set<BrowserAudioWorkletCapture>();
+
+const loadWorkletContext = (): Promise<AudioContext> => {
+  const AudioContextConstructor =
+    window.AudioContext || (window as WebkitWindow).webkitAudioContext;
+  if (!AudioContextConstructor || typeof AudioWorkletNode === 'undefined') {
+    return Promise.reject(new Error('audio_worklet_not_supported'));
+  }
+
+  const context = new AudioContextConstructor();
+  const sourceUrl = URL.createObjectURL(
+    new Blob([createWorkletSource()], { type: 'text/javascript' }),
+  );
+  return context.audioWorklet
+    .addModule(sourceUrl)
+    .then(
+      () => context,
+      async (error) => {
+        await context.close().catch(() => undefined);
+        throw error;
+      },
+    )
+    .finally(() => URL.revokeObjectURL(sourceUrl));
+};
+
+// One AudioContext with the worklet already registered is kept across sessions
+// so a press does not pay for context creation and worklet compilation again.
+const getWorkletContext = async (): Promise<AudioContext> => {
+  const pending = sharedContext;
+  if (pending) {
+    const context = await pending.catch(() => undefined);
+    if (context && context.state !== 'closed') return context;
+    if (sharedContext === pending) sharedContext = undefined;
+  }
+  const loading = loadWorkletContext();
+  sharedContext = loading;
+  loading.catch(() => {
+    if (sharedContext === loading) sharedContext = undefined;
+  });
+  return loading;
 };
 
 export class BrowserAudioWorkletCapture implements RealtimeAudioCapture {
@@ -170,19 +213,8 @@ export class BrowserAudioWorkletCapture implements RealtimeAudioCapture {
   }
 
   static async create(stream: MediaStream): Promise<BrowserAudioWorkletCapture> {
-    const AudioContextConstructor =
-      window.AudioContext || (window as WebkitWindow).webkitAudioContext;
-    if (!AudioContextConstructor || typeof AudioWorkletNode === 'undefined') {
-      stopStream(stream);
-      throw new Error('audio_worklet_not_supported');
-    }
-
-    const context = new AudioContextConstructor();
-    const sourceUrl = URL.createObjectURL(
-      new Blob([createWorkletSource()], { type: 'text/javascript' }),
-    );
     try {
-      await context.audioWorklet.addModule(sourceUrl);
+      const context = await getWorkletContext();
       const node = new AudioWorkletNode(context, WORKLET_NAME, {
         numberOfInputs: 1,
         numberOfOutputs: 1,
@@ -193,11 +225,8 @@ export class BrowserAudioWorkletCapture implements RealtimeAudioCapture {
       gain.gain.value = 0;
       return new BrowserAudioWorkletCapture({ context, gain, node, source, stream });
     } catch (error) {
-      stopStream(stream);
-      await context.close().catch(() => undefined);
+      stopMediaStream(stream);
       throw error;
-    } finally {
-      URL.revokeObjectURL(sourceUrl);
     }
   }
 
@@ -217,6 +246,7 @@ export class BrowserAudioWorkletCapture implements RealtimeAudioCapture {
     this.#node.connect(this.#gain);
     this.#gain.connect(this.#context.destination);
     this.#connected = true;
+    activeCaptures.add(this);
     if (this.#context.state === 'suspended') await this.#context.resume();
   }
 
@@ -248,7 +278,10 @@ export class BrowserAudioWorkletCapture implements RealtimeAudioCapture {
     this.#connected = false;
     this.#node.disconnect();
     this.#gain.disconnect();
-    stopStream(this.#stream);
-    if (this.#context.state !== 'closed') await this.#context.close().catch(() => undefined);
+    stopMediaStream(this.#stream);
+    activeCaptures.delete(this);
+    if (activeCaptures.size === 0 && this.#context.state === 'running') {
+      await this.#context.suspend().catch(() => undefined);
+    }
   }
 }

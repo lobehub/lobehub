@@ -1,15 +1,5 @@
+import { getOperationFinalRootId } from '@lobechat/conversation-flow';
 import type { UIChatMessage, WorkSummaryItem } from '@lobechat/types';
-
-/**
- * Reads the operation-final work root id stamped on message/block metadata by
- * the server work registry (`metadata.work.rootOperationId`). Consumed by the
- * in-message Works chip resolution (`AssistantGroup`) and the work-summary index
- * below.
- */
-export const getOperationFinalRootId = (
-  metadata?: { work?: { rootOperationId?: unknown } } | null,
-) =>
-  typeof metadata?.work?.rootOperationId === 'string' ? metadata.work.rootOperationId : undefined;
 
 const toTime = (value: unknown): number => {
   if (!value) return 0;

@@ -1,9 +1,4 @@
-import {
-  AGENT_CHAT_TOPIC_URL,
-  DEFAULT_AVATAR,
-  GROUP_CHAT_TOPIC_URL,
-  GROUP_CHAT_URL,
-} from '@lobechat/const';
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
@@ -27,10 +22,11 @@ import {
 import { memo, type ReactNode, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
+import { libraryFolderPath, libraryItemPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useImageStore } from '@/store/image';
 import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
@@ -128,9 +124,9 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'file': {
-          // Navigate to resource library with file parameter
+          // Open the file inside its library, or over the Docs home
           const fileUrl = result.knowledgeBaseId
-            ? `/resource/library/${result.knowledgeBaseId}?file=${result.id}`
+            ? libraryItemPath(result.knowledgeBaseId, result.id)
             : `/resource?file=${result.id}`;
           console.info('[SearchResults] File navigation:', {
             fileDetails: result,
@@ -140,15 +136,12 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'folder': {
-          // Navigate to folder by slug
-          if (result.knowledgeBaseId && result.slug) {
-            navigate(`/resource/library/${result.knowledgeBaseId}/${result.slug}`);
-          } else if (result.slug) {
-            navigate(`/resource/library/${result.slug}`);
-          } else {
-            // Fallback to library root if no slug
-            navigate(`/resource/library`);
-          }
+          // Open the folder inside its library, or the library gallery without one
+          navigate(
+            result.knowledgeBaseId
+              ? libraryFolderPath(result.knowledgeBaseId, result.id)
+              : '/resource/library',
+          );
           break;
         }
         case 'page': {
@@ -176,7 +169,7 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'task': {
-          navigate(taskDetailPath(result.identifier, undefined, result.title));
+          navigate(taskDetailPath(result.identifier ?? result.id, undefined, result.title));
           break;
         }
       }
@@ -305,10 +298,12 @@ const SearchResults = memo<SearchResultsProps>(
         }
         return (
           <Flexbox horizontal align="center" gap={6} style={{ minWidth: 0 }}>
-            <Avatar
-              avatar={result.agent.avatar || DEFAULT_AVATAR}
+            <AgentAvatar
+              agentId={result.agentId}
+              avatar={result.agent.avatar}
               background={result.agent.backgroundColor || undefined}
               name={agentDisplayName(result.agent, t('defaultAgent'))}
+              shape={'circle'}
               size={14}
             />
             <span style={{ flex: 'none' }}>

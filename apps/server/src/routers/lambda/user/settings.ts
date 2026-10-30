@@ -1,6 +1,7 @@
 import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import type { UserSettings } from '@lobechat/types';
 import {
+  NotificationSettingsSchema,
   PERSONAL_SYSTEM_AGENT_KEYS,
   UserPreferenceSchema,
   UserSettingsSchema,
@@ -29,9 +30,23 @@ const hasMemberSettingChange = (input: Partial<UserSettings>) =>
   MEMBER_SETTING_KEYS.some((key) => input[key] !== undefined);
 
 export const settingsRouter = router({
+  getNotificationSettings: userProcedure.query(async ({ ctx }) => {
+    return ctx.userModel.getNotificationSetting();
+  }),
   resetSettings: userProcedure.mutation(async ({ ctx }) => {
     return ctx.userModel.deleteSetting();
   }),
+  /**
+   * Patch personal notification settings server-side. Unlike `updateSettings`,
+   * which replaces the whole `notification` column, this merges the patch so a
+   * caller can flip one switch without first loading every other toggle.
+   * Personal, like the rest of `notification`: no workspace gate.
+   */
+  updateNotificationSettings: userProcedure
+    .input(NotificationSettingsSchema)
+    .mutation(async ({ ctx, input }) => {
+      return ctx.userModel.mergeNotificationSetting(input);
+    }),
   updatePreference: userProcedure.input(UserPreferenceSchema).mutation(async ({ ctx, input }) => {
     return ctx.userModel.updatePreference(input);
   }),

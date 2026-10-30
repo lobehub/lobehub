@@ -1,12 +1,24 @@
-import type { TrashListParams, TrashProjectFilter, TrashResourceType } from '@lobechat/types';
+import type {
+  TrashListParams,
+  TrashProjectFilter,
+  TrashResourceType,
+  TrashVisibility,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
-/** One recycle-bin view: `projectId` undefined = every project, `null` = no project. */
+/**
+ * One recycle-bin view: `projectId` undefined = every project, `null` = no
+ * project; `visibility` picks the side of a workspace bin (unset in personal).
+ */
 export interface TrashViewFilter {
   projectId?: TrashProjectFilter;
   resourceType?: TrashResourceType;
+  visibility?: TrashVisibility;
 }
+
+/** Filter of the per-type counts: one project filter on one side of the bin. */
+export type TrashCountFilter = Pick<TrashViewFilter, 'projectId' | 'visibility'>;
 
 /**
  * Single chokepoint for the `trash` (recycle bin) TRPC router. Components,
@@ -17,9 +29,9 @@ class TrashService {
     return lambdaClient.trash.list.query(params ?? undefined);
   }
 
-  countByType(projectId?: TrashProjectFilter) {
+  countByType({ projectId, visibility }: TrashCountFilter = {}) {
     return lambdaClient.trash.countByType.query(
-      projectId === undefined ? undefined : { projectId },
+      projectId === undefined && !visibility ? undefined : { projectId, visibility },
     );
   }
 

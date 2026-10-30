@@ -15,6 +15,7 @@ import { sx } from '@/styles/sx';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
+import CanvasWorkCard from './CanvasWorkCard';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from './descriptors';
 import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
 
@@ -72,9 +73,21 @@ const styles = stylex.create({
     fontSize: '11px',
     color: cssVar.colorTextTertiary,
   },
-  inlineDescription: { minWidth: '0', fontSize: '11px', color: cssVar.colorTextTertiary },
+  inlineDescription: {
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0',
+    minWidth: '0',
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+  inlineDot: { flexShrink: 0, fontSize: '11px', color: cssVar.colorTextQuaternary },
+  inlineMeta: { minWidth: 0 },
   inlineIdentifier: {
-    flexShrink: 0,
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    maxWidth: '70%',
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '11px',
     color: cssVar.colorTextTertiary,
@@ -111,6 +124,7 @@ interface WorkSummaryCardProps {
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
   ({ className, item, onOpen, variant = 'card', xstyle }) => {
     const { t } = useTranslation('chat');
+    const openCanvas = useChatStore((s) => s.openCanvas);
     const openDocument = useChatStore((s) => s.openDocument);
     const openFilePreview = useChatStore((s) => s.openFilePreview);
     const openTaskDetail = useChatStore((s) => s.openTaskDetail);
@@ -161,6 +175,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       if (!openTarget) return;
 
       switch (openTarget.kind) {
+        case 'canvas': {
+          openCanvas(openTarget.canvasId, openTarget.version);
+          return;
+        }
         case 'document': {
           openDocument(openTarget.documentId, openTarget.agentDocumentId);
           return;
@@ -176,10 +194,20 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           return;
         }
         case 'task': {
-          openTaskDetail(openTarget.identifier);
+          openTaskDetail(openTarget.taskId);
         }
       }
     };
+
+    if (item.type === 'canvas' && variant === 'card') {
+      return (
+        <CanvasWorkCard
+          className={className}
+          item={item}
+          onOpen={clickable ? handleOpen : undefined}
+        />
+      );
+    }
 
     if (variant === 'inline') {
       return (
@@ -191,32 +219,62 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           onClick={clickable ? handleOpen : undefined}
         >
           <Icon className={stylex.props(styles.inlineIcon).className} size={17} />
+          {/* The sidebar is narrow: the title owns the first line (sharing it only
+              with the short usage badge), and the identifier drops to the meta line
+              with the description so a long `owner/repo#n` can't squeeze the title. */}
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text ellipsis className={stylex.props(styles.inlineTitle).className}>
+              <Text
+                ellipsis
+                className={stylex.props(styles.inlineTitle).className}
+                style={{ flex: 1 }}
+                title={title}
+              >
                 {title}
               </Text>
-              {showIdentifier && (
-                <span {...stylex.props(styles.inlineIdentifier)}>{identifier}</span>
+              {usage && (
+                <Center
+                  horizontal
+                  className={stylex.props(styles.inlineCost).className}
+                  gap={2}
+                  title={usageTitle}
+                >
+                  <LobeIcon icon={usage.icon} />
+                  {usage.value}
+                </Center>
               )}
             </Flexbox>
-            {description && (
-              <Text ellipsis className={stylex.props(styles.inlineDescription).className}>
-                {description}
-              </Text>
+            {(showIdentifier || description) && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.inlineMeta).className}
+                gap={4}
+              >
+                {showIdentifier && (
+                  <Text
+                    ellipsis
+                    className={stylex.props(styles.inlineIdentifier).className}
+                    title={identifier}
+                  >
+                    {identifier}
+                  </Text>
+                )}
+                {showIdentifier && description && (
+                  <span className={stylex.props(styles.inlineDot).className}>·</span>
+                )}
+                {description && (
+                  <Text
+                    ellipsis
+                    className={stylex.props(styles.inlineDescription).className}
+                    title={description}
+                  >
+                    {description}
+                  </Text>
+                )}
+              </Flexbox>
             )}
           </Flexbox>
-          {usage && (
-            <Center
-              horizontal
-              className={stylex.props(styles.inlineCost).className}
-              gap={2}
-              title={usageTitle}
-            >
-              <LobeIcon icon={usage.icon} />
-              {usage.value}
-            </Center>
-          )}
         </Flexbox>
       );
     }

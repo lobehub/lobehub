@@ -77,7 +77,7 @@ describe('useTopicNavigation', () => {
       ),
     });
     await act(async () => result.current.navigateToTopic('topic-other-agent'));
-    expect(pushMock).toHaveBeenCalledWith('/team/project/project-1/conversation/topic-other-agent');
+    expect(pushMock).toHaveBeenCalledWith('/team/project/project-1/topic/topic-other-agent');
     expect(switchTopicMock).not.toHaveBeenCalled();
     expect(focusTopicPopupMock).not.toHaveBeenCalled();
   });
