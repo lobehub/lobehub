@@ -748,6 +748,11 @@ export const execAgentTurn = async (
         approvalSourceToolMessageIds,
         autoStart,
         onOperationCreated: params.onOperationCreated,
+        // From here the run's completion releases the slot; a run that never
+        // started (failed, or created without auto-start) gives it back.
+        onScheduled: () => {
+          runSlot.handedOff = true;
+        },
         botContext,
         botPlatformContext,
         clientIp,
@@ -783,8 +788,5 @@ export const execAgentTurn = async (
       },
     ),
   );
-  // From here the run's completion releases the slot; a run that never
-  // started (failed, or created without auto-start) gives it back now.
-  runSlot.handedOff = started.success && !!started.autoStarted;
   return started;
 };

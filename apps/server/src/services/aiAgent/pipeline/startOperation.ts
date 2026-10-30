@@ -57,6 +57,12 @@ export interface StartOperationInput {
   llmExecutor?: InternalExecAgentParams['llmExecutor'];
   maxSteps?: number;
   onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
+  /**
+   * Called once the first step is queued. A later startup failure (a marker
+   * write) still returns `success: false` while the run executes, so ownership
+   * that follows the run (its concurrency slot) must transfer here.
+   */
+  onScheduled?: () => void;
   operationId: string;
   operationTaskId?: string;
   parentOperationId?: string;
@@ -349,6 +355,7 @@ export const startOperation = async (
       workspaceId: deps.workspaceId,
     });
     approvalClaim.continuationStarted = true;
+    if (result.autoStarted) input.onScheduled?.();
 
     // The approval continuation is a fresh operation. Legacy direct callers
     // retire the old parked runtime here, only after createOperation has
