@@ -6,6 +6,7 @@ import { ContextEngine } from '../../pipeline';
 import {
   ActivationResultTrimProcessor,
   AgentCouncilFlattenProcessor,
+  AgentSenderMessageProcessor,
   cacheEconomicsForProvider,
   CompressedGroupRoleTransformProcessor,
   DisabledToolCallFilter,
@@ -594,6 +595,8 @@ export class MessagesEngine {
 
       // Reaction feedback
       new ReactionFeedbackProcessor({ enabled: true }),
+      // Who sent an agent → agent message, and how to reply (string content only)
+      new AgentSenderMessageProcessor(),
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
         canReadAttachment,

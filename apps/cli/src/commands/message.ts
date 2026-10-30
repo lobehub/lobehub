@@ -14,6 +14,7 @@ import {
 import { log } from '../utils/logger';
 import type { TimeWindow } from '../utils/timeWindow';
 import { parseTimeWindow, TIME_POINT_HELP } from '../utils/timeWindow';
+import { registerMessageReplyCommand } from './message/reply';
 import { resolveUrlBuilder, resourcePath, withUrls } from './resourceUrl';
 
 interface MessageSearchOptions {
@@ -404,7 +405,9 @@ export function registerMessageCommand(program: Command) {
 
   message
     .command('create')
-    .description('Create a message')
+    .description(
+      "Write a message row without running anything: no agent sees or answers it. To have another conversation's agent act on a message, use 'lh topic send'",
+    )
     .requiredOption('-r, --role <role>', 'Message role (user, assistant, system)')
     .requiredOption('-c, --content <content>', 'Message content')
     .option('--agent-id <id>', 'Agent ID')
@@ -619,4 +622,6 @@ export function registerMessageCommand(program: Command) {
         console.log(`${e.date || e.day || ''}: ${pc.bold(String(e.count || e.value || 0))}`);
       }
     });
+
+  registerMessageReplyCommand(message);
 }

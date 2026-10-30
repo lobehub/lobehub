@@ -4,6 +4,7 @@ export {
   ActivationResultTrimProcessor,
 } from './ActivationResultTrim';
 export { AgentCouncilFlattenProcessor } from './AgentCouncilFlatten';
+export { AgentSenderMessageProcessor, formatAgentSenderHeader } from './AgentSenderMessage';
 export { CompressedGroupRoleTransformProcessor } from './CompressedGroupRoleTransform';
 export { DisabledToolCallFilter } from './DisabledToolCallFilter';
 export { GroupMessageFlattenProcessor } from './GroupMessageFlatten';

@@ -18,6 +18,7 @@ import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupMemberContinuationResult';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
+import { AgentRelayHopLimitError } from '@/server/services/aiAgent/sourceAttribution';
 
 import type { ExecAgentInput } from './execSchemas';
 import {
@@ -284,6 +285,12 @@ export const execRouter = router({
 
       if (error instanceof TRPCError) {
         throw error;
+      }
+
+      // An agent → agent send past the relay bound: the sending agent has to
+      // hand back to a person, so the reason travels to it verbatim.
+      if (error instanceof AgentRelayHopLimitError) {
+        throw new TRPCError({ cause: error, code: 'TOO_MANY_REQUESTS', message: error.message });
       }
 
       if (error instanceof HumanApprovalAlreadyResolvedError) {

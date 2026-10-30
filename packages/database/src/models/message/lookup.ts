@@ -147,6 +147,37 @@ export class MessageLookupQueries extends MessageScope {
     });
 
   /**
+   * The agent relay hop (`metadata.agentSender.hop`) of the newest user
+   * message in a conversation — the main transcript, or one thread — or
+   * undefined when a person wrote it. Read when an agent turn sends to another
+   * conversation, to count how many agent → agent sends led to it.
+   */
+  findLatestUserTurnHop = async ({
+    threadId,
+    topicId,
+  }: {
+    threadId?: string;
+    topicId: string;
+  }): Promise<number | undefined> => {
+    const [row] = await this.db
+      .select({ hop: sql<null | string>`${messages.metadata}->'agentSender'->>'hop'` })
+      .from(messages)
+      .where(
+        and(
+          this.ownership(),
+          eq(messages.topicId, topicId),
+          threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
+          eq(messages.role, 'user'),
+        ),
+      )
+      .orderBy(desc(messages.createdAt), desc(messages.id))
+      .limit(1);
+
+    const hop = Number(row?.hop);
+    return Number.isInteger(hop) && hop > 0 ? hop : undefined;
+  };
+
+  /**
    * Resolve the `role='verify'` delivery-checker card for an Agent Run (created
    * with `metadata.verifyOperationId = operationId`). Used by auto-repair to
    * persist the failure feedback onto the card it belongs to.

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ComposerUserMessage, MessageMetadata } from '@lobechat/types';
+import type { AgentSenderMetadata, ComposerUserMessage, MessageMetadata } from '@lobechat/types';
 import { COMPOSER_USER_MESSAGE_METADATA_KEYS, toComposerUserMessage } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -38,6 +38,13 @@ export type QueuedFollowUpRequest = Omit<
 >;
 
 export interface QueuedFollowUp extends SteerQueueEntry {
+  /**
+   * The sending agent, when another agent queued this (`lh topic send` into a
+   * busy conversation). Resolved by the server when it was queued: by the time
+   * the follow-up starts, the sending run has usually settled and can no longer
+   * vouch for it.
+   */
+  agentSender?: AgentSenderMetadata;
   /** Server-derived provenance of the request that queued it. */
   audit?: { clientIp?: string; userAgent?: string };
   /**
@@ -101,6 +108,34 @@ export const mergeQueuedFollowUps = (entries: QueuedFollowUp[]): QueuedFollowUpR
     selectedSkillIds: selectedSkillIds.length ? selectedSkillIds : undefined,
     selectedToolIds: selectedToolIds.length ? selectedToolIds : undefined,
     userMessage: mergeComposerUserMessages(sorted.map((entry) => entry.request.userMessage)),
+  };
+};
+
+const senderKey = (entry: QueuedFollowUp) =>
+  entry.agentSender
+    ? [entry.agentSender.agentId, entry.agentSender.topicId, entry.agentSender.threadId].join('|')
+    : '';
+
+/**
+ * Split off the leading follow-ups that share one author — the person, or one
+ * sending agent's conversation. Merged follow-ups become one user message with
+ * one author, so an agent's message must not be folded into the person's (it
+ * would read as typed by them) nor into another agent's (the reply would go to
+ * only one of them). The rest wait for the next turn.
+ */
+export const takeSameSenderFollowUps = (
+  entries: QueuedFollowUp[],
+): { agentSender?: AgentSenderMetadata; rest: QueuedFollowUp[]; taken: QueuedFollowUp[] } => {
+  const sorted = [...entries].sort((a, b) => a.createdAt - b.createdAt);
+  if (sorted.length === 0) return { rest: [], taken: [] };
+  const key = senderKey(sorted[0]);
+  const firstOther = sorted.findIndex((entry) => senderKey(entry) !== key);
+  const taken = firstOther === -1 ? sorted : sorted.slice(0, firstOther);
+
+  return {
+    agentSender: sorted[0].agentSender,
+    rest: sorted.slice(taken.length),
+    taken,
   };
 };
 
@@ -270,8 +305,11 @@ export const startQueuedFollowUp = async (
   const { scope } = params;
 
   const drained = await drainOwnFollowUps(ctx, scope, params.operationId);
-  const { entries } = drained;
-  if (entries.length === 0) return;
+  if (drained.entries.length === 0) return;
+
+  // One author per turn; the run this starts picks the others up when it ends.
+  const { agentSender, rest, taken: entries } = takeSameSenderFollowUps(drained.entries);
+  await returnFollowUps(scope, drained, rest, 'sent by another author');
 
   const request = mergeQueuedFollowUps(entries);
   const audit = entries.at(-1)!.audit;
@@ -307,6 +345,7 @@ export const startQueuedFollowUp = async (
       { ...ctx, clientIp: audit?.clientIp, supersedeLiveRun: false, userAgent: audit?.userAgent },
       {
         ...request,
+        agentSender,
         appContext: { ...request.appContext, threadId: scope.threadId, topicId: scope.topicId },
         // A drained follow-up starts its own turn — it did not steer the run
         // it waited behind, so the user message stays unmarked.
