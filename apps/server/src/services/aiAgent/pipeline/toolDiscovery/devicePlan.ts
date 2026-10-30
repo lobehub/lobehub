@@ -58,6 +58,7 @@ export const resolveDevicePlan = async (
     | 'localDeviceId'
     | 'requestedDeviceId'
     | 'requestTrigger'
+    | 'requireDevice'
   >,
   devices: {
     boundDeviceId?: string | null;
@@ -72,6 +73,7 @@ export const resolveDevicePlan = async (
     localDeviceId,
     requestTrigger,
     requestedDeviceId,
+    requireDevice,
   } = input;
   const { boundDeviceId, gatewayConfigured, onlineDevices } = devices;
 
@@ -86,31 +88,21 @@ export const resolveDevicePlan = async (
     sandboxFallback: shareGate ? shareGateGrantsCloudSandbox(shareGate) : false,
     trigger: requestTrigger,
   });
-  // A fixed device target must never degrade to the cloud sandbox or a
-  // different device. Persist a visible assistant error and fail the RPC
-  // before tool/runtime preparation so no operation can start elsewhere.
-  if (
-    isFixedDeviceTarget &&
-    boundDeviceId &&
-    resolveToolMode(agentConfig.chatConfig ?? undefined) !== 'chat' &&
-    executionPlan.kind !== 'device'
-  ) {
+  // Persist a visible assistant error and fail the RPC before tool/runtime
+  // preparation, so no operation can start somewhere it must not run.
+  const failUnroutedDevice = async (deviceId: string, message: string, detail: string) => {
     const errorData: DeviceUnavailableErrorData = {
       code: 'DEVICE_NOT_FOUND',
-      deviceId: boundDeviceId,
+      deviceId,
       retryable: true,
       scope: deps.workspaceId ? 'workspace' : 'personal',
       ...(deps.workspaceId ? { workspaceId: deps.workspaceId } : {}),
     };
-    const detail =
-      executionPlan.kind === 'device-unrouted' && executionPlan.reason === 'bound-device-offline'
-        ? 'The device fixed by this agent is offline. Ask an editor to bring it online or change the agent device policy.'
-        : 'The device fixed by this agent is unavailable for this run. Ask an editor to check the agent device policy.';
     await deps.messageModel.update(assistantMessageId, {
       content: '',
       error: {
         body: { detail, ...errorData },
-        message: 'Fixed agent device unavailable',
+        message,
         type: 'ServerAgentRuntimeError',
       },
     });
@@ -119,6 +111,38 @@ export const resolveDevicePlan = async (
       code: 'PRECONDITION_FAILED',
       message: detail,
     });
+  };
+  const isChatMode = resolveToolMode(agentConfig.chatConfig ?? undefined) === 'chat';
+  const deviceOffline =
+    executionPlan.kind === 'device-unrouted' && executionPlan.reason === 'bound-device-offline';
+
+  // A fixed device target must never degrade to the cloud sandbox or a
+  // different device.
+  if (isFixedDeviceTarget && boundDeviceId && !isChatMode && executionPlan.kind !== 'device') {
+    await failUnroutedDevice(
+      boundDeviceId,
+      'Fixed agent device unavailable',
+      deviceOffline
+        ? 'The device fixed by this agent is offline. Ask an editor to bring it online or change the agent device policy.'
+        : 'The device fixed by this agent is unavailable for this run. Ask an editor to check the agent device policy.',
+    );
+  }
+  // Nor may a device the request required (`lh topic send --new --device`):
+  // it can go offline between the caller's check and this routing, and the
+  // run would otherwise degrade to the cloud sandbox or another machine.
+  if (
+    requireDevice &&
+    requestedDeviceId &&
+    !isChatMode &&
+    !(executionPlan.kind === 'device' && executionPlan.deviceId === requestedDeviceId)
+  ) {
+    await failUnroutedDevice(
+      requestedDeviceId,
+      'Required device unavailable',
+      deviceOffline
+        ? `Device ${requestedDeviceId} went offline before the run could start there. Bring it online and send again.`
+        : `This run cannot be routed to device ${requestedDeviceId}, so it was not started elsewhere.`,
+    );
   }
   // Device tools (local-system / remote-device proxy) only exist in a
   // device-capable session — `none` and `sandbox` sessions must never see

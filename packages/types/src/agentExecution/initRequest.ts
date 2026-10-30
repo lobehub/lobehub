@@ -84,6 +84,12 @@ export interface AgentRunInitRequest {
   requestedTopicId?: string;
   requestTrigger?: string;
   /**
+   * The request required its `requestedDeviceId` (`lh topic send --new --device`):
+   * a plan that does not route to that device fails instead of degrading to
+   * the cloud sandbox or another machine.
+   */
+  requireDevice?: boolean;
+  /**
    * The caller re-answers an existing turn (regenerate / continue). Unlike
    * `resumeFromHistory`, a run that only suppresses its user row does not set it.
    */

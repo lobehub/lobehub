@@ -185,6 +185,7 @@ export const runOperationInit = async (
         globalMemoryEnabled: request.globalMemoryEnabled,
         hasMentionedAgents: request.hasMentionedAgents,
         isFixedDeviceTarget: request.isFixedDeviceTarget,
+        requireDevice: request.requireDevice,
         loadHistoryMessages: deps.loadHistoryMessages,
         localDeviceId: request.localDeviceId,
         requestTrigger: request.requestTrigger as RequestTrigger | undefined,

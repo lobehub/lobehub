@@ -614,6 +614,7 @@ export const execAgentTurn = async (
     hasMentionedAgents,
     isFixedDeviceTarget: turn.isFixedDeviceTarget,
     localDeviceId,
+    requireDevice,
     mentionedAgents,
     parentMessageId,
     prompt,
