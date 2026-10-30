@@ -688,6 +688,7 @@ export default {
   'channel.records.purged': 'Message expired',
   'channel.records.purgedHint': 'Message text is kept for 7 days.',
   'channel.records.silenced': 'Chose not to reply',
+  'channel.records.silencedWithReason': 'Chose not to reply: {{reason}}',
   'channel.records.reason.access-gate-rejected': 'Blocked by access rules',
   'channel.records.reason.addressed': 'A reply to the bot',
   'channel.records.reason.classifier-confident': 'Judged as meant for it',

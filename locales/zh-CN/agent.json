@@ -498,6 +498,7 @@
   "channel.records.reason.solo-conversation": "一对一对话",
   "channel.records.reason.watch-keyword": "命中监听关键词",
   "channel.records.silenced": "选择不回复",
+  "channel.records.silencedWithReason": "选择不回复：{{reason}}",
   "channel.records.summary.defer": "暂缓处理",
   "channel.records.summary.followup": "主动唤醒",
   "channel.records.summary.followupHint": "没人 @ 它时自己醒来的次数",

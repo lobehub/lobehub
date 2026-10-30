@@ -81,8 +81,12 @@ export const RecordItem = ({ disabled, item, onMark }: RecordItemProps) => {
       <Text fontSize={12} type={'secondary'}>
         {item.finalReason ? translate('reason', item.finalReason) : '--'}
         {item.agentLabel &&
-          ` · ${t('channel.records.silenced')}${
-            item.agentLabel.reason ? `: ${translate('noReplyReason', item.agentLabel.reason)}` : ''
+          ` · ${
+            item.agentLabel.reason
+              ? t('channel.records.silencedWithReason', {
+                  reason: translate('noReplyReason', item.agentLabel.reason),
+                })
+              : t('channel.records.silenced')
           }`}
       </Text>
     </Flexbox>

@@ -498,6 +498,7 @@
   "channel.records.reason.solo-conversation": "One-on-one conversation",
   "channel.records.reason.watch-keyword": "Watch keyword matched",
   "channel.records.silenced": "Chose not to reply",
+  "channel.records.silencedWithReason": "Chose not to reply: {{reason}}",
   "channel.records.summary.defer": "Deferred",
   "channel.records.summary.followup": "Proactive wakes",
   "channel.records.summary.followupHint": "Woke up without being @-mentioned",
