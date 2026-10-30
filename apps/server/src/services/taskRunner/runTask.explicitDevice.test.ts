@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   findTopicById: vi.fn(),
   getAgentAgencyConfig: vi.fn(),
   getAgentModelConfig: vi.fn(),
+  interruptTask: vi.fn(),
   updateTopicMetadata: vi.fn(),
 }));
 
@@ -32,7 +33,7 @@ vi.mock('@/database/models/agent', () => ({
 vi.mock('@/database/models/brief', () => ({ BriefModel: vi.fn() }));
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(function () {
-    return { execAgent: mocks.execAgent, interruptTask: vi.fn() };
+    return { execAgent: mocks.execAgent, interruptTask: mocks.interruptTask };
   }),
 }));
 vi.mock('@/server/services/taskLifecycle', () => ({ TaskLifecycleService: vi.fn() }));
@@ -192,6 +193,50 @@ describe('TaskRunnerService.runTask explicit device', () => {
       mocks.findTopicById.mockResolvedValue({ id: 'tpc-old', metadata: previous });
     });
 
+    const expectRestored = () =>
+      expect(mocks.updateTopicMetadata).toHaveBeenLastCalledWith(
+        'tpc-old',
+        { ...previous, repos: undefined },
+        { onlyIf: expect.any(Function) },
+      );
+
+    it("restores only while the topic still carries this run's retarget", async () => {
+      mocks.execAgent.mockResolvedValue({ error: 'device offline', success: false });
+
+      await expect(run({ continueTopicId: 'tpc-old', deviceId: 'device-b' })).rejects.toThrow();
+
+      const { onlyIf } = mocks.updateTopicMetadata.mock.lastCall![2];
+      expect(onlyIf({ boundDeviceId: 'device-b', model: 'codex' })).toBe(true);
+      // Someone moved the topic while the kickoff was in flight: theirs is newer.
+      expect(onlyIf({ boundDeviceId: 'device-d' })).toBe(false);
+      expect(onlyIf({ boundDeviceId: 'device-b', workingDirectory: '/b/other' })).toBe(false);
+    });
+
+    it('restores the topic when the task is withdrawn and the run is confirmed stopped', async () => {
+      const taskModel = setupTask(pinnedToA);
+      taskModel.lockForUpdate.mockResolvedValue(false);
+      mocks.interruptTask.mockResolvedValue({ success: true });
+
+      await expect(run({ continueTopicId: 'tpc-old', deviceId: 'device-b' })).rejects.toThrow(
+        'the run was stopped',
+      );
+
+      expect(mocks.updateTopicMetadata).toHaveBeenCalledTimes(2);
+      expectRestored();
+    });
+
+    it('keeps the retarget when stopping the withdrawn run is not confirmed', async () => {
+      const taskModel = setupTask(pinnedToA);
+      taskModel.lockForUpdate.mockResolvedValue(false);
+      mocks.interruptTask.mockResolvedValue({ success: false });
+
+      await expect(run({ continueTopicId: 'tpc-old', deviceId: 'device-b' })).rejects.toThrow(
+        'could not be confirmed',
+      );
+
+      expect(mocks.updateTopicMetadata).toHaveBeenCalledTimes(1);
+    });
+
     it('restores the topic when dispatch is not accepted', async () => {
       mocks.execAgent.mockResolvedValue({ error: 'device offline', success: false });
 
@@ -199,10 +244,7 @@ describe('TaskRunnerService.runTask explicit device', () => {
         'device offline',
       );
 
-      expect(mocks.updateTopicMetadata).toHaveBeenLastCalledWith('tpc-old', {
-        ...previous,
-        repos: undefined,
-      });
+      expectRestored();
     });
 
     it('restores the topic when dispatch throws', async () => {
@@ -212,10 +254,7 @@ describe('TaskRunnerService.runTask explicit device', () => {
         'boom',
       );
 
-      expect(mocks.updateTopicMetadata).toHaveBeenLastCalledWith('tpc-old', {
-        ...previous,
-        repos: undefined,
-      });
+      expectRestored();
     });
 
     it('keeps the retarget when bookkeeping fails after a successful dispatch', async () => {

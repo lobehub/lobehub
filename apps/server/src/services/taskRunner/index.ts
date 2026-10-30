@@ -22,12 +22,19 @@ import { readTaskSkillIds } from '@/server/services/userSkill';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
 import {
+  isSameTopicExecution,
   resolveRunDeviceId,
   resolveTaskRunExecution,
   resolveTopicExecutionPatch,
 } from './resolveRunExecution';
 
 const log = debug('task-runner');
+
+/** A continued topic moved for one run only, and how to move it back. */
+interface TopicRetarget {
+  previous: ChatTopicMetadata;
+  written: ChatTopicMetadata;
+}
 
 export interface RunTaskParams {
   /** Extra builtin tools this run mounts beside the Task skill, e.g. the Goal report tool. */
@@ -93,16 +100,16 @@ export class TaskRunnerService {
    * caller's error path restore the task's resting state) is better than
    * running somewhere the user did not pin.
    *
-   * Returns the topic's previous execution axes when a device named for this
-   * run only took part in the write: that retarget is not the task's standing
-   * selection, so the caller restores it if the run never starts.
+   * Returns the write and the topic's previous execution axes when a device
+   * named for this run only took part in it: that retarget is not the task's
+   * standing selection, so the caller restores it if the run never starts.
    */
   private async syncTopicExecution(
     topicId: string,
     taskConfig: Record<string, unknown>,
     runDeviceId: string | undefined,
     requestedDeviceId: string | undefined,
-  ): Promise<ChatTopicMetadata | undefined> {
+  ): Promise<TopicRetarget | undefined> {
     const topic = await this.topicModel.findById(topicId);
     const patch = resolveTopicExecutionPatch(
       topic?.metadata,
@@ -116,12 +123,15 @@ export class TaskRunnerService {
     log('runTask: synced topic %s execution metadata', topicId);
 
     if (!requestedDeviceId) return;
-    // `undefined` clears an axis on restore, same as in the patch itself.
     return {
-      boundDeviceId: topic?.metadata?.boundDeviceId,
-      repos: topic?.metadata?.repos,
-      workingDirectory: topic?.metadata?.workingDirectory,
-      workingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
+      // `undefined` clears an axis on restore, same as in the patch itself.
+      previous: {
+        boundDeviceId: topic?.metadata?.boundDeviceId,
+        repos: topic?.metadata?.repos,
+        workingDirectory: topic?.metadata?.workingDirectory,
+        workingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
+      },
+      written: patch,
     };
   }
 
@@ -157,7 +167,7 @@ export class TaskRunnerService {
     let weSetRunning = false;
     // A continued topic retargeted for this run only, and what to put back if
     // the run is not accepted — see `syncTopicExecution`.
-    let topicExecutionToRestore: ChatTopicMetadata | undefined;
+    let topicRetarget: TopicRetarget | undefined;
     let runAccepted = false;
 
     try {
@@ -340,7 +350,7 @@ export class TaskRunnerService {
       // be ignored, and the previous machine's kept. Stamp the task's selection
       // onto the topic first; see `resolveTopicExecutionPatch`.
       if (continueTopicId) {
-        topicExecutionToRestore = await this.syncTopicExecution(
+        topicRetarget = await this.syncTopicExecution(
           continueTopicId,
           taskConfig,
           runDeviceId,
@@ -462,6 +472,9 @@ export class TaskRunnerService {
             });
           // Same confirmation gate as TaskService.interruptTaskOperation.
           const stopped = !!stop?.success && stop.deviceCancellationConfirmed !== false;
+          // Nothing is left running on the requested device, so its retarget
+          // goes back like any other kickoff that did not start.
+          if (stopped) runAccepted = false;
           throw new TRPCError({
             code: stopped
               ? recorded === 'deleted'
@@ -486,9 +499,14 @@ export class TaskRunnerService {
       // The run never started on the requested device, so its retarget must
       // not outlive it: a later plain continuation would otherwise be routed
       // there while the task still pins its own machine.
-      if (continueTopicId && topicExecutionToRestore && !runAccepted) {
+      if (continueTopicId && topicRetarget && !runAccepted) {
+        const { previous, written } = topicRetarget;
         try {
-          await this.topicModel.updateMetadata(continueTopicId, topicExecutionToRestore);
+          // Only while the topic still carries this run's own write: a device or
+          // directory someone set since then is newer than our snapshot.
+          await this.topicModel.updateMetadata(continueTopicId, previous, {
+            onlyIf: (current) => isSameTopicExecution(current, written),
+          });
         } catch (restoreError) {
           log('runTask: failed to restore topic %s execution: %O', continueTopicId, restoreError);
         }

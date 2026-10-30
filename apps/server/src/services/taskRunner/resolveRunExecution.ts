@@ -139,6 +139,12 @@ const topicExecutionOf = (metadata?: ChatTopicMetadata | null): string =>
     workingDirectoryConfig: metadata?.workingDirectoryConfig ?? null,
   });
 
+/** Whether two topic metadata snapshots agree on every execution axis. */
+export const isSameTopicExecution = (
+  a: ChatTopicMetadata | null | undefined,
+  b: ChatTopicMetadata | null | undefined,
+): boolean => topicExecutionOf(a) === topicExecutionOf(b);
+
 /**
  * The execution metadata a CONTINUED topic has to carry before this run.
  *
@@ -195,5 +201,5 @@ export const resolveTopicExecutionPatch = (
     workingDirectoryConfig: initial?.workingDirectoryConfig,
   };
 
-  return topicExecutionOf(topicMetadata) === topicExecutionOf(next) ? undefined : next;
+  return isSameTopicExecution(topicMetadata, next) ? undefined : next;
 };
