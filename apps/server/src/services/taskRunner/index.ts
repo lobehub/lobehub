@@ -415,6 +415,9 @@ export class TaskRunnerService {
         }
         throw new Error(result.error || result.message || 'Agent run failed to start');
       }
+      // The operation may now be live on the requested device: bookkeeping that
+      // fails below must not move its topic back to the previous machine.
+      runAccepted = true;
 
       if (result.topicId) {
         const topicId = result.topicId;
@@ -469,7 +472,6 @@ export class TaskRunnerService {
         }
       }
 
-      runAccepted = true;
       await this.taskModel.updateHeartbeat(task.id);
 
       return {

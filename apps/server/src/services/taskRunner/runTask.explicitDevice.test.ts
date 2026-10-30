@@ -89,6 +89,7 @@ describe('TaskRunnerService.runTask explicit device', () => {
     vi.mocked(TaskModel).mockImplementation(function () {
       return taskModel as any;
     });
+    return taskModel;
   };
 
   const run = (params: { continueTopicId?: string; deviceId?: string } = {}) =>
@@ -215,6 +216,18 @@ describe('TaskRunnerService.runTask explicit device', () => {
         ...previous,
         repos: undefined,
       });
+    });
+
+    it('keeps the retarget when bookkeeping fails after a successful dispatch', async () => {
+      const taskModel = setupTask(pinnedToA);
+      taskModel.lockForUpdate.mockRejectedValue(new Error('db down'));
+
+      await expect(run({ continueTopicId: 'tpc-old', deviceId: 'device-b' })).rejects.toThrow(
+        'db down',
+      );
+
+      // The operation may be live on device-b, so the topic must stay there.
+      expect(mocks.updateTopicMetadata).toHaveBeenCalledTimes(1);
     });
 
     it('keeps the retarget once the run is accepted', async () => {
