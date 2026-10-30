@@ -40,12 +40,20 @@ const scheduleNightlyConsolidation = async (
   context: WorkflowContext<MemoryExtractionHourlyWorkflowPayload>,
   baseUrl: string,
 ) => {
-  const { consolidationNightlyHourUtc } = parseMemoryExtractionConfig();
-  if (
-    consolidationNightlyHourUtc === undefined ||
-    new Date().getUTCHours() !== consolidationNightlyHourUtc
-  )
-    return;
+  // NOTICE: The window decision is time-dependent, so it must be evaluated inside a step that
+  // Upstash can replay with the same result. Reading the clock before branching would let a
+  // replayed page that crosses the hour boundary skip the fan-out it already committed to.
+  const inNightlyWindow = await runStep(
+    context,
+    'memory:user-memory:hourly:consolidation-window',
+    () => {
+      const { consolidationNightlyHourUtc } = parseMemoryExtractionConfig();
+      if (consolidationNightlyHourUtc === undefined) return false;
+
+      return new Date().getUTCHours() === consolidationNightlyHourUtc;
+    },
+  );
+  if (!inNightlyWindow) return;
 
   const stepName = 'memory:user-memory:hourly:schedule-consolidation';
   const guard = await checkGuard(context, WORKFLOW_PATH, {
