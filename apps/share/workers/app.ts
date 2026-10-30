@@ -14,7 +14,10 @@ const requestHandler = createRequestHandler(
 );
 
 export default {
-  fetch(request: Request, env: Record<string, unknown>, ctx: WorkerExecutionContext) {
+  // `async` because the framework handler answers with a promise: the SSR build transforms this
+  // file, and an `await` in a non-async method fails the build with "await is only allowed within
+  // async functions" before the worker is ever deployed.
+  async fetch(request: Request, env: Record<string, unknown>, ctx: WorkerExecutionContext) {
     const url = new URL(request.url);
 
     // Standalone deployments have no reverse proxy in front: forward the SPA's
