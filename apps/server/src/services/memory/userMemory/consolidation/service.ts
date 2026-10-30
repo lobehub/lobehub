@@ -314,6 +314,10 @@ export class MemoryConsolidationService {
     }
   }
 
+  filedContextIds(ids: string[]) {
+    return this.model.listFiledContextIds(this.runId, ids);
+  }
+
   markRouted(routes: Record<string, ConsolidationRoute>) {
     return this.model.markRouted(this.runId, routes);
   }

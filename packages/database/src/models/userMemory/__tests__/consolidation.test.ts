@@ -360,6 +360,50 @@ describe('UserMemoryConsolidationModel', () => {
     await model.revertRun('run_11');
     expect(await parentSummaries()).toEqual(['v1', 'v1']);
   });
+
+  it('refuses to revert a run a later run extended, until the later one is reverted', async () => {
+    const a = await createLegacy('scheduler backend', '2026-05-01');
+    const first = await model.applyContextPlan('run_12', {
+      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
+      nextSteps: [],
+      now: 'v1',
+      openQuestions: [],
+      title: 'Task system',
+    });
+    expect(await model.listFiledContextIds('run_12', [a.context.id])).toEqual([first.contextId]);
+    const b = await createLegacy('scheduler cron mode', '2026-06-01');
+    await model.applyContextPlan('run_13', {
+      dossiers: [
+        {
+          existingDossierId: first.dossierIds[0],
+          memberIds: [b.context.id],
+          now: 'v2',
+          title: 'Scheduler',
+        },
+      ],
+      existingContextId: first.contextId,
+      nextSteps: [],
+      now: 'v2',
+      openQuestions: [],
+      title: 'Task system',
+    });
+
+    expect(await model.revertRun('run_12')).toEqual({
+      blockedBy: ['run_13'],
+      deleted: 0,
+      restored: 0,
+    });
+    const contexts = await serverDB
+      .select()
+      .from(userMemoriesContexts)
+      .where(eq(userMemoriesContexts.id, first.contextId!));
+    expect(contexts).toHaveLength(1);
+
+    await model.revertRun('run_13');
+    const reverted = await model.revertRun('run_12');
+    expect(reverted.blockedBy).toBeUndefined();
+    expect(await model.listPendingLegacyContexts()).toHaveLength(2);
+  });
 });
 
 describe('deriveContextStatus', () => {

@@ -36,6 +36,11 @@ export const memoryUserMemoryConsolidation = async (c: Context) => {
       const result = await new UserMemoryConsolidationModel(db, params.userId).revertRun(
         params.runId,
       );
+      if (result.blockedBy)
+        return c.json(
+          { message: 'Later runs extended this run; revert them first.', ...result },
+          409,
+        );
       return c.json({ message: 'Consolidation run reverted.', ...result }, 200);
     }
 

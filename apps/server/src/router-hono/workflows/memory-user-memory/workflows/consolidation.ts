@@ -214,13 +214,15 @@ const synthesizeAndApply = async (
   const out = { activities: 0, contextIds: [] as string[], dossiers: 0, unplaced: 0 };
   // A retried step re-reads its chunk: evidence a committed plan already filed drops out here.
   const ids = (await s.model.getLegacyContextsByIds(chunkIds)).map((i) => i.id);
+  // ...and the contexts it filed them into stay known, so the rest extends them.
+  const filed = ids.length < chunkIds.length ? await s.filedContextIds(chunkIds) : [];
+  out.contextIds.push(...filed);
   if (ids.length === 0) return out;
+  const knownIds = new Set([...contextIds, ...filed]);
 
   const consolidated = await s.model.listConsolidated();
-  const known = consolidated.contexts.filter((c) => contextIds.includes(c.id));
-  const dossiers = consolidated.dossiers.filter(
-    (d) => d.contextId && contextIds.includes(d.contextId),
-  );
+  const known = consolidated.contexts.filter((c) => knownIds.has(c.id));
+  const dossiers = consolidated.dossiers.filter((d) => d.contextId && knownIds.has(d.contextId));
   const titles = await s.model.listDossierEvidenceTitles(
     dossiers.map((d) => d.id),
     3,

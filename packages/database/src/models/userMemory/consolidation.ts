@@ -192,6 +192,35 @@ export class UserMemoryConsolidationModel {
     }));
   };
 
+  /**
+   * Contexts this run already filed some of these legacy rows into. A retried synthesis step skips
+   * the filed rows, so it needs these to keep extending the same contexts instead of new ones.
+   */
+  listFiledContextIds = async (runId: string, ids: string[]): Promise<string[]> => {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .selectDistinct({ contextId: userMemoriesDossiers.contextId })
+      .from(userMemoriesContexts)
+      .innerJoin(userMemories, legacyParentJoin)
+      .innerJoin(
+        userMemoriesActivities,
+        sql`${userMemoriesActivities.id} = ${userMemories.metadata} -> 'consolidation' ->> 'activityId'`,
+      )
+      .innerJoin(
+        userMemoriesDossiers,
+        eq(userMemoriesDossiers.id, userMemoriesActivities.dossierId),
+      )
+      .where(
+        and(
+          eq(userMemoriesContexts.userId, this.userId),
+          inArray(userMemoriesContexts.id, ids),
+          eq(userMemories.userId, this.userId),
+          sql`${userMemories.metadata} -> 'consolidation' ->> 'runId' = ${runId}`,
+        ),
+      );
+    return rows.map((r) => r.contextId).filter((id): id is string => !!id);
+  };
+
   /** Consolidated contexts (they have a single parent) with their dossiers, for the online step. */
   listConsolidated = async (): Promise<{
     contexts: ConsolidatedContextSummary[];
@@ -665,8 +694,33 @@ export class UserMemoryConsolidationModel {
    * Undo a run: delete the memories it created (children cascade) and bring the legacy rows back.
    * In-place updates of pre-existing contexts / dossiers are restored from the operation log.
    */
-  revertRun = async (runId: string) => {
+  revertRun = async (
+    runId: string,
+  ): Promise<{ blockedBy?: string[]; deleted: number; restored: number }> => {
     return this.db.transaction(async (tx) => {
+      // A later run that extended what this run created or updated depends on it: reverting this
+      // one alone would cascade-delete or overwrite that run's work. Revert the later runs first.
+      const dependents = await tx.execute<{ run_id: string }>(sql`
+        WITH mine AS (
+          SELECT targets, created_at FROM ${userMemoriesOperations}
+          WHERE user_id = ${this.userId} AND state = 'applied'
+            AND metadata ->> 'consolidationRunId' = ${runId}
+        ), touched AS (
+          SELECT targets ->> 'context' AS id FROM mine WHERE jsonb_exists(targets, 'context')
+          UNION SELECT targets ->> 'dossier' FROM mine WHERE jsonb_exists(targets, 'dossier')
+        )
+        SELECT DISTINCT o.metadata ->> 'consolidationRunId' AS run_id
+        FROM ${userMemoriesOperations} o
+        WHERE o.user_id = ${this.userId} AND o.state = 'applied'
+          AND o.metadata ->> 'consolidationRunId' IS DISTINCT FROM ${runId}
+          AND jsonb_exists(o.metadata, 'consolidationRunId')
+          AND o.created_at > (SELECT min(created_at) FROM mine)
+          AND (o.targets ->> 'context' IN (SELECT id FROM touched)
+            OR o.targets ->> 'dossier' IN (SELECT id FROM touched))
+      `);
+      const blockedBy = dependents.rows.map((r) => r.run_id).filter(Boolean);
+      if (blockedBy.length > 0) return { blockedBy, deleted: 0, restored: 0 };
+
       const updates = await tx
         .select()
         .from(userMemoriesOperations)
