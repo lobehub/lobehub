@@ -34,10 +34,11 @@ import {
 import type { ReactNode } from 'react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { SkeletonList } from '@/features/NavPanel/components/SkeletonList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import type { AcceptanceStatusOverride } from '@/services/verify';
 import { verifyService } from '@/services/verify';
@@ -47,7 +48,7 @@ import { useVerifyStore } from '@/store/verify';
 import { sx } from '@/styles/sx';
 
 import { useAcceptanceList, useAcceptanceListInfinite } from '../hooks';
-import { acceptanceHomePath } from '../Viewer/routes';
+import { acceptanceHomePath, useAcceptanceRouteBase } from '../Viewer/routes';
 import type { AcceptanceStatusAction } from '../Viewer/statusActions';
 import AcceptanceBatchBar from './AcceptanceBatchBar';
 import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
@@ -65,6 +66,7 @@ import {
   resetAcceptanceListFacets,
 } from './acceptanceListFilter';
 import AcceptanceRow from './AcceptanceRow';
+import AcceptanceScopeSwitcher from './AcceptanceScopeSwitcher';
 import {
   acceptanceBatchTargets,
   acceptanceProjectTargets,
@@ -82,7 +84,7 @@ import {
   expandedAcceptanceGroupKeys,
   groupAcceptanceList,
   nextCollapsedGroupKeys,
-  normalizeAcceptanceGroupMode,
+  resolveAcceptanceGroupMode,
   shouldRenderAcceptanceGroups,
 } from './groupAcceptanceList';
 import { useAcceptanceListFilterMenu } from './useAcceptanceListFilterMenu';
@@ -274,7 +276,8 @@ interface AcceptanceListPanelProps extends ReportPanelExpand {
 const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
   ({ expand, headerLeading, hosted, isNarrow, projectActionItems, projectId, setExpand }) => {
     const { t } = useTranslation('verify');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
+    const routeBase = useAcceptanceRouteBase();
     const { acceptanceId } = useParams<{ acceptanceId: string }>();
 
     const [query, setQuery] = useState('');
@@ -307,7 +310,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
       source,
     } = effectiveAcceptanceListFacets(facets, projectId);
     const listQuery = { projectId: listProjectId, scope, source };
-    const groupMode = normalizeAcceptanceGroupMode(storedGroupMode);
+    const groupMode = resolveAcceptanceGroupMode(storedGroupMode, projectId);
     const debouncedQuery = useDebounce(query.trim(), { wait: 300 });
     const trimmedQuery = query.trim();
     const searching = Boolean(debouncedQuery);
@@ -576,7 +579,12 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
             // The open acceptance just stopped existing — leave its dead route
             // rather than letting the detail pane render a 404.
-            const redirect = acceptanceRedirectAfterDelete(acceptanceId, targets, failedIds);
+            const redirect = acceptanceRedirectAfterDelete(
+              acceptanceId,
+              targets,
+              failedIds,
+              routeBase,
+            );
             if (redirect) navigate(redirect, { replace: true });
             await settleBatch(targets, [], failedIds);
             reportBatch(deleted, targets.length, 'acceptance.workspace.batch.deleteSuccess');
@@ -589,7 +597,10 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
 
     // Grouping by project already names it in the header; every other mode has
     // to carry it on the row or the affiliation is simply not on screen.
-    const showRowProject = groupMode !== 'project';
+    // Inside a project every row belongs to it, so naming the project again is noise.
+    const showRowProject = !projectId && groupMode !== 'project';
+    // "Created by me" makes every row the viewer's own, so the avatar adds nothing.
+    const showRowCreator = scope !== 'created';
 
     const orderedIds = (showGroups ? groups.flatMap((group) => group.items) : items)
       .filter((item) => item.canManage)
@@ -686,6 +697,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                 <Text ellipsis strong style={{ fontSize: 15, minWidth: 0 }}>
                   {t('acceptance.workspace.title')}
                 </Text>
+                {!projectId && <AcceptanceScopeSwitcher />}
               </Flexbox>
               <button
                 aria-label={t('workspace.collapse')}
@@ -850,6 +862,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                             active={item.id === acceptanceId}
                             item={item}
                             key={item.id}
+                            showCreator={showRowCreator}
                             showProject={showRowProject}
                             onChanged={mutate}
                             {...rowSelectionProps(item)}
@@ -870,6 +883,7 @@ const AcceptanceListPanel = memo<AcceptanceListPanelProps>(
                     active={item.id === acceptanceId}
                     item={item}
                     key={item.id}
+                    showCreator={showRowCreator}
                     showProject={showRowProject}
                     onChanged={mutate}
                     {...rowSelectionProps(item)}

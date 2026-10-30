@@ -2,6 +2,7 @@
 
 import { cssVar, Tabs } from '@lobehub/ui';
 import { memo, useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 import { useCategory } from '@/features/AgentSetting/AgentCategory/useCategory';
@@ -15,8 +16,15 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
 
 export default memo(() => {
-  const [tab, setTab] = useState(ChatSettingsTabs.Prompt);
   const cateItems = useCategory();
+  const navigate = useNavigate();
+  // The agent profile (identity, model, instructions) is edited on the profile
+  // page; the settings sheet only renders the tabs below it.
+  const [tab, setTab] = useState(
+    () =>
+      (cateItems?.find((item) => item?.key !== ChatSettingsTabs.Prompt)?.key ??
+        ChatSettingsTabs.Opening) as ChatSettingsTabs,
+  );
   const id = useAgentStore((s) => s.activeAgentId);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { canEditResource, isAccessResolved } = useResourceAccess('agent', id);
@@ -38,7 +46,13 @@ export default memo(() => {
         style={{
           borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
         }}
-        onChange={(value) => setTab(value as ChatSettingsTabs)}
+        onChange={(value) => {
+          if (value === ChatSettingsTabs.Prompt) {
+            navigate('../profile', { relative: 'path' });
+            return;
+          }
+          setTab(value as ChatSettingsTabs);
+        }}
       />
       <AgentSettings
         config={config}

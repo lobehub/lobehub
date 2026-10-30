@@ -21,6 +21,7 @@ import {
   otherUserId,
   userId,
 } from '../__tests__/productSearchBehavior';
+import { describeFtsSearchTimeRangeBehavior } from '../__tests__/timeRangeBehavior';
 import { FtsSearchRepo } from '../index';
 import { PgLikeFtsSearchBackend } from './index';
 
@@ -47,6 +48,7 @@ const createRepo = (
  */
 describe('FtsSearchRepo (pg_like)', () => {
   describeFtsSearchProductBehavior({ createRepo, db: serverDB });
+  describeFtsSearchTimeRangeBehavior({ createRepo, db: serverDB, supportsCandidates: true });
 
   describe('LIKE wildcard escaping', () => {
     beforeEach(async () => {
@@ -520,6 +522,77 @@ describe('FtsSearchRepo (pg_like)', () => {
 
       expect(response.candidates.map((candidate) => candidate.id)).toEqual([late.id]);
       expect(response.candidates.map((candidate) => candidate.id)).not.toContain(early.id);
+    });
+
+    it('reports a bounded pool as cut only when matches lie past its cutoff', async () => {
+      const insertHits = (count: number, offset = 0) =>
+        serverDB.insert(messages).values(
+          Array.from({ length: count }, (_, i) => ({
+            content: `cutoff kubernetes ${offset + i}`,
+            id: `cutoff-${offset + i}`,
+            role: 'user',
+            userId,
+          })),
+        );
+      const repo = createRepo(serverDB, userId);
+      // A limit of 1 over-fetches to a cutoff of 4.
+      const request = {
+        entity: 'messages' as const,
+        filters: {},
+        pagination: { limit: 1 },
+        query: { text: 'cutoff' },
+      };
+
+      await insertHits(4);
+      const exact = await repo.ftsSearchCandidates(request);
+      expect(exact.candidates).toHaveLength(4);
+      expect(exact.total).toBe(4);
+
+      await insertHits(1, 4);
+      const cut = await repo.ftsSearchCandidates(request);
+      expect(cut.candidates).toHaveLength(4);
+      expect(cut.total).toBeGreaterThan(cut.candidates.length);
+    });
+
+    it('applies the message scope before the candidate limit', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'scope-topic-a', title: 'A', userId },
+        { id: 'scope-topic-b', title: 'B', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        // Stronger matches outside the requested topic and role.
+        {
+          content: 'kubernetes',
+          id: 'scope-other-topic',
+          role: 'user',
+          topicId: 'scope-topic-b',
+          userId,
+        },
+        {
+          content: 'kubernetes',
+          id: 'scope-other-role',
+          role: 'assistant',
+          topicId: 'scope-topic-a',
+          userId,
+        },
+        {
+          content: 'notes on kubernetes upgrades',
+          id: 'scope-hit',
+          role: 'user',
+          topicId: 'scope-topic-a',
+          userId,
+        },
+      ]);
+
+      const repo = createRepo(serverDB, userId);
+      const response = await repo.ftsSearchCandidates({
+        entity: 'messages',
+        filters: { messageScope: { roles: ['user'], topicId: 'scope-topic-a' } },
+        pagination: { limit: 1 },
+        query: { text: 'kubernetes' },
+      });
+
+      expect(response.candidates.map((candidate) => candidate.id)).toEqual(['scope-hit']);
     });
 
     it('applies topic scope to topics and messages before the candidate limit', async () => {

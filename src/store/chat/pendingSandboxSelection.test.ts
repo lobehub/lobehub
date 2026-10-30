@@ -5,6 +5,7 @@ import {
   getPendingSandboxSelection,
   setPendingSandboxSelection,
   subscribePendingSandboxSelection,
+  toSandboxTopicMetadata,
 } from './pendingSandboxSelection';
 
 describe('pendingSandboxSelection', () => {
@@ -33,5 +34,21 @@ describe('pendingSandboxSelection', () => {
     setPendingSandboxSelection('agent-2', { instanceId: 'i', mode: 'persistent' });
     expect(getPendingSandboxSelection('agent-2')).toBe(getPendingSandboxSelection('agent-2'));
     consumePendingSandboxSelection('agent-2');
+  });
+
+  it('carries the environment into the new topic beside the folder it was picked with', () => {
+    expect(
+      toSandboxTopicMetadata({
+        drive: 'personal',
+        environmentId: 'env_1',
+        mode: 'persistent',
+        workingDirectory: 'app',
+      }),
+    ).toMatchObject({
+      sandboxDrive: 'personal',
+      sandboxEnvironmentId: 'env_1',
+      sandboxWorkingDirectory: 'app',
+    });
+    expect(toSandboxTopicMetadata(undefined)).toBeUndefined();
   });
 });

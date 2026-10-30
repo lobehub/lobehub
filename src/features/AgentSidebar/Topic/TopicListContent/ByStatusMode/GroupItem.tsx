@@ -18,6 +18,7 @@ import {
 } from '@/components/ExecutionStatus';
 
 import TopicItem from '../../List/Item';
+import { useTopicListScope } from '../../TopicListScope';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 
 // Status-group ids map 1:1 to a topic status except the synthetic `favorite`
@@ -31,6 +32,9 @@ const STATUS_ICON: Record<string, ExecutionStatusVisual> = {
 const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
   const { id, title, children } = group;
   const statusIcon = STATUS_ICON[id];
+  // An agent's own status buckets mix topics from different projects, so each
+  // row names its directory; inside a project that line repeats the project.
+  const scope = useTopicListScope();
 
   return (
     <AccordionItem value={id}>
@@ -52,12 +56,13 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
         <Flexbox gap={1} paddingBlock={1}>
           {children.map((topic) => (
             <TopicItem
-              showWorkingDirectory
               fav={topic.favorite}
+              hasGoal={topic.hasGoal}
               id={topic.id}
               key={topic.id}
               metadata={topic.metadata}
               runStartedAt={topic.runStartedAt}
+              showWorkingDirectory={!scope}
               status={topic.status}
               title={topic.title}
               userId={topic.userId}

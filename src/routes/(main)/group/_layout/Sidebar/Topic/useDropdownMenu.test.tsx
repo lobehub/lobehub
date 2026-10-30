@@ -194,16 +194,16 @@ describe('group useTopicActionsDropdownMenu', () => {
     });
 
     expect(workspaceUnstarredItem).toMatchObject({
-      label: 'actions.removeUnstarredWorkspace',
+      label: 'actions.removeUnpinnedWorkspace',
     });
     if (workspaceUnstarredItem && 'onClick' in workspaceUnstarredItem) {
       workspaceUnstarredItem.onClick?.({} as never);
     }
     expect(openWorkspaceDeleteAllModalMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        acknowledgeText: 'actions.confirmRemoveUnstarredWorkspaceAcknowledge',
-        description: 'actions.confirmRemoveUnstarredWorkspace',
-        title: 'actions.removeUnstarredWorkspace',
+        acknowledgeText: 'actions.confirmRemoveUnpinnedWorkspaceAcknowledge',
+        description: 'actions.confirmRemoveUnpinnedWorkspace',
+        title: 'actions.removeUnpinnedWorkspace',
       }),
     );
     await openWorkspaceDeleteAllModalMock.mock.calls[0][0].onConfirm();

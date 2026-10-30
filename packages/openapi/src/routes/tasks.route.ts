@@ -8,8 +8,10 @@ import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
 import {
   CreateTaskRequestSchema,
+  RunTaskRequestSchema,
   TaskIdParamSchema,
   TaskListQuerySchema,
+  TaskRunListQuerySchema,
   UpdateTaskRequestSchema,
   UpdateTaskStatusRequestSchema,
 } from '../types/task.type';
@@ -69,6 +71,26 @@ TaskRoutes.patch(
   zValidator('param', TaskIdParamSchema),
   zValidator('json', UpdateTaskStatusRequestSchema),
   async (c) => new TaskController().updateTaskStatus(c),
+);
+
+/** POST /api/v1/tasks/:id/runs — start a run now, the API twin of the in-app "Run now". */
+TaskRoutes.post(
+  '/:id/runs',
+  requireAuth,
+  taskWrite,
+  zValidator('param', TaskIdParamSchema),
+  zValidator('json', RunTaskRequestSchema),
+  async (c) => new TaskController().runTask(c),
+);
+
+/** GET /api/v1/tasks/:id/runs — past runs, newest first, each with its handoff result. */
+TaskRoutes.get(
+  '/:id/runs',
+  requireAuth,
+  taskRead,
+  zValidator('param', TaskIdParamSchema),
+  zValidator('query', TaskRunListQuerySchema),
+  async (c) => new TaskController().listRuns(c),
 );
 
 /** DELETE /api/v1/tasks/:id */

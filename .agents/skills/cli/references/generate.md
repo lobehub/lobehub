@@ -9,6 +9,8 @@ Generate text, images, videos, speech, and transcriptions.
 ```
 lh generate (alias: gen)
 ├── text <prompt>                          # Text generation
+├── json <prompt>                          # Structured output (JSON Schema)
+├── decide [state]                         # Decision model: typed questions → probabilities
 ├── image <prompt>                         # Image generation
 ├── video <prompt>                         # Video generation
 ├── tts <text>                             # Text-to-speech
@@ -27,12 +29,13 @@ lh generate (alias: gen)
 
 ## `lh generate text <prompt>` / `lh gen text <prompt>`
 
-Generate text completion.
+Generate a complete text response. Incremental streaming is not supported; the agent
+gateway WebSocket handles agent operations, not this single-completion endpoint.
 
 **Source**: `apps/cli/src/commands/generate/text.ts`
 
 ```bash
-lh gen text <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--temperature <n>] [--max-tokens <n>] [--stream] [--json] [--pipe]
+lh gen text <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--temperature <n>] [--max-tokens <n>] [--json] [--pipe]
 ```
 
 ```bash
@@ -46,7 +49,6 @@ echo "context" | lh gen text "summarize" --pipe
 | `-s, --system <prompt>`     | System prompt                      | -                    |
 | `--temperature <n>`         | Temperature (0-2)                  | -                    |
 | `--max-tokens <n>`          | Maximum output tokens              | -                    |
-| `--stream`                  | Enable streaming output            | `false`              |
 | `--json`                    | Output full JSON response          | `false`              |
 | `--pipe`                    | Read additional context from stdin | `false`              |
 
@@ -57,6 +59,69 @@ When `--pipe` is used, reads stdin and prepends it to the prompt. Useful for pip
 ```bash
 cat README.md | lh gen text "summarize this" --pipe
 ```
+
+---
+
+## `lh generate json <prompt>` / `lh gen json <prompt>`
+
+Generate a JSON object with structured output.
+
+**Source**: `apps/cli/src/commands/generate/json.ts`
+
+```bash
+lh gen json <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--schema <json|path>] [--schema-name <name>] [--strict] [--pipe]
+```
+
+| Option                      | Description                                        | Default              |
+| --------------------------- | -------------------------------------------------- | -------------------- |
+| `-m, --model <model>`       | Model ID                                           | `openai/gpt-4o-mini` |
+| `-p, --provider <provider>` | Provider name                                      | -                    |
+| `-s, --system <prompt>`     | System prompt                                      | -                    |
+| `--schema <json\|path>`     | JSON Schema, inline or from a file (required)      | -                    |
+| `--schema-name <name>`      | Schema name sent to the model                      | `response`           |
+| `--strict`                  | Require the model to adhere strictly to the schema | `false`              |
+| `--pipe`                    | Read additional context from stdin                 | `false`              |
+
+The command calls the `aiChat.outputJSON` mutation rather than `/webapi/chat`, so the server owns
+provider-specific handling (`json_schema` support, the tool-calling fallback, Responses API routing), and
+prints the parsed object pretty-printed. It is a single request: `--stream`, `--temperature` and
+`--max-tokens` are not accepted options, and passing them fails as an unknown option. A reply the server
+cannot parse into the schema exits with code 1. The server keeps only `type`, `properties`, `required`,
+`additionalProperties` and `$defs`; schemas using other root keywords (`allOf`, `minProperties`, ...) are
+rejected up front.
+
+---
+
+## `lh generate decide [state]` / `lh gen decide [state]`
+
+Ask a decision model (e.g. Jev) typed questions about one state. Each answer comes back as a probability,
+not generated text: `boolean` → `probability`, `choice` → the picked option with `probabilities`, `score`
+→ a rubric level.
+
+**Source**: `apps/cli/src/commands/generate/decide.ts`
+
+```bash
+lh gen decide [state] -m <model> -q <json|path> [-p <provider>] [--state-file <path>] [--pipe]
+```
+
+```bash
+lh gen decide "Newest message: is the queue mode ready?" -m lobehub/jev-1.14.0 \
+  -q '{"addressed":{"type":"boolean","instructions":"Is the message directed at the assistant?"}}'
+```
+
+| Option                         | Description                                                             | Default |
+| ------------------------------ | ----------------------------------------------------------------------- | ------- |
+| `-m, --model <model>`          | Decision model ID, `provider/model` (required)                          | -       |
+| `-p, --provider <provider>`    | Provider name                                                           | -       |
+| `-q, --questions <json\|path>` | Question name → `{type, instructions, criteria}`, inline or from a file | -       |
+| `--state-file <path>`          | Read the state from a file instead of the argument                      | -       |
+| `--pipe`                       | Read the state (or more of it) from stdin                               | `false` |
+
+Question shapes mirror `DecisionQuestion` in `@lobechat/model-runtime`: `boolean` takes optional
+`criteria: {true, false}`, `choice` takes `criteria: {option: guidance | null}`, `score` takes
+`criteria: [level0, level1, ...]`. The command calls the `aiChat.decide` mutation, the same
+`runtime.decide` path bot wake and channel routing use, so a prompt can be replayed on the production
+model. A provider without a decision endpoint fails with `CapabilityNotSupported` and exit code 1.
 
 ---
 

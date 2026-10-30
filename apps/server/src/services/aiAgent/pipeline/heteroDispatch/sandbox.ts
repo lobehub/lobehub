@@ -135,6 +135,8 @@ export const spawnInCloudSandbox = async (
     sandbox: sandbox && {
       cwd: sandbox.cwd,
       environment: sandbox.environment,
+      // Applied before the agent starts, so it opens on the checkout.
+      initialization: sandbox.initialization,
       mode: sandbox.mode,
       // The environment's variables, network access, maintenance command
       // and sources all ride here; dropping it starts the run with none

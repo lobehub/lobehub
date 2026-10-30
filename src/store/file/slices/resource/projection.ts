@@ -18,6 +18,8 @@ export const DEFAULT_RESOURCE_PAGE_SIZE = 50;
  */
 export interface ResourceListParams {
   category?: FilesTabs;
+  /** Drive listing: uploaded files only, no pages or folders. */
+  filesOnly?: boolean;
   includeContentPreview?: boolean;
   libraryId?: string;
   /**
@@ -57,6 +59,7 @@ export const normalizeResourceListParams = (
 
   return {
     category: input.category,
+    filesOnly: input.filesOnly || undefined,
     includeContentPreview: input.includeContentPreview || undefined,
     libraryId: input.libraryId,
     pageSize: input.limit ?? DEFAULT_RESOURCE_PAGE_SIZE,
@@ -92,6 +95,7 @@ export const resourceListResource = definePagedReplica<
   },
   query: ({
     category,
+    filesOnly,
     includeContentPreview,
     libraryId,
     pageSize,
@@ -104,6 +108,7 @@ export const resourceListResource = definePagedReplica<
     visibility,
   }) => ({
     category,
+    filesOnly,
     includeContentPreview,
     libraryId,
     pageSize,

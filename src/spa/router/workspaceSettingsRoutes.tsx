@@ -201,6 +201,14 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/trash'),
+        'Desktop > Workspace > Settings > Trash',
+      ),
+      handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+      path: 'trash',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/devices'),
         'Desktop > Workspace > Settings > Devices',
       ),
@@ -218,11 +226,27 @@ export const workspaceSettingsContentRoute: RouteObject = {
     },
     {
       element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/subscription-accounts'),
+        'Desktop > Workspace > Settings > Subscription Accounts',
+      ),
+      handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+      path: 'subscription-accounts',
+    },
+    {
+      element: dynamicElement(
         () => import('@/routes/(main)/[workspaceSlug]/settings/environments'),
         'Desktop > Workspace > Settings > Environments',
       ),
       handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
       path: 'environments',
+    },
+    {
+      element: dynamicElement(
+        () => import('@/routes/(main)/[workspaceSlug]/settings/drive'),
+        'Desktop > Workspace > Settings > Drive',
+      ),
+      handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+      path: 'drive',
     },
     // Account-level tabs mirrored inside the workspace so members can
     // adjust user settings without leaving the workspace. Same pages

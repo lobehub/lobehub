@@ -85,6 +85,215 @@ describe('background runs in the active topic', () => {
     vi.useRealTimers();
   });
 
+  it.each(['empty bucket', 'listed row'])(
+    'recovers a live run on cold entry with %s and stale detail',
+    async (source) => {
+      vi.useFakeTimers();
+      vi.mocked(scmService.hasWakeTarget).mockResolvedValue(false);
+      useChatStore.setState({
+        topicDataMap: source === 'empty bucket' ? {} : useChatStore.getState().topicDataMap,
+        topicDetailMap: { [topic.id]: topic },
+      });
+      const marker = { ...runningOperation, heteroType: null, scope: 'main', threadId: null };
+      vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+        ...topic,
+        metadata: { runningOperation: marker },
+        status: 'running',
+      });
+      const { result } = renderHook(useConversation, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(
+        topicSelectors.getTopicById(topic.id)(useChatStore.getState())?.metadata?.runningOperation,
+      ).toEqual(marker);
+      expect(result.current.isInputVisiblyLoading).toBe(true);
+      const reads = vi.mocked(topicService.getTopicDetail).mock.calls.length;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(topicService.getTopicDetail).toHaveBeenCalledTimes(reads);
+    },
+  );
+
+  it.each(['topic edit', 'detail edit', 'list hydration'])(
+    'applies a fresh live marker after %s overtakes the detail read',
+    async (change) => {
+      vi.useFakeTimers();
+      let resolve!: (topic: ChatTopic) => void;
+      vi.mocked(topicService.getTopicDetail).mockReturnValue(
+        new Promise((done) => {
+          resolve = done;
+        }),
+      );
+      if (change !== 'topic edit')
+        useChatStore.setState({ topicDataMap: {}, topicDetailMap: { [topic.id]: topic } });
+      const { result } = renderHook(useConversation, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => {
+        if (change === 'list hydration') {
+          useChatStore.getState().internal_updateTopics(context.agentId, {
+            items: [{ ...topic, title: 'Updated', status: 'running' }],
+            pageSize: 20,
+            total: 1,
+          });
+        } else {
+          useChatStore.getState().internal_dispatchTopic({
+            id: topic.id,
+            type: 'updateTopic',
+            value: { title: 'Updated', status: 'running' },
+          });
+        }
+      });
+      const marker = { ...runningOperation, heteroType: null, scope: 'main', threadId: null };
+      await act(async () => {
+        resolve({ ...topic, metadata: { runningOperation: marker }, status: 'running' });
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(
+        topicSelectors.getTopicById(topic.id)(useChatStore.getState())?.metadata?.runningOperation,
+      ).toEqual(marker);
+      expect(result.current.isInputVisiblyLoading).toBe(true);
+      expect(topicSelectors.getTopicById(topic.id)(useChatStore.getState())?.title).toBe('Updated');
+    },
+  );
+
+  it.each(['deleted topic', 'edited topic without a live response'])(
+    'does not revive stale details after %s',
+    async (change) => {
+      vi.useFakeTimers();
+      let resolve!: (value: ChatTopic) => void;
+      vi.mocked(topicService.getTopicDetail).mockReturnValue(
+        new Promise((done) => {
+          resolve = done;
+        }),
+      );
+      renderHook(useFetchActiveTopicDetail, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      act(() => {
+        if (change === 'deleted topic') {
+          useChatStore.getState().internal_dispatchTopic({ id: topic.id, type: 'deleteTopic' });
+        } else {
+          useChatStore.getState().internal_dispatchTopic({
+            id: topic.id,
+            type: 'updateTopic',
+            value: { title: 'Updated', status: 'completed' },
+          });
+        }
+      });
+      await act(async () => {
+        resolve(change === 'deleted topic' ? { ...topic, metadata: { runningOperation } } : topic);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const current = topicSelectors.getTopicById(topic.id)(useChatStore.getState());
+      if (change === 'deleted topic') expect(current).toBeUndefined();
+      else expect(current).toMatchObject({ title: 'Updated', status: 'completed' });
+      expect(useChatStore.getState().reconnectToGatewayOperation).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['stop marker', 'replacement marker'])(
+    'rejects a live response overtaken by a %s',
+    async (change) => {
+      vi.useFakeTimers();
+      let resolve!: (topic: ChatTopic) => void;
+      vi.mocked(topicService.getTopicDetail).mockReturnValue(
+        new Promise((done) => {
+          resolve = done;
+        }),
+      );
+      renderHook(useFetchActiveTopicDetail, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const newerMarker =
+        change === 'stop marker' ? null : { ...runningOperation, operationId: 'newer-run' };
+      act(() => {
+        useChatStore.getState().internal_dispatchTopic({
+          id: topic.id,
+          type: 'updateTopic',
+          value: { metadata: { runningOperation: newerMarker } },
+        });
+      });
+      await act(async () => {
+        resolve({ ...topic, metadata: { runningOperation } });
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(
+        topicSelectors.getTopicById(topic.id)(useChatStore.getState())?.metadata?.runningOperation,
+      ).toEqual(newerMarker);
+      expect(useChatStore.getState().reconnectToGatewayOperation).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([true, false])(
+    'waits for topic creation before reading a missing topic (gateway %s)',
+    async (gateway) => {
+      vi.useFakeTimers();
+      config.serverConfig.agentGatewayUrl = gateway ? 'wss://gateway.test' : '';
+      useChatStore.setState({ topicDataMap: {}, creatingTopicIds: [topic.id] });
+      vi.mocked(scmService.hasWakeTarget).mockResolvedValue(false);
+      renderHook(useFetchActiveTopicDetail, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      act(() => {
+        useChatStore.setState({ creatingTopicIds: [] });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(topicService.getTopicDetail).toHaveBeenCalledTimes(1);
+      expect(topicSelectors.getTopicById(topic.id)(useChatStore.getState())).toEqual(topic);
+    },
+  );
+
+  it.each(['missing', 'error'])(
+    'keeps cached running status when a cold detail read is %s',
+    async (response) => {
+      vi.useFakeTimers();
+      const cached = { ...topic, status: 'running' as const };
+      useChatStore.setState({ topicDataMap: {}, topicDetailMap: { [topic.id]: cached } });
+      vi.mocked(scmService.hasWakeTarget).mockResolvedValue(false);
+      if (response === 'missing') vi.mocked(topicService.getTopicDetail).mockResolvedValue(null);
+      else
+        vi.mocked(topicService.getTopicDetail).mockRejectedValue(new Error('detail unavailable'));
+      const { result } = renderHook(useConversation, { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(topicSelectors.getTopicById(topic.id)(useChatStore.getState())).toEqual(cached);
+      expect(result.current.isInputVisiblyLoading).toBe(false);
+      expect(useChatStore.getState().reconnectToGatewayOperation).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not create a local run for a completed topic on cold entry', async () => {
+    vi.useFakeTimers();
+    useChatStore.setState({ topicDataMap: {}, topicDetailMap: { [topic.id]: topic } });
+    vi.mocked(scmService.hasWakeTarget).mockResolvedValue(false);
+    vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+      ...topic,
+      status: 'completed',
+      metadata: { runningOperation: null },
+    });
+    const { result } = renderHook(useConversation, { wrapper });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(topicSelectors.getTopicById(topic.id)(useChatStore.getState())?.status).toBe(
+      'completed',
+    );
+    expect(result.current.isInputVisiblyLoading).toBe(false);
+    expect(useChatStore.getState().reconnectToGatewayOperation).not.toHaveBeenCalled();
+    expect(topicService.getTopicDetail).toHaveBeenCalledTimes(1);
+  });
+
   it('discovers a CR run while the conversation stays open and restores the stop control', async () => {
     vi.useFakeTimers();
     const { result } = renderHook(useConversation, { wrapper });
@@ -218,7 +427,8 @@ describe('background runs in the active topic', () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
     expect(scmService.hasWakeTarget).toHaveBeenCalledWith(context.topicId);
-    expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+    // One entry read checks for an existing run; no SCM target means no polling.
+    expect(topicService.getTopicDetail).toHaveBeenCalledTimes(1);
   });
 
   it('starts watching once a local run links the topic to a pull request', async () => {

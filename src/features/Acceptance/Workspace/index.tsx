@@ -6,10 +6,11 @@ import * as stylex from '@stylexjs/stylex';
 import { Menu, PanelLeftOpen, Pin } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Outlet, useParams, useSearchParams } from 'react-router';
 
 import { ShellTopBar } from '@/features/PageShell';
 import { RouteMetaBridge } from '@/features/RouteMeta';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
@@ -18,6 +19,7 @@ import { acceptanceHomePath } from '../Viewer/routes';
 import AcceptanceListPanel from './AcceptanceListPanel';
 import AcceptanceOnboarding from './AcceptanceOnboarding';
 import { useAcceptanceProjectActionItems } from './AcceptanceProjectActions';
+import AcceptanceScopeSwitcher from './AcceptanceScopeSwitcher';
 import { useReportPanelExpand } from './useReportPanelExpand';
 
 const styles = stylex.create({
@@ -73,7 +75,7 @@ interface AcceptanceWorkspaceProps {
 
 const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
   const { t } = useTranslation('verify');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const isSignedIn = useUserStore(authSelectors.isLogin);
   const panel = useReportPanelExpand();
   const projectActionItems = useAcceptanceProjectActionItems();
@@ -120,6 +122,7 @@ const AcceptanceWorkspace = memo<AcceptanceWorkspaceProps>(({ projectId }) => {
 
   const topBar = standalone ? (
     <ShellTopBar
+      scope={isSignedIn ? <AcceptanceScopeSwitcher /> : undefined}
       title={t('acceptance.workspace.title')}
       titleExtra={
         isSignedIn && (

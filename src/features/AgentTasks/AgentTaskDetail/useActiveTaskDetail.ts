@@ -37,11 +37,15 @@ export const useActiveTaskDetail = (taskId?: string): ActiveTaskDetailState => {
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const useHydrateAgentConfig = useAgentStore((s) => s.useHydrateAgentConfig);
 
-  const hasTaskDetail = useTaskStore((s) => (taskId ? !!s.taskDetailMap[taskId] : false));
+  const hasTaskDetail = useTaskStore((s) =>
+    taskId ? !!s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId] : false,
+  );
   // The assignee comes from the loaded task detail, so this stays undefined
   // until the first fetch resolves — which is exactly when its hydration kicks in.
   const assigneeAgentId = useTaskStore((s) =>
-    taskId ? (s.taskDetailMap[taskId]?.agentId ?? undefined) : undefined,
+    taskId
+      ? (s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.agentId ?? undefined)
+      : undefined,
   );
   const assigneeInMap = useAgentStore((s) => !!(assigneeAgentId && s.agentMap[assigneeAgentId]));
 

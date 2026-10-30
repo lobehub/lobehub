@@ -28,14 +28,23 @@ describe('taskRowState', () => {
     expect(taskRowSpan(running)).toEqual({ endedAt: undefined, startedAt: STARTED });
   });
 
-  it('reads a stale active task as lost and freezes its clock at the last heartbeat', () => {
+  it('reads a stale active task as stalled and freezes its clock at the last heartbeat', () => {
     const stale = view({ isStale: true });
     const state = taskRowState(stale);
 
-    expect(state).toBe('lost');
-    // The node row still says `active`; the label must follow the lost glyph, not "Running".
-    expect(taskRowStateLabelKey(stale, state)).toBe('goalProcess.tag.lost');
+    expect(state).toBe('stalled');
+    // The node row still says `active`; the label must follow the stalled glyph, not "Running".
+    expect(taskRowStateLabelKey(stale, state)).toBe('goalProcess.tag.stalled');
     expect(taskRowSpan(stale)).toEqual({ endedAt: HEARTBEAT, startedAt: STARTED });
+  });
+
+  it('reads a task held for a usage window as waiting for quota, not running', () => {
+    const held = view({ quotaRetryAt: ENDED });
+    const state = taskRowState(held);
+
+    expect(state).toBe('waitingQuota');
+    expect(taskRowStateLabelKey(held, state)).toBe('goalProcess.tag.waitingQuota');
+    expect(taskRowSpan(held)?.endedAt).toEqual(HEARTBEAT);
   });
 
   it('freezes the clock of a task parked on a decision', () => {

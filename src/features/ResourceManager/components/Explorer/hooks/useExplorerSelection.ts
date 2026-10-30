@@ -13,6 +13,8 @@ import { useFileStore } from '@/store/file';
 interface ExplorerSelectionOptions {
   data: ExplorerSelectableItem[];
   hasMore: boolean;
+  /** Size of the listed pool; defaults to the folder list's total. */
+  total?: number;
 }
 
 interface ExplorerSelectableItem {
@@ -30,7 +32,11 @@ export const useExplorerSelectionEligibility = () => {
   };
 };
 
-export const useExplorerSelectionSummary = ({ data, hasMore }: ExplorerSelectionOptions) => {
+export const useExplorerSelectionSummary = ({
+  data,
+  hasMore,
+  total: poolTotal,
+}: ExplorerSelectionOptions) => {
   const [selectAllState, selectedFileIds, selectionTotal] = useResourceManagerStore((s) => [
     s.selectAllState,
     s.selectedFileIds,
@@ -38,8 +44,8 @@ export const useExplorerSelectionSummary = ({ data, hasMore }: ExplorerSelection
   ]);
   const { isItemSelectable, isWorkspaceOwner } = useExplorerSelectionEligibility();
   const selectableData = useMemo(() => data.filter(isItemSelectable), [data, isItemSelectable]);
-  const total = useFileStore((s) => s.total);
-  const effectiveTotal = selectionTotal ?? total;
+  const listTotal = useFileStore((s) => s.total);
+  const effectiveTotal = selectionTotal ?? poolTotal ?? listTotal;
   const selectedCount = useMemo(
     () =>
       getExplorerSelectedCount({

@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -7,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { log } from '../../../utils/logger';
 import { registerVerifyCommand } from '../deprecatedVerify';
+import { registerAcceptanceCommands } from '../index';
+import { loadLocalAcceptance } from '../local/localAcceptance';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
@@ -36,10 +39,14 @@ vi.mock('../../../settings', () => ({
 
 describe('verify ingest-report — every run is an immutable acceptance round', () => {
   let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let cwdSpy: ReturnType<typeof vi.spyOn>;
   let dir: string;
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    // This repository declares a project in `.agents/acceptance/config.json`;
+    // run outside it so no suite files its acceptance under that project.
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpdir());
     vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     const verify = mockTrpcClient.verify as Record<string, any>;
@@ -62,6 +69,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
 
   afterEach(() => {
     consoleSpy.mockRestore();
+    cwdSpy.mockRestore();
     vi.unstubAllEnvs();
     delete process.env.LOBEHUB_TOPIC_ID;
     rmSync(dir, { force: true, recursive: true });
@@ -157,6 +165,70 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       verifyRunId: 'run-new',
     });
   });
+
+  it.each([undefined, 'topic:authored-topic', { id: 'authored-task', type: 'task' }])(
+    'publishes local histories independently of the ambient topic, preserving authored subject %j',
+    async (authoredSubject) => {
+      const acceptances = new Map<string, { id: string; subjectId: string; subjectType: string }>();
+      mockTrpcClient.acceptance.ensure.mutate.mockImplementation(
+        async (input: { subjectId: string; subjectType: string }) => {
+          const acceptance = { ...input, id: `acceptance-${input.subjectId}`, status: 'delivered' };
+          acceptances.set(acceptance.id, acceptance);
+          return acceptance;
+        },
+      );
+      mockTrpcClient.acceptance.getBundle.query.mockImplementation(
+        async ({ id }: { id: string }) => ({
+          acceptance: acceptances.get(id),
+        }),
+      );
+      vi.stubEnv('HOME', dir);
+      vi.stubEnv('LOBEHUB_ACCEPTANCE_DOWNLOADS', path.join(dir, 'Downloads'));
+
+      const publishedIds = [];
+      // Same directory name in two projects must not collapse two independent histories.
+      for (const project of ['first', 'second']) {
+        const acceptanceDir = path.join(dir, project, 'standalone-demo');
+        for (const round of ['20260101-090000-first', '20260102-090000-second']) {
+          const roundDir = path.join(acceptanceDir, round);
+          await mkdir(roundDir, { recursive: true });
+          await writeFile(
+            path.join(roundDir, 'result.json'),
+            JSON.stringify({ cases: [], subject: authoredSubject, title: 'Local delivery' }),
+          );
+        }
+        const { info } = loadLocalAcceptance(acceptanceDir, { create: true });
+        const program = new Command();
+        program.exitOverride();
+        registerAcceptanceCommands(program);
+        await program.parseAsync([
+          'node',
+          'lh',
+          'acceptance',
+          'publish',
+          acceptanceDir,
+          '--no-reviews',
+          '--json',
+        ]);
+
+        const published = JSON.parse(String(consoleSpy.mock.calls.at(-1)![0]));
+        const expectedSubjectId = authoredSubject
+          ? typeof authoredSubject === 'string'
+            ? 'authored-topic'
+            : 'authored-task'
+          : info.id;
+        expect(published.acceptanceId).toBe(`acceptance-${expectedSubjectId}`);
+        expect(published.published).toHaveLength(2);
+        const stored = JSON.parse(
+          await readFile(path.join(acceptanceDir, 'acceptance.json'), 'utf8'),
+        );
+        expect(stored.remote.acceptanceId).toBe(published.acceptanceId);
+        expect(stored.remote.rounds).toHaveLength(2);
+        publishedIds.push(published.acceptanceId);
+      }
+      expect(new Set(publishedIds).size).toBe(authoredSubject ? 1 : 2);
+    },
+  );
 
   it('reuses the asset when the acceptance row is keyed by criterion rather than plan item', async () => {
     mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
@@ -293,6 +365,51 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
   );
 
   it.each([
+    { authored: 'task:T-12', name: 'the acceptance it already names', published: true },
+    { authored: 'task:T-99', name: 'another subject', published: false },
+  ])(
+    'with --acceptance, accepts an authored subject only when it is $name',
+    async ({ authored, published }) => {
+      // `lh acceptance publish` appends a local acceptance's later rounds by
+      // id; their result.json keeps the subject the first round was filed under.
+      mockTrpcClient.acceptance.getBundle.query.mockResolvedValue({
+        acceptance: {
+          id: 'acceptance-existing',
+          status: 'delivered',
+          subjectId: 'T-12',
+          subjectType: 'task',
+        },
+      });
+      writeFileSync(
+        path.join(dir, 'result.json'),
+        JSON.stringify({ cases: [], subject: authored }),
+      );
+      const errorSpy = vi.spyOn(log, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`process.exit ${code}`);
+      }) as never);
+      try {
+        const ingest = run(['ingest-report', dir, '--acceptance', 'acceptance-existing', '--json']);
+        if (published) await ingest;
+        else await expect(ingest).rejects.toThrow('process.exit 1');
+      } finally {
+        exitSpy.mockRestore();
+        errorSpy.mockRestore();
+      }
+
+      expect(mockTrpcClient.acceptance.ensure.mutate).not.toHaveBeenCalled();
+      if (published) {
+        expect(mockTrpcClient.acceptance.attachRun.mutate).toHaveBeenCalledWith({
+          acceptanceId: 'acceptance-existing',
+          verifyRunId: 'run-new',
+        });
+      } else {
+        expect(mockTrpcClient.verify.createRun.mutate).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each([
     { effectiveWorkspace: null, name: 'revoked workspace membership' },
     { effectiveWorkspace: { id: 'workspace-other' }, name: 'a different server workspace' },
     { effectiveWorkspace: new Error('Workspace lookup unavailable'), name: 'a failed lookup' },
@@ -331,7 +448,7 @@ describe('verify ingest-report — every run is an immutable acceptance round', 
       hint: 'LOBEHUB_WORKSPACE_ID=workspace-target',
       target: 'workspace-target',
     },
-    { current: 'workspace-current', hint: 'lh workspace use --personal', target: null },
+    { current: 'workspace-current', hint: 'LOBEHUB_WORKSPACE_ID=personal', target: null },
   ])(
     'rejects scope $current → $target before any remote writes',
     async ({ current, target, hint }) => {

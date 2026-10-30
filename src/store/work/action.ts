@@ -1,5 +1,5 @@
-import type { ReplicaSyncOptions } from '@lobechat/replica/zustand';
 import type { WorkListItem, WorkVersionItem } from '@lobechat/types';
+import type { ReplicaSyncOptions } from 'local-replica/zustand';
 
 import type { ReplicaSyncResult } from '@/libs/replica';
 import type { StoreSetter } from '@/store/types';

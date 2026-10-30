@@ -1,10 +1,10 @@
 import type { GoalGraphSnapshot, GoalItem, GoalStatus, TaskItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { GoalRepository } from '@/database/repositories/goal';
 
 import { GoalAssignmentService } from '../assignment';
 import { GOAL_ACCEPTANCE_TASK_TITLE, TERMINAL_NODE_STATUSES } from '../decideNextMove';
@@ -54,7 +54,7 @@ export const deleteGoal = async (ctx: GoalServiceContext, goalId: string) => {
   if (managed || supervised) {
     // Fence new claims before cancellation, then read the latest claimed turn.
     await ctx.db.transaction(async (db) => {
-      const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+      const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
       const current = await model.lockById(goalId);
       if (current && current.status !== 'paused') {
         await model.updateStatus(goalId, 'paused');
@@ -101,7 +101,7 @@ export const deleteGoal = async (ctx: GoalServiceContext, goalId: string) => {
 
   if (managed || supervised) {
     return ctx.db.transaction(async (db) => {
-      const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+      const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
       const current = await model.lockById(goalId);
       if (
         current &&
@@ -284,7 +284,7 @@ export const resume = async (ctx: GoalServiceContext, goalId: string) => {
   // Tasks back to `backlog` and they would dispatch again. Reopening an ended
   // goal still works — that resume reads the ended status itself.
   return ctx.db.transaction(async (tx) => {
-    const model = new GoalModel(tx, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(tx, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     // Only `start` launches a draft: it settles the creating run's planning
@@ -325,7 +325,7 @@ export const close = async (
   // the close cannot start a Task after the scan below. The pause is the
   // person's, so no measurement lifts it if the close is refused later on.
   await ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     // Only a goal that can still dispatch needs fencing.
     if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
@@ -428,7 +428,7 @@ export const close = async (
   // would leave that run spending on a goal reading "ended".
   const reason = to === 'achieved' ? 'marked achieved by user' : 'canceled by user';
   const goal = await ctx.db.transaction(async (db) => {
-    const model = new GoalModel(db, ctx.userId, ctx.workspaceId);
+    const model = new GoalRepository(db, ctx.userId, ctx.workspaceId);
     const current = await model.lockById(goalId);
     if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
     if (!['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) {

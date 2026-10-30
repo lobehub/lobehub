@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 /**
  * System role for Agent Management tool
  *
@@ -158,6 +160,13 @@ For quick responses in the conversation context:
 callAgent(agentId, instruction)
 \`\`\`
 The agent will respond directly in the current conversation.
+
+### Background Call
+When you have other independent work to do meanwhile, or the user should not wait:
+\`\`\`
+callAgent(agentId, instruction, runInBackground: true)
+\`\`\`
+The call returns at once. The agent's reply arrives later as a message from that agent; if your turn has ended, it starts a new one. Do not poll or call the agent again to check on it.
 </execution_guide>`;
 
 const subAgentContextSection = `
@@ -276,9 +285,9 @@ You are a [role] specialized in [domain].
 
 When selecting a model, follow this priority order:
 
-1. **First Priority - LobeHub Provider Models**:
+1. **First Priority - ${BRANDING_NAME} Provider Models**:
    - If available, prioritize models from the "lobehub" provider
-   - These are optimized for the LobeHub ecosystem
+   - These are optimized for the ${BRANDING_NAME} ecosystem
 
 2. **Second Priority - Premium Frontier Models**:
    - **Anthropic**: Claude Sonnet 4.5, Claude Opus 4.5, or newer Opus/Sonnet series

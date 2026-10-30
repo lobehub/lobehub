@@ -25,6 +25,7 @@ import {
   processContentBlocks,
 } from '@/server/services/mcp/contentProcessor';
 import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
+import { isSandboxAuthError } from '@/server/services/sandbox/errors';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 import { SkillConnectionErrorCode } from '@/types/skillConnectionError';
 
@@ -36,20 +37,6 @@ import {
 } from './_helpers/marketConnections';
 
 const log = debug('lobe-server:tools:market');
-
-const isSandboxAuthError = (error?: { message?: string; name?: string }) => {
-  const code = error?.name;
-  const message = error?.message || '';
-
-  return (
-    code === 'invalid_token' ||
-    code === 'token_expired' ||
-    code === 'unauthorized' ||
-    message.toLowerCase().includes('invalid_token') ||
-    message.toLowerCase().includes('token expired') ||
-    message.toLowerCase().includes('unauthorized')
-  );
-};
 
 const throwSandboxAuthError = () => {
   throw new TRPCError({
@@ -320,6 +307,7 @@ const execInSandboxHandler = async ({
       fileService: ctx.fileService,
       marketService,
       sandboxCwd: sandbox.cwd,
+      sandboxInitialization: sandbox.initialization,
       sandboxInstanceId: sandbox.environment,
       sandboxMode: sandbox.mode,
       sandboxSpecification: sandbox.specification,

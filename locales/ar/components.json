@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "يدعم هذا النموذج التعرف على الفيديو",
   "ModelSelect.featureTag.vision": "يدعم هذا النموذج التعرف البصري.",
   "ModelSelect.removed": "النموذج غير موجود في القائمة. سيتم حذفه تلقائيًا إذا تم إلغاء تحديده.",
+  "ModelSelect.routing": "التوجيه",
+  "ModelSelect.routingTooltip": "مجموعة توجيه: يقدم عدة مزودين هذا النموذج، وتذهب كل طلبية إلى المزود الذي يجيب.",
   "ModelSelect.staleModel.current": "التحديد الحالي",
   "ModelSelect.staleModel.notEnabled.action": "تفعيل هذا النموذج",
   "ModelSelect.staleModel.notEnabled.actionFailed": "فشل في تفعيل النموذج. يرجى المحاولة مرة أخرى.",
