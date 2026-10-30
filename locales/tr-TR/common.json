@@ -412,7 +412,6 @@
   "serverVersionOutdated.warning": "Bazı özellikler düzgün çalışmayabilir veya beklenmedik şekilde davranabilir. En iyi deneyim için lütfen sunucunuzu güncelleyin.",
   "setting": "Ayarlar",
   "share": "Paylaş",
-  "stillLoading": "Hâlâ yükleniyor...",
   "stop": "Durdur",
   "supportAgent.context.attached": "Tanılama bilgisi eklendi",
   "supportAgent.context.remove": "Kaldır",

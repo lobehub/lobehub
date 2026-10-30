@@ -236,6 +236,13 @@ export interface AgentSenderMetadata {
    * own conversation instead of the group the turn actually came from.
    */
   chatGroupId?: string;
+  /**
+   * How many agent → agent sends in a row led to this message: 1 when the
+   * sending turn was started by a person, one more than the message that
+   * started the sending turn otherwise. The server refuses a send past
+   * `MAX_AGENT_RELAY_HOPS`, so two agents cannot keep waking each other.
+   */
+  hop?: number;
   /** Sending agent's personal name at send time; resolve the label with `agentDisplayName`. */
   name?: string;
   /**
@@ -266,6 +273,7 @@ export const AgentSenderMetadataSchema = z.object({
   agentId: z.string(),
   avatar: z.string().optional(),
   chatGroupId: z.string().optional(),
+  hop: z.number().int().positive().optional(),
   name: z.string().optional(),
   threadId: z.string().optional(),
   title: z.string().optional(),

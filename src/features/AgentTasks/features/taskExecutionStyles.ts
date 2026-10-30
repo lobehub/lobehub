@@ -1,7 +1,7 @@
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 /**
- * Shared look for the task-side execution chips (run location + working
+ * Shared look for the task-side execution chips (environment + working
  * directory) and their popover rows.
  *
  * They live in one module for the reason the chat side keeps `gitChipStyles`:
@@ -37,8 +37,8 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
    * wears.
    *
    * Where a run goes is the task's one real decision; the directory follows from
-   * that target and is inherited most of the time. Giving the two the same
-   * weight reads as two equal choices. This is the muted text affordance the
+   * that target and only shows once the task stops following the agent. Giving
+   * the two the same weight reads as two equal choices. This is the muted text affordance the
    * chat composer's own directory / repo pickers use, so the two surfaces agree
    * on the hierarchy as well.
    */
@@ -92,6 +92,18 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
     display: inline-flex;
     flex: none;
   `,
+  /** What "follow the agent" resolves to, under the switch's description. */
+  followSummary: css`
+    min-width: 0;
+    padding-block-start: 2px;
+    font-size: 11px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  /** The "follow the agent" row: a label block and its switch, aligned with the picker rows. */
+  switchRow: css`
+    padding-block: 6px;
+    padding-inline: 8px;
+  `,
   emptyHint: css`
     padding-block: 12px;
     padding-inline: 8px;
@@ -99,27 +111,6 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     color: ${cssVar.colorTextQuaternary};
     text-align: center;
-  `,
-  /**
-   * A selection the task does NOT own, reported rather than offered.
-   *
-   * The directory axis follows the target: on a machine it is a path, in the
-   * cloud it is a repo, and when the task's target leaves nothing choosable the
-   * honest answer is a muted line saying what the run will use — not an
-   * interactive chip that looks like it can change something.
-   */
-  hint: css`
-    display: flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-    padding-inline: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-    white-space: nowrap;
   `,
   hintValue: css`
     overflow: hidden;

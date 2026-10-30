@@ -63,6 +63,7 @@ export const createContextMemory = async (
       title: params.context.title ?? null,
       type: params.context.type ?? null,
       userId: ctx.userId,
+      userMemoryId: memory.id,
       userMemoryIds: [memory.id],
     } satisfies typeof userMemoriesContexts.$inferInsert;
 

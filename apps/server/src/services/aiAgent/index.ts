@@ -637,6 +637,7 @@ export class AiAgentService {
           ?.visibility ?? null,
       findOperation: (operationId) => this.agentOperationModel.findById(operationId),
       findTopic: (topicId) => this.topicModel.findById(topicId),
+      findTriggerHop: (params) => this.messageModel.findLatestUserTurnHop(params),
       userId: this.userId,
       workspaceId: this.workspaceId,
     });

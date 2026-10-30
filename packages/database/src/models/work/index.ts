@@ -181,6 +181,10 @@ export class WorkModel {
 
   deleteWork = (params: DeleteWorkParams) => writes.deleteWork(this.ctx, params);
 
+  /** See {@link writes.reassignTaskWorksOwner}. */
+  reassignTaskWorksOwner = (taskIds: string[], fromUserId: string): Promise<void> =>
+    writes.reassignTaskWorksOwner(this.ctx, taskIds, fromUserId);
+
   /** See {@link writes.setTaskWorksVisibility}. */
   setTaskWorksVisibility = (taskIds: string[], visibility: WorkVisibility): Promise<void> =>
     writes.setTaskWorksVisibility(this.ctx, taskIds, visibility);

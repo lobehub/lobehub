@@ -5,6 +5,9 @@ import { BrowserWindow } from 'electron';
 import type { App } from '@/core/App';
 import ZoomService, { type ZoomAction } from '@/services/zoomSrv';
 
+// Popup (`/popup/*`) and desktop utility (`/desktop/*`) windows run without the app shell.
+const NON_APP_SHELL_PATH = /^\/(?:popup|desktop)(?:\/|$)/;
+
 export abstract class BaseMenuPlatform {
   protected app: App;
   private readonly devToolsWindows = new Map<BrowserWindow, BrowserWindow>();
@@ -64,6 +67,28 @@ export abstract class BaseMenuPlatform {
       },
       label,
     };
+  }
+
+  /**
+   * File > New Window: ask the window the user is working in to open its current
+   * workspace in a new window. Only full-app windows mount the File-menu bridge,
+   * so popups, devtools, or no focused window fall back to the main window.
+   */
+  protected openNewWindow(targetWindow?: BaseWindow | null): void {
+    const focused =
+      targetWindow && 'webContents' in targetWindow
+        ? (targetWindow as BrowserWindow)
+        : BrowserWindow.getFocusedWindow();
+    const focusedBrowser = focused
+      ? [...this.app.browserManager.browsers.values()].find(
+          (browser) => browser.webContents === focused.webContents,
+        )
+      : undefined;
+    const isAppShell = focusedBrowser && !NON_APP_SHELL_PATH.test(focusedBrowser.options.path);
+
+    (isAppShell ? focusedBrowser : this.app.browserManager.getMainWindow()).broadcast(
+      'openNewWindow',
+    );
   }
 
   protected closeFocusedTabOrWindow(targetWindow?: BaseWindow | null): void {

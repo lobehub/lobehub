@@ -21,6 +21,7 @@ import {
   CpuIcon,
   FolderIcon,
   GaugeIcon,
+  HardDriveIcon,
   HeartPulseIcon,
   LayersIcon,
   type LucideIcon,
@@ -251,6 +252,8 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
   const cores = data?.cpuCount ?? null;
   const memoryTotal = data?.memoryTotalBytes ?? null;
   const memoryUsed = newest?.memoryUsedBytes ?? null;
+  const diskTotal = data?.diskTotalBytes ?? null;
+  const diskUsed = newest?.diskUsedBytes ?? null;
 
   const lastConnected = dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow();
   const platformLabel = getPlatformLabel(device.platform);
@@ -356,6 +359,11 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
           <InfoRow icon={MemoryStickIcon} label={t('devices.detail.memory')}>
             {memoryTotal ? <Text>{formatSize(memoryTotal)}</Text> : <Empty />}
           </InfoRow>
+          {diskTotal ? (
+            <InfoRow icon={HardDriveIcon} label={t('devices.detail.disk')}>
+              <Text>{formatSize(diskTotal)}</Text>
+            </InfoRow>
+          ) : null}
           <InfoRow icon={FolderIcon} label={t('devices.card.workingDir')}>
             {device.defaultCwd ? (
               <span className={styles.code} title={device.defaultCwd}>
@@ -413,6 +421,18 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
               : undefined
           }
         />
+        {!usage.loading && usage.reportsDisk && (
+          <StatCard
+            icon={HardDriveIcon}
+            title={t('devices.card.diskUsage')}
+            value={latest?.diskPercent}
+            detail={
+              diskUsed !== null && diskTotal
+                ? `${formatSize(diskUsed)} / ${formatSize(diskTotal)}`
+                : undefined
+            }
+          />
+        )}
       </div>
 
       <DetailCard extra={<HealthLegend />} icon={HeartPulseIcon} title={t('devices.health.title')}>

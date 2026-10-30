@@ -677,8 +677,8 @@ importers:
   ../../packages/types:
     dependencies:
       '@lobehub/market-sdk':
-        specifier: 0.43.0
-        version: 0.43.0(supports-color@9.4.0)(zod@4.6.5)
+        specifier: 0.46.0
+        version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
       '@lobehub/market-types':
         specifier: ^1.19.0
         version: 1.19.0
@@ -2197,13 +2197,16 @@ packages:
       react: 19.2.7
       react-dom: 19.2.7
 
-  '@lobehub/market-sdk@0.43.0':
-    resolution: {integrity: sha512-pe0+otQzPBoq9X/C1fEYkM6yjVToO7esnW4b1CrfAe8jj9OPm7QZxgM5sHh4uZ6SU95+oEjOBKCutQyvruY8ZA==}
+  '@lobehub/market-sdk@0.46.0':
+    resolution: {integrity: sha512-N2TFEUJLQ8GZwFaRimoTU6rPZEgMz3Qk9765e+2YrODv+H5qAGEXavTz1EnQww9FrrdpgzzhUhGmwxksh6wOxQ==}
     peerDependencies:
       zod: ^3.24.4
 
   '@lobehub/market-types@1.19.0':
     resolution: {integrity: sha512-t6384KeWcSii42kuOqZClhoMs4tus+bW/izoNq96p0M5CvTVxUjrqpmXcKQUK+bnOXMzqqcJZcCU/3hTmFz0lQ==}
+
+  '@lobehub/market-types@1.22.0':
+    resolution: {integrity: sha512-QAgcPaXgaelqPtiplYuV2aJO0JJ0N6NFICXrM0oUI+IPfFpYlTi4UUARzKCprLGnDg4rQvGHVrdiKEzOTaYYpw==}
 
   '@lobehub/streamdown@1.4.0':
     resolution: {integrity: sha512-kkqq2nqwcqz+rV/eUPQ7vY1TQWHWZE3kQt1MsSLtNFLNXMoKYPiF+cdahP97uunWKtf2dB48q/nkSWaZzEKRSw==}
@@ -9509,9 +9512,9 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@lobehub/market-sdk@0.43.0(supports-color@9.4.0)(zod@4.6.5)':
+  '@lobehub/market-sdk@0.46.0(supports-color@9.4.0)(zod@4.6.5)':
     dependencies:
-      '@lobehub/market-types': 1.19.0
+      '@lobehub/market-types': 1.22.0
       '@opentelemetry/api': 1.9.1
       debug: 4.4.3(supports-color@9.4.0)
       jose: 6.2.12
@@ -9521,6 +9524,10 @@ snapshots:
       - supports-color
 
   '@lobehub/market-types@1.19.0':
+    dependencies:
+      zod: 3.25.76
+
+  '@lobehub/market-types@1.22.0':
     dependencies:
       zod: 3.25.76
 

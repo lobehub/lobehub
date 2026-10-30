@@ -14,6 +14,7 @@ import {
 } from '@lobechat/utils/verify/localAcceptance';
 
 import {
+  commandAcceptanceDir,
   ensureAcceptanceInfo,
   listRoundDirs,
   readAcceptanceInfo,
@@ -173,6 +174,7 @@ export function loadLocalAcceptance(
     rounds,
     source: {
       acceptance: info,
+      acceptanceDir: commandAcceptanceDir(acceptanceDir),
       format: LOCAL_ACCEPTANCE_FORMAT,
       generatedAt: new Date().toISOString(),
       reviews: events,

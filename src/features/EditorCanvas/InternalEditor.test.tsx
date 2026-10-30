@@ -154,6 +154,37 @@ describe('InternalEditor', () => {
     });
   });
 
+  describe('video', () => {
+    it('reads a markdown <video> into a video node with the default plugins', async () => {
+      let editorInstance: IEditor | undefined;
+
+      render(
+        <TestWrapper
+          onEditorReady={(editor) => {
+            editorInstance = editor;
+          }}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(editorInstance).toBeDefined();
+      });
+
+      await act(async () => {
+        editorInstance!.setDocument(
+          'markdown',
+          '<video src="https://cdn.test/a.mp4" style="width: 50%" controls></video>',
+        );
+        await moment();
+      });
+
+      expect(JSON.stringify(editorInstance!.getDocument('json'))).toContain('"type":"video"');
+      expect(editorInstance!.getDocument('markdown')).toContain(
+        '<video src="https://cdn.test/a.mp4" style="width: 50%" controls></video>',
+      );
+    });
+  });
+
   describe('onInit callback', () => {
     it('should call onInit when editor initializes', async () => {
       const onInit = vi.fn();

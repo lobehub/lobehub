@@ -5,6 +5,7 @@ import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ip
 import {
   appendAttachedFilesToPrompt,
   buildHeterogeneousAgentAuthRequiredError,
+  buildSubagentRunSnapshot,
   createMainAgentRunState,
   type HeteroAttachedFileRef,
   isHeterogeneousAgentAuthRequired,
@@ -1142,28 +1143,15 @@ export const executeHeterogeneousAgent = async (
           threadId: thread.id,
           topicId: context.topicId,
         });
-        const currentAssistant = messages.findLast((message) => message.role === 'assistant');
-        if (!currentAssistant) continue;
+        const snapshot = buildSubagentRunSnapshot(parentToolCallId, thread.id, messages);
+        if (!snapshot) continue;
 
-        const toolRows = messages.filter(
-          (message) => message.role === 'tool' && message.tool_call_id,
-        );
-        for (const message of toolRows) {
-          toolMsgIdByCallId.set(message.tool_call_id!, message.id);
-          toolThreadIdByCallId.set(message.tool_call_id!, thread.id);
+        for (const message of messages) {
+          if (message.role !== 'tool' || !message.tool_call_id) continue;
+          toolMsgIdByCallId.set(message.tool_call_id, message.id);
+          toolThreadIdByCallId.set(message.tool_call_id, thread.id);
         }
-        const subagentMessageId = (currentAssistant.metadata as Record<string, unknown> | null)
-          ?.subagentMessageId;
-
-        snapshots.push({
-          currentAssistantId: currentAssistant.id,
-          currentSubagentMessageId:
-            typeof subagentMessageId === 'string' ? subagentMessageId : undefined,
-          lastChainParentId: currentAssistant.id,
-          lifetimeToolCallIds: toolRows.map((message) => message.tool_call_id!),
-          parentToolCallId,
-          threadId: thread.id,
-        });
+        snapshots.push(snapshot);
       }
 
       mainState = {
@@ -1483,6 +1471,17 @@ export const executeHeterogeneousAgent = async (
         }
         const t = getSubagentThread(intent.threadId);
         if (t) completeSubagentOp(t.subOperationId);
+        return;
+      }
+
+      case 'reopenThread': {
+        try {
+          await threadService.updateThread(intent.threadId, { status: ThreadStatus.Processing });
+        } catch (err) {
+          console.error('[HeterogeneousAgent] Failed to reopen subagent thread:', err);
+        }
+        // Finalize completed the thread's sub-op; the resumed turns need a live one.
+        subagentThreads.set(intent.threadId, beginSubagentRun(intent.threadId));
         return;
       }
     }

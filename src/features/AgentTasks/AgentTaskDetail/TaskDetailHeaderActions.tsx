@@ -117,26 +117,47 @@ const TaskDetailHeaderActions = memo(() => {
     });
   }, [canEditTask, taskId, t, updateTaskVisibility]);
 
+  // Someone else's public task can only go private as the caller's own: it is
+  // taken over, which the confirmation spells out.
+  const takesOver = !!currentUserId && !!createdByUserId && createdByUserId !== currentUserId;
+
   const triggerMakePrivate = useCallback(() => {
     if (!canEditTask) return;
     if (!taskId) return;
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
-      content: <VisibilityConfirmContent variant="makePrivate" />,
+      content: (
+        <>
+          <VisibilityConfirmContent variant="makePrivate" />
+          {takesOver && (
+            <div style={{ marginTop: 8, opacity: 0.7 }}>{t('taskDetail.takeOver.confirmHint')}</div>
+          )}
+        </>
+      ),
       okButtonProps: { danger: true },
-      okText: t('makePrivate.confirm.ok', { ns: 'common' }),
+      okText: takesOver
+        ? t('taskDetail.takeOver.confirmOk')
+        : t('makePrivate.confirm.ok', { ns: 'common' }),
       onOk: async () => {
         try {
-          await updateTaskVisibility(taskId, 'private');
-          toast.success(t('makePrivate.success', { ns: 'common' }));
+          await (takesOver
+            ? updateTaskVisibility(taskId, 'private', { takeOwnership: true })
+            : updateTaskVisibility(taskId, 'private'));
+          toast.success(
+            takesOver
+              ? t('taskDetail.takeOver.success')
+              : t('makePrivate.success', { ns: 'common' }),
+          );
         } catch {
           // store action already surfaced a targeted toast; swallow so the
           // confirm modal doesn't bubble a second error to base-ui.
         }
       },
-      title: t('makePrivate.confirm.title', { ns: 'common' }),
+      title: takesOver
+        ? t('taskDetail.takeOver.confirmTitle')
+        : t('makePrivate.confirm.title', { ns: 'common' }),
     });
-  }, [canEditTask, taskId, t, updateTaskVisibility]);
+  }, [canEditTask, taskId, t, takesOver, updateTaskVisibility]);
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!taskId) return [];
@@ -195,19 +216,17 @@ const TaskDetailHeaderActions = memo(() => {
           }
         : null;
 
-    // Inverse transition: only the task creator can pull a
-    // published task back to private ( — an owner demoting another
-    // member's task would appropriate it into the creator's private list);
-    // everyone else doesn't see the entry at all (the server enforces the
-    // same rule as a backstop).
-    const canMakePrivate = !!currentUserId && createdByUserId === currentUserId;
+    // Inverse transition: the creator pulls a published task back to private;
+    // any other member takes it over as their own private task.
     const makePrivateItem: DropdownItem | null =
-      activeWorkspaceId && visibility === 'public' && canMakePrivate
+      activeWorkspaceId && visibility === 'public' && !!currentUserId
         ? {
             disabled: !canEditTask,
             icon: <Icon icon={EyeOffIcon} />,
             key: 'makePrivate',
-            label: t('makePrivate', { ns: 'common' }),
+            label: takesOver
+              ? t('taskDetail.takeOver.menuLabel')
+              : t('makePrivate', { ns: 'common' }),
             onClick: triggerMakePrivate,
           }
         : null;
@@ -241,8 +260,8 @@ const TaskDetailHeaderActions = memo(() => {
     hasContent,
     activeWorkspaceId,
     visibility,
-    createdByUserId,
     currentUserId,
+    takesOver,
     t,
     triggerDelete,
     toggleArchive,

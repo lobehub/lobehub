@@ -1,8 +1,10 @@
 # Channel responder routing
 
 Unmentioned group messages can use a decision model to choose Agent **members**, not replace
-their configured reply models or runtimes. Explicit mentions and bound direct conversations
-still bypass classification. Agent replies never trigger another classification.
+their configured reply models or runtimes. Explicit mentions, bound direct conversations and
+groups whose only active members are one person and one Agent still bypass classification; in
+the latter, every message from that person, including Thread replies, goes to the Agent. Agent
+replies never trigger another classification.
 
 ## Enable
 

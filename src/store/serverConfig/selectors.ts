@@ -8,7 +8,7 @@ export const serverConfigSelectors = {
   enableEmailVerification: (s: ServerConfigStore) =>
     s.serverConfig.enableEmailVerification || false,
   enableComposio: (s: ServerConfigStore) => s.serverConfig.enableComposio || false,
-  /** Runtime flag `dashboard`: dashboards, widget previews and the lobe-dashboard tool. */
+  /** Runtime flag `dashboard`: dashboards, widget previews and the builtin-dashboard tool. */
   enableChannels: (s: ServerConfigStore) => s.featureFlags.enableChannels === true,
   enableDashboard: (s: ServerConfigStore) => s.featureFlags.enableDashboard === true,
   enableGatewayMode: (s: ServerConfigStore) => s.serverConfig.enableGatewayMode || false,
