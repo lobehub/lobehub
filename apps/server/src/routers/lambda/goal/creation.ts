@@ -196,7 +196,7 @@ export const creationRouter = router({
   createConversationGoal: heteroAuthedProcedure
     .use(serverDatabase)
     .input(conversationGoalInput.extend({ operationId: z.string().min(1) }))
-    .mutation(async ({ ctx, input: { operationId, taskModelConfig, ...input } }) => {
+    .mutation(async ({ ctx, input: { operationId, ...input } }) => {
       if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
@@ -221,10 +221,11 @@ export const creationRouter = router({
         });
       }
       try {
-        const service = new GoalService(ctx.serverDB, principal.userId, principal.workspaceId);
-        const created = await service.createFromConversation(operationId, input);
-        const graph = await applyCreatedTaskModel(service, created.graph, taskModelConfig);
-        const { turnToken } = created;
+        const { graph, turnToken } = await new GoalService(
+          ctx.serverDB,
+          principal.userId,
+          principal.workspaceId,
+        ).createFromConversation(operationId, input);
         await scheduleGoalAdvance({
           goalId: graph.goal.id,
           trigger: 'create',
@@ -352,19 +353,13 @@ export const creationRouter = router({
         try {
           if (conversationOperationId) {
             const { agentId, createdByAgentId: _createdBy, ...goalInput } = input;
-            const created = await ctx.goalService.createFromConversation(
+            const { graph, turnToken } = await ctx.goalService.createFromConversation(
               conversationOperationId,
-              goalInput,
+              { ...goalInput, taskModelConfig },
               conversationTopicId && agentId
                 ? { agentId, topicId: conversationTopicId }
                 : undefined,
             );
-            const graph = await applyCreatedTaskModel(
-              ctx.goalService,
-              created.graph,
-              taskModelConfig,
-            );
-            const { turnToken } = created;
             await scheduleGoalAdvance({
               goalId: graph.goal.id,
               trigger: 'create',
