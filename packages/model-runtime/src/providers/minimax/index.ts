@@ -16,6 +16,7 @@ import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProper
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import { createMiniMaxImage } from './createImage';
+import { createMiniMaxSpeech } from './createSpeech';
 import { createMiniMaxVideo } from './createVideo';
 
 const DEFAULT_MINIMAX_BASE_URL = 'https://api.minimaxi.com/v1';
@@ -23,6 +24,9 @@ const DEFAULT_MINIMAX_ANTHROPIC_BASE_URL = 'https://api.minimax.io/anthropic';
 const MINIMAX_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
 const MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN = /\/anthropic(?:\/v1\/messages)?\/?$/;
 const MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
+
+// All MiniMax speech models (`speech-2.8-hd`, `speech-02-turbo`, ...) share the t2a_v2 API.
+const MINIMAX_SPEECH_MODEL_PATTERN = /^speech-/i;
 
 const isMiniMaxM3Model = (model: string) => model.toLowerCase() === 'minimax-m3';
 // M3.1 Flash always thinks: it rejects disabled thinking and takes `reasoning_effort` instead.
@@ -383,6 +387,7 @@ export const openAIParams = {
     });
   },
   provider: ModelProvider.Minimax,
+  textToSpeech: createMiniMaxSpeech,
 } satisfies OpenAICompatibleFactoryOptions;
 
 export const LobeMinimaxOpenAI = createOpenAICompatibleRuntime(openAIParams);
@@ -436,10 +441,26 @@ const createOpenAIRouter = () => ({
   runtime: LobeMinimaxOpenAI,
 });
 
+// Speech always goes to the native t2a_v2 API on the OpenAI-style base URL, whatever
+// SDK type serves chat; the Anthropic-compatible runtime has no speech support.
+const createSpeechRouter = (baseURL?: string | null) => ({
+  apiType: 'openai' as const,
+  id: 'speech',
+  options: {
+    baseURL: normalizeMiniMaxOpenAIModelBaseURL(baseURL),
+    remark: 'speech',
+  },
+  runtime: LobeMinimaxOpenAI,
+});
+
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Minimax,
   models: fetchMiniMaxModelsWithOpenAI,
-  routers: (options) => {
+  routers: (options, context) => {
+    if (context?.model && MINIMAX_SPEECH_MODEL_PATTERN.test(context.model)) {
+      return [createSpeechRouter(options.baseURL)];
+    }
+
     const sdkType = resolveMiniMaxSDKType(options.sdkType);
 
     if (sdkType === 'anthropic') {

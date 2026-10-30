@@ -20,9 +20,10 @@ export const isTokenBilledTextToSpeech = (pricing?: Pricing) =>
   !!pricing?.units.some((unit) => unit.unit === 'millionTokens');
 
 /**
- * Build the usage of one synthesis. `inputCharacters` is always reported; provider token
- * usage is merged in when available. Cost follows the same `computeChatCost` rules as
- * chat: `millionCharacters` units bill `inputCharacters`, `millionTokens` units bill tokens.
+ * Build the usage of one synthesis. `inputCharacters` is always reported, counted locally
+ * unless the provider reports its own billed count; provider token usage is merged in when
+ * available. Cost follows the same `computeChatCost` rules as chat: `millionCharacters`
+ * units bill `inputCharacters`, `millionTokens` units bill tokens.
  */
 export const convertTextToSpeechUsage = (
   input: string,
@@ -30,8 +31,8 @@ export const convertTextToSpeechUsage = (
   tokenUsage?: ModelTokensUsage,
 ): ModelUsage => {
   const data: ModelTokensUsage = {
-    ...tokenUsage,
     inputCharacters: countTextToSpeechCharacters(input),
+    ...tokenUsage,
   };
 
   log('convertTextToSpeechUsage data: %O', data);
