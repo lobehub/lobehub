@@ -27,7 +27,6 @@ import { goalKeys } from '@/libs/swr/keys';
 import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
-import { useChatStore } from '@/store/chat';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -456,7 +455,11 @@ export class GoalActionImpl {
       await write;
       // The goal's management topic was renamed with it.
       const topicId = this.#get().goalGraphById[goalId]?.goal.config?.managerState?.topicId;
-      if (topicId) void useChatStore.getState().refreshTopicDetail(topicId, true);
+      // Loaded on demand: a static import puts the whole chat store on the first screen.
+      if (topicId)
+        void import('@/store/chat')
+          .then(({ useChatStore }) => useChatStore.getState().refreshTopicDetail(topicId, true))
+          .catch(() => {});
     } catch (error) {
       // A newer edit is still on its way: re-reading now would show this one's old title over it.
       if (this.#titleWrites.get(goalId) === write) {
