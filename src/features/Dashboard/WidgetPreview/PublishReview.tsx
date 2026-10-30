@@ -18,7 +18,7 @@ import {
   reviewStyles,
   ReviewUnavailable,
 } from './ReviewFacts';
-import ReviewStage from './ReviewStage';
+import ReviewStage, { ReviewStageNote } from './ReviewStage';
 import { useWidgetReview } from './useWidgetReview';
 
 interface PublishReviewProps {
@@ -80,12 +80,12 @@ const PublishReview = memo<PublishReviewProps>(
           {run && (
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={12} />
-              <Text fontSize={12} type={'secondary'}>
+              <ReviewStageNote>
                 {t('publish.dryRunPassed', {
                   time: dayjs(run.finishedAt ?? run.startedAt).fromNow(),
                   version: target.version,
                 })}
-              </Text>
+              </ReviewStageNote>
             </Flexbox>
           )}
         </ReviewStage>

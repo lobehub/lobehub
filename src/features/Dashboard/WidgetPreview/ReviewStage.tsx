@@ -1,47 +1,47 @@
 'use client';
 
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Badge, Flexbox, Icon, Steps, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CheckIcon, ChevronRightIcon } from 'lucide-react';
-import { Fragment, memo, type ReactNode } from 'react';
+import { CheckIcon } from 'lucide-react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ReviewStageStep, reviewStepStates } from './reviewSteps';
+import { type ReviewStageStep, type ReviewStepState, reviewStepStates } from './reviewSteps';
 
 const styles = stylex.create({
-  current: {
-    color: cssVar.colorText,
-    fontWeight: 600,
-  },
-  done: {
-    color: cssVar.colorTextTertiary,
-  },
   check: {
     color: cssVar.colorSuccess,
     display: 'inline-flex',
   },
-  dot: {
-    backgroundColor: cssVar.colorPrimary,
-    borderRadius: '50%',
-    height: 6,
-    width: 6,
+  description: {
+    color: cssVar.colorTextDescription,
   },
-  separator: {
-    color: cssVar.colorTextQuaternary,
-    display: 'inline-flex',
-  },
-  step: {
-    alignItems: 'center',
-    display: 'inline-flex',
-    fontSize: 12,
-    gap: 4,
-    lineHeight: '20px',
-  },
-  upcoming: {
-    color: cssVar.colorTextQuaternary,
+  root: {
+    paddingBlockStart: 8,
   },
 });
+
+// The step markers are status dots, not numbered circles: drop the circle so
+// the current step reads as the blue live dot the rest of the app uses.
+const INDICATOR_STYLE = {
+  backgroundColor: 'transparent',
+  borderWidth: 0,
+  height: 14,
+  width: 14,
+};
+const TITLE_STYLE = { fontSize: 13 };
+
+const StepMarker = ({ state }: { state: ReviewStepState }) => {
+  if (state === 'done') {
+    return (
+      <span {...stylex.props(styles.check)}>
+        <Icon icon={CheckIcon} size={14} />
+      </span>
+    );
+  }
+  return <Badge status={state === 'current' ? 'processing' : 'default'} />;
+};
 
 interface ReviewStageProps {
   /** Under the title: what approving this stage does, or how the previous one went. */
@@ -58,38 +58,35 @@ interface ReviewStageProps {
  */
 const ReviewStage = memo<ReviewStageProps>(({ children, stage, title, version }) => {
   const { t } = useTranslation('dashboard');
+  const steps = reviewStepStates(stage);
 
   return (
-    <Flexbox gap={4}>
-      <Flexbox horizontal align={'center'} aria-label={t('review.stage.label')} gap={6}>
-        {reviewStepStates(stage).map(({ state, step }, index) => (
-          <Fragment key={step}>
-            {index > 0 && (
-              <span {...stylex.props(styles.separator)}>
-                <Icon icon={ChevronRightIcon} size={12} />
-              </span>
-            )}
-            <span
-              aria-current={state === 'current' ? 'step' : undefined}
-              {...stylex.props(styles.step, styles[state])}
-            >
-              {state === 'done' && (
-                <span {...stylex.props(styles.check)}>
-                  <Icon icon={CheckIcon} size={12} />
-                </span>
-              )}
-              {state === 'current' && <span {...stylex.props(styles.dot)} />}
-              {t(`review.stage.${step}`)}
-            </span>
-          </Fragment>
-        ))}
+    <Flexbox gap={12} {...stylex.props(styles.root)}>
+      <Steps
+        aria-label={t('review.stage.label')}
+        current={steps.findIndex(({ state }) => state === 'current')}
+        styles={{ indicator: INDICATOR_STYLE, title: TITLE_STYLE }}
+        items={steps.map(({ state, step }) => ({
+          icon: <StepMarker state={state} />,
+          key: step,
+          title: t(`review.stage.${step}`),
+        }))}
+      />
+      <Flexbox gap={4}>
+        <Text weight={600}>{t(`review.title.${stage}`, { title, version })}</Text>
+        {children}
       </Flexbox>
-      <Text weight={600}>{t(`review.title.${stage}`, { title, version })}</Text>
-      {children}
     </Flexbox>
   );
 });
 
 ReviewStage.displayName = 'DashboardReviewStage';
+
+/** Copy under a review title: the description tone, quieter than the title. */
+export const ReviewStageNote = ({ children }: { children: ReactNode }) => (
+  <Text fontSize={12} {...stylex.props(styles.description)}>
+    {children}
+  </Text>
+);
 
 export default ReviewStage;

@@ -22,7 +22,7 @@ import {
   reviewStyles,
   ReviewUnavailable,
 } from './ReviewFacts';
-import ReviewStage from './ReviewStage';
+import ReviewStage, { ReviewStageNote } from './ReviewStage';
 import { useWidgetReview } from './useWidgetReview';
 
 interface ExpectedPreviewProps {
@@ -154,9 +154,7 @@ const DryRunReview = memo<DryRunReviewProps>(
     return (
       <Flexbox data-widget-dry-run-review={widgetId} gap={12}>
         <ReviewStage stage={'dryRun'} title={widget.title} version={target.version}>
-          <Text fontSize={12} type={'secondary'}>
-            {t('dryRun.intro')}
-          </Text>
+          <ReviewStageNote>{t('dryRun.intro')}</ReviewStageNote>
         </ReviewStage>
 
         <ExpectedPreview target={target} versions={versions} widget={widget} />

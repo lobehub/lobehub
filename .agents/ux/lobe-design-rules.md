@@ -113,3 +113,9 @@ An unreleased feature's settings, search results and settings summary counts use
 Enforcement: `src/features/SettingsSearch/items.test.ts` covers the channel decision search entry with the flag off and on. The service-model form filters the channel row before deriving its groups and counts.
 
 Source: user correction about the unreleased Channel feature (2026-10-28).
+
+## LOBE-UX-016 — A stage path is `Steps`, and its current step is the blue live dot
+
+Show where a flow stands (draft → dry run → publish, select → fill) with `Steps` from `@lobehub/ui`, not a hand-rolled row of labels and chevrons: `Steps` owns the connectors and spacing that make the path readable. Mark the current step with `Badge status="processing"` (the blue `colorInfo` dot with its pulse), not `colorPrimary`, which renders near-black in LobeHub's theme and reads as plain text. Done steps keep a check; upcoming steps are a quiet dot. Leave room above the path when it sits right under a tab bar or divider. Copy under the stage title uses `colorTextDescription`.
+
+Source: reviewer correction on widget approval cards, lobehub#21936 acceptance round 1 (2026-10-30).
