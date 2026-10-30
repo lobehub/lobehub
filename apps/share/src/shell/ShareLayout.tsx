@@ -9,7 +9,7 @@ import * as ShareChrome from '@/business/client/features/ShareChrome';
 import { ProductLogo } from '@/components/Branding';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import ShareErrorView from '@/features/Share/ErrorView';
+import ShareErrorView, { type ShareNotFoundCopy } from '@/features/Share/ErrorView';
 
 type HeaderActionsProps = {
   actions?: ReactNode;
@@ -131,6 +131,8 @@ export interface ShareLayoutProps {
   contentWidth?: number;
   error?: unknown;
   loading?: boolean;
+  /** Copy for a missing share; the error view defaults to the topic wording. */
+  notFound?: ShareNotFoundCopy;
   title?: string | null;
 }
 
@@ -161,10 +163,11 @@ const ShareLayout = ({
   contentWidth,
   error,
   loading,
+  notFound,
   title,
 }: ShareLayoutProps) => {
   let body = children;
-  if (error) body = <ShareErrorView error={error} />;
+  if (error) body = <ShareErrorView error={error} notFound={notFound} />;
   else if (loading) body = <Loading debugId="share layout" />;
 
   const laneStyle = contentWidth

@@ -101,7 +101,7 @@ describe('dashboardExecutor', () => {
     const after = (apiName: string, params: unknown, result: Record<string, unknown>) =>
       dashboardExecutor.onAfterCall({
         apiName,
-        identifier: 'lobe-dashboard',
+        identifier: 'builtin-dashboard',
         params,
         result: { content: '', success: true, ...result },
       });

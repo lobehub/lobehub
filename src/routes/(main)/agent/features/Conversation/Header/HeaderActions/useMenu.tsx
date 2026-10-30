@@ -1,5 +1,6 @@
 'use client';
 
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import {
   Block,
   confirmModal,
@@ -35,6 +36,7 @@ import { DOCUMENT_HISTORY_QUERY_LIST_LIMIT } from '@/const/documentHistory';
 import { isDesktop } from '@/const/version';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import { openDocumentCompareModal } from '@/features/PageEditor/History/CompareModal';
 import { formatHistoryAbsoluteTime } from '@/features/PageEditor/History/formatHistoryDate';
 import type {
@@ -197,6 +199,20 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
   const topicId = activeTopic?.id;
   const topicTitle = activeTopic?.title ?? '';
   const isFavorite = !!activeTopic?.favorite;
+  // `isFavorite` above is the topic's Pin; this adds it to the home sidebar's
+  // Favorites section. No star button owns the hotkey here, so none is shown.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    topicId && activeAgentId
+      ? {
+          path: AGENT_CHAT_TOPIC_URL(activeAgentId, topicId),
+          snapshotReady: !!topicTitle && topicTitle !== '...',
+          targetId: topicId,
+          title: topicTitle,
+          type: 'topic',
+        }
+      : undefined,
+    { showHotkey: false },
+  );
 
   const enableTopicBugReport = useUserStore(labPreferSelectors.enableTopicBugReport);
   const bugReportItem = useTopicBugReportMenuItem({
@@ -244,6 +260,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
             favoriteTopic(topicId, !isFavorite);
           },
         },
+        ...(favoriteMenuItem ? [favoriteMenuItem] : []),
         { type: 'divider' as const },
         {
           icon: <Icon icon={Wand2} />,
@@ -359,6 +376,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: () => DropdownIt
     bugReportItem,
     enableTopicBugReport,
     isFavorite,
+    favoriteMenuItem,
     activeAgentId,
     pathname,
     workingDirectory,

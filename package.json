@@ -328,7 +328,7 @@
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "7.1.0",
     "@lobehub/icons": "^6.13.0",
-    "@lobehub/market-sdk": "0.43.0",
+    "@lobehub/market-sdk": "0.46.0",
     "@lobehub/ui": "^6.9.0",
     "@modelcontextprotocol/client": "~2.4.0",
     "@neondatabase/serverless": "^1.1.0",

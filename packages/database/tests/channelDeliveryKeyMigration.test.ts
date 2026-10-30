@@ -18,7 +18,7 @@ import * as schema from '../src/schemas';
 import type { LobeChatDatabase } from '../src/type';
 
 const migrationsFolder = path.join(__dirname, '../migrations');
-const TAG = '0195_channel_jobs_message_member_unique';
+const TAG = '0197_channel_jobs_message_member_unique';
 
 // Old binaries include delivery_key in implicit SELECT, INSERT and RETURNING lists.
 const legacyJobs = pgTable('channel_jobs', {

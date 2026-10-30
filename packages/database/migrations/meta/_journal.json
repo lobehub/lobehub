@@ -1369,8 +1369,22 @@
     {
       "idx": 195,
       "version": "7",
-      "when": 1793352431640,
-      "tag": "0195_channel_jobs_message_member_unique",
+      "when": 1793336966391,
+      "tag": "0195_memory_columns_account_logins_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1793337113351,
+      "tag": "0196_memory_large_table_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "7",
+      "when": 1793371200635,
+      "tag": "0197_channel_jobs_message_member_unique",
       "breakpoints": true
     }
   ],

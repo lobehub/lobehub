@@ -26,6 +26,7 @@ import type { MarketService } from '@/server/services/market';
 
 import { createRunFacts, type RunFacts } from '../runFacts';
 import { applyShareGateToAgentConfig } from '../shareGate';
+import { assertAgentRelayHop } from '../sourceAttribution';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
 import { claimApprovalResume, tryReuseInterventionContinuation } from './approvalResume';
@@ -386,10 +387,12 @@ export const execAgentTurn = async (
   // Agent → agent attribution: resolve the launching run's agent into a
   // display snapshot once, before the turn rows exist, so the persisted user
   // message carries a self-contained sender block.
-  const agentSender = await deps.resolveSourceAgentSnapshot(
-    resolvedAgentId,
-    params.sourceOperationId,
-  );
+  const agentSender =
+    params.agentSender ??
+    (await deps.resolveSourceAgentSnapshot(resolvedAgentId, params.sourceOperationId));
+  // Two agents told to report back to each other would otherwise wake each
+  // other forever; past the bound a person has to step in.
+  assertAgentRelayHop(agentSender);
 
   // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
   // model), device-access policy, hetero detection, attachment ingestion, and

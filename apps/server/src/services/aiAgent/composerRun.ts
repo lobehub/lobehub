@@ -18,6 +18,7 @@ export type ComposerRunRequest = Pick<
   | 'acceptsFileWorks'
   | 'acceptsMemberRuntimeEnd'
   | 'agentId'
+  | 'agentSender'
   | 'appContext'
   | 'autoStart'
   | 'clientIds'
@@ -155,6 +156,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     selectedSkillIds: input.selectedSkillIds,
     selectedToolIds: input.selectedToolIds,
     slug: input.slug,
+    agentSender: input.agentSender,
     sourceOperationId: input.sourceOperationId,
     steer: input.steer,
     trigger: input.trigger ?? RequestTrigger.Chat,

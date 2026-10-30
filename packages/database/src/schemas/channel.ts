@@ -388,7 +388,7 @@ export const channelMessageFiles = pgTable(
  * lease, the writer lock and publication of the final reply.
  *
  * The retired delivery_key column is intentionally absent from the ORM schema. Migration
- * 0195 retains it physically for older binaries; a later custom migration can remove it.
+ * 0197 retains it physically for older binaries; a later custom migration can remove it.
  */
 export const channelJobs = pgTable(
   'channel_jobs',

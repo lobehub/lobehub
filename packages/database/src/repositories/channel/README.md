@@ -67,7 +67,7 @@ access check before any topic or operation is created.
 
 ## Delivery-key retirement rollout
 
-Migration `0195_channel_jobs_message_member_unique` enforces one job per message and Agent
+Migration `0197_channel_jobs_message_member_unique` enforces one job per message and Agent
 member, but deliberately retains the physical `delivery_key` column and its `initial` default.
 Older binaries still include that column in ORM reads and writes; new binaries omit it.
 The generated snapshot and DBML describe the new application schema, not this temporary

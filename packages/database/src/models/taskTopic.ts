@@ -11,6 +11,7 @@ import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { topicsOwnership } from './task/context';
 
 export const TERMINAL_TOPIC_STATUSES = new Set([
   'canceled',
@@ -33,15 +34,10 @@ export class TaskTopicModel {
     this.workspaceId = workspaceId;
   }
 
+  // Same rule as the other task child rows: a private run is visible to the
+  // member who ran it and to the task's creator.
   private ownership = () =>
-    buildWorkspaceWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      {
-        userId: taskTopics.userId,
-        visibility: taskTopics.visibility,
-        workspaceId: taskTopics.workspaceId,
-      },
-    );
+    topicsOwnership({ db: this.db, userId: this.userId, workspaceId: this.workspaceId });
 
   /** Look up the parent task's visibility so newly added topics mirror it. */
   private async getTaskVisibility(taskId: string): Promise<'private' | 'public'> {

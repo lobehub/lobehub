@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildTopicPrompt } from './buildTopicPrompt';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
+const favoriteMenuItemMock = vi.hoisted(() =>
+  vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
+);
+vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
+
 const locationFixture = vi.hoisted(() => ({ pathname: '/project/project-1/topic/topic-1' }));
 const removeMock = vi.hoisted(() => vi.fn());
 const confirmDeleteMock = vi.hoisted(() => vi.fn());
@@ -382,6 +387,7 @@ describe('useTopicItemDropdownMenu', () => {
     expect(items.map((item) => (item && 'key' in item ? item.key : 'divider'))).toEqual([
       'markCompleted',
       'favorite',
+      'toggleFavorite',
       'divider',
       'autoRename',
       'rename',
@@ -503,5 +509,38 @@ describe('useTopicItemDropdownMenu', () => {
 
       expect(result.current.canInlineArchive).toBe(false);
     });
+  });
+
+  it('offers Favorites beside Pin, linking the row topic under its agent', () => {
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ fav: true, id: 'topic-1', title: 'Topic 1' }),
+    );
+
+    const keys = result.current
+      .dropdownMenu()
+      .map((item) => (item && 'key' in item ? item.key : 'divider'));
+    expect(keys.slice(keys.indexOf('favorite'), keys.indexOf('favorite') + 2)).toEqual([
+      'favorite',
+      'toggleFavorite',
+    ]);
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        path: '/agent/agent-1/topic-1',
+        snapshotReady: true,
+        targetId: 'topic-1',
+        title: 'Topic 1',
+        type: 'topic',
+      },
+      { showHotkey: false },
+    );
+  });
+
+  it('holds the favorite add until a placeholder topic title is replaced', () => {
+    renderHook(() => useTopicItemDropdownMenu({ id: 'topic-1', title: '...' }));
+
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotReady: false }),
+      { showHotkey: false },
+    );
   });
 });

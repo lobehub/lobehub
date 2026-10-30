@@ -1873,6 +1873,9 @@ export default {
   'sharePage.explain.prompt':
     'Take a look at this conversation. Briefly tell me what it is about and what is worth noticing:\n{{url}}',
   'sharePage.actions.tryItYourself': 'Try it yourself',
+  'sharePage.error.fileNotFound.subtitle':
+    'This file does not exist, has been removed, or is no longer shared.',
+  'sharePage.error.fileNotFound.title': 'File Not Found',
   'sharePage.error.forbidden.subtitle': 'This share is private and not accessible.',
   'sharePage.error.forbidden.title': 'Access Denied',
   'sharePage.error.notFound.subtitle': 'This topic does not exist or has been removed.',
@@ -1880,11 +1883,15 @@ export default {
   'sharePage.error.unauthorized.action': 'Sign In',
   'sharePage.error.unauthorized.subtitle': 'Please sign in to view this shared topic.',
   'sharePage.error.unauthorized.title': 'Sign In Required',
+  'sharePage.file.download': 'Download',
+  'sharePage.file.noPreview.desc': 'Download it to open it on your device.',
+  'sharePage.file.noPreview.title': "This file can't be previewed here",
   'sharePage.menu.copyLink': 'Copy Link',
   'sharePage.menu.goToLobeHub': 'Go to LobeHub',
   'sharePage.menu.more': 'More',
   'sharePage.menu.report': 'Report',
   'sharePage.meta.artifactDescription': 'An artifact shared from {{appName}}.',
+  'sharePage.meta.fileDescription': 'A file shared from {{appName}}.',
   'sharePage.meta.pageDescription': 'A page shared from {{appName}}.',
   'sharePage.meta.topicDescription': 'A topic shared from {{appName}}.',
   'sharePage.pill.edit': 'Edit',
@@ -2235,6 +2242,11 @@ export default {
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
   'createGoal.criteriaTitle': 'Acceptance criteria',
+  'createGoal.discardConfirm.cancel': 'Keep editing',
+  'createGoal.discardConfirm.content':
+    'The goal description, attachments and acceptance criteria you added will be lost.',
+  'createGoal.discardConfirm.ok': 'Discard',
+  'createGoal.discardConfirm.title': 'Discard this goal?',
   'createGoal.describeTitle': 'What goal do you expect to achieve?',
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
   'createGoal.generateFailed':

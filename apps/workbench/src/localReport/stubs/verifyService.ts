@@ -1,5 +1,6 @@
 import type { AcceptanceCheckReviewAction, AcceptanceReviewAnnotation } from '@lobechat/types';
-import { localReviewTargets } from '@lobechat/utils/verify/localAcceptance';
+import type { LocalDeliveryDecision } from '@lobechat/utils/verify/localAcceptance';
+import { localDecisionEvent, localReviewTargets } from '@lobechat/utils/verify/localAcceptance';
 
 import { localEventId } from '../localEventId';
 import { getLocalReport } from '../localReportData';
@@ -48,6 +49,24 @@ const addGroupFeedback = async (input: {
   return { entry: { ...entry, roundIndex }, success: true };
 };
 
+const decideDelivery = (action: LocalDeliveryDecision, comment?: string) => {
+  const report = getLocalReport();
+  report.append(
+    localDecisionEvent(report.bundle(), {
+      action,
+      comment,
+      createdAt: new Date().toISOString(),
+      id: localEventId(),
+    }),
+  );
+  return report.bundle().acceptance;
+};
+
+const acceptDelivery = async (_id: string, comment?: string) => decideDelivery('accept', comment);
+
+/** Nothing to send the delivery back to: the page hands the repair prompt over itself. */
+const rejectDelivery = async (_id: string, comment?: string) => decideDelivery('reject', comment);
+
 const adjudicateProposal = async (): Promise<never> => {
   throw needsPublishedAcceptance('Review proposals');
 };
@@ -59,8 +78,10 @@ const adjudicateProposal = async (): Promise<never> => {
  * refusals — so the page answers a click exactly as the hosted one would.
  */
 export const verifyService = {
+  acceptDelivery,
   addGroupFeedback,
   adjudicateProposal,
   getAcceptanceBundle,
+  rejectDelivery,
   reviewChecks,
 };
