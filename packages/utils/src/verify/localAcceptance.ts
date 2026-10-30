@@ -182,7 +182,21 @@ export type LocalReviewEvent =
       id: string;
       kind: 'group';
       roundIndex: number;
+    }
+  | {
+      /**
+       * The reviewer's decision on the whole delivery of `roundIndex` — what
+       * `acceptance.accept` / `acceptance.reject` stamp on the current round.
+       */
+      action: LocalDeliveryDecision;
+      comment?: string;
+      createdAt: IsoDate;
+      id: string;
+      kind: 'decision';
+      roundIndex: number;
     };
+
+export type LocalDeliveryDecision = 'accept' | 'reject';
 
 /** `reviews.json` — the local review log of one acceptance. */
 export interface LocalReviewLog {
@@ -208,7 +222,7 @@ interface LocalAcceptanceRow {
   config: AcceptanceConfig | null;
   createdAt: Date;
   id: string;
-  metadata: AcceptanceMetadata | null;
+  metadata: AcceptanceMetadata;
   projectId: string | null;
   requirement: string | null;
   status: AcceptanceStatus;
@@ -350,6 +364,8 @@ export interface LocalAcceptanceBundle {
   author: { avatar: string | null; fullName: string | null; id: string; username: string | null };
   canCollaborate: false;
   canReject: boolean;
+  /** Feedback hand-offs to an agent are a LobeHub feature. */
+  canRequestRepair: false;
   canReview: boolean;
   checks: LocalCheck[];
   collaboration: null;
@@ -358,7 +374,9 @@ export interface LocalAcceptanceBundle {
   latestReport: LocalReportRow | null;
   origin: null;
   pullRequests: LocalPullRequest[];
+  repair: null;
   repairDispatchAvailable: false;
+  repairSource: null;
   rounds: { report: LocalReportRow | null; run: LocalRunRow; usage: null }[];
   subject: { id: string; title: string | null; type: AcceptanceSubjectType };
 }
@@ -562,6 +580,19 @@ export const assembleLocalAcceptance = (source: LocalAcceptanceSource): LocalAcc
     }
     const run = runByIndex.get(event.roundIndex);
     if (!run) continue;
+    if (event.kind === 'decision') {
+      // A later decision on the same round replaces the earlier one, as the
+      // server's `setDecision` does; the round's group feedback stays.
+      const groupFeedback = run.decisionDetail?.groupFeedback;
+      run.userDecision = event.action;
+      run.decisionDetail = {
+        decidedAt: event.createdAt,
+        decidedBy: LOCAL_ACCEPTANCE_USER_ID,
+        ...(event.comment ? { comment: event.comment } : {}),
+        ...(groupFeedback ? { groupFeedback } : {}),
+      };
+      continue;
+    }
     run.decisionDetail = {
       ...run.decisionDetail,
       groupFeedback: [
@@ -597,18 +628,30 @@ export const assembleLocalAcceptance = (source: LocalAcceptanceSource): LocalAcc
   const updatedAt = current?.createdAt ?? createdAt;
   const subject = localSubjectFromKey(info.subjectKey);
   const title = current?.title || current?.goal || null;
+  // Only a decision on the current round settles the delivery: a newer round
+  // re-opens it, the way a new round re-opens a rejected acceptance online.
+  const decision = current?.userDecision;
+  const status: AcceptanceStatus =
+    decision === 'accept'
+      ? 'accepted'
+      : decision === 'reject'
+        ? 'rejected'
+        : current
+          ? statusFromRound(current, reports.has(current.id))
+          : 'pending';
 
   return {
     acceptance: {
       accessedAt: updatedAt,
-      completedAt: null,
+      completedAt:
+        status === 'accepted' ? date(current?.decisionDetail?.decidedAt, updatedAt) : null,
       config: {},
       createdAt,
       id: info.id,
-      metadata: title ? { title } : null,
+      metadata: title ? { title } : {},
       projectId: null,
       requirement: info.requirement,
-      status: current ? statusFromRound(current, reports.has(current.id)) : 'pending',
+      status,
       subjectId: subject.id,
       subjectType: subject.type,
       updatedAt,
@@ -620,6 +663,7 @@ export const assembleLocalAcceptance = (source: LocalAcceptanceSource): LocalAcc
     author: { avatar: null, fullName: null, id: LOCAL_ACCEPTANCE_USER_ID, username: null },
     canCollaborate: false,
     canReject: true,
+    canRequestRepair: false,
     canReview: true,
     checks,
     collaboration: null,
@@ -628,7 +672,9 @@ export const assembleLocalAcceptance = (source: LocalAcceptanceSource): LocalAcc
     latestReport,
     origin: null,
     pullRequests: pullRequestsOf(runs),
+    repair: null,
     repairDispatchAvailable: false,
+    repairSource: null,
     rounds,
     subject: { id: subject.id, title, type: subject.type },
   };
@@ -705,6 +751,35 @@ export const localReviewTargets = (
     const check = byId.get(id)!;
     return { checkId: check.id, resultId: check.result!.id };
   });
+};
+
+/**
+ * The reviewer's decision on the whole delivery, as the event the review log
+ * records. Same refusals as the server's `requireDecidableAcceptance`: the
+ * current round must have settled, and a decided delivery stays decided until
+ * a newer round re-opens it.
+ */
+export const localDecisionEvent = (
+  bundle: Pick<LocalAcceptanceBundle, 'acceptance' | 'rounds'>,
+  input: { action: LocalDeliveryDecision; comment?: string; createdAt: IsoDate; id: string },
+): Extract<LocalReviewEvent, { kind: 'decision' }> => {
+  const { status } = bundle.acceptance;
+  if (status === 'accepted') throw new Error('This delivery has already been accepted');
+  if (status === 'rejected')
+    throw new Error('This delivery was rejected — the next verification round re-opens it');
+  if (status !== 'delivered' && status !== 'errored')
+    throw new Error(
+      `Verification is still in progress (${status}) — the decision comes once the round settles`,
+    );
+  const comment = input.comment?.trim();
+  return {
+    action: input.action,
+    ...(comment ? { comment } : {}),
+    createdAt: input.createdAt,
+    id: input.id,
+    kind: 'decision',
+    roundIndex: bundle.rounds.at(-1)!.run.roundIndex!,
+  };
 };
 
 /** Merge two review logs by event id, oldest first — an export re-read changes nothing. */

@@ -62,7 +62,14 @@ async function carryReviews(
       event.roundIndex === latestRoundIndex &&
       !done.has(`group:${event.id}`),
   );
-  if (standing.length === 0 && groupFeedback.length === 0) return carry;
+  // The delivery decision of the latest round moves last, once its feedback is
+  // there: it is what closes (or sends back) the published acceptance.
+  const decision = read.source.reviews.findLast(
+    (event): event is Extract<typeof event, { kind: 'decision' }> =>
+      event.kind === 'decision' && event.roundIndex === latestRoundIndex,
+  );
+  const pendingDecision = decision && !done.has(`decision:${decision.id}`) ? decision : undefined;
+  if (standing.length === 0 && groupFeedback.length === 0 && !pendingDecision) return carry;
 
   const bundle: RemoteBundle = await client.acceptance.getBundle.query({
     id: remote.acceptanceId,
@@ -124,6 +131,36 @@ async function carryReviews(
     } catch (error) {
       carry.skipped.push({
         checkId: `group:${entry.category}`,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  if (pendingDecision) {
+    // Bound to the round it judged: the server refuses it once a newer round landed.
+    const latestDir = [...read.source.rounds]
+      .sort((a, b) => a.run.roundIndex - b.run.roundIndex)
+      .at(-1)?.dir;
+    const roundId = remote.rounds.find((round) => round.dir === latestDir)?.verifyRunId;
+    try {
+      if (pendingDecision.action === 'accept')
+        await client.acceptance.accept.mutate({
+          comment: pendingDecision.comment,
+          id: remote.acceptanceId,
+          roundId,
+        });
+      // Recorded only: the reviewer already handed the repair prompt over locally.
+      else
+        await client.acceptance.reject.mutate({
+          comment: pendingDecision.comment,
+          dispatch: false,
+          id: remote.acceptanceId,
+          roundId,
+        });
+      carry.carried.push(`decision:${pendingDecision.id}`);
+      carry.uploaded++;
+    } catch (error) {
+      carry.skipped.push({
+        checkId: `decision:${pendingDecision.action}`,
         reason: error instanceof Error ? error.message : String(error),
       });
     }
