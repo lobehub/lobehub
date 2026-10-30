@@ -103,6 +103,7 @@ import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
 import { shareRouter } from './share';
 import { shareChatRouter } from './shareChat';
+import { subagentRouter } from './subagent';
 import { taskRouter } from './task';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
@@ -208,6 +209,7 @@ export const lambdaRouter = router({
   share: shareRouter,
   shareChat: shareChatRouter,
   task: taskRouter,
+  subagent: subagentRouter,
   thread: threadRouter,
   topic: topicRouter,
   trash: trashRouter,

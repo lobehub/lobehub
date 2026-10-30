@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { agents, messages, threads, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
@@ -66,7 +66,11 @@ export const batchMoveToAgent = async (
 
     await tx
       .update(threads)
-      .set({ agentId: targetAgentId })
+      .set({
+        agentId: targetAgentId,
+        // Presets belong to the source agent; a no-op move keeps the attribution.
+        subagentId: sql`CASE WHEN ${threads.agentId} IS DISTINCT FROM ${targetAgentId} THEN NULL ELSE ${threads.subagentId} END`,
+      })
       .where(
         and(
           inArray(threads.topicId, topicIds),

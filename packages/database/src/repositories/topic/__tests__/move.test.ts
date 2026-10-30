@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, messages, sessions, threads, topics, users } from '../../../schemas';
+import { agents, messages, sessions, subagents, threads, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicRepository } from '../index';
 
@@ -71,6 +71,7 @@ describe('TopicRepository - batchMoveToAgent', () => {
         { id: 'topic-t', userId, agentId: 'source-agent' },
         { id: 'topic-t-keep', userId, agentId: 'source-agent' },
       ]);
+      await tx.insert(subagents).values({ id: 'sub-1', name: 'p', parentAgentId: 'source-agent' });
       await tx.insert(threads).values([
         {
           id: 'thread-1',
@@ -78,6 +79,7 @@ describe('TopicRepository - batchMoveToAgent', () => {
           topicId: 'topic-t',
           type: 'continuation',
           agentId: 'source-agent',
+          subagentId: 'sub-1',
         },
         {
           id: 'thread-keep',
@@ -95,6 +97,17 @@ describe('TopicRepository - batchMoveToAgent', () => {
     // critical because threads.agentId is a cascade-on-delete FK.
     const [movedThread] = await serverDB.select().from(threads).where(eq(threads.id, 'thread-1'));
     expect(movedThread.agentId).toBe('target-agent');
+    // Presets stay with the source agent.
+    expect(movedThread.subagentId).toBeNull();
+
+    // A no-op move onto the same agent keeps the attribution.
+    await serverDB
+      .insert(subagents)
+      .values({ id: 'sub-2', name: 'p', parentAgentId: 'target-agent' });
+    await serverDB.update(threads).set({ subagentId: 'sub-2' }).where(eq(threads.id, 'thread-1'));
+    await topicRepo.batchMoveToAgent(['topic-t'], 'target-agent');
+    const [sameAgent] = await serverDB.select().from(threads).where(eq(threads.id, 'thread-1'));
+    expect(sameAgent.subagentId).toBe('sub-2');
 
     // Thread under an untouched topic keeps its source agent.
     const [keptThread] = await serverDB.select().from(threads).where(eq(threads.id, 'thread-keep'));

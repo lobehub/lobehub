@@ -305,6 +305,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   shareChat: 'blocked',
   spend: 'blocked',
   storageOverage: 'blocked',
+  subagent: rw('agent:read', 'agent:write'),
   subscription: 'blocked',
   task: rw('agent:read', 'agent:write'),
   taskTemplate: rw('agent:read', 'agent:write'),

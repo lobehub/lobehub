@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { MessageModel } from '@/database/models/message';
+import { SubagentModel } from '@/database/models/subagent';
 import { ThreadModel } from '@/database/models/thread';
+import { TopicModel } from '@/database/models/topic';
 import { updateThreadSchema } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -37,6 +39,29 @@ const ensureThreadCreated = <T extends { id: string } | undefined>(
   });
 };
 
+/**
+ * A thread may only be attributed to a visible preset of its own topic's agent;
+ * otherwise it would count towards an unrelated agent's preset statistics.
+ */
+const assertSubagentAttributable = async (
+  { subagentModel, topicModel }: { subagentModel: SubagentModel; topicModel: TopicModel },
+  subagentId: string | null | undefined,
+  topicId: string | undefined,
+) => {
+  if (!subagentId) return;
+
+  const preset = await subagentModel.findById(subagentId);
+  if (!preset)
+    throw new TRPCError({ code: 'NOT_FOUND', message: `Subagent ${subagentId} not found` });
+
+  const topic = topicId ? await topicModel.findById(topicId) : undefined;
+  if (topic?.agentId && topic.agentId !== preset.parentAgentId)
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `Subagent ${subagentId} does not belong to the agent of topic ${topicId}`,
+    });
+};
+
 const threadProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const wsId = ctx.workspaceId ?? undefined;
@@ -44,7 +69,9 @@ const threadProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      subagentModel: new SubagentModel(ctx.serverDB, ctx.userId, wsId),
       threadModel: new ThreadModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -54,12 +81,14 @@ export const threadRouter = router({
     .use(withScopedPermission('topic:create'))
     .input(createThreadSchema)
     .mutation(async ({ input, ctx }) => {
+      await assertSubagentAttributable(ctx, input.subagentId, input.topicId);
       const thread = ensureThreadCreated(
         await ctx.threadModel.create({
           id: input.id,
           metadata: input.metadata,
           parentThreadId: input.parentThreadId,
           sourceMessageId: input.sourceMessageId,
+          subagentId: input.subagentId,
           title: input.title,
           topicId: input.topicId,
           type: input.type,
@@ -77,12 +106,14 @@ export const threadRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      await assertSubagentAttributable(ctx, input.subagentId, input.topicId);
       const thread = ensureThreadCreated(
         await ctx.threadModel.create({
           id: input.id,
           metadata: input.metadata,
           parentThreadId: input.parentThreadId,
           sourceMessageId: input.sourceMessageId,
+          subagentId: input.subagentId,
           title: markdownToTxt(input.message.content).slice(0, 80),
           topicId: input.topicId,
           type: input.type,
@@ -131,6 +162,12 @@ export const threadRouter = router({
     .mutation(async ({ input, ctx }) => {
       const thread = await ctx.threadModel.findById(input.id);
       if (thread) assertWorkspaceRowManageable(ctx, thread.userId, 'thread');
+      // Re-check on a topic change too: the kept preset must match the new topic's agent.
+      await assertSubagentAttributable(
+        ctx,
+        input.value.subagentId === undefined ? thread?.subagentId : input.value.subagentId,
+        input.value.topicId ?? thread?.topicId,
+      );
 
       return ctx.threadModel.update(input.id, input.value);
     }),

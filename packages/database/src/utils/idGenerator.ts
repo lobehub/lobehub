@@ -40,6 +40,7 @@ const prefixes = {
   scmChangeRequests: 'scr',
   sessionGroups: 'sg',
   sessions: 'ssn',
+  subagents: 'sub',
   threads: 'thd',
   topicComments: 'tcm',
   topics: 'tpc',

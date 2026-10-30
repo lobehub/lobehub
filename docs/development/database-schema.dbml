@@ -4063,6 +4063,27 @@ table signal_decisions {
   }
 }
 
+table subagents {
+  id text [pk, not null]
+  parent_agent_id text [not null]
+  name text [not null]
+  description text
+  system_role text
+  model text
+  provider text
+  reasoning_effort text
+  tools jsonb
+  is_enabled boolean [not null, default: true]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    parent_agent_id [name: 'subagents_parent_agent_id_idx']
+    (parent_agent_id, name) [name: 'subagents_parent_agent_id_name_unique', unique]
+  }
+}
+
 table system_bot_providers {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   platform varchar(50) [not null]
@@ -4335,6 +4356,7 @@ table threads {
   client_id text
   agent_id text
   group_id text
+  subagent_id text
   metadata jsonb
   user_id text [not null]
   last_active_at "timestamp with time zone" [default: `now()`]
@@ -4354,6 +4376,7 @@ table threads {
     group_id [name: 'threads_group_id_idx']
     parent_thread_id [name: 'threads_parent_thread_id_idx']
     workspace_id [name: 'threads_workspace_id_idx']
+    subagent_id [name: 'threads_subagent_id_idx']
   }
 }
 
@@ -5681,3 +5704,5 @@ ref: topic_documents.document_id > documents.id
 ref: topic_documents.topic_id > topics.id
 
 ref: topics.session_id - sessions.id
+
+ref: subagents.parent_agent_id - agents.id
