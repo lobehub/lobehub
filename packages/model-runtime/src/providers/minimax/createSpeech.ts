@@ -3,17 +3,30 @@ import createDebug from 'debug';
 import type { TTSAudioFormat } from 'model-bank';
 import { DEFAULT_TTS_AUDIO_FORMAT } from 'model-bank';
 
-import type { CreateSpeechOptions } from '../../core/openaiCompatibleFactory';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { convertTextToSpeechUsage } from '../../core/usageConverters/tts';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
-import type { TextToSpeechPayload, TextToSpeechResponse } from '../../types/tts';
+import type {
+  TextToSpeechOptions,
+  TextToSpeechPayload,
+  TextToSpeechResponse,
+} from '../../types/tts';
 import { resolveTextToSpeechParams } from '../../types/tts';
 import type { ChatCompletionErrorPayload } from '../../types/type';
 import { AgentRuntimeError } from '../../utils/createError';
 import { getModelPricing } from '../../utils/getModelPricing';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 
 const log = createDebug('lobe-tts:minimax');
+
+export interface MiniMaxSpeechOptions extends ModelIdMappingOptions, TextToSpeechOptions {
+  apiKey: string;
+  /** OpenAI-style API root, e.g. `https://api.minimaxi.com/v1`. */
+  baseURL: string;
+  /** Provider id used for pricing lookup and error payloads. */
+  provider: string;
+}
 
 /** Formats t2a_v2 returns for the standard TTS formats; MiniMax has no `aac` output. */
 const MINIMAX_AUDIO_FORMATS: Partial<Record<TTSAudioFormat, string>> = {
@@ -155,7 +168,7 @@ const readErrorBody = async (response: Response) => {
  */
 export async function createMiniMaxSpeech(
   payload: TextToSpeechPayload,
-  options: CreateSpeechOptions,
+  options: MiniMaxSpeechOptions,
 ): Promise<TextToSpeechResponse> {
   const { apiKey, baseURL, provider } = options;
   const requestModel = resolveMappedModelId(payload.model, options);
@@ -243,4 +256,40 @@ export async function createMiniMaxSpeech(
   await options.onUsage?.(result.usage!);
 
   return result;
+}
+
+/**
+ * Speech-only runtime the MiniMax router uses for `speech-*` models, so synthesis never
+ * goes through the OpenAI-compatible `/audio/speech` or the Anthropic-compatible runtime.
+ */
+export class LobeMinimaxSpeechAI implements LobeRuntimeAI {
+  baseURL: string;
+  private apiKey: string;
+  private id: string;
+  private modelIdMapping?: ModelIdMappingOptions['modelIdMapping'];
+
+  constructor({
+    apiKey,
+    baseURL,
+    id,
+    modelIdMapping,
+  }: ModelIdMappingOptions & { apiKey?: string; baseURL: string; id: string }) {
+    if (!apiKey?.trim())
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
+
+    this.apiKey = apiKey.trim();
+    this.baseURL = baseURL;
+    this.id = id;
+    this.modelIdMapping = modelIdMapping;
+  }
+
+  textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
+    return createMiniMaxSpeech(payload, {
+      ...options,
+      apiKey: this.apiKey,
+      baseURL: this.baseURL,
+      modelIdMapping: this.modelIdMapping,
+      provider: this.id,
+    });
+  }
 }

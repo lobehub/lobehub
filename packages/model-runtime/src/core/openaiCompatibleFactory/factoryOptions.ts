@@ -13,11 +13,6 @@ import type {
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import type {
-  TextToSpeechOptions,
-  TextToSpeechPayload,
-  TextToSpeechResponse,
-} from '../../types/tts';
-import type {
   CreateVideoPayload,
   CreateVideoResult,
   HandleCreateVideoWebhookPayload,
@@ -60,14 +55,6 @@ export type CreateImageOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
 // See CreateImageOptions above: drop openai's `provider` so ours stays `string`.
 export type CreateVideoOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
   ModelIdMappingOptions & {
-    apiKey: string;
-    provider: string;
-  };
-
-// See CreateImageOptions above: drop openai's `provider` so ours stays `string`.
-export type CreateSpeechOptions = Omit<ClientOptions, 'apiKey' | 'provider'> &
-  ModelIdMappingOptions &
-  TextToSpeechOptions & {
     apiKey: string;
     provider: string;
   };
@@ -219,13 +206,6 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
       payload: ResponseCreateParamsWithPromptCacheKey;
     };
   };
-  /**
-   * Native speech synthesis for providers whose TTS API is not `POST /audio/speech`.
-   */
-  textToSpeech?: (
-    payload: TextToSpeechPayload,
-    options: CreateSpeechOptions,
-  ) => Promise<TextToSpeechResponse>;
   videoGenerationCapabilities?:
     VideoGenerationCapabilities | ((model: string) => VideoGenerationCapabilities);
 }
