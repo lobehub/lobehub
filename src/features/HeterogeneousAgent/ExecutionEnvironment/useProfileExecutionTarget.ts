@@ -1,6 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceExecutionTarget, LobeAgentAgencyConfig } from '@lobechat/types';
 
+import { isApiAuthBlockedOnTarget } from '@/features/HeterogeneousAgent/apiMode';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 
@@ -11,6 +12,8 @@ export interface ProfileExecutionTarget {
   agencyConfig: LobeAgentAgencyConfig | undefined;
   /** The gateway-routed device, set only when `target` is `device`. */
   deviceId?: string;
+  /** API-mode auth cannot run on `target`; dispatch rejects it off this desktop. */
+  isApiAuthBlocked: boolean;
   /** The caller's own pick applies instead of the shared default. */
   isOverridden: boolean;
   /** The workspace preference is still loading, so `target` may still flip. */
@@ -44,18 +47,23 @@ export const useProfileExecutionTarget = (agentId: string): ProfileExecutionTarg
   });
 
   const deviceId = target === 'device' ? agencyConfig?.boundDeviceId : undefined;
+  const panel = resolveHeteroProfilePanel({
+    deviceId,
+    providerType: agencyConfig?.heterogeneousProvider?.type,
+    target,
+  });
 
   return {
     agencyConfig,
     deviceId,
+    // A bundled runtime has its own provider-key auth, not the CLI API mode.
+    isApiAuthBlocked:
+      panel.kind !== 'runtime' &&
+      isApiAuthBlockedOnTarget(agencyConfig?.heterogeneousProvider?.authMode, target),
     isOverridden: executionTargetOverridden,
     isPending: isPreferenceLoading,
     isSelectable: canSelectExecutionTarget,
-    panel: resolveHeteroProfilePanel({
-      deviceId,
-      providerType: agencyConfig?.heterogeneousProvider?.type,
-      target,
-    }),
+    panel,
     target,
   };
 };

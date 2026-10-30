@@ -489,6 +489,7 @@ export default {
   'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Same as primary model',
   'heterogeneousStatus.apiMode.provider': 'Provider',
   'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
+  'heterogeneousStatus.apiMode.useSubscription': 'Use subscription',
   'heterogeneousStatus.apiMode.workspaceUnsupported': 'Not available for workspace agents',
   'heterogeneousStatus.apiMode.serverDefault.checking': 'Checking deployment provider...',
   'heterogeneousStatus.apiMode.serverDefault.disabled':
@@ -573,7 +574,6 @@ export default {
   'heterogeneousStatus.device.scanFailedReason': 'Details: {{reason}}',
   'heterogeneousStatus.device.scanFailedTag': 'Unknown',
   'heterogeneousStatus.device.unavailable': '{{name}} CLI not found on {{device}}',
-  'heterogeneousStatus.device.useSubscription': 'Use subscription',
   'heterogeneousStatus.sandbox.desc':
     '{{name}} runs in the cloud sandbox. Nothing needs to be installed on your devices.',
   'heterogeneousStatus.target.desc':

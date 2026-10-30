@@ -112,6 +112,50 @@ describe('useProfileExecutionTarget', () => {
     expect(result.current.panel).toEqual({ kind: 'pending' });
   });
 
+  it('flags API auth on the cloud sandbox, where dispatch rejects it', () => {
+    // The sandbox panel has no auth controls, so the profile must surface the
+    // block and the way back to subscription auth.
+    testState.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { authMode: 'api', type: 'claude-code' },
+    };
+
+    const { result } = renderHook(() => useProfileExecutionTarget('agent-1'));
+
+    expect(result.current.panel).toEqual({ kind: 'cloud' });
+    expect(result.current.isApiAuthBlocked).toBe(true);
+  });
+
+  it('flags API auth on a bound device too', () => {
+    testState.agencyConfig = {
+      boundDeviceId: 'device-us-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { authMode: 'api', type: 'codex' },
+    };
+
+    const { result } = renderHook(() => useProfileExecutionTarget('agent-1'));
+
+    expect(result.current.isApiAuthBlocked).toBe(true);
+  });
+
+  it('keeps API auth usable on this desktop and ignores subscription auth', () => {
+    testState.agencyConfig = {
+      executionTarget: 'local',
+      heterogeneousProvider: { authMode: 'api', type: 'claude-code' },
+    };
+    expect(
+      renderHook(() => useProfileExecutionTarget('agent-1')).result.current.isApiAuthBlocked,
+    ).toBe(false);
+
+    testState.agencyConfig = {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { authMode: 'subscription', type: 'claude-code' },
+    };
+    expect(
+      renderHook(() => useProfileExecutionTarget('agent-1')).result.current.isApiAuthBlocked,
+    ).toBe(false);
+  });
+
   it('reports a pending target while the workspace preference loads', () => {
     testState.isPreferenceLoading = true;
     testState.agencyConfig = { heterogeneousProvider: { type: 'claude-code' } };

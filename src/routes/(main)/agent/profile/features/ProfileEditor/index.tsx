@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { ModelIcon } from '@/components/LobeIcons';
+import { ApiAuthLocalOnlyNotice } from '@/features/HeterogeneousAgent/ExecutionEnvironment/ApiAuthLocalOnlyNotice';
 import { DeviceCliStatusCard } from '@/features/HeterogeneousAgent/ExecutionEnvironment/DeviceCliStatusCard';
 import { HeteroExecutionTargetSelect } from '@/features/HeterogeneousAgent/ExecutionEnvironment/HeteroExecutionTargetSelect';
 import { useProfileExecutionTarget } from '@/features/HeterogeneousAgent/ExecutionEnvironment/useProfileExecutionTarget';
@@ -181,9 +182,8 @@ const ProfileEditor = memo(() => {
         : serverCapabilityEnabled && !serverCapabilityLoading && !serverDefaultAvailable
           ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
           : undefined;
-  const renderHeterogeneousPanel = () => {
-    // Until the member's own override loads, the target may still flip.
-    if (!heterogeneousProvider || executionTarget.isPending) return null;
+  const renderHeterogeneousPanelBody = () => {
+    if (!heterogeneousProvider) return null;
 
     const { panel } = executionTarget;
 
@@ -197,13 +197,7 @@ const ProfileEditor = memo(() => {
         );
       }
       case 'device': {
-        return (
-          <DeviceCliStatusCard
-            deviceId={panel.deviceId}
-            provider={heterogeneousProvider}
-            onAuthModeChange={updateHeterogeneousAuthMode}
-          />
-        );
+        return <DeviceCliStatusCard deviceId={panel.deviceId} provider={heterogeneousProvider} />;
       }
       case 'local':
       case 'runtime': {
@@ -240,6 +234,32 @@ const ProfileEditor = memo(() => {
         return null;
       }
     }
+  };
+
+  const renderHeterogeneousPanel = () => {
+    // Until the member's own override loads, the target may still flip.
+    if (!heterogeneousProvider || executionTarget.isPending) return null;
+
+    return (
+      <>
+        {/* Dispatch rejects API auth off this desktop, and only the local card
+            edits auth — so every other environment offers the way back. */}
+        {executionTarget.isApiAuthBlocked && (
+          <ApiAuthLocalOnlyNotice
+            onUseSubscription={
+              canEdit
+                ? () =>
+                    void updateHeterogeneousAuthMode(
+                      'subscription',
+                      heterogeneousProvider.apiConfig,
+                    )
+                : undefined
+            }
+          />
+        )}
+        {renderHeterogeneousPanelBody()}
+      </>
+    );
   };
 
   return (
