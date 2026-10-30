@@ -386,6 +386,9 @@ export const channelMessageFiles = pgTable(
  * topic (continued when safe); execution status, errors, usage and traces live on the
  * operation. The job keeps only what the operation cannot: the frozen input, the execution
  * lease, the writer lock and publication of the final reply.
+ *
+ * The retired delivery_key column is intentionally absent from the ORM schema. Migration
+ * 0195 retains it physically for older binaries; a later custom migration can remove it.
  */
 export const channelJobs = pgTable(
   'channel_jobs',
