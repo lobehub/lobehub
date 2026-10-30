@@ -10,11 +10,13 @@ import {
   isAnonymousScope,
   isScopeTrusted,
   useCacheScope,
+  useIsSignedInOrRestoring,
 } from './useCacheScope';
 
 let mockUserId: string | null | undefined = undefined;
 let mockIsAuthLoaded = false;
 let mockIsIdentityResolved = false;
+let mockIsSignedIn: boolean | undefined = undefined;
 let mockWorkspaceId: string | null = null;
 let mockIsDesktop = false;
 
@@ -26,6 +28,7 @@ vi.mock('@lobechat/const', () => ({
 const mockUserState = () => ({
   isLoaded: mockIsAuthLoaded,
   isIdentityResolved: mockIsIdentityResolved,
+  isSignedIn: mockIsSignedIn,
   user: { id: mockUserId },
 });
 vi.mock('@/store/user', () => ({
@@ -33,7 +36,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) => selector(mockUserState()),
 }));
 vi.mock('@/store/user/selectors', () => ({
-  authSelectors: { isLoaded: (s: any) => s.isLoaded },
+  authSelectors: { isLoaded: (s: any) => s.isLoaded, isLogin: (s: any) => s.isSignedIn },
   userProfileSelectors: { userId: (s: any) => s.user?.id },
 }));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -157,6 +160,50 @@ describe('isScopeTrusted', () => {
     mockIsAuthLoaded = true;
     mockIsIdentityResolved = true;
     expect(isScopeTrusted()).toBe(true);
+  });
+});
+
+describe('useIsSignedInOrRestoring', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mockIsAuthLoaded = false;
+    mockIsIdentityResolved = false;
+    mockIsSignedIn = undefined;
+    mockIsDesktop = false;
+  });
+
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  const render = () => renderHook(() => useIsSignedInOrRestoring()).result.current;
+
+  it('trusts the last signed-in scope while the session check is in flight', () => {
+    localStorage.setItem('lobehub:active-scope', 'user_abc:w1');
+    expect(render()).toBe(true);
+  });
+
+  it('treats a first-ever boot as signed out until the session answers', () => {
+    expect(render()).toBe(false);
+  });
+
+  it('does not restore an anonymous scope', () => {
+    localStorage.setItem('lobehub:active-scope', 'anon:personal');
+    expect(render()).toBe(false);
+  });
+
+  it('follows the session once it resolves signed-out, ignoring the persisted scope', () => {
+    localStorage.setItem('lobehub:active-scope', 'user_abc:w1');
+    mockIsAuthLoaded = true;
+    mockIsSignedIn = false;
+    expect(render()).toBe(false);
+  });
+
+  it('is signed in as soon as the session says so', () => {
+    mockIsAuthLoaded = true;
+    mockIsSignedIn = true;
+    expect(render()).toBe(true);
   });
 });
 

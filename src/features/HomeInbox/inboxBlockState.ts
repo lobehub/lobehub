@@ -36,3 +36,18 @@ export const resolveInboxBlockState = ({
 
   return hasError && !isLoading ? 'error' : 'skeleton';
 };
+
+/**
+ * What a viewer the session has not confirmed sees. The page already lays out
+ * for the last signed-in user while the session check is in flight, but the
+ * feeds and the lab preferences that pick the rail's sections stay network-only
+ * until it answers. The rail holds its place with skeletons meanwhile; settling
+ * "empty" would fold the page to one column and slide it back once the cards land.
+ */
+export const resolveSignedOutRailState = ({
+  isRail,
+  restoringSession,
+}: {
+  isRail: boolean;
+  restoringSession: boolean;
+}): 'skeleton' | null => (isRail && restoringSession ? 'skeleton' : null);
