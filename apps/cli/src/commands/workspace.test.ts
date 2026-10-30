@@ -403,20 +403,29 @@ describe('workspace command', () => {
       expect(results[0]).toMatchObject({ status: 'would-update', title: 'CEO' });
     });
 
-    // A non-admin gets FORBIDDEN for every other member, so the run stops at
-    // the first one and exits non-zero with the reason, instead of failing quietly.
-    it('stops at a permission error and exits non-zero', async () => {
-      mockClient.workspaceMember.updateProfile.mutate.mockRejectedValue(
-        Object.assign(new Error("Requires admin role or higher to edit another member's profile"), {
-          data: { code: 'FORBIDDEN' },
-        }),
+    // Permission depends on the target: a non-admin is refused for someone
+    // else but may still edit themselves, so a refusal must not skip later rows.
+    it('keeps going after a permission error and exits non-zero', async () => {
+      mockClient.workspaceMember.updateProfile.mutate.mockImplementation(
+        async ({ userId, ...fields }: { userId: string }) => {
+          if (userId === 'user_1')
+            throw Object.assign(
+              new Error("Requires admin role or higher to edit another member's profile"),
+              { data: { code: 'FORBIDDEN' } },
+            );
+          return { ...roster().find((m) => m.userId === userId), ...fields };
+        },
       );
 
       await expect(
-        run('workspace', 'member', 'update', 'ada', 'user_2', '-t', 'X'),
+        run('workspace', 'member', 'update', 'ada', 'user_2', '-t', 'X', '--json'),
       ).rejects.toThrow('process.exit');
 
-      expect(mockClient.workspaceMember.updateProfile.mutate).toHaveBeenCalledTimes(1);
+      expect(mockClient.workspaceMember.updateProfile.mutate).toHaveBeenCalledTimes(2);
+      const results = JSON.parse(String(consoleSpy.mock.calls.at(-1)![0]));
+      // The refused row reports what is stored, not the value it never wrote.
+      expect(results[0]).toMatchObject({ status: 'failed', title: null, userId: 'user_1' });
+      expect(results[1]).toMatchObject({ status: 'updated', title: 'X', userId: 'user_2' });
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Permission denied'));
     });
   });

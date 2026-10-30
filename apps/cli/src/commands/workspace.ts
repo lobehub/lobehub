@@ -603,9 +603,8 @@ export function registerWorkspaceCommand(program: Command) {
           results.push(result);
 
           if (Object.keys(changes).length === 0) continue;
-          if (options.dryRun || forbidden) {
-            Object.assign(result, changes, { status: forbidden ? 'failed' : 'would-update' });
-            if (forbidden) result.error = 'skipped after a permission error';
+          if (options.dryRun) {
+            Object.assign(result, changes, { status: 'would-update' });
             continue;
           }
 
@@ -622,7 +621,8 @@ export function registerWorkspaceCommand(program: Command) {
           } catch (error) {
             result.status = 'failed';
             result.error = error instanceof Error ? error.message : String(error);
-            // The same check guards every other member, so stop sending.
+            // Permission depends on the target — anyone may edit their own
+            // profile — so one rejection must not skip the remaining rows.
             if (isForbidden(error)) forbidden = true;
           }
         }
