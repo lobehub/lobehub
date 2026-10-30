@@ -148,6 +148,10 @@ describe('createOpenAICompatibleSpeech', () => {
       [{ type: 'speech.audio.done', usage: { input_tokens: 1, output_tokens: 1 } }],
     ],
     ['carries an error event', [{ error: { message: 'quota' }, type: 'error' }]],
+    [
+      'closes before speech.audio.done',
+      [{ audio: Buffer.from([1]).toString('base64'), type: 'speech.audio.delta' }],
+    ],
   ])('fails instead of reporting usage when the SSE stream %s', async (_label, events) => {
     vi.mocked(getModelPricing).mockResolvedValue(tokenPricing);
     create.mockResolvedValue(sseResponse(events));

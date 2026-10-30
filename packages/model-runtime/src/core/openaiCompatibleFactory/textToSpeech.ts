@@ -41,6 +41,7 @@ const readSpeechEventStream = async (response: Response): Promise<SpeechEventStr
   const text = await response.text();
   const chunks: Buffer[] = [];
   let tokenUsage: ModelTokensUsage | undefined;
+  let completed = false;
 
   for (const line of text.split('\n')) {
     if (!line.startsWith('data:')) continue;
@@ -58,6 +59,7 @@ const readSpeechEventStream = async (response: Response): Promise<SpeechEventStr
     if (event.type === 'speech.audio.delta' && event.audio) {
       chunks.push(Buffer.from(event.audio, 'base64'));
     } else if (event.type === 'speech.audio.done') {
+      completed = true;
       tokenUsage = convertOpenAISpeechTokenUsage(event.usage);
     } else if (event.type === 'error' || event.error) {
       throw Object.assign(new Error('Speech stream returned an error event'), {
@@ -66,8 +68,9 @@ const readSpeechEventStream = async (response: Response): Promise<SpeechEventStr
     }
   }
 
-  // An empty stream must not settle as a successful (billable) synthesis.
+  // An empty or truncated stream must not settle as a successful (billable) synthesis.
   if (chunks.length === 0) throw new Error('Speech stream ended without audio');
+  if (!completed) throw new Error('Speech stream ended before speech.audio.done');
 
   const merged = Buffer.concat(chunks);
   const audio = merged.buffer.slice(merged.byteOffset, merged.byteOffset + merged.byteLength);
