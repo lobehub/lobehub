@@ -32,7 +32,9 @@ export class TaskSubtreeRepository {
    *   - the indexed visibility mirror on the tasks' Work rows, so gallery/list
    *     queries cannot observe a stale public row after demotion;
    *   - on demotion, `assignee_user_id` is cleared wherever it names someone
-   *     other than the task's creator, who could no longer open the task.
+   *     other than the task's creator, who could no longer open the task;
+   *   - with `takeOwnership`, the caller becomes the subtree's creator first
+   *     and its automation stops (see `takeOverSubtree`).
    *
    * `task_topics` and `task_comments` are direction-sensitive. Their
    * `visibility` column is a write-time mirror of the parent task used as a
@@ -49,16 +51,27 @@ export class TaskSubtreeRepository {
    * (either missing or owned by another workspace member). Callers should
    * gate authorization (creator-only / admin) before invoking this.
    */
-  async updateVisibility(id: string, visibility: 'private' | 'public'): Promise<TaskItem | null> {
+  async updateVisibility(
+    id: string,
+    visibility: 'private' | 'public',
+    options: { takeOwnership?: boolean } = {},
+  ): Promise<TaskItem | null> {
     const taskModel = this.taskModel();
     const root = await taskModel.findById(id);
     if (!root) return null;
     if (root.visibility === visibility) return root;
 
     const descendantIds = (await taskModel.findAllDescendants(root.id)).map((d) => d.id);
+    // Taking a task over only applies on the way to private, and only when the
+    // subtree is not already the caller's.
+    const takeOver =
+      !!options.takeOwnership && visibility === 'private' && root.createdByUserId !== this.userId;
 
     return this.db.transaction(async (tx) => {
       const db = tx as LobeChatDatabase;
+      // Ownership moves first, so the visibility write below already treats
+      // the caller as the creator (and unassigns the previous one).
+      if (takeOver) await this.taskModel(db).takeOverSubtree([root.id, ...descendantIds]);
       const updated = await this.taskModel(db).setSubtreeVisibility(
         root.id,
         descendantIds,

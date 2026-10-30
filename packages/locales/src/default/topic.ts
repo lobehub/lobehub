@@ -331,7 +331,12 @@ export default {
   'taskManager.agentSelector.makePrivateConfirm.title': 'Assign to a private agent?',
   'taskManager.agentSelector.privateGroup': 'Private',
   'taskManager.agentSelector.privateGroupMakesPrivate': 'Private · makes this task private',
+  'taskManager.agentSelector.privateGroupTakesOver': 'Private · takes this task over as yours',
   'taskManager.agentSelector.recentGroup': 'Recently assigned',
+  'taskManager.agentSelector.takeOverConfirm.hint':
+    'This agent is private, so the task and its subtasks become your private task before it is assigned. Its creator and other members lose access, and its schedule or heartbeat is turned off.',
+  'taskManager.agentSelector.takeOverConfirm.ok': 'Take over and assign',
+  'taskManager.agentSelector.takeOverConfirm.title': 'Take this task over as yours?',
   'taskManager.agentSelector.workspaceGroup': 'Workspace',
   'taskManager.welcome': 'Ask me about your tasks',
   'temp': 'Temporary',

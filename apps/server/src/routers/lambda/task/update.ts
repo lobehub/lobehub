@@ -159,10 +159,25 @@ export const updateRouter = router({
       }
     }),
   updateVisibility: taskProcedureWrite
-    .input(idInput.merge(z.object({ visibility: z.enum(['private', 'public']) })))
+    .input(
+      idInput.merge(
+        z.object({
+          // A member making someone else's public task private takes it over:
+          // it becomes their private task. Opt-in, so a plain demotion by a
+          // non-creator still fails instead of silently moving the task.
+          takeOwnership: z.boolean().optional(),
+          visibility: z.enum(['private', 'public']),
+        }),
+      ),
+    )
     .mutation(async ({ input, ctx }) => {
       try {
         const resolved = await resolveTaskOrThrow(ctx.taskModel, input.id);
+        const takeOwnership =
+          !!ctx.workspaceId &&
+          !!input.takeOwnership &&
+          input.visibility === 'private' &&
+          resolved.createdByUserId !== ctx.userId;
 
         // Mirror the edit-lock contract from `update`: reject visibility flips
         // while another workspace member is actively editing this task. Without
@@ -181,11 +196,10 @@ export const updateRouter = router({
 
         // The creator can always change visibility on their own tasks. In
         // workspace mode, workspace owners may still promote other members'
-        // tasks (mirrors the transferTask policy at line ~1166), but demoting
-        // to private stays creator-only: the task would land in
-        // the creator's private list, so an owner-initiated demotion just
-        // appropriates another member's data.
-        if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId) {
+        // tasks (mirrors the transferTask policy at line ~1166). Demoting
+        // someone else's task leaves it in the creator's private list, so a
+        // non-creator may only demote by taking the task over as their own.
+        if (ctx.workspaceId && resolved.createdByUserId !== ctx.userId && !takeOwnership) {
           if (input.visibility === 'private') {
             throw new TRPCError({
               code: 'FORBIDDEN',
@@ -203,6 +217,18 @@ export const updateRouter = router({
             throw new TRPCError({
               code: 'FORBIDDEN',
               message: 'Only the task creator or workspace owner can change visibility',
+            });
+          }
+        }
+
+        // Runs are attributed to the creator; moving ownership under a live run
+        // would leave it finishing as the previous creator.
+        if (takeOwnership) {
+          const subtree = [resolved, ...(await ctx.taskModel.findAllDescendants(resolved.id))];
+          if (subtree.some((task) => task.status === 'running')) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Cannot take over this task while it or a subtask is running.',
             });
           }
         }
@@ -246,7 +272,9 @@ export const updateRouter = router({
           ctx.taskService.assertParentVisibilityCompat(input.visibility, parent?.visibility);
         }
 
-        const updated = await ctx.taskSubtree.updateVisibility(resolved.id, input.visibility);
+        const updated = await ctx.taskSubtree.updateVisibility(resolved.id, input.visibility, {
+          takeOwnership,
+        });
         if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return { data: updated, message: 'Task visibility updated', success: true };
       } catch (error) {

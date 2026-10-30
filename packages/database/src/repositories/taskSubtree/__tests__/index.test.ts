@@ -177,6 +177,42 @@ describe('TaskSubtreeRepository', () => {
       expect((await alice.findById(childForAlice.id))?.assigneeUserId).toBe(userId);
     });
 
+    it('should hand the subtree to the caller when taking it over as private', async () => {
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const bob = new TaskModel(serverDB, userId2, wsId);
+
+      const root = await alice.create({
+        automationMode: 'schedule',
+        instruction: 'Alice root',
+        schedulePattern: '0 9 * * *',
+        visibility: 'public',
+      });
+      await alice.update(root.id, { status: 'scheduled' });
+      const child = await alice.create({ instruction: 'Alice child', parentTaskId: root.id });
+      await alice.addComment({
+        authorUserId: userId,
+        content: 'alice context',
+        taskId: root.id,
+        userId,
+      });
+
+      const taken = await subtreeRepo(userId2, wsId).updateVisibility(root.id, 'private', {
+        takeOwnership: true,
+      });
+      expect(taken).toMatchObject({
+        automationMode: null,
+        createdByUserId: userId2,
+        status: 'paused',
+        visibility: 'private',
+      });
+      expect((await bob.findById(child.id))?.createdByUserId).toBe(userId2);
+
+      // Bob keeps Alice's comment (author unchanged); Alice loses the task.
+      const comments = await bob.getComments(root.id);
+      expect(comments.map((c) => [c.content, c.authorUserId])).toEqual([['alice context', userId]]);
+      expect(await alice.findById(root.id)).toBeNull();
+    });
+
     it('should keep member assignees when promoting to public', async () => {
       const alice = new TaskModel(serverDB, userId, wsId);
       const task = await alice.create({ instruction: 'Private', visibility: 'private' });

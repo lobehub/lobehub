@@ -2227,6 +2227,14 @@ export default {
     'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
   'taskDetail.makePrivate.errorOtherCreators':
     'This task has subtasks created by other members. Move or remove them before making it private.',
+  'taskDetail.takeOver.confirmHint':
+    'This task belongs to another member. It and its subtasks become your private task: its creator and other members lose access, and its schedule or heartbeat is turned off.',
+  'taskDetail.takeOver.confirmOk': 'Take over',
+  'taskDetail.takeOver.confirmTitle': 'Take this task over as your private task?',
+  'taskDetail.takeOver.errorRunning':
+    'This task or one of its subtasks is running. Take it over once the run finishes.',
+  'taskDetail.takeOver.menuLabel': 'Take over as private',
+  'taskDetail.takeOver.success': 'Taken over as your private task',
 
   'createGoal.addCriterion': 'Add criterion',
   'createGoal.costBudgetHint':

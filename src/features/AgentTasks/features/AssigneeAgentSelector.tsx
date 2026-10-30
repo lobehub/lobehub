@@ -214,15 +214,18 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const collapsedGroups = useGlobalStore((s) => s.status.assigneeAgentSelectorCollapsedGroups);
     const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-    const { offer: offerPrivateAgents, privatizes: offerPrivateOnPublic } =
-      shouldOfferPrivateAgents({
-        currentUserId,
-        hasOnChange: !!onChange,
-        taskCreatorId,
-        taskIdentifier,
-        taskVisibility,
-        workspaceId,
-      });
+    const {
+      offer: offerPrivateAgents,
+      privatizes: offerPrivateOnPublic,
+      takesOver,
+    } = shouldOfferPrivateAgents({
+      currentUserId,
+      hasOnChange: !!onChange,
+      taskCreatorId,
+      taskIdentifier,
+      taskVisibility,
+      workspaceId,
+    });
 
     const scopes = useMemo<PickerScope[]>(() => {
       const labels = {
@@ -241,9 +244,11 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
             scope: 'private',
             ungrouped: privateUngroupedAgents,
           }),
-          title: offerPrivateOnPublic
-            ? t('taskManager.agentSelector.privateGroupMakesPrivate', { ns: 'topic' })
-            : t('taskManager.agentSelector.privateGroup', { ns: 'topic' }),
+          title: takesOver
+            ? t('taskManager.agentSelector.privateGroupTakesOver', { ns: 'topic' })
+            : offerPrivateOnPublic
+              ? t('taskManager.agentSelector.privateGroupMakesPrivate', { ns: 'topic' })
+              : t('taskManager.agentSelector.privateGroup', { ns: 'topic' }),
         });
 
       const workspaceSections = buildAssigneeAgentSections({
@@ -272,6 +277,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       privatePinnedAgents,
       privateUngroupedAgents,
       t,
+      takesOver,
       ungroupedAgents,
     ]);
 
@@ -447,21 +453,33 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
 
         // The task goes private before the private agent is assigned; if that
         // fails, the store has already explained why and nothing is assigned.
+        // Someone else's task becomes the picker's own private task.
+        const copy = takesOver
+          ? {
+              hint: t('taskManager.agentSelector.takeOverConfirm.hint', { ns: 'topic' }),
+              ok: t('taskManager.agentSelector.takeOverConfirm.ok', { ns: 'topic' }),
+              title: t('taskManager.agentSelector.takeOverConfirm.title', { ns: 'topic' }),
+            }
+          : {
+              hint: t('taskManager.agentSelector.makePrivateConfirm.hint', { ns: 'topic' }),
+              ok: t('taskManager.agentSelector.makePrivateConfirm.ok', { ns: 'topic' }),
+              title: t('taskManager.agentSelector.makePrivateConfirm.title', { ns: 'topic' }),
+            };
         confirmModal({
           cancelText: t('cancel', { ns: 'common' }),
           content: (
             <>
               <VisibilityConfirmContent variant="makePrivate" />
-              <div style={{ marginTop: 8, opacity: 0.7 }}>
-                {t('taskManager.agentSelector.makePrivateConfirm.hint', { ns: 'topic' })}
-              </div>
+              <div style={{ marginTop: 8, opacity: 0.7 }}>{copy.hint}</div>
             </>
           ),
           okButtonProps: { danger: true },
-          okText: t('taskManager.agentSelector.makePrivateConfirm.ok', { ns: 'topic' }),
+          okText: copy.ok,
           onOk: async () => {
             try {
-              await updateTaskVisibility(taskIdentifier, 'private');
+              await (takesOver
+                ? updateTaskVisibility(taskIdentifier, 'private', { takeOwnership: true })
+                : updateTaskVisibility(taskIdentifier, 'private'));
             } catch {
               // The store action already surfaced a targeted toast; swallow so
               // the confirm modal doesn't bubble a second error to base-ui.
@@ -469,7 +487,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
             }
             await assignAgent(agentId, agent);
           },
-          title: t('taskManager.agentSelector.makePrivateConfirm.title', { ns: 'topic' }),
+          title: copy.title,
         });
       },
       [
@@ -479,6 +497,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
         offerPrivateOnPublic,
         privateAgentIds,
         t,
+        takesOver,
         taskIdentifier,
         updateTaskVisibility,
       ],

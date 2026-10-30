@@ -110,29 +110,35 @@ describe('shouldOfferPrivateAgents', () => {
     taskVisibility: 'public' as const,
     workspaceId: 'ws-1',
   };
+  const hidden = { offer: false, privatizes: false, takesOver: false };
 
   it('offers private agents on a non-public task without privatizing it', () => {
+    const plain = { offer: true, privatizes: false, takesOver: false };
     expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, taskVisibility: 'private' })).toEqual(
-      { offer: true, privatizes: false },
+      plain,
     );
-    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, taskVisibility: null })).toEqual({
-      offer: true,
-      privatizes: false,
-    });
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, taskVisibility: null })).toEqual(
+      plain,
+    );
   });
 
-  it('lets the creator of a public workspace task pick a private agent by privatizing it', () => {
+  it('lets the creator of a public workspace task keep it while privatizing it', () => {
     expect(shouldOfferPrivateAgents(creatorOnPublicTask)).toEqual({
       offer: true,
       privatizes: true,
+      takesOver: false,
     });
   });
 
-  it('keeps private agents hidden on a public task for everyone else', () => {
-    const hidden = { offer: false, privatizes: false };
-    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, currentUserId: 'user-b' })).toEqual(
-      hidden,
-    );
+  it('lets another member take a public workspace task over', () => {
+    expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, currentUserId: 'user-b' })).toEqual({
+      offer: true,
+      privatizes: true,
+      takesOver: true,
+    });
+  });
+
+  it('keeps private agents hidden on a public task outside a persisted workspace task', () => {
     expect(shouldOfferPrivateAgents({ ...creatorOnPublicTask, taskCreatorId: undefined })).toEqual(
       hidden,
     );

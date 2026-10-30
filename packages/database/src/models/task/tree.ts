@@ -262,6 +262,30 @@ export const setSubtreeVisibility = async (
 };
 
 /**
+ * Make the caller the creator of a task subtree, for a member taking another
+ * member's public task private as their own. Only the `tasks` rows change: the
+ * child rows keep their authors and stay readable through the creator branch
+ * of `childOwnership`.
+ *
+ * Automation stops: runs are attributed to the creator, so the previous
+ * creator's queued schedule/heartbeat ticks no longer match the row, and an
+ * armed `scheduled` task would otherwise look live with nothing driving it.
+ * The new creator re-arms it if they want it.
+ */
+export const takeOverSubtree = async (ctx: TaskModelContext, taskIds: string[]): Promise<void> => {
+  if (taskIds.length === 0) return;
+  await ctx.db
+    .update(tasks)
+    .set({
+      automationMode: null,
+      createdByUserId: ctx.userId,
+      status: sql`CASE WHEN ${tasks.status} = 'scheduled' THEN 'paused' ELSE ${tasks.status} END`,
+      updatedAt: new Date(),
+    })
+    .where(and(inArray(tasks.id, taskIds), taskOwnership(ctx)));
+};
+
+/**
  * Delete the given tasks (owned child rows cascade through their FKs).
  * Acceptances belong to the verify aggregate; `TaskSubtreeRepository`
  * removes them in the same transaction.

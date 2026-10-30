@@ -489,9 +489,15 @@ export class TaskDetailSliceActionImpl {
     }
   };
 
-  updateTaskVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
+  updateTaskVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+    options?: { takeOwnership?: boolean },
+  ): Promise<void> => {
     try {
-      await taskService.updateVisibility(id, visibility);
+      await (options
+        ? taskService.updateVisibility(id, visibility, options)
+        : taskService.updateVisibility(id, visibility));
     } catch (error) {
       // Surfaces a specific actionable error when the task's assignee is a
       // private agent. The generic "failed" toast hides what the user must
@@ -500,6 +506,9 @@ export class TaskDetailSliceActionImpl {
       const raw = (error as { message?: string })?.message ?? '';
       const isPrivateAgentBlock = /public task cannot be assigned to a private agent/i.test(raw);
       const isOtherCreatorsBlock = /subtasks created by other members/i.test(raw);
+      const isRunningBlock = /cannot take over this task while it or a subtask is running/i.test(
+        raw,
+      );
       toast.error(
         isPrivateAgentBlock
           ? t('taskDetail.publishToWorkspace.errorPrivateAgent', {
@@ -513,10 +522,16 @@ export class TaskDetailSliceActionImpl {
                   'This task has subtasks created by other members. Move or remove them before making it private.',
                 ns: 'chat',
               })
-            : t('createTask.visibility.changeFailed', {
-                defaultValue: 'Failed to change task visibility',
-                ns: 'chat',
-              }),
+            : isRunningBlock
+              ? t('taskDetail.takeOver.errorRunning', {
+                  defaultValue:
+                    'This task or one of its subtasks is running. Take it over once the run finishes.',
+                  ns: 'chat',
+                })
+              : t('createTask.visibility.changeFailed', {
+                  defaultValue: 'Failed to change task visibility',
+                  ns: 'chat',
+                }),
       );
       throw error;
     }

@@ -105,10 +105,11 @@ export const pushRecentAssignee = (current: string[] | undefined, agentId: strin
   [agentId, ...(current ?? []).filter((id) => id !== agentId)].slice(0, MAX_RECENT_ASSIGNEES);
 
 /**
- * A public task only takes a private agent once it is private itself, and only
- * its creator may make a workspace task private, so the creator alone is
- * offered private agents there (behind a confirmation). A caller that owns the
- * change through `onChange` (e.g. a create form) keeps the plain public list.
+ * A public task only takes a private agent once it is private itself, so on a
+ * public workspace task picking one makes the task private first (behind a
+ * confirmation). Its creator keeps it; anyone else takes it over as their own
+ * private task. A caller that owns the change through `onChange` (e.g. a
+ * create form) keeps the plain public list.
  */
 export const shouldOfferPrivateAgents = ({
   currentUserId,
@@ -124,13 +125,13 @@ export const shouldOfferPrivateAgents = ({
   taskIdentifier?: string;
   taskVisibility?: 'private' | 'public' | null;
   workspaceId?: string | null;
-}): { offer: boolean; privatizes: boolean } => {
-  if (taskVisibility !== 'public') return { offer: true, privatizes: false };
+}): { offer: boolean; privatizes: boolean; takesOver: boolean } => {
+  if (taskVisibility !== 'public') return { offer: true, privatizes: false, takesOver: false };
   const privatizes =
-    !hasOnChange &&
-    !!taskIdentifier &&
-    !!workspaceId &&
-    !!currentUserId &&
-    taskCreatorId === currentUserId;
-  return { offer: privatizes, privatizes };
+    !hasOnChange && !!taskIdentifier && !!workspaceId && !!currentUserId && !!taskCreatorId;
+  return {
+    offer: privatizes,
+    privatizes,
+    takesOver: privatizes && taskCreatorId !== currentUserId,
+  };
 };
