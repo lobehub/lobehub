@@ -2,6 +2,7 @@ import type {
   SignalDecisionLabel,
   SignalDecisionLabelMetadata,
   SignalDecisionOutcome,
+  SignalDecisionVerdict,
 } from '@lobechat/types';
 import { SIGNAL_DECISION_LABEL_CLEARED } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
@@ -84,6 +85,8 @@ export interface ScopeDecisionListItem {
   /** The retention sweep blanked the message, or its signal is gone. */
   textPurged: boolean;
   toTag: string | null;
+  /** Every policy's opinion, shadow ones included. */
+  verdicts: SignalDecisionVerdict[];
 }
 
 export interface ScopeDecisionPage {
@@ -281,6 +284,7 @@ export class SignalDecisionModel {
           string | null
         >`case when ${signals.payloadPurgedAt} is null then left(${signals.payload} ->> 'text', ${SCOPE_READ_TEXT_PREVIEW}) end`,
         toTag: signalDecisions.toTag,
+        verdicts: signalDecisions.verdicts,
       })
       .from(signalDecisions)
       .leftJoin(signals, eq(signals.id, signalDecisions.signalId))
@@ -303,6 +307,7 @@ export class SignalDecisionModel {
         text: row.purged ? null : (row.text ?? null),
         textPurged: row.purged,
         toTag: row.toTag,
+        verdicts: row.verdicts ?? [],
       })),
       nextCursor:
         rows.length > limit && last ? { createdAt: last.createdAtIso, id: last.id } : undefined,

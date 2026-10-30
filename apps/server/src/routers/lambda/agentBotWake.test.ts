@@ -156,6 +156,17 @@ describe('agentBotWakeRouter', () => {
               { label: 'correct', metadata: {}, source: 'llm_judge' },
             ],
             outcome: 'wake',
+            verdicts: [
+              {
+                confidence: 0.83,
+                latencyMs: 400,
+                mode: 'enforce',
+                policyId: 'bot-wake:classifier',
+                reason: 'score 0.83',
+                verdict: 'allow',
+                version: 1,
+              },
+            ],
           },
         ],
       });
@@ -167,9 +178,11 @@ describe('agentBotWakeRouter', () => {
       expect(items[0]).toMatchObject({
         agentLabel: { label: 'false_wake', reason: 'off_topic' },
         followup: true,
+        judge: { kind: 'addressed', score: 0.83, verdict: 'allow' },
         userLabel: { label: 'correct', note: 'fine' },
       });
       expect(items[0]).not.toHaveProperty('labels');
+      expect(items[0]).not.toHaveProperty('verdicts');
     });
   });
 

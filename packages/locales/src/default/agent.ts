@@ -724,6 +724,12 @@ export default {
   'channel.records.column.mark': 'Right?',
   'channel.records.mark.wrong': 'Wrong call',
   'channel.records.openMessage': 'Open the message',
+  'channel.records.column.score': 'Score',
+  'channel.records.judge.addressed': 'Is it meant for the bot',
+  'channel.records.judge.duty': 'Is it within its duties',
+  'channel.records.judge.allow': 'over the threshold',
+  'channel.records.judge.deny': 'under the threshold',
+  'channel.records.judge.hint': '{{judge}}: {{verdict}}',
   'channel.records.mark.undo': 'Click again to remove the mark',
   'channel.records.empty.title': 'No records yet',
   'channel.records.empty.desc':

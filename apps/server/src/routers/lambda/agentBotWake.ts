@@ -21,6 +21,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { BOT_WAKE_FOLLOWUP_REASONS } from '@/server/services/bot/BotMessageRouter/wakeDecision';
 import { NO_REPLY_LABEL_SOURCE } from '@/server/services/bot/noReplyLabel';
+import { pickWakeJudgeScore } from '@/server/services/bot/wake/judgeScore';
 
 import {
   agentBotProviderProcedure,
@@ -66,8 +67,8 @@ const cursorSchema = z.object({
 export const agentBotWakeRouter = router({
   /**
    * One bot's wake decisions, newest first, from the last {@link SCOPE_READ_DEFAULT_DAYS} days:
-   * the message preview, what the router did and why, the agent's own silence label and the
-   * owner's current mark.
+   * the message preview, what the router did and why, the model score behind it (`judge`), the
+   * agent's own silence label and the owner's current mark. The raw verdicts stay on the server.
    */
   listWakeDecisions: agentBotProviderProcedure
     .input(
@@ -94,7 +95,7 @@ export const agentBotWakeRouter = router({
       });
 
       return {
-        items: page.items.map(({ labels, ...item }) => {
+        items: page.items.map(({ labels, verdicts, ...item }) => {
           const agent = pickLabel(labels, NO_REPLY_LABEL_SOURCE);
           const user = pickLabel(labels, BOT_WAKE_USER_LABEL_SOURCE);
 
@@ -102,6 +103,7 @@ export const agentBotWakeRouter = router({
             ...item,
             agentLabel: agent ? { label: agent.label, reason: agent.metadata.reason } : null,
             followup: !!item.finalReason && followups.has(item.finalReason),
+            judge: pickWakeJudgeScore(verdicts, item.finalReason) ?? null,
             userLabel: user
               ? { createdAt: user.createdAt, label: user.label, note: user.metadata.rationale }
               : null,

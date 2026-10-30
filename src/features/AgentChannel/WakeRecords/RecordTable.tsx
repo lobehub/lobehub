@@ -1,7 +1,8 @@
 'use client';
 
 import type { BotWakeUserLabel } from '@lobechat/types';
-import { ActionIcon, Flexbox, Table, type TableColumn, Tag, Text, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Table, type TableColumn, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ExternalLink } from 'lucide-react';
@@ -12,13 +13,36 @@ import type { WakeDecisionItem } from '@/services/agentBotProvider';
 import { MarkButtons } from './MarkButtons';
 import { platformMessageUrl } from './messageLink';
 
-const OUTCOME_COLOR: Record<string, string> = {
-  defer: 'processing',
-  skip: 'default',
-  wake: 'success',
+const HOVER = '@media (hover: hover)';
+
+const OUTCOME_DOT: Record<string, string> = {
+  defer: cssVar.colorInfo,
+  skip: cssVar.colorTextQuaternary,
+  wake: cssVar.colorSuccess,
 };
 
 const styles = stylex.create({
+  dot: (color: string) => ({
+    backgroundColor: color,
+    borderRadius: '50%',
+    flexShrink: 0,
+    height: 6,
+    width: 6,
+  }),
+  // Shown on a pointer device only while the row is hovered or focused; always on touch.
+  link: {
+    opacity: {
+      default: 1,
+      [HOVER]: {
+        default: 0,
+        [stylex.when.ancestor(':hover')]: 1,
+        [stylex.when.ancestor(':focus-within')]: 1,
+      },
+    },
+  },
+  score: {
+    fontVariantNumeric: 'tabular-nums',
+  },
   preview: {
     flex: '1',
     minWidth: 0,
@@ -34,8 +58,8 @@ interface RecordTableProps {
 }
 
 /**
- * One row per judged message: when, what it said (with a link to it on the platform), what the
- * bot did and why, and the owner's ✓ / ✗ mark.
+ * One row per judged message: when, what it said (with a link to it on the platform, shown on
+ * hover), what the bot did, the model score behind it, why, and the owner's ✓ / ✗ mark.
  */
 export const RecordTable = ({ disabled, items, onMark }: RecordTableProps) => {
   const { t: _t } = useTranslation('agent');
@@ -85,6 +109,7 @@ export const RecordTable = ({ disabled, items, onMark }: RecordTableProps) => {
               <a
                 aria-label={t('channel.records.openMessage')}
                 href={url}
+                {...stylex.props(styles.link)}
                 rel={'noopener noreferrer'}
                 target={'_blank'}
               >
@@ -103,15 +128,47 @@ export const RecordTable = ({ disabled, items, onMark }: RecordTableProps) => {
     {
       key: 'outcome',
       render: (_, item) => (
-        <Flexbox horizontal gap={4} wrap={'wrap'}>
-          <Tag color={OUTCOME_COLOR[item.outcome]} size={'small'}>
+        <Flexbox horizontal align={'center'} gap={6}>
+          <span
+            {...stylex.props(styles.dot(OUTCOME_DOT[item.outcome] ?? cssVar.colorTextQuaternary))}
+          />
+          <Text fontSize={12} style={{ whiteSpace: 'nowrap' }}>
             {translate('outcome', item.outcome)}
-          </Tag>
-          {item.followup && <Tag size={'small'}>{t('channel.records.proactive')}</Tag>}
+            {item.followup && (
+              <Text as={'span'} fontSize={12} type={'secondary'}>
+                {` · ${t('channel.records.proactive')}`}
+              </Text>
+            )}
+          </Text>
         </Flexbox>
       ),
       title: t('channel.records.column.outcome'),
-      width: 124,
+      width: 116,
+    },
+    {
+      align: 'right',
+      key: 'score',
+      render: (_, item) =>
+        item.judge ? (
+          <Tooltip
+            title={t('channel.records.judge.hint', {
+              judge: t(`channel.records.judge.${item.judge.kind}`),
+              verdict: t(`channel.records.judge.${item.judge.verdict}`, {
+                defaultValue: item.judge.verdict,
+              }),
+            })}
+          >
+            <Text fontSize={12} {...stylex.props(styles.score)}>
+              {item.judge.score.toFixed(2)}
+            </Text>
+          </Tooltip>
+        ) : (
+          <Text fontSize={12} type={'secondary'}>
+            --
+          </Text>
+        ),
+      title: t('channel.records.column.score'),
+      width: 72,
     },
     {
       key: 'reason',
@@ -157,6 +214,8 @@ export const RecordTable = ({ disabled, items, onMark }: RecordTableProps) => {
       pagination={false}
       rowKey={'id'}
       size={'small'}
+      // Each row marks itself so the message link can show on hovering it.
+      onRow={() => stylex.props(stylex.defaultMarker())}
     />
   );
 };
