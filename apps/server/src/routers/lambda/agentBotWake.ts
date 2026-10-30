@@ -54,7 +54,9 @@ const resolveBotScope = async (ctx: BotScopeCtx, botId: string) => {
   if (!bot) throw new TRPCError({ code: 'NOT_FOUND', message: BOT_NOT_FOUND_MESSAGE });
 
   return {
-    decisions: new SignalDecisionModel(ctx.serverDB, bot.userId),
+    // The bot's own workspace, not the caller's: a teammate may read a bot its workspace owns, and
+    // the scope read must match the `workspace_id` the wake pipeline recorded the decisions under.
+    decisions: new SignalDecisionModel(ctx.serverDB, bot.userId, bot.workspaceId ?? undefined),
     scopeKey: `${bot.platform}:${bot.applicationId}`,
   };
 };

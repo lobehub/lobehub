@@ -3,7 +3,14 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, signalDecisionLabels, signalDecisions, signals, users } from '../../schemas';
+import {
+  agents,
+  signalDecisionLabels,
+  signalDecisions,
+  signals,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { SignalModel } from '../signal';
 import { SignalDecisionModel } from '../signalDecision';
@@ -28,6 +35,7 @@ const seed = async (
     scope = scopeKey,
     text = `text of ${externalId}`,
     owner = userId,
+    workspace,
   }: {
     minutesAgo?: number;
     outcome?: 'defer' | 'skip' | 'wake';
@@ -35,9 +43,11 @@ const seed = async (
     reason?: string;
     scope?: string;
     text?: string;
+    /** The workspace that owns the binding; omitted means personal scope. */
+    workspace?: string;
   } = {},
 ) => {
-  const signal = (await new SignalModel(serverDB, owner).record({
+  const signal = (await new SignalModel(serverDB, owner, workspace).record({
     externalId,
     metadata: { address: { messageId: externalId, platform: 'discord' } },
     payload: { text },
@@ -45,7 +55,7 @@ const seed = async (
     source: 'bot:discord',
     type: 'bot.message.merged',
   }))!;
-  const decision = (await new SignalDecisionModel(serverDB, owner).record({
+  const decision = (await new SignalDecisionModel(serverDB, owner, workspace).record({
     agentId,
     finalReason: reason,
     outcome,
@@ -69,6 +79,9 @@ const label = (decisionId: string, source: string, value: any, minutesAgo: numbe
     source,
   });
 
+let workspaceA = '';
+let workspaceB = '';
+
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
@@ -76,6 +89,17 @@ beforeEach(async () => {
     { id: agentId, userId },
     { id: `${agentId}-other`, userId: otherUserId },
   ]);
+
+  const [wsA] = await serverDB
+    .insert(workspaces)
+    .values({ name: 'wsA', primaryOwnerId: userId, slug: 'signal-decision-scope-ws-a' })
+    .returning();
+  const [wsB] = await serverDB
+    .insert(workspaces)
+    .values({ name: 'wsB', primaryOwnerId: userId, slug: 'signal-decision-scope-ws-b' })
+    .returning();
+  workspaceA = wsA.id;
+  workspaceB = wsB.id;
 });
 
 afterEach(async () => {
@@ -124,6 +148,26 @@ describe('SignalDecisionModel scope reads', () => {
       const page = await new SignalDecisionModel(serverDB, userId).listByScope({ scopeKey });
 
       expect(page.items).toEqual([]);
+    });
+
+    it('does not read decisions a different scope recorded on the same channel', async () => {
+      // Deleting a binding in workspace A and recreating the same platform app in workspace B
+      // reuses `discord:app-1` under the same owner; the two histories must not merge.
+      await seed('shared-a', { workspace: workspaceA });
+      await seed('personal');
+      await seed('shared-b', { workspace: workspaceB });
+
+      const fromA = await new SignalDecisionModel(serverDB, userId, workspaceA).listByScope({
+        scopeKey,
+      });
+      const fromB = await new SignalDecisionModel(serverDB, userId, workspaceB).listByScope({
+        scopeKey,
+      });
+      const personal = await new SignalDecisionModel(serverDB, userId).listByScope({ scopeKey });
+
+      expect(fromA.items.map((i) => i.text)).toEqual(['text of shared-a']);
+      expect(fromB.items.map((i) => i.text)).toEqual(['text of shared-b']);
+      expect(personal.items.map((i) => i.text)).toEqual(['text of personal']);
     });
 
     it('leaves out decisions older than the window', async () => {
@@ -229,6 +273,30 @@ describe('SignalDecisionModel scope reads', () => {
   });
 
   describe('summaryByScope', () => {
+    it('counts only the scope’s own decisions', async () => {
+      await seed('shared-a', { workspace: workspaceA });
+      await seed('shared-b-1', { workspace: workspaceB });
+      await seed('shared-b-2', { workspace: workspaceB });
+      await seed('personal');
+
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60_000);
+      const fromB = await new SignalDecisionModel(serverDB, userId, workspaceB).summaryByScope({
+        followupReasons: FOLLOWUPS,
+        labelSources: SOURCES,
+        scopeKey,
+        since,
+      });
+      const personal = await new SignalDecisionModel(serverDB, userId).summaryByScope({
+        followupReasons: FOLLOWUPS,
+        labelSources: SOURCES,
+        scopeKey,
+        since,
+      });
+
+      expect(fromB.total).toBe(2);
+      expect(personal.total).toBe(1);
+    });
+
     it('counts outcomes, follow-up wakes and current labels per source', async () => {
       const keyword = await seed('keyword', { reason: 'watch-keyword' });
       const mention = await seed('mention');

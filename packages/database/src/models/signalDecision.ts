@@ -6,7 +6,7 @@ import type {
 } from '@lobechat/types';
 import { SIGNAL_DECISION_LABEL_CLEARED } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import type { NewSignalDecision, SignalDecisionItem, SignalDecisionLabelItem } from '../schemas';
 import { signalDecisionLabels, signalDecisions, signals } from '../schemas';
@@ -134,6 +134,21 @@ export class SignalDecisionModel {
   }
 
   /**
+   * The scope that recorded a decision, as a predicate: workspace rows carry their `workspace_id`,
+   * personal ones leave it null.
+   *
+   * Scope reads cannot skip this. A bot binding is looked up by `platform:applicationId`, so
+   * deleting a binding in one scope and recreating the same platform app in another reuses the
+   * exact same `scope_key` under the same owner — owner + scope key alone would hand the new
+   * scope's members the previous scope's history.
+   */
+  private get scopeOfRecord() {
+    return this.workspaceId
+      ? eq(signalDecisions.workspaceId, this.workspaceId)
+      : isNull(signalDecisions.workspaceId);
+  }
+
+  /**
    * Records what the pipeline decided for one signal.
    *
    * Idempotent on `(signal_id, agent_id, pipeline_version)`: a redelivered message returns the
@@ -253,6 +268,7 @@ export class SignalDecisionModel {
       eq(signalDecisions.userId, this.userId),
       eq(signalDecisions.scopeKey, params.scopeKey),
       gte(signalDecisions.createdAt, since),
+      this.scopeOfRecord,
     ];
     if (params.outcome) conditions.push(eq(signalDecisions.outcome, params.outcome));
     if (params.finalReasons?.length)
@@ -326,6 +342,7 @@ export class SignalDecisionModel {
       eq(signalDecisions.userId, this.userId),
       eq(signalDecisions.scopeKey, params.scopeKey),
       gte(signalDecisions.createdAt, params.since),
+      this.scopeOfRecord,
     );
     const followup = params.followupReasons.length
       ? inArray(signalDecisions.finalReason, [...params.followupReasons])

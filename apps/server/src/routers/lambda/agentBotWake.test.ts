@@ -61,8 +61,14 @@ const { agentBotWakeRouter } = await import('./agentBotWake');
 
 const BOT_ID = 'bot-1';
 const DECISION_ID = '7f1c2a40-5b7e-4d8a-9f61-0c2b3d4e5f60';
-/** A teammate's bot in the caller's workspace: decisions live under its owner. */
-const bot = { applicationId: 'app-1', id: BOT_ID, platform: 'discord', userId: 'owner-1' };
+/** A teammate's bot in the caller's workspace: decisions live under its owner and that workspace. */
+const bot = {
+  applicationId: 'app-1',
+  id: BOT_ID,
+  platform: 'discord',
+  userId: 'owner-1',
+  workspaceId: 'ws-1',
+};
 const ctx: any = { serverDB: {}, userId: 'caller-1', workspaceId: 'ws-1' };
 
 const decision = (overrides = {}) => ({
@@ -102,7 +108,9 @@ describe('agentBotWakeRouter', () => {
 
       expect(botModelCtor).toHaveBeenCalledWith({}, 'caller-1', {}, 'ws-1');
       expect(mockFindBot).toHaveBeenCalledWith(BOT_ID);
-      expect(decisionModelCtor).toHaveBeenCalledWith({}, 'owner-1');
+      // The record's own scope, not the caller's: the read must match the `workspace_id` the wake
+      // pipeline wrote, so a bot recreated elsewhere cannot read the earlier scope's history.
+      expect(decisionModelCtor).toHaveBeenCalledWith({}, 'owner-1', 'ws-1');
       expect(mockListByScope).toHaveBeenCalledWith(
         expect.objectContaining({ scopeKey: 'discord:app-1' }),
       );
