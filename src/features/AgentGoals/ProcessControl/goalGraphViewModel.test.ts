@@ -282,6 +282,31 @@ describe('buildGoalGraphView', () => {
     expect(view.byId.w1).toMatchObject({ isStale: false, isVerifying: true });
   });
 
+  it('stops asking for a sign-off on a retired node', () => {
+    // The node's delivery is discarded; a `delivered` acceptance beside the
+    // "retired" tag asked the owner to confirm work the Goal had dropped.
+    const view = buildGoalGraphView(
+      snapshot({
+        acceptances: {
+          w1: { id: 'acc-1', status: 'delivered' },
+          w2: { id: 'acc-2', status: 'errored' },
+          w3: { id: 'acc-3', status: 'delivered' },
+        },
+        events: [event('w1', 'retired', 30), event('w2', 'retired', 30)],
+        nodes: [
+          node('w1', { status: 'retired', taskId: 'task-1' }),
+          node('w2', { status: 'retired', taskId: 'task-2' }),
+          node('w3', { status: 'active', taskId: 'task-3' }),
+        ],
+      }),
+      NOW,
+    );
+
+    expect(view.byId.w1.acceptance).toEqual({ id: 'acc-1', status: 'closed' });
+    expect(view.byId.w2.acceptance).toEqual({ id: 'acc-2', status: 'closed' });
+    expect(view.byId.w3.acceptance).toEqual({ id: 'acc-3', status: 'delivered' });
+  });
+
   it('gives up on a delivery the coordinator itself would no longer wait for', () => {
     // Past the coordinator's settle grace the verify run really is stuck, and
     // the honest reading flips back to lost.
