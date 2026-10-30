@@ -15,6 +15,7 @@ import {
   candidateAgents,
   deliver,
   findThread,
+  pairedAgent,
 } from './delivery';
 import { ChannelError } from './error';
 import { audit } from './transaction';
@@ -62,8 +63,10 @@ export const validateSendInput = (input: ChannelSendInput) => {
  *
  * - @mentioned Agents get jobs in this transaction (`directed`, source `explicit`).
  * - @mentioning only people wakes no Agent.
- * - Without mentions, `jev` leaves the message `pending` for the routing task, and
+ * - Without mentions, `decision` leaves the message `pending` for the routing task, and
  *   `fallback` hands it to every candidate Agent at once.
+ * - A group with one person and one Agent skips routing: any message that mentions no
+ *   Agent, in the main channel or a Thread, goes straight to that Agent.
  */
 export const sendMessage = async (
   tx: Transaction,
@@ -124,19 +127,24 @@ export const sendMessage = async (
 
   const mentioned = await activeMembers(tx, channel.id, mentions);
   const mentionedAgents = mentioned.filter((target) => target.actorType === 'agent');
-  if (thread && mentioned.length) {
+  const paired =
+    channel.agentId || mentionedAgents.length ? undefined : await pairedAgent(tx, channel.id);
+  // The paired Agent follows the Thread it answers, like a mentioned one.
+  const followers = [...mentions, ...(thread && paired ? [paired.id] : [])];
+  if (thread && followers.some((id) => !thread.followerMemberIds.includes(id))) {
     await tx
       .update(channelThreads)
-      .set({ followerMemberIds: [...new Set([...thread.followerMemberIds, ...mentions])] })
+      .set({ followerMemberIds: [...new Set([...thread.followerMemberIds, ...followers])] })
       .where(eq(channelThreads.id, thread.id));
   }
 
-  const candidates = mentions.length
-    ? []
-    : await candidateAgents(tx, channel.id, channel.agentId ? null : thread);
+  const candidates =
+    paired || mentions.length
+      ? []
+      : await candidateAgents(tx, channel.id, channel.agentId ? null : thread);
   const direct = !!channel.agentId && candidates.length > 0;
   const [pendingRoot] =
-    thread && !mentions.length && !direct
+    thread && !paired && !mentions.length && !direct
       ? await tx
           .select({ id: channelMessages.id })
           .from(channelMessages)
@@ -147,30 +155,34 @@ export const sendMessage = async (
             ),
           )
       : [];
-  const routed = mentions.length
-    ? ({ reason: 'Mentioned', source: 'explicit', status: 'directed' } as const)
-    : pendingRoot
-      ? {
-          reason: 'Waiting for the root message routing decision',
-          source: input.routing === 'fallback' ? ('fallback' as const) : null,
-          status: 'pending' as const,
-        }
-      : !candidates.length
-        ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
-        : direct
-          ? ({ reason: 'Direct conversation', source: 'explicit', status: 'directed' } as const)
-          : input.routing === 'jev'
-            ? ({ reason: null, source: null, status: 'pending' } as const)
-            : ({
-                reason: 'No decision model configured',
-                source: 'fallback',
-                status: 'assigned',
-              } as const);
-  const recipients = mentions.length
-    ? mentionedAgents
-    : direct || routed.status === 'assigned'
-      ? candidates
-      : [];
+  const routed = paired
+    ? ({ reason: 'Only Agent in the Channel', source: 'explicit', status: 'directed' } as const)
+    : mentions.length
+      ? ({ reason: 'Mentioned', source: 'explicit', status: 'directed' } as const)
+      : pendingRoot
+        ? {
+            reason: 'Waiting for the root message routing decision',
+            source: input.routing === 'fallback' ? ('fallback' as const) : null,
+            status: 'pending' as const,
+          }
+        : !candidates.length
+          ? ({ reason: 'No Agent can answer here', source: null, status: 'skipped' } as const)
+          : direct
+            ? ({ reason: 'Direct conversation', source: 'explicit', status: 'directed' } as const)
+            : input.routing === 'decision'
+              ? ({ reason: null, source: null, status: 'pending' } as const)
+              : ({
+                  reason: 'No decision model configured',
+                  source: 'fallback',
+                  status: 'assigned',
+                } as const);
+  const recipients = paired
+    ? [paired]
+    : mentions.length
+      ? mentionedAgents
+      : direct || routed.status === 'assigned'
+        ? candidates
+        : [];
 
   const message = await appendMessage(tx, {
     userId: member.userId,

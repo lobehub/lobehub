@@ -440,8 +440,6 @@
   "acceptance.roundStatus.uncertain": "不確定",
   "acceptance.roundStatus.verifying": "進行中",
   "acceptance.share.copyFailed": "無法複製連結。請從地址欄複製。",
-  "acceptance.share.makePrivate": "限制存取",
-  "acceptance.share.makePublic": "允許使用連結存取",
   "acceptance.share.privateHint": "只有創建者和工作區成員可以閱讀此驗收及其回合。已下載的副本無法撤回。",
   "acceptance.share.publicHint": "任何擁有連結的人都可以閱讀此驗收、所有回合、證據和評論。已登入的訪客也可以評論和註解。公開前請檢查內容。",
   "acceptance.share.saved": "共享權限已更新",

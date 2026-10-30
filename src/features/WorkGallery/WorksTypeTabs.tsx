@@ -12,10 +12,11 @@ const WORK_TYPES = [
   { key: 'all', titleKey: 'docs.works.all', url: '/resource/works' },
   { key: 'task', titleKey: 'docs.works.task', url: '/resource/works?works=task' },
   { key: 'document', titleKey: 'docs.works.document', url: '/resource/works?works=document' },
+  { key: 'canvas', titleKey: 'docs.works.canvas', url: '/resource/works?works=canvas' },
 ] as const;
 
 interface WorksTypeTabsProps {
-  /** A `?works=` key (`all` / `task` / `document`) or a business category key. */
+  /** A `?works=` key (`all` / `task` / `document` / `canvas`) or a business category key. */
   activeKey: string;
 }
 

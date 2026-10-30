@@ -153,12 +153,16 @@ export const copyToWorkspace = async (
 
     while (queue.length > 0) {
       const currentId = queue.shift()!;
+      /* v8 ignore next -- unreachable: each subtree id is queued once, by its single parent */
       if (seen.has(currentId)) continue;
       seen.add(currentId);
       const original = byId.get(currentId);
+      /* v8 ignore next -- unreachable: the queue only holds ids taken from the subtree */
       if (!original) continue;
 
+      /* v8 ignore start -- unreachable `?? null`: BFS clones a parent before its children, so idMap always holds it */
       const newParentId = currentId === taskId ? null : (idMap.get(original.parentTaskId!) ?? null);
+      /* v8 ignore stop */
 
       const identifier = `${DEFAULT_TASK_IDENTIFIER_PREFIX}-${seq}`;
       const inserted = (await (trx as LobeChatDatabase)

@@ -15,6 +15,9 @@
     "test:coverage": "vitest --coverage --silent='passed-only'",
     "test:update": "vitest -u"
   },
+  "dependencies": {
+    "@lobechat/business-const": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },

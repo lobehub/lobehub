@@ -152,7 +152,7 @@ describe('Channel topic continuation', () => {
     const early = await state.asMember.send(state.channel.id, {
       content: 'Delayed request',
       requestKey: 'delayed',
-      routing: 'jev',
+      routing: 'decision',
     });
     await execution.resolveRouting(state.channel.id, early.id, early.routingAttempt, {
       reason: 'Decision unavailable',

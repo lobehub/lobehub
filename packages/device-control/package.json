@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./agent-browser": "./src/agentBrowser.ts",
     "./claude-code-account-routing": "./src/claudeCodeAccountRouting.ts",
+    "./claude-code-memory": "./src/claudeCodeMemory.ts",
     "./computer-use": "./src/computerUse.ts",
     "./file-preview": "./src/filePreview.ts",
     "./metrics": "./src/metrics/index.ts",

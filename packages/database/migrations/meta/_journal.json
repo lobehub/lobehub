@@ -1351,6 +1351,20 @@
       "when": 1793201098555,
       "tag": "0192_user_favorites",
       "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1793247094452,
+      "tag": "0193_goal_file_shares_memory_structure_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1793260018928,
+      "tag": "0194_document_histories_attribution",
+      "breakpoints": true
     }
   ],
   "version": "6"

@@ -84,10 +84,20 @@ export class ChannelService {
         userId: this.userId,
         workspaceId: this.workspaceId,
       });
-      if (!path?.isDirectory || !path.canonicalPath)
+      if (!path)
         throw new ChannelError(
           'BAD_REQUEST',
-          'The device must be online and support directory verification',
+          'Could not reach the device to verify the working directory',
+        );
+      if (!path.isDirectory)
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'The working directory does not exist or is not a directory',
+        );
+      if (!path.canonicalPath)
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'The device connector must be upgraded to verify the working directory',
         );
       config.deviceId = device.deviceId;
       config.deviceOwnerId = device.userId;
@@ -200,10 +210,13 @@ export class ChannelService {
   };
 
   send = async (channelId: string, input: Omit<ChannelSendInput, 'routing'>) => {
-    const config = await resolveChannelRoutingConfig(this.db, this.userId);
+    // The repository directs any mentioned message itself and never reads its routing mode.
+    const config = input.mentions?.length
+      ? null
+      : await resolveChannelRoutingConfig(this.db, this.userId);
     const message = await this.repository.send(channelId, {
       ...input,
-      routing: config ? 'jev' : 'fallback',
+      routing: config ? 'decision' : 'fallback',
     });
     // Do not swallow a queue failure: the client can retry the SAME request key safely.
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);

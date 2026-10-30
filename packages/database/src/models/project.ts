@@ -21,6 +21,7 @@ import { topics } from '../schemas/topic';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { joinTopicAgentsToProjects } from '../utils/projectTopicAgents';
+import { topicRunStartedAtColumn } from '../utils/topicRunStartedAt';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { AgentModel } from './agent';
 import { EnvironmentModel } from './environment';
@@ -1066,6 +1067,8 @@ export class ProjectModel {
         userId: topics.userId,
         title: topics.title,
         status: topics.status,
+        // The project sidebar draws a running row's elapsed clock from this.
+        runStartedAt: topicRunStartedAtColumn(this.db),
         agentId: topics.agentId,
         agentTitle: agents.title,
         agentName: agents.name,

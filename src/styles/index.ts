@@ -2,9 +2,7 @@ import { createGlobalStyle } from '@lobehub/ui';
 
 import global from './global';
 
-const prefixCls = 'ant';
-
-export const GlobalStyle = createGlobalStyle(({ theme }) => [global({ prefixCls, token: theme })]);
+export const GlobalStyle = createGlobalStyle(() => [global()]);
 
 export { shinyTextStyles } from './loading';
 export * from './text';

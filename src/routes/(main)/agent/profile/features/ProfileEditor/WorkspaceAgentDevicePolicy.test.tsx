@@ -10,8 +10,12 @@ const testState = vi.hoisted(() => ({
     agentMap: {
       'agent-1': {
         agencyConfig: {
-          executionTarget: 'auto' as const,
-          executionTargetSelectionPolicy: 'member' as const,
+          executionTarget: 'auto',
+          executionTargetSelectionPolicy: 'member',
+        } as {
+          boundDeviceId?: string;
+          executionTarget: string;
+          executionTargetSelectionPolicy: string;
         },
         visibility: 'public' as 'private' | 'public',
         workspaceId: 'workspace-1',
@@ -150,5 +154,96 @@ describe('WorkspaceAgentDevicePolicy over an unconfirmed device list', () => {
     render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
 
     expect(workspaceGroup()[0].disabled).toBeFalsy();
+  });
+});
+
+describe('WorkspaceAgentDevicePolicy with a private workspace device', () => {
+  const privateDevice = {
+    channels: [],
+    deviceId: 'private-device',
+    friendlyName: 'My Laptop',
+    online: true,
+    scope: 'workspace',
+    visibility: 'private',
+  };
+
+  const privateGroupOptions = () => {
+    const options = (selectPropsSpy.mock.lastCall?.[0] as { options: unknown[] }).options as {
+      options?: { disabled?: boolean; value: string }[];
+    }[];
+    return (
+      options.find((group) =>
+        group.options?.some((option) => option.value.includes('private-device')),
+      )?.options ?? []
+    );
+  };
+
+  const deviceOption = () =>
+    privateGroupOptions().find((option) => option.value.includes('private-device'));
+
+  beforeEach(() => {
+    selectPropsSpy.mockClear();
+    testState.agent.updateAgentConfigById.mockReset();
+    testState.agent.agentMap['agent-1'].agencyConfig = {
+      executionTarget: 'auto',
+      executionTargetSelectionPolicy: 'member',
+    };
+    testState.deviceList = { data: [privateDevice], isConfirmed: true, isLoading: false };
+  });
+
+  it("lets a private agent's owner bind their own private device", () => {
+    testState.agent.agentMap['agent-1'].visibility = 'private';
+
+    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+
+    const option = deviceOption();
+    expect(option?.disabled).toBeFalsy();
+
+    const { onChange } = selectPropsSpy.mock.lastCall?.[0] as { onChange: (v: string) => void };
+    onChange(option!.value);
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-1', {
+      agencyConfig: { boundDeviceId: 'private-device', executionTarget: 'device' },
+    });
+  });
+
+  it('keeps private devices unselectable on a public agent and says why', () => {
+    testState.agent.agentMap['agent-1'].visibility = 'public';
+
+    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+
+    expect(deviceOption()?.disabled).toBe(true);
+    expect(privateGroupOptions().map((option) => option.value)).toContain(
+      'status:privateUnavailable',
+    );
+  });
+
+  it('keeps private devices unselectable once the environment is fixed', () => {
+    testState.agent.agentMap['agent-1'].visibility = 'private';
+    testState.agent.agentMap['agent-1'].agencyConfig = {
+      executionTarget: 'auto',
+      executionTargetSelectionPolicy: 'fixed',
+    };
+
+    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+
+    expect(deviceOption()?.disabled).toBe(true);
+    expect(privateGroupOptions().map((option) => option.value)).toContain(
+      'status:privateUnavailable',
+    );
+  });
+
+  it('shows an already-bound private device as the current selection', () => {
+    testState.agent.agentMap['agent-1'].visibility = 'private';
+    testState.agent.agentMap['agent-1'].agencyConfig = {
+      boundDeviceId: 'private-device',
+      executionTarget: 'device',
+      executionTargetSelectionPolicy: 'member',
+    };
+
+    render(<WorkspaceAgentDevicePolicy agentId="agent-1" />);
+
+    const { value } = selectPropsSpy.mock.lastCall?.[0] as { value?: string };
+    expect(value).toContain('private-device');
+    expect(value).toBe(deviceOption()?.value);
   });
 });

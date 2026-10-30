@@ -17,6 +17,7 @@ export const serverConfigSelectors = {
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
     s.serverConfig.enableMarketTrustedClient || false,
+  enablePageCollab: (s: ServerConfigStore) => s.serverConfig.enablePageCollab || false,
   enableUploadFileToServer: (s: ServerConfigStore) => s.serverConfig.enableUploadFileToServer,
   /** Workspaces are available to this user (business deployment + per-user `workspace` flag). */
   enableWorkspace: (s: ServerConfigStore) =>
@@ -27,5 +28,6 @@ export const serverConfigSelectors = {
   isMobile: (s: ServerConfigStore) => s.isMobile || false,
   oAuthSSOProviders: (s: ServerConfigStore) => s.serverConfig.oAuthSSOProviders,
   oidcIssuer: (s: ServerConfigStore) => s.serverConfig.oidcIssuer,
+  sandbox: (s: ServerConfigStore) => s.serverConfig.sandbox ?? 'market',
   multimodalUnderstanding: (s: ServerConfigStore) => s.serverConfig.multimodalUnderstanding,
 };

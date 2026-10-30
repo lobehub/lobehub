@@ -1,8 +1,10 @@
 # Channel responder routing
 
 Unmentioned group messages can use a decision model to choose Agent **members**, not replace
-their configured reply models or runtimes. Explicit mentions and bound direct conversations
-still bypass classification. Agent replies never trigger another classification.
+their configured reply models or runtimes. Explicit mentions, bound direct conversations and
+groups whose only active members are one person and one Agent still bypass classification; in
+the latter, every message from that person, including Thread replies, goes to the Agent. Agent
+replies never trigger another classification.
 
 ## Enable
 
@@ -78,3 +80,15 @@ arguments. Reads are bounded, paginated and fixed to the request cutoff and curr
 `readMessage` expands long text and resolves shared attachment URLs. Membership removal, archive,
 revocation or operation completion prevents subsequent reads. The routing classifier's bounded
 history above remains separate from the responder's on-demand context.
+
+Public replies refer to participants by display name and to history by content, not internal
+sequence numbers or IDs. The shared Channel instructions apply to native and external runtimes,
+including when old replies already contain metadata. Explicit, authorized technical questions
+can still receive IDs, paths or code relevant to the request.
+
+The request prompt omits sequencing and branch-control fields. Builtin tool `content` and CLI
+history output share a model-facing projection that keeps attribution, message/attachment
+references and continuation cursors but omits per-message sequence/thread IDs and the cutoff.
+The API and builtin `state` retain the original history for UI/debugging; authorization and
+pagination still use the frozen manifest. Native Channel runs also skip unsolicited
+`available_agents` inventory, without disabling self-management or explicit discovery tools.

@@ -8,6 +8,9 @@ import { MacOSMenu } from './macOS';
 
 // Mock Electron modules
 vi.mock('electron', () => ({
+  BrowserWindow: {
+    getFocusedWindow: vi.fn(() => null),
+  },
   Menu: {
     buildFromTemplate: vi.fn((template) => ({ template })),
     setApplicationMenu: vi.fn(),
@@ -257,6 +260,22 @@ describe('MacOSMenu', () => {
       const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results[0].value;
       expect(mainWindow.show).toHaveBeenCalled();
       expect(mainWindow.broadcast).toHaveBeenCalledWith('createNewTab', { path: '/settings' });
+    });
+
+    it('should place New Window after New Tab in the File menu', () => {
+      macOSMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const labels = fileMenu.submenu.map((item: any) => item.label);
+      const newWindowItem = fileMenu.submenu.find((item: any) => item.label === 'New Window');
+
+      expect(labels.indexOf('New Window')).toBe(labels.indexOf('New Tab') + 1);
+      expect(newWindowItem.accelerator).toBe('Shift+Command+N');
+
+      newWindowItem.click(undefined, null);
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results.at(-1).value;
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
     });
 
     it('should handle visit website click', async () => {

@@ -179,10 +179,16 @@ export const latestCheckCounts = async (
   return out;
 };
 
+/**
+ * Rows the caller created in the active scope — their subjects resolve through
+ * the scoped models. A teammate's row in the same workspace does not qualify:
+ * its private task/topic/document is hidden from the caller's models, though
+ * the list already granted the row itself, so it resolves like any other
+ * owner's.
+ */
 export const isInOwnScope = (deps: AcceptanceServiceDeps, row: AcceptanceItem) =>
-  row.workspaceId
-    ? row.workspaceId === deps.workspaceId
-    : !deps.workspaceId && row.userId === deps.userId;
+  row.userId === deps.userId &&
+  (row.workspaceId ? row.workspaceId === deps.workspaceId : !deps.workspaceId);
 
 export const resolveForeignSubjects = async (
   deps: AcceptanceServiceDeps,

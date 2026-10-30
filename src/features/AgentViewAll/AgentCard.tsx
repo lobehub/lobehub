@@ -1,9 +1,10 @@
 'use client';
 
-import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
+import { AGENT_CHAT_URL, DEFAULT_USER_AVATAR_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import {
+  Avatar,
   Block,
   ContextMenuTrigger,
   createStaticStyles,
@@ -17,16 +18,18 @@ import { useTranslation } from 'react-i18next';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import AgentPendant from './AgentPendant';
+import type { AgentRowAuthor } from './AgentRow';
+import { coverPattern } from './coverColor';
 import ItemActions from './ItemActions';
 import { resolveAgentBadge } from './resolveAgentBadge';
 import SidebarItemAvatar from './SidebarItemAvatar';
+import { useAgentCoverColor } from './useAgentCoverColor';
 
-// Badge-wall layout: avatar → name → role chip → two-line description,
-// centered. Every row has a fixed height, so plain and cover badges mixed in
-// one row keep the avatar, the name baseline and the description's first line
-// aligned. The avatar sits at the same y either way: with a cover it straddles
-// the cover's bottom edge, without one the band is just top padding.
-const COVER_HEIGHT = 48;
+// Badge-wall layout: cover → avatar → name → role chip → two-line description,
+// centered, with the owner in the bottom-left corner. Every row has a fixed
+// height, so the avatar, the name baseline and the description's first line
+// line up across a row. The avatar straddles the cover's bottom edge.
+const COVER_HEIGHT = 80;
 const AVATAR_SIZE = 56;
 export const AGENT_GRID_MIN_COLUMN = 260;
 
@@ -54,22 +57,102 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
       box-shadow: ${cssVar.boxShadowTertiary};
     }
   `,
-  // Identity texture, not artwork: a short straight-edged band tinted from the
-  // agent's avatar background, mixed toward the container color so it stays
-  // calm in both themes, with a faint dot grid on top.
+  // Identity texture, not artwork: a straight-edged band tinted from the
+  // agent's avatar (see useAgentCoverColor), mixed toward the container color
+  // so it stays calm in both themes, with a faint texture on top picked from
+  // the agent id (see coverPattern). Every texture is drawn in the container
+  // color at low alpha: dots in --cover-ink, strokes in the lighter
+  // --cover-line, and dense strokes in --cover-faint, so none outshouts another.
   cover: css`
+    --cover-ink: color-mix(in srgb, ${cssVar.colorBgContainer} 30%, transparent);
+    --cover-line: color-mix(in srgb, ${cssVar.colorBgContainer} 22%, transparent);
+    --cover-faint: color-mix(in srgb, ${cssVar.colorBgContainer} 15%, transparent);
+
     position: absolute;
     inset-block-start: 0;
     inset-inline: 0;
 
     height: ${COVER_HEIGHT}px;
 
-    background-color: color-mix(in srgb, var(--agent-cover) 72%, ${cssVar.colorBgContainer});
-    background-image: radial-gradient(
-      color-mix(in srgb, ${cssVar.colorBgContainer} 30%, transparent) 1px,
-      transparent 1.5px
+    /* Neutral until an avatar image has been sampled. */
+    background-color: color-mix(
+      in srgb,
+      var(--agent-cover, ${cssVar.colorFill}) 72%,
+      ${cssVar.colorBgContainer}
     );
+    background-image: radial-gradient(var(--cover-ink) 1px, transparent 1.5px);
     background-size: 10px 10px;
+
+    /* The sampled color fades in over the neutral band. */
+    transition: background-color 0.3s;
+
+    /* An uploaded profile cover replaces both the tint and the texture. */
+    &[data-cover-image] {
+      background-position: center;
+      background-size: cover;
+    }
+
+    &[data-pattern='grid'] {
+      background-image:
+        linear-gradient(var(--cover-faint) 1px, transparent 1px),
+        linear-gradient(90deg, var(--cover-faint) 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+
+    &[data-pattern='stripes'] {
+      background-image: repeating-linear-gradient(
+        45deg,
+        var(--cover-line) 0 1px,
+        transparent 1px 8px
+      );
+      background-size: auto;
+    }
+
+    &[data-pattern='crosshatch'] {
+      background-image:
+        repeating-linear-gradient(45deg, var(--cover-line) 0 1px, transparent 1px 10px),
+        repeating-linear-gradient(-45deg, var(--cover-line) 0 1px, transparent 1px 10px);
+      background-size: auto;
+    }
+
+    /* Concentric arcs from the top-right corner, away from the avatar. */
+    &[data-pattern='rings'] {
+      background-image: repeating-radial-gradient(
+        circle at 100% 0,
+        var(--cover-line) 0 1px,
+        transparent 1px 10px
+      );
+      background-size: auto;
+    }
+
+    &[data-pattern='stagger'] {
+      background-image:
+        radial-gradient(var(--cover-ink) 1.5px, transparent 2px),
+        radial-gradient(var(--cover-ink) 1.5px, transparent 2px);
+      background-position:
+        0 0,
+        8px 8px;
+      background-size: 16px 16px;
+    }
+
+    &[data-pattern='lines'] {
+      background-image: repeating-linear-gradient(
+        0deg,
+        var(--cover-faint) 0 1px,
+        transparent 1px 8px
+      );
+      background-size: auto;
+    }
+
+    &[data-pattern='scales'] {
+      background-image: radial-gradient(
+        circle at 50% 0,
+        transparent 6px,
+        var(--cover-line) 6px 7px,
+        transparent 7px
+      );
+      background-size: 14px 8px;
+    }
   `,
   avatarRing: css`
     position: relative;
@@ -81,8 +164,11 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 50%;
 
     /* Neutral face plate for emoji avatars without a background color;
-       images and colored avatars paint over it. */
-    background: ${cssVar.colorFillTertiary};
+       images and colored avatars paint over it. The fill is translucent, so it
+       sits on an opaque card-color base: a cover image would show through it. */
+    background:
+      linear-gradient(${cssVar.colorFillTertiary}, ${cssVar.colorFillTertiary}),
+      ${cssVar.colorBgContainer};
     background-clip: padding-box;
   `,
   // Group avatars are a square member grid; a circle would clip its corners.
@@ -141,6 +227,28 @@ export const cardStyles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 18px;
     color: ${cssVar.colorTextSecondary};
     overflow-wrap: anywhere;
+  `,
+  // Pinned to the bottom-left corner: auto top margin takes up whatever height
+  // the grid row adds, so the owner sits on the same line across a row.
+  owner: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    align-self: stretch;
+
+    min-width: 0;
+    margin-block-start: auto;
+    padding-block-start: 12px;
+
+    font-size: 12px;
+    line-height: 16px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  ownerName: css`
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   // Columns come from the content width: as many 260px+ badges as fit, so a
   // ~1300px page shows four and an ultra-wide one six, instead of a fixed four
@@ -203,17 +311,20 @@ interface AgentCardProps {
   item: SidebarAgentItem;
   /** Toggle whether this item appears in the caller's sidebar. */
   onToggleSidebar?: (item: SidebarAgentItem) => void;
+  /** Who owns the agent; shown in the bottom-left corner when given. */
+  owner?: AgentRowAuthor | null;
   /** Whether the caller removed this item from their sidebar (default listed). */
   sidebarHidden?: boolean;
 }
 
-const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, sidebarHidden }) => {
+const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, owner, sidebarHidden }) => {
   const { t } = useTranslation('common');
   const { description, id, type } = item;
   // Groups have no personal name, so this resolves to their title.
   const displayTitle = agentDisplayName(item, t('agentViewAll.untitled'));
   const roleTag = agentSecondaryDisplayName(item);
   const badge = resolveAgentBadge(item);
+  const coverColor = useAgentCoverColor(item, badge.cover, !!badge.coverImage);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   // Right-click support — same bridge as AgentRow: the hook-bearing menu
@@ -237,12 +348,19 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, sidebarHidden }
           onPointerEnter={activateMenu}
         >
           <Block clickable className={cardStyles.card} height={'100%'} variant={'outlined'}>
-            {badge.cover ? (
-              <div
-                className={cardStyles.cover}
-                style={{ '--agent-cover': badge.cover } as CSSProperties}
-              />
-            ) : null}
+            <div
+              className={cardStyles.cover}
+              data-cover-image={badge.coverImage ? '' : undefined}
+              data-pattern={badge.coverImage ? undefined : coverPattern(item)}
+              style={
+                {
+                  '--agent-cover': coverColor,
+                  'backgroundImage': badge.coverImage
+                    ? `url(${JSON.stringify(badge.coverImage)})`
+                    : undefined,
+                } as CSSProperties
+              }
+            />
             <AgentPendant bottom={badge.bottom} top={badge.top}>
               <span
                 className={cx(
@@ -265,6 +383,18 @@ const AgentCard = memo<AgentCardProps>(({ item, onToggleSidebar, sidebarHidden }
               ) : null}
             </div>
             <div className={cardStyles.description}>{description}</div>
+            {owner?.name ? (
+              <div className={cardStyles.owner}>
+                <Avatar
+                  avatar={owner.avatar || DEFAULT_USER_AVATAR_URL}
+                  shape={'circle'}
+                  size={16}
+                />
+                <span className={cardStyles.ownerName} title={owner.name}>
+                  {owner.name}
+                </span>
+              </div>
+            ) : null}
           </Block>
         </WorkspaceLink>
         <span data-card-actions className={cardStyles.actions}>

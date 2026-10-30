@@ -1,8 +1,8 @@
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import type { ScreenCaptureAgentOption } from '@lobechat/electron-client-ipc';
 import { agentDisplayName } from '@lobechat/types';
 
-const LOBE_AI_TITLE = 'Lobe AI';
+const LOBE_AI_TITLE = DEFAULT_INBOX_TITLE;
 const UNTITLED_AGENT_TITLE = 'Untitled Agent';
 
 interface OverlayAgentSource {

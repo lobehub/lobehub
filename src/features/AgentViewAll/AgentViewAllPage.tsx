@@ -456,11 +456,12 @@ const AgentViewAllPage = memo(() => {
       <AgentCard
         item={item}
         key={item.id}
+        owner={showAuthor && item.userId ? authorByUserId.get(item.userId) : undefined}
         sidebarHidden={!isSidebarItemVisible(item)}
         onToggleSidebar={handleToggleSidebar}
       />
     ),
-    [handleToggleSidebar, isSidebarItemVisible],
+    [showAuthor, authorByUserId, handleToggleSidebar, isSidebarItemVisible],
   );
 
   const renderRow = useCallback(

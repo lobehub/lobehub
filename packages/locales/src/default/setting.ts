@@ -489,6 +489,7 @@ export default {
   'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Same as primary model',
   'heterogeneousStatus.apiMode.provider': 'Provider',
   'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
+  'heterogeneousStatus.apiMode.useSubscription': 'Use subscription',
   'heterogeneousStatus.apiMode.workspaceUnsupported': 'Not available for workspace agents',
   'heterogeneousStatus.apiMode.serverDefault.checking': 'Checking deployment provider...',
   'heterogeneousStatus.apiMode.serverDefault.disabled':
@@ -519,8 +520,7 @@ export default {
   'heterogeneousStatus.runtime.keyMissing': 'Configure the DeepSeek provider API key',
   'heterogeneousStatus.runtime.configure': 'Provider Settings',
 
-  // Heterogeneous agent — Cloud tab (web environment config)
-  'heterogeneousStatus.cloud.tabLabel': 'Cloud',
+  // Heterogeneous agent — cloud sandbox config
   'heterogeneousStatus.cloud.tokenLabel': 'Claude Code Token',
   'heterogeneousStatus.cloud.tokenDesc':
     'Your Claude Code OAuth token. Saved securely to Credentials once submitted. Run `claude setup-token` in your terminal to generate one.',
@@ -557,8 +557,30 @@ export default {
   'heterogeneousStatus.cloud.repoPlaceholder': 'owner/repo or https://github.com/owner/repo',
   'heterogeneousStatus.cloud.repoAdd': 'Add',
 
-  // Heterogeneous agent — Desktop tab
-  'heterogeneousStatus.desktop.tabLabel': 'Desktop',
+  // Heterogeneous agent — execution environment and its bound device
+  'heterogeneousStatus.device.afterInstall':
+    'After installing, run `{{command}}` on that device once to sign in, then check again.',
+  'heterogeneousStatus.device.detecting': 'Checking {{name}} CLI on {{device}}…',
+  'heterogeneousStatus.device.installDesc':
+    'Run one of these commands in a terminal on {{device}}:',
+  'heterogeneousStatus.device.installTitle': 'Install on {{device}}',
+  'heterogeneousStatus.device.label': 'Device',
+  'heterogeneousStatus.device.missing':
+    'The bound device is no longer available. Choose another execution environment above.',
+  'heterogeneousStatus.device.offline': '{{device}} is offline. Check again once it reconnects.',
+  'heterogeneousStatus.device.openDocs': 'Installation guide',
+  'heterogeneousStatus.device.scanFailed':
+    'Couldn’t check {{name}} CLI on {{device}}. Update LobeHub on that device and try again.',
+  'heterogeneousStatus.device.scanFailedTag': 'Unknown',
+  'heterogeneousStatus.device.showDetails': 'Show details',
+  'heterogeneousStatus.device.unavailable': '{{name}} CLI not found on {{device}}',
+  'heterogeneousStatus.sandbox.desc':
+    '{{name}} runs in the cloud sandbox. Nothing needs to be installed on your devices.',
+  'heterogeneousStatus.target.desc':
+    'New topics run here. Existing topics stay on the device they ran on.',
+  'heterogeneousStatus.target.fixed': 'This environment is fixed. Members can’t change it.',
+  'heterogeneousStatus.target.overridden':
+    'Applies only to you. Other members keep the Agent default.',
 
   // Connected agent profile config panel (openclaw / hermes)
   'platformAgentConfig.title': 'Connection',
@@ -704,6 +726,7 @@ export default {
   'devices.detail.cores_one': '{{count}} core',
   'devices.detail.cores_other': '{{count}} cores',
   'devices.detail.cpu': 'CPU',
+  'devices.detail.disk': 'Disk',
   'devices.detail.lastConnected': 'Last connected',
   'devices.detail.loadUsage': 'Load average',
   'devices.detail.memory': 'Memory',
@@ -736,6 +759,7 @@ export default {
   'devices.capabilities.tools.desc': 'Connect local tools to extend what agents can do.',
   'devices.capabilities.tools.title': 'Call system tools',
   'devices.card.cpuUsage': 'CPU usage',
+  'devices.card.diskUsage': 'Disk usage',
   'devices.card.hostname': 'Hostname',
   'devices.card.memoryUsage': 'Memory usage',
   'devices.card.runningTopics': 'Running topics',
@@ -1191,6 +1215,10 @@ export default {
   'settingAgent.agentTools.tabUser': 'User Tools',
   'settingAgent.agentTools.tabWorkspace': 'Workspace Tools',
   'settingAgent.devicePolicy.noPublicDevice': 'No public devices',
+  'settingAgent.devicePolicy.privateDeviceFixed':
+    'A fixed environment can only use public workspace devices',
+  'settingAgent.devicePolicy.privateDevicePublicAgent':
+    'Private devices are for private agents only — other members cannot reach them',
   'settingAgent.devicePolicy.selectTarget': 'Select environment',
   'settingAgent.devicePolicy.title': 'Execution environment',
   'settingAgent.modelPolicy.fixedTip':
