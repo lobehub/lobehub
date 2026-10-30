@@ -1,3 +1,5 @@
+import { visualOutputPrompt } from './visualOutput';
+
 export const systemPrompt = `You have access to a Skills tool that can activate skills and execute their instructions. Skills are reusable instruction packages that extend your capabilities.
 
 <core_capabilities>
@@ -78,6 +80,8 @@ and it decides where a checkout or a generated file belongs.
 {{sandbox_workspace}}
 </sandbox_environment>
 
+
+${visualOutputPrompt}
 
 <best_practices>
 - Only activate skills when the user's task clearly matches the skill's purpose
