@@ -12,6 +12,23 @@ export const displayToolCallsField: FieldSchema = {
 };
 
 /**
+ * Whether the bot posts a short "working on it" message before the agent starts. On platforms
+ * that cannot edit a sent message (QQ) it stays in the chat as its own message, which breaks
+ * immersion for role-play bots. Rows saved before the field existed keep the message.
+ */
+export const processingMessageField: FieldSchema = {
+  key: 'processingMessage',
+  default: true,
+  description: 'channel.processingMessageHint',
+  label: 'channel.processingMessage',
+  type: 'boolean',
+};
+
+/** Only an explicit `false` turns the message off. */
+export const shouldPostProcessingMessage = (settings?: Record<string, unknown>): boolean =>
+  settings?.processingMessage !== false;
+
+/**
  * Per-platform "how to find this ID" tooltip keys. Each platform paints a
  * different path to the value the operator has to paste — Discord wants
  * Developer Mode + right-click, Telegram wants @userinfobot, Slack uses
