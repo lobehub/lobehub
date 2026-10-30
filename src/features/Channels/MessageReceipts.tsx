@@ -31,7 +31,7 @@ export const replyEntries = (
   jobs.map((job) => {
     const member = (detail.members ?? []).find((entry) => entry.id === job.memberId);
     return {
-      agentId: member?.agentId,
+      agentId: member?.agentDeleted ? undefined : member?.agentId,
       avatar: memberAvatar(member),
       job,
       name: memberName(member, fallbackName),

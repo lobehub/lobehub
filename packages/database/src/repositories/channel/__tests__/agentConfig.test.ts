@@ -173,7 +173,7 @@ describe('Channel Agent configuration', () => {
   });
 
   it.each(['private', 'trashed', 'other scope'])(
-    'blocks a queued request after its Agent becomes %s',
+    'prevents a queued request after its Agent becomes %s',
     async (reason) => {
       const team = await fixture.createTeamChannel();
       const member = await fixture.addAgent(team.channel.id, 'Agent');
@@ -196,8 +196,9 @@ describe('Channel Agent configuration', () => {
         .where(eq(agents.id, member.agentId!));
       expect(await execution.claim(team.channel.id, job.id, lease)).toBeNull();
       expect(await jobById(db, job.id)).toMatchObject({
-        blockedCode: 'unavailable',
+        blockedCode: reason === 'trashed' ? null : 'unavailable',
         operationId: null,
+        status: reason === 'trashed' ? 'cancelled' : 'queued',
         topicId: null,
       });
     },

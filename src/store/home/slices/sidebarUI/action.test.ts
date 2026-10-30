@@ -49,6 +49,7 @@ vi.mock('@/store/agent', async (importOriginal) => {
     ...actual,
     getAgentStoreState: vi.fn(() => ({
       invalidateAvailableAgents: vi.fn(),
+      markAgentDeleted: vi.fn(),
       setActiveAgentId: vi.fn(),
     })),
     useAgentStore: actual.useAgentStore,
@@ -172,7 +173,7 @@ describe('createSidebarUISlice', () => {
     it('should remove an agent and refresh agent list', async () => {
       const mockAgentId = 'agent-123';
       vi.spyOn(agentService, 'removeAgent').mockResolvedValueOnce(undefined as any);
-      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+      const spyOnRefresh = vi.spyOn(useHomeStore.getState(), 'fetchAgentList').mockResolvedValue();
 
       const { result } = renderHook(() => useHomeStore());
 
@@ -194,7 +195,7 @@ describe('createSidebarUISlice', () => {
       } as any);
 
       vi.spyOn(agentService, 'removeAgent').mockResolvedValueOnce(undefined as any);
-      vi.spyOn(useHomeStore.getState(), 'refreshAgentList');
+      vi.spyOn(useHomeStore.getState(), 'fetchAgentList').mockResolvedValue();
 
       const { result } = renderHook(() => useHomeStore());
 

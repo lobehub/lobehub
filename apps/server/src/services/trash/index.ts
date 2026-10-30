@@ -14,6 +14,8 @@ import { TrashModel } from '@/database/models/trash';
 import type { TrashItemRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
+import { notifyChannel } from '@/server/services/channel/notify';
+import { wakeChannel } from '@/server/services/channel/queue';
 import { FileService } from '@/server/services/file';
 
 import {
@@ -197,9 +199,22 @@ export class TrashService {
 
   trashAgent = async (agentId: string, options?: TrashOptions) => {
     const stamp = this.stampOptions(options);
-    const [root] = await this.commit(
-      (ctx) => softDeleteAgent(ctx, agentId, stamp),
-      stamp.deletedAt,
+    let channelIds: string[] = [];
+    const [root] = await this.commit(async (ctx) => {
+      const result = await softDeleteAgent(ctx, agentId, stamp);
+      channelIds = result?.channelIds ?? [];
+      return result;
+    }, stamp.deletedAt);
+    // The deletion already committed. Existing recovery wakes still own any physical
+    // writer; a notification failure must not make a successful deletion look failed.
+    await Promise.all(
+      channelIds.map(async (channelId) => {
+        try {
+          await Promise.all([wakeChannel(channelId), notifyChannel(this.db, channelId)]);
+        } catch (error) {
+          console.error('Failed to notify Channel after Agent deletion', error);
+        }
+      }),
     );
     return root ?? null;
   };

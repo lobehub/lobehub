@@ -5,6 +5,7 @@ import type { PartialDeep } from 'type-fest';
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem, TopicItem } from '../../schemas';
 import {
   agentOperations,
+  agents,
   channelJobs,
   channelMemberGrants,
   channelMembers,
@@ -193,6 +194,25 @@ export const claimJob = async (
     return null;
   }
 
+  const [member] = await tx
+    .select()
+    .from(channelMembers)
+    .where(eq(channelMembers.id, job.memberId));
+  const [agent] = member?.agentId
+    ? await tx
+        .select({ isDeleted: agents.isDeleted })
+        .from(agents)
+        .where(eq(agents.id, member.agentId))
+        .for('share')
+    : [];
+  // Also settle pre-fix queues and hard-deleted Agents: a departed member must not
+  // wait forever or replay old requests if the Agent is restored and invited again.
+  if (!member || member.status !== 'active' || !agent || agent.isDeleted) {
+    await cancel(tx, job, 'agent_deleted_or_removed');
+    return null;
+  }
+  if (!member.config) return null;
+
   const [request] = await tx
     .select()
     .from(channelMessages)
@@ -235,12 +255,6 @@ export const claimJob = async (
     await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
     return null;
   }
-
-  const [member] = await tx
-    .select()
-    .from(channelMembers)
-    .where(and(eq(channelMembers.id, job.memberId), eq(channelMembers.status, 'active')));
-  if (!member?.config) return null;
 
   const [busy] = await tx
     .select({ id: channelJobs.id })

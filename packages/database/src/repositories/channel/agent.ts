@@ -3,7 +3,7 @@ import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { ChannelExecutionConfig, ChannelMemberConfig, LobeAgentConfig } from '@lobechat/types';
 import { agentDisplayName, isChannelRuntime } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, getTableColumns } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelMemberItem } from '../../schemas';
@@ -11,6 +11,7 @@ import { agents, channelMembers, userSettings } from '../../schemas';
 import type { Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
+import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
 
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
@@ -96,8 +97,9 @@ export const addAgentMember = async (
 /** An active Agent member of this Channel; people and departed Agents have no environment. */
 export const requireAgentMember = async (tx: Transaction, channelId: string, memberId: string) => {
   const [member] = await tx
-    .select()
+    .select(getTableColumns(channelMembers))
     .from(channelMembers)
+    .innerJoin(agents, and(eq(agents.id, channelMembers.agentId), notTrashed(agents.isDeleted)))
     .where(
       and(
         eq(channelMembers.channelId, channelId),
@@ -106,7 +108,8 @@ export const requireAgentMember = async (tx: Transaction, channelId: string, mem
         eq(channelMembers.status, 'active'),
       ),
     )
-    .limit(1);
+    .limit(1)
+    .for('share', { of: agents });
   if (!member?.agentId) throw new ChannelError('NOT_FOUND', 'Agent member not found');
   return member as ChannelMemberItem & { agentId: string };
 };

@@ -39,6 +39,10 @@ class ChannelActionImpl {
   refreshList = () => this.#private.list.fetch({}, { fresh: true });
   refreshDetail = (params: ChannelViewParams) =>
     this.#private.detail.fetch(params, { fresh: true });
+  /** A confirmed deletion must immediately retire recipients in every cached channel page. */
+  retireAgent = async (agentId: string) => {
+    await this.#refreshAfterWrite(() => this.#private.retireAgent(agentId));
+  };
   /**
    * Refresh after a write that already committed. A failed refresh must not read as a failed
    * write, or retrying repeats it; the periodic sync catches up instead.

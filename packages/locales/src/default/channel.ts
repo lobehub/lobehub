@@ -79,6 +79,15 @@ export default {
   'membersTitle': 'Members',
   'members.show': 'Show member list',
   'members.hide': 'Hide member list',
+  'members.former': 'Former Agents',
+  'members.agentDeleted': 'Agent deleted',
+  'members.removed': 'No longer in this channel',
+  'members.historyKept':
+    'History is kept. These Agents no longer receive new requests. Invite them again after restoring them.',
+  'members.openTrash': 'Open Trash',
+  'members.inviteAgent': 'Invite an Agent',
+  'recipientUnavailable':
+    'A mentioned member is no longer available. Remove the mention or choose another member before sending.',
   'membersCount': 'Members · {{count}}',
   'openAgent': 'Open Agent',
   'openAgentNamed': 'Open {{name}}',

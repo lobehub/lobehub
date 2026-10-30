@@ -5,8 +5,9 @@ import { RESERVED_AGENT_SLUGS } from '../../models/agent/constants';
 import { type AgentModelContext, createAgentModelContext } from '../../models/agent/context';
 import { AGENT_COPY_IN_PROGRESS, AgentCopyJobModel } from '../../models/agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../../models/agentTransferJob';
-import { agents, agentsToSessions, sessions } from '../../schemas';
+import { agents, agentsToSessions, channelJobs, channelMembers, sessions } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { isTrashed } from '../../utils/softDelete';
 
 /**
  * Delete an agent and its associated session.
@@ -107,4 +108,48 @@ export class AgentDeletionRepository {
 
   /** See {@link deleteAgent}. */
   deleteAgent = (agentId: string) => deleteAgent(this.ctx, agentId);
+
+  /**
+   * Called inside the trash transaction, after the owned Agent row has been locked and
+   * stamped. Retain members and public messages as history, but stop accepting work.
+   * Do not take channel locks after the Agent lock: channel claims take them in the
+   * opposite order. Claims hold a shared Agent lock and recheck its deletion flag.
+   * Revoked writers keep their lock until the coordinator confirms physical exit.
+   */
+  retireChannelMemberships = async (agentId: string): Promise<string[]> => {
+    const { db } = this.ctx;
+    const [agent] = await db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(and(eq(agents.id, agentId), this.ctx.trashScope(), isTrashed(agents.isDeleted)));
+    if (!agent) return [];
+
+    const members = await db
+      .select({ channelId: channelMembers.channelId, id: channelMembers.id })
+      .from(channelMembers)
+      .where(eq(channelMembers.agentId, agentId));
+    if (!members.length) return [];
+
+    const memberIds = members.map((member) => member.id);
+    await db
+      .update(channelMembers)
+      .set({ status: 'removed' })
+      .where(and(inArray(channelMembers.id, memberIds), eq(channelMembers.status, 'active')));
+    await db
+      .update(channelJobs)
+      .set({
+        blockedCode: null,
+        blockedReason: null,
+        publicationRevoked: true,
+        status: 'cancelled',
+      })
+      .where(
+        and(
+          inArray(channelJobs.memberId, memberIds),
+          inArray(channelJobs.status, ['queued', 'running']),
+        ),
+      );
+
+    return [...new Set(members.map((member) => member.channelId))];
+  };
 }

@@ -17,6 +17,7 @@ import { styles } from './styles';
 import { type ChannelThreadDraft, draftThreadFollowerIds } from './threadDraft';
 import { threadTitle } from './threadTitle';
 import { useThreadMenu } from './useThreadMenu';
+import { isActiveChannelMember } from './visibleMembers';
 
 /** Below this width the thread floats over the channel instead of sitting beside it. */
 export const THREAD_FLOAT_BREAKPOINT = 760;
@@ -37,7 +38,7 @@ const ThreadFollowers = ({
       ? (threads.find((entry) => entry.id === target)?.followerMemberIds ?? [])
       : draftThreadFollowerIds(target.root, members);
   const followers = members.filter(
-    (member) => member.status === 'active' && followerIds.includes(member.id),
+    (member) => isActiveChannelMember(member) && followerIds.includes(member.id),
   );
   if (!followers.length) return null;
   const names = followers.map((member) => memberName(member, t('deletedMember'))).join('、');

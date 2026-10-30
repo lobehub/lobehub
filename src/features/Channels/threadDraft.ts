@@ -1,5 +1,7 @@
 import type { ChannelDetail, ChannelPublicMember, ChannelPublicMessage } from '@lobechat/types';
 
+import { isActiveChannelMember } from './visibleMembers';
+
 /** A local preview, never a persisted thread or replica entry. */
 export interface ChannelThreadDraft {
   attachments: ChannelDetail['attachments'];
@@ -14,7 +16,7 @@ export const draftThreadFollowerIds = (
   members
     .filter(
       (member) =>
-        member.status === 'active' &&
+        isActiveChannelMember(member) &&
         (root.recipientMemberIds.includes(member.id) ||
           (root.author.type === 'agent' &&
             !!root.author.id &&

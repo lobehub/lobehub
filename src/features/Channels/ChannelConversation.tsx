@@ -22,6 +22,7 @@ import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { useChannelEvents } from './useChannelEvents';
 import { channelDraftKey } from './useComposerDraft';
+import { isActiveChannelMember } from './visibleMembers';
 
 interface ChannelConversationProps {
   channelId: string;
@@ -63,7 +64,7 @@ const Timeline = ({
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
   }, [channelId, threadId, sequence, before]);
 
-  const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
+  const activeMembers = detail?.members.filter(isActiveChannelMember) ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
   const channelArchived = detail?.channel.status === 'archived';
   // Join lines belong to the main conversation; a thread starts from its root message.

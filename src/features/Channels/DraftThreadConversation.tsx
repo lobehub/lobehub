@@ -13,6 +13,7 @@ import { Composer } from './Composer';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import { channelDraftKey } from './useComposerDraft';
+import { isActiveChannelMember } from './visibleMembers';
 
 /** No thread query, subscription or database write until the user sends. */
 export function DraftThreadConversation({
@@ -51,7 +52,7 @@ export function DraftThreadConversation({
         ) : (
           <Composer
             draftKey={channelDraftKey(detail.channel.id, `draft:${draft.root.id}`)}
-            members={detail.members.filter((member) => member.status === 'active')}
+            members={detail.members.filter(isActiveChannelMember)}
             placeholder={t('threadComposer')}
             onSend={onSend}
           />

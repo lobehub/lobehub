@@ -1,6 +1,7 @@
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
+import { cacheScope } from '@/libs/replica';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
@@ -85,8 +86,20 @@ export class SidebarUIActionImpl {
   };
 
   removeAgent = async (agentId: string): Promise<void> => {
+    const { channelActions } = await import('@/store/channel');
+    const scope = cacheScope.get();
     await agentService.removeAgent(agentId);
-    await this.#get().refreshAgentList();
+    if (cacheScope.get() !== scope) return;
+    getAgentStoreState().markAgentDeleted(agentId);
+    this.#get().removeAgentFromList(agentId);
+    await Promise.all([
+      this.#get()
+        .fetchAgentList()
+        .catch((error) => {
+          console.error('Failed to refresh sidebar after Agent deletion', error);
+        }),
+      channelActions.retireAgent(agentId),
+    ]);
     // deleting an agent cascade-deletes its topics + messages on the server; drop
     // their message cache too so it doesn't orphan in IndexedDB (never expires)
     void evictMessageCache((ctx) => ctx.agentId === agentId);

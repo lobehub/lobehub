@@ -355,7 +355,7 @@ export default {
     'You are about to delete this category. After deletion, its agents will be moved to the default list. Please confirm your action.',
   'confirmRemoveGroupSuccess': 'Group deleted successfully',
   'confirmRemoveSessionItemAlert':
-    'You are about to delete this agent and its topics. They will be moved to the trash and can be restored within 30 days.',
+    'This Agent and its topics will move to Trash and can be restored within 30 days. Its channel memberships will be deactivated and unfinished replies stopped. Channel message history will be kept. After restoring the Agent, invite it to channels again to resume participation.',
   'confirmRemoveSessionSuccess': 'Agent removed successfully',
   'defaultAgent': 'Default Agent',
   'defaultGroupChat': 'Group',

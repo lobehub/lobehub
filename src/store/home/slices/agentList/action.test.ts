@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
+import { agentService } from '@/services/agent';
 import { homeService } from '@/services/home';
 import { getAgentStoreState } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
@@ -27,6 +28,7 @@ import { agentListResource } from './projection';
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: vi.fn(() => ({
     invalidateAvailableAgents: vi.fn(),
+    markAgentDeleted: vi.fn(),
     updateAgentMetaById: vi.fn(),
   })),
 }));
@@ -75,6 +77,33 @@ afterEach(() => {
 const sync = () => renderHook(() => useHomeStore((s) => s.useFetchAgentList)(true), { wrapper });
 
 describe('sidebar agent list replica', () => {
+  it('keeps a confirmed deletion out of the sidebar when the refresh is offline', async () => {
+    const getList = vi
+      .spyOn(homeService, 'getSidebarAgentList')
+      .mockResolvedValue(response({ pinned: [agent('deleted')] }));
+    await useHomeStore.getState().fetchAgentList();
+    vi.spyOn(agentService, 'removeAgent').mockResolvedValue(undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    getList.mockRejectedValue(new Error('offline'));
+    await expect(useHomeStore.getState().removeAgent('deleted')).resolves.toBeUndefined();
+    expect(homeAgentListSelectors.allAgents(useHomeStore.getState())).toEqual([]);
+  });
+
+  it('removes a deleted Agent even when an older sidebar request finishes afterwards', async () => {
+    const list = response({ ungrouped: [agent('deleted')] });
+    const getList = vi.spyOn(homeService, 'getSidebarAgentList').mockResolvedValue(list);
+    await useHomeStore.getState().fetchAgentList();
+    const old = Promise.withResolvers<SidebarAgentListResponse>();
+    getList.mockReturnValueOnce(old.promise);
+    const pending = useHomeStore.getState().fetchAgentList();
+    vi.spyOn(agentService, 'removeAgent').mockResolvedValue(undefined);
+    getList.mockResolvedValue(response());
+    await useHomeStore.getState().removeAgent('deleted');
+    old.resolve(list);
+    await pending;
+    expect(homeAgentListSelectors.allAgents(useHomeStore.getState())).toEqual([]);
+  });
+
   it('paints the persisted list before the network answers', async () => {
     await agentListResource.storage!.set(
       { queryKey: agentListResource.storageKey({}), scope },

@@ -60,6 +60,9 @@ describe('Channel mention boundaries', () => {
 
 const chip = (id: string) => ({ type: 'mention', metadata: { type: 'channel-member', id } });
 describe('Channel recipient chips', () => {
+  it('retains stale recipient ids for validation instead of silently changing to automatic routing', () => {
+    expect(channelMentionIds({ root: { children: [chip('deleted')] } })).toEqual(['deleted']);
+  });
   it('selects only real active member chips, not text, code, foreign IDs or another mention kind', () => {
     expect(
       channelMentionIds(
