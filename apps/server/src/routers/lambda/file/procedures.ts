@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
@@ -23,6 +24,7 @@ export const fileProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
 
   return opts.next({
     ctx: {
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
       chunkModel: new ChunkModel(ctx.serverDB, ctx.userId, wsId),
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),

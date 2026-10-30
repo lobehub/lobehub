@@ -393,6 +393,7 @@ export class FileActionImpl {
               shareId,
             })
           : await this.#get().uploadWithProgress({
+              conversationAgentId: agentId,
               file,
               onStatusUpdate: dispatchChatUploadFileList,
             });

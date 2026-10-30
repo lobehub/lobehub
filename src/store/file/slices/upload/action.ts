@@ -29,6 +29,11 @@ type OnStatusUpdate = (
 
 interface UploadWithProgressParams {
   abortController?: AbortController;
+  /**
+   * Agent whose conversation this upload is attached to. In a public agent the
+   * server shares the attachment with the conversation's readers.
+   */
+  conversationAgentId?: string;
   file: File;
   /**
    * Additional metadata persisted with the file record. Media capture flows use
@@ -150,6 +155,7 @@ export class FileUploadActionImpl {
     abortController,
     visibility,
     fileMetadata,
+    conversationAgentId,
   }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const statusId = uploadId ?? file.name;
     let uploadedPathname: string | undefined;
@@ -235,6 +241,7 @@ export class FileUploadActionImpl {
 
       const data = await fileService.createFile(
         {
+          conversationAgentId,
           fileType,
           hash,
           metadata: {
