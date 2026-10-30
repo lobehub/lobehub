@@ -1,4 +1,10 @@
 import { gptImage1Schema, gptImage2Schema } from '../../const/imageParameters';
+import {
+  openaiGpt4oMiniTTSSchema,
+  openaiGpt4oTTSVoices,
+  openaiTTS1Schema,
+  openaiTTS1Voices,
+} from '../../const/ttsParameters';
 import type {
   AIASRModelCard,
   AIEmbeddingModelCard,
@@ -46,25 +52,30 @@ export const openaiTTSModels: AITTSModelCard[] = [
     description: 'The latest text-to-speech model optimized for real-time speed.',
     displayName: 'TTS-1',
     id: 'tts-1',
+    parameters: openaiTTS1Schema,
     pricing: {
       units: [{ name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionCharacters' }],
     },
     type: 'tts',
+    voices: openaiTTS1Voices,
   },
   {
     description: 'The latest text-to-speech model optimized for quality.',
     displayName: 'TTS-1 HD',
     id: 'tts-1-hd',
+    parameters: openaiTTS1Schema,
     pricing: {
       units: [{ name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionCharacters' }],
     },
     type: 'tts',
+    voices: openaiTTS1Voices,
   },
   {
     description:
       'GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, converting text into natural-sounding speech with a max input of 2000 tokens.',
     displayName: 'GPT-4o Mini TTS',
     id: 'gpt-4o-mini-tts',
+    parameters: openaiGpt4oMiniTTSSchema,
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
@@ -72,6 +83,7 @@ export const openaiTTSModels: AITTSModelCard[] = [
       ],
     },
     type: 'tts',
+    voices: openaiGpt4oTTSVoices,
   },
 ];
 
