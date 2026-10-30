@@ -2,12 +2,7 @@ import type { ModelUsage } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import type { AITTSModelCard, TTSAudioFormat } from 'model-bank';
-import {
-  LOBE_DEFAULT_MODEL_LIST,
-  TTS_AUDIO_FORMATS,
-  TTS_AUDIO_MIME_TYPES,
-  validateTTSParams,
-} from 'model-bank';
+import { LOBE_DEFAULT_MODEL_LIST, TTS_AUDIO_MIME_TYPES, validateTTSParams } from 'model-bank';
 import { z } from 'zod';
 
 import {
@@ -18,10 +13,22 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
+/**
+ * The audio returns inline as base64 inside one buffered response (≈4.5MB on serverless
+ * deploys). Uncompressed `wav` / `pcm` (and lossless `flac`) outgrow that within about a
+ * minute of speech, after the provider has already billed the synthesis, so this transport
+ * only offers compressed formats.
+ */
+const INLINE_TTS_AUDIO_FORMATS = ['mp3', 'opus', 'aac'] as const;
+
 const ttsParamsInput = z
   .object({
     emotion: z.string().min(1).optional(),
-    format: z.enum(TTS_AUDIO_FORMATS).optional(),
+    format: z
+      .enum(INLINE_TTS_AUDIO_FORMATS, {
+        message: `params.format must be one of ${INLINE_TTS_AUDIO_FORMATS.join(', ')} for inline audio`,
+      })
+      .optional(),
     instructions: z.string().optional(),
     pitch: z.number().optional(),
     sampleRate: z.number().int().positive().optional(),

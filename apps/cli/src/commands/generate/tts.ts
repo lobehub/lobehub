@@ -73,7 +73,7 @@ export function registerTtsCommand(parent: Command) {
     .option('--pitch <n>', 'Pitch adjustment')
     .option('--volume <n>', 'Volume adjustment')
     .option('--emotion <emotion>', 'Emotion, e.g. happy, sad')
-    .option('--format <format>', 'Audio format: mp3, opus, aac, flac, wav, pcm')
+    .option('--format <format>', 'Audio format: mp3, opus, aac')
     .option('--sample-rate <hz>', 'Output sample rate in Hz')
     .option('--instructions <text>', 'Style instructions, for models that accept them')
     .option('--params <json>', 'Extra standard TTS params as a JSON object')
@@ -104,7 +104,8 @@ export function registerTtsCommand(parent: Command) {
         voice: options.voice,
       });
 
-      const output = options.output || `output.${result.format}`;
+      // Servers that predate standard TTS params return no `format`; they always sent mp3.
+      const output = options.output || `output.${result.format ?? 'mp3'}`;
       const buffer = Buffer.from(result.audioBase64, 'base64');
       await writeFile(output, buffer);
 

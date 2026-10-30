@@ -105,6 +105,20 @@ describe('generate tts', () => {
     }
   });
 
+  it('falls back to output.mp3 when an older server returns no format', async () => {
+    synthesize.mockResolvedValue({ audioBase64: Buffer.from('ID3').toString('base64') });
+    const cwd = process.cwd();
+    const dir = path.dirname(output);
+    process.chdir(dir);
+    try {
+      await run('hello');
+      expect(await readFile(path.join(dir, 'output.mp3'), 'utf8')).toBe('ID3');
+    } finally {
+      process.chdir(cwd);
+      await rm(path.join(dir, 'output.mp3'), { force: true });
+    }
+  });
+
   it('exits with an error on invalid --params JSON', async () => {
     await run('hello', '--params', '{not json', '-o', output);
 

@@ -23,7 +23,7 @@ const usage = { cost: 0.000_075, inputCharacters: 5 };
 beforeEach(() => {
   textToSpeechMock.mockResolvedValue({
     audio: new Uint8Array([1, 2, 3]).buffer,
-    format: 'wav',
+    format: 'opus',
     usage,
   });
 });
@@ -37,7 +37,7 @@ describe('ttsRouter.synthesize', () => {
     const res = await caller.synthesize({
       input: 'hello',
       model: 'tts-1',
-      params: { format: 'wav', speed: 1.5 },
+      params: { format: 'opus', speed: 1.5 },
       provider: 'openai',
       voice: 'nova',
     });
@@ -49,13 +49,13 @@ describe('ttsRouter.synthesize', () => {
       undefined,
     );
     expect(textToSpeechMock).toHaveBeenCalledWith(
-      { input: 'hello', model: 'tts-1', params: { format: 'wav', speed: 1.5 }, voice: 'nova' },
+      { input: 'hello', model: 'tts-1', params: { format: 'opus', speed: 1.5 }, voice: 'nova' },
       { metadata: { trigger: 'tts' }, user: 'u1' },
     );
     expect(res).toEqual({
       audioBase64: Buffer.from([1, 2, 3]).toString('base64'),
-      format: 'wav',
-      mimeType: 'audio/wav',
+      format: 'opus',
+      mimeType: 'audio/opus',
       usage,
     });
   });
@@ -105,6 +105,19 @@ describe('ttsRouter.synthesize', () => {
 
     expect(textToSpeechMock.mock.calls[0][0].params).toEqual({ emotion: 'happy', pitch: 3 });
   });
+
+  it.each(['wav', 'pcm', 'flac'])(
+    'rejects uncompressed %s before synthesizing, since inline audio would outgrow the response',
+    async (format) => {
+      await expect(
+        caller.synthesize({ input: 'hello', model: 'tts-1', params: { format } as any }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('params.format must be one of mp3, opus, aac'),
+      });
+      expect(textToSpeechMock).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects unknown param keys at the input boundary', async () => {
     await expect(
