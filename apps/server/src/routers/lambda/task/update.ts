@@ -2,6 +2,7 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { TaskTakeOverError } from '@/database/repositories/taskSubtree';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
@@ -221,18 +222,6 @@ export const updateRouter = router({
           }
         }
 
-        // Runs are attributed to the creator; moving ownership under a live run
-        // would leave it finishing as the previous creator.
-        if (takeOwnership) {
-          const subtree = [resolved, ...(await ctx.taskModel.findAllDescendants(resolved.id))];
-          if (subtree.some((task) => task.status === 'running')) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'Cannot take over this task while it or a subtask is running.',
-            });
-          }
-        }
-
         // Demoting a mixed-creator subtree would fracture it: each descendant
         // stays owned by its creator, so the root creator loses other
         // members' subtasks while those members keep orphaned children whose
@@ -272,9 +261,16 @@ export const updateRouter = router({
           ctx.taskService.assertParentVisibilityCompat(input.visibility, parent?.visibility);
         }
 
-        const updated = await ctx.taskSubtree.updateVisibility(resolved.id, input.visibility, {
-          takeOwnership,
-        });
+        // A takeover re-checks running runs and hidden private subtasks under
+        // the subtree lock (`TaskTakeOverError`).
+        const updated = await ctx.taskSubtree
+          .updateVisibility(resolved.id, input.visibility, { takeOwnership })
+          .catch((error: unknown) => {
+            if (error instanceof TaskTakeOverError) {
+              throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+            }
+            throw error;
+          });
         if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
         return { data: updated, message: 'Task visibility updated', success: true };
       } catch (error) {

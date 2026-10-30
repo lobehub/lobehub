@@ -262,6 +262,30 @@ export const setSubtreeVisibility = async (
 };
 
 /**
+ * Row-lock every task of a subtree for the enclosing transaction, whatever its
+ * visibility, and return their statuses. A takeover authorizes the root it can
+ * see, then must act on the whole subtree: private subtasks the caller cannot
+ * see and runs starting concurrently both have to be caught under the lock.
+ */
+export const lockWholeSubtree = async (
+  ctx: TaskModelContext,
+  rootId: string,
+): Promise<{ id: string; status: string }[]> => {
+  if (!ctx.workspaceId) return [];
+  const result = await ctx.db.execute(sql`
+    WITH RECURSIVE task_tree AS (
+      SELECT id FROM tasks WHERE id = ${rootId} AND workspace_id = ${ctx.workspaceId}
+      UNION ALL
+      SELECT t.id FROM tasks t JOIN task_tree tt ON t.parent_task_id = tt.id
+    )
+    SELECT id, status FROM tasks
+    WHERE id IN (SELECT id FROM task_tree) AND is_deleted IS NOT TRUE
+    FOR UPDATE
+  `);
+  return result.rows as { id: string; status: string }[];
+};
+
+/**
  * Make the caller the creator of a task subtree, for a member taking another
  * member's public task private as their own. Only the `tasks` rows change: the
  * child rows keep their authors and stay readable through the creator branch

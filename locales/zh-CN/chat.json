@@ -2544,6 +2544,7 @@
   "taskDetail.takeOver.confirmHint": "此任务由其他成员创建。确认后它及其子任务将成为你的私人任务：创建者和其他成员将无法再看到它，定时与心跳会被关闭。",
   "taskDetail.takeOver.confirmOk": "收归",
   "taskDetail.takeOver.confirmTitle": "收归为你的私人任务？",
+  "taskDetail.takeOver.errorHiddenSubtasks": "此任务包含创建者设为私人的子任务，无法收归。",
   "taskDetail.takeOver.errorRunning": "此任务或其子任务正在运行，请等运行结束后再收归。",
   "taskDetail.takeOver.menuLabel": "收归为我的私人任务",
   "taskDetail.takeOver.success": "已收归为你的私人任务",

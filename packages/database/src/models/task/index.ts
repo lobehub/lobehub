@@ -193,6 +193,10 @@ export class TaskModel {
     return rows.countTasksBlockingAgentDemotion(this.ctx, assigneeAgentId, agentOwnerUserId);
   }
 
+  async lockWholeSubtree(rootId: string): Promise<{ id: string; status: string }[]> {
+    return tree.lockWholeSubtree(this.ctx, rootId);
+  }
+
   async takeOverSubtree(taskIds: string[]): Promise<void> {
     return tree.takeOverSubtree(this.ctx, taskIds);
   }

@@ -509,6 +509,7 @@ export class TaskDetailSliceActionImpl {
       const isRunningBlock = /cannot take over this task while it or a subtask is running/i.test(
         raw,
       );
+      const isHiddenSubtasksBlock = /private subtasks you cannot see/i.test(raw);
       toast.error(
         isPrivateAgentBlock
           ? t('taskDetail.publishToWorkspace.errorPrivateAgent', {
@@ -528,10 +529,16 @@ export class TaskDetailSliceActionImpl {
                     'This task or one of its subtasks is running. Take it over once the run finishes.',
                   ns: 'chat',
                 })
-              : t('createTask.visibility.changeFailed', {
-                  defaultValue: 'Failed to change task visibility',
-                  ns: 'chat',
-                }),
+              : isHiddenSubtasksBlock
+                ? t('taskDetail.takeOver.errorHiddenSubtasks', {
+                    defaultValue:
+                      'This task has private subtasks its creator kept to themselves, so it cannot be taken over.',
+                    ns: 'chat',
+                  })
+                : t('createTask.visibility.changeFailed', {
+                    defaultValue: 'Failed to change task visibility',
+                    ns: 'chat',
+                  }),
       );
       throw error;
     }
