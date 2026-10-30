@@ -10,13 +10,16 @@ import {
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Alert, Button, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { ChevronDown, Wrench } from 'lucide-react';
+import { ChevronDown, MonitorSmartphone, Wrench } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import { ModelIcon } from '@/components/LobeIcons';
+import { DeviceCliStatusCard } from '@/features/HeterogeneousAgent/ExecutionEnvironment/DeviceCliStatusCard';
+import { HeteroExecutionTargetSelect } from '@/features/HeterogeneousAgent/ExecutionEnvironment/HeteroExecutionTargetSelect';
+import { useProfileExecutionTarget } from '@/features/HeterogeneousAgent/ExecutionEnvironment/useProfileExecutionTarget';
 import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
 import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
@@ -31,11 +34,8 @@ import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
 import AgentTool from './AgentTool';
 import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
-import DeviceHeterogeneousAgentStatusCard from './DeviceHeterogeneousAgentStatusCard';
-import HeteroExecutionTargetSelect from './HeteroExecutionTargetSelect';
 import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
 import RemoteAgentConfigCard from './RemoteAgentConfigCard';
-import { useProfileExecutionTarget } from './useProfileExecutionTarget';
 import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
 import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';
 import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
@@ -198,7 +198,7 @@ const ProfileEditor = memo(() => {
       }
       case 'device': {
         return (
-          <DeviceHeterogeneousAgentStatusCard
+          <DeviceCliStatusCard
             deviceId={panel.deviceId}
             provider={heterogeneousProvider}
             onAuthModeChange={updateHeterogeneousAuthMode}
@@ -266,15 +266,21 @@ const ProfileEditor = memo(() => {
           ) : isHeterogeneous && heterogeneousProvider ? (
             // CLI agents: pick where new topics run, then configure that environment.
             <>
-              <HeteroExecutionTargetSelect
-                agentId={agentId}
-                deviceId={executionTarget.deviceId}
-                isOverridden={executionTarget.isOverridden}
-                isPending={executionTarget.isPending}
-                isSelectable={executionTarget.isSelectable}
-                providerType={heterogeneousProvider.type}
-                target={executionTarget.target}
-              />
+              <WorkspaceAgentPolicyCard
+                fullWidth
+                icon={MonitorSmartphone}
+                title={t('settingAgent.devicePolicy.title')}
+              >
+                <HeteroExecutionTargetSelect
+                  agentId={agentId}
+                  deviceId={executionTarget.deviceId}
+                  isOverridden={executionTarget.isOverridden}
+                  isPending={executionTarget.isPending}
+                  isSelectable={executionTarget.isSelectable}
+                  providerType={heterogeneousProvider.type}
+                  target={executionTarget.target}
+                />
+              </WorkspaceAgentPolicyCard>
               {renderHeterogeneousPanel()}
             </>
           ) : isWorkspaceAgent ? (

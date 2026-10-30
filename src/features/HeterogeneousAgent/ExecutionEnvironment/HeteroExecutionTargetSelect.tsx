@@ -6,7 +6,6 @@ import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import type { SelectOption, SelectOptions } from '@lobehub/ui';
 import { Select, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { MonitorSmartphone } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +13,8 @@ import AsyncError from '@/components/AsyncError';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
 import {
   devicePoolForAgent,
+  ExecutionTargetLabel,
+  executionTargetSelectClassNames,
   executionTargetValue,
   groupExecutionTargetDevices,
   parseExecutionTargetValue,
@@ -28,11 +29,6 @@ import {
   getTargetHint,
   getTargetSelectValue,
 } from './heteroTargetSelection';
-import {
-  ExecutionTargetLabel,
-  executionTargetSelectClassNames,
-} from './WorkspaceAgentDevicePolicy';
-import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
 
 const styles = stylex.create({
   select: {
@@ -55,11 +51,14 @@ interface HeteroExecutionTargetSelectProps {
 
 /**
  * Where a heterogeneous agent's new topics run, as the current caller will
- * actually run them. Picks go through the same writer as the chat-input
- * switcher, so a member changes only their own environment and a manager's
- * pick replaces the shared default.
+ * actually run them: the picker, the line saying whose pick applies, and the
+ * device-list error. The host supplies the surrounding card.
+ *
+ * Picks go through the same writer as the chat-input switcher, so a member
+ * changes only their own environment and a manager's pick replaces the shared
+ * default.
  */
-const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps>(
+export const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps>(
   ({ agentId, deviceId, isOverridden, isPending, isSelectable, providerType, target }) => {
     const { t } = useTranslation(['setting', 'chat']);
     const agent = useAgentStore((s) => s.agentMap[agentId]);
@@ -212,11 +211,7 @@ const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps>(
     const hint = getTargetHint({ isOverridden, isSelectable });
 
     return (
-      <WorkspaceAgentPolicyCard
-        fullWidth
-        icon={MonitorSmartphone}
-        title={t('settingAgent.devicePolicy.title')}
-      >
+      <>
         <Select
           {...stylex.props(styles.select)}
           classNames={executionTargetSelectClassNames}
@@ -266,11 +261,9 @@ const HeteroExecutionTargetSelect = memo<HeteroExecutionTargetSelectProps>(
         {error ? (
           <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
         ) : null}
-      </WorkspaceAgentPolicyCard>
+      </>
     );
   },
 );
 
 HeteroExecutionTargetSelect.displayName = 'HeteroExecutionTargetSelect';
-
-export default HeteroExecutionTargetSelect;

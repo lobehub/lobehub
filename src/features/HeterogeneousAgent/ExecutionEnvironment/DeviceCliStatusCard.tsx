@@ -68,7 +68,7 @@ const styles = stylex.create({
   },
 });
 
-interface DeviceHeterogeneousAgentStatusCardProps {
+interface DeviceCliStatusCardProps {
   deviceId: string;
   onAuthModeChange?: (
     authMode: HeterogeneousAuthMode,
@@ -92,7 +92,7 @@ const openExternal = (url: string) => {
  * run resolves the CLI's default command itself and authenticates with the
  * device's own login, so a custom command or API mode would not apply there.
  */
-const DeviceHeterogeneousAgentStatusCard = memo<DeviceHeterogeneousAgentStatusCardProps>(
+export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(
   ({ deviceId, onAuthModeChange, provider }) => {
     const { t } = useTranslation(['setting', 'chat']);
     const { allowed: canEdit } = usePermission('edit_own_content');
@@ -295,6 +295,4 @@ const DeviceHeterogeneousAgentStatusCard = memo<DeviceHeterogeneousAgentStatusCa
   },
 );
 
-DeviceHeterogeneousAgentStatusCard.displayName = 'DeviceHeterogeneousAgentStatusCard';
-
-export default DeviceHeterogeneousAgentStatusCard;
+DeviceCliStatusCard.displayName = 'DeviceCliStatusCard';

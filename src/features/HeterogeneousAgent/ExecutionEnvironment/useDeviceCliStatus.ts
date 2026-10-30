@@ -1,8 +1,8 @@
-import { useDeviceAgentScan } from '@/features/HeterogeneousAgent/hooks/useDeviceAgentScan';
 import { useDeviceList } from '@/store/device';
 
 import { getBoundDevicePresence } from './boundDevicePresence';
 import { resolveDeviceCliState } from './deviceCliStatus';
+import { useDeviceAgentScan } from './useDeviceAgentScan';
 
 /**
  * The agent CLI on a bound device, probed over the device gateway.
