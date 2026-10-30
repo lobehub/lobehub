@@ -63,8 +63,8 @@ export const imageUrlToBase64 = async (
 
     // Use SSRF-safe fetch on server-side to prevent SSRF attacks
     const init = options.signal ? { signal: options.signal } : undefined;
-    // ssrfSafeFetch buffers the whole body before returning, so the cap must be applied
-    // there. It truncates silently, so read one extra byte for readBlobWithLimit to reject.
+    // Also cap the stream inside ssrfSafeFetch. It truncates silently, so allow one extra
+    // byte for readBlobWithLimit to detect the overflow and reject.
     const res = isServer
       ? await import('@lobechat/ssrf-safe-fetch').then((m) =>
           m.ssrfSafeFetch(

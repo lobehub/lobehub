@@ -229,6 +229,25 @@ describe('AgentRuntimeService', () => {
       });
     });
 
+    it('releases the unread body of a non-2xx forwarding response', async () => {
+      const cancel = vi.fn();
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(new ReadableStream({ cancel, pull: () => new Promise(() => {}) }), {
+          status: 503,
+        }),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler!(event as any);
+
+      expect(event.mock).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringContaining('HTTP 503'), success: false }),
+      );
+      expect(cancel).toHaveBeenCalled();
+    });
+
     it('mocks transport failures', async () => {
       mockSsrfSafeFetch.mockRejectedValue('SSRF blocked');
       const hook = createEvalToolForwardingHook({

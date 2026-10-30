@@ -28,7 +28,12 @@ vi.mock('../wake/scheduler', () => ({
   resolveWakeScheduler: (_platform: string, _app: string, settings: any) =>
     settings?.botWake?.scheduler?.mode === 'enforce' ? { submit: mocks.submit } : undefined,
 }));
-vi.mock('../wake/classify', () => ({ createWakeClassify: () => vi.fn() }));
+vi.mock('../wake/classify', () => ({
+  createWakeClassify: () => vi.fn(),
+}));
+vi.mock('../wake/dutyJudge', () => ({
+  createWakeDutyJudge: () => vi.fn(),
+}));
 vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
@@ -122,7 +127,7 @@ describe('BotMessageRouter follow-up scheduling', () => {
       expect(mocks.defer).not.toHaveBeenCalled();
     });
 
-    it('runs it straight away with bot-wake enabled in shadow and no scheduler', async () => {
+    it('runs it straight away with bot-wake enabled and no scheduler', async () => {
       await boot(keywordSettings({ enabled: true }));
 
       await subscribed()(thread(), message());
@@ -131,9 +136,14 @@ describe('BotMessageRouter follow-up scheduling', () => {
       expect(mocks.defer).not.toHaveBeenCalled();
     });
 
-    it('does not let shadow policies silence a wake they would deny', async () => {
+    it('does not let shadow policies silence a wake they would deny (an operator override)', async () => {
       await boot(
-        keywordSettings({ enabled: true, rules: { denyChannels: ['chat-1'], scope: 'none' } }),
+        keywordSettings({
+          classifier: { mode: 'shadow' },
+          enabled: true,
+          mode: 'shadow',
+          rules: { denyChannels: ['chat-1'], scope: 'none' },
+        }),
       );
 
       await subscribed()(thread(), message());
@@ -194,6 +204,54 @@ describe('BotMessageRouter follow-up scheduling', () => {
       expect(mockHandleSubscribedMessage).toHaveBeenCalledTimes(2);
       expect(mockHandleMention).toHaveBeenCalledTimes(1);
       expect(mocks.submit).not.toHaveBeenCalled();
+    });
+
+    it('answers a keyword the owner marked as the bot name at once, as a named wake', async () => {
+      await boot({
+        ...settings,
+        watchKeywords: [
+          { keyword: 'bug' },
+          { asName: true, instruction: 'Reply as the team helper.', keyword: 'canis' },
+        ],
+      });
+
+      await subscribed()(thread(), message({ text: 'canis, are you there?' }));
+      await catchAll()(
+        thread({ id: 'telegram:group-9' }),
+        message({ id: 'msg-9', text: 'canis, are you there?' }),
+      );
+      await flush();
+
+      expect(mocks.submit).not.toHaveBeenCalled();
+      expect(mocks.defer).not.toHaveBeenCalled();
+      expect(mockHandleSubscribedMessage.mock.calls[0][2]).toMatchObject({
+        named: true,
+        wakeKind: 'followup',
+      });
+      expect(mockHandleMention.mock.calls[0][2]).toMatchObject({
+        named: true,
+        wakeKind: 'followup',
+      });
+      // The name still carries its instruction, like any keyword.
+      expect(mockHandleMention.mock.calls[0][1].text).toBe(
+        'Reply as the team helper.\n\ncanis, are you there?',
+      );
+      expect(decisions().map((d) => [d.outcome, d.finalReason])).toEqual([
+        ['wake', 'named-in-text'],
+        ['wake', 'named-in-text'],
+      ]);
+    });
+
+    it('still parks an unflagged keyword next to a keyword name', async () => {
+      await boot({
+        ...settings,
+        watchKeywords: [{ keyword: 'bug' }, { asName: true, keyword: 'canis' }],
+      });
+
+      await subscribed()(thread(), message());
+
+      expect(mockHandleSubscribedMessage).not.toHaveBeenCalled();
+      expect(mocks.defer).toHaveBeenCalledTimes(1);
     });
 
     it('parks a catch-all keyword wake before a reply thread is opened for it', async () => {

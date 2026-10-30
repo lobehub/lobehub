@@ -55,12 +55,28 @@ export async function executeWithCallback(
   opts: {
     agentId: string;
     botContext?: ChatTopicBotContext;
+    /** The bot's settings; local mode records the bot-wake outcome with them. */
+    botSettings?: Record<string, unknown>;
     channelContext?: DiscordChannelContext;
     charLimit?: number;
     client?: PlatformClient;
     displayToolCalls?: boolean;
+    /** The message falls within the bot's duties; told to the agent with a `followup`. */
+    duty?: { matched?: string };
+    /** The bot woke in its follow-up window; told to the agent with a `followup`. */
+    followup?: BotPlatformContext['followup'];
+    /** The bot woke only because its name is in the text; told to the agent with a `followup`. */
+    named?: boolean;
+    /** Emoji the owner lets the bot use in this conversation. */
+    replyEmojis?: { emoji: string; usage?: string }[];
+    /** How the bot talks in this conversation, as the owner wrote it. */
+    replyStyle?: string;
+    /** Acknowledgement posted before the run; the agent is told not to repeat it. */
+    openingReply?: string;
     reactionMode?: BotReactionMode;
     replyLocale: BotReplyLocale;
+    /** The agent may step back from this conversation; documented in its prompt. */
+    standDown?: boolean;
     topicId?: string;
     trigger?: string;
     /** `followup` holds visible feedback back until the agent starts acting. Default `mention`. */
@@ -288,7 +304,18 @@ export async function executeWithCallback(
     : undefined;
 
   // Tell the agent it may stay silent; see `formatBotPlatformContext`.
-  if (deferFeedback && botPlatformContext) botPlatformContext.wakeKind = wakeKind;
+  if (deferFeedback && botPlatformContext) {
+    botPlatformContext.wakeKind = wakeKind;
+    if (opts.duty) botPlatformContext.duty = opts.duty;
+    if (opts.followup) botPlatformContext.followup = opts.followup;
+    if (opts.named) botPlatformContext.named = true;
+  }
+  if (opts.openingReply && botPlatformContext) botPlatformContext.openingReply = opts.openingReply;
+  if (botPlatformContext) {
+    if (opts.replyStyle) botPlatformContext.replyStyle = opts.replyStyle;
+    if (opts.replyEmojis?.length) botPlatformContext.replyEmojis = opts.replyEmojis;
+  }
+  if (opts.standDown && botPlatformContext) botPlatformContext.standDown = true;
 
   // Attach file warnings to botPlatformContext for injection via context engine
   if (fileWarnings?.length && botPlatformContext) {
@@ -362,6 +389,7 @@ export async function executeWithCallback(
     botContext,
     botPlatformContext,
     botSender,
+    botSettings: opts.botSettings,
     callbackUrl,
     charLimit,
     channelContext,

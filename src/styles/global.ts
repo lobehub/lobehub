@@ -1,5 +1,4 @@
-import type { LobeTheme } from '@lobehub/ui';
-import { CLASSNAMES, css } from '@lobehub/ui';
+import { CLASSNAMES, css, cssVar } from '@lobehub/ui';
 
 import { CONVERSATION_PRINT_ROOT_CLASS } from '@/features/Conversation/ChatList/constants';
 import {
@@ -10,7 +9,7 @@ import {
 // fix ios input keyboard
 // overflow: hidden;
 // ref: https://zhuanlan.zhihu.com/p/113855026
-const genGlobalStyle = ({ token }: { prefixCls: string; token: LobeTheme }) => css`
+const genGlobalStyle = () => css`
   html,
   body,
   #__next {
@@ -41,7 +40,7 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: LobeTheme }) => c
   }
 
   * {
-    scrollbar-color: ${token.colorFill} transparent;
+    scrollbar-color: ${cssVar.colorFill} transparent;
     scrollbar-width: thin;
 
     ::-webkit-scrollbar {
@@ -55,7 +54,7 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: LobeTheme }) => c
 
     :hover::-webkit-scrollbar-thumb {
       border: 3px solid transparent;
-      background-color: ${token.colorText};
+      background-color: ${cssVar.colorText};
       background-clip: content-box;
     }
 
@@ -71,19 +70,19 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: LobeTheme }) => c
   }
 
   html.desktop[data-theme='dark'] body {
-    background-color: color-mix(in srgb, ${token.colorBgLayout} 50%, transparent);
+    background-color: color-mix(in srgb, ${cssVar.colorBgLayout} 50%, transparent);
   }
 
   html.desktop[data-theme='light'] body {
-    background-color: color-mix(in srgb, ${token.colorBgLayout} 70%, transparent);
+    background-color: color-mix(in srgb, ${cssVar.colorBgLayout} 70%, transparent);
   }
 
   ${MAC_WINDOW_FULLSCREEN_SELECTOR} {
-    ${MAC_PANEL_BG_VAR}: ${token.colorBgLayout};
+    ${MAC_PANEL_BG_VAR}: ${cssVar.colorBgLayout};
   }
 
   ${MAC_WINDOW_FULLSCREEN_SELECTOR} body {
-    background-color: ${token.colorBgLayout};
+    background-color: ${cssVar.colorBgLayout};
   }
 
   button {
@@ -92,7 +91,7 @@ const genGlobalStyle = ({ token }: { prefixCls: string; token: LobeTheme }) => c
 
   .${CLASSNAMES.ContextTrigger}[data-popup-open]:not([data-no-highlight]),
   .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open]:not([data-no-highlight]) {
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   }
   .accordion-action:has(
     .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open]:not([data-no-highlight])

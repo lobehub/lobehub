@@ -5,6 +5,9 @@ const DISCORD_ROLE_MENTION = /<@&(\d+)>/g;
 const DISCORD_CUSTOM_EMOJI = /<a?:\w+:\d+>/g;
 const SHORTCODE_EMOJI = /:[\w+-]+:/g;
 
+const LARK_CHAT_TYPES = new Set(['group', 'p2p']);
+const isLarkPlatform = (platform: string) => platform === 'feishu' || platform === 'lark';
+
 /**
  * Re-derives mentions from a Discord message's own text.
  *
@@ -88,13 +91,62 @@ export const resolveChannelKeys = (
 
   // Other platforms encode the conversation as `platform:part:part`. The owner may know it by the
   // whole id or by the id they see in the platform's UI (Telegram chat id, Slack channel id).
+  // Feishu / Lark put the chat type there (`feishu:group:oc_…`), which is no id of the chat.
   const [, ...parts] = platformThreadId.split(':');
+  const ids = isLarkPlatform(platform) ? parts.filter((part) => !LARK_CHAT_TYPES.has(part)) : parts;
 
   return {
     channelKey: `${base}:${platformThreadId}`,
-    ids: [platformThreadId, ...parts.filter(Boolean)],
+    ids: [platformThreadId, ...ids.filter(Boolean)],
   };
 };
+
+/**
+ * Whether a conversation keeps a shared message log: a group conversation on a platform that
+ * delivers every message said in it, not only those addressed to the bot. Direct messages are
+ * private and never logged.
+ *
+ * - Discord: guild channels (`discord:<guild>:<channel>[:<thread>]`), not `@me`
+ * - Feishu / Lark: group chats (`feishu:group:oc_…`); a legacy id without the chat type cannot
+ *   tell a group from a direct message, so it is not logged
+ */
+export const hasConversationLog = (platform: string, platformThreadId: string): boolean => {
+  const [, kind] = platformThreadId.split(':');
+
+  if (platform === 'discord') return !!kind && kind !== '@me';
+  if (isLarkPlatform(platform)) return kind === 'group';
+
+  return false;
+};
+
+/**
+ * Keys of a conversation's shared message log, the channel first and then the thread when there is
+ * one. Unlike the wake state they carry no application id: every bot in a channel reads and writes
+ * the same log, so the channel's last messages are stored once however many bots listen.
+ *
+ * A person's message is filed under the last key only (where it was said); the bot's own reply is
+ * filed under all of them, because people answer it from the channel as well as from the thread.
+ */
+export const resolveConversationLogKeys = (
+  platform: string,
+  platformThreadId: string,
+): string[] => {
+  if (platform === 'discord') {
+    const [, guildId, channelId, threadId] = platformThreadId.split(':');
+
+    if (guildId && channelId) {
+      const channel = ['discord', guildId, channelId].join(':');
+
+      return threadId ? [channel, `${channel}:${threadId}`] : [channel];
+    }
+  }
+
+  return [`${platform}:${platformThreadId.split(':').slice(1).join(':')}`];
+};
+
+/** Where a message said in this conversation is filed: the most specific log. */
+export const resolveConversationLogKey = (platform: string, platformThreadId: string): string =>
+  resolveConversationLogKeys(platform, platformThreadId).at(-1)!;
 
 /** Every key the channel's state is written under (channel first, then thread when there is one). */
 export const wakeStateKeys = (keys: WakeChannelKeys): string[] =>

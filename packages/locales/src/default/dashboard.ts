@@ -56,7 +56,7 @@ export default {
   'detail.versionNone': 'Not published',
   'detail.versionPublished': 'v{{version}} live',
   'dryRun.intro':
-    'The agent wants to run this draft once to preview its output. It runs in a sandbox with the access below; nothing goes live and no dashboard changes.',
+    'The agent wants to run this draft once in a sandbox to see its real output. Nothing goes live and no dashboard changes; it gets only the access listed below.',
   'error.hideDetails': 'Hide details',
   'error.showDetails': 'Show details',
   'form.descriptionLabel': 'Description',
@@ -93,6 +93,7 @@ export default {
     'Output of the dry run this conversation produced. It does not change the live widget.',
   'detail.tab.diff': 'Changes',
   'portal.title': 'Widget',
+  'publish.dryRunPassed': 'v{{version}} passed its dry run {{time}}',
   'publish.env': 'Credentials',
   'publish.envNone': 'None',
   'publish.intro':
@@ -110,6 +111,12 @@ export default {
     "for reference, v{{version}}'s last result; approving runs this draft to make its own",
   'review.expectedSameVersion': "from this version's last dry run",
   'review.loadFailed': "Couldn't load the review, so approval is on hold",
+  'review.stage.draft': 'Draft',
+  'review.stage.dryRun': 'Dry run',
+  'review.stage.label': 'Widget approval stage',
+  'review.stage.publish': 'Publish',
+  'review.title.dryRun': 'Dry-run approval · {{title}} · v{{version}}',
+  'review.title.publish': 'Publish approval · {{title}} · v{{version}}',
   'review.versionMissing':
     "This version is no longer available, so it can't be reviewed. Reject the request and ask the agent to try again.",
   'run.empty': 'This widget has not run yet.',

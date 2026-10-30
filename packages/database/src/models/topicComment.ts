@@ -664,9 +664,10 @@ export class TopicCommentModel {
       const [structuralReplies] = await tx
         .select({ total: count() })
         .from(topicComments)
-        .where(eq(topicComments.parentCommentId, id));
+        .where(eq(topicComments.parentCommentId, id)); // v8 ignore start -- unreachable: an ungrouped count() always returns one row
 
       if ((structuralReplies?.total ?? 0) > 0) {
+        // v8 ignore stop
         await tx
           .update(topicComments)
           .set({ content: '', deletedAt: new Date(), editorData: null, updatedAt: new Date() })
@@ -691,9 +692,10 @@ export class TopicCommentModel {
           const [siblings] = await tx
             .select({ total: count() })
             .from(topicComments)
-            .where(eq(topicComments.parentCommentId, parent.id));
+            .where(eq(topicComments.parentCommentId, parent.id)); // v8 ignore start -- unreachable: an ungrouped count() always returns one row
 
           if ((siblings?.total ?? 0) === 0)
+            // v8 ignore stop
             await tx.delete(topicComments).where(eq(topicComments.id, parent.id));
         }
       }
@@ -853,6 +855,7 @@ export class TopicCommentModel {
 
     const replyCountByRootId = new Map<string, number>();
     for (const row of replyCountRows) {
+      /* v8 ignore next -- unreachable: grouped by inArray(parentCommentId, …), never NULL */
       if (row.parentCommentId) replyCountByRootId.set(row.parentCommentId, row.total);
     }
 
@@ -965,8 +968,8 @@ export class TopicCommentModel {
     return {
       countByMessage: Object.fromEntries(
         byMessage.map((row) => [row.messageId as string, row.messageCount]),
-      ),
-      total: totalRow?.total ?? 0,
+      ), // v8 ignore start -- unreachable: an ungrouped count() always returns one row
+      total: totalRow?.total ?? 0, // v8 ignore stop
     };
   }
 
@@ -1023,6 +1026,7 @@ export const purgeExpiredTopicCommentModeration = async (
       .select({ parentCommentId: topicComments.parentCommentId })
       .from(topicComments)
       .where(inArray(topicComments.parentCommentId, candidateIds));
+    /* v8 ignore next -- unreachable: children are selected by inArray(parentCommentId, …), never NULL */
     const idsWithChildren = new Set(
       children.flatMap(({ parentCommentId }) => (parentCommentId ? [parentCommentId] : [])),
     );

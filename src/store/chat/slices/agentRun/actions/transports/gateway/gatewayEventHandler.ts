@@ -725,12 +725,12 @@ export const createGatewayEventHandler = (
           // is what un-blocks the enqueue chain so live chunks can land
           // mid-stream.
           //
-          // Hetero CLI adapters (Claude Code / Codex) never set
-          // `assistantMessage.id` on stream_start, so the DB read stays
-          // mandatory for them — it (a) pulls the executor-created
-          // placeholder into `dbMessagesMap` so subsequent chunks can
-          // dispatch to it, and (b) resolves the next-step assistant id for
-          // the `newStep` fallback.
+          // Server-ingested hetero runs get `assistantMessage.id` stamped at
+          // publish; desktop-local hetero steps and older servers send none,
+          // so the DB read stays mandatory for them — it (a) pulls the
+          // executor-created placeholder into `dbMessagesMap` for later
+          // chunks, and (b) resolves the `newStep` fallback, which only knows
+          // "the assistant after the current one" (wrong for a replay).
           if (!newAssistantMessageId) {
             const messages = await refreshMessagesFromDb({
               skipWorks: true,

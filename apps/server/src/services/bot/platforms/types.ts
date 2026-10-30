@@ -47,7 +47,19 @@ export interface PlatformAccessMeta {
  * - Server: validation + default value extraction
  * - Frontend: auto-generated form (type → component mapping)
  */
+/** One condition of {@link FieldSchema.visibleWhen}. */
+export interface FieldVisibleWhen {
+  field: string;
+  value: unknown;
+}
+
 export interface FieldSchema {
+  /**
+   * Render an `enum` as a list of choices, each with its description under it, instead of a
+   * dropdown. For a few options whose consequences need a sentence each (who may DM the bot, where
+   * it may join).
+   */
+  choices?: boolean;
   /** Default value */
   default?: unknown;
   description?: string;
@@ -59,6 +71,8 @@ export interface FieldSchema {
   enumDescriptions?: string[];
   /** Display labels for enum options */
   enumLabels?: string[];
+  /** The `enum` value the product suggests; a `choices` list tags it. */
+  enumRecommended?: string;
   /**
    * Rollout gate for the field: the key of a boolean in the user's feature flags (for example
    * `enableBotWake`). The form hides the field unless that flag is on for the signed-in user.
@@ -96,6 +110,11 @@ export interface FieldSchema {
   properties?: FieldSchema[];
   required?: boolean;
   /**
+   * Visible lines for a multi-line `string` field. Setting it renders a text area instead of a
+   * one-line input; `maximum` is then its character limit.
+   */
+  rows?: number;
+  /**
    * i18n key for an extra `?` tooltip rendered next to the field label. Use
    * for "how to find this value" guidance that's too long for the inline
    * `description` (e.g. platform-specific UI paths for fetching User IDs).
@@ -103,7 +122,7 @@ export interface FieldSchema {
   tooltip?: string;
   /**
    * Field type, maps to UI component:
-   * - 'string' → Input
+   * - 'string' → Input (a text area when `rows` is set)
    * - 'password' → Password input
    * - 'number' / 'integer' → NumberInput
    * - 'boolean' → Switch
@@ -113,10 +132,11 @@ export interface FieldSchema {
   type: 'array' | 'boolean' | 'integer' | 'number' | 'object' | 'password' | 'string';
   /**
    * Conditional visibility: show only when another field matches a value. Pass
-   * an array to match any of several values, e.g. a window size that applies to
-   * both the `burst` and `debounce` concurrency strategies.
+   * an array as `value` to match any of several values, e.g. a window size that
+   * applies to both the `burst` and `debounce` concurrency strategies. Pass a
+   * list of conditions to require all of them.
    */
-  visibleWhen?: { field: string; value: unknown };
+  visibleWhen?: FieldVisibleWhen | FieldVisibleWhen[];
 }
 
 // --------------- Bot Message Attachment ---------------
@@ -224,7 +244,41 @@ export interface UsageStats {
   totalTokens: number;
 }
 
+// --------------- Reply Targets ---------------
+
+/**
+ * Where the reply to a message at the top level of a channel can go: the channel itself, or a
+ * thread under the message. Each target is a `platformThreadId` the handler swaps in before the
+ * run, so everything downstream (posting, reactions, subscription) follows the choice.
+ *
+ * - Discord: the message arrives keyed by the channel; a thread is created off it on demand and
+ *   can be named.
+ * - Slack: the message arrives keyed by the thread under it (`slack:<channel>:<ts>`); the channel
+ *   is `slack:<channel>`, and the thread exists as soon as someone replies in it, without a name.
+ */
+export interface ReplyTargets {
+  /** Posts at the top level of the channel the message was sent in. */
+  channel: string;
+  /** Whether `openThread` uses its `name`. A thread without a name takes the platform's own. */
+  namesThread: boolean;
+  /**
+   * Opens the thread under the message and returns its `platformThreadId`. Best-effort: resolves
+   * `undefined` instead of throwing when the platform refuses, so the reply falls back to the
+   * channel rather than being lost.
+   */
+  openThread: (name?: string) => Promise<string | undefined>;
+}
+
 // --------------- Platform Client ---------------
+
+/** Behaviour the router asks a platform's Chat SDK patches to adopt. */
+export interface ChatPatchOptions {
+  /**
+   * Asked before the adapter opens a reply thread for an @-mention on its own. `true` keeps the
+   * message in the channel, so the router decides where the reply goes.
+   */
+  deferMentionThread?: () => Promise<boolean>;
+}
 
 /**
  * A client to a specific platform instance, holding credentials and runtime context.
@@ -238,7 +292,7 @@ export interface PlatformClient {
    * Apply platform-specific Chat SDK compatibility patches after bot initialization.
    * Useful for adapter quirks that should stay encapsulated within the platform client.
    */
-  applyChatPatches?: (chatBot: Chat<any>) => void;
+  applyChatPatches?: (chatBot: Chat<any>, options?: ChatPatchOptions) => void;
 
   /** Create a Chat SDK adapter config for inbound message handling. */
   createAdapter: () => Record<string, any>;
@@ -337,10 +391,30 @@ export interface PlatformClient {
    */
   formatReply?: (body: string, stats?: UsageStats) => string;
 
+  /**
+   * What people call the bot on this platform (display name, username), so a message that says the
+   * name is read as addressed to it. Optional: without it the bot is recognised by @mention only.
+   * Implementations cache; an error is treated as "no names yet" and retried on the next message.
+   * `platformThreadId`, when given, adds the names the bot goes by in that conversation's server
+   * (a Discord guild nickname).
+   */
+  getBotNames?: (platformThreadId?: string) => Promise<string[]>;
+
+  // --- Runtime Operations ---
+
   /** Get a messenger for a specific thread (outbound messaging). */
   getMessenger: (platformThreadId: string) => PlatformMessenger;
 
-  // --- Runtime Operations ---
+  /**
+   * Where the reply to `message` can go, when it sits at the top level of a channel that has
+   * threads (see `ReplyTargets`). `undefined` when there is no choice: a DM, a message already
+   * inside a thread, or a threadless platform (Telegram, WeChat, QQ). Omit when the platform never
+   * offers one; the reply then stays in `platformThreadId`.
+   */
+  getReplyTargets?: (
+    platformThreadId: string,
+    message: { id?: string; raw?: unknown },
+  ) => ReplyTargets | undefined;
 
   readonly id: string;
 
@@ -358,26 +432,6 @@ export interface PlatformClient {
    * group. Platforms that can't tell omit the method.
    */
   isSoloBotConversation?: (platformThreadId: string) => Promise<boolean>;
-
-  /**
-   * Optional hook called from the router when a non-DM message wakes the
-   * bot via a watch-keyword match (). Platforms that prefer to
-   * isolate the reply in a sub-thread (Discord, where the chat-sdk
-   * auto-creates a thread only on @-mention) should spawn one off the
-   * triggering message and return the upgraded composite threadId so the
-   * downstream `bridge.handleMention` posts inside the new thread.
-   *
-   * Return `undefined` (or omit the method) to leave the threadId
-   * unchanged — the bot then replies in the original channel, which is
-   * the right behaviour for threadless platforms (Telegram / WeChat / QQ)
-   * and for Slack / Lark / Feishu where channel-level replies are the
-   * conventional response shape.
-   *
-   * Implementations must be best-effort: any platform error should be
-   * caught and `undefined` returned so the router falls back to the
-   * original threadId rather than swallowing the user message.
-   */
-  openThreadForChannelWake?: (threadId: string, messageRaw: unknown) => Promise<string | undefined>;
 
   /** Parse a composite message ID into the platform-native format. */
   parseMessageId: (compositeId: string) => string | number;

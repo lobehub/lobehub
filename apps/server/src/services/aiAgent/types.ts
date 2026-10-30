@@ -1,11 +1,13 @@
 import type { AgentRunLlmExecutor } from '@lobechat/agent-runtime';
 import type { BotPlatformContext } from '@lobechat/context-engine';
 import type {
+  AgentSenderMetadata,
   BotSenderMetadata,
   ChatTopicBotContext,
   ExecAgentParams,
   ExternalOriginMetadata,
   LobeAgentChatConfig,
+  LobeAgentConfig,
   MessageMetadata,
   RuntimeMentionedAgent,
   UserInterventionConfig,
@@ -108,6 +110,15 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   acceptsMemberRuntimeEnd?: boolean;
   /** Additional plugin IDs to inject (e.g., task tool during task execution) */
   additionalPluginIds?: string[];
+  /** Trusted settings frozen by a durable dispatcher, never accepted from a client. */
+  agentConfigSnapshot?: LobeAgentConfig;
+  /**
+   * The sending agent of an agent → agent turn, already resolved from its
+   * `sourceOperationId` by the server. Set by a queued follow-up, whose sender
+   * was resolved when it was queued: by the time it starts, the sending run may
+   * have settled and could no longer vouch for it. Never client-passable.
+   */
+  agentSender?: AgentSenderMetadata;
   /**
    * Server-authored generic intervention claim id. When present, the message
    * claim stores this exact id so a retry after dispatch-but-before-publish can
@@ -226,8 +237,17 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   onOperationCreated?: (operationId: string) => Promise<void>;
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
+  /**
+   * A server-started turn that takes over where a finished run left off (the
+   * server-side drain of queued follow-ups). Non-interactive thread starts
+   * must hold the thread-start fence and find no other live run — see
+   * `startOnThread`. Unlike `steer`, it never marks the user message.
+   */
+  queuedSuccessor?: boolean;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
+  reservedOperationId?: string;
   /** Whether to continue execution from an existing persisted message */
   resume?: boolean;
   /**
@@ -303,9 +323,10 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
-   * The prompt was queued while the previous turn was still running. The user
-   * message is persisted with `metadata.steer` so it renders as a continuation
-   * of that turn.
+   * The send directly steered the turn it replaces: an interrupting "send
+   * now", not a follow-up that waited in queue and started as the next turn.
+   * The user message is persisted with `metadata.steer` so it renders as a
+   * continuation of the steered turn.
    */
   steer?: boolean;
   /**

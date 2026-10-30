@@ -39,6 +39,7 @@ import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
 import LongCatProvider from './longcat';
+import MagpieProvider from './magpie';
 import MetaProvider from './meta';
 import MinimaxProvider from './minimax';
 import MinimaxCodingPlanProvider from './minimaxCodingPlan';
@@ -231,6 +232,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   OpenCodeCodingPlanProvider,
   StraicoProvider,
   LongCatProvider,
+  MagpieProvider,
   StreamLakeProvider,
   AntGroupProvider,
 ];
@@ -250,8 +252,12 @@ export const isProviderDisableBrowserRequest = (id: string) => {
  * Providers that run on the user's own machine: requests leave from the device
  * unless `fetchOnClient` says otherwise (a desktop app or a deployment that
  * proxies them sets it to `false`).
+ *
+ * magpie belongs here for the same reason: the user runs it, and it answers on
+ * `127.0.0.1`. A deployment that reaches one elsewhere sets `MAGPIE_PROXY_URL`,
+ * which arrives as `fetchOnClient: false` and keeps the requests on the server.
  */
-const LOCAL_FETCH_ON_CLIENT_PROVIDERS = new Set(['lmstudio', 'ollama', 'unsloth']);
+const LOCAL_FETCH_ON_CLIENT_PROVIDERS = new Set(['lmstudio', 'magpie', 'ollama', 'unsloth']);
 
 export interface ProviderFetchOnClientConfig {
   /** The user's choice, else the deployment's override for the provider. */
@@ -265,7 +271,7 @@ export interface ProviderFetchOnClientConfig {
  * server never relays a call the client did not prepare for (or the reverse).
  *
  * 1. A provider that disables browser requests always runs on the server.
- * 2. Local providers (Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
+ * 2. Local providers (magpie / Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
  * 3. Neither a base URL nor an API key: the server's own configuration.
  * 4. Only a base URL: an endpoint the server may not reach, so the device.
  * 5. Otherwise `fetchOnClient`, default the server.
@@ -337,6 +343,7 @@ export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
 export { default as LongCatProviderCard } from './longcat';
+export { default as MagpieProviderCard } from './magpie';
 export { default as MetaProviderCard } from './meta';
 export { default as MinimaxProviderCard } from './minimax';
 export { default as MinimaxCodingPlanProviderCard } from './minimaxCodingPlan';

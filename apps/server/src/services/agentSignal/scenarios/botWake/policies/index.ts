@@ -6,6 +6,7 @@ import { createInternalRulesPolicy } from './internalRules';
 import { createOwnerRulesPolicy } from './ownerRules';
 
 export * from './classifier';
+export * from './duty';
 export * from './internalRules';
 export * from './ownerRules';
 

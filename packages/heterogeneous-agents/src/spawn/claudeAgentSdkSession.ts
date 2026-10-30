@@ -77,8 +77,10 @@ export const buildClaudeSdkUserMessageFromStreamJson = (stdinPayload: string): S
 
 const parseClaudeSdkExtraArgs = (
   args: string[],
-): Pick<ClaudeAgentSdkOptions, 'effort' | 'extraArgs' | 'model'> => {
+): Pick<ClaudeAgentSdkOptions, 'effort' | 'extraArgs' | 'model' | 'plugins'> => {
   const extraArgs: Record<string, string | null> = {};
+  // `--plugin-dir` repeats, which `extraArgs` (one value per flag) cannot carry.
+  const plugins: NonNullable<ClaudeAgentSdkOptions['plugins']> = [];
   let model: string | undefined;
   let effort: ClaudeAgentSdkOptions['effort'];
 
@@ -102,6 +104,12 @@ const parseClaudeSdkExtraArgs = (
       continue;
     }
 
+    if (key === 'plugin-dir' && hasValue) {
+      plugins.push({ path: next, type: 'local' });
+      index += 1;
+      continue;
+    }
+
     extraArgs[key] = hasValue ? next : null;
     if (hasValue) index += 1;
   }
@@ -110,6 +118,7 @@ const parseClaudeSdkExtraArgs = (
     ...(effort ? { effort } : {}),
     extraArgs: Object.keys(extraArgs).length > 0 ? extraArgs : undefined,
     ...(model ? { model } : {}),
+    ...(plugins.length > 0 ? { plugins } : {}),
   };
 };
 

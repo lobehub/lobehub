@@ -20,7 +20,6 @@ export interface PlatformTaskEntry {
 }
 
 export interface GatewayAgentRunDeps {
-  getAccessToken: () => Promise<string | null | undefined>;
   getServerUrl: () => Promise<string | undefined>;
   heterogeneousAgentCtr: Pick<
     HeterogeneousAgentCtr,
@@ -69,19 +68,13 @@ export const executeGatewayAgentRun = async (
       return { reason: 'Remote server URL not configured', status: 'rejected' };
     }
 
-    // Reuse this device's own logged-in session as the run identity. The
-    // access token is a full user OIDC token (7-day TTL, longer than any run),
-    // which heteroIngest/heteroFinish now accept (ownership-gated), AND which
-    // gives the spawned Claude Code's nested `lh` calls a real login state —
-    // unlike the narrow `hetero-operation` token, which only works for the
-    // ingest endpoints. We deliberately do NOT pass the refresh token to the
-    // CLI: the device stays the single refresher (refresh tokens rotate), and
-    // the 7-day access token outlives the run so no mid-run refresh is needed.
-    //
-    // Fall back to the dispatched `request.jwt` when the device has no access
-    // token (e.g. not logged in), preserving the prior behavior gracefully.
-    const accessToken = await deps.getAccessToken();
-    const jwt = accessToken || request.jwt;
+    // Keep the dispatched operation identity: channel history and other
+    // operation-scoped APIs require it. The device's login authenticates the
+    // gateway connection, not the run, and may belong to a different user.
+    // An empty token would let the CLI fall back to its stored login instead.
+    if (!request.jwt?.trim()) {
+      return { reason: 'Missing operation token', status: 'rejected' };
+    }
 
     const account = await resolveClaudeAccountEnv(heterogeneousAgentCtr, request);
     if (account.kind === 'reject') return { reason: account.reason, status: 'rejected' };
@@ -98,7 +91,7 @@ export const executeGatewayAgentRun = async (
       args: request.args,
       cwd: request.cwd,
       imageList: request.imageList,
-      jwt,
+      jwt: request.jwt,
       operationId: request.operationId,
       prompt: request.prompt,
       resumeFallbackSystemContext: request.resumeFallbackSystemContext,

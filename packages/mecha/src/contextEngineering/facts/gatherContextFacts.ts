@@ -29,6 +29,7 @@ import {
   type TopicReferenceItem,
   type WorkspaceContext,
 } from '@lobechat/context-engine';
+import { agentDisplayName } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -396,10 +397,14 @@ const gatherAgentManagementContext = async (
     // Self-management (updateAgent / installPlugin on itself) stays available
     // inside a sub-agent, so its own id is kept; only the delegation list goes.
     const currentAgent = request.agentId
-      ? { id: request.agentId, title: request.agent.title ?? undefined }
+      ? {
+          id: request.agentId,
+          name: request.agent.name ?? undefined,
+          title: request.agent.title ?? undefined,
+        }
       : undefined;
 
-    if (canDelegate) {
+    if (canDelegate && request.includeRecentAgents !== false) {
       const { listRecentAgents } = providers;
       const recent =
         (await attempt('recentAgents', () => listRecentAgents(AVAILABLE_AGENTS_LIMIT + 2))) ?? [];
@@ -410,6 +415,7 @@ const gatherAgentManagementContext = async (
         availableAgents: others.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
           description: a.description ?? undefined,
           id: a.id,
+          name: a.name ?? undefined,
           title: a.title ?? 'Untitled',
         })),
         availableAgentsHasMore: others.length > AVAILABLE_AGENTS_LIMIT,
@@ -523,6 +529,7 @@ export const gatherContextFacts = async (
       CREDS_LIST: credentials ? generateCredsList(credentials) : '',
       agent_description: request.agent.description ?? '',
       agent_id: request.agentId ?? '',
+      agent_name: agentDisplayName(request.agent) ?? '',
       agent_title: request.agent.title ?? '',
       // A credential is reachable whenever the dedicated sandbox tool is
       // exposed for 'auto' (independent of device routing) or no device is

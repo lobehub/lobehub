@@ -190,6 +190,27 @@ describe('injectQueuedFollowUp', () => {
     );
   });
 
+  it('joins an agent’s follow-up under that agent, and leaves another author’s for later', async () => {
+    const writer = { agentId: 'agt-writer', hop: 1, topicId: 'tpc-writer' };
+    const fromWriter = [
+      { ...followUp('one', 1), agentSender: writer },
+      { ...followUp('two', 2), agentSender: writer },
+    ];
+    const typed = followUp('typed', 3);
+    mocks.drain.mockResolvedValue([...fromWriter, typed]);
+
+    await expect(inject()).resolves.toEqual({ messageId: 'msg-steer' });
+
+    // One message, one author: the person's text must not read as the agent's.
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'one\n\ntwo',
+        metadata: expect.objectContaining({ agentSender: writer, steer: true }),
+      }),
+    );
+    expect(mocks.settle).toHaveBeenCalledWith(scope, expect.any(String), [typed.id]);
+  });
+
   it('joins nothing when the first follow-up needs a turn of its own', async () => {
     const entries = [followUp('with-file', 1, { fileIds: ['f1'] })];
     mocks.drain.mockResolvedValue(entries);

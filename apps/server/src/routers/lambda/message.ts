@@ -1,5 +1,6 @@
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
+  AgentSenderMetadataSchema,
   CreateNewMessageParamsSchema,
   omitServerOwnedMessageMetadata,
   UpdateMessageParamsSchema,
@@ -41,8 +42,8 @@ import {
   assertCreatorMessageTargets,
   assertCreatorTopicTargets,
 } from './_helpers/shareVisitorTargetGuard';
+import { readTopicPreviews, topicPreviewsInputSchema } from './_helpers/topicPreviews';
 import { basicContextSchema } from './_schema/context';
-import { messageBatchProcedures } from './messageBatch';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
 
@@ -419,6 +420,32 @@ export const messageRouter = router({
       return ctx.messageService.getToolResultPayloads(input.messageIds);
     }),
 
+  /**
+   * Where a message came from, for answering it: its conversation and, for a
+   * message another agent sent, that agent and its conversation
+   * (`metadata.agentSender`). Read by `lh message reply`.
+   */
+  getMessageOrigin: messageProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), [input.id]);
+
+      const message = await ctx.messageModel.findById(input.id);
+      if (!message) return null;
+
+      const agentSender = AgentSenderMetadataSchema.safeParse(
+        (message.metadata as Record<string, unknown> | null)?.agentSender,
+      );
+      return {
+        agentId: message.agentId ?? null,
+        agentSender: agentSender.success ? agentSender.data : null,
+        id: message.id,
+        role: message.role,
+        threadId: message.threadId ?? null,
+        topicId: message.topicId ?? null,
+      };
+    }),
+
   getToolResultPayload: messageProcedure
     .input(z.object({ messageId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -565,7 +592,10 @@ export const messageRouter = router({
     .input(messagesByCursorInputSchema)
     .query(({ ctx, input }) => readMessagesByCursor(ctx, input)),
 
-  ...messageBatchProcedures,
+  getTopicPreviews: messageProcedure
+    .input(topicPreviewsInputSchema)
+    .query(({ ctx, input }) => readTopicPreviews(ctx, input)),
+
   rankModels: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.rankModels();
   }),

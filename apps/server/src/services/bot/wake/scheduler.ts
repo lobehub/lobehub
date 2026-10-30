@@ -1,10 +1,14 @@
 import { botWakeFlushCounter } from '@lobechat/observability-otel/modules/bot-wake';
+import { BOT_STAND_DOWN_MINUTES } from '@lobechat/types';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import { parseBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
+import { toConversationLine } from '@/server/services/agentSignal/scenarios/botWake/conversation';
 import {
+  hasConversationLog,
   resolveChannelKeys,
+  resolveConversationLogKeys,
   wakeStateKeys,
 } from '@/server/services/agentSignal/scenarios/botWake/facts';
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
@@ -160,6 +164,45 @@ export const handleWakeFlush = async (
   }
 };
 
+/**
+ * Adds the bot's own reply to the conversation log, so the next judgement can read what the bot
+ * last said. Best-effort: a failed write never affects the run's bookkeeping. Discord guild
+ * channels only, like the log itself.
+ */
+const rememberBotReply = async ({
+  applicationId,
+  at,
+  platform,
+  platformThreadId,
+  spoken,
+}: {
+  applicationId: string;
+  at: number;
+  platform: string;
+  platformThreadId: string;
+  spoken?: { id: string; text?: string };
+}) => {
+  if (!hasConversationLog(platform, platformThreadId)) return;
+
+  try {
+    const line = toConversationLine({
+      at,
+      authorId: applicationId,
+      id: `bot:${spoken?.id ?? at}`,
+      isBot: true,
+      text: spoken?.text,
+    });
+    if (!line.text) return;
+
+    await redisService.botWake.rememberMessages(
+      resolveConversationLogKeys(platform, platformThreadId),
+      [line],
+    );
+  } catch (error) {
+    log('rememberBotReply failed: %O', error);
+  }
+};
+
 /** Keys the bot's wake state is filed under for a conversation. */
 export const wakeKeysFor = (platform: string, applicationId: string, platformThreadId: string) =>
   wakeStateKeys(resolveChannelKeys(platform, applicationId, platformThreadId));
@@ -173,6 +216,10 @@ export const wakeKeysFor = (platform: string, applicationId: string, platformThr
  *
  * `spoke` = the bot posted a reply. A follow-up wake that ended in silence counts against the
  * silent-wake budget; speaking opens the follow-up window and resets it.
+ *
+ * `standDown` = the agent stepped back from the conversation (`STAND_DOWN`): for
+ * `BOT_STAND_DOWN_MINUTES` only an explicit address wakes it there. Filed on the conversation's own
+ * key, the thread the run replied in.
  */
 export const recordWakeRunOutcome = async (input: {
   applicationId: string;
@@ -180,18 +227,40 @@ export const recordWakeRunOutcome = async (input: {
   platformThreadId: string;
   settings: Record<string, unknown> | null | undefined;
   spoke: boolean;
+  /** What the bot said and the id of the run that said it; kept in the channel's shared log. */
+  spoken?: { id: string; text?: string };
+  standDown?: boolean;
   wakeKind?: 'followup' | 'mention';
 }): Promise<void> => {
-  const { applicationId, platform, platformThreadId, settings, spoke, wakeKind } = input;
+  const {
+    applicationId,
+    platform,
+    platformThreadId,
+    settings,
+    spoke,
+    spoken,
+    standDown,
+    wakeKind,
+  } = input;
   const { config, rules } = parseBotWakeSettings(settings);
   if (!isBotWakeEnabled(config)) return;
 
   const keys = wakeKeysFor(platform, applicationId, platformThreadId);
 
   if (spoke) {
-    await redisService.botWake.recordBotSpoke(keys, Date.now(), rules.windowSeconds * 1000);
+    const at = Date.now();
+    await redisService.botWake.recordBotSpoke(keys, at, rules.windowSeconds * 1000);
+    await rememberBotReply({ applicationId, at, platform, platformThreadId, spoken });
   } else if (wakeKind === 'followup') {
     await redisService.botWake.recordSilentWake(keys);
+  }
+
+  const conversationKey = keys.at(-1);
+  if (standDown && conversationKey) {
+    await redisService.botWake.recordStandDown(
+      conversationKey,
+      Date.now() + BOT_STAND_DOWN_MINUTES * 60 * 1000,
+    );
   }
 
   const scheduler = resolveWakeScheduler(platform, applicationId, settings);

@@ -71,6 +71,7 @@ import {
   resolveDesktopDeviceHints,
   resolveUserInterventionConfig,
 } from './execRequest';
+import { retireLocalRowIfServerSettled } from './externalProducerSettle';
 import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler } from './gatewayEventHandler';
 import { createGatewayEventRouter } from './gatewayEventRouter';
@@ -1336,7 +1337,10 @@ export class GatewayActionImpl {
       }
     }
 
-    if (!isCreateNewTopic && cancelledAfterPersistence) {
+    // A run the server failed at dispatch is already settled and has no token;
+    // treating it as started wrote `running` back over that settlement.
+    const failedBeforeStart = result.success === false && result.status === 'error';
+    if (!isCreateNewTopic && (cancelledAfterPersistence || failedBeforeStart)) {
       try {
         const messages = await messageService.getMessages(resolvedMessageContext);
         this.#get().replaceMessages(messages, { context: resolvedMessageContext });
@@ -1421,11 +1425,10 @@ export class GatewayActionImpl {
       );
     cancelledAfterPersistence = interruptIfCancelledAfterPersistence() || cancelledAfterPersistence;
 
-    if (cancelledAfterPersistence) {
-      // This path never opens a socket, so no terminal frame will ever retire
-      // the topic row. Settle it once the stop is confirmed AND the sidebar
-      // refetch has landed: settling first would find no marker to clear, and
-      // the refetch would then install a `running` row nobody retires.
+    if (cancelledAfterPersistence || failedBeforeStart) {
+      // No socket opens here, so no terminal frame retires the row. A stop settles
+      // once confirmed AND the sidebar refetch landed: settling first finds no
+      // marker, and the refetch would reinstall a `running` row nobody retires.
       const { topicId } = result;
       if (lateInterruptConfirmed && topicId) {
         void Promise.all([lateInterruptConfirmed, topicRefresh]).then(([confirmed]) => {
@@ -1442,10 +1445,9 @@ export class GatewayActionImpl {
       return result;
     }
 
-    // `updateTopicStatus` persists through the owner-scoped `topic.updateTopic`
-    // procedure, which a share visitor is never authorized to call — firing it
-    // would only produce a rejected request (and a pinned optimistic write that
-    // no owner topic list ever consumes).
+    // `updateTopicStatus` persists through the owner-scoped `topic.updateTopic`,
+    // which a share visitor may never call — it would only be rejected (and pin
+    // an optimistic write that no owner topic list ever consumes).
     if (result.topicId && !agentShareId) {
       void this.#get().updateTopicStatus?.({
         agentId: messageContext.agentId,
@@ -1624,22 +1626,22 @@ export class GatewayActionImpl {
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
 
         // An external hetero producer does not run on this socket: the CLI
-        // streams through `heteroIngest` and ends the run through
-        // `heteroFinish`, so nothing the transport observes proves it stopped.
-        // A terminal resume status can mean the Gateway simply has no
-        // initialized DO session; a raw `session_complete` or a terminal
-        // `status_change` can arrive for a run that is still producing; and on
-        // the multiplexed socket ONE auth failure is fanned out to every
-        // operation on the tab. Settling on any of those clears
-        // `topic.metadata.runningOperation`, after which the server discards
-        // every later batch as stale — the CLI keeps burning tokens and its
-        // whole output is thrown away. Only an in-band terminal for THIS op
-        // (`terminalReceived`) is authoritative; otherwise leave the settle to
-        // the server, which owns `heteroFinish` and the liveness lease behind
-        // it. Preserve unknown (`undefined`) during rolling deploys too; new
-        // normal runtimes explicitly return `heteroType: null`.
-        const preserveExternalProducer = !terminalReceived && result.heteroType !== null;
-        if (preserveExternalProducer) return;
+        // streams through `heteroIngest` and ends through `heteroFinish`, so no
+        // transport signal proves it stopped — a terminal resume status (no DO
+        // session yet), a raw `session_complete` / terminal `status_change` for
+        // a run still producing, or ONE auth failure fanned out across the mux.
+        // Settling on those clears `runningOperation`, and the server then
+        // discards every later batch as stale. Only an in-band terminal for THIS
+        // op is authoritative; otherwise the server owns the settle, and the
+        // local row only follows once the server proves the run over. Unknown
+        // (`undefined`, rolling deploys) is preserved; normal runs send `null`.
+        if (!terminalReceived && result.heteroType !== null) {
+          const { agentId, groupId } = resolvedMessageContext;
+          const { operationId, topicId } = result;
+          if (topicId && !agentShareId)
+            this.#retireExternalRow({ agentId, groupId, operationId, topicId });
+          return;
+        }
 
         const effectiveSucceeded = isSuccessfulGatewayCompletion({
           authFailed,
@@ -1889,11 +1891,10 @@ export class GatewayActionImpl {
       });
     });
 
-    // Get a fresh JWT token (original expired after 5 min). The server throws
-    // TRPCError NOT_FOUND when it has no running operation on this topic — our
-    // local marker is stale (e.g. an error run cleared the server marker but not
-    // the store). Clear it and bail silently so the reconnect SWR fetcher resolves
-    // and does not retry the 404 forever.
+    // Get a fresh JWT token (original expired after 5 min). NOT_FOUND: no running
+    // operation on this topic, so the local marker is stale — clear it. FORBIDDEN:
+    // a workspace teammate's live run the gateway only streams to its starter —
+    // keep the marker. Both bail silently so the reconnect SWR fetcher resolves.
     let token: string;
     try {
       // Share visitors have no owner-scoped access to `aiAgentService.refreshGatewayToken`
@@ -1917,6 +1918,7 @@ export class GatewayActionImpl {
         this.clearLocalRunningOperation({ operationId, topicId });
         return;
       }
+      if (isTrpcErrorCode(error, 'FORBIDDEN')) return;
       throw error;
     }
 
@@ -1996,16 +1998,11 @@ export class GatewayActionImpl {
         // the preserved external producer case below) must close it here.
         if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
 
-        // A reconnect is passive, and an external producer's output never
-        // travelled over this socket in the first place — see the same guard in
-        // `executeGatewayAgent`. No transport signal (terminal resume status,
-        // raw `session_complete`, terminal `status_change`, or an auth failure
-        // fanned out across the multiplexed socket) proves such a run ended, and
-        // settling on one discards everything it produces afterwards. New normal
-        // runtime markers carry `heteroType: null`; old markers omit the field,
-        // so the rolling-deploy fallback is deliberately fail-safe.
-        const preserveExternalProducer = !terminalReceived && heteroType !== null;
-        if (preserveExternalProducer) {
+        // An external producer never streamed over this socket: no transport
+        // signal proves it ended — see the same guard in `executeGatewayAgent`.
+        if (!terminalReceived && heteroType !== null) {
+          const { agentId } = context;
+          if (!agentShareId) this.#retireExternalRow({ agentId, operationId, topicId });
           return;
         }
 
@@ -2020,21 +2017,11 @@ export class GatewayActionImpl {
         // terminal status inside the topic row lock, comparing the operation id
         // so a late close from another tab cannot settle a newer run.
         //
-        // This was hand-rolled here as two independent fire-and-forget writes: an
-        // UNCONDITIONAL `updateTopicMetadata({ runningOperation: null })` plus an
-        // `updateTopicStatus('active')` that was SKIPPED whenever the run finished
-        // cleanly while the user was on another topic. That case delegated the
-        // status write to `markTopicUnread` — a separate call, on a separate
-        // guard — and when it did not land the topic stayed `running` forever:
-        // the marker was already gone, so every later `settleRunningOperation`
-        // returned `missing` and nothing on the server could repair it. Observed
-        // on a self-hosted deployment as 7 topics stuck `running` whose
-        // `metadata.runningOperation` was present-and-JSON-null (the signature of
-        // that unconditional clear) with their operation rows already terminal.
-        //
-        // Reconnect is the path a page refresh takes, which is why the symptom
-        // was always "still spinning after a reload" — refreshing is what moved
-        // the run off the primary path and onto this one.
+        // It used to be two independent writes: an unconditional marker clear
+        // plus an `active` status write skipped for an unwatched clean finish,
+        // left to `markTopicUnread`. When that did not land the topic stayed
+        // `running` forever with no marker left for any settle to match (seen
+        // self-hosted: 7 topics stuck after a reload, the path this one serves).
         const viewing = this.#get().activeTopicId === topicId;
         // Share visitors cannot settle the creator-owned topic row (the topic
         // router is owner-scoped) — the local clear below still runs. Same
@@ -2577,6 +2564,19 @@ export class GatewayActionImpl {
       })
       .catch(console.error);
   };
+
+  /** See {@link retireLocalRowIfServerSettled}. */
+  #retireExternalRow = (params: {
+    agentId?: string;
+    groupId?: string;
+    operationId: string;
+    topicId: string;
+  }) =>
+    void retireLocalRowIfServerSettled({
+      clear: (status) => this.clearLocalRunningOperation({ ...params, status }),
+      isViewing: () => this.#get().activeTopicId === params.topicId,
+      readTopic: () => topicService.getTopicDetail(params.topicId),
+    });
 
   /**
    * @returns Whether a terminal status was written without a local marker — the

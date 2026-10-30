@@ -241,7 +241,7 @@ const AgentTopicManager = memo(() => {
             projects={projects}
             statusCounts={statusCounts}
           />
-          <BulkActionBar />
+          <BulkActionBar topics={baseTopics} />
           {!isSearchMode && error && !isLoading && baseTopics.length === 0 ? (
             <AsyncError
               error={error}

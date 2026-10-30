@@ -81,7 +81,8 @@ describe('bot-wake policy replay from recorded state snapshots', () => {
         expect(classify).not.toHaveBeenCalled();
       }
 
-      // Shadow by default: whatever the policies said, the aggregate does not enforce.
+      // Recorded in shadow (see the fixture's settings): every policy answers, none of them
+      // decides, so each verdict can be compared on its own.
       expect(decision.verdict).toBe('abstain');
       expect(decision.records.every((record) => !record.effective)).toBe(true);
     },

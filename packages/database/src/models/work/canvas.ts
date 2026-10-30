@@ -16,6 +16,12 @@ import { registerWorkVersion } from './writes';
 
 export const canvasWorkAdapter = createDisplayWorkAdapter({ type: 'canvas' });
 
+export class CanvasVersionConflictError extends Error {
+  constructor() {
+    super('Canvas version conflict; read the latest version before saving again');
+  }
+}
+
 const canvasResource = (ctx: WorkContext, canvasId: string) =>
   and(workOwnership(ctx), eq(works.resourceType, 'canvas'), eq(works.resourceId, canvasId));
 
@@ -66,10 +72,18 @@ export const registerCanvasWork = async (
       // The public link written by `recordCanvasPublish` lives on the Work, and
       // each registration replaces every display column, so carry it over.
       const [published] = await txCtx.db
-        .select({ url: works.url })
+        .select({ url: works.url, version: workVersions.version })
         .from(works)
+        .leftJoin(workVersions, eq(workVersions.id, works.currentVersionId))
         .where(canvasResource(txCtx, params.canvasId))
         .limit(1);
+
+      if (
+        params.expectedVersion !== undefined &&
+        (published?.version ?? 0) !== params.expectedVersion
+      ) {
+        throw new CanvasVersionConflictError();
+      }
 
       return {
         display: {
@@ -103,6 +117,43 @@ export const findCanvasWork = async (
   return row ? { version: row.version, work: row.work as CanvasWorkWithVersion['work'] } : null;
 };
 
+/** The canvas a Work id stands for, when it is a canvas Work this caller can see. */
+export const findCanvasIdByWorkId = async (
+  ctx: WorkContext,
+  workId: string,
+): Promise<string | null> => {
+  const [row] = await ctx.db
+    .select({ canvasId: works.resourceId })
+    .from(works)
+    .where(and(workOwnership(ctx), eq(works.id, workId), eq(works.resourceType, 'canvas')))
+    .limit(1);
+
+  return row?.canvasId ?? null;
+};
+
+export const findCanvasIdsByDeploymentIds = async (
+  ctx: WorkContext,
+  deploymentIds: string[],
+): Promise<Record<string, string>> => {
+  if (deploymentIds.length === 0) return {};
+
+  const deploymentId = sql<string>`${works.metadata}->'canvasPublish'->>'deploymentId'`;
+  const rows = await ctx.db
+    .select({ canvasId: works.resourceId, deploymentId })
+    .from(works)
+    .where(
+      and(
+        workOwnership(ctx),
+        eq(works.resourceType, 'canvas'),
+        inArray(deploymentId, deploymentIds),
+      ),
+    );
+
+  return Object.fromEntries(
+    rows.flatMap((row) => (row.canvasId ? [[row.deploymentId, row.canvasId] as const] : [])),
+  );
+};
+
 export const findCanvasWorkVersion = async (
   ctx: WorkContext,
   workId: string,
@@ -115,6 +166,20 @@ export const findCanvasWorkVersion = async (
     .where(and(eq(works.id, workId), eq(works.type, 'canvas'), eq(workVersions.version, version)))
     .limit(1);
 
+  return row?.version ?? null;
+};
+
+export const findCanvasWorkVersionByToolCall = async (
+  ctx: WorkContext,
+  canvasId: string,
+  toolCallId: string,
+): Promise<WorkVersionItem | null> => {
+  const [row] = await ctx.db
+    .select({ version: workVersions })
+    .from(workVersions)
+    .innerJoin(works, eq(works.id, workVersions.workId))
+    .where(and(canvasResource(ctx, canvasId), eq(workVersions.toolCallId, toolCallId)))
+    .limit(1);
   return row?.version ?? null;
 };
 

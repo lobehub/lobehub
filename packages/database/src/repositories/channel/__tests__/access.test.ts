@@ -107,7 +107,7 @@ describe('ChannelRepository', () => {
       await addPerson(channel.id, memberId, 'member');
       await serverDB
         .update(channelMembers)
-        .set({ active: false })
+        .set({ status: 'left' })
         .where(eq(channelMembers.userId, memberId));
 
       expect(
@@ -117,10 +117,13 @@ describe('ChannelRepository', () => {
       expect(await new ChannelRepository(serverDB, ownerId).list()).toEqual([]);
     });
 
-    it('omits archived channels from the list', async () => {
+    it('omits trashed channels from the list', async () => {
       const model = new ChannelRepository(serverDB, ownerId);
-      const { channel } = await model.create({ title: 'Archived' });
-      await serverDB.update(channels).set({ archived: true }).where(eq(channels.id, channel.id));
+      const { channel } = await model.create({ title: 'Trashed' });
+      await serverDB
+        .update(channels)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(channels.id, channel.id));
 
       expect(await model.list()).toEqual([]);
     });
@@ -163,7 +166,7 @@ describe('ChannelRepository', () => {
       expect((await model.findAccess(channel.id))?.channel.title).toBe('Personal');
     });
 
-    it('rejects outsiders, insufficient roles and archived channels', async () => {
+    it('rejects outsiders, insufficient roles and trashed channels', async () => {
       const { channel } = await new ChannelRepository(serverDB, ownerId, workspaceId).create({
         title: 'Team',
       });
@@ -179,11 +182,14 @@ describe('ChannelRepository', () => {
         }),
       ).rejects.toBeInstanceOf(ChannelError);
 
-      await serverDB.update(channels).set({ archived: true }).where(eq(channels.id, channel.id));
+      await serverDB
+        .update(channels)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(channels.id, channel.id));
       const asOwner = new ChannelRepository(serverDB, ownerId, workspaceId);
       await expect(asOwner.write(channel.id, noop)).rejects.toMatchObject({ code: 'CONFLICT' });
       await expect(
-        asOwner.write(channel.id, async () => 'restored', { allowArchived: true }),
+        asOwner.write(channel.id, async () => 'restored', { allowTrashed: true }),
       ).resolves.toBe('restored');
     });
 
@@ -204,7 +210,7 @@ describe('ChannelRepository', () => {
           async (tx) => {
             await tx
               .update(channelMembers)
-              .set({ active: false })
+              .set({ status: 'removed' })
               .where(eq(channelMembers.userId, memberId));
             removed();
             await released;

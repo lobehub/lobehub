@@ -14,7 +14,17 @@ import { stylexMigrationConfig } from './scripts/stylexMigration/eslint.mjs';
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
-const baseRestrictedImportOptions = restrictedImports.rules['no-restricted-imports'][1];
+const baseRestrictedImportOptions = {
+  ...restrictedImports.rules['no-restricted-imports'][1],
+  patterns: [
+    ...(restrictedImports.rules['no-restricted-imports'][1].patterns ?? []),
+    {
+      regex: '^@modelcontextprotocol/(?:sdk)(/|$)',
+      message:
+        'Use the v2 @modelcontextprotocol/client, @modelcontextprotocol/server or @modelcontextprotocol/node packages.',
+    },
+  ],
+};
 
 // On desktop the shell — every NavPanelPortal sidebar, the titlebar, the command
 // menu — renders as a sibling of TabHost, so React context binds these hooks to
@@ -359,7 +369,13 @@ export default eslint(
       },
     },
   },
-  restrictedImports,
+  {
+    ...restrictedImports,
+    rules: {
+      ...restrictedImports.rules,
+      'no-restricted-imports': ['error', baseRestrictedImportOptions],
+    },
+  },
   // Performance import boundaries. These restrictions preserve real import()
   // seams instead of relying on component-level conditional rendering.
   {

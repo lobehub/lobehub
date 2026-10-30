@@ -1,11 +1,12 @@
 import type {
   AcceptanceCheckGroup,
   AcceptanceMetadata,
+  AcceptanceRepairRequest,
   AcceptanceStatus,
   AcceptanceSubjectType,
 } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, exists, inArray, isNull, lt, not, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, lt, ne, not, or, sql } from 'drizzle-orm';
 
 import { acceptanceComments } from '../schemas/acceptanceComment';
 import { goalNodes } from '../schemas/goalGraph';
@@ -87,6 +88,25 @@ export class AcceptanceModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, acceptances);
 
   /**
+   * What the list reads in the active scope. Wider than {@link ownership} in a
+   * workspace: a `private` workspace acceptance is member-gated, not
+   * creator-only — every member can open it (`resolveAcceptanceCommentAccess`),
+   * so the list must show it too. Only an `owner` row stays its creator's.
+   * Writes keep using `ownership`.
+   */
+  private listScope = (): SQL => {
+    const scope = buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: acceptances.userId, workspaceId: acceptances.workspaceId },
+    );
+    if (!this.workspaceId) return scope;
+    return and(scope, or(eq(acceptances.userId, this.userId), this.workspaceReadable()))!;
+  };
+
+  /** Rows a member of their workspace may read; mirrors `isWorkspaceReadableVisibility`. */
+  private workspaceReadable = (): SQL => ne(acceptances.visibility, 'owner');
+
+  /**
    * Acceptances the caller has spoken on — a remark or an approval, replies
    * included; a bare emoji reaction is not taking part. Rows the caller can no
    * longer read (made private, or they left its workspace) drop out: the link
@@ -111,17 +131,20 @@ export class AcceptanceModel {
       or(
         eq(acceptances.userId, this.userId),
         eq(acceptances.visibility, 'public'),
-        exists(
-          this.db
-            .select({ one: sql`1` })
-            .from(workspaceMembers)
-            .where(
-              and(
-                eq(workspaceMembers.workspaceId, acceptances.workspaceId),
-                eq(workspaceMembers.userId, this.userId),
-                isNull(workspaceMembers.deletedAt),
+        and(
+          this.workspaceReadable(),
+          exists(
+            this.db
+              .select({ one: sql`1` })
+              .from(workspaceMembers)
+              .where(
+                and(
+                  eq(workspaceMembers.workspaceId, acceptances.workspaceId),
+                  eq(workspaceMembers.userId, this.userId),
+                  isNull(workspaceMembers.deletedAt),
+                ),
               ),
-            ),
+          ),
         ),
       ),
     )!;
@@ -166,7 +189,7 @@ export class AcceptanceModel {
     const conditions: SQL[] = [];
     if (scope === 'participated') conditions.push(this.participation());
     else {
-      conditions.push(this.ownership());
+      conditions.push(this.listScope());
       if (scope === 'created') conditions.push(eq(acceptances.userId, this.userId));
     }
     if (projectId === null) conditions.push(isNull(acceptances.projectId));
@@ -325,7 +348,9 @@ export class AcceptanceModel {
   ensureForSubject = async (
     subjectType: AcceptanceSubjectType,
     subjectId: string,
-    defaults?: Partial<Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement'>>,
+    defaults?: Partial<
+      Pick<NewAcceptance, 'config' | 'metadata' | 'projectId' | 'requirement' | 'visibility'>
+    >,
   ): Promise<AcceptanceItem> => {
     const existing = await this.findBySubject(subjectType, subjectId);
     if (existing) {
@@ -497,6 +522,56 @@ export class AcceptanceModel {
         metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
       })
       .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /** Claim before any external side effect: concurrent submissions share one handoff. */
+  claimRepair = async (id: string, request: AcceptanceRepairRequest) =>
+    this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(acceptances)
+        .where(and(eq(acceptances.id, id), this.ownership()))
+        .for('update');
+      if (!row) throw new Error('Acceptance not found');
+      const previous = row.metadata?.repair;
+      if (previous?.state === 'starting' || previous?.state === 'running') {
+        return { claimed: false, request: previous };
+      }
+      const next =
+        previous?.state === 'failed'
+          ? {
+              ...previous,
+              error: undefined,
+              operationId: undefined,
+              topicId: undefined,
+              state: 'starting' as const,
+            }
+          : request;
+      await tx
+        .update(acceptances)
+        .set({
+          metadata: { ...row.metadata, repair: next },
+        })
+        .where(eq(acceptances.id, id));
+      return { claimed: true, request: next };
+    });
+
+  /** Late dispatch callbacks cannot overwrite a newer handoff or unrelated metadata. */
+  patchRepair = async (id: string, requestId: string, patch: Partial<AcceptanceRepairRequest>) => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({
+        metadata: sql`jsonb_set(${acceptances.metadata}, '{repair}', (${acceptances.metadata}->'repair') || ${JSON.stringify(patch)}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(acceptances.id, id),
+          this.ownership(),
+          sql`${acceptances.metadata}->'repair'->>'id' = ${requestId}`,
+        ),
+      )
       .returning();
     return row;
   };

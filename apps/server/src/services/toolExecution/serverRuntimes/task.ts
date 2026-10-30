@@ -23,6 +23,7 @@ import {
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
 import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
@@ -34,9 +35,11 @@ import { appEnv } from '@/envs/app';
 import { formatPgError, unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
+import { resolveTaskOrThrow, resolveTasksOrThrow } from '@/server/services/task/utils';
 
 import { resolveTaskWorkspaceId } from './resolveWorkspaceScope';
 import { createTaskAssigneeHelpers } from './taskAssignees';
+import { taskResult, taskResultLabel } from './taskResults';
 import { type ServerRuntimeRegistration } from './types';
 
 export interface TaskRuntimeDeps {
@@ -207,10 +210,12 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         // bot channels and mobile, where a relative path has no app origin to
         // resolve against and the `/{slug}` prefix would otherwise be lost.
         baseUrl: await taskLinkBaseUrl(),
+        id: task.id,
         identifier: task.identifier,
         instruction: args.instruction,
         name: task.name,
         parentLabel,
+        parentTaskId,
         priority: task.priority,
         status: task.status,
       }),
@@ -231,16 +236,22 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       try {
+        const task = await resolveTaskOrThrow(taskModel(), id);
         const result = await taskCaller().addComment({
           authorAgentId: agentId,
           content: args.content,
-          id,
+          id: task.id,
         });
 
         return {
-          content: `Comment added to task ${id}.`,
+          content: `Comment added to task ${taskResultLabel(task)}.`,
           success: true,
-          state: { commentId: result.data.id, identifier: id, success: true },
+          state: {
+            commentId: result.data.id,
+            identifier: task.identifier,
+            taskId: task.id,
+            success: true,
+          },
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to add task comment';
@@ -275,6 +286,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           results.push({
             error: result.success ? undefined : result.content,
             identifier: result.identifier,
+            taskId: result.taskId,
             name: item.name,
             success: result.success,
           });
@@ -311,7 +323,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       return {
-        content: formatTaskDeleted(task.identifier, task.name),
+        content: formatTaskDeleted(taskResultLabel(task), task.name),
         // Surface the deleted task's internal id so the dispatch-layer Work
         // deletion (`work: { action: 'delete' }`) can locate the Work by
         // `works.resourceId = taskId` after the task row is gone.
@@ -394,7 +406,9 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
       if (args.parentIdentifier !== undefined) {
         const parentIdentifier = args.parentIdentifier?.trim() || null;
-        updateData.parentTaskId = parentIdentifier;
+        updateData.parentTaskId = parentIdentifier
+          ? (await resolveTaskOrThrow(taskModel(), parentIdentifier)).id
+          : null;
         changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
       }
       if (args.priority !== undefined) {
@@ -413,18 +427,10 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         apply: (depId: string) => Promise<unknown>,
         onChange: (depIdentifier: string) => void,
       ): Promise<string | undefined> => {
-        const resolved = await Promise.all(
-          ids.map((id) =>
-            taskModel()
-              .resolve(id)
-              .then((r) => ({ id, resolved: r })),
-          ),
-        );
-        const missing = resolved.find((r) => !r.resolved);
-        if (missing) return `Dependency task not found: ${missing.id}`;
-
-        await Promise.all(resolved.map(({ resolved: dep }) => apply(dep!.id)));
-        resolved.forEach(({ resolved: dep }) => onChange(dep!.identifier));
+        const resolved = await resolveTasksOrThrow(taskModel(), ids, { duplicates: 'collapse' });
+        await pMap(resolved.tasks, (dep) => apply(dep.id), { concurrency: 5 });
+        resolved.tasks.forEach((dep) => onChange(taskResultLabel(dep)));
+        return undefined;
       };
 
       const depResults: Promise<string | undefined>[] = [];
@@ -456,7 +462,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       const firstDepError = depErrors.find((e) => e);
       if (firstDepError) return { content: firstDepError, success: false };
 
-      return { content: formatTaskEdited(task.identifier, changes), success: true };
+      return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
     },
 
     listTasks: async (args: {
@@ -477,6 +483,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
         return {
           content: formatTaskList(result.data, normalized.displayFilters),
+          state: {
+            results: result.data.map((task) => ({
+              identifier: task.identifier,
+              taskId: task.id,
+              success: true,
+            })),
+          },
           success: true,
         };
       } catch (error) {
@@ -657,7 +670,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       if (schedulePreview) changes.push(schedulePreview);
 
-      return { content: formatTaskEdited(task.identifier, changes), success: true };
+      return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
     },
 
     setTaskVerify: async (args: {
@@ -738,7 +751,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       await taskCaller().updateVerifyConfig({ id: task.id, verify });
 
-      return { content: formatTaskEdited(task.identifier, changes), success: true };
+      return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
     },
 
     runTask: async (args: { continueTopicId?: string; identifier?: string; prompt?: string }) => {
@@ -751,19 +764,20 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       try {
+        const task = await resolveTaskOrThrow(taskModel(), id);
         const result = await taskCaller().run({
           continueTopicId: args.continueTopicId,
-          id,
+          id: task.id,
           prompt: args.prompt,
         });
 
         const topicId = (result as { topicId?: string } | undefined)?.topicId;
         const operationId = (result as { operationId?: string } | undefined)?.operationId;
-        const lines = [`Task ${id} started.`];
+        const lines = [`Task ${taskResultLabel(task)} started.`];
         if (topicId) lines.push(`  Topic: ${topicId}`);
         if (operationId) lines.push(`  Operation: ${operationId}`);
 
-        return { content: lines.join('\n'), success: true };
+        return taskResult(task, lines.join('\n'), { topicId, operationId });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to run task';
         return { content: `Failed to run task ${id}: ${message}`, success: false };
@@ -772,39 +786,53 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     runTasks: async (args: { identifiers: string[] }) => {
       const identifiers = Array.isArray(args.identifiers)
-        ? args.identifiers.map((value) => value?.trim()).filter((value): value is string => !!value)
+        ? args.identifiers.filter(
+            (value): value is string => typeof value === 'string' && !!value.trim(),
+          )
         : [];
 
       if (identifiers.length === 0) {
         return { content: 'No task identifiers provided.', success: false };
       }
 
-      const lines: string[] = [];
-      let succeeded = 0;
-      let failed = 0;
-
-      for (const [index, identifier] of identifiers.entries()) {
+      const resolved = await taskModel().resolveRefs(identifiers);
+      if (resolved.ambiguous.length)
+        throw new Error(`Ambiguous task references: ${resolved.ambiguous.join(', ')}`);
+      const results: {
+        taskId?: string;
+        identifier?: string;
+        refs: string[];
+        success: boolean;
+        error?: string;
+      }[] = [];
+      for (const task of resolved.tasks) {
+        const refs = identifiers.filter((ref) => resolved.byRef.get(ref)?.id === task.id);
         try {
-          const result = await taskCaller().run({ id: identifier });
-          const topicId = (result as { topicId?: string } | undefined)?.topicId;
-          succeeded += 1;
-          lines.push(
-            `${index + 1}. ${identifier} — started${topicId ? ` (topic ${topicId})` : ''}`,
-          );
+          await taskCaller().run({ id: task.id });
+          results.push({ taskId: task.id, identifier: task.identifier, refs, success: true });
         } catch (error) {
-          failed += 1;
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          lines.push(`${index + 1}. ${identifier} — failed: ${message}`);
+          results.push({
+            taskId: task.id,
+            identifier: task.identifier,
+            refs,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       }
-
-      const header =
-        failed === 0
-          ? `Started ${succeeded} task${succeeded === 1 ? '' : 's'}:`
-          : `Started ${succeeded}/${identifiers.length} tasks (${failed} failed):`;
-
+      for (const ref of resolved.missing)
+        results.push({ refs: [ref], success: false, error: `Task not found: ${ref}` });
+      const succeeded = results.filter((result) => result.success).length;
+      const failed = results.length - succeeded;
       return {
-        content: [header, ...lines].join('\n'),
+        content: [
+          `Started ${succeeded}/${results.length} tasks (${failed} failed):`,
+          ...results.map(
+            (result) =>
+              `${result.identifier ?? result.refs[0]}${result.taskId ? ` (id: ${result.taskId})` : ''} — ${result.success ? 'started' : `failed: ${result.error}`}`,
+          ),
+        ].join('\n'),
+        state: { results, succeeded, failed },
         success: failed === 0,
       };
     },
@@ -833,6 +861,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       try {
+        const target = await resolveTaskOrThrow(taskModel(), id);
         // Completing the task that owns the current operation is a delivery
         // request, not an external cancellation. TaskService.updateStatus
         // interrupts every still-running topic when a task leaves `running`;
@@ -840,31 +869,35 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         // leave an `interrupted` operation / `canceled` topic. Persist the
         // intent instead and let onTopicComplete finalize it after the runtime
         // has reached `done`.
-        if (args.status === 'completed' && operationId && taskId) {
-          const target = await taskModel().resolve(id);
-          if (target?.id === taskId) {
-            await taskModel().updateContext(target.id, {
-              completion: { requestedByOperationId: operationId },
-            });
-            return {
-              content: `Task ${target.identifier} completion requested. It will be finalized when the current run finishes.`,
-              success: true,
-            };
-          }
+        if (args.status === 'completed' && operationId && taskId && target?.id === taskId) {
+          await taskModel().updateContext(target.id, {
+            completion: { requestedByOperationId: operationId },
+          });
+          return {
+            content: `Task ${target.identifier} completion requested. It will be finalized when the current run finishes.`,
+            success: true,
+            state: { taskId: target.id, identifier: target.identifier, success: true },
+          };
         }
 
         const result = await taskCaller().updateStatus({
           error: args.error,
-          id,
+          id: target.id,
           status: args.status,
         });
 
         return {
           content:
             args.status === 'failed' && args.error
-              ? `Task ${result.data.identifier} status updated to failed. Error: ${args.error}`
-              : `Task ${result.data.identifier} status updated to ${args.status}.`,
+              ? `Task ${taskResultLabel(result.data)} status updated to failed. Error: ${args.error}`
+              : `Task ${taskResultLabel(result.data)} status updated to ${args.status}.`,
           success: true,
+          state: {
+            taskId: result.data.id,
+            identifier: result.data.identifier,
+            status: result.data.status,
+            success: true,
+          },
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to update task status';
@@ -885,11 +918,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         };
       }
 
-      const detail = await taskService().getTaskDetail(id);
+      const task = await resolveTaskOrThrow(taskModel(), id);
+      const detail = await taskService().getTaskDetail(task.id);
       if (!detail) return { content: `Task not found: ${id}`, success: false };
 
       return {
         content: formatTaskDetail(detail),
+        state: { taskId: detail.id, identifier: detail.identifier, success: true },
         success: true,
       };
     },

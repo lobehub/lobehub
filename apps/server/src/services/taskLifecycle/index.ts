@@ -554,7 +554,7 @@ export class TaskLifecycleService {
 
     if (completedTask.parentTaskId) {
       const parentTask = await this.taskModel.findById(completedTask.parentTaskId);
-      if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
+      if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task)) {
         await this.taskModel.updateStatus(parentTask.id, 'paused');
       }
     }

@@ -63,11 +63,13 @@ export function registerLifecycleCommands(task: Command) {
 
         if (taskDetail.data.status === 'running') {
           log.info(`Task ${pc.bold(taskDetail.data.identifier)} is already running.`);
+          console.log(`ID: ${taskDetail.data.id}`);
           return;
         }
 
         const statusResult = await client.task.updateStatus.mutate({ id, status: 'running' });
         log.info(`Task ${pc.bold(statusResult.data.identifier)} started.`);
+        console.log(`ID: ${statusResult.data.id}`);
 
         // Auto-run unless --no-run
         if (options.run === false) return;
@@ -207,7 +209,7 @@ export function registerLifecycleCommands(task: Command) {
           if (!shouldFollow && options.json) {
             const toUrl = await resolveUrlBuilder(client);
             outputJson({
-              taskUrl: toUrl(resourcePath.task({ identifier: result.taskIdentifier })),
+              taskUrl: toUrl(resourcePath.task({ id: result.taskId })),
               autoStarted: result.autoStarted,
               operationId,
               status: result.status,
@@ -219,6 +221,7 @@ export function registerLifecycleCommands(task: Command) {
           }
           if (i === 0) {
             log.info(`Task ${pc.bold(result.taskIdentifier)} running`);
+            console.log(`ID: ${result.taskId}`);
           }
           log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(result.topicId || 'n/a')}`);
 
@@ -377,8 +380,8 @@ export function registerLifecycleCommands(task: Command) {
     .description('Manually send heartbeat for a running task')
     .action(async (id: string) => {
       const client = await getTrpcClient();
-      await client.task.heartbeat.mutate({ id });
-      log.info(`Heartbeat sent for ${pc.bold(id)}.`);
+      const result = await client.task.heartbeat.mutate({ id });
+      log.info(`Heartbeat sent for ${pc.bold(result.data.identifier)} (id: ${result.data.id}).`);
     });
 
   // ── watchdog ──────────────────────────────────────────────

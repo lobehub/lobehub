@@ -14,8 +14,11 @@ import {
   makeServerIdField,
   makeUserIdField,
   reactionModeField,
+  replyPlacementField,
   watchKeywordsField,
 } from '../const';
+import { deviceAccessFields } from '../deviceAccess';
+import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 import {
   DISCORD_APPLICATION_ID_PATTERN,
@@ -67,6 +70,7 @@ export const schema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       makeUserIdField('discord'),
+      ...deviceAccessFields,
       makeServerIdField('discord'),
       {
         key: 'charLimit',
@@ -112,6 +116,7 @@ export const schema: FieldSchema[] = [
         label: 'channel.showUsageStats',
         type: 'boolean',
       },
+      replyPlacementField,
       displayToolCallsField,
       reactionModeField,
       {
@@ -127,6 +132,7 @@ export const schema: FieldSchema[] = [
       ...makeGroupPolicyFields({ policy: 'open' }),
       allowFromField,
       watchKeywordsField,
+      ...replyStyleFields,
       ...botWakeFields,
     ],
     type: 'object',

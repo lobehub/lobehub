@@ -77,7 +77,7 @@ export const AgentViewAllSidebarSectionSkeleton = () => {
 };
 
 /**
- * Dense `AgentRow`s of the default list view (`agentListViewMode: 'list'`,
+ * Dense `AgentRow`s of the list view (`agentListViewMode: 'list'`,
  * `groupBy: 'none'`): padding 8/12, 28px square avatar, then the name / role /
  * description columns, then the
  * right-aligned 88px update-time column and the 64px eye / "…" action column.
@@ -118,7 +118,7 @@ export const AgentViewAllRowsSkeleton = ({ rows = 8 }: { rows?: number }) => (
  * Route-level skeleton for `/agents` (`features/AgentViewAll/AgentViewAllPage.tsx`):
  * the 44px header (title left, list-config icon right), then the full-width column
  * with the "In sidebar" block and the toolbar (240px-max search left, split
- * create button right) over the default list view's rows.
+ * create button right) over list-view rows (also the loading state of the card view).
  */
 const AgentViewAllSkeleton = ({ chrome = 'page' }: RouteSkeletonProps) => (
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>

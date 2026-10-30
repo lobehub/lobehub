@@ -63,9 +63,11 @@ allowBuilds:
   workerd: true
 
 overrides:
-  '@lobehub/ui': ^6.1.0
+  '@lobehub/ui': ^6.9.0
   '@lobehub/icons': ^6.0.0
-  '@lobehub/editor': ^5.0.0
+  # Exact: an editor release can move its lexical version, and the root pins
+  # lexical; lift both together.
+  '@lobehub/editor': 7.1.0
   '@lobehub/charts': ^6.0.0
   '@lobehub/fluent-emoji': ^5.0.0
   # Stay on the latest 1.9.x: @opentelemetry/*@2.x peers reject 1.10.0, and mixing both splits drizzle-orm into duplicate peer variants.

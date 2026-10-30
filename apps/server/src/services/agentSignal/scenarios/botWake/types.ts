@@ -21,6 +21,13 @@ export interface WakeSignal {
   message: string;
   platform?: string;
   platformThreadId?: string;
+  /**
+   * Platform user id of the author of the message this one replies to (Discord replies only).
+   * Absent when it is not a reply or the platform does not say.
+   */
+  replyToAuthorId?: string;
+  /** The name that author shows, for the classifier to read; absent when the platform omits it. */
+  replyToAuthorName?: string;
   timestamp: number;
 }
 
@@ -65,6 +72,41 @@ export interface WakeChannelKeys {
   threadKey?: string;
 }
 
+/** One message of a channel's recent conversation, as kept for context. Never the full history. */
+export interface WakeConversationLine {
+  /** Epoch ms the message was sent. */
+  at: number;
+  authorId?: string;
+  authorName?: string;
+  /** Platform message id; the same message seen by two bots is one line. */
+  id: string;
+  /** Another bot, or this one. */
+  isBot: boolean;
+  text: string;
+}
+
+/**
+ * What was said around a message: who the bot is, what it last said and the messages just before.
+ * Read from a log shared by every bot in the channel, so it holds other people's words too.
+ */
+export interface WakeConversation {
+  /** The agent behind the bot: its name and its title (identity or role). */
+  agent?: { name?: string; title?: string };
+  /** Names people may call the bot by (its platform username and display name). */
+  botNames: string[];
+  /** The bot's own latest message in this conversation, when it is still in the log. */
+  lastBotMessage?: string;
+  /** The bot owner's id on the platform, to mark their lines in the transcript. */
+  ownerId?: string;
+  /**
+   * What the owner is called: their LobeHub name and the names they go by on the platform. Their
+   * name is a person's, so a message that only says it is not addressed to the bot.
+   */
+  ownerNames?: string[];
+  /** The messages before the one being judged, oldest first. */
+  recent: WakeConversationLine[];
+}
+
 /**
  * Everything a wake policy may read besides the signal. The runner resolves it once per
  * evaluation, so policies stay pure and never touch the database, Redis or the clock.
@@ -72,6 +114,8 @@ export interface WakeChannelKeys {
 export interface WakeStateSnapshot {
   /** Channel state read from Redis, merged over the channel and thread keys. */
   channel?: WakeChannelState;
+  /** Who the bot is and what was said just before; absent when no conversation could be read. */
+  conversation?: WakeConversation;
   /** The message @-mentions the bot. */
   explicitMention: boolean;
   /** Epoch ms of the bot's latest reply in the thread, when known. */
@@ -93,6 +137,11 @@ export interface WakePolicyContext<TKey extends WakeStateKey = WakeStateKey> {
 export interface WakePolicyResult {
   /** 0..1, how sure the policy is about its verdict. */
   confidence: number;
+  /**
+   * What the policy matched, when the woken agent should hear it: the duty a message falls within.
+   * Kept on the record for the wake; not part of the stored verdict, whose `reason` says it too.
+   */
+  matched?: string;
   reason: string;
   tags: readonly string[];
   verdict: WakeVerdict;
@@ -146,6 +195,11 @@ export interface WakeDecision {
 export interface WakeChannelState {
   /** Latest time the bot posted in this channel or its thread. */
   botLastSpokeAt?: number;
+  /**
+   * Platform id of the person whose message last woke the bot in this conversation. The follow-up
+   * window is a follow-up to them: someone else's message in it is not.
+   */
+  followupAuthorId?: string;
   /** End of the follow-up window opened by the bot's last post. */
   followupUntil?: number;
   /** Latest time the bot's owner posted in this channel or its thread. */
@@ -155,6 +209,11 @@ export interface WakeChannelState {
    * silence.
    */
   silentWakes: number;
+  /**
+   * The bot stepped back from this conversation until then: people told it it was interfering.
+   * Only an explicit address (@-mention, reply, DM, command) wakes it before.
+   */
+  standDownUntil?: number;
 }
 
 /** Where passive waking may happen. */
@@ -172,10 +231,15 @@ export interface WakeRules {
   /** Raw platform channel/thread ids the bot may wake in; empty means anywhere. */
   allowChannels: string[];
   classifier: WakeClassifierRules;
-  /** Free text handed to the classifier as context. Never compiled into a rule. */
+  /** Free text handed to the classifier and the duty judge as context. Never compiled into a rule. */
   customInstructions?: string;
   /** Raw platform channel/thread ids the bot never wakes in. Wins over the allow list. */
   denyChannels: string[];
+  /**
+   * The bot's duties: what its owner made it responsible for, as free text. A message nobody
+   * addressed to the bot that falls within them may wake it. Without `text` the judge is not run.
+   */
+  duties: WakeClassifierRules & { text?: string };
   /** Follow-up wakes without the bot speaking before it stays quiet; 0 = no limit. */
   maxSilentWakes: number;
   /** The owner posted in the channel within this many seconds: stay quiet. 0 disables. */
@@ -200,14 +264,30 @@ export interface WakeSchedulerConfig {
  */
 export interface BotWakeConfig {
   classifier?: { mode?: WakePolicyMode; threshold?: number };
-  /** Free-text guidance for the classifier. */
+  /** Free-text guidance for the classifier and the duty judge. */
   customInstructions?: string;
+  /**
+   * The settings switch for `customInstructions`. Off keeps the text but stops handing it to the
+   * classifier; absent (a config saved before the switch existed) counts as on.
+   */
+  customInstructionsEnabled?: boolean;
+  /**
+   * What the bot is responsible for (`text`) and how sure the judge must be that a message falls
+   * within it (`threshold`). `mode` is an operator override, such as `shadow` to only score it.
+   * Off while there is no text.
+   */
+  duties?: { mode?: WakePolicyMode; text?: string; threshold?: number };
   enabled?: boolean;
   /**
    * Mode of the rule policies (internal rules and the owner's structured rules). `off` disables
    * the scenario like `enabled: false`. Defaults to `shadow`.
    */
   mode?: WakePolicyMode;
-  rules?: Partial<Omit<WakeRules, 'classifier' | 'customInstructions'>>;
+  /**
+   * How often the bot speaks up on its own (`calm` / `balanced` / `active`), or `custom` to read
+   * `rules` and `scheduler` as written. Absent reads as `custom`.
+   */
+  pace?: 'active' | 'balanced' | 'calm' | 'custom';
+  rules?: Partial<Omit<WakeRules, 'classifier' | 'customInstructions' | 'duties'>>;
   scheduler?: WakeSchedulerConfig;
 }

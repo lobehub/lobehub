@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "Ce modèle prend en charge la reconnaissance vidéo",
   "ModelSelect.featureTag.vision": "Ce modèle prend en charge la reconnaissance visuelle.",
   "ModelSelect.removed": "Le modèle ne figure pas dans la liste. Il sera automatiquement retiré s’il est désélectionné.",
+  "ModelSelect.routing": "Routage",
+  "ModelSelect.routingTooltip": "Un groupe de routage : plusieurs fournisseurs servent ce modèle, et chaque requête est dirigée vers celui qui répond.",
   "ModelSelect.staleModel.current": "Sélection actuelle",
   "ModelSelect.staleModel.notEnabled.action": "Activer ce modèle",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Échec de l'activation du modèle. Veuillez réessayer.",

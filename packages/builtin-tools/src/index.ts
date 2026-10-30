@@ -21,6 +21,7 @@ import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CanvasManifest } from '@lobechat/builtin-tool-canvas';
+import { ChannelManifest } from '@lobechat/builtin-tool-channel';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
 import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
@@ -55,6 +56,8 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type LobeBuiltinTool } from '@lobechat/types';
+
+import { resolveCloudSandboxInPageScope } from './pageScope';
 
 /**
  * Default tool IDs that will always be added to the tools list.
@@ -421,6 +424,7 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: CloudSandboxManifest.identifier,
     manifest: CloudSandboxManifest,
+    resolveManifest: resolveCloudSandboxInPageScope(CloudSandboxManifest),
     type: 'builtin',
   },
   {
@@ -502,6 +506,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
+    discoverable: false,
+    hidden: true,
+    identifier: ChannelManifest.identifier,
+    manifest: ChannelManifest,
+    type: 'builtin',
+  },
+  {
     identifier: MessageManifest.identifier,
     manifest: MessageManifest,
     // Context-aware: drops APIs the current IM platform can't fulfil (e.g.
@@ -544,7 +555,9 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     type: 'builtin',
   },
   {
-    discoverable: false,
+    // Hidden from the Tools popover (a goal starts from `/goal`), but
+    // discoverable so the activator can enable it when the user asks for a goal
+    // in plain words or wants a rejected goal proposal redone.
     hidden: true,
     identifier: GoalManifest.identifier,
     manifest: GoalManifest,

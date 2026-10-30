@@ -153,6 +153,34 @@ describe('Agent quota workspace scope', () => {
     expect(await personalCalibrations.latest(account.id, 'weekly_all')).toBeNull();
   });
 
+  it('hides a private workspace subscription from other members', async () => {
+    const mine = new AgentProviderAccountModel(serverDB, userId, workspaceId);
+    const teammate = new AgentProviderAccountModel(serverDB, teammateId, workspaceId);
+
+    const shared = await mine.create({
+      credentialMode: 'referenced',
+      label: 'Team 20x',
+      provider: 'claude-code',
+    });
+    const hidden = await mine.create({
+      credentialMode: 'referenced',
+      label: 'My own Max',
+      provider: 'claude-code',
+      visibility: 'private',
+    });
+
+    expect(shared.visibility).toBe('public');
+    expect((await mine.list()).map((a) => a.id).sort()).toEqual([hidden.id, shared.id].sort());
+    expect((await teammate.list()).map((a) => a.id)).toEqual([shared.id]);
+    expect(await teammate.findById(hidden.id)).toBeNull();
+
+    // a teammate cannot change it either; the owner can publish it
+    await teammate.update(hidden.id, { visibility: 'public' });
+    expect(await teammate.findById(hidden.id)).toBeNull();
+    await mine.update(hidden.id, { visibility: 'public' });
+    expect(await teammate.findById(hidden.id)).not.toBeNull();
+  });
+
   it('lets the same external identity exist once per scope', async () => {
     const identity = { externalAccountId: 'ext-acc-1', email: 'a@b.com' };
     const personalAccounts = new AgentProviderAccountModel(serverDB, userId);

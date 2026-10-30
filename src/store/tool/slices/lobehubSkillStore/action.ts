@@ -14,6 +14,7 @@ import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { isSkillConnectionError } from '@/types/skillConnectionError';
+import { type ConnectorActionError, toConnectorActionError } from '@/utils/connectorActionError';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -322,9 +323,11 @@ export class LobehubSkillStoreActionImpl {
   };
 
   revokeLobehubSkill = async (provider: string): Promise<void> => {
+    const scope = cacheScope.get();
     this.#set(
       produce((draft: LobehubSkillStoreState) => {
         draft.lobehubSkillLoadingIds.add(provider);
+        delete draft.lobehubSkillErrors[provider];
       }),
       false,
       n('revokeLobehubSkill/start'),
@@ -353,11 +356,31 @@ export class LobehubSkillStoreActionImpl {
       this.#set(
         produce((draft: LobehubSkillStoreState) => {
           draft.lobehubSkillLoadingIds.delete(provider);
+          // Kept on the row, so the failure stays visible after any toast is gone.
+          if (cacheScope.get() === scope)
+            draft.lobehubSkillErrors[provider] = {
+              ...toConnectorActionError('remove', error),
+              scope,
+            };
         }),
         false,
         n('revokeLobehubSkill/error'),
       );
     }
+  };
+
+  /** Record (or clear, with `undefined`) the last failed write of a provider row. */
+  setLobehubSkillError = (provider: string, error: ConnectorActionError | undefined): void => {
+    if (!error && !this.#get().lobehubSkillErrors[provider]) return;
+
+    this.#set(
+      produce((draft: LobehubSkillStoreState) => {
+        if (error) draft.lobehubSkillErrors[provider] = { ...error, scope: cacheScope.get() };
+        else delete draft.lobehubSkillErrors[provider];
+      }),
+      false,
+      n('setLobehubSkillError'),
+    );
   };
 
   /**

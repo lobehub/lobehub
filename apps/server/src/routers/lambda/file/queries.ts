@@ -94,6 +94,7 @@ export const queriesRouter = router({
         id: item.id,
         metadata: item.metadata as Record<string, any> | null | undefined,
         name: item.name,
+        parentId: item.parentId,
         size: item.size,
         sourceType: 'file' as const,
         updatedAt: item.updatedAt,

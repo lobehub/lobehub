@@ -520,6 +520,29 @@ export class AgentOperationModel {
   }
 
   /**
+   * Fail a run whose dispatch was never confirmed: nothing has touched the row
+   * since `dispatchedAt`. The first `heteroIngest` refreshes `updatedAt`, so a run
+   * that did start wins the race and this returns false. Settles to `error` so the
+   * caller's completion lifecycle persists onto the same status.
+   */
+  async settleUnconfirmedRunning(operationId: string, dispatchedAt: Date): Promise<boolean> {
+    const [row] = await this.db
+      .update(agentOperations)
+      .set({ completedAt: new Date(), completionReason: 'error', status: 'error' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.status, 'running'),
+          sql`${agentOperations.updatedAt} <= ${dispatchedAt}`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+
+    return Boolean(row);
+  }
+
+  /**
    * Atomically retire an operation whose liveness lease has expired. A concurrent
    * heartbeat wins by moving updatedAt past staleBefore, preventing false recovery.
    */

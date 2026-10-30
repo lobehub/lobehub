@@ -9,7 +9,9 @@ export interface ChannelAccess {
 }
 
 export interface ChannelWriteOptions {
-  /** Lets owners and admins un-archive or clean up an archived channel. */
+  /** Lets a write through while the channel is archived; archived channels are read-only. */
   allowArchived?: boolean;
+  /** Lets owners and admins act on a channel that sits in the recycle bin. */
+  allowTrashed?: boolean;
   minRole?: ChannelMemberRole;
 }

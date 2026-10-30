@@ -49,7 +49,7 @@ const setup = async (thread = false) => {
   };
   const claim = (id: string) => execution.claim(team.channel.id, id, lease);
   const finish = async (id: string, publish = true) => {
-    await execution.accepted(team.channel.id, id, {});
+    await execution.accepted(team.channel.id, id);
     await execution.saveDraft(team.channel.id, id, `Answer ${sequence}`);
     if (publish) await execution.publish(team.channel.id, id);
     await execution.releaseWriter(team.channel.id, id);
@@ -78,9 +78,7 @@ describe('Channel topic continuation', () => {
       expect(second.topic.id === first.topic.id).toBe(reuse);
       expect(second.job.operationId).not.toBe(first.job.operationId);
       expect(second.job.topicId).toBe(second.topic.id);
-      expect(await state.input(second.job.id)).toEqual(
-        reuse ? ['Request 2'] : ['Request 1', 'Answer 1', 'Request 2'],
-      );
+      expect(await state.input(second.job.id)).toEqual(['Request 2']);
       expect(await db.select().from(topics).where(eq(topics.id, first.topic.id))).toHaveLength(1);
     },
   );
@@ -132,11 +130,10 @@ describe('Channel topic continuation', () => {
           .where(eq(topics.id, first.topic.id));
       const second = (await state.claim((await state.send()).id))!;
       expect(second.topic.id).not.toBe(first.topic.id);
-      expect(second.job.manifest?.afterSequence).toBe(0);
     },
   );
 
-  it('excludes delayed public copies of answers already in the topic, even across queued requests', async () => {
+  it('delivers only each request when continuing across delayed publications', async () => {
     const state = await setup();
     const first = (await state.claim((await state.send()).id))!;
     const next = await state.send();
@@ -150,16 +147,21 @@ describe('Channel topic continuation', () => {
     expect(await state.input(third.job.id)).toEqual(['Request 3']);
   });
 
-  it('continues the most recently claimed delivery after an older request is routed late', async () => {
+  it('starts a new topic when failed routing is explicitly retried after a newer delivery', async () => {
     const state = await setup();
     const early = await state.asMember.send(state.channel.id, {
       content: 'Delayed request',
       requestKey: 'delayed',
-      routing: 'jev',
+      routing: 'decision',
+    });
+    await execution.resolveRouting(state.channel.id, early.id, early.routingAttempt, {
+      reason: 'Decision unavailable',
+      status: 'unassigned',
     });
     const first = (await state.claim((await state.send()).id))!;
     await state.finish(first.job.id);
-    await execution.resolveRouting(state.channel.id, early.id, early.routingAttempt, {
+    const retried = await state.asMember.retryRouting(state.channel.id, early.id);
+    await execution.resolveRouting(state.channel.id, early.id, retried.routingAttempt, {
       memberIds: [state.agent.id],
       reason: 'Agent can help',
       status: 'assigned',
@@ -170,7 +172,7 @@ describe('Channel topic continuation', () => {
     await state.finish(delayed.job.id);
     const next = (await state.claim((await state.send()).id))!;
     expect(next.topic.id).toBe(delayed.topic.id);
-    expect(await state.input(next.job.id)).toEqual(['Request 1', 'Answer 1', 'Request 2']);
+    expect(await state.input(next.job.id)).toEqual(['Request 2']);
   });
 
   it('blocks a deleted Agent reference while retaining the public request', async () => {

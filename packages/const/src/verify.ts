@@ -249,12 +249,23 @@ export const creatableAcceptanceSubjectTypes = [
  */
 /**
  * Who can see a verify artifact (a run's report page, an acceptance page)
- * beyond its creator. Personal-scope rows default to `public` (the page is
- * meant to be linked from PRs / reports); workspace-scope rows default to
- * `private` (org data stays member-gated until deliberately opened up).
+ * beyond its creator:
+ *
+ * - `public` — anyone holding the link.
+ * - `private` — the creator and members of the row's own workspace. In a
+ *   workspace this is "shared with the team", the default there.
+ * - `owner` — the creator alone, even inside a workspace.
+ *
+ * Personal-scope rows default to `public` (the page is meant to be linked from
+ * PRs / reports); workspace-scope rows default to `private`, so org data reaches
+ * every member without leaking past the workspace.
  */
-export const verifyVisibilities = ['private', 'public'] as const;
+export const verifyVisibilities = ['private', 'public', 'owner'] as const;
 export type VerifyVisibility = (typeof verifyVisibilities)[number];
+
+/** Whether a member of the row's workspace (not its creator) may read it. */
+export const isWorkspaceReadableVisibility = (visibility: VerifyVisibility) =>
+  visibility !== 'owner';
 
 export const acceptanceVisibilities = verifyVisibilities;
 export type AcceptanceVisibility = VerifyVisibility;
@@ -376,6 +387,9 @@ export const verifyEvidenceTypes = [
   'markdown',
   'dom_snapshot',
   'transcript',
+  // One command execution: a readable text payload plus structured execution
+  // facts, provenance and stdout / stderr / recording artifacts in metadata.
+  'terminal',
 ] as const;
 export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
 
@@ -450,6 +464,42 @@ export const runEvidenceGaps = (
     readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence'),
     evidence,
   );
+/**
+ * Evidence whose payload is text a reader or model can take in directly. A
+ * `terminal` evidence belongs here because its payload is the text fallback of
+ * the execution, written for exactly the readers that have no player.
+ */
+export const verifyTextEvidenceTypes: ReadonlySet<string> = new Set([
+  'dom_snapshot',
+  'markdown',
+  'terminal',
+  'text',
+  'transcript',
+]);
+
+/**
+ * Every stored file an evidence row references: its own payload file, plus —
+ * for a `terminal` evidence — the stdout / stderr / output / recording files its
+ * record names. Anything that follows evidence to its files (library hiding,
+ * permanent purge) must use this, or those artifacts outlive their evidence.
+ * Reads ids leniently; the record itself was validated when it was stored.
+ */
+export const verifyEvidenceFileIds = (evidence: {
+  fileId?: string | null;
+  metadata?: unknown;
+  type: string;
+}): string[] => {
+  const ids = evidence.fileId ? [evidence.fileId] : [];
+  if (evidence.type !== 'terminal') return ids;
+  const artifacts = (evidence.metadata as { terminal?: { artifacts?: unknown } } | null | undefined)
+    ?.terminal?.artifacts;
+  if (!artifacts || typeof artifacts !== 'object') return ids;
+  for (const artifact of Object.values(artifacts as Record<string, unknown>)) {
+    const fileId = (artifact as { fileId?: unknown } | null)?.fileId;
+    if (typeof fileId === 'string' && fileId.length > 0) ids.push(fileId);
+  }
+  return [...new Set(ids)];
+};
 
 /** Who / what captured an evidence artifact (provenance). */
 export const verifyEvidenceCapturedBy = [
@@ -527,6 +577,12 @@ export const readEvidenceChapters = (value: unknown): VerifyEvidenceChapter[] | 
  */
 export const normalizeEvidenceMetadata = (metadata: unknown, type: string): unknown => {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  // Only a `terminal` row may carry an execution record — on any other medium
+  // it would claim provenance no reader checks.
+  if (type !== 'terminal' && 'terminal' in metadata) {
+    const { terminal: _terminal, ...rest } = metadata as Record<string, unknown>;
+    return normalizeEvidenceMetadata(Object.keys(rest).length > 0 ? rest : null, type);
+  }
   if (!('chapters' in metadata)) return metadata;
   const { chapters: _chapters, ...rest } = metadata as Record<string, unknown>;
   const chapters = type === 'video' ? readEvidenceChapters(metadata) : undefined;

@@ -110,6 +110,27 @@ export const RedisKeys = {
      */
     channel: (key: string): string => `channel:v1:${key}`,
     /**
+     * The wake a bot already decided to start for one message, kept while the message is parked
+     * so its replay runs on that decision instead of judging the message a second time.
+     * Full key: bot-wake:initiation:v1:{applicationId}:{messageId}
+     */
+    initiation: (applicationId: string, messageId: string): string =>
+      `initiation:v1:${applicationId}:${messageId}`,
+    /**
+     * Set once a message has engaged a bot: it @-mentioned the bot when sent, the bot replied to
+     * it, or an edit already woke the bot on it. An edit that newly @-mentions the bot wakes it only
+     * while this key is absent, so one message never wakes the same bot twice.
+     * Full key: bot-wake:edit_wake:v1:{applicationId}:{messageId}
+     */
+    editWake: (applicationId: string, messageId: string): string =>
+      `edit_wake:v1:${applicationId}:${messageId}`,
+    /**
+     * The last messages said in one channel or thread, shared by every bot listening there, so it
+     * carries no application id.
+     * Full key: bot-wake:conversation_log:v1:{key}
+     */
+    conversationLog: (key: string): string => `conversation_log:v1:${key}`,
+    /**
      * Wake scheduler state machine of one channel.
      * Full key: bot-wake:scheduler:v1:{key}
      */
@@ -183,7 +204,11 @@ export const RedisKeys = {
    * Lobechat core scope - for application-level caching
    */
   lobechat: {
-    // Add lobechat scope keys here as needed
+    /**
+     * Digest of the body the last projection of a page's collaboration room wrote.
+     * Full key: lobechat:page_projection:v1:{documentId}
+     */
+    pageProjection: (documentId: string): string => `page_projection:v1:${documentId}`,
   },
   /**
    * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.

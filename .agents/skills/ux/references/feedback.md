@@ -143,6 +143,13 @@ state hands control back and restores certainty. Retry re-runs the _same_ fetch 
 `mutate` / query refetch), shows loading again while it re-runs, and stays available if it
 fails again; keep any already-loaded context rather than blowing the surface away.
 
+When an upstream lifecycle event can settle an interaction, consume that event and
+close the obsolete form automatically. Reconcile missed events internally on reconnect
+or a bounded acknowledgement wait; do not require a “check runtime status” action.
+A submit/cancel racing completion should report that the operation ended and preserve
+its terminal state, rather than restore the obsolete form or invent a successful answer.
+Verify both completion before the click and completion while delivery is in flight.
+
 **But not every failure should offer Retry — gate it on whether a retry could plausibly
 succeed.** A `401` (auth expired / invalid) or `403` (no permission) wall will just fail
 again the same way, so a **Reload** button there is a false promise: it invites the user to

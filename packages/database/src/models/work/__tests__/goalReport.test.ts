@@ -50,7 +50,7 @@ const reportParams = (
   threadId,
   title: 'Wrap-up report',
   toolCallId: 'op:goal-report',
-  toolIdentifier: 'lobe-goal',
+  toolIdentifier: 'builtin-goal',
   toolName: 'submitGoalReport',
   topicId,
   ...overrides,

@@ -31,7 +31,9 @@ is part of the key because a transferred Agent starts a new conversation in its 
 Only that human participant can access it, even if another
 membership is accidentally granted. It accepts no additional Agent members and routes unmentioned
 messages directly to the bound Agent. Group channels leave `agentId` NULL, including groups with
-only one Agent. Deleting a bound Agent cascades its direct conversations and their public history.
+only one Agent. A group whose only active members are one person and one Agent also skips routing:
+every message that mentions no Agent, in the main timeline or any Thread, goes to that Agent,
+which then follows the Thread. Deleting a bound Agent cascades its direct conversations and their public history.
 
 Group history survives deletion of an author or Agent. Message sender references use `SET NULL`;
 new writes require exactly one actual sender. Human requests have `userId`, Agent replies have
@@ -63,6 +65,25 @@ Updating Agent settings affects the next claim, including already queued request
 rewrites an earlier job snapshot. A private, trashed, deleted or moved Agent fails the requester
 access check before any topic or operation is created.
 
+## Delivery-key retirement rollout
+
+Migration `0197_channel_jobs_message_member_unique` enforces one job per message and Agent
+member, but deliberately retains the physical `delivery_key` column and its `initial` default.
+Older binaries still include that column in ORM reads and writes; new binaries omit it.
+The generated snapshot and DBML describe the new application schema, not this temporary
+compatibility column. Do not add the column back to the runtime schema or drop it in this release.
+
+Deploy this version normally; no separate manual database step is required. Only after it has
+been deployed and all earlier instances, workers and in-flight tasks have drained should a later
+release drop the column with a **custom** migration (the generated snapshot already omits it).
+Do not ship that cleanup in the same deployment, and retire rollback targets that still reference
+the column before applying it.
+
+The migration fails rather than deleting jobs if historical `(message_id, member_id)` pairs are
+duplicated. The migrator transaction restores the previous index and leaves the data and migration
+history unchanged on failure. Rebuilding the index still takes a table lock; column compatibility
+does not promise a lock-free migration.
+
 ## Topic continuation
 
 Every claim reserves a new operation, but normally continues the previous topic for the same
@@ -75,17 +96,31 @@ topic must exist in the same user/workspace scope and not be trashed.
 Like the Discord bridge, the main timeline starts a new topic when the previous topic's
 `updatedAt` is more than four hours old. This is checked when the next request arrives; it is not a
 timer and does not delete old topics. Channel Threads keep their topic despite idle time. A
-late-routed request older than the previous input cutoff starts a new topic instead of inheriting
-later context. Failed/unknown executions, changed environments and unavailable topics also start
-afresh. An adapter's explicit “new conversation” feature is outside this foundation.
+request explicitly retried after routing failed may be older than the previous input cutoff; it
+starts a new topic instead of inheriting later context. Failed/unknown executions, changed
+environments and unavailable topics also start afresh. An adapter's explicit “new conversation”
+feature is outside this foundation.
 
-A fresh topic receives the full branch through the triggering request: a Thread gets the main
-prefix through its root plus its own messages. Continuation receives only public messages in
-`(manifest.afterSequence, manifest.cutoffSequence]`. Its own published answers are excluded because
-they already exist in the ordinary transcript, including answers published after another request
-was queued. Other participants' messages remain new input. The manifest freezes bounds and the
-execution scope, not a duplicate transcript; later messages cannot change an earlier input.
-Author names and attachment availability are resolved at read time.
+Every dispatch receives only the triggering request, its author and attachment references. Public
+history is read on demand through `lobe-channel.readMessages` / `readMessage` in Native runs, or
+`lh channel history` / `lh channel message` in external runtimes. A Thread can read the main prefix
+through its root plus its own messages; the frozen request cutoff excludes later arrivals. Reads
+include published Agent answers, including when continuing a private topic. Existing private
+Agent transcripts stay in their ordinary topic and are never exposed through these tools.
+
+`ChannelHistoryRepository` binds reads to the live operation and rechecks requester/Agent membership,
+workspace access, thread availability and revocation under the Channel lock. The caller cannot
+choose a Channel or Thread. History pages contain at most 20 messages with 2000-character excerpts;
+individual messages are read in 12000-character chunks. Names and attachments resolve at read time.
+External operation tokens receive `channel:read` only for a reserved Channel dispatch; ordinary
+runs and sub-agents do not inherit it.
+
+Pending routing is part of member FIFO even before a job exists. An earlier main-channel
+decision blocks later claims until its recipients are known; an earlier Thread decision blocks
+only that Thread's following members. Skipped, failed or stopped routing releases this barrier.
+Branches opened while their root is pending inherit its eventual responders, preserving explicit
+invitations. Their unmentioned replies stay pending until then, including replies sent with the
+all-candidate fallback. Stopping a reply still fences it; root completion never revives it.
 
 ## Access and runtime integration
 
@@ -113,14 +148,15 @@ Author names and attachment availability are resolved at read time.
 - Call `recordStart` for the reserved idle operation before acknowledging dispatch. Only an exact
   user/workspace/topic/Agent match may initialize it. Repeated starts cannot overwrite running or
   terminal executions. The runtime remains responsible for normal topic activity updates.
-- Acknowledgement records native resume/turn IDs. Save the final answer once, then publish its
-  text to `channel_messages`; publication is idempotent and cannot publish a revoked delivery.
+- Acknowledgement records input acceptance; the ordinary runtime owns session metadata. Save the
+  final answer once, then publish its text to `channel_messages`; publication is idempotent and
+  cannot publish a revoked delivery.
   Public attachment uploads are authorized and locked before association. Generic file cleanup
   preserves files still referenced by Channel messages.
 - Job status describes the Channel delivery; execution status/errors/usage live on its operation.
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
-  confirmed termination, or a trusted `notSubmitted` failure, releases the writer. Isolation frees
-  the member but keeps the device/directory lock. Never retry an unknown delivery.
+  confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
+  Isolation frees the member but keeps the device/directory lock. Never retry an unknown delivery.
 - Existing hard-delete paths already reach Channel rows: Agent deletion (including trash purge,
   session and group deletion) cascades direct conversations, `UserModel.deleteUser` removes
   personal channels and direct conversations, and workspace deletion cascades every channel in it.
@@ -145,7 +181,7 @@ of this exact schema, not conversion from earlier development-only versions. A s
 deployed prototype needs an explicit inventory and conversion plan before cutover.
 
 Focused integration tests cover storage separation, ordinary access boundaries, attachment
-retention, continuation/expiry, incremental input, routing, stops and writer locks. Run with PGlite
+retention, continuation/expiry, request-only input, bounded history reads, routing, stops and writer locks. Run with PGlite
 and with PostgreSQL (`vitest.config.server.mts`); the two concurrent claim/sequence tests require
 real PostgreSQL row locking. Runtime and UI integration require separate product acceptance;
 storage tests alone do not verify the user-visible Channel flow.

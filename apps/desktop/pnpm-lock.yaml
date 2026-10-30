@@ -91,6 +91,9 @@ importers:
       '@lobechat/electron-mac-permission-guide':
         specifier: workspace:*
         version: link:../../packages/electron-mac-permission-guide
+      '@lobechat/electron-mac-sidebar-glass':
+        specifier: workspace:*
+        version: link:../../packages/electron-mac-sidebar-glass
       '@lobechat/electron-server-ipc':
         specifier: workspace:*
         version: link:../../packages/electron-server-ipc
@@ -115,9 +118,9 @@ importers:
       '@lobehub/i18n-cli':
         specifier: ^1.27.0
         version: 1.27.0(@types/react@19.3.0)(immer@11.1.18)(supports-color@9.4.0)(typescript@6.0.3)(use-sync-external-store@1.7.0(react@19.2.7))(ws@8.22.0)(zod@4.6.5)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.31.0
-        version: 1.32.0(supports-color@9.4.0)(zod@4.6.5)
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
       '@sentry/electron':
         specifier: 7.20.0
         version: 7.20.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(supports-color@9.4.0)
@@ -446,6 +449,19 @@ importers:
         specifier: ^12.4.0
         version: 12.4.0
 
+  ../../packages/electron-mac-sidebar-glass:
+    dependencies:
+      '@lobechat/napi-loader':
+        specifier: workspace:*
+        version: link:../napi-loader
+    devDependencies:
+      node-addon-api:
+        specifier: ^8.5.0
+        version: 8.9.2
+      node-gyp:
+        specifier: ^12.4.0
+        version: 12.4.0
+
   ../../packages/electron-server-ipc:
     dependencies:
       debug:
@@ -532,9 +548,12 @@ importers:
       '@lobehub/icons':
         specifier: ^6.0.0
         version: 6.0.0(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.32.1
-        version: 1.32.1(supports-color@9.4.0)(zod@4.6.5)
+      '@modelcontextprotocol/node':
+        specifier: ~2.1.2
+        version: 2.1.2(@modelcontextprotocol/server@2.4.0)
+      '@modelcontextprotocol/server':
+        specifier: ~2.4.0
+        version: 2.4.0
       diff:
         specifier: ^8.0.4
         version: 8.0.4
@@ -544,6 +563,10 @@ importers:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+    devDependencies:
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
 
   ../../packages/html-artifact:
     dependencies:
@@ -654,8 +677,8 @@ importers:
   ../../packages/types:
     dependencies:
       '@lobehub/market-sdk':
-        specifier: 0.43.0
-        version: 0.43.0(supports-color@9.4.0)(zod@4.6.5)
+        specifier: 0.46.0
+        version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
       '@lobehub/market-types':
         specifier: ^1.19.0
         version: 1.19.0
@@ -817,6 +840,9 @@ importers:
       '@lobechat/local-file-shell':
         specifier: workspace:*
         version: link:../../packages/local-file-shell
+      '@lobechat/prompts':
+        specifier: workspace:*
+        version: link:../../packages/prompts
       '@lobechat/tool-runtime':
         specifier: workspace:*
         version: link:../../packages/tool-runtime
@@ -2171,13 +2197,16 @@ packages:
       react: 19.2.7
       react-dom: 19.2.7
 
-  '@lobehub/market-sdk@0.43.0':
-    resolution: {integrity: sha512-pe0+otQzPBoq9X/C1fEYkM6yjVToO7esnW4b1CrfAe8jj9OPm7QZxgM5sHh4uZ6SU95+oEjOBKCutQyvruY8ZA==}
+  '@lobehub/market-sdk@0.46.0':
+    resolution: {integrity: sha512-N2TFEUJLQ8GZwFaRimoTU6rPZEgMz3Qk9765e+2YrODv+H5qAGEXavTz1EnQww9FrrdpgzzhUhGmwxksh6wOxQ==}
     peerDependencies:
       zod: ^3.24.4
 
   '@lobehub/market-types@1.19.0':
     resolution: {integrity: sha512-t6384KeWcSii42kuOqZClhoMs4tus+bW/izoNq96p0M5CvTVxUjrqpmXcKQUK+bnOXMzqqcJZcCU/3hTmFz0lQ==}
+
+  '@lobehub/market-types@1.22.0':
+    resolution: {integrity: sha512-QAgcPaXgaelqPtiplYuV2aJO0JJ0N6NFICXrM0oUI+IPfFpYlTi4UUARzKCprLGnDg4rQvGHVrdiKEzOTaYYpw==}
 
   '@lobehub/streamdown@1.4.0':
     resolution: {integrity: sha512-kkqq2nqwcqz+rV/eUPQ7vY1TQWHWZE3kQt1MsSLtNFLNXMoKYPiF+cdahP97uunWKtf2dB48q/nkSWaZzEKRSw==}
@@ -2244,15 +2273,19 @@ packages:
   '@mdx-js/mdx@3.1.1':
     resolution: {integrity: sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ==}
 
-  '@modelcontextprotocol/sdk@1.32.0':
-    resolution: {integrity: sha512-8BviX/hK4Gd2eL1KdTwm0gfl4d3wdoErW0Jd00h6nomUAtk6IJk5vwQJc6kfWtJTzN5OEV/lgIiJKI8fiDGAlA==}
-    engines: {node: '>=18'}
+  '@modelcontextprotocol/client@2.4.0':
+    resolution: {integrity: sha512-LgrD2OphHuG12vfKFKz6SOnq7bKHQmhGJIAYdD+MZBn2npHEyry6uD8zvktodtl5CQM85MO0anUyD9JwmUmxww==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/core@2.4.0':
+    resolution: {integrity: sha512-z8QBKqdfXLPzkLQuG4xp8hrVEMm1PZ1IgxMN2sMbJiFiAKOWXnAzogXn2W4aqIBlP1ea6U5yiqVquvUNM1Cj6Q==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/node@2.1.2':
+    resolution: {integrity: sha512-IIcIqBpr6NCQQs5DgJTgvbSOAw+3iaR/uquqg+e0nXCdudfjPg/80x0TseUnQx14AUAtE4fsJCEpJKPyb6WPVA==}
+    engines: {node: '>=20'}
     peerDependencies:
-      '@cfworker/json-schema': ^4.1.1
-      zod: 4.6.5
-    peerDependenciesMeta:
-      '@cfworker/json-schema':
-        optional: true
+      '@modelcontextprotocol/server': ^2.4.0
 
   '@modelcontextprotocol/sdk@1.32.1':
     resolution: {integrity: sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==}
@@ -2263,6 +2296,10 @@ packages:
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
+
+  '@modelcontextprotocol/server@2.4.0':
+    resolution: {integrity: sha512-rgR9yxSaAJ+bcsi/XroT/S2AfPiIWloXAnrdfYSCms9ivVju0ishu/wW0J21Ho6+ZOR1r7RyeRbjiRuF87ix5Q==}
+    engines: {node: '>=20'}
 
   '@moeru/std@0.1.0-beta.20':
     resolution: {integrity: sha512-09Nunc5dLT0+oAaLV18nIGHLkQO3LOUGOpGcQ2VIFTqWybJojT9geawhTVtuclYcJtIApgIt+3BLWI1K9dYpFw==}
@@ -9475,9 +9512,9 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@lobehub/market-sdk@0.43.0(supports-color@9.4.0)(zod@4.6.5)':
+  '@lobehub/market-sdk@0.46.0(supports-color@9.4.0)(zod@4.6.5)':
     dependencies:
-      '@lobehub/market-types': 1.19.0
+      '@lobehub/market-types': 1.22.0
       '@opentelemetry/api': 1.9.1
       debug: 4.4.3(supports-color@9.4.0)
       jose: 6.2.12
@@ -9487,6 +9524,10 @@ snapshots:
       - supports-color
 
   '@lobehub/market-types@1.19.0':
+    dependencies:
+      zod: 3.25.76
+
+  '@lobehub/market-types@1.22.0':
     dependencies:
       zod: 3.25.76
 
@@ -9669,27 +9710,25 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.32.0(supports-color@9.4.0)(zod@4.6.5)':
+  '@modelcontextprotocol/client@2.4.0':
     dependencies:
-      '@hono/node-server': 2.1.3(hono@4.13.12)
-      ajv: 8.20.0
-      ajv-formats: 3.0.1
-      content-type: 1.0.5
-      cors: 2.8.6
+      '@modelcontextprotocol/core': 2.4.0
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
-      express: 5.2.1(supports-color@9.4.0)
-      express-rate-limit: 8.7.0(express@5.2.1(supports-color@9.4.0))(supports-color@9.4.0)
-      hono: 4.13.12
       jose: 6.2.12
-      json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
-      raw-body: 3.0.2
       zod: 4.6.5
-      zod-to-json-schema: 3.25.2(zod@4.6.5)
-    transitivePeerDependencies:
-      - supports-color
+
+  '@modelcontextprotocol/core@2.4.0':
+    dependencies:
+      zod: 4.6.5
+
+  '@modelcontextprotocol/node@2.1.2(@modelcontextprotocol/server@2.4.0)':
+    dependencies:
+      '@hono/node-server': 2.1.3(hono@4.13.12)
+      '@modelcontextprotocol/server': 2.4.0
+      hono: 4.13.12
 
   '@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5)':
     dependencies:
@@ -9712,6 +9751,11 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
+
+  '@modelcontextprotocol/server@2.4.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.4.0
+      zod: 4.6.5
 
   '@moeru/std@0.1.0-beta.20': {}
 

@@ -76,13 +76,22 @@ export const FeatureFlagsSchema = z.object({
   bot_wake: FeatureFlagValue.optional(),
 
   /**
-   * Dashboards: monitoring widgets built by the `lobe-dashboard` agent tool,
+   * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
    * already-published widgets keep refreshing on their schedule. Array values
    * are user ids.
    */
   dashboard: FeatureFlagValue.optional(),
+
+  /**
+   * Multi-agent Channels: the sidebar section, Channel pages and every Channel API, including
+   * Agent history reads (`lobe-channel`, `lh channel`). Off: none of it is reachable. Work that
+   * was already queued still finishes. Array values are user ids, checked per member.
+   */
+  channel: FeatureFlagValue.optional(),
+
+  topic_preview: FeatureFlagValue.optional(),
 
   // internal flag
   agent_onboarding: FeatureFlagValue.optional(),
@@ -160,6 +169,12 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
 
+  // Off until an admin publishes a user allowlist or flips it to true.
+  channel: false,
+
+  // Off until the backend replaces the preview read; allowlist first.
+  topic_preview: false,
+
   agent_onboarding: isDev,
   dev_dock: isDev,
   auth_captcha: true,
@@ -196,6 +211,8 @@ export const mapFeatureFlagsEnvToState = (
     enableBotWake: evaluateFeatureFlag(config.bot_wake, userId),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId),
+    enableChannels: evaluateFeatureFlag(config.channel, userId),
+    enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),

@@ -1,7 +1,7 @@
 import { BOT_NO_REPLY_LABELS, BOT_NO_REPLY_REASONS } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { detectNoReply } from './noReply';
+import { detectNoReply, extractStandDown } from './noReply';
 
 describe('detectNoReply', () => {
   it.each([
@@ -58,11 +58,56 @@ describe('detectNoReply', () => {
     }
   });
 
+  // "nasa 就在这瞎捣乱": the agent steps back from the thread, with a short acknowledgement or none.
+  describe('standing down', () => {
+    it.each([
+      ['好，我先退出这个讨论。\nSTAND_DOWN', '好，我先退出这个讨论。'],
+      ['Got it, stepping back. STAND_DOWN', 'Got it, stepping back.'],
+      ['Got it.\n`STAND_DOWN`\n', 'Got it.'],
+      ['Got it. [STAND_DOWN].', 'Got it.'],
+      ['STAND_DOWN', ''],
+    ])('reads the marker ending %j and keeps what comes before it', (content, kept) => {
+      expect(extractStandDown(content)).toEqual({ content: kept, standDown: true });
+    });
+
+    it.each([
+      'Standing down now',
+      'the STAND_DOWN marker is how I step back, see above',
+      'NOT_STAND_DOWN',
+      '',
+    ])('leaves other text alone: %j', (content) => {
+      expect(extractStandDown(content)).toEqual({ content, standDown: false });
+    });
+
+    it('is silence with reason stand_down when nothing comes before the marker, on any wake', () => {
+      for (const wakeKind of ['followup', 'mention', undefined] as const) {
+        expect(detectNoReply({ content: 'STAND_DOWN', wakeKind })).toEqual({
+          reason: 'stand_down',
+        });
+      }
+      expect(detectNoReply({ content: 'NO_REPLY:stand_down', wakeKind: 'followup' })).toEqual({
+        reason: 'stand_down',
+      });
+      expect(detectNoReply({ content: 'NO_REPLY\nSTAND_DOWN', wakeKind: 'followup' })).toEqual({
+        reason: 'stand_down',
+      });
+    });
+
+    it('is a reply when the agent acknowledges before the marker', () => {
+      expect(detectNoReply({ content: '好的，我撤。\nSTAND_DOWN', wakeKind: 'followup' })).toBe(
+        undefined,
+      );
+      expect(detectNoReply({ content: 'STAND_DOWN', hasAttachments: true })).toBe(undefined);
+    });
+  });
+
   it('labels every reason, as false_wake unless the message was already answered', () => {
     expect(Object.keys(BOT_NO_REPLY_LABELS).sort()).toEqual([...BOT_NO_REPLY_REASONS].sort());
     expect(BOT_NO_REPLY_LABELS.duplicate).toBe('dup_wake');
     expect(BOT_NO_REPLY_LABELS.already_handled).toBe('dup_wake');
     expect(BOT_NO_REPLY_LABELS.off_topic).toBe('false_wake');
     expect(BOT_NO_REPLY_LABELS.empty_completion).toBe('false_wake');
+    // Stepping back acted on the message: that wake was right.
+    expect(BOT_NO_REPLY_LABELS.stand_down).toBe('correct');
   });
 });

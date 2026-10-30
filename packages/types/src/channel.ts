@@ -25,6 +25,8 @@ export const CHANNEL_LIMITS = {
   attachments: 20,
   /** Characters in one message. */
   contentLength: 100_000,
+  /** Characters in a channel name. */
+  titleLength: 100,
 } as const;
 
 /** Display name for a person whose account was deleted; their member row stays. */
@@ -34,10 +36,37 @@ export const CHANNEL_DELETED_AGENT_NAME = 'Deleted agent';
 /** Discoverability inside a workspace. Ignored for personal channels (`workspace_id IS NULL`). */
 export type ChannelVisibility = 'private' | 'public';
 
+/**
+ * Channel lifecycle. Orthogonal to the recycle bin: archiving keeps a channel for good, while
+ * a trashed one is purged once its retention expires.
+ * - `active`: listed and open to messages and Agent work.
+ * - `archived`: finished but kept. Readable and searchable, out of the active list, closed to
+ *   messages and Agent work until an admin unarchives it.
+ */
+export type ChannelStatus = 'active' | 'archived';
+
+/**
+ * Thread lifecycle, orthogonal to the recycle bin like `ChannelStatus`.
+ * - `active`: open to replies and Agent work.
+ * - `archived`: readable history, out of Agent context. It still holds its root message, so
+ *   unarchiving brings the same Thread back.
+ */
+export type ChannelThreadStatus = 'active' | 'archived';
+
 export type ChannelMemberActorType = 'agent' | 'user';
 
 /** Role of a human member. Agent members carry no role. */
 export type ChannelMemberRole = 'admin' | 'member' | 'owner';
+
+/**
+ * Membership state. A former member keeps its row, so jobs, mentions, Thread followers and
+ * authored messages still resolve.
+ * - `active`: in the channel.
+ * - `left`: the person left on their own.
+ * - `removed`: an admin removed the person or Agent.
+ * Either former state can be added back.
+ */
+export type ChannelMemberStatus = 'active' | 'left' | 'removed';
 
 /** Channel-specific execution environment; Agent settings always come from the Agent. */
 export interface ChannelMemberConfig {
@@ -74,10 +103,10 @@ export interface ChannelExecutionConfig extends LobeAgentConfig, ChannelMemberCo
 
 /**
  * - `directed`: carried explicit @mentions; jobs were created in the send transaction.
- * - `pending`: waiting for Jev to pick responders.
- * - `assigned`: Jev (or the no-model fallback) picked at least one Agent.
- * - `unassigned`: Jev was unsure or failed; no Agent was woken and the user may retry.
- * - `skipped`: Jev decided nobody needs to reply. Not a failure.
+ * - `pending`: waiting for the decision model to pick responders.
+ * - `assigned`: the decision model (or the no-model fallback) picked at least one Agent.
+ * - `unassigned`: routing could not complete; no Agent was woken and the user may retry.
+ * - `skipped`: the decision model decided nobody needs to reply. Not a failure.
  * - `reply`: an Agent's published reply; replies never enter routing.
  */
 export type ChannelMessageRoutingStatus =
@@ -85,16 +114,16 @@ export type ChannelMessageRoutingStatus =
 
 /**
  * - `explicit`: recipients came from @mentions, Thread followers or a bound direct Agent.
- * - `jev`: recipients came from a `decide()` call.
+ * - `decision`: recipients came from a `decide()` call.
  * - `fallback`: no decision model is configured, so every available Agent was picked.
  */
-export type ChannelMessageRoutingSource = 'explicit' | 'fallback' | 'jev';
+export type ChannelMessageRoutingSource = 'decision' | 'explicit' | 'fallback';
 
 /**
- * How a human message without @mentions is routed: `jev` when a decision model is
+ * How a human message without @mentions is routed: `decision` when a decision model is
  * configured, otherwise `fallback` to every candidate Agent.
  */
-export type ChannelRoutingMode = 'fallback' | 'jev';
+export type ChannelRoutingMode = 'decision' | 'fallback';
 
 /**
  * - `queued`: waiting at the member's FIFO.
@@ -110,6 +139,7 @@ export type ChannelJobBlockCode =
   | 'device_approval_pending'
   | 'device_offline'
   | 'directory_locked'
+  | 'member_busy'
   | 'unavailable'
   | 'workspace_changed';
 
@@ -129,13 +159,42 @@ export interface ChannelContextMessage {
   threadId: string | null;
 }
 
+/** Read-only history of the current Channel operation; scope is never supplied by the model. */
+export interface ChannelReadMessagesParams {
+  /** Exclusive sequence cursor returned by the preceding page. */
+  beforeSequence?: number;
+  limit?: number;
+}
+
+export interface ChannelReadMessageParams {
+  messageId: string;
+  /** Character offset for reading a long message without flooding the context. */
+  offset?: number;
+}
+
+export interface ChannelHistoryMessage extends ChannelContextMessage {
+  contentLength: number;
+  truncated: boolean;
+}
+
+export interface ChannelHistoryPage {
+  cutoffSequence: number;
+  messages: ChannelHistoryMessage[];
+  nextBeforeSequence: number | null;
+}
+
+export interface ChannelHistoryMessageDetail {
+  attachments?: Array<{ fileType: string; id: string; name: string; size: number; url: string }>;
+  message: ChannelHistoryMessage;
+  nextOffset: number | null;
+  offset: number;
+}
+
 /**
- * A run's input, frozen at claim time as a cutoff rather than a copy of the messages: the run
- * receives new branch messages in (afterSequence, cutoffSequence], read on demand.
+ * Frozen conversation scope. Only requestMessageId is delivered eagerly; history tools may
+ * read the entire branch up to cutoffSequence.
  */
 export interface ChannelInputManifest {
-  /** Exclusive lower bound: already consumed public input in the continued topic. */
-  afterSequence: number;
   /** Immutable at claim time; later public messages belong to the next run. */
   cutoffSequence: number;
   /** The member that triggered this run; its user is the execution identity. */
@@ -150,3 +209,88 @@ export interface ChannelInputManifest {
 
 /** Flat audit payload: routing decisions, claims, stops, isolation reasons. */
 export type ChannelAuditDetails = Record<string, boolean | number | string | string[] | null>;
+
+/** Public client projection. No execution configuration, private topic or draft fields. */
+export interface ChannelListItem {
+  /** Server-computed for the current member. */
+  canDelete: boolean;
+  createdAt: Date;
+  id: string;
+  /** The project the channel is grouped under; null for a standalone channel. */
+  projectId: string | null;
+  sequence: number;
+  status: ChannelStatus;
+  title: string;
+  workspaceId: string | null;
+}
+
+export interface ChannelPublicMember {
+  actorType: ChannelMemberActorType;
+  agentId: string | null;
+  avatar: string | null;
+  description: string | null;
+  id: string;
+  joinedAt: Date;
+  name: string | null;
+  role: ChannelMemberRole | null;
+  status: ChannelMemberStatus;
+  userAvatar: string | null;
+  userId: string | null;
+  userName: string | null;
+  username: string | null;
+}
+
+export interface ChannelPublicMessage {
+  agentId: string | null;
+  author: {
+    avatar: string | null;
+    id: string | null;
+    name: string | null;
+    type: ChannelMemberActorType;
+  };
+  content: string;
+  createdAt: Date;
+  fileIds: string[];
+  id: string;
+  mentions: string[];
+  recipientMemberIds: string[];
+  replyToId: string | null;
+  routingStatus: ChannelMessageRoutingStatus;
+  sequence: number;
+  threadId: string | null;
+  userId: string | null;
+}
+
+export interface ChannelPublicJob {
+  blockedCode: ChannelJobBlockCode | null;
+  /** Server-computed for the current member: its requester or an admin. */
+  canStop: boolean;
+  /** Failure diagnostic only. */
+  errorMessage: string | null;
+  id: string;
+  memberId: string;
+  messageId: string;
+  publicationRevoked: boolean;
+  status: ChannelJobStatus;
+  threadId: string | null;
+  writerHeld: boolean;
+}
+
+export interface ChannelPublicThread {
+  followerMemberIds: string[];
+  id: string;
+  rootMessageId: string;
+  rootSequence: number;
+  status: ChannelThreadStatus;
+}
+
+export interface ChannelDetail {
+  attachments: Array<{ fileType: string; id: string; name: string; size: number; url: string }>;
+  channel: ChannelListItem;
+  hasMore: boolean;
+  jobs: ChannelPublicJob[];
+  members: ChannelPublicMember[];
+  messages: ChannelPublicMessage[];
+  rootMessage: ChannelPublicMessage | null;
+  threads: ChannelPublicThread[];
+}

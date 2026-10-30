@@ -33,4 +33,19 @@ describe('TopicService.searchTopics', () => {
       expect.objectContaining({ onlyMine: undefined }),
     );
   });
+
+  it('hides channel conversations from agent search results', async () => {
+    const regular = { id: 'regular', trigger: null };
+    const task = { id: 'task', trigger: 'task' };
+    vi.mocked(lambdaClient.topic.searchTopics.query).mockResolvedValueOnce([
+      regular,
+      { id: 'channel', trigger: 'channel' },
+      task,
+    ] as Awaited<ReturnType<typeof lambdaClient.topic.searchTopics.query>>);
+
+    await expect(new TopicService().searchTopics('release', 'agt_1')).resolves.toEqual([
+      regular,
+      task,
+    ]);
+  });
 });

@@ -82,6 +82,12 @@ const projectRoutes: RouteObject[] = [
       {
         ...projectWorkspaceRoute,
         children: overlayRoutes(projectWorkspaceRoute.children ?? [], {
+          // Like `/channels/*` below: Channels have no mobile layout yet.
+          'channels/:channelId': (route) => ({
+            ...route,
+            element: redirectElement('..'),
+            handle: undefined,
+          }),
           'index': withHandle({
             mobileShellHeader: true,
             mobileShellTitle: ProjectMobileShellTitle,
@@ -256,5 +262,7 @@ export const mobileWorkspaceRoutes: RouteObject[] = [
 
 /** Desktop-only surfaces (no mobile entry on desktop either) leave for home instead of being read as a workspace slug. */
 export const mobileUnsupportedRoutes: RouteObject[] = [
+  // Multi-agent Channels currently use the desktop home sidebar and conversation layout.
+  { element: redirectElement('..'), path: 'channels/*' },
   { element: redirectElement('..'), path: 'eval/*' },
 ];

@@ -276,7 +276,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
                     {t(`goals.status.${task.status}`, { defaultValue: task.status })}
                   </Tag>
                 }
-                onClick={() => navigate(taskDetailPath(task.id, undefined, task.name))}
+                onClick={() => navigate(taskDetailPath(task.identifier, undefined, task.name))}
               />
             ))
           )}

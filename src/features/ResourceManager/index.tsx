@@ -7,7 +7,9 @@ import { useLocation, useSearchParams } from 'react-router';
 import DragUploadZone from '@/components/DragUploadZone';
 import { PageEditor } from '@/features/PageEditor';
 import { RESOURCE_HOME_PATH } from '@/features/ResourceHome/paths';
+import { useLibraryItemBackPath } from '@/features/ResourceManager/hooks/useLibraryItemBackPath';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { LIBRARY_ITEM_PATH } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import dynamic from '@/libs/next/dynamic';
@@ -118,12 +120,24 @@ const ResourceManager = memo<ResourceManagerProps>(({ content, explorerHero }) =
   // persisted projection on the first frame and the network only confirms it.
   useFetchDocumentDetail(currentViewItemId);
 
+  const isLibraryItemRoute = LIBRARY_ITEM_PATH.test(location.pathname);
+  const libraryBackPath = useLibraryItemBackPath(
+    libraryId,
+    isLibraryItemRoute ? currentViewItemId : undefined,
+  );
+
   const handleBack = () => {
     setMode('explorer');
     setCurrentViewItemId(undefined);
     // An item opened by path (`/resource/{file,page}/:id`) goes back to the Docs home.
     if (OPENED_ITEM_PATH.test(location.pathname)) {
       navigate(RESOURCE_HOME_PATH);
+      return;
+    }
+    // An item opened inside a library (`/resource/library/:id/{docs,file}/:itemId`)
+    // goes back to the folder that holds it.
+    if (isLibraryItemRoute && libraryBackPath) {
+      navigate(libraryBackPath);
       return;
     }
     // Remove the file query parameter from URL

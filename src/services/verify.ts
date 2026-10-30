@@ -1,4 +1,5 @@
 import { DEFAULT_VERIFY_PLAN_PROVIDER } from '@lobechat/business-const';
+import type { AcceptanceVisibility } from '@lobechat/const/verify';
 import type {
   AcceptanceChecklistItem,
   AcceptanceCheckReviewAction,
@@ -132,6 +133,13 @@ export interface VerifyStateResponse {
 export type VerifyEvidenceWithUrl = VerifyEvidence & {
   fileName: string | null;
   fileUrl: string | null;
+  /** `terminal` evidence only: signed URLs for the stdout / stderr / output / recording files. */
+  terminalArtifacts?: Partial<
+    Record<
+      'cast' | 'output' | 'stderr' | 'stdout',
+      { fileUrl: string | null; sha256: string; size: number }
+    >
+  >;
 };
 
 /** One check result plus the evidence artifacts attached to it. */
@@ -180,7 +188,7 @@ export class VerifyService {
   getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
     lambdaClient.acceptance.getBundle.query({ id });
 
-  setAcceptanceVisibility = (id: string, visibility: 'private' | 'public') =>
+  setAcceptanceVisibility = (id: string, visibility: AcceptanceVisibility) =>
     lambdaClient.acceptance.setVisibility.mutate({ id, visibility });
 
   /** The acceptance aggregate for a subject (topic/task/document), or null. */
@@ -325,6 +333,9 @@ export class VerifyService {
 
   /** Stamp the aggregate `repairing` after the send-back dispatch. */
   markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
+
+  requestAcceptanceRepair = (id: string, comment?: string) =>
+    lambdaClient.acceptance.requestRepair.mutate({ id, comment });
 
   /** Rename the acceptance's sidebar entry (a metadata title override). */
   renameAcceptance = (id: string, title: string) =>

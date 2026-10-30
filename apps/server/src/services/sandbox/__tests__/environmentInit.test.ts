@@ -17,8 +17,10 @@ import {
   buildSandboxEnvironmentInitCommand,
   environmentInitRan,
   environmentInitReport,
+  hasEnvironmentInitWork,
   type SandboxInitialization,
   toSandboxInitialization,
+  withEnvironmentVariables,
 } from '../environmentInit';
 
 const sandbox = { home: '', tmp: '' };
@@ -68,6 +70,67 @@ describe('toSandboxInitialization', () => {
         name: 'Empty',
       }),
     ).toBeUndefined();
+  });
+
+  it('keeps an environment that only declares variables, with nothing to apply to the folder', () => {
+    const init = toSandboxInitialization({
+      configuration: { env: { LOBEHUB_ADMIN_URL: 'https://admin.example.com' } },
+      id: 'env_1',
+      name: 'lobe-admin',
+    });
+
+    expect(init).toEqual({
+      env: { LOBEHUB_ADMIN_URL: 'https://admin.example.com' },
+      environmentId: 'env_1',
+      name: 'lobe-admin',
+      sources: [],
+    });
+    expect(hasEnvironmentInitWork(init!)).toBe(false);
+  });
+});
+
+describe('withEnvironmentVariables', () => {
+  let work: string;
+
+  beforeEach(() => {
+    work = mkdtempSync(join(tmpdir(), 'lobe-env-vars-'));
+    sandbox.home = work;
+    sandbox.tmp = work;
+  });
+
+  afterEach(() => {
+    rmSync(work, { force: true, recursive: true });
+  });
+
+  it('exports the variables into the command and whatever it starts', () => {
+    const command = withEnvironmentVariables(
+      'bash -c "printenv LOBEHUB_ADMIN_URL"; echo "$REGION"',
+      {
+        LOBEHUB_ADMIN_URL: 'https://admin.example.com',
+        REGION: 'us',
+      },
+    );
+
+    expect(run(command, work).stdout).toBe('https://admin.example.com\nus\n');
+  });
+
+  it('keeps values literal, quotes and substitutions included', () => {
+    const value = `it's $(echo pwned) \`id\` $HOME`;
+
+    expect(
+      run(withEnvironmentVariables('printf %s "$TRICKY"', { TRICKY: value }), work).stdout,
+    ).toBe(value);
+  });
+
+  it('lets the command override a variable for itself', () => {
+    expect(
+      run(withEnvironmentVariables('REGION=eu; echo "$REGION"', { REGION: 'us' }), work).stdout,
+    ).toBe('eu\n');
+  });
+
+  it('skips names a shell cannot export and leaves the command alone without variables', () => {
+    expect(withEnvironmentVariables('ls', { 'BAD-NAME': 'x' })).toBe('ls');
+    expect(withEnvironmentVariables('ls', undefined)).toBe('ls');
   });
 });
 

@@ -7,7 +7,8 @@ import { useMutation } from '@tanstack/react-query';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CredsApi } from '../useCredsApi';
+import { credErrorKey } from '../credError';
+import { createExtras, type CredsApi } from '../useCredsApi';
 
 const styles = stylex.create({
   footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
@@ -47,7 +48,11 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         fileName,
         key: values.key,
         name: values.name,
+        ...createExtras(credsApi),
       });
+    },
+    onError: (error) => {
+      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
     },
     onSuccess: () => {
       onSuccess();

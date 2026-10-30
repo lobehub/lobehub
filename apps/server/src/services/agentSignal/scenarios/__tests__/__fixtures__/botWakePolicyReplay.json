@@ -215,7 +215,9 @@
   ],
   "settings": {
     "botWake": {
+      "classifier": { "mode": "shadow" },
       "enabled": true,
+      "mode": "shadow",
       "rules": { "maxSilentWakes": 3, "ownerPresenceSeconds": 120, "windowSeconds": 300 }
     }
   }

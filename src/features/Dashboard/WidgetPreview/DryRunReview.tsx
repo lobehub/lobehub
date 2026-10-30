@@ -22,6 +22,7 @@ import {
   reviewStyles,
   ReviewUnavailable,
 } from './ReviewFacts';
+import ReviewStage, { ReviewStageNote } from './ReviewStage';
 import { useWidgetReview } from './useWidgetReview';
 
 interface ExpectedPreviewProps {
@@ -152,14 +153,12 @@ const DryRunReview = memo<DryRunReviewProps>(
 
     return (
       <Flexbox data-widget-dry-run-review={widgetId} gap={12}>
-        <Text weight={600}>{`${widget.title} · v${target.version}`}</Text>
+        <ReviewStage stage={'dryRun'} title={widget.title} version={target.version}>
+          <ReviewStageNote>{t('dryRun.intro')}</ReviewStageNote>
+        </ReviewStage>
 
         <ExpectedPreview target={target} versions={versions} widget={widget} />
 
-        {/* The intro introduces the access facts it sits above. */}
-        <Text fontSize={12} type={'secondary'}>
-          {t('dryRun.intro')}
-        </Text>
         <Flexbox className={reviewStyles.section} gap={6}>
           <Fact label={t('chat.definition')}>
             <Text fontSize={12}>{widget.description || t('chat.noDefinition')}</Text>

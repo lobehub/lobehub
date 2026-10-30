@@ -8,6 +8,7 @@ import { useUserStore } from '@/store/user';
 import {
   readConversationMessageListPage,
   readConversationMessages,
+  readEarlierConversationMessages,
 } from './conversationMessageRead';
 
 const mockGatewayMode = ({
@@ -84,5 +85,22 @@ describe('readConversationMessageListPage', () => {
       projectToolPayloads: true,
       topicId: 'topic-1',
     });
+  });
+});
+
+describe('readEarlierConversationMessages', () => {
+  it('pages older history with the same projection gate as the head page', async () => {
+    mockGatewayMode({ gatewayMode: true });
+    const getEarlierMessages = vi
+      .spyOn(messageService, 'getEarlierMessages')
+      .mockResolvedValue({ messages: [], olderCursor: null });
+    const cursor = { createdAt: '2026-10-27T00:00:00.000Z', id: 'msg_1' };
+
+    await readEarlierConversationMessages({ agentId: 'agent-1', topicId: 'topic-1' }, cursor);
+
+    expect(getEarlierMessages).toHaveBeenCalledWith(
+      { agentId: 'agent-1', projectToolPayloads: true, topicId: 'topic-1' },
+      cursor,
+    );
   });
 });

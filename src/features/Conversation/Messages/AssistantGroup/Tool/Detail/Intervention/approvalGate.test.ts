@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  approveChoiceLabelKeys,
   canRememberViaAllowList,
+  dynamicAuditType,
   getApprovalChoices,
   isChoiceSubmitBlocked,
+  isCoveredByRemember,
   resolveRememberAction,
 } from './approvalGate';
 
@@ -84,5 +87,81 @@ describe('canRememberViaAllowList', () => {
     expect(canRememberViaAllowList({ config: 'required', toolArgs: { command: 'rm -rf /' } })).toBe(
       false,
     );
+  });
+});
+
+describe('approveChoiceLabelKeys', () => {
+  it('lets each tool name its own approval so consecutive steps of one flow read differently', () => {
+    const dryRun = approveChoiceLabelKeys({
+      apiName: 'dryRunWidget',
+      choice: 'approve',
+      identifier: 'builtin-dashboard',
+    });
+    const publish = approveChoiceLabelKeys({
+      apiName: 'requestPublish',
+      choice: 'approve',
+      identifier: 'builtin-dashboard',
+    });
+    expect(dryRun.tool).toBe('builtins.builtin-dashboard.approve.dryRunWidget');
+    expect(publish.tool).toBe('builtins.builtin-dashboard.approve.requestPublish');
+    expect(dryRun.shared).toBe('tool.intervention.optionApprove');
+  });
+
+  it('keys the remember choice apart from the plain approve', () => {
+    expect(
+      approveChoiceLabelKeys({
+        apiName: 'dryRunWidget',
+        choice: 'approve-remember',
+        identifier: 'builtin-dashboard',
+      }),
+    ).toEqual({
+      shared: 'tool.intervention.optionApproveRemember',
+      tool: 'builtins.builtin-dashboard.approveRemember.dryRunWidget',
+    });
+  });
+});
+
+describe('dynamicAuditType', () => {
+  it('reads the audit type of a dynamic config only', () => {
+    expect(dynamicAuditType({ dynamic: { type: 'dashboardDryRunAudit' } })).toBe(
+      'dashboardDryRunAudit',
+    );
+    expect(dynamicAuditType('always')).toBeUndefined();
+    expect(dynamicAuditType(undefined)).toBeUndefined();
+  });
+});
+
+describe('isCoveredByRemember', () => {
+  it("re-runs the tool's audit: covered once the remembered access clears it", async () => {
+    await expect(
+      isCoveredByRemember({ audit: async () => false, rememberAction: 'tool', toolArgs: {} }),
+    ).resolves.toBe(true);
+    await expect(
+      isCoveredByRemember({ audit: async () => true, rememberAction: 'tool', toolArgs: {} }),
+    ).resolves.toBe(false);
+  });
+
+  it('keeps asking when the tool has no audit or the audit fails', async () => {
+    await expect(isCoveredByRemember({ rememberAction: 'tool', toolArgs: {} })).resolves.toBe(
+      false,
+    );
+    await expect(
+      isCoveredByRemember({
+        audit: async () => {
+          throw new Error('offline');
+        },
+        rememberAction: 'tool',
+        toolArgs: {},
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it('covers allow-listed siblings unless they must always ask', async () => {
+    await expect(
+      isCoveredByRemember({ config: 'required', rememberAction: 'allow-list', toolArgs: {} }),
+    ).resolves.toBe(true);
+    await expect(
+      isCoveredByRemember({ config: 'always', rememberAction: 'allow-list', toolArgs: {} }),
+    ).resolves.toBe(false);
   });
 });

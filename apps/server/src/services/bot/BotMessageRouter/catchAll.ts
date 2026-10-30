@@ -4,16 +4,16 @@ import debug from 'debug';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 
 import { buildBotContext } from '../buildBotContext';
-import { getSameSenderMessages } from '../mergeMessages';
-import { messageMatchesWatchKeyword } from '../platforms';
 import { renderInlineError } from '../replyTemplate';
 import type { BotHandlerContext } from './types';
 import {
   applyWatchKeywordInstructions,
+  burstMatchesWatchKeyword,
   dispatchTextCommand,
   mergeSkippedMessages,
   summarizeMessageAttachments,
 } from './utils';
+import { botWakeKindFor, type BotWakeReason } from './wakeDecision';
 
 const log = debug('lobe-server:bot:message-router');
 
@@ -22,22 +22,32 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
   const {
     agentId,
     applicationId,
+    botSettings,
     botWakeEnabled,
     bridge,
+    canStandDown,
     charLimit,
     client,
     commands,
     detectReplyLocale,
+    deviceAllowlist,
     displayToolCalls,
     dmSettings,
     gateFollowup,
+    initiate,
+    isBotWakeRolledOut,
     isMessageMonitoringAllowed,
+    nameKeywords,
     observe,
+    observeBurst,
     operatorUserId,
+    replyVoiceFor,
     passGatesOrNotify,
     platform,
     reactionMode,
+    remember,
     serverDB,
+    startReply,
     userId,
     watchKeywordEntries,
     watchKeywords,
@@ -67,6 +77,9 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
   // those messages (shadow by default), so they must reach this handler.
   if (dmCatchAllEnabled || keywordCatchAllEnabled || botWakeEnabled) {
     bot.onNewMessage(/./, async (thread, message, context?: MessageContext) => {
+      // Everyone's words, other bots' too, are context for a later judgement; never DMs (the
+      // recorder refuses them) and never the bot's own.
+      remember('catchAll', [...(context?.skipped ?? []), message], thread);
       if (message.author.isBot === true) return;
 
       // Skip text-based slash commands — already handled by registerCommands
@@ -82,24 +95,32 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
       const matchesWatchKeyword =
         !isDM &&
         keywordCatchAllEnabled &&
-        (messageMatchesWatchKeyword(message.text, watchKeywords) ||
-          getSameSenderMessages(message, context?.skipped).some((m) =>
-            messageMatchesWatchKeyword(m.text, watchKeywords),
-          ) === true);
+        burstMatchesWatchKeyword(message, context?.skipped, watchKeywords);
+      // A keyword the owner marked as the bot's name calls the bot rather than just waking it.
+      const calledByKeywordName =
+        matchesWatchKeyword && burstMatchesWatchKeyword(message, context?.skipped, nameKeywords);
 
       // If neither path applies, return so the regex doesn't act as a
       // channel-wide hijack. DMs still need the dmCatchAllEnabled gate
       // because a DM message can arrive while DM policy is disabled.
+      let initiation: Awaited<ReturnType<typeof initiate>>;
       if (!(isDM && dmCatchAllEnabled) && !matchesWatchKeyword) {
-        // Observation only. Gated like every other passive listening path.
+        // Gated like every other passive listening path.
         if (
-          botWakeEnabled &&
-          !isDM &&
-          (await isMessageMonitoringAllowed(`onNewMessage (${platform} bot-wake)`, thread.id))
+          !botWakeEnabled ||
+          isDM ||
+          !(await isMessageMonitoringAllowed(`onNewMessage (${platform} bot-wake)`, thread.id))
         ) {
-          observe('catchAll', message, thread, 'skip', 'not-addressed');
+          return;
         }
-        return;
+
+        // Nobody addressed the bot. With the rules enforcing it may still speak up: its name is in
+        // the text, or it spoke lately and the classifier agrees. Otherwise this is observation only.
+        initiation = await initiate('catchAll', mergeSkippedMessages(message, context), thread);
+        if (!initiation) {
+          observeBurst('catchAll', message, context, thread);
+          return;
+        }
       }
 
       if (matchesWatchKeyword) {
@@ -121,9 +142,14 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
 
       const replyLocale = detectReplyLocale(message);
 
+      // A wake the bot started itself answers chatter nobody asked it to join: if the sender is not
+      // allowed, drop it quietly rather than posting a rejection notice into the channel.
+      const gateThread = initiation
+        ? { id: thread.id, isDM: thread.isDM, post: async () => undefined }
+        : thread;
       if (
         !(await passGatesOrNotify(
-          thread,
+          gateThread,
           message.author,
           replyLocale,
           `onNewMessage (${platform} catch-all)`,
@@ -171,58 +197,54 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
             applied.prefixLength,
           );
         }
-
-        // Last check before a keyword wake runs: enforced policies, then the scheduler. Before
-        // the thread below is opened, so a parked message does not leave an empty thread behind.
-        if (
-          (await gateFollowup({
-            entryPoint: 'catchAll',
-            merged,
-            parked: [...(context?.skipped ?? []), message],
-            thread,
-          })) === 'stop'
-        ) {
-          return;
-        }
-
-        // Discord (and any platform that prefers thread isolation) opts
-        // into spawning a sub-thread for the reply via this hook. The
-        // chat-sdk Discord adapter only auto-creates a thread on
-        // @-mention, so without this the keyword wake would clutter the
-        // parent channel with the bot's output. Best-effort: on hook
-        // failure we keep the original thread.id and reply in the
-        // channel rather than dropping the message.
-        if (typeof client.openThreadForChannelWake === 'function') {
-          try {
-            const upgraded = await client.openThreadForChannelWake(
-              thread.id,
-              (message as { raw?: unknown }).raw,
-            );
-            if (upgraded && upgraded !== thread.id) {
-              log(
-                'onNewMessage (%s catch-all): opened reply thread for keyword wake, %s -> %s',
-                platform,
-                thread.id,
-                upgraded,
-              );
-              (thread as { id: string }).id = upgraded;
-            }
-          } catch (error) {
-            log(
-              'onNewMessage (%s catch-all): openThreadForChannelWake threw, posting in channel: %O',
-              platform,
-              error,
-            );
-          }
-        }
       }
-      observe(
-        'catchAll',
-        merged,
+
+      const wakeReason: BotWakeReason =
+        initiation?.reason ??
+        (matchesWatchKeyword
+          ? calledByKeywordName
+            ? 'named-in-text'
+            : 'watch-keyword'
+          : 'direct-message');
+
+      // Last check before a keyword wake runs: enforced policies, then the scheduler. Before the
+      // reply below is opened, so a parked message does not leave an empty thread behind.
+      if (
+        (matchesWatchKeyword || initiation) &&
+        (await gateFollowup({
+          entryPoint: 'catchAll',
+          // Already judged by `initiate`: do not judge again. A message addressed to the bot (by
+          // name, keyword names included) does not wait for the scheduler's collect window.
+          immediate: initiation?.addressed || wakeReason === 'named-in-text',
+          initiated: !!initiation,
+          merged,
+          parked: [...(context?.skipped ?? []), message],
+          thread,
+        })) === 'stop'
+      ) {
+        return;
+      }
+
+      // Only a wake nobody asked for (a keyword, or one the bot started itself) may end in silence
+      // (`NO_REPLY`), holding back its reactions and typing until it decides to speak; and only
+      // once the bot-wake rollout reaches this bot's owner, exactly as in a subscribed thread. A DM
+      // is always answered and never asks.
+      const wakeKind =
+        wakeReason !== 'direct-message' && (await isBotWakeRolledOut())
+          ? botWakeKindFor(wakeReason)
+          : 'mention';
+      // Where the reply goes and what is said before the run (see `startReply`). Keyword and name
+      // wakes in a channel used to get their own reply thread, since the chat-sdk Discord adapter
+      // only auto-creates one on @-mention; that stays the behaviour when the bot does not decide.
+      const { openingReply, release } = await startReply({
+        entryPoint: 'catchAll',
+        legacyOpensThread: matchesWatchKeyword || !!initiation,
+        message: merged,
+        rawMessage: (message as { raw?: unknown }).raw,
+        reason: wakeReason,
         thread,
-        'wake',
-        matchesWatchKeyword ? 'watch-keyword' : 'direct-message',
-      );
+        wakeKind,
+      });
       void emitAgentSignalSourceEvent(
         {
           payload: {
@@ -260,15 +282,24 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           botContext: buildBotContext({
             applicationId,
             authorUserId: merged.author?.userId,
+            deviceAllowlist,
             operatorUserId,
             platform,
             platformThreadId: thread.id,
           }),
+          botSettings,
           charLimit,
           client,
           displayToolCalls,
+          openingReply,
           reactionMode,
           replyLocale,
+          duty: initiation?.reason === 'in-duty' ? { matched: initiation.duty } : undefined,
+          followup: initiation?.reason === 'followup-window' ? initiation.followup : undefined,
+          named: wakeReason === 'named-in-text',
+          ...replyVoiceFor(thread.id),
+          standDown: await canStandDown(thread),
+          wakeKind,
         });
       } catch (error) {
         log('onNewMessage: unhandled error from handleMention: %O', error);
@@ -278,6 +309,8 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
         } catch {
           // best-effort notification
         }
+      } finally {
+        release();
       }
     });
   }

@@ -11,11 +11,14 @@ import type {
   ChannelMemberGrantStatus,
   ChannelMemberMetadata,
   ChannelMemberRole,
+  ChannelMemberStatus,
   ChannelMessageMetadata,
   ChannelMessageRoutingSource,
   ChannelMessageRoutingStatus,
   ChannelMetadata,
+  ChannelStatus,
   ChannelThreadMetadata,
+  ChannelThreadStatus,
   ChannelVisibility,
 } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
@@ -36,7 +39,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
-import { createdAt, timestamptz, updatedAt } from './_helpers';
+import { createdAt, softDeleteColumns, timestamptz, updatedAt } from './_helpers';
 import { agents } from './agent';
 import { agentOperations } from './agentOperations';
 import { files } from './file';
@@ -81,7 +84,8 @@ export const channels = pgTable(
     title: text('title').notNull(),
     /** Last allocated message sequence; incremented under the row lock when a message lands. */
     sequence: integer('sequence').notNull().default(0),
-    archived: boolean('archived').notNull().default(false),
+    /** Lifecycle (`ChannelStatus`); trashing is the separate `is_deleted` below. */
+    status: text('status').$type<ChannelStatus>().notNull().default('active'),
 
     /**
      * `public`: any workspace member can find and join. `private`: members only.
@@ -89,6 +93,8 @@ export const channels = pgTable(
      */
     visibility: text('visibility').$type<ChannelVisibility>().notNull().default('private'),
     metadata: jsonb('metadata').$type<ChannelMetadata>().default({}),
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -142,8 +148,8 @@ export const channelMembers = pgTable(
     config: jsonb('config').$type<ChannelMemberConfig>(),
     metadata: jsonb('metadata').$type<ChannelMemberMetadata>().default({}),
 
-    /** False once the member leaves; retain job and Thread references. */
-    active: boolean('active').notNull().default(true),
+    /** Former members keep their row for job and Thread references (`ChannelMemberStatus`). */
+    status: text('status').$type<ChannelMemberStatus>().notNull().default('active'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -261,13 +267,23 @@ export const channelThreads = pgTable(
     rootSequence: integer('root_sequence').notNull(),
     /** Member ids (people and Agents) following this Thread. */
     followerMemberIds: jsonb('follower_member_ids').$type<string[]>().notNull().default([]),
+    /**
+     * Lifecycle (`ChannelThreadStatus`). An archived Thread still holds its root, so the
+     * uniqueness below excludes only trashed rows.
+     */
+    status: text('status').$type<ChannelThreadStatus>().notNull().default('active'),
     metadata: jsonb('metadata').$type<ChannelThreadMetadata>().default({}),
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     createdAt: createdAt(),
   },
   // Threads and messages reference each other; the annotation breaks the type cycle.
   (t): PgTableExtraConfigValue[] => [
     unique('channel_threads_scope_unique').on(t.channelId, t.id),
-    uniqueIndex('channel_threads_root_unique').on(t.channelId, t.rootMessageId),
+    // One live Thread per root message; a trashed Thread keeps its row until restore or purge.
+    uniqueIndex('channel_threads_root_unique')
+      .on(t.channelId, t.rootMessageId)
+      .where(sql`${t.isDeleted} IS NOT TRUE`),
     foreignKey({
       columns: [t.channelId, t.rootMessageId],
       foreignColumns: [channelMessages.channelId, channelMessages.id],
@@ -370,6 +386,9 @@ export const channelMessageFiles = pgTable(
  * topic (continued when safe); execution status, errors, usage and traces live on the
  * operation. The job keeps only what the operation cannot: the frozen input, the execution
  * lease, the writer lock and publication of the final reply.
+ *
+ * The retired delivery_key column is intentionally absent from the ORM schema. Migration
+ * 0197 retains it physically for older binaries; a later custom migration can remove it.
  */
 export const channelJobs = pgTable(
   'channel_jobs',
@@ -383,8 +402,6 @@ export const channelJobs = pgTable(
     threadId: text('thread_id'),
     /** Member who triggered the request; its user is the execution identity. */
     requesterMemberId: uuid('requester_member_id').notNull(),
-    /** Separates redeliveries of the same message to the same member, e.g. after a retry. */
-    deliveryKey: text('delivery_key').notNull().default('initial'),
     /**
      * Channel outcome of this delivery. It may settle while the writer is still held, e.g. a
      * stop cancels the job before the process exits; the locks follow `writerHeld`.
@@ -439,7 +456,7 @@ export const channelJobs = pgTable(
   },
   (t) => [
     unique('channel_jobs_scope_unique').on(t.channelId, t.id),
-    uniqueIndex('channel_jobs_delivery_unique').on(t.messageId, t.memberId, t.deliveryKey),
+    uniqueIndex('channel_jobs_delivery_unique').on(t.messageId, t.memberId),
     index('channel_jobs_channel_status_idx').on(t.channelId, t.status),
     index('channel_jobs_continuation_idx').on(
       t.memberId,

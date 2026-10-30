@@ -79,7 +79,6 @@ const createMessage = async (channelId: string, authorMemberId: string, sequence
 };
 
 const manifest = (requesterMemberId: string, memberId: string): ChannelInputManifest => ({
-  afterSequence: 0,
   cutoffSequence: 1,
   requestMessageId: 'unused',
   requesterMemberId,

@@ -156,7 +156,7 @@ describe('Channel Agent configuration', () => {
       })
       .where(eq(agents.id, member.agentId!));
     expect((await jobById(db, first.job.id)).executionConfig).toEqual(first.job.executionConfig);
-    await execution.accepted(team.channel.id, first.job.id, {});
+    await execution.accepted(team.channel.id, first.job.id);
     await execution.saveDraft(team.channel.id, first.job.id, 'Done');
     await execution.releaseWriter(team.channel.id, first.job.id);
     const next = (await execution.claim(team.channel.id, queued.id, lease))!;
