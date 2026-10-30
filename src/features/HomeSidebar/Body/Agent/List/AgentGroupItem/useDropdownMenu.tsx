@@ -1,4 +1,3 @@
-import { GROUP_CHAT_URL } from '@lobechat/const';
 import { type DropdownItem } from '@lobehub/ui';
 import { confirmModal, Icon, toast } from '@lobehub/ui';
 import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'lucide-react';
@@ -8,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
 import { useAgentGroupTransferToMemberMenuItem } from '@/business/client/hooks/useAgentGroupTransferToMemberMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
-import { useFavoriteMenuItem } from '@/features/Favorites';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { useResourceManageable } from '@/hooks/useResourceManageable';
@@ -64,12 +62,6 @@ export const useGroupDropdownMenu = ({
     backgroundColor,
     title,
   });
-  // A group without its own avatar renders its members' faces, which a favorite
-  // cannot snapshot; it falls back to the group type icon instead.
-  const favoriteMenuItem = useFavoriteMenuItem(
-    { icon: avatar ?? null, path: GROUP_CHAT_URL(id), targetId: id, title, type: 'group' },
-    { showHotkey: false },
-  );
 
   return useMemo(
     () => () =>
@@ -83,13 +75,6 @@ export const useGroupDropdownMenu = ({
                 onClick: () => pinAgentGroup(id, !pinned),
                 sfSymbol: pinned ? 'pin.slash' : 'pin',
               },
-            ]
-          : []),
-        // Favorites are per person, so the item sits beside Pin even for members
-        // who cannot configure the group.
-        ...(favoriteMenuItem ? [favoriteMenuItem] : []),
-        ...(canConfigure
-          ? [
               {
                 icon: <Icon icon={Pen} />,
                 key: 'rename',
@@ -183,7 +168,6 @@ export const useGroupDropdownMenu = ({
       id,
       title,
       duplicateAgentGroup,
-      favoriteMenuItem,
       openAgentInNewWindow,
       removeAgentGroup,
       transferMenuItems,
