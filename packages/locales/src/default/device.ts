@@ -78,6 +78,13 @@ export default {
   'workingDirectory.ghMissing':
     'Install and log in to the GitHub CLI (`gh`) to see linked pull requests',
   'workingDirectory.newBranchPlaceholder': 'feature/new-branch-name',
+  'workingDirectory.newWorktreeBaseDetached': 'Based on {{sha}} (detached HEAD)',
+  'workingDirectory.newWorktreeBaseInvalid': 'Can’t find “{{ref}}” in this repository',
+  'workingDirectory.newWorktreeBaseLabel': 'Based on',
+  'workingDirectory.newWorktreeBasePlaceholder': 'Branch, tag, or commit',
+  'workingDirectory.newWorktreeBaseResolved': 'Forks from {{base}}',
+  'workingDirectory.newWorktreeBaseUnavailable':
+    'Couldn’t read this device’s base. New worktrees fork from its current HEAD; update the device to choose one.',
   'workingDirectory.newWorktreeLocation': 'Will be created at {{path}}',
   'workingDirectory.noMatch': 'No matching directories',
   'workingDirectory.noRecent': 'No directories yet',
@@ -134,6 +141,7 @@ export default {
   'workingDirectory.removeWorktreePending': 'Deleting worktree “{{name}}”…',
   'workingDirectory.removeWorktreeSuccess': 'Worktree deleted',
   'workingDirectory.removeWorktreeTitle': 'Delete worktree',
+  'workingDirectory.worktreeForkPoint': 'based on {{base}}',
   'workingDirectory.worktreeSearchPlaceholder': 'Search worktrees',
   'workingDirectory.worktreeUnavailable': 'unavailable',
   'workingDirectory.worktreesEmpty': 'No worktrees found',

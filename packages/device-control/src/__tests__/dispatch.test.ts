@@ -637,6 +637,15 @@ describe('executeDeviceRpc', () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
+  it('routes resolveGitWorktreeBase through the shared git dispatcher', async () => {
+    const result = await executeDeviceRpc(
+      'resolveGitWorktreeBase',
+      { baseRef: '--orphan', path: root },
+      makeDeps(),
+    );
+    expect(result).toMatchObject({ success: false });
+  });
+
   it('routes removeGitWorktree through the shared git dispatcher', async () => {
     const result = (await executeDeviceRpc(
       'removeGitWorktree',

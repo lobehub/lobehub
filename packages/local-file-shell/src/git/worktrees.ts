@@ -8,9 +8,12 @@ import { getGitWorkingTreeStatus } from './info';
 import type {
   GitAddWorktreeResult,
   GitRemoveWorktreeResult,
+  GitResolveWorktreeBaseResult,
   GitWorkingTreeStatus,
+  GitWorktreeForkPoint,
   GitWorktreeListItem,
 } from './types';
+import { getDefaultRemoteBranch } from './upstream';
 
 const execFileAsync = promisify(execFile);
 
@@ -100,6 +103,46 @@ const readStatus = async (worktree: ParsedWorktree): Promise<GitWorkingTreeStatu
   return getGitWorkingTreeStatus(worktree.path);
 };
 
+const readGitOutput = async (args: string[], cwd: string): Promise<string | undefined> => {
+  try {
+    const { stdout } = await execFileAsync('git', args, { cwd, timeout: 5000 });
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const resolveCommit = (ref: string, cwd: string): Promise<string | undefined> =>
+  readGitOutput(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], cwd);
+
+/** `origin/HEAD`'s target, else a conventional local default for repos without a remote. */
+const resolveDefaultBranch = async (
+  dirPath: string,
+): Promise<{ name: string; tip: string } | undefined> => {
+  const remoteBranch = await getDefaultRemoteBranch(dirPath, 'origin');
+  const candidates = remoteBranch
+    ? [{ name: remoteBranch.slice('origin/'.length), ref: `refs/remotes/${remoteBranch}` }]
+    : ['main', 'master'].map((name) => ({ name, ref: `refs/heads/${name}` }));
+
+  for (const { name, ref } of candidates) {
+    const tip = await resolveCommit(ref, dirPath);
+    if (tip) return { name, tip };
+  }
+};
+
+const readForkPoint = async (
+  worktree: ParsedWorktree,
+  defaultBranch: { name: string; tip: string } | undefined,
+  dirPath: string,
+): Promise<GitWorktreeForkPoint | undefined> => {
+  if (!defaultBranch || !worktree.head || worktree.bare || worktree.prunable) return undefined;
+  // A checkout of the default branch itself wasn't forked from anything.
+  if (worktree.branch === defaultBranch.name) return undefined;
+  const sha = await readGitOutput(['merge-base', worktree.head, defaultBranch.tip], dirPath);
+  if (!sha) return undefined;
+  return { atTip: sha === defaultBranch.tip, defaultBranch: defaultBranch.name, sha };
+};
+
 export const listGitWorktrees = async (dirPath: string): Promise<GitWorktreeListItem[]> => {
   try {
     const [{ stdout: rootStdout }, { stdout }] = await Promise.all([
@@ -112,7 +155,13 @@ export const listGitWorktrees = async (dirPath: string): Promise<GitWorktreeList
 
     const currentRoot = await safeRealpath(rootStdout.trim());
     const parsed = parseGitWorktreeList(stdout);
-    const statuses = await Promise.all(parsed.map(readStatus));
+    const [statuses, defaultBranch] = await Promise.all([
+      Promise.all(parsed.map(readStatus)),
+      resolveDefaultBranch(dirPath),
+    ]);
+    const forkPoints = await Promise.all(
+      parsed.map((worktree) => readForkPoint(worktree, defaultBranch, dirPath)),
+    );
 
     return Promise.all(
       parsed.map(async (worktree, index): Promise<GitWorktreeListItem> => {
@@ -120,6 +169,7 @@ export const listGitWorktrees = async (dirPath: string): Promise<GitWorktreeList
         return {
           ...worktree,
           current: worktreePath === currentRoot,
+          forkPoint: forkPoints[index],
           path: worktree.path,
           status: statuses[index],
         };
@@ -168,13 +218,44 @@ export const removeGitWorktree = async (payload: {
 };
 
 /**
+ * Resolve what a new worktree would fork from: `baseRef` when given, otherwise
+ * the current HEAD, which may be a feature branch or a detached HEAD rather than
+ * the default branch. Backs both the create dialog's preview and creation itself.
+ */
+export const resolveGitWorktreeBase = async (payload: {
+  baseRef?: string;
+  path: string;
+}): Promise<GitResolveWorktreeBaseResult> => {
+  const { path: dirPath } = payload;
+  const baseRef = payload.baseRef?.trim();
+  if (!dirPath?.trim()) return { error: 'Working directory is required', success: false };
+  if (baseRef && isInvalidBranchRef(baseRef))
+    return { error: `Invalid base ref: ${baseRef}`, success: false };
+
+  // The dialog offers branch names, and bare `rev-parse` prefers a same-named tag.
+  const sha =
+    (baseRef && (await resolveCommit(`refs/heads/${baseRef}`, dirPath))) ||
+    (await resolveCommit(baseRef || 'HEAD', dirPath));
+  if (!sha) return { error: `Unknown base ref: ${baseRef || 'HEAD'}`, success: false };
+
+  if (baseRef && baseRef !== 'HEAD')
+    return { base: { detached: false, ref: baseRef, sha }, success: true };
+
+  const branch = await readGitOutput(['symbolic-ref', '--short', '--quiet', 'HEAD'], dirPath);
+  return { base: { detached: !branch, ref: branch, sha }, success: true };
+};
+
+/**
  * Add a linked worktree checked out on a fresh branch, mirroring the branch
- * switcher's "create branch" flow (`git worktree add -b <branch> <path>`). The
- * new branch forks from the repo's current HEAD; the caller supplies the target
- * directory (an absolute sibling path the renderer derives from the source
- * repo). Returns the created path on success so the UI can switch into it.
+ * switcher's "create branch" flow (`git worktree add -b <branch> <path> <base>`).
+ * The new branch forks from `baseRef`, defaulting to the repo's current HEAD; the
+ * caller supplies the target directory (an absolute sibling path the renderer
+ * derives from the source repo). The base goes to git as the resolved SHA, so a
+ * remote-tracking base doesn't also become the new branch's upstream. Returns the
+ * created path and base on success so the UI can switch into it.
  */
 export const addGitWorktree = async (payload: {
+  baseRef?: string;
   branch: string;
   path: string;
   worktreePath: string;
@@ -186,12 +267,15 @@ export const addGitWorktree = async (payload: {
   if (isInvalidBranchRef(branch))
     return { error: `Invalid branch name: ${branch}`, success: false };
 
+  const { base, error } = await resolveGitWorktreeBase({ baseRef: payload.baseRef, path: dirPath });
+  if (!base) return { error, success: false };
+
   try {
-    await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {
+    await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath, base.sha], {
       cwd: dirPath,
       timeout: 30_000,
     });
-    return { success: true, worktreePath };
+    return { base, success: true, worktreePath };
   } catch (error: any) {
     const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
     return { error: stderr || 'git worktree add failed', success: false };

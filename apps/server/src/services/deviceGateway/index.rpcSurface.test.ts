@@ -148,6 +148,13 @@ const cases: RpcCase[] = [
   },
   {
     address: address(15_000),
+    call: (g) => g.resolveGitWorktreeBase({ ...base, baseRef: 'main', path: '/p' }),
+    failure: UNDEFINED,
+    name: 'resolveGitWorktreeBase',
+    payload: { method: 'resolveGitWorktreeBase', params: { baseRef: 'main', path: '/p' } },
+  },
+  {
+    address: address(15_000),
     call: (g) => g.listGitBranches({ ...base, path: '/p' }),
     failure: UNDEFINED,
     name: 'listGitBranches',

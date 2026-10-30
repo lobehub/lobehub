@@ -19,6 +19,7 @@ import {
   type GitRemoteBranchListItem,
   type GitRemoveWorktreeResult,
   type GitRenameBranchResult,
+  type GitResolveWorktreeBaseResult,
   type GitWorkingTreeFiles,
   type GitWorkingTreePatches,
   type GitWorkingTreeStatus,
@@ -157,7 +158,15 @@ class ElectronGitService {
     return this.ipc.git.removeGitWorktree(params);
   }
 
+  async resolveGitWorktreeBase(params: {
+    baseRef?: string;
+    path: string;
+  }): Promise<GitResolveWorktreeBaseResult> {
+    return this.ipc.git.resolveGitWorktreeBase(params);
+  }
+
   async addGitWorktree(params: {
+    baseRef?: string;
     branch: string;
     path: string;
     worktreePath: string;
