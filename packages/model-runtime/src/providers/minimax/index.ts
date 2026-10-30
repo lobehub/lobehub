@@ -469,7 +469,9 @@ export const params: CreateRouterRuntimeOptions = {
     // Match the upstream id too, so an alias mapped onto `speech-*` still reaches t2a_v2.
     if (
       context?.model &&
-      MINIMAX_SPEECH_MODEL_PATTERN.test(resolveMappedModelId(context.model, options))
+      MINIMAX_SPEECH_MODEL_PATTERN.test(
+        resolveMappedModelId(context.model, { modelIdMapping: options.modelIdMapping }),
+      )
     ) {
       return [createSpeechRouter(options.baseURL)];
     }
