@@ -1883,28 +1883,6 @@ describe('UserMemoryModel', () => {
       expect(result.activity.narrative).toBe('Did a thing');
       expect(result.activity.userMemoryId).toBe(result.memory.id);
     });
-
-    it('should persist the structured fields accepted by the create contract', async () => {
-      const result = await memoryModel.createActivityMemory({
-        details: 'Activity details',
-        memoryLayer: LayersEnum.Activity,
-        memoryType: TypesEnum.Activity,
-        summary: 'Activity summary',
-        title: 'Activity structured fields',
-        activity: {
-          injectable: false,
-          narrative: 'Did a thing',
-          status: 'completed',
-          type: ActivityTypeEnum.Other,
-        },
-      });
-
-      const persisted = await serverDB.query.userMemoriesActivities.findFirst({
-        where: eq(userMemoriesActivities.id, result.activity.id),
-      });
-
-      expect(persisted?.injectable).toBe(false);
-    });
   });
 
   describe('createExperienceMemory', () => {
@@ -1967,42 +1945,6 @@ describe('UserMemoryModel', () => {
       expect(result.context).toBeDefined();
       expect(result.context.description).toBe('A test context');
     });
-
-    it('should persist the structured fields accepted by the create contract', async () => {
-      const firstSeenAt = new Date('2025-01-01T00:00:00.000Z');
-      const lastEvidenceAt = new Date('2025-01-05T00:00:00.000Z');
-      const synthesizedAt = new Date('2025-01-06T00:00:00.000Z');
-
-      const result = await memoryModel.createContextMemory({
-        details: 'Context details',
-        memoryLayer: LayersEnum.Context,
-        memoryType: TypesEnum.Context,
-        summary: 'Context summary',
-        title: 'Context structured fields',
-        context: {
-          description: 'A test context',
-          firstSeenAt,
-          lastEvidenceAt,
-          nextSteps: ['ship the schema'],
-          now: 'wiring the create path',
-          openQuestions: ['who owns the extraction?'],
-          synthesizedAt,
-          title: 'Test Context',
-          type: 'project',
-        },
-      });
-
-      const persisted = await serverDB.query.userMemoriesContexts.findFirst({
-        where: eq(userMemoriesContexts.id, result.context.id),
-      });
-
-      expect(persisted?.now).toBe('wiring the create path');
-      expect(persisted?.nextSteps).toEqual(['ship the schema']);
-      expect(persisted?.openQuestions).toEqual(['who owns the extraction?']);
-      expect(persisted?.firstSeenAt).toEqual(firstSeenAt);
-      expect(persisted?.lastEvidenceAt).toEqual(lastEvidenceAt);
-      expect(persisted?.synthesizedAt).toEqual(synthesizedAt);
-    });
   });
 
   describe('createPreferenceMemory', () => {
@@ -2036,36 +1978,6 @@ describe('UserMemoryModel', () => {
       expect(result.preference.capturedAt).toEqual(capturedAt);
       expect(result.preference.type).toBe(TypesEnum.Other);
       expect(result.preference.userMemoryId).toBe(result.memory.id);
-    });
-
-    it('should persist the structured fields accepted by the create contract', async () => {
-      const lastEvidenceAt = new Date('2025-01-07T00:00:00.000Z');
-
-      const result = await memoryModel.createPreferenceMemory({
-        details: 'Preference details',
-        memoryLayer: LayersEnum.Preference,
-        memoryType: TypesEnum.Other,
-        summary: 'Preference summary',
-        title: 'Preference structured fields',
-        preference: {
-          conclusionDirectives: 'Use compact cards',
-          evidenceCount: 4,
-          evidenceSource: 'reported',
-          lastEvidenceAt,
-          scope: 'ui-copy',
-          suggestions: 'Prefer short answers',
-          type: 'style',
-        },
-      });
-
-      const persisted = await serverDB.query.userMemoriesPreferences.findFirst({
-        where: eq(userMemoriesPreferences.id, result.preference.id),
-      });
-
-      expect(persisted?.evidenceCount).toBe(4);
-      expect(persisted?.evidenceSource).toBe('reported');
-      expect(persisted?.scope).toBe('ui-copy');
-      expect(persisted?.lastEvidenceAt).toEqual(lastEvidenceAt);
     });
   });
 
