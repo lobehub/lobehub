@@ -35,6 +35,7 @@
   "ModelEmptyCompletionWithCost": "模型供应商返回空内容，本次费用为 {{credits}} 积分。重试可能产生相近费用，也可切换模型。",
   "ModelNotFound": "抱歉，未找到请求的模型。可能是模型不存在或您没有必要的访问权限。请在更改API密钥或调整访问权限后重试。",
   "ModelRefusal": "模型明确拒绝回答此请求。请尝试改写请求，或切换其他模型。",
+  "ModelTextToolCallError": "模型在回复里输出了未闭合或格式错误的 <tool_call>，工具没有执行。请在推理服务上为该模型配置 tool-call parser（vLLM 可用 --enable-auto-tool-choice --tool-call-parser qwen3_coder）。",
   "NoAvailableChannel": "抱歉，代理或路由器没有可用的通道来请求此模型。请切换通道/密钥配置或稍后重试。",
   "OllamaBizError": "请求Ollama服务时发生错误，请根据以下信息进行排查或重试。",
   "OllamaServiceUnavailable": "Ollama服务不可用。请检查Ollama是否正常运行或Ollama的跨域配置是否正确设置。",

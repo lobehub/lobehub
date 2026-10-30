@@ -89,6 +89,11 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     contextPreFlight?: AssertContextWithinWindowOptions & {
       models: AiFullModelCard[];
     };
+    /**
+     * Turn off parsing text-protocol tool calls (e.g. Qwen `<tool_call>` blocks) from the
+     * content when the provider returns no native `tool_calls`.
+     */
+    disableTextToolCallFallback?: boolean;
     excludeUsage?: boolean;
     forceImageBase64?: boolean;
     forceVideoBase64?: boolean;

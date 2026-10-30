@@ -8,6 +8,8 @@ import {
   createSSEProtocolTransformer,
   generateToolCallId,
 } from './protocol';
+import type { TextToolCallTool } from './textToolCalls';
+import { createTextToolCallTransformer, isTextToolCallFallbackDisabled } from './textToolCalls';
 
 const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): StreamProtocolChunk => {
   if (chunk.message.thinking) {
@@ -53,10 +55,20 @@ const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): Strea
 export const OllamaStream = (
   res: ReadableStream<ChatResponse>,
   cb?: ChatStreamCallbacks,
+  options?: { tools?: readonly TextToolCallTool[] },
 ): ReadableStream<Uint8Array> => {
   const streamStack: StreamContext = { id: 'chat_' + nanoid() };
 
   return res
-    .pipeThrough(createSSEProtocolTransformer(transformOllamaStream, streamStack))
+    .pipeThrough(
+      new TransformStream<ChatResponse, StreamProtocolChunk>({
+        transform: (chunk, controller) =>
+          controller.enqueue(transformOllamaStream(chunk, streamStack)),
+      }),
+    )
+    .pipeThrough(
+      createTextToolCallTransformer(isTextToolCallFallbackDisabled() ? undefined : options?.tools),
+    )
+    .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
     .pipeThrough(createCallbacksTransformer(cb));
 };

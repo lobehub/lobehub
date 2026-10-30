@@ -1,4 +1,5 @@
 import { ModelEmptyError } from '@lobechat/model-runtime';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
@@ -147,6 +148,31 @@ describe('ClientLLMTransport.runAttempt · empty-completion grounding guard', ()
       expect(result.error).toBeInstanceOf(ModelEmptyError);
       expect((result.error as ModelEmptyError).diagnostics).toMatchObject({ cost: 5.980_015 });
       expect(transport.retryPolicy.classifyError(result.error).kind).toBe('stop');
+    }
+  });
+});
+
+describe('ClientLLMTransport.runAttempt · typed stream errors', () => {
+  it('keeps the stream error code when the error is persisted', async () => {
+    vi.mocked(chatService.getChatCompletion).mockImplementationOnce(async (_params, options) => {
+      options?.onErrorHandle?.({
+        body: { name: 'TextToolCallParseError', reason: 'unclosed_tool_call' },
+        message: 'The model output an unclosed <tool_call> block',
+        type: 'ModelTextToolCallError',
+      } as any);
+    });
+    const { transport } = createTransport();
+
+    const result = await transport.runAttempt(input);
+
+    expect(result.ok).toBe(false);
+    if (result.ok === false) {
+      expect(transport.retryPolicy.classifyError(result.error).kind).toBe('stop');
+      expect(normalizeChatMessageError(result.error)).toMatchObject({
+        body: { reason: 'unclosed_tool_call' },
+        message: 'The model output an unclosed <tool_call> block',
+        type: 'ModelTextToolCallError',
+      });
     }
   });
 });

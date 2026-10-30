@@ -35,6 +35,7 @@
   "ModelEmptyCompletionWithCost": "The model provider returned an empty response. This request cost {{credits}} credits. Retrying may incur a similar cost, or you can switch models.",
   "ModelNotFound": "Sorry, the requested model could not be found. It may not exist or you may not have the necessary access permissions. Please try again after changing the API Key or adjusting your access permissions.",
   "ModelRefusal": "The model declined to answer this request. Try rephrasing it or choose another model.",
+  "ModelTextToolCallError": "The model wrote an unclosed or malformed <tool_call> block in its reply, so the tool did not run. Configure a tool-call parser for this model on your inference server (for vLLM: --enable-auto-tool-choice --tool-call-parser qwen3_coder).",
   "NoAvailableChannel": "Sorry, the proxy or router has no available channel for the requested model. Please switch the channel/key configuration or try again later.",
   "OllamaBizError": "Error requesting Ollama service, please troubleshoot or retry based on the following information",
   "OllamaServiceUnavailable": "Ollama service is unavailable. Please check if Ollama is running properly or if the cross-origin configuration of Ollama is set correctly.",

@@ -13,6 +13,7 @@ import { safeParseJSON } from '../../utils/safeParseJSON';
 import type { SignatureScope } from '../../utils/signatureScope';
 import { nanoid } from '../../utils/uuid';
 import type { ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
+import type { TextToolCallTool } from './textToolCalls';
 
 export type ChatPayloadForTransformStream = {
   apiMode?: UsageMissingDiagnostics['apiMode'];
@@ -22,6 +23,11 @@ export type ChatPayloadForTransformStream = {
   pricingOptions?: ComputeChatCostOptions;
   provider?: string;
   reasoningSignatureScope?: SignatureScope;
+  /**
+   * Tools declared by the request. When set, text-protocol tool calls (e.g. Qwen's
+   * `<tool_call>` blocks) in the content are converted into native tool calls.
+   */
+  textToolCallTools?: readonly TextToolCallTool[];
   thoughtSignatureScope?: SignatureScope;
 };
 

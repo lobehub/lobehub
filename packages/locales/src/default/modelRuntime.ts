@@ -67,6 +67,8 @@ export default {
     'The model provider returned an empty response. This request cost {{credits}} credits. Retrying may incur a similar cost, or you can switch models.',
   ModelRefusal:
     'The model declined to answer this request. Try rephrasing it or choose another model.',
+  ModelTextToolCallError:
+    'The model wrote an unclosed or malformed <tool_call> block in its reply, so the tool did not run. Configure a tool-call parser for this model on your inference server (for vLLM: --enable-auto-tool-choice --tool-call-parser qwen3_coder).',
   ModelNotFound:
     'Sorry, the requested model could not be found. It may not exist or you may not have the necessary access permissions. Please try again after changing the API Key or adjusting your access permissions.',
   NoAvailableChannel:

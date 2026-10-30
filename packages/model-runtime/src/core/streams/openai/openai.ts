@@ -24,6 +24,7 @@ import {
   FIRST_CHUNK_ERROR_KEY,
   generateToolCallId,
 } from '../protocol';
+import { createTextToolCallTransformer, isTextToolCallFallbackDisabled } from '../textToolCalls';
 
 /**
  * Extended type for OpenAI tool calls that includes provider-specific extensions
@@ -750,6 +751,12 @@ export const OpenAIStream = (
           inputStartAt,
           streamStack,
         }),
+      )
+      // 2. recover text-protocol tool calls when the provider returns no native ones
+      .pipeThrough(
+        createTextToolCallTransformer(
+          isTextToolCallFallbackDisabled() ? undefined : payload?.textToolCallTools,
+        ),
       )
       .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
       .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }))

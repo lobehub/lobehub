@@ -55,6 +55,10 @@ const createStreamExecutionError = (errorData: unknown) => {
   const error = new Error(message || 'LLM stream failed');
 
   if (record) Object.assign(error, record);
+  // Persisting goes through `normalizeChatMessageError`, which reads a typed Error by its
+  // `errorType` and stores any other Error as an unclassified 500. Keep the stream's code.
+  if (record && record.errorType === undefined && typeof record.type === 'string')
+    Object.assign(error, { errorType: record.type });
   return error;
 };
 

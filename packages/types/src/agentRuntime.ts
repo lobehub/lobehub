@@ -324,6 +324,12 @@ export const AgentRuntimeErrorType = {
    */
   ModelRefusal: 'ModelRefusal',
   /**
+   * The model wrote a text-protocol tool call (e.g. Qwen's `<tool_call>` block) that
+   * was unclosed or malformed, so it could not be run. Usually the inference server
+   * has no tool-call parser configured for the model. Retrying reproduces it.
+   */
+  ModelTextToolCallError: 'ModelTextToolCallError',
+  /**
    * A persistence-layer query / transaction failed (Drizzle "Failed query:
    * …"). Harness-side: the DB write/read or txn could not complete and
    * surfaced as an unhandled error instead of being retried / degraded.

@@ -608,6 +608,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             model: payload.model,
             pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
             provider: this.id,
+            textToolCallTools: chatCompletion?.disableTextToolCallFallback
+              ? undefined
+              : postPayload.tools,
             thoughtSignatureScope,
           },
         };
@@ -732,9 +735,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
                   ...streamOptions,
                   inputStartAt,
                 }),
-            {
-              headers: options?.headers,
-            },
+            { headers: options?.headers },
           );
         }
 
@@ -766,9 +767,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
                 payload: streamOptions.payload,
               })
             : OpenAIStream(stream, { ...streamOptions, enableStreaming: false, inputStartAt }),
-          {
-            headers: options?.headers,
-          },
+          { headers: options?.headers },
         );
       } catch (error) {
         throw this.handleError(error);

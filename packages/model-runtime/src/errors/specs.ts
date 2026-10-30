@@ -705,6 +705,19 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Provider explicitly refused to produce an otherwise empty completion.',
   },
+  [AgentRuntimeErrorType.ModelTextToolCallError]: {
+    code: AgentRuntimeErrorType.ModelTextToolCallError,
+    numericId: 8016,
+    category: 'provider',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 471,
+    // The same model and server configuration emit the same broken block again.
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'Model wrote an unclosed or malformed text-protocol tool call (e.g. Qwen <tool_call>), usually because the inference server has no tool-call parser configured.',
+  },
 
   // ─── 9xxx Config ──────────────────────────────────────────────────────
   [AgentRuntimeErrorType.InvalidOllamaArgs]: {
