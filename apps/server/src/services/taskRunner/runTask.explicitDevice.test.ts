@@ -109,6 +109,7 @@ describe('TaskRunnerService.runTask explicit device', () => {
       } as any;
     });
     mocks.execAgent.mockResolvedValue({ operationId: 'op-1', success: true, topicId: 'tpc-1' });
+    mocks.updateTopicMetadata.mockResolvedValue([{ id: 'tpc-old' }]);
     mocks.getAgentModelConfig.mockResolvedValue({ model: 'codex', provider: 'openai' });
     mocks.getAgentAgencyConfig.mockResolvedValue({
       executionTarget: 'device',
@@ -172,12 +173,16 @@ describe('TaskRunnerService.runTask explicit device', () => {
 
     await run({ continueTopicId: 'tpc-old', deviceId: 'device-b' });
 
-    expect(mocks.updateTopicMetadata).toHaveBeenCalledWith('tpc-old', {
-      boundDeviceId: 'device-b',
-      repos: undefined,
-      workingDirectory: undefined,
-      workingDirectoryConfig: undefined,
-    });
+    expect(mocks.updateTopicMetadata).toHaveBeenCalledWith(
+      'tpc-old',
+      {
+        boundDeviceId: 'device-b',
+        repos: undefined,
+        workingDirectory: undefined,
+        workingDirectoryConfig: undefined,
+      },
+      { onlyIf: expect.any(Function) },
+    );
     expect(execParams().deviceId).toBe('device-b');
   });
 
@@ -210,6 +215,36 @@ describe('TaskRunnerService.runTask explicit device', () => {
       // Someone moved the topic while the kickoff was in flight: theirs is newer.
       expect(onlyIf({ boundDeviceId: 'device-d' })).toBe(false);
       expect(onlyIf({ boundDeviceId: 'device-b', workingDirectory: '/b/other' })).toBe(false);
+    });
+
+    it('snapshots what the retarget actually replaced when the topic changes underneath', async () => {
+      const concurrent = { ...previous, boundDeviceId: 'device-c' };
+      mocks.findTopicById
+        .mockResolvedValueOnce({ id: 'tpc-old', metadata: previous })
+        .mockResolvedValueOnce({ id: 'tpc-old', metadata: concurrent });
+      // The first write is computed from a snapshot that is already stale.
+      mocks.updateTopicMetadata.mockResolvedValueOnce([]);
+      mocks.execAgent.mockResolvedValue({ error: 'device offline', success: false });
+
+      await expect(run({ continueTopicId: 'tpc-old', deviceId: 'device-b' })).rejects.toThrow();
+
+      const [, staleGuard] = mocks.updateTopicMetadata.mock.calls.map((call) => call[2].onlyIf);
+      expect(staleGuard(concurrent)).toBe(true);
+      expect(mocks.updateTopicMetadata).toHaveBeenLastCalledWith(
+        'tpc-old',
+        { ...concurrent, repos: undefined },
+        { onlyIf: expect.any(Function) },
+      );
+    });
+
+    it('fails the kickoff when the topic keeps changing underneath', async () => {
+      mocks.updateTopicMetadata.mockResolvedValue([]);
+
+      await expect(run({ continueTopicId: 'tpc-old', deviceId: 'device-b' })).rejects.toThrow(
+        'kept changing',
+      );
+
+      expect(mocks.execAgent).not.toHaveBeenCalled();
     });
 
     it('restores the topic when the task is withdrawn and the run is confirmed stopped', async () => {

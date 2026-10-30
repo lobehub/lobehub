@@ -30,6 +30,9 @@ import {
 
 const log = debug('task-runner');
 
+/** Concurrent writers are rare; a few re-reads settle them or fail the kickoff. */
+const SYNC_TOPIC_EXECUTION_ATTEMPTS = 3;
+
 /** A continued topic moved for one run only, and how to move it back. */
 interface TopicRetarget {
   previous: ChatTopicMetadata;
@@ -103,6 +106,9 @@ export class TaskRunnerService {
    * Returns the write and the topic's previous execution axes when a device
    * named for this run only took part in it: that retarget is not the task's
    * standing selection, so the caller restores it if the run never starts.
+   * The write only lands while the topic still matches the snapshot it was
+   * computed from, so `previous` is exactly what it replaced; a concurrent
+   * change is re-read and the patch recomputed against it.
    */
   private async syncTopicExecution(
     topicId: string,
@@ -110,29 +116,39 @@ export class TaskRunnerService {
     runDeviceId: string | undefined,
     requestedDeviceId: string | undefined,
   ): Promise<TopicRetarget | undefined> {
-    const topic = await this.topicModel.findById(topicId);
-    const patch = resolveTopicExecutionPatch(
-      topic?.metadata,
-      taskConfig,
-      runDeviceId,
-      requestedDeviceId,
-    );
-    if (!patch) return;
+    for (let attempt = 0; attempt < SYNC_TOPIC_EXECUTION_ATTEMPTS; attempt++) {
+      const topic = await this.topicModel.findById(topicId);
+      if (!topic) return;
 
-    await this.topicModel.updateMetadata(topicId, patch);
-    log('runTask: synced topic %s execution metadata', topicId);
+      const patch = resolveTopicExecutionPatch(
+        topic.metadata,
+        taskConfig,
+        runDeviceId,
+        requestedDeviceId,
+      );
+      if (!patch) return;
 
-    if (!requestedDeviceId) return;
-    return {
-      // `undefined` clears an axis on restore, same as in the patch itself.
-      previous: {
-        boundDeviceId: topic?.metadata?.boundDeviceId,
-        repos: topic?.metadata?.repos,
-        workingDirectory: topic?.metadata?.workingDirectory,
-        workingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
-      },
-      written: patch,
-    };
+      const updated = await this.topicModel.updateMetadata(topicId, patch, {
+        onlyIf: (current) => isSameTopicExecution(current, topic.metadata),
+      });
+      if (updated.length === 0) continue;
+
+      log('runTask: synced topic %s execution metadata', topicId);
+
+      if (!requestedDeviceId) return;
+      return {
+        // `undefined` clears an axis on restore, same as in the patch itself.
+        previous: {
+          boundDeviceId: topic.metadata?.boundDeviceId,
+          repos: topic.metadata?.repos,
+          workingDirectory: topic.metadata?.workingDirectory,
+          workingDirectoryConfig: topic.metadata?.workingDirectoryConfig,
+        },
+        written: patch,
+      };
+    }
+
+    throw new Error(`Topic ${topicId} execution kept changing while this run was starting`);
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
