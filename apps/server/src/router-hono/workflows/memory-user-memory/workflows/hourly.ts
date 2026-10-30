@@ -2,6 +2,8 @@ import { MemorySourceType } from '@lobechat/types';
 import { type WorkflowContext } from '@upstash/workflow';
 import { chunk } from 'es-toolkit/compat';
 
+import { listConsolidatedUserIds } from '@/database/models/userMemory/consolidation';
+import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import {
@@ -204,6 +206,32 @@ export const hourlyWorkflowHandler = async (
       ),
     );
     await appendHourlyWorkflowRunId(hourlyTaskId, result.workflowRunId);
+  }
+
+  if (!nextCursor && !dryRun) {
+    const { consolidationNightlyHourUtc } = parseMemoryExtractionConfig();
+    if (
+      consolidationNightlyHourUtc !== undefined &&
+      new Date().getUTCHours() === consolidationNightlyHourUtc
+    ) {
+      const stepName = 'memory:user-memory:hourly:schedule-consolidation';
+      const guard = await checkGuard(context, WORKFLOW_PATH, {
+        response: { processedUsers: 0 },
+        stepName,
+      });
+      if (!guard.result) return guard.response;
+
+      await runStep(context, stepName, async () => {
+        const db = await getServerDB();
+        const userIdsToConsolidate = await listConsolidatedUserIds(db);
+        for (const userId of userIdsToConsolidate) {
+          await MemoryExtractionWorkflowService.triggerConsolidation(userId, baseUrl, {
+            extraHeaders: upstashWorkflowExtraHeaders,
+          });
+        }
+        return userIdsToConsolidate.length;
+      });
+    }
   }
 
   if (!nextCursor) {

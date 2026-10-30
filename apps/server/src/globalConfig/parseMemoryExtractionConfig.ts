@@ -75,6 +75,11 @@ export interface MemoryExtractionPrivateConfig {
   agentLayerExtractorPreferredProviders?: string[];
   agentPersonaWriter: MemoryAgentConfig;
   concurrency?: number;
+  /**
+   * UTC hour at which the hourly run also starts the incremental consolidation of every
+   * consolidated user; undefined disables it.
+   */
+  consolidationNightlyHourUtc?: number;
   embedding: MemoryAgentConfig;
   embeddingPreferredModels?: string[];
   embeddingPreferredProviders?: string[];
@@ -280,6 +285,11 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
   const agentLayerExtractor = parseLayerExtractorAgent(agentGateKeeper.model);
   const agentPersonaWriter = parsePersonaWriterAgent(agentGateKeeper.model);
   const agentConsolidation = parseConsolidationAgent(agentPersonaWriter);
+  const nightlyHourRaw = process.env.MEMORY_USER_MEMORY_CONSOLIDATION_NIGHTLY_HOUR ?? '18';
+  const consolidationNightlyHourUtc =
+    /^\d+$/.test(nightlyHourRaw) && Number(nightlyHourRaw) < 24
+      ? Number(nightlyHourRaw)
+      : undefined;
   const embedding = parseEmbeddingAgent(
     agentLayerExtractor.model,
     agentLayerExtractor.provider || DEFAULT_MINI_PROVIDER,
@@ -359,6 +369,7 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     agentLayerExtractorPreferredModels,
     agentLayerExtractorPreferredProviders,
     agentConsolidation,
+    consolidationNightlyHourUtc,
     agentPersonaWriter,
     concurrency,
     embedding,

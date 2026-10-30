@@ -88,6 +88,18 @@ export const deriveContextStatus = (lastEvidenceAt: Date, now = new Date()) => {
 
 const runTag = (runId: string) => ({ consolidationRunId: runId });
 
+/**
+ * Users that have been consolidated at least once, so the nightly run can keep them current.
+ * Reads the dossiers table (new and small), not the large contexts table.
+ */
+export const listConsolidatedUserIds = async (db: LobeChatDatabase): Promise<string[]> => {
+  const rows = await db
+    .selectDistinct({ userId: userMemoriesDossiers.userId })
+    .from(userMemoriesDossiers)
+    .where(isNotNull(userMemoriesDossiers.userId));
+  return rows.map((r) => r.userId).filter((id): id is string => !!id);
+};
+
 export class UserMemoryConsolidationModel {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
