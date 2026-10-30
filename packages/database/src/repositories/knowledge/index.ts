@@ -37,7 +37,7 @@ import { FileModel } from '../../models/file';
 import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
-import { notAgentShareFile } from '../../utils/fileVisibility';
+import { notAgentShareFile, ownChatAttachment } from '../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 /**
@@ -349,7 +349,11 @@ export class KnowledgeRepo {
       buildWorkspaceWhere(this.scope(), f),
       sourceFilter === ResourceSourceFilter.Acceptance
         ? undefined
-        : or(isNull(f.source), notInArray(f.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+        : or(
+            isNull(f.source),
+            notInArray(f.source, LIBRARY_HIDDEN_FILE_SOURCES),
+            ownChatAttachment(f.source, f.userId, this.userId),
+          ),
       notAgentShareFile(f.metadata),
     );
 
@@ -777,6 +781,7 @@ export class KnowledgeRepo {
         return or(
           isNull(f.source),
           notInArray(f.source, [...AI_GENERATED_FILE_SOURCES, ...LIBRARY_HIDDEN_FILE_SOURCES]),
+          ownChatAttachment(f.source, f.userId, this.userId),
         );
       }
       default: {
