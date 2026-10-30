@@ -208,9 +208,14 @@ export const consolidationHandler = async (context: WorkflowContext) => {
 const synthesizeAndApply = async (
   s: MemoryConsolidationService,
   label: string,
-  ids: string[],
+  chunkIds: string[],
   contextIds: string[],
 ) => {
+  const out = { activities: 0, contextIds: [] as string[], dossiers: 0, unplaced: 0 };
+  // A retried step re-reads its chunk: evidence a committed plan already filed drops out here.
+  const ids = (await s.model.getLegacyContextsByIds(chunkIds)).map((i) => i.id);
+  if (ids.length === 0) return out;
+
   const consolidated = await s.model.listConsolidated();
   const known = consolidated.contexts.filter((c) => contextIds.includes(c.id));
   const dossiers = consolidated.dossiers.filter(
@@ -239,7 +244,6 @@ const synthesizeAndApply = async (
   // When there is a single known context, the model may describe it without echoing its id.
   if (known.length === 1) for (const p of plans) p.existingContextId ??= known[0].id;
 
-  const out = { activities: 0, contextIds: [] as string[], dossiers: 0, unplaced: 0 };
   for (const plan of plans) {
     const r = await s.applyPlan(plan);
     out.activities += r.activities;

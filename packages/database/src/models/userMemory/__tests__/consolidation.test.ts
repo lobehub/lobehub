@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -286,6 +286,79 @@ describe('UserMemoryConsolidationModel', () => {
       .from(userMemoriesContexts)
       .where(eq(userMemoriesContexts.id, first.contextId!));
     expect(ctx.descriptionVector).toHaveLength(1024);
+  });
+
+  it('ignores evidence a committed plan already filed when a step is retried', async () => {
+    const a = await createLegacy('scheduler backend', '2026-05-01');
+    const plan = {
+      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
+      nextSteps: [],
+      now: 'v1',
+      openQuestions: [],
+      title: 'Task system',
+    };
+    const first = await model.applyContextPlan('run_9', plan);
+    expect(first.activities).toBe(1);
+    expect(await model.getLegacyContextsByIds([a.context.id])).toEqual([]);
+
+    const retried = await model.applyContextPlan('run_9', {
+      ...plan,
+      dossiers: [{ ...plan.dossiers[0], existingDossierId: first.dossierIds[0] }],
+      existingContextId: first.contextId,
+    });
+    expect(retried).toMatchObject({ activities: 0, contextsUpdated: 0, dossiersUpdated: 0 });
+    const [dossier] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(dossier.activityCount).toBe(1);
+  });
+
+  it('keeps parent summaries in step with extended contexts and dossiers', async () => {
+    const a = await createLegacy('scheduler backend', '2026-05-01');
+    const first = await model.applyContextPlan('run_10', {
+      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
+      nextSteps: [],
+      now: 'v1',
+      openQuestions: [],
+      title: 'Task system',
+    });
+    const b = await createLegacy('scheduler cron mode', '2026-06-01');
+    await model.applyContextPlan('run_11', {
+      dossiers: [
+        {
+          existingDossierId: first.dossierIds[0],
+          memberIds: [b.context.id],
+          now: 'dossier v2',
+          title: 'Scheduler',
+        },
+      ],
+      existingContextId: first.contextId,
+      nextSteps: [],
+      now: 'context v2',
+      openQuestions: [],
+      title: 'Task system',
+    });
+    const parentSummaries = async () => {
+      const [ctx] = await serverDB
+        .select()
+        .from(userMemoriesContexts)
+        .where(eq(userMemoriesContexts.id, first.contextId!));
+      const [dossier] = await serverDB
+        .select()
+        .from(userMemoriesDossiers)
+        .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+      const parents = await serverDB
+        .select({ id: userMemories.id, summary: userMemories.summary })
+        .from(userMemories)
+        .where(inArray(userMemories.id, [ctx.userMemoryId!, dossier.userMemoryId!]));
+      const byId = new Map(parents.map((p) => [p.id, p.summary]));
+      return [byId.get(ctx.userMemoryId!), byId.get(dossier.userMemoryId!)];
+    };
+    expect(await parentSummaries()).toEqual(['context v2', 'dossier v2']);
+
+    await model.revertRun('run_11');
+    expect(await parentSummaries()).toEqual(['v1', 'v1']);
   });
 });
 

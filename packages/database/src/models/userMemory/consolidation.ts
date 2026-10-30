@@ -178,7 +178,12 @@ export class UserMemoryConsolidationModel {
       .from(userMemoriesContexts)
       .innerJoin(userMemories, legacyParentJoin)
       .where(
-        and(eq(userMemoriesContexts.userId, this.userId), inArray(userMemoriesContexts.id, ids)),
+        and(
+          eq(userMemoriesContexts.userId, this.userId),
+          inArray(userMemoriesContexts.id, ids),
+          // Rows a run already applied or routed are done: a retried step must not file them again.
+          notConsolidated,
+        ),
       );
 
     return items.map(({ memoryMetadata, ...row }) => ({
@@ -393,6 +398,10 @@ export class UserMemoryConsolidationModel {
             now: userMemoriesContexts.now,
             openQuestions: userMemoriesContexts.openQuestions,
             synthesizedAt: userMemoriesContexts.synthesizedAt,
+            userMemoryId: userMemoriesContexts.userMemoryId,
+            parentSummary: sql<
+              string | null
+            >`(SELECT ${userMemories.summary} FROM ${userMemories} WHERE ${userMemories.id} = ${userMemoriesContexts.userMemoryId})`,
           })
           .from(userMemoriesContexts)
           .where(
@@ -423,6 +432,14 @@ export class UserMemoryConsolidationModel {
               updatedAt: now,
             })
             .where(eq(userMemoriesContexts.id, contextId));
+          // Unified search reads the parent memory, so its summary follows the description.
+          if (before.userMemoryId)
+            await tx
+              .update(userMemories)
+              .set({ summary: plan.now, updatedAt: now })
+              .where(
+                and(eq(userMemories.id, before.userMemoryId), eq(userMemories.userId, this.userId)),
+              );
           await op({
             after: { nextSteps: plan.nextSteps, now: plan.now, openQuestions: plan.openQuestions },
             before,
@@ -489,6 +506,10 @@ export class UserMemoryConsolidationModel {
               now: userMemoriesDossiers.now,
               status: userMemoriesDossiers.status,
               summary: userMemoriesDossiers.summary,
+              userMemoryId: userMemoriesDossiers.userMemoryId,
+              parentSummary: sql<
+                string | null
+              >`(SELECT ${userMemories.summary} FROM ${userMemories} WHERE ${userMemories.id} = ${userMemoriesDossiers.userMemoryId})`,
             })
             .from(userMemoriesDossiers)
             .where(
@@ -514,6 +535,16 @@ export class UserMemoryConsolidationModel {
                 updatedAt: now,
               })
               .where(eq(userMemoriesDossiers.id, dossierId));
+            if (existing.userMemoryId)
+              await tx
+                .update(userMemories)
+                .set({ summary: d.now, updatedAt: now })
+                .where(
+                  and(
+                    eq(userMemories.id, existing.userMemoryId),
+                    eq(userMemories.userId, this.userId),
+                  ),
+                );
             // A second group placed on the same dossier would log an intermediate before-image.
             if (logBefore) {
               await op({
@@ -659,6 +690,14 @@ export class UserMemoryConsolidationModel {
           : `context:${target.context}`;
         if (restoredTargets.has(targetKey)) continue;
         restoredTargets.add(targetKey);
+        // Before-images from older runs have no parent fields; leave those parents as they are.
+        if (typeof before.userMemoryId === 'string' && 'parentSummary' in before)
+          await tx
+            .update(userMemories)
+            .set({ summary: (before.parentSummary as string) ?? null })
+            .where(
+              and(eq(userMemories.id, before.userMemoryId), eq(userMemories.userId, this.userId)),
+            );
         if (target.context && !target.dossier) {
           await tx
             .update(userMemoriesContexts)
