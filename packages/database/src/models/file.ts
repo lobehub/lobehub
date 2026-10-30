@@ -52,6 +52,7 @@ import {
   fileMatchesAccessScope,
   libraryVisibleFile,
   notAgentShareFile,
+  ownChatAttachment,
 } from '../utils/fileVisibility';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -504,7 +505,13 @@ export class FileModel {
       q ? ilike(files.name, `%${q}%`) : undefined,
       this.ownership(callerAgentVisibility),
       visibility ? eq(files.visibility, visibility) : undefined,
-      libraryVisibleFile(files.source, files.metadata),
+      or(
+        libraryVisibleFile(files.source, files.metadata),
+        and(
+          ownChatAttachment(files.source, files.userId, this.userId),
+          notAgentShareFile(files.metadata),
+        ),
+      ),
     );
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
       const categoryFilter = buildFileCategoryFilter(files.fileType, category as FilesTabs);

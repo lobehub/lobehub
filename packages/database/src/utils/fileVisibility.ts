@@ -1,5 +1,5 @@
 import type { FileAccessScope } from '@lobechat/types';
-import { LIBRARY_HIDDEN_FILE_SOURCES, ordinaryFileAccessScope } from '@lobechat/types';
+import { FileSource, LIBRARY_HIDDEN_FILE_SOURCES, ordinaryFileAccessScope } from '@lobechat/types';
 import { and, eq, exists, isNull, notExists, notInArray, or, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
@@ -13,6 +13,13 @@ export const notAgentShareFile = (metadata: AnyPgColumn) =>
 /** Files whose source belongs in ordinary library surfaces. */
 export const libraryVisibleFileSource = (source: AnyPgColumn) =>
   or(isNull(source), notInArray(source, LIBRARY_HIDDEN_FILE_SOURCES));
+
+/**
+ * An uploader keeps their own conversation attachments in the library, the only
+ * place they can unshare or delete one; other members never list them.
+ */
+export const ownChatAttachment = (source: AnyPgColumn, fileUserId: AnyPgColumn, userId: string) =>
+  and(eq(source, FileSource.ChatAttachment), eq(fileUserId, userId));
 
 /** Files that belong in ordinary library, knowledge, and search surfaces. */
 export const libraryVisibleFile = (source: AnyPgColumn, metadata: AnyPgColumn) =>
