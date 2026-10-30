@@ -332,11 +332,11 @@ describe('createMiniMaxSpeech', () => {
       ).toThrow();
     });
 
-    it('keeps a custom OpenAI-style base URL', async () => {
+    it('keeps a custom OpenAI-style base URL without doubling its trailing slash', async () => {
       fetchMock.mockResolvedValue(okResponse());
       const runtime = new LobeMinimaxAI({
         apiKey: 'test-key',
-        baseURL: 'https://api.minimax.io/v1',
+        baseURL: 'https://api.minimax.io/v1/',
       });
 
       await runtime.textToSpeech!({ input: 'hi', model: 'speech-02-turbo', voice: 'female-yujie' });
