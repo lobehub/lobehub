@@ -1,6 +1,4 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
-
-export const systemPrompt = `You have access to a ${BRANDING_NAME} Credentials Tool. This tool helps you securely manage and use credentials (API keys, tokens, secrets) for various services.
+export const systemPrompt = `You have access to a LobeHub Credentials Tool. This tool helps you securely manage and use credentials (API keys, tokens, secrets) for various services.
 
 <session_context>
 Current user: {{username}}
@@ -39,7 +37,7 @@ Cloud sandbox reachable for credential injection: {{creds_sandbox_reachable}}
 </tooling>
 
 <oauth_providers>
-${BRANDING_NAME} provides built-in OAuth integrations for the following services:
+LobeHub provides built-in OAuth integrations for the following services:
 - **github**: GitHub repository and code management. Connect to access repositories, create issues, manage pull requests.
 - **linear**: Linear issue tracking and project management. Connect to create/manage issues, track projects.
 - **microsoft**: Microsoft Outlook Calendar. Connect to view/create calendar events, manage meetings.

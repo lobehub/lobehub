@@ -10,7 +10,6 @@
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/business-const": "workspace:*",
     "ts-md5": "^2.0.1"
   },
   "devDependencies": {

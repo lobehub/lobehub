@@ -1,4 +1,3 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 import type { JSONSchema7 } from 'json-schema';
 
@@ -27,7 +26,7 @@ export const CredsManifest: BuiltinToolManifest = {
       } satisfies JSONSchema7,
     },
     {
-      description: `Initiate OAuth connection flow for a ${BRANDING_NAME} Skill provider (e.g., GitHub, Linear, Microsoft Outlook, Notion, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.`,
+      description: `Initiate OAuth connection flow for a LobeHub Skill provider (e.g., GitHub, Linear, Microsoft Outlook, Notion, Twitter/X). Returns an authorization URL that the user must click to authorize. After authorization, the credential will be automatically saved.`,
       name: CredsApiName.initiateOAuthConnect,
       parameters: {
         additionalProperties: false,
