@@ -73,3 +73,65 @@ export const resolveRememberAction = ({
 }: {
   toolRemember: boolean;
 }): 'allow-list' | 'tool' => (toolRemember ? 'tool' : 'allow-list');
+
+const APPROVE_LABEL_KEY = {
+  'approve': ['approve', 'tool.intervention.optionApprove'],
+  'approve-remember': ['approveRemember', 'tool.intervention.optionApproveRemember'],
+} as const;
+
+/**
+ * The keys wording an approve choice: a builtin tool may name what approving
+ * its call does (`plugin` key, e.g. "Approve dry run" vs "Approve
+ * publishing"), so consecutive steps of one flow do not read as the same
+ * approval; the shared `chat` wording is the fallback for every other tool.
+ */
+export const approveChoiceLabelKeys = ({
+  apiName,
+  choice,
+  identifier,
+}: {
+  apiName: string;
+  choice: Exclude<ApprovalChoice, 'reject'>;
+  identifier: string;
+}) => {
+  const [toolKey, shared] = APPROVE_LABEL_KEY[choice];
+  return { shared, tool: `builtins.${identifier}.${toolKey}.${apiName}` };
+};
+
+/** The dynamic audit type of an intervention config, when it has one. */
+export const dynamicAuditType = (config: unknown): string | undefined => {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return undefined;
+  const dynamic = (config as { dynamic?: { type?: unknown } }).dynamic;
+  return typeof dynamic?.type === 'string' ? dynamic.type : undefined;
+};
+
+/**
+ * Whether a sibling call of the same tool, still waiting in the same parallel
+ * batch, no longer needs approval once "approve, and don't ask again" took
+ * effect. Siblings were audited when the model emitted them, before the
+ * remember existed, so without this the user is asked again for the very
+ * thing they just said not to ask about.
+ *
+ * Allow-list: the sibling is covered unless it must always ask. Tool's own
+ * remember: the tool's audit is re-run with the remembered access; with no
+ * audit, or when it fails, the sibling still asks (fails closed).
+ */
+export const isCoveredByRemember = async ({
+  audit,
+  config,
+  rememberAction,
+  toolArgs,
+}: {
+  audit?: (toolArgs: Record<string, unknown>) => boolean | Promise<boolean>;
+  config?: unknown;
+  rememberAction: 'allow-list' | 'tool';
+  toolArgs: Record<string, unknown>;
+}) => {
+  if (rememberAction === 'allow-list') return canRememberViaAllowList({ config, toolArgs });
+  if (!audit) return false;
+  try {
+    return !(await audit(toolArgs));
+  } catch {
+    return false;
+  }
+};

@@ -4,6 +4,7 @@ import {
   assembleLocalAcceptance,
   localAcceptanceComments,
   type LocalAcceptanceSource,
+  localDecisionEvent,
   type LocalReviewEvent,
   localReviewTargets,
   type LocalRoundSource,
@@ -201,6 +202,108 @@ describe('assembleLocalAcceptance', () => {
     expect(repaired.checks[0]!.reviews).toHaveLength(1);
     // An accept is sticky across rounds.
     expect(repaired.checks[1]!.userReview).toMatchObject({ action: 'accept', stale: false });
+  });
+
+  it('settles the delivery only through a decision on the current round', () => {
+    const rounds = [round(1, [{ id: 'rename', title: 'Rename keeps focus', verdict: 'passed' }])];
+    const reviews: LocalReviewEvent[] = [
+      {
+        action: 'accept',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        id: 'ev-1',
+        kind: 'checks',
+        roundIndex: 1,
+        targets: [{ checkId: 'rename', resultId: 'r1-rename' }],
+      },
+      {
+        category: 'Rename',
+        comment: 'Also check keyboard-only',
+        createdAt: '2026-01-01T10:01:00.000Z',
+        id: 'ev-2',
+        kind: 'group',
+        roundIndex: 1,
+      },
+    ];
+
+    // Every check accepted is still a delivery awaiting its decision.
+    expect(assembleLocalAcceptance(source(rounds, reviews)).acceptance.status).toBe('delivered');
+
+    const accepted = assembleLocalAcceptance(
+      source(rounds, [
+        ...reviews,
+        {
+          action: 'accept',
+          comment: 'Ship it',
+          createdAt: '2026-01-01T10:02:00.000Z',
+          id: 'ev-3',
+          kind: 'decision',
+          roundIndex: 1,
+        },
+      ]),
+    );
+    expect(accepted.acceptance.status).toBe('accepted');
+    expect(accepted.acceptance.completedAt?.toISOString()).toBe('2026-01-01T10:02:00.000Z');
+    expect(accepted.rounds[0]!.run.userDecision).toBe('accept');
+    expect(accepted.rounds[0]!.run.decisionDetail).toMatchObject({
+      comment: 'Ship it',
+      decidedAt: '2026-01-01T10:02:00.000Z',
+      groupFeedback: [{ category: 'Rename', comment: 'Also check keyboard-only' }],
+    });
+
+    const rejected = [
+      {
+        action: 'reject' as const,
+        comment: 'Focus is lost',
+        createdAt: '2026-01-01T10:02:00.000Z',
+        id: 'ev-3',
+        kind: 'decision' as const,
+        roundIndex: 1,
+      },
+    ];
+    expect(assembleLocalAcceptance(source(rounds, rejected)).acceptance.status).toBe('rejected');
+    // A newer round re-opens a rejected delivery.
+    const reopened = assembleLocalAcceptance(
+      source(
+        [...rounds, round(2, [{ id: 'rename', title: 'Rename keeps focus', verdict: 'passed' }])],
+        rejected,
+      ),
+    );
+    expect(reopened.acceptance.status).toBe('delivered');
+    expect(reopened.rounds[0]!.run.userDecision).toBe('reject');
+  });
+});
+
+describe('localDecisionEvent', () => {
+  const at = { createdAt: '2026-01-01T10:00:00.000Z', id: 'ev-d' };
+  const rounds = [round(1, [{ id: 'rename', title: 'Rename', verdict: 'passed' }])];
+
+  it('records the decision on the current round', () => {
+    expect(
+      localDecisionEvent(assembleLocalAcceptance(source(rounds)), {
+        ...at,
+        action: 'reject',
+        comment: '  Focus is lost  ',
+      }),
+    ).toEqual({
+      ...at,
+      action: 'reject',
+      comment: 'Focus is lost',
+      kind: 'decision',
+      roundIndex: 1,
+    });
+  });
+
+  it('refuses a decided or unsettled delivery, like the server', () => {
+    const decided = assembleLocalAcceptance(
+      source(rounds, [{ ...at, action: 'accept', kind: 'decision', roundIndex: 1 }]),
+    );
+    expect(() => localDecisionEvent(decided, { ...at, action: 'reject' })).toThrow(
+      'already been accepted',
+    );
+    const open = assembleLocalAcceptance(source([{ ...rounds[0]!, report: null }]));
+    expect(() => localDecisionEvent(open, { ...at, action: 'accept' })).toThrow(
+      'still in progress (verifying)',
+    );
   });
 });
 

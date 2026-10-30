@@ -10,9 +10,11 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
+import { openCurrentWorkspaceInNewWindow } from './openCurrentWorkspaceInNewWindow';
+
 /**
  * Bridge component for handling File menu actions from Electron main process
- * Listens to broadcast events for creating new topics, agents, agent groups, and pages
+ * Listens to broadcast events for creating new topics, agents, agent groups, pages and windows
  */
 const DesktopFileMenuBridge = () => {
   const { createAgent, createEmptyGroup, createPage } = useCreateMenuItems();
@@ -52,6 +54,7 @@ const DesktopFileMenuBridge = () => {
   useWatchBroadcast('createNewAgent', handleCreateNewAgent);
   useWatchBroadcast('createNewAgentGroup', handleCreateNewAgentGroup);
   useWatchBroadcast('createNewPage', handleCreateNewPage);
+  useWatchBroadcast('openNewWindow', openCurrentWorkspaceInNewWindow);
 
   return null;
 };

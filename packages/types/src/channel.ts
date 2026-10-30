@@ -103,10 +103,10 @@ export interface ChannelExecutionConfig extends LobeAgentConfig, ChannelMemberCo
 
 /**
  * - `directed`: carried explicit @mentions; jobs were created in the send transaction.
- * - `pending`: waiting for Jev to pick responders.
- * - `assigned`: Jev (or the no-model fallback) picked at least one Agent.
+ * - `pending`: waiting for the decision model to pick responders.
+ * - `assigned`: the decision model (or the no-model fallback) picked at least one Agent.
  * - `unassigned`: routing could not complete; no Agent was woken and the user may retry.
- * - `skipped`: Jev decided nobody needs to reply. Not a failure.
+ * - `skipped`: the decision model decided nobody needs to reply. Not a failure.
  * - `reply`: an Agent's published reply; replies never enter routing.
  */
 export type ChannelMessageRoutingStatus =
@@ -114,16 +114,16 @@ export type ChannelMessageRoutingStatus =
 
 /**
  * - `explicit`: recipients came from @mentions, Thread followers or a bound direct Agent.
- * - `jev`: recipients came from a `decide()` call.
+ * - `decision`: recipients came from a `decide()` call.
  * - `fallback`: no decision model is configured, so every available Agent was picked.
  */
-export type ChannelMessageRoutingSource = 'explicit' | 'fallback' | 'jev';
+export type ChannelMessageRoutingSource = 'decision' | 'explicit' | 'fallback';
 
 /**
- * How a human message without @mentions is routed: `jev` when a decision model is
+ * How a human message without @mentions is routed: `decision` when a decision model is
  * configured, otherwise `fallback` to every candidate Agent.
  */
-export type ChannelRoutingMode = 'fallback' | 'jev';
+export type ChannelRoutingMode = 'decision' | 'fallback';
 
 /**
  * - `queued`: waiting at the member's FIFO.

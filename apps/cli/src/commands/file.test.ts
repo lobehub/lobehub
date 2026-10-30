@@ -93,7 +93,7 @@ describe('file command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(
         JSON.stringify(
-          [{ ...items[0], appUrl: 'https://app.lobehub.com/resource?file=f1' }],
+          [{ ...items[0], appUrl: 'https://app.lobehub.com/resource/file/f1' }],
           null,
           2,
         ),

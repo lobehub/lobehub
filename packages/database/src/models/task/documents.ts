@@ -108,7 +108,9 @@ export const getTreePinnedDocuments = async (
   const recursiveOwnership = taskOwnershipSql(ctx, 't');
   const docsOwnership = ctx.workspaceId
     ? sql`td.workspace_id = ${ctx.workspaceId}
-          AND (td.visibility = 'public' OR td.user_id = ${ctx.userId})`
+          AND (td.visibility = 'public' OR td.user_id = ${ctx.userId}
+            OR EXISTS (SELECT 1 FROM tasks ot
+                       WHERE ot.id = td.task_id AND ot.created_by_user_id = ${ctx.userId}))`
     : sql`td.user_id = ${ctx.userId} AND td.workspace_id IS NULL`;
   // Guard the referenced document row itself: `td.visibility` is a
   // write-time mirror of the TASK's visibility, so a document independently

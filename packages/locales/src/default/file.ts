@@ -2,6 +2,25 @@ export default {
   'addFolder': 'Create Folder',
   'addLibrary': 'Add',
   'addPage': 'Create Page',
+  'canvasStorage.delete.content':
+    'This deletes every version and file of “{{title}}” and frees {{size}}. This can’t be undone.',
+  'canvasStorage.delete.contentNoSize':
+    'This deletes every version and file of “{{title}}”. This can’t be undone.',
+  'canvasStorage.delete.published': 'Its public link will stop working.',
+  'canvasStorage.delete.success': 'Canvas deleted. {{size}} freed.',
+  'canvasStorage.delete.successNoSize': 'Canvas deleted',
+  'canvasStorage.delete.title': 'Delete this canvas?',
+  'canvasStorage.menu.copyLink': 'Copy public link',
+  'canvasStorage.menu.delete': 'Delete canvas',
+  'canvasStorage.orphan.clean': 'Clean up',
+  'canvasStorage.orphan.confirm':
+    'This deletes {{size}} of files left by canvases that no longer exist. This can’t be undone.',
+  'canvasStorage.orphan.desc':
+    '{{size}} of files left by deleted canvases still count toward storage',
+  'canvasStorage.orphan.success': 'Leftover files cleaned up. {{size}} freed.',
+  'canvasStorage.orphan.title': 'Clean up leftover canvas files?',
+  'canvasStorage.summary_one': 'Your {{count}} canvas uses {{size}} of file storage',
+  'canvasStorage.summary_other': 'Your {{count}} canvases use {{size}} of file storage',
   'detail.basic.createdAt': 'Creation Time',
   'detail.basic.filename': 'File Name',
   'detail.basic.size': 'File Size',
@@ -89,6 +108,7 @@ export default {
   'docs.shared.title': 'Shared docs',
   'docs.viewAllPages': 'View all',
   'docs.works.all': 'All',
+  'docs.works.canvas': 'Canvas',
   'docs.works.document': 'Documents',
   'docs.works.task': 'Tasks',
   'empty': 'No files or folders have been uploaded yet.',
@@ -288,9 +308,29 @@ export default {
   'imageViewer.zoomIn': 'Zoom in',
   'imageViewer.zoomOut': 'Zoom out',
   'pageEditor.addIcon': 'Add Icon',
+  'pageEditor.agentEditing': 'Agent is editing the page…',
+  'pageEditor.agentUnavailable.connectMarket': 'Connect Market',
+  'pageEditor.agentUnavailable.marketUnauthorized':
+    'The Agent edits pages in the cloud sandbox. Connect your Market account to let it edit this page.',
+  'pageEditor.agentUnavailable.noGateway':
+    "The Agent can't edit pages until Gateway Mode is on. Ask your admin to turn it on.",
+  'pageEditor.agentUnavailable.sandboxUnconfigured':
+    "The Agent can't edit pages until a sandbox is configured. Ask your admin to set one up.",
+  'pageEditor.agentUnavailable.viewDocs': 'View docs',
   'pageEditor.artifactTag': 'Artifact',
   'pageEditor.autoSaveMessage': 'Your page is saved automatically. No need to save manually.',
   'pageEditor.chooseIcon': 'Choose Icon',
+  'pageEditor.collab.notSynced':
+    'Your latest page edits are still syncing, so the Agent may not see them yet.',
+  'pageEditor.collab.offlineRestore.content':
+    'The page was reloaded from the server while you were offline, and your unsynced edits are not in it. Put your version back?',
+  'pageEditor.collab.offlineRestore.discard': 'Keep the current page',
+  'pageEditor.collab.offlineRestore.restore': 'Restore my version',
+  'pageEditor.collab.offlineRestore.title': 'Restore your offline edits?',
+  'pageEditor.collab.retry': 'Retry',
+  'pageEditor.collab.status.connecting': 'Connecting…',
+  'pageEditor.collab.status.error': "Couldn't sync this page.",
+  'pageEditor.collab.status.offline': 'Offline. Edits sync when you reconnect.',
   'pageEditor.comments.anchor.add': 'Comment',
   'pageEditor.comments.anchor.addToLine': 'Comment on this line',
   'pageEditor.comments.anchor.label': 'Quoted text:',

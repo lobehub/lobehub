@@ -489,6 +489,7 @@ export default {
   'heterogeneousStatus.apiMode.smallFastModelPlaceholder': 'Same as primary model',
   'heterogeneousStatus.apiMode.provider': 'Provider',
   'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
+  'heterogeneousStatus.apiMode.useSubscription': 'Use subscription',
   'heterogeneousStatus.apiMode.workspaceUnsupported': 'Not available for workspace agents',
   'heterogeneousStatus.apiMode.serverDefault.checking': 'Checking deployment provider...',
   'heterogeneousStatus.apiMode.serverDefault.disabled':
@@ -519,16 +520,13 @@ export default {
   'heterogeneousStatus.runtime.keyMissing': 'Configure the DeepSeek provider API key',
   'heterogeneousStatus.runtime.configure': 'Provider Settings',
 
-  // Heterogeneous agent — Cloud tab (web environment config)
-  'heterogeneousStatus.cloud.tabLabel': 'Cloud',
+  // Heterogeneous agent — cloud sandbox config
   'heterogeneousStatus.cloud.tokenLabel': 'Claude Code Token',
   'heterogeneousStatus.cloud.tokenDesc':
     'Your Claude Code OAuth token. Saved securely to Credentials once submitted. Run `claude setup-token` in your terminal to generate one.',
   'heterogeneousStatus.cloud.tokenLookupError':
     "Couldn't check whether this token is available here. Retry to load it again.",
   'heterogeneousStatus.cloud.tokenRetry': 'Retry',
-  'heterogeneousStatus.cloud.tokenSharedElsewhere':
-    'Your personal Claude Code token is shared to another workspace. Saving a token here moves it to this workspace, and cloud runs in the other workspace will no longer be able to use it.',
   'heterogeneousStatus.cloud.tokenTypeMismatch':
     'A credential with the key CLAUDE_CODE_OAUTH_TOKEN already exists with a different type. Remove or rename it in Credentials, then save again.',
   'heterogeneousStatus.cloud.tokenNotShared':
@@ -557,8 +555,30 @@ export default {
   'heterogeneousStatus.cloud.repoPlaceholder': 'owner/repo or https://github.com/owner/repo',
   'heterogeneousStatus.cloud.repoAdd': 'Add',
 
-  // Heterogeneous agent — Desktop tab
-  'heterogeneousStatus.desktop.tabLabel': 'Desktop',
+  // Heterogeneous agent — execution environment and its bound device
+  'heterogeneousStatus.device.afterInstall':
+    'After installing, run `{{command}}` on that device once to sign in, then check again.',
+  'heterogeneousStatus.device.detecting': 'Checking {{name}} CLI on {{device}}…',
+  'heterogeneousStatus.device.installDesc':
+    'Run one of these commands in a terminal on {{device}}:',
+  'heterogeneousStatus.device.installTitle': 'Install on {{device}}',
+  'heterogeneousStatus.device.label': 'Device',
+  'heterogeneousStatus.device.missing':
+    'The bound device is no longer available. Choose another execution environment above.',
+  'heterogeneousStatus.device.offline': '{{device}} is offline. Check again once it reconnects.',
+  'heterogeneousStatus.device.openDocs': 'Installation guide',
+  'heterogeneousStatus.device.scanFailed':
+    'Couldn’t check {{name}} CLI on {{device}}. Update LobeHub on that device and try again.',
+  'heterogeneousStatus.device.scanFailedTag': 'Unknown',
+  'heterogeneousStatus.device.showDetails': 'Show details',
+  'heterogeneousStatus.device.unavailable': '{{name}} CLI not found on {{device}}',
+  'heterogeneousStatus.sandbox.desc':
+    '{{name}} runs in the cloud sandbox. Nothing needs to be installed on your devices.',
+  'heterogeneousStatus.target.desc':
+    'New topics run here. Existing topics stay on the device they ran on.',
+  'heterogeneousStatus.target.fixed': 'This environment is fixed. Members can’t change it.',
+  'heterogeneousStatus.target.overridden':
+    'Applies only to you. Other members keep the Agent default.',
 
   // Connected agent profile config panel (openclaw / hermes)
   'platformAgentConfig.title': 'Connection',
@@ -593,23 +613,54 @@ export default {
   'creds.createModal.title': 'Create Credential',
   'creds.edit.title': 'Edit Credential',
   'creds.empty': 'No credentials configured yet',
+  'creds.errors.createFailed': 'Failed to create the credential. Please try again.',
+  'creds.errors.multiOrgShareDisabled':
+    'Sharing one credential into several workspaces is not available yet. Remove its other share first.',
+  'creds.errors.privateCredExists':
+    'You already have a private credential with this key in this workspace. Remove it before making this one private.',
+  'creds.errors.privateCredsDisabled':
+    'Private workspace credentials are not available yet. Please try again later.',
+  'creds.errors.publicCredExists':
+    'This workspace already shares a credential with this key. Remove it before publishing this one.',
   'creds.file.authRequired': 'Please sign in to the Market first',
   'creds.file.uploadFailed': 'File upload failed',
   'creds.file.uploadSuccess': 'File uploaded successfully',
   'creds.file.uploading': 'Uploading...',
   'creds.orgSetupRequired':
     'Community Profile not set up yet. Please complete the workspace Community Profile setup to manage credentials.',
+  'creds.owner.fromPersonal': 'From your personal account',
   'creds.owner.sharedBy': 'Shared by {{name}}',
-  'creds.personalSection.desc':
-    'These are your own credentials. Turn on sharing to make one available to this workspace.',
+  'creds.privateSection.desc':
+    'Only you can see and use these credentials in this workspace. Publish one to let every member use it.',
+  'creds.privateSection.empty': 'No private credentials yet',
+  'creds.share.alreadyShared': 'Shared',
+  'creds.share.badge': 'Shared to {{count}} workspaces',
+  'creds.share.confirm': 'Share',
+  'creds.share.empty': "You haven't joined any workspace yet.",
   'creds.share.error': 'Failed to update sharing for this credential. Please try again.',
-  'creds.share.toggle': 'Share to workspace',
-  'creds.share.visibility.private': 'Private',
-  'creds.share.visibility.public': 'Public',
+  'creds.share.menu': 'Share to Workspace…',
+  'creds.share.modalDesc':
+    'Share this credential into a workspace. It stays in your account, and you can stop sharing at any time.',
+  'creds.share.modalTitle': 'Share Credential to Workspace',
+  'creds.share.revoke': 'Stop Sharing',
+  'creds.share.revokeConfirmDesc':
+    'Agent runs in that workspace will no longer be able to use it. The credential stays in your account.',
+  'creds.share.revokeConfirmTitle': 'Stop sharing to "{{name}}"?',
+  'creds.share.selectPlaceholder': 'Select a workspace',
+  'creds.share.sharedLabel': 'Shared to',
+  'creds.share.success': 'Shared to {{name}}',
+  'creds.share.targetLabel': 'Share to',
+  'creds.share.unshareConfirmDesc':
+    "Agent runs in this workspace will no longer be able to use it. The credential stays in its owner's personal account.",
+  'creds.share.unshareConfirmTitle': 'Stop sharing this credential to the workspace?',
+  'creds.share.viewerHint': "Viewers can't share credentials",
   'creds.signIn': 'Sign In to Market',
   'creds.signInRequired': 'Please sign in to the Market to manage your credentials',
-  'creds.tabs.personal': 'Personal',
+  'creds.tabs.private': 'Private',
   'creds.tabs.workspace': 'Workspace',
+  'creds.viewerHint': "Viewers can't create credentials",
+  'creds.visibility.publish': 'Publish to Workspace',
+  'creds.visibility.publishConfirmTitle': 'Publish this credential to the workspace?',
   'creds.workspaceSection.desc':
     'Credentials available to everyone in this workspace, including credentials shared by members.',
   'creds.form.addPair': 'Add Key-Value Pair',
@@ -704,6 +755,7 @@ export default {
   'devices.detail.cores_one': '{{count}} core',
   'devices.detail.cores_other': '{{count}} cores',
   'devices.detail.cpu': 'CPU',
+  'devices.detail.disk': 'Disk',
   'devices.detail.lastConnected': 'Last connected',
   'devices.detail.loadUsage': 'Load average',
   'devices.detail.memory': 'Memory',
@@ -736,6 +788,7 @@ export default {
   'devices.capabilities.tools.desc': 'Connect local tools to extend what agents can do.',
   'devices.capabilities.tools.title': 'Call system tools',
   'devices.card.cpuUsage': 'CPU usage',
+  'devices.card.diskUsage': 'Disk usage',
   'devices.card.hostname': 'Hostname',
   'devices.card.memoryUsage': 'Memory usage',
   'devices.card.runningTopics': 'Running topics',
@@ -4003,9 +4056,9 @@ When I am ___, I need ___
   'tools.builtins.lobe-skill-store.title': 'Skill Store',
   'tools.builtins.lobe-skills.description': 'Activate and use reusable skill packages',
   'tools.builtins.lobe-skills.title': 'Skills',
-  'tools.builtins.lobe-dashboard.description':
+  'tools.builtins.builtin-dashboard.description':
     'Build live monitoring widgets from sandboxed scripts, preview them with real data and put them on dashboards',
-  'tools.builtins.lobe-dashboard.title': 'Dashboards',
+  'tools.builtins.builtin-dashboard.title': 'Dashboards',
   'tools.builtins.lobe-task.description':
     'Create, schedule, list, edit, and delete tasks with dependencies and review configuration',
   'tools.builtins.lobe-task.title': 'Task Tools',

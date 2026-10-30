@@ -13,6 +13,7 @@ import {
   ReactMentionPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
+  ReactVideoPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
 import { createStaticStyles } from '@lobehub/ui';
@@ -33,8 +34,17 @@ import { registerImageFilePastePreference } from './registerImageFilePastePrefer
 import { needsImageRehost, rehostImage } from './rehostImage';
 import { useFileUpload, useImageUpload } from './useImageUpload';
 
-const IMAGE_FILTERS = [
+interface FileFilter {
+  extensions: string[];
+  name: string;
+}
+
+const IMAGE_FILTERS: FileFilter[] = [
   { extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'], name: 'Images' },
+];
+
+const VIDEO_FILTERS: FileFilter[] = [
+  { extensions: ['mp4', 'webm', 'mov', 'm4v', 'ogv'], name: 'Videos' },
 ];
 
 // Force the Lexical FileNode's outer `<span>` to render as its own block-
@@ -144,17 +154,17 @@ const InternalEditor = memo<InternalEditorProps>(
     const handleImageUpload = useImageUpload();
     const handleFileUpload = useFileUpload();
 
-    const handlePickFile = useCallback(async (): Promise<File | null> => {
+    const pickDesktopFile = useCallback(async (filters: FileFilter[]): Promise<File | null> => {
       if (!isDesktop) return null;
       const { ensureElectronIpc } = await import('@/utils/electron/ipc');
       const ipc = ensureElectronIpc();
-      const result = await (ipc as any).localSystem.handlePickFile({
-        filters: IMAGE_FILTERS,
-      });
+      const result = await (ipc as any).localSystem.handlePickFile({ filters });
       if (result.canceled || !result.file) return null;
       const { data, mimeType, name } = result.file;
       return new File([data], name, { type: mimeType });
     }, []);
+    const handlePickImage = useCallback(() => pickDesktopFile(IMAGE_FILTERS), [pickDesktopFile]);
+    const handlePickVideo = useCallback(() => pickDesktopFile(VIDEO_FILTERS), [pickDesktopFile]);
 
     const finalPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
     const wrapperStyle = useMemo<CSSProperties>(
@@ -181,7 +191,12 @@ const InternalEditor = memo<InternalEditorProps>(
         handleUpload: handleImageUpload,
         needRehost: (url: string) =>
           !!editor.getLexicalEditor?.()?.isEditable() && needsImageRehost(url),
-        onPickFile: isDesktop ? handlePickFile : undefined,
+        onPickFile: isDesktop ? handlePickImage : undefined,
+      });
+
+      const videoPlugin = Editor.withProps(ReactVideoPlugin, {
+        handleUpload: handleFileUpload,
+        onPickFile: isDesktop ? handlePickVideo : undefined,
       });
 
       const filePlugin = Editor.withProps(LinearFilePlugin, {
@@ -193,8 +208,8 @@ const InternalEditor = memo<InternalEditorProps>(
 
       // Build base plugins with optional extra plugins prepended
       const basePlugins = extraPlugins
-        ? [...extraPlugins, ...STATIC_PLUGINS, mathPlugin, imagePlugin, filePlugin]
-        : [...STATIC_PLUGINS, mathPlugin, imagePlugin, filePlugin];
+        ? [...extraPlugins, ...STATIC_PLUGINS, mathPlugin, imagePlugin, videoPlugin, filePlugin]
+        : [...STATIC_PLUGINS, mathPlugin, imagePlugin, videoPlugin, filePlugin];
 
       if (!floatingToolbar || disabled) return basePlugins;
 
@@ -249,7 +264,8 @@ const InternalEditor = memo<InternalEditorProps>(
       floatingToolbar,
       handleFileUpload,
       handleImageUpload,
-      handlePickFile,
+      handlePickImage,
+      handlePickVideo,
       readonlySelectionItems,
       toolbarExtraItems,
     ]);

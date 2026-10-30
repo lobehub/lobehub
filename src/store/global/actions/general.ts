@@ -223,6 +223,12 @@ export class GlobalGeneralActionImpl {
     );
   };
 
+  setNavPanelResizing = (resizing: boolean): void => {
+    if (!!this.#get().isNavPanelResizing === resizing) return;
+
+    this.#set({ isNavPanelResizing: resizing }, false, n('setNavPanelResizing'));
+  };
+
   updateSystemStatus = (
     status: Partial<SystemStatus>,
     action?: any,

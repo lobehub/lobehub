@@ -193,6 +193,14 @@ export class TaskModel {
     return rows.countTasksBlockingAgentDemotion(this.ctx, assigneeAgentId, agentOwnerUserId);
   }
 
+  async lockWholeSubtree(rootId: string): Promise<{ id: string; status: string }[]> {
+    return tree.lockWholeSubtree(this.ctx, rootId);
+  }
+
+  async takeOverSubtree(taskIds: string[]): Promise<void> {
+    return tree.takeOverSubtree(this.ctx, taskIds);
+  }
+
   async subtreeHasOtherCreators(rootTaskId: string, creatorUserId: string): Promise<boolean> {
     return rows.subtreeHasOtherCreators(this.ctx, rootTaskId, creatorUserId);
   }

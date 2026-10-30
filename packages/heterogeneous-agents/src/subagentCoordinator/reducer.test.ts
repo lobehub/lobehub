@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSubagentRunsState, reduceSubagentRuns } from './index';
-import type { SubagentIntent, SubagentReduceCtx } from './types';
+import { createSubagentRunsState, reduceSubagentRuns, rehydrateSubagentRunsState } from './index';
+import type { PersistToolBatchIntent, SubagentIntent, SubagentReduceCtx } from './types';
 
 /** Deterministic id factory: `thd_1`, `msg_1`, `msg_2`, … per kind. */
 const makeCtx = (over: Partial<SubagentReduceCtx> = {}): SubagentReduceCtx => {
@@ -289,6 +289,141 @@ describe('subagent reducer', () => {
     // Run stays deleted; the parent is remembered as finalized.
     expect(state.runs.has('task-1')).toBe(false);
     expect(state.finalizedParents.has('task-1')).toBe(true);
+  });
+
+  it('reopens a finalized thread when the subagent resumes with a NEW turn', () => {
+    // CC `SendMessage` resumes a completed subagent; its events keep the
+    // original `parent_tool_use_id`. The new turn must continue the existing
+    // thread from its tail, not be dropped as a stale replay.
+    const { steps, state } = run([
+      textEvent('task-1', 'm1', 'working'),
+      toolsEvent('task-1', 'm1', [tool('tc-1')]),
+      { data: { content: 'answer', toolCallId: 'task-1' }, type: 'tool_result' }, // finalize
+      toolsEvent('task-1', 'm2', [tool('tc-2')]),
+    ]);
+
+    // seed msg_1, assistant msg_2, tool msg_3, hand-back msg_4
+    expect(kinds(steps[3])).toEqual(['reopenThread', 'createMessage', 'persistToolBatch']);
+    expect(steps[3][0]).toMatchObject({ threadId: 'thd_1' });
+    expect(steps[3][1]).toMatchObject({
+      messageId: 'msg_5',
+      parentId: 'msg_4',
+      role: 'assistant',
+      subagentMessageId: 'm2',
+      threadId: 'thd_1',
+    });
+    expect(state.runs.get('task-1')).toMatchObject({
+      currentAssistantId: 'msg_5',
+      currentSubagentMessageId: 'm2',
+      threadId: 'thd_1',
+    });
+    expect(state.finalizedParents.has('task-1')).toBe(false);
+  });
+
+  it('keeps dropping a replay of a turn the finalized thread already holds', () => {
+    const { steps, state } = run([
+      textEvent('task-1', 'm1', 'working'),
+      toolsEvent('task-1', 'm2', [tool('tc-1')]),
+      { data: { content: 'answer', toolCallId: 'task-1' }, type: 'tool_result' }, // finalize
+      // ↓ replays of both earlier turns
+      textEvent('task-1', 'm1', 'working'),
+      toolsEvent('task-1', 'm2', [tool('tc-1')]),
+    ]);
+
+    expect(steps[3]).toEqual([]);
+    expect(steps[4]).toEqual([]);
+    expect(state.runs.has('task-1')).toBe(false);
+    expect(state.finalizedParents.has('task-1')).toBe(true);
+  });
+
+  it('re-finalizes a resumed run and remembers its resumed turns', () => {
+    const { steps, state } = run([
+      textEvent('task-1', 'm1', 'working'),
+      { data: { content: 'answer', toolCallId: 'task-1' }, type: 'tool_result' }, // finalize
+      textEvent('task-1', 'm2', 'resumed'),
+      { data: {}, type: 'agent_runtime_end' }, // orphan drain closes the resumed run
+      textEvent('task-1', 'm2', 'resumed'), // replay of the resumed turn
+      textEvent('task-1', 'm3', 'resumed again'),
+    ]);
+
+    expect(kinds(steps[3])).toEqual(['persistContent', 'finalizeThread']);
+    expect(steps[4]).toEqual([]);
+    // m3 chains off the resumed turn's assistant (msg_4), not the first hand-back.
+    expect(kinds(steps[5])).toEqual(['reopenThread', 'createMessage', 'streamContent']);
+    expect(steps[5][1]).toMatchObject({ messageId: 'msg_5', parentId: 'msg_4' });
+    expect(state.runs.get('task-1')!.currentSubagentMessageId).toBe('m3');
+  });
+
+  it('resumes from a rehydrated finalized anchor (cold replica)', () => {
+    const state0 = rehydrateSubagentRunsState(
+      [],
+      ['task-1'],
+      [
+        {
+          lastChainParentId: 'asst-tail',
+          lifetimeToolCallIds: ['tc-1'],
+          parentToolCallId: 'task-1',
+          threadId: 'thd-x',
+          turnIds: ['m1'],
+        },
+      ],
+    );
+
+    const replay = reduceSubagentRuns(
+      state0,
+      toolsEvent('task-1', 'm1', [tool('tc-1')]),
+      makeCtx(),
+    );
+    expect(replay.intents).toEqual([]);
+
+    const resumed = reduceSubagentRuns(
+      state0,
+      toolsEvent('task-1', 'm2', [tool('tc-1'), tool('tc-2')]),
+      makeCtx(),
+    );
+    expect(kinds(resumed.intents)).toEqual(['reopenThread', 'createMessage', 'persistToolBatch']);
+    expect(resumed.intents[1]).toMatchObject({ parentId: 'asst-tail', threadId: 'thd-x' });
+    // tc-1 already lives in the thread — only tc-2 becomes a new tool row.
+    const batch = resumed.intents[2] as PersistToolBatchIntent;
+    expect(batch.tools.map((t) => t.payload.id)).toEqual(['tc-2']);
+  });
+
+  it('continues a rehydrated in-flight turn with its persisted text and tools', () => {
+    // A replica that rebuilds the run from DB mid-turn must keep the turn's
+    // earlier text and tools; otherwise the next write replaces them.
+    const state0 = rehydrateSubagentRunsState([
+      {
+        accContent: 'first half ',
+        currentAssistantId: 'asst-1',
+        currentSubagentMessageId: 'm1',
+        lifetimeToolCallIds: ['tc-1'],
+        parentToolCallId: 'task-1',
+        threadId: 'thd-x',
+        turnTools: [{ payload: tool('tc-1'), toolMessageId: 'tool-msg-1' }],
+      },
+    ]);
+
+    const text = reduceSubagentRuns(state0, textEvent('task-1', 'm1', 'second half'), makeCtx());
+    expect(text.intents).toEqual([
+      {
+        content: 'first half second half',
+        kind: 'streamContent',
+        messageId: 'asst-1',
+        threadId: 'thd-x',
+      },
+    ]);
+
+    const tools = reduceSubagentRuns(
+      text.state,
+      toolsEvent('task-1', 'm1', [tool('tc-1'), tool('tc-2')]),
+      makeCtx(),
+    );
+    const batch = tools.intents[0] as PersistToolBatchIntent;
+    expect(batch.content).toBe('first half second half');
+    expect(batch.tools.map((t) => [t.payload.id, t.isNew, t.toolMessageId])).toEqual([
+      ['tc-1', false, 'tool-msg-1'],
+      ['tc-2', true, 'msg_1'],
+    ]);
   });
 
   it('records subagent usage onto the current assistant', () => {

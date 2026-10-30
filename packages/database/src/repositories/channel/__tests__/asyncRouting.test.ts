@@ -29,7 +29,7 @@ const setup = async () => {
   const root = await team.asMember.send(team.channel.id, {
     content: 'Make a change',
     requestKey: 'root',
-    routing: 'jev',
+    routing: 'decision',
   });
   return { ...team, agent, other, root };
 };
@@ -54,7 +54,7 @@ describe('asynchronous Channel routing', () => {
       content: 'Undo the change',
       mentions: [agent.id],
       requestKey: 'undo',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [nextJob] = await jobsOf(db, next.id);
     expect(await routing.claim(channel.id, root.id)).toBeNull();
@@ -88,7 +88,7 @@ describe('asynchronous Channel routing', () => {
         content: 'Explicit request',
         mentions: [agent.id],
         requestKey: 'next',
-        routing: 'jev',
+        routing: 'decision',
       });
       const [job] = await jobsOf(db, next.id);
       expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
@@ -108,13 +108,13 @@ describe('asynchronous Channel routing', () => {
       content: 'Other branch',
       rootMessageId: root.id,
       requestKey: 'branch',
-      routing: 'jev',
+      routing: 'decision',
     });
     const next = await asMember.send(channel.id, {
       content: 'Independent',
       mentions: [agent.id],
       requestKey: 'next',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [job] = await jobsOf(db, next.id);
     expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
@@ -134,7 +134,7 @@ describe('asynchronous Channel routing', () => {
       content: 'Earlier branch',
       rootMessageId: root.id,
       requestKey: 'branch',
-      routing: 'jev',
+      routing: 'decision',
     });
     const next = await asMember.send(channel.id, {
       content: 'Later main',
@@ -161,7 +161,7 @@ describe('asynchronous Channel routing', () => {
     expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
   });
 
-  it.each(['jev', 'fallback'] as const)(
+  it.each(['decision', 'fallback'] as const)(
     'keeps the first %s thread reply pending until it can inherit the root responders',
     async (mode) => {
       const { agent, asMember, channel, other, root } = await setup();
@@ -205,7 +205,7 @@ describe('asynchronous Channel routing', () => {
       expect(await messageById(reply.id)).toMatchObject({
         recipientMemberIds: [agent.id],
         routingStatus: 'assigned',
-        routingSource: mode === 'fallback' ? 'fallback' : 'jev',
+        routingSource: mode === 'fallback' ? 'fallback' : 'decision',
       });
       expect(await jobsOf(db, reply.id)).toHaveLength(1);
       const next = await asMember.send(channel.id, {
@@ -224,7 +224,7 @@ describe('asynchronous Channel routing', () => {
       content: 'Continue',
       requestKey: 'reply',
       rootMessageId: root.id,
-      routing: 'jev',
+      routing: 'decision',
     });
     expect(reply.routingStatus).toBe('pending');
     await asOwner.stop(channel.id, { threadId: reply.threadId });
@@ -244,7 +244,7 @@ describe('asynchronous Channel routing', () => {
       content: 'Continue',
       requestKey: 'reply',
       rootMessageId: root.id,
-      routing: 'jev',
+      routing: 'decision',
     });
     await execution.resolveRouting(channel.id, root.id, 1, {
       reason: 'Provider unavailable',

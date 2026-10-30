@@ -21,6 +21,11 @@ import { DocumentService } from '@/server/services/document';
 import { resolveDocumentWrite } from '@/server/services/document/editorData';
 import { canViewDocumentContent, getDocumentForViewer } from '@/server/services/documentAccess';
 import { FileService } from '@/server/services/file';
+import { resolvePageAccess } from '@/server/services/pageCollab';
+import {
+  snapshotPageThroughRoom,
+  updateDocumentThroughRoom,
+} from '@/server/services/pageCollab/bodyWriter';
 import {
   assertCanPerformResourceAction,
   buildResourcePermissionState,
@@ -445,11 +450,37 @@ export const documentRouter = router({
       );
     }),
 
+  /**
+   * Store a page's live collaboration room as a version (manual save, accepting
+   * AI suggestions): the edits are already in the room, so there is no body to
+   * send. A page without a live room returns `recorded: false`, and the client
+   * saves it the usual way.
+   */
+  snapshotPageVersion: documentProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ documentId: z.string(), saveSource: z.enum(['manual']) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertContentsNotInRestrictedKnowledgeBase(ctx, [input.documentId]);
+      if ((await resolvePageAccess(ctx.serverDB, ctx.userId, input.documentId)) !== 'edit') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'No permission to edit this page' });
+      }
+
+      const recorded = await snapshotPageThroughRoom(ctx.serverDB, input.documentId, {
+        saveSource: input.saveSource,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return { recorded };
+    }),
+
   getFolderBreadcrumb: documentProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ ctx, input }) => {
       const chain = [];
-      let currentFolder = await ctx.documentModel.findBySlug(input.slug);
+      // Folder URLs carry the id; older links still carry the slug.
+      let currentFolder =
+        (await ctx.documentModel.findBySlug(input.slug)) ??
+        (await ctx.documentModel.findById(input.slug));
 
       // Build chain from current folder to root
       while (currentFolder) {
@@ -596,11 +627,15 @@ export const documentRouter = router({
         fileType: params.fileType ?? currentDocument?.fileType,
         title: params.title ?? currentDocument?.title ?? undefined,
       });
-      const result = await ctx.documentService.updateDocument(id, {
-        ...params,
-        content,
-        editorData,
-      });
+      // A page with a live room projects the room over its row, so the body
+      // (from the CLI or a client that predates rooms) goes into the room.
+      const result = await updateDocumentThroughRoom(
+        ctx.serverDB,
+        ctx.documentService,
+        id,
+        { ...params, content, editorData },
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+      );
 
       // Only a change to what the document says is a new deliverable version;
       // a move or a file-type change is not.

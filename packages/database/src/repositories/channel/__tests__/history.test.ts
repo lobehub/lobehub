@@ -36,7 +36,7 @@ const setup = async () => {
       threadId,
       mentions: [team.owner.id],
       requestKey: `history-${++key}`,
-      routing: 'jev',
+      routing: 'decision',
     });
   const run = async (threadId?: string) => {
     const request = await team.asMember.send(team.channel.id, {
@@ -44,7 +44,7 @@ const setup = async () => {
       threadId,
       mentions: [agent.id],
       requestKey: `run-${++key}`,
-      routing: 'jev',
+      routing: 'decision',
     });
     const [job] = await jobsOf(db, request.id);
     const claim = (await execution.claim(team.channel.id, job.id, lease))!;

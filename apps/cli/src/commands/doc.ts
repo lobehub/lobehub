@@ -164,10 +164,9 @@ export function registerDocCommand(program: Command) {
           slug: options.slug,
           title: options.title,
         });
-        const pathname = options.kb
-          ? `/resource/library/${encodeURIComponent(options.kb)}?file=${encodeURIComponent(result.id)}`
-          : `/page/${encodeURIComponent(result.id)}`;
-        const url = buildUrl(pathname);
+        const url = buildUrl(
+          resourcePath.document({ id: result.id, knowledgeBaseId: options.kb })!,
+        );
 
         console.log(`${pc.green('✓')} Created document ${pc.bold(result.id)}`);
         console.log(`${pc.bold('document')}: ${url}`);
@@ -219,10 +218,9 @@ export function registerDocCommand(program: Command) {
       const urls = await Promise.all(
         created.map((document, index) => {
           const source = items[index];
-          const pathname = source?.knowledgeBaseId
-            ? `/resource/library/${encodeURIComponent(source.knowledgeBaseId)}?file=${encodeURIComponent(document.id)}`
-            : `/page/${encodeURIComponent(document.id)}`;
-          return buildUrl(pathname);
+          return buildUrl(
+            resourcePath.document({ id: document.id, knowledgeBaseId: source?.knowledgeBaseId })!,
+          );
         }),
       );
       console.log(`${pc.green('✓')} Created ${created.length} document(s)`);

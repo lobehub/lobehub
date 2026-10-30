@@ -1,3 +1,4 @@
+import { projectChannelHistory } from '@lobechat/prompts/channel';
 import type {
   BuiltinServerRuntimeOutput,
   ChannelHistoryMessageDetail,
@@ -19,7 +20,7 @@ export class ChannelExecutionRuntime {
   ): Promise<BuiltinServerRuntimeOutput> {
     try {
       const state = await read();
-      return { content: JSON.stringify(state), state, success: true };
+      return { content: JSON.stringify(projectChannelHistory(state)), state, success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not read Channel history';
       return { content: message, error: { type: 'ChannelHistoryError', message }, success: false };

@@ -7,13 +7,13 @@ import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { channelActions } from '@/store/channel';
 
 import { ChannelStatus } from './ChannelStatus';
 import { channelJobStatus, channelJobTone, isChannelJobActive } from './jobStatus';
 import { memberAvatar, memberName } from './memberName';
 import { statusStyles, styles } from './styles';
+import { useOpenReplyAgent } from './useOpenReplyAgent';
 
 export interface ReplyEntry {
   agentId?: string | null;
@@ -47,8 +47,8 @@ export function ReplyDetail({
   entry: ReplyEntry;
 }) {
   const { t } = useTranslation('channel');
-  const navigate = useWorkspaceAwareNavigate();
   const { close } = usePopoverContext();
+  const openAgent = useOpenReplyAgent(agentId, close);
   const [stopping, setStopping] = useState(false);
   const [error, setError] = useState<unknown>();
   const stop = async () => {
@@ -74,9 +74,29 @@ export function ReplyDetail({
           size={24}
           title={name}
         />
-        <Text ellipsis style={{ flex: 1 }} weight={500}>
-          {name}
-        </Text>
+        <Flexbox flex={1} style={{ minWidth: 0 }}>
+          {agentId ? (
+            <Button
+              aria-label={t('openAgentNamed', { name })}
+              icon={ExternalLink}
+              iconPosition="end"
+              outdent="start"
+              size="small"
+              style={{ alignSelf: 'flex-start', maxWidth: '100%', minWidth: 0 }}
+              title={t('openAgentNamed', { name })}
+              type="text"
+              onClick={openAgent}
+            >
+              <Text ellipsis as="span" style={{ minWidth: 0 }} weight={500}>
+                {name}
+              </Text>
+            </Button>
+          ) : (
+            <Text ellipsis weight={500}>
+              {name}
+            </Text>
+          )}
+        </Flexbox>
         <ChannelStatus label={t(channelJobStatus(job))} tone={channelJobTone(job)} />
       </Flexbox>
       {job.status === 'failed' && (
@@ -88,34 +108,18 @@ export function ReplyDetail({
           <span {...stylex.props(styles.muted)}>{t('receipt.failedHint')}</span>
         </Flexbox>
       )}
-      {((job.canStop && isChannelJobActive(job)) || agentId) && (
-        <Flexbox horizontal gap={4} wrap="wrap">
-          {job.canStop && isChannelJobActive(job) && (
-            <Button
-              danger
-              icon={Square}
-              loading={stopping}
-              size="small"
-              type="text"
-              onClick={() => void stop()}
-            >
-              {t('stopReply')}
-            </Button>
-          )}
-          {agentId && (
-            <Button
-              icon={ExternalLink}
-              size="small"
-              type="text"
-              onClick={() => {
-                close();
-                navigate(`/agent/${agentId}`);
-              }}
-            >
-              {t('openAgent')}
-            </Button>
-          )}
-        </Flexbox>
+      {job.canStop && isChannelJobActive(job) && (
+        <Button
+          danger
+          icon={Square}
+          loading={stopping}
+          size="small"
+          style={{ alignSelf: 'flex-start' }}
+          type="text"
+          onClick={() => void stop()}
+        >
+          {t('stopReply')}
+        </Button>
       )}
       {error !== undefined && <AsyncError error={error} variant="inline" />}
     </Flexbox>

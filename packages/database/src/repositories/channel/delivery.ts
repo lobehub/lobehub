@@ -95,7 +95,24 @@ export const candidateAgents = async (
 };
 
 /**
- * Queues one job per Agent. Idempotent through the delivery key. Skips Agents whose
+ * The only Agent of a group with exactly one active person and one active Agent. Such a
+ * group needs no responder decision: every message the person sends goes to this Agent.
+ */
+export const pairedAgent = async (
+  tx: Transaction,
+  channelId: string,
+): Promise<ChannelMemberItem | undefined> => {
+  const members = await tx
+    .select()
+    .from(channelMembers)
+    .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')));
+  const agents = members.filter((member) => member.actorType === 'agent');
+
+  return agents.length === 1 && members.length === 2 ? agents[0] : undefined;
+};
+
+/**
+ * Queues one job per message and Agent member. Skips Agents whose
  * environment changed after the message, so a late route cannot run an old instruction
  * in a new directory. Returns the ids of the Agents that received a job.
  */

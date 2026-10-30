@@ -14,8 +14,10 @@ import { createLocalAcceptance, firstRound } from './testUtils';
 const { client, ingestReportAction, outputJson } = vi.hoisted(() => ({
   client: {
     acceptance: {
+      accept: { mutate: vi.fn() },
       addGroupFeedback: { mutate: vi.fn() },
       getBundle: { query: vi.fn() },
+      reject: { mutate: vi.fn() },
       reviewChecks: { mutate: vi.fn() },
     },
   },
@@ -49,7 +51,9 @@ const bothUploaded = [
   { checkItemId: 'rename', evidenceId: 'remote-api', position: 1 },
 ];
 
-const remoteBundle = (evidence: { id: string }[]) => ({
+/** `latestRunId` is the published acceptance's current round. */
+const remoteBundle = (evidence: { id: string }[], latestRunId = 'remote-run-1') => ({
+  rounds: [{ run: { id: latestRunId } }],
   checks: [
     {
       id: 'criterion-rename',
@@ -274,6 +278,117 @@ describe('lh acceptance publish', () => {
       expect.objectContaining({ action: 'reject', checkItemIds: ['criterion-rename'] }),
     );
     expect(client.acceptance.addGroupFeedback.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries the latest round's delivery decision last, bound to that round, once", async () => {
+    const { info, source } = loadLocalAcceptance(fixture.acceptanceDir, { create: true });
+    const check = assembleLocalAcceptance(source).checks.find((item) => item.id === 'rename')!;
+    const accept = {
+      action: 'accept' as const,
+      createdAt: '2026-01-01T10:00:00.000Z',
+      id: 'event-1',
+      kind: 'checks' as const,
+      roundIndex: 1,
+      targets: [{ checkId: 'rename', resultId: check.result!.id }],
+    };
+    const decision = {
+      action: 'accept' as const,
+      comment: 'Ship it',
+      createdAt: '2026-01-01T10:05:00.000Z',
+      id: 'event-2',
+      kind: 'decision' as const,
+      roundIndex: 1,
+    };
+    writeReviewLog(fixture.acceptanceDir, info.id, [accept, decision]);
+    ingestReportAction.mockResolvedValueOnce(ingested(1, bothUploaded));
+    client.acceptance.getBundle.query.mockResolvedValue(
+      remoteBundle([{ id: 'remote-shot' }, { id: 'remote-api' }]),
+    );
+
+    await publishAction(fixture.acceptanceDir, { json: true });
+    expect(client.acceptance.accept.mutate).toHaveBeenCalledWith({
+      comment: 'Ship it',
+      id: 'remote-acceptance',
+      roundId: 'remote-run-1',
+    });
+    expect(client.acceptance.reviewChecks.mutate.mock.invocationCallOrder[0]).toBeLessThan(
+      client.acceptance.accept.mutate.mock.invocationCallOrder[0]!,
+    );
+    expect(outputJson.mock.calls[0]![0].reviews).toEqual({ skipped: [], uploaded: 2 });
+
+    await publishAction(fixture.acceptanceDir, { json: true });
+    expect(client.acceptance.accept.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a local send-back without dispatching it again, and leaves older rounds alone', async () => {
+    const { info } = loadLocalAcceptance(fixture.acceptanceDir, { create: true });
+    const second = firstRound();
+    second.dir = '20260102-090000-second';
+    fixture.addRound(second);
+    const reject = {
+      action: 'reject' as const,
+      comment: 'Focus is lost',
+      createdAt: '2026-01-02T10:00:00.000Z',
+      id: 'event-1',
+      kind: 'decision' as const,
+      roundIndex: 2,
+    };
+    // A decision on a round a later one re-opened is history, not the current call.
+    writeReviewLog(fixture.acceptanceDir, info.id, [
+      {
+        ...reject,
+        action: 'accept',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        id: 'old',
+        roundIndex: 1,
+      },
+      reject,
+    ]);
+    ingestReportAction.mockResolvedValueOnce(ingested(1)).mockResolvedValueOnce(ingested(2));
+    client.acceptance.getBundle.query.mockResolvedValue(remoteBundle([], 'remote-run-2'));
+
+    await publishAction(fixture.acceptanceDir, { json: true });
+    expect(client.acceptance.accept.mutate).not.toHaveBeenCalled();
+    expect(client.acceptance.reject.mutate).toHaveBeenCalledWith({
+      comment: 'Focus is lost',
+      dispatch: false,
+      id: 'remote-acceptance',
+      roundId: 'remote-run-2',
+    });
+  });
+
+  it('refuses a decision once the published acceptance moved past the round it judged', async () => {
+    const { info } = loadLocalAcceptance(fixture.acceptanceDir, { create: true });
+    ingestReportAction.mockResolvedValueOnce(ingested(1));
+    await publishAction(fixture.acceptanceDir, { json: true, reviews: false });
+
+    // Online, someone ingested a newer round; locally the reviewer accepted round 1.
+    writeReviewLog(fixture.acceptanceDir, info.id, [
+      {
+        action: 'accept',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        id: 'event-1',
+        kind: 'decision',
+        roundIndex: 1,
+      },
+    ]);
+    client.acceptance.getBundle.query.mockResolvedValue(remoteBundle([], 'remote-run-2'));
+
+    await publishAction(fixture.acceptanceDir, { json: true });
+    expect(client.acceptance.accept.mutate).not.toHaveBeenCalled();
+    expect(outputJson.mock.calls[1]![0].reviews).toEqual({
+      skipped: [
+        {
+          checkId: 'decision:accept',
+          reason: 'the published acceptance has a newer round than the one this decision judged',
+        },
+      ],
+      uploaded: 0,
+    });
+    const stored = JSON.parse(
+      readFileSync(path.join(fixture.acceptanceDir, ACCEPTANCE_FILE), 'utf8'),
+    );
+    expect(stored.remote.carriedReviews).toBeUndefined();
   });
 
   it('reports how to repair evidence a published round failed to upload', async () => {

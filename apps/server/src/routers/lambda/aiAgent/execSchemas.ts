@@ -304,6 +304,14 @@ export const ExecAgentFieldsSchema = z.object({
    * waited in queue and starts a turn of its own is not marked.
    */
   steer: z.boolean().optional(),
+  /**
+   * Whether this send may take the topic over from a run that still owns it,
+   * as a person at the composer does (default). `false` — another agent
+   * delivering through `lh topic send` — never interrupts: a live run makes the
+   * call fail with `CONFLICT` before anything is written, and the caller queues
+   * the message behind that run instead.
+   */
+  supersedeLiveRun: z.boolean().optional(),
   trigger: z
     .string()
     .refine((value) => value !== RequestTrigger.Bot, {

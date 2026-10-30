@@ -97,7 +97,8 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     // Auto mode lets the model pick the sandbox or the routed device per
     // call, so the dedicated sandbox tool is offered there too.
     [AttachmentsManifest.identifier]: attachmentsEnabled,
-    [CloudSandboxManifest.identifier]: runtimeMode === 'cloud' || executionTarget === 'auto',
+    [CloudSandboxManifest.identifier]:
+      runtimeMode === 'cloud' || executionTarget === 'auto' || !!request.pageScope,
     [KnowledgeBaseManifest.identifier]: kbEnabled,
     [LocalSystemManifest.identifier]: localToolsEnabled,
     // The in-app browser drives the same machine as local-system.

@@ -1,6 +1,7 @@
 import type { AgentRunLlmExecutor } from '@lobechat/agent-runtime';
 import type { BotPlatformContext } from '@lobechat/context-engine';
 import type {
+  AgentSenderMetadata,
   BotSenderMetadata,
   ChatTopicBotContext,
   ExecAgentParams,
@@ -111,6 +112,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   additionalPluginIds?: string[];
   /** Trusted settings frozen by a durable dispatcher, never accepted from a client. */
   agentConfigSnapshot?: LobeAgentConfig;
+  /**
+   * The sending agent of an agent → agent turn, already resolved from its
+   * `sourceOperationId` by the server. Set by a queued follow-up, whose sender
+   * was resolved when it was queued: by the time it starts, the sending run may
+   * have settled and could no longer vouch for it. Never client-passable.
+   */
+  agentSender?: AgentSenderMetadata;
   /**
    * Server-authored generic intervention claim id. When present, the message
    * claim stores this exact id so a retry after dispatch-but-before-publish can

@@ -1,5 +1,6 @@
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
+  AgentSenderMetadataSchema,
   CreateNewMessageParamsSchema,
   omitServerOwnedMessageMetadata,
   UpdateMessageParamsSchema,
@@ -417,6 +418,32 @@ export const messageRouter = router({
       await assertCanViewMessageTargets(guardCtx(ctx), input.messageIds);
 
       return ctx.messageService.getToolResultPayloads(input.messageIds);
+    }),
+
+  /**
+   * Where a message came from, for answering it: its conversation and, for a
+   * message another agent sent, that agent and its conversation
+   * (`metadata.agentSender`). Read by `lh message reply`.
+   */
+  getMessageOrigin: messageProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), [input.id]);
+
+      const message = await ctx.messageModel.findById(input.id);
+      if (!message) return null;
+
+      const agentSender = AgentSenderMetadataSchema.safeParse(
+        (message.metadata as Record<string, unknown> | null)?.agentSender,
+      );
+      return {
+        agentId: message.agentId ?? null,
+        agentSender: agentSender.success ? agentSender.data : null,
+        id: message.id,
+        role: message.role,
+        threadId: message.threadId ?? null,
+        topicId: message.topicId ?? null,
+      };
     }),
 
   getToolResultPayload: messageProcedure
