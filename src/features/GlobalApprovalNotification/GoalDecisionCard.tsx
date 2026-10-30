@@ -1,9 +1,9 @@
 'use client';
 
-import { ActionIcon, Button, toast } from '@lobehub/ui';
+import { ActionIcon, Button } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRight, ChevronUp } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openGateReportModal } from '@/features/Acceptance/Viewer/Gate';
@@ -17,15 +17,13 @@ import {
   coordinatorGateReason,
   localizedCoordinatorReason,
 } from '@/features/AgentGoals/ProcessControl/coordinatorCopy';
-import ClarificationQuestions, {
-  type ClarificationAnswer,
-} from '@/features/ClarificationQuestions';
+import { openGoalSignOffModal } from '@/features/AgentGoals/SignOffReport';
+import SignOffDigest from '@/features/AgentGoals/SignOffReport/SignOffDigest';
+import { useGoalSignOff } from '@/features/AgentGoals/SignOffReport/useGoalSignOff';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { mutate } from '@/libs/swr';
-import { goalKeys } from '@/libs/swr/keys';
-import { verifyService } from '@/services/verify';
 import { useGoalStore } from '@/store/goal';
 
+import { refreshGoalAsks } from './refreshGoalAsks';
 import { styles } from './styles';
 import type { IslandGoalItem } from './usePendingGoalDecisions';
 
@@ -35,8 +33,6 @@ interface GoalDecisionCardProps {
   /** Hide this ask from the island; it keeps waiting in the Home inbox. */
   onDismiss?: () => void;
 }
-
-const SIGN_OFF = { accept: 'signOff', requestChanges: 'requestChanges' } as const;
 
 /**
  * A goal gate or a goal sign-off in the island: the same question the goal
@@ -71,65 +67,35 @@ const GoalDecisionCard = ({ item, onCollapse, onDismiss }: GoalDecisionCardProps
     reviewAcceptanceId &&
     openGateReportModal({
       acceptanceId: reviewAcceptanceId,
-      onDecided: () => {
-        void mutate(goalKeys.pendingForIsland());
-        void mutate((key) => Array.isArray(key) && key[0] === 'brief:list');
-      },
+      onDecided: () => void refreshGoalAsks(goal.id),
     });
 
   const openGoal = () =>
     navigate(goal.agentId ? `/agent/${goal.agentId}/goal/${goal.id}` : `/goal/${goal.id}`);
 
-  const signOffQuestions = useMemo(
-    () => [
-      {
-        description: t('goalProcess.signOff.description'),
-        header: '',
-        id: 'signOff',
-        options: [
-          {
-            description: t('goalProcess.signOff.acceptEffect'),
-            id: SIGN_OFF.accept,
-            label: t('goalProcess.signOff.accept'),
-            recommended: true,
-          },
-          {
-            description: t('goalProcess.signOff.requestChangesEffect'),
-            id: SIGN_OFF.requestChanges,
-            label: t('goalProcess.signOff.requestChanges'),
-          },
-        ],
-        question: t('goalProcess.signOff.question'),
-      },
-    ],
-    [t],
-  );
-
-  const signOff = useCallback(
-    async (answers: ClarificationAnswer[]) => {
-      if (item.type !== 'signOff') return;
-      const [answer] = answers;
-      if (!answer) return;
-      // Words with no pick are a change request: that is the only answer that
-      // needs them.
-      const accept = answer.type === 'option' && answer.optionId === SIGN_OFF.accept;
-      const comment = (answer.type === 'option' ? answer.note : answer.text)?.trim() || undefined;
-      if (accept) await verifyService.acceptDelivery(item.signOff.acceptanceId, comment);
-      else
-        await verifyService.rejectDelivery(item.signOff.acceptanceId, comment, { dispatch: true });
-      toast.success({
-        placement: 'top',
-        title: accept ? t('goalProcess.signOff.accepted') : t('goalProcess.signOff.sentBack'),
-      });
+  // A sign-off closes the goal, so it is decided over the delivery itself —
+  // the report opens first, never a bare yes/no from wherever the user is.
+  const openSignOff = () =>
+    item.type === 'signOff' &&
+    openGoalSignOffModal({
+      acceptanceId: item.signOff.acceptanceId,
+      agentId: item.signOff.agentId,
+      goalId: item.signOff.goalId,
+      goalTitle: item.signOff.goalTitle,
       // The inbox carries the same sign-off; it is settled on the server with
       // the acceptance, so re-read it there too.
-      await Promise.all([
-        mutate(goalKeys.pendingForIsland()),
-        mutate((key) => Array.isArray(key) && key[0] === 'brief:list'),
-      ]);
-    },
-    [item, t],
-  );
+      onDecided: () => refreshGoalAsks(item.signOff.goalId),
+      onOpenGoal: openGoal,
+    });
+
+  // The digest says what was delivered, so a sign-off the owner agrees with
+  // needs no detour; asking for changes goes through the full report, where
+  // the feedback is written.
+  const { accept, pending } = useGoalSignOff({
+    acceptanceId: item.type === 'signOff' ? item.signOff.acceptanceId : '',
+    onClose: () => {},
+    onDecided: () => refreshGoalAsks(goal.id),
+  });
 
   return (
     <div data-pending-hotkey-scope {...stylex.props(styles.card)}>
@@ -197,15 +163,7 @@ const GoalDecisionCard = ({ item, onCollapse, onDismiss }: GoalDecisionCardProps
             }
           />
         ) : (
-          <ClarificationQuestions
-            actionsPortalTarget={actionsPortalTarget}
-            draftKey={`goal-sign-off:${item.signOff.acceptanceId}`}
-            key={item.signOff.acceptanceId}
-            questions={signOffQuestions}
-            submitLabel={t('goalProcess.decision.submit')}
-            supplementPlaceholder={t('goalProcess.signOff.notePlaceholder')}
-            onSubmit={signOff}
-          />
+          <SignOffDigest goalId={item.signOff.goalId} key={item.signOff.goalId} />
         )}
       </div>
 
@@ -220,11 +178,34 @@ const GoalDecisionCard = ({ item, onCollapse, onDismiss }: GoalDecisionCardProps
             {t('globalApproval.dismiss')}
           </Button>
         )}
-        <div {...stylex.props(styles.goalActionsSlot)} ref={setActionsPortalTarget} />
-        {reviewAcceptanceId && (
-          <Button size="small" type="primary" onClick={openReview}>
-            {t('goalProcess.gate.openReview')}
-          </Button>
+        <div
+          className={stylex.props(styles.goalActionsSlot).className}
+          ref={setActionsPortalTarget}
+        />
+        {/* One primary per card: a sign-off commits from its digest, a held
+            release is reviewed in its report — never both on one card. */}
+        {item.type === 'signOff' ? (
+          <>
+            <Button disabled={!!pending} size="small" onClick={openSignOff}>
+              {t('goalProcess.signOff.openReport')}
+            </Button>
+            <Button
+              disabled={!!pending}
+              loading={pending === 'accept'}
+              size="small"
+              title={t('goalProcess.signOff.acceptEffect')}
+              type="primary"
+              onClick={accept}
+            >
+              {t('goalProcess.signOff.accept')}
+            </Button>
+          </>
+        ) : (
+          reviewAcceptanceId && (
+            <Button size="small" type="primary" onClick={openReview}>
+              {t('goalProcess.gate.openReview')}
+            </Button>
+          )
         )}
       </div>
     </div>

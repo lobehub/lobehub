@@ -67,16 +67,13 @@
 /*
  * Collapsed, the content takes part of the vacated rail track and re-centers
  * on what is left, so the page reads wider without going full-bleed.
- * An enabled rail can render no cards; reclaim its space without changing preferences.
  */
 @media (width > 1100px) {
-  .heroCollapsed[data-rail-collapsed='true'],
-  div:has(> :global(#home-rail):empty) > .heroCollapsed {
+  .heroCollapsed[data-rail-collapsed='true'] {
     transform: translateX(var(--home-collapsed-offset));
   }
 
-  .heroCollapsed[data-rail-collapsed='true']:dir(rtl),
-  div:has(> :global(#home-rail):empty) > .heroCollapsed:dir(rtl) {
+  .heroCollapsed[data-rail-collapsed='true']:dir(rtl) {
     transform: translateX(calc(-1 * var(--home-collapsed-offset)));
   }
 }
@@ -111,8 +108,7 @@
     transform: translateX(calc(var(--home-collapsed-offset) * -2));
   }
 
-  .speech[data-collapsed='true'],
-  div:has(> :global(#home-rail):empty) > div > .speech {
+  .speech[data-collapsed='true'] {
     transform: none;
   }
 }
@@ -180,14 +176,12 @@
 }
 
 @media (width > 1100px) {
-  .contentCollapsed[data-rail-collapsed='true'],
-  div:has(> :global(#home-rail):empty) > .contentCollapsed {
+  .contentCollapsed[data-rail-collapsed='true'] {
     transform: translateX(var(--home-collapsed-offset));
     width: calc(100% + var(--home-collapsed-gain));
   }
 
-  .contentCollapsed[data-rail-collapsed='true']:dir(rtl),
-  div:has(> :global(#home-rail):empty) > .contentCollapsed:dir(rtl) {
+  .contentCollapsed[data-rail-collapsed='true']:dir(rtl) {
     transform: translateX(calc(-1 * var(--home-collapsed-offset)));
   }
 }

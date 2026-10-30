@@ -133,6 +133,19 @@ export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 export const VERIFICATION_ERRORED_ERROR =
   'Verification could not run (internal error); the delivery was not evaluated.';
 /**
+ * The verifier could not run because the account has no credits left for its
+ * model. The delivery was never evaluated, and nothing a builder does changes
+ * that.
+ *
+ * Deliberately has NO recovery branch. Recovering it like any other verifier
+ * error started a fresh builder attempt, which re-delivered the same evidence
+ * into the same refused verifier and spent attempt after attempt until the
+ * budget ran out. The `InsufficientBudgetForModel` code in the text classifies
+ * it as a setup problem, so the gate asks for credits instead of a judgment.
+ */
+export const VERIFICATION_OUT_OF_CREDITS_ERROR =
+  'Verification could not run: the verifier model was refused for lack of credits (InsufficientBudgetForModel); the delivery was not evaluated.';
+/**
  * The review read the evidence and found the criterion undecidable from it — it
  * asks for an action the review layer cannot perform (re-running the delivered
  * scripts, building, driving a live system).

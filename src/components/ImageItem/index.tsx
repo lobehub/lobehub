@@ -93,6 +93,9 @@ const ImageItem = memo<ImageItemProps>(
         style={{
           aspectRatio,
           height: aspectRatio || isSafari ? 'auto' : '100%',
+          // the grid's min-height and row stretch would push wide images past their ratio, leaving a blank strip
+          alignSelf: aspectRatio ? 'start' : undefined,
+          minHeight: aspectRatio ? 'auto' : undefined,
           width: '100%',
           ...style,
         }}

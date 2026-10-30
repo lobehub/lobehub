@@ -24,6 +24,11 @@ vi.mock('../codex/CodexAppServerClient', async (importOriginal) => {
   };
 });
 
+// Transport tests use virtual paths; real filesystem failures are covered by the catalog tests.
+vi.mock('../spawn/workingDirectory', () => ({
+  resolveHeteroSpawnCwd: vi.fn((cwd: string) => cwd),
+}));
+
 const options = {
   commandPath: '/custom/codex',
   cwd: '/repo',

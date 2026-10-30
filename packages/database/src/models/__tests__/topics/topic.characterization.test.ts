@@ -61,6 +61,7 @@ const PUBLIC_METHODS = [
   'getCronTopicsGroupedByCronJob',
   'isRunningOperationAlive',
   'listTopicsForMemoryExtractor',
+  'markRead',
   'patchRunningOperation',
   'purge',
   'query',

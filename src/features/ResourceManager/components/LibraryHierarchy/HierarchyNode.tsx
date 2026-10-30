@@ -29,6 +29,7 @@ import {
   useSetCurrentDrag,
 } from '@/features/ResourceManager/DndContextWrapper';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { libraryFolderPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { showContextMenu } from '@/libs/contextMenu';
 import type { TreeItem } from '@/store/tree';
@@ -277,13 +278,11 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       isFolder: item.isFolder,
       isPage,
       libraryId,
-      slug: item.slug,
     });
 
     const handleFolderClick = useCallback(
-      (folderId: string, folderSlug?: string | null) => {
-        const navKey = folderSlug || folderId;
-        navigate(`/resource/library/${libraryId}/${navKey}`);
+      (folderId: string) => {
+        if (libraryId) navigate(libraryFolderPath(libraryId, folderId));
 
         setMode('explorer');
       },
@@ -318,7 +317,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             style={{
               paddingInlineStart: level * 12 + 4,
             }}
-            onClick={() => handleFolderClick(item.id, item.slug)}
+            onClick={() => handleFolderClick(item.id)}
             onDragEnd={handleDragEnd}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}

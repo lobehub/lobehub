@@ -3,7 +3,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
+import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -55,6 +55,20 @@ const styles = stylex.create({
   },
   subtitle: { marginInlineStart: '8px' },
 });
+
+/**
+ * Mounted only while the rail has settled with nothing to show, so the page
+ * hears "empty" once the feeds have answered and "not empty" as soon as any
+ * card returns — including when the rail unmounts.
+ */
+const RailEmptyReporter = ({ onChange }: { onChange: (empty: boolean) => void }) => {
+  useEffect(() => {
+    onChange(true);
+    return () => onChange(false);
+  }, [onChange]);
+
+  return null;
+};
 
 interface InboxSection {
   /** Header action revealed on hover (GroupBlock's action slot). */
@@ -114,6 +128,12 @@ interface HomeInboxProps {
    * news) fold into this column instead of disappearing with it.
    */
   inlineRail?: boolean;
+  /**
+   * Rail only: told `true` once the rail's feeds have loaded and it has no card
+   * to show, and `false` when a card appears, so the page can hand its space to
+   * the main column without guessing from a loading rail.
+   */
+  onRailEmptyChange?: (empty: boolean) => void;
   /** Controlled mine/team scope — lets the page share one scope across sibling sections. */
   onScopeChange?: (scope: 'mine' | 'team') => void;
   scope?: 'mine' | 'team';
@@ -126,6 +146,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     hideRunning,
     hideUnread,
     inlineRail,
+    onRailEmptyChange,
     onScopeChange,
     scope: controlledScope,
     variant = 'default',
@@ -524,13 +545,32 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (visibleSections.length === 0) {
     if (isMain) return null;
 
-    if (isRail)
-      return recommendationsVisible || usageCard ? (
-        <Flexbox gap={12}>
-          {recommendationsVisible && <Recommendations variant={'rail'} />}
-          {usageCard}
-        </Flexbox>
-      ) : null;
+    if (isRail) {
+      if (recommendationsVisible || usageCard)
+        return (
+          <Flexbox gap={12}>
+            {recommendationsVisible && <Recommendations variant={'rail'} />}
+            {usageCard}
+          </Flexbox>
+        );
+
+      // Still waiting on a feed that may yet fill the rail: keep its place
+      // with the loading skeleton rather than collapse it and slide the page
+      // back when the cards land.
+      const railFeedsSettled =
+        (!showGoals || goals !== undefined || Boolean(goalsSWR.error)) &&
+        (!showRailSections || Boolean(newsSWR.data) || Boolean(newsSWR.error));
+
+      if (!railFeedsSettled)
+        return (
+          <Flexbox gap={12}>
+            <BriefCardSkeleton />
+            <BriefCardSkeleton />
+          </Flexbox>
+        );
+
+      return onRailEmptyChange ? <RailEmptyReporter onChange={onRailEmptyChange} /> : null;
+    }
 
     // With no titled block above it, the bare recommendations list doesn't need
     // the full section gap below the input area — offset the parent's gap so it

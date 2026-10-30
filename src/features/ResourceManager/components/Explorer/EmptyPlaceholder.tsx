@@ -94,7 +94,8 @@ const EmptyPlaceholder = () => {
         <Text as={'h4'}>{t('FileManager.emptyStatus.title')}</Text>
         <Text type={'secondary'}>{t('FileManager.emptyStatus.or')}</Text>
       </Flexbox>
-      <Flexbox horizontal gap={12}>
+      {/* Wraps so the three 200px cards stack on a phone instead of clipping. */}
+      <Flexbox horizontal gap={12} justify={'center'} paddingInline={16} wrap={'wrap'}>
         {!libraryId && (
           <Flexbox
             className={stylex.props(styles.card).className}

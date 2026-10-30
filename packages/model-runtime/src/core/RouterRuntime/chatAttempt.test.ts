@@ -390,6 +390,40 @@ describe('observeChatAttempt', () => {
   );
 
   it.each([
+    {
+      error: {
+        body: { message: 'The content was blocked for safety reasons.', provider: 'google' },
+        type: 'ProviderContentPolicyViolation',
+      },
+      errorType: 'ProviderContentPolicyViolation',
+    },
+    {
+      error: { errorType: 'ContentModeration', message: 'blocked by moderation' },
+      errorType: 'ContentModeration',
+    },
+    // Fallback buckets carry no classification of their own, so they stay StreamChunkError.
+    { error: { message: 'boom', type: 'ProviderBizError' }, errorType: 'StreamChunkError' },
+    { error: { message: 'Internal error encountered.' }, errorType: 'StreamChunkError' },
+  ])('keeps the code a stream error already carries: $errorType', async ({ error, errorType }) => {
+    const finished = vi.fn();
+    const response = await observeChatAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('partial');
+        await callback?.onError?.(error);
+        await callback?.onFinal?.({ text: 'partial' });
+        return new Response('done');
+      },
+      undefined,
+      attempt,
+      true,
+      finished,
+    );
+    await response.text();
+
+    expect(finished.mock.calls[0][0].error).toMatchObject({ errorType });
+  });
+
+  it.each([
     { expectedOutcome: 'completed', text: 'I cannot help with that.' },
     { expectedOutcome: 'empty', text: '' },
   ])(

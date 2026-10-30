@@ -12,6 +12,8 @@ describe('home input banner queue', () => {
     );
 
     // The banner's own `display: flex` is StyleX, which beats a plain class rule on specificity.
-    expect(css).toMatch(/~ :global\(\[data-home-input-banner\]\)\s*\{[^}]*display: none !important/);
+    expect(css).toMatch(
+      /~ :global\(\[data-home-input-banner\]\)\s*\{[^}]*display: none !important/,
+    );
   });
 });

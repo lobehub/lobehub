@@ -8,8 +8,8 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { REPLICA_INDEX_KEY } from '@lobechat/replica';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { REPLICA_INDEX_KEY } from 'local-replica';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';

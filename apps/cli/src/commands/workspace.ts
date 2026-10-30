@@ -2,22 +2,23 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { resolveWorkspaceScope, type WorkspaceScope } from '../api/workspace';
+import {
+  PERSONAL_SCOPE_ENV_VALUE,
+  resolveWorkspaceScope,
+  type WorkspaceScope,
+} from '../api/workspace';
+import {
+  listWorkspaces,
+  resolveWorkspace,
+  resolveWorkspaceRef,
+  type WorkspaceRow,
+} from '../api/workspaceRef';
 import { resolveIdentityFingerprint } from '../auth/identity';
 import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { type ActiveWorkspaceRecord, resolveServerUrl, saveActiveWorkspace } from '../settings';
 import { formatCost, outputJson, printTable, timeAgo, timeUntil, truncate } from '../utils/format';
 import { log } from '../utils/logger';
-
-interface WorkspaceRow {
-  id: string;
-  lockedOut?: boolean;
-  name: string;
-  plan?: string;
-  role?: string | null;
-  slug: string;
-  updatedAt?: Date | string;
-}
+import { workspaceUrl } from './resourceUrl';
 
 const SCOPE_HINTS: Record<WorkspaceScope['source'], string> = {
   env: 'LOBEHUB_WORKSPACE_ID',
@@ -30,19 +31,22 @@ const SCOPE_HINTS: Record<WorkspaceScope['source'], string> = {
 const describeScope = (scope: WorkspaceScope): string =>
   scope.workspaceId
     ? `workspace ${scope.workspaceId} ${pc.dim(`(from ${SCOPE_HINTS[scope.source]})`)}`
-    : pc.dim(SCOPE_HINTS[scope.source === 'stale' ? 'stale' : 'personal']);
+    : scope.source === 'env'
+      ? pc.dim(`personal (from LOBEHUB_WORKSPACE_ID=${PERSONAL_SCOPE_ENV_VALUE})`)
+      : pc.dim(SCOPE_HINTS[scope.source === 'stale' ? 'stale' : 'personal']);
 
 /**
  * Every workspace-scoped read goes through the workspace header, so a command
  * that forgets `--workspace` while the CLI sits in personal scope silently
  * queries the wrong tenant. Fail loudly instead, and say how to fix it.
+ * An explicit id or slug is resolved against the caller's workspaces first.
  */
-const requireScope = (explicit?: string): string => {
-  const scope = resolveWorkspaceScope(explicit);
+const requireScope = async (explicit?: string): Promise<string> => {
+  const scope = resolveWorkspaceScope(await resolveWorkspaceRef(explicit));
   if (scope.workspaceId) return scope.workspaceId;
 
   log.error(
-    `No workspace scope. Pass --workspace <id>, or run '${CLI_PRIMARY_BIN} workspace use <id|slug>' first.`,
+    `No workspace scope. Pass --workspace <id|slug>, or run '${CLI_PRIMARY_BIN} workspace use <id|slug>' first.`,
   );
   process.exit(1);
 };
@@ -85,15 +89,6 @@ const isForbidden = (error: unknown): boolean =>
   typeof error === 'object' &&
   error !== null &&
   (error as { data?: { code?: string } }).data?.code === 'FORBIDDEN';
-
-const listWorkspaces = async (): Promise<WorkspaceRow[]> => {
-  const client = await getTrpcClient();
-  return (await client.workspace.list.query()) as WorkspaceRow[];
-};
-
-/** Accept either a workspace id or its slug, so `lh workspace use acme` works. */
-const findWorkspace = (workspaces: WorkspaceRow[], idOrSlug: string): WorkspaceRow | undefined =>
-  workspaces.find((w) => w.id === idOrSlug) ?? workspaces.find((w) => w.slug === idOrSlug);
 
 const planLabel = (workspace: WorkspaceRow): string => {
   if (!workspace.plan) return '-';
@@ -166,18 +161,7 @@ export function registerWorkspaceCommand(program: Command) {
         process.exit(1);
       }
 
-      const workspaces = await listWorkspaces();
-      const match = findWorkspace(workspaces, idOrSlug);
-
-      if (!match) {
-        log.error(`Workspace not found: ${idOrSlug}`);
-        if (workspaces.length > 0) {
-          console.log(pc.dim('Available:'));
-          for (const w of workspaces) console.log(pc.dim(`  ${w.id}  ${w.slug}  ${w.name}`));
-        }
-        process.exit(1);
-      }
-
+      const match = await resolveWorkspace(idOrSlug);
       persistScope(match.id);
       console.log(`Scope set to ${pc.bold(match.name)} ${pc.dim(match.id)}.`);
 
@@ -193,7 +177,11 @@ export function registerWorkspaceCommand(program: Command) {
     .option('--json [fields]', 'Output JSON')
     .action(async (options: { json?: boolean | string }) => {
       const workspaces = await listWorkspaces();
-      if (options.json !== undefined) return outputJson(workspaces, options.json);
+      if (options.json !== undefined)
+        return outputJson(
+          workspaces.map((w) => ({ ...w, url: workspaceUrl(w) })),
+          options.json,
+        );
       if (workspaces.length === 0) return console.log('No workspaces found.');
 
       // The marker has to follow the same precedence every other command uses,
@@ -213,11 +201,11 @@ export function registerWorkspaceCommand(program: Command) {
     });
 
   workspace
-    .command('view [workspaceId]')
+    .command('view [workspaceIdOrSlug]')
     .description('View workspace detail (defaults to the active scope)')
     .option('--json [fields]', 'Output JSON')
-    .action(async (workspaceId: string | undefined, options: { json?: boolean | string }) => {
-      const scopeId = requireScope(workspaceId);
+    .action(async (idOrSlug: string | undefined, options: { json?: boolean | string }) => {
+      const scopeId = await requireScope(idOrSlug);
       const client = await getTrpcClient(scopeId);
       const detail = (await client.workspace.getById.query()) as WorkspaceRow | null;
 
@@ -226,7 +214,8 @@ export function registerWorkspaceCommand(program: Command) {
         process.exit(1);
       }
 
-      if (options.json !== undefined) return outputJson(detail, options.json);
+      if (options.json !== undefined)
+        return outputJson({ ...detail, url: workspaceUrl(detail) }, options.json);
 
       const row = detail as WorkspaceRow & { description?: string | null; frozen?: boolean };
       console.log(`\n${pc.bold(row.name)} ${pc.dim(row.id)}`);
@@ -264,7 +253,8 @@ export function registerWorkspaceCommand(program: Command) {
 
         if (options.use) persistScope(created.id);
 
-        if (options.json !== undefined) return outputJson(created, options.json);
+        if (options.json !== undefined)
+          return outputJson({ ...created, url: workspaceUrl(created) }, options.json);
         console.log(`Created ${pc.bold(created.name)} ${pc.dim(created.id)}`);
         if (options.use) {
           console.log(`Scope set to ${pc.bold(created.name)}.`);
@@ -276,7 +266,7 @@ export function registerWorkspaceCommand(program: Command) {
   workspace
     .command('update')
     .description('Update workspace profile (admin or higher)')
-    .option('-w, --workspace <id>', 'Workspace to update (defaults to the active scope)')
+    .option('-w, --workspace <id|slug>', 'Workspace to update (defaults to the active scope)')
     .option('-n, --name <name>', 'Display name')
     .option('-s, --slug <slug>', 'URL slug')
     .option('-d, --description <description>', 'Description')
@@ -301,7 +291,7 @@ export function registerWorkspaceCommand(program: Command) {
           process.exit(1);
         }
 
-        const scopeId = requireScope(options.workspace);
+        const scopeId = await requireScope(options.workspace);
         await (await getTrpcClient(scopeId)).workspace.update.mutate(patch);
         console.log('Workspace updated.');
       },
@@ -310,10 +300,10 @@ export function registerWorkspaceCommand(program: Command) {
   workspace
     .command('settings')
     .description('Show the workspace settings blob')
-    .option('-w, --workspace <id>', 'Workspace to read (defaults to the active scope)')
+    .option('-w, --workspace <id|slug>', 'Workspace to read (defaults to the active scope)')
     .option('--json [fields]', 'Output JSON')
     .action(async (options: { json?: boolean | string; workspace?: string }) => {
-      const scopeId = requireScope(options.workspace);
+      const scopeId = await requireScope(options.workspace);
       const settings = await (await getTrpcClient(scopeId)).workspace.getSettings.query();
       if (options.json !== undefined) return outputJson(settings, options.json);
       console.log(JSON.stringify(settings ?? {}, null, 2));
@@ -322,11 +312,11 @@ export function registerWorkspaceCommand(program: Command) {
   workspace
     .command('stats')
     .description('Show workspace-wide content statistics (admin or higher)')
-    .option('-w, --workspace <id>', 'Workspace to read (defaults to the active scope)')
+    .option('-w, --workspace <id|slug>', 'Workspace to read (defaults to the active scope)')
     .option('--mine', 'Count only content you created — available to every member')
     .option('--json [fields]', 'Output JSON')
     .action(async (options: { json?: boolean | string; mine?: boolean; workspace?: string }) => {
-      const scopeId = requireScope(options.workspace);
+      const scopeId = await requireScope(options.workspace);
       const client = await getTrpcClient(scopeId);
       const input = { todayStartAt: new Date(new Date().setHours(0, 0, 0, 0)).toISOString() };
       // Workspace-wide totals are Admin-or-higher; members and viewers hit a bare
@@ -354,7 +344,7 @@ export function registerWorkspaceCommand(program: Command) {
   workspace
     .command('usage')
     .description('Show workspace credit usage for the current billing window')
-    .option('-w, --workspace <id>', 'Workspace to read (defaults to the active scope)')
+    .option('-w, --workspace <id|slug>', 'Workspace to read (defaults to the active scope)')
     .option('--since <date>', 'Window start (ISO date)')
     .option('--until <date>', 'Window end (ISO date)')
     .option('--json [fields]', 'Output JSON')
@@ -365,7 +355,7 @@ export function registerWorkspaceCommand(program: Command) {
         until?: string;
         workspace?: string;
       }) => {
-        const scopeId = requireScope(options.workspace);
+        const scopeId = await requireScope(options.workspace);
         const usage = await (
           await getTrpcClient(scopeId)
         ).workspaceUsage.getCurrentUsage.query({ since: options.since, until: options.until });
@@ -392,10 +382,10 @@ export function registerWorkspaceCommand(program: Command) {
   workspace
     .command('members')
     .description('List workspace members')
-    .option('-w, --workspace <id>', 'Workspace to read (defaults to the active scope)')
+    .option('-w, --workspace <id|slug>', 'Workspace to read (defaults to the active scope)')
     .option('--json [fields]', 'Output JSON')
     .action(async (options: { json?: boolean | string; workspace?: string }) => {
-      const scopeId = requireScope(options.workspace);
+      const scopeId = await requireScope(options.workspace);
       const members = await (await getTrpcClient(scopeId)).workspaceMember.list.query({});
 
       if (options.json !== undefined) return outputJson(members, options.json);
@@ -416,7 +406,7 @@ export function registerWorkspaceCommand(program: Command) {
   workspace
     .command('invite <email>')
     .description('Invite a member by email (admin or higher)')
-    .option('-w, --workspace <id>', 'Workspace to invite into (defaults to the active scope)')
+    .option('-w, --workspace <id|slug>', 'Workspace to invite into (defaults to the active scope)')
     .option('-r, --role <role>', 'Role to grant: admin | member | viewer', 'member')
     .option('--json [fields]', 'Output JSON')
     .action(
@@ -431,7 +421,7 @@ export function registerWorkspaceCommand(program: Command) {
           process.exit(1);
         }
 
-        const scopeId = requireScope(options.workspace);
+        const scopeId = await requireScope(options.workspace);
         const invitation = await (
           await getTrpcClient(scopeId)
         ).workspaceMember.invite.mutate({ email, role });
@@ -444,10 +434,10 @@ export function registerWorkspaceCommand(program: Command) {
   workspace
     .command('invitations')
     .description('List pending invitations (admin or higher)')
-    .option('-w, --workspace <id>', 'Workspace to read (defaults to the active scope)')
+    .option('-w, --workspace <id|slug>', 'Workspace to read (defaults to the active scope)')
     .option('--json [fields]', 'Output JSON')
     .action(async (options: { json?: boolean | string; workspace?: string }) => {
-      const scopeId = requireScope(options.workspace);
+      const scopeId = await requireScope(options.workspace);
       const invitations = await (
         await getTrpcClient(scopeId)
       ).workspaceMember.listInvitations.query();
@@ -472,7 +462,7 @@ export function registerWorkspaceCommand(program: Command) {
   workspace
     .command('audit-log')
     .description('List workspace audit-log entries (admin or higher, Business plan)')
-    .option('-w, --workspace <id>', 'Workspace to read (defaults to the active scope)')
+    .option('-w, --workspace <id|slug>', 'Workspace to read (defaults to the active scope)')
     .option('--action <action>', 'Filter by action, for example workspace.updated')
     .option('--resource-type <type>', 'Filter by resource type')
     .option('-q, --query <text>', 'Free-text search')
@@ -497,7 +487,7 @@ export function registerWorkspaceCommand(program: Command) {
           process.exit(1);
         }
 
-        const scopeId = requireScope(options.workspace);
+        const scopeId = await requireScope(options.workspace);
         const result = await (
           await getTrpcClient(scopeId)
         ).workspaceAuditLog.list.query({

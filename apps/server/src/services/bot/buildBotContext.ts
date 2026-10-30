@@ -5,6 +5,11 @@ export interface BuildBotContextParams {
   /** Platform-assigned ID of the inbound message author (e.g. Discord/Slack `user.id`). */
   authorUserId: string | undefined;
   /**
+   * User IDs, besides the owner, the owner trusts with their devices
+   * (`extractDeviceAllowlist(settings)`). Omitted or empty: owner only.
+   */
+  deviceAllowlist?: string[];
+  /**
    * Configured owner ID for this bot install (e.g. `agent_bot_providers.settings.userId`
    * or messenger link's `platformUserId`). Owner identity is decided by
    * exact equality with `authorUserId` — never inferred, never defaulted.
@@ -31,9 +36,13 @@ export interface BuildBotContextParams {
 export const buildBotContext = (params: BuildBotContextParams): ChatTopicBotContext => {
   const senderExternalUserId = params.authorUserId ?? '';
   const isOwner = !!params.operatorUserId && senderExternalUserId === params.operatorUserId;
+  // Same fail-closed rule as `isOwner`: an unknown sender is never trusted.
+  const isDeviceTrusted =
+    !isOwner && !!senderExternalUserId && !!params.deviceAllowlist?.includes(senderExternalUserId);
   return {
     applicationId: params.applicationId,
     isOwner,
+    ...(isDeviceTrusted && { isDeviceTrusted }),
     platform: params.platform,
     platformThreadId: params.platformThreadId,
     senderExternalUserId,

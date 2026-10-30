@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router';
 
 import { useFolderPath } from '@/features/ResourceManager/hooks/useFolderPath';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { libraryFolderPath } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFileStore } from '@/store/file';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
@@ -39,7 +40,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
   const { t } = useTranslation('file');
   const navigate = useWorkspaceAwareNavigate();
   const [searchParams] = useSearchParams();
-  const { currentFolderSlug, knowledgeBaseId: currentKnowledgeBaseId } = useFolderPath();
+  const { currentFolderId, knowledgeBaseId: currentKnowledgeBaseId } = useFolderPath();
 
   const setMode = useResourceManagerStore((s) => s.setMode);
   const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
@@ -51,7 +52,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
 
   // Fetch folder breadcrumb chain from backend
   const useFetchFolderBreadcrumb = useFileStore((s) => s.useFetchFolderBreadcrumb);
-  const { data: folderChain = [] } = useFetchFolderBreadcrumb(currentFolderSlug);
+  const { data: folderChain = [] } = useFetchFolderBreadcrumb(currentFolderId);
 
   // When in inbox mode (no knowledgeBaseId), show category in breadcrumb
   if (!baseKnowledgeBaseId) {
@@ -78,7 +79,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
     );
   }
 
-  const handleNavigate = (slug: string | null) => {
+  const handleNavigate = (folderId: string | null) => {
     // If navigating while viewing a file, reset the file view mode
     if (fileName) {
       setMode('explorer');
@@ -91,9 +92,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
     newParams.delete('file');
 
     const queryString = newParams.toString();
-    const basePath = slug
-      ? `/resource/library/${baseKnowledgeBaseId}/${slug}`
-      : `/resource/library/${baseKnowledgeBaseId}`;
+    const basePath = libraryFolderPath(baseKnowledgeBaseId, folderId);
 
     navigate(queryString ? `${basePath}?${queryString}` : basePath);
   };
@@ -130,7 +129,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ category, fileName }) => {
               className={
                 stylex.props(styles.breadcrumbItem, isLast && styles.currentItem).className
               }
-              onClick={() => !isLast && handleNavigate(folder.slug)}
+              onClick={() => !isLast && handleNavigate(folder.id)}
             >
               {folder.name}
             </span>

@@ -6,9 +6,11 @@ import type {
   MarkNotificationsReadRequest,
   NotificationIdParam,
   NotificationListQuery,
+  NotificationSettingsQuery,
+  UpdateNotificationSettingsRequest,
 } from '../types/notification.type';
 
-/** Notifications controller — inbox reads and read/archive transitions. */
+/** Notifications controller — inbox reads, read/archive transitions and delivery settings. */
 export class NotificationController extends BaseController {
   private async service(c: Context): Promise<NotificationRestService> {
     return new NotificationRestService(
@@ -94,6 +96,33 @@ export class NotificationController extends BaseController {
       const service = await this.service(c);
       await service.archive(id);
       return this.success(c, undefined, 'Notification archived');
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** GET /api/v1/notifications/settings */
+  async getSettings(c: Context): Promise<Response> {
+    try {
+      const { scope } = this.getQuery<NotificationSettingsQuery>(c);
+      const service = await this.service(c);
+      return this.success(c, await service.getSettings(scope));
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
+  /** PATCH /api/v1/notifications/settings */
+  async updateSettings(c: Context): Promise<Response> {
+    try {
+      const { scope } = this.getQuery<NotificationSettingsQuery>(c);
+      const body = await this.getBody<UpdateNotificationSettingsRequest>(c);
+      const service = await this.service(c);
+      return this.success(
+        c,
+        await service.updateSettings(scope, body),
+        'Notification settings updated',
+      );
     } catch (error) {
       return this.handleError(c, error);
     }

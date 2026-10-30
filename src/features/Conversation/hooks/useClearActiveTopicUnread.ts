@@ -26,6 +26,6 @@ export const useClearActiveTopicUnread = () => {
   const markTopicRead = useChatStore((s) => s.markTopicRead);
 
   useEffect(() => {
-    if (activeTopicId && isActiveTopicUnread) markTopicRead({ topicId: activeTopicId });
+    if (activeTopicId && isActiveTopicUnread) void markTopicRead({ topicId: activeTopicId });
   }, [activeTopicId, isActiveTopicUnread, markTopicRead]);
 };

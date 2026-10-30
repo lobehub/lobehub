@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { agentDisplayName } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   Button,
   createStaticStyles,
@@ -13,6 +13,7 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
 import { CircleCheck } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +28,8 @@ import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
+import { buildMoveTargets } from './targets';
+
 type Step = 'pick' | 'confirm' | 'moving' | 'done';
 
 export interface MoveTopicsContentProps {
@@ -38,6 +41,12 @@ export interface MoveTopicsContentProps {
 }
 
 const styles = createStaticStyles(({ css }) => ({
+  sectionHeader: css`
+    padding-block: 4px;
+    padding-inline: 8px;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
   searchInput: css`
     width: 100%;
     padding-block: 6px;
@@ -68,7 +77,15 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
   const [target, setTarget] = useState<{ id: string; title: string } | null>(null);
 
   const batchMoveTopicsToAgent = useChatStore((s) => s.batchMoveTopicsToAgent);
-  const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
+  const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+  const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
+  const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
+  const privateUngroupedAgents = useHomeStore(
+    homeAgentListSelectors.privateUngroupedAgents,
+    isEqual,
+  );
   const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
 
   // The inbox (default "LobeAI") agent is virtual, so it's filtered out of the
@@ -82,33 +99,66 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
 
   const count = topicIds.length;
 
-  // Source agent is excluded — moving topics back to where they already live
-  // would be a no-op. The inbox agent is prepended when not already present.
-  const targetAgents = useMemo(() => {
-    const available = agents.filter((a) => a.type === 'agent');
-    const withInbox =
-      inboxAgentId && !available.some((a) => a.id === inboxAgentId)
-        ? [
-            {
+  // Private agents get their own section on top — appended to the end of a
+  // long workspace list they were effectively unreachable. The source agent is
+  // excluded (no-op move) and the virtual inbox agent is added back.
+  const { privateAgents, workspaceAgents } = useMemo(
+    () =>
+      buildMoveTargets({
+        agentGroups,
+        inbox: inboxAgentId
+          ? {
               avatar: inboxMeta?.avatar || DEFAULT_INBOX_AVATAR,
               description: null,
               id: inboxAgentId,
               pinned: false,
               title: agentDisplayName(inboxMeta, t('inbox.title', { ns: 'chat' })),
-              type: 'agent' as const,
+              type: 'agent',
               updatedAt: new Date(),
-            },
-            ...available,
-          ]
-        : available;
-    return withInbox.filter((a) => a.id !== sourceAgentId);
-  }, [agents, inboxAgentId, inboxMeta, sourceAgentId, t]);
+            }
+          : undefined,
+        pinnedAgents,
+        privateAgentGroups,
+        privatePinnedAgents,
+        privateUngroupedAgents,
+        search,
+        sourceAgentId,
+        ungroupedAgents,
+      }),
+    [
+      agentGroups,
+      inboxAgentId,
+      inboxMeta,
+      pinnedAgents,
+      privateAgentGroups,
+      privatePinnedAgents,
+      privateUngroupedAgents,
+      search,
+      sourceAgentId,
+      t,
+      ungroupedAgents,
+    ],
+  );
 
-  const filteredAgents = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return targetAgents;
-    return targetAgents.filter((a) => (agentDisplayName(a) ?? '').toLowerCase().includes(q));
-  }, [targetAgents, search]);
+  const renderAgentItems = (list: SidebarAgentItem[]) =>
+    list.map((agent) => (
+      <AgentItem
+        active={false}
+        agent={agent}
+        agentId={agent.id}
+        agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
+        avatar={agent.avatar}
+        key={agent.id}
+        onClose={() => {}}
+        onAgentChange={() => {
+          setTarget({
+            id: agent.id,
+            title: agentDisplayName(agent, t('untitledAgent', { ns: 'chat' })),
+          });
+          setStep('confirm');
+        }}
+      />
+    ));
 
   const handleConfirm = async () => {
     if (!target) return;
@@ -140,7 +190,7 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
         />
         {!isAgentListInit ? (
           <SkeletonList rows={6} />
-        ) : filteredAgents.length === 0 ? (
+        ) : privateAgents.length + workspaceAgents.length === 0 ? (
           <Flexbox align={'center'} justify={'center'} padding={24}>
             <Text fontSize={12} type={'secondary'}>
               {t('management.bulk.moveEmpty')}
@@ -152,24 +202,22 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
             padding={8}
             style={{ maxHeight: '50vh', overflowY: 'auto', width: '100%' }}
           >
-            {filteredAgents.map((agent) => (
-              <AgentItem
-                active={false}
-                agent={agent}
-                agentId={agent.id}
-                agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
-                avatar={agent.avatar}
-                key={agent.id}
-                onClose={() => {}}
-                onAgentChange={() => {
-                  setTarget({
-                    id: agent.id,
-                    title: agentDisplayName(agent, t('untitledAgent', { ns: 'chat' })),
-                  });
-                  setStep('confirm');
-                }}
-              />
-            ))}
+            {privateAgents.length > 0 ? (
+              <>
+                <div className={styles.sectionHeader}>
+                  {t('taskManager.agentSelector.privateGroup')}
+                </div>
+                {renderAgentItems(privateAgents)}
+                {workspaceAgents.length > 0 && (
+                  <div className={styles.sectionHeader}>
+                    {t('taskManager.agentSelector.workspaceGroup')}
+                  </div>
+                )}
+                {renderAgentItems(workspaceAgents)}
+              </>
+            ) : (
+              renderAgentItems(workspaceAgents)
+            )}
           </Flexbox>
         )}
       </Flexbox>

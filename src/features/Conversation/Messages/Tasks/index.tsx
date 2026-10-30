@@ -39,6 +39,7 @@ const TasksMessage = memo<TasksMessageProps>(({ id }) => {
       showTitle
       aboveMessage={null}
       actions={<AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} />}
+      agentId={firstTaskAgentId ?? null}
       avatar={avatar}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       id={id}

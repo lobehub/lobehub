@@ -43,7 +43,7 @@ const manifestSchema = {
   properties: {
     env: {
       description:
-        'Secrets / variables the script reads from its environment. Each is injected from a connected account (connector) at run time and redacted from logs.',
+        'Secrets / variables the script reads from its environment. Each is injected from a connected account (connector) at run time and redacted from logs. For a LobeHub Market connector the value is a placeholder that only works sent as the configured header (default Authorization: Bearer) to the provider API host, which must be in network.allow.',
       items: {
         additionalProperties: false,
         properties: {
@@ -56,6 +56,24 @@ const manifestSchema = {
             description:
               'For a connector holding several headers: which header to inject, e.g. "X-Api-Key" (case-insensitive). Required then; ignored for single-secret connectors.',
             type: 'string',
+          },
+          inject: {
+            additionalProperties: false,
+            description:
+              'LobeHub Market connectors only (github, linear, notion, vercel, …): their variable holds a placeholder and the sandbox sets the real token as `header` on requests to `host`. Defaults per provider (github → Authorization: Bearer on api.github.com); set it only for another host or header. Every host must be in network.allow.',
+            properties: {
+              header: { description: 'Defaults to "Authorization".', type: 'string' },
+              host: {
+                description: 'API host (or list), exact or "*.domain".',
+                oneOf: [{ type: 'string' }, { items: { type: 'string' }, type: 'array' }],
+              },
+              prefix: {
+                description: 'Prepended to the token; defaults to "Bearer " for Authorization.',
+                type: 'string',
+              },
+            },
+            required: ['host'],
+            type: 'object',
           },
           name: { description: 'Variable name, e.g. GITHUB_TOKEN.', type: 'string' },
           required: { type: 'boolean' },
@@ -128,6 +146,27 @@ export const DashboardManifest: BuiltinToolManifest = {
       parameters: {
         additionalProperties: false,
         properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Create an empty dashboard (in a project conversation it belongs to the project) and return its id. Check listDashboards first so you do not duplicate an existing board; to create a board for one widget, addWidgetToDashboard with newDashboardTitle does both in one step.',
+      name: DashboardApiName.createDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          description: {
+            description:
+              'What the dashboard monitors and why, shown under its title, e.g. "Launch monitoring for iBench 0.1: hourly engagement of the announcement post and daily GitHub stars since open-sourcing on 2026-10-29." At most 2000 characters.',
+            type: 'string',
+          },
+          title: {
+            description: 'Dashboard title, e.g. "iBench launch". At most 200 characters.',
+            type: 'string',
+          },
+        },
+        required: ['title', 'description'],
         type: 'object',
       },
     },
@@ -221,12 +260,17 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Place a widget on a dashboard. Pass dashboardId from listDashboards, or newDashboardTitle to create a dashboard first (in a project conversation it belongs to the project). Placing an unpublished widget is allowed.',
+        'Place a widget on a dashboard. Pass dashboardId from listDashboards, or newDashboardTitle (with newDashboardDescription) to create a dashboard first (in a project conversation it belongs to the project). Placing an unpublished widget is allowed.',
       name: DashboardApiName.addWidgetToDashboard,
       parameters: {
         additionalProperties: false,
         properties: {
           dashboardId: { description: 'Existing dashboard id (uuid).', type: 'string' },
+          newDashboardDescription: {
+            description:
+              'Description of the new dashboard, shown under its title: what it monitors and why, e.g. "Launch monitoring for iBench 0.1: hourly engagement of the announcement post and daily GitHub stars since open-sourcing on 2026-10-29." Only used with newDashboardTitle. At most 2000 characters.',
+            type: 'string',
+          },
           newDashboardTitle: {
             description:
               'Create a new dashboard with this name and place the widget on it. Titles over 200 characters are rejected.',
@@ -235,6 +279,31 @@ export const DashboardManifest: BuiltinToolManifest = {
           widgetId: widgetIdSchema,
         },
         required: ['widgetId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Rename a dashboard or rewrite its description. Pass only what changes; an empty description clears it. Only dashboards listDashboards shows are editable.',
+      name: DashboardApiName.updateDashboard,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          dashboardId: {
+            description: 'Dashboard id (uuid) from listDashboards or addWidgetToDashboard.',
+            type: 'string',
+          },
+          description: {
+            description:
+              'New dashboard description: what the board monitors and why. At most 2000 characters.',
+            type: 'string',
+          },
+          title: {
+            description: 'New dashboard title. At most 200 characters.',
+            type: 'string',
+          },
+        },
+        required: ['dashboardId'],
         type: 'object',
       },
     },

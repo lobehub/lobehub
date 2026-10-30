@@ -296,6 +296,7 @@ export interface UpdateClientTaskThreadStatusParams {
   error?: string;
   metadata?: {
     totalCost?: number;
+    totalLlmCalls?: number;
     totalMessages?: number;
     totalSteps?: number;
     totalTokens?: number;

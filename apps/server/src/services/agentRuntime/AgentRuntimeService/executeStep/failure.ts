@@ -1,3 +1,4 @@
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import type { Span } from '@lobechat/observability-otel/api';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { buildInvokeAgentResultAttributes } from '@lobechat/observability-otel/modules/agent-runtime';
@@ -96,6 +97,7 @@ export async function failStep(
     finalStateWithError = {
       ...errorState!,
       error: formattedError,
+      llmCalls: getLlmCallCount(errorState),
       metadata: {
         ...errorState?.metadata,
         externalRetryCount,

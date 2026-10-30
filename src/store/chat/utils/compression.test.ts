@@ -25,6 +25,26 @@ describe('compression utils', () => {
     ).toEqual(['user-1', 'tool-1']);
   });
 
+  it('should keep the given message and later ones out of compression candidates', () => {
+    const messages = [
+      { id: 'user-1', role: 'user' },
+      { id: 'assistant-1', role: 'assistant' },
+      { id: 'user-2', role: 'user' },
+      { id: 'assistant-2', role: 'assistant' },
+    ] as any[];
+
+    expect(getCompressionCandidateMessageIds(messages, { beforeMessageId: 'user-2' })).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+    expect(getCompressionCandidateMessageIds(messages, { beforeMessageId: 'missing' })).toEqual([
+      'user-1',
+      'assistant-1',
+      'user-2',
+      'assistant-2',
+    ]);
+  });
+
   it('should detect running compression operations in the same conversation context', () => {
     const operations: Operation[] = [
       {

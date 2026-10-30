@@ -1,4 +1,4 @@
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import * as stylex from '@stylexjs/stylex';
@@ -7,6 +7,7 @@ import { Bot, Image } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import Avatar from '@/components/Avatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useHomeStore } from '@/store/home';
@@ -63,8 +64,8 @@ const AskAIMenu = memo(() => {
     <Command.Group heading={heading}>
       <Command.Item value="lobe-ai" onSelect={handleAskLobeAI}>
         <Avatar emojiScaleWithBackground avatar={DEFAULT_INBOX_AVATAR} shape="square" size={18} />
-        <div {...stylex.props(styles.itemContent)}>
-          <div {...stylex.props(styles.itemLabel)}>Lobe AI</div>
+        <div className={stylex.props(styles.itemContent).className}>
+          <div className={stylex.props(styles.itemLabel).className}>{DEFAULT_INBOX_TITLE}</div>
         </div>
       </Command.Item>
       <Command.Item value="agent-builder" onSelect={handleAgentBuilder}>
@@ -94,9 +95,9 @@ const AskAIMenu = memo(() => {
           value={`agent-${agent.id}`}
           variant="detailed"
           icon={
-            <Avatar
-              emojiScaleWithBackground
-              avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
+            <AgentAvatar
+              agentId={agent.id}
+              avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
               name={agentDisplayName(agent, t('defaultAgent'))}
               shape="square"
               size={18}

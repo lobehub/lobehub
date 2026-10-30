@@ -2,7 +2,6 @@
 
 import { MAX_RESOURCE_COLLABORATORS_PER_ADD } from '@lobechat/const';
 import {
-  Avatar,
   Button,
   Empty,
   Flexbox,
@@ -23,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { useWorkspaceMembers } from '@/business/client/hooks/useWorkspaceMembers';
+import UserAvatar from '@/components/UserAvatar';
 import type { PermissionResourceType, ResourceAccessLevel } from '@/services/resourcePermission';
 
 import { useResourceCollaborators } from '../useResourceCollaborators';
@@ -123,12 +123,7 @@ const MemberRow = memo<{
         onToggle(member.userId);
       }}
     >
-      <Avatar
-        animation={isHovering}
-        avatar={member.user?.avatar || undefined}
-        size={40}
-        title={name}
-      />
+      <UserAvatar animation={isHovering} avatar={member.user?.avatar} name={name} size={40} />
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Text ellipsis weight={500}>
           {name}

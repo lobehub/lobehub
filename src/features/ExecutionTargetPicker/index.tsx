@@ -1,13 +1,15 @@
 'use client';
 
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+
+import moduleStyles from './index.module.css';
 
 const styles = stylex.create({
   dotOffline: {
@@ -28,6 +30,51 @@ const styles = stylex.create({
     boxShadow: `0 0 0 2px ${cssVar.colorSuccessBg}`,
   },
   status: { display: 'inline-flex', gap: '6px', alignItems: 'center' },
+  option: { display: 'flex', flex: '1', gap: '8px', alignItems: 'center', minWidth: 0 },
+  optionDescription: { fontSize: '12px', lineHeight: '16px', color: cssVar.colorTextDescription },
+  optionIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  optionName: {
+    overflow: 'hidden',
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: '20px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  selectItem: { minHeight: '40px' },
+  selectPopup: { maxWidth: 'calc(100vw - 24px)' },
+  triggerIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    color: cssVar.colorTextSecondary,
+  },
+  triggerLabel: { display: 'flex', flex: '1', gap: '8px', alignItems: 'center', minWidth: 0 },
+  triggerName: {
+    overflow: 'hidden',
+    flex: '1',
+    textAlign: 'start',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
 });
 
 export const SHARED_EXECUTION_TARGETS = ['auto', 'device', 'none', 'sandbox'] as const;
@@ -205,3 +252,66 @@ export const ExecutionTargetDeviceStatus = memo<ExecutionTargetDeviceStatusProps
 );
 
 ExecutionTargetDeviceStatus.displayName = 'ExecutionTargetPicker.ExecutionTargetDeviceStatus';
+
+/** Select slots for execution-environment pickers that render {@link ExecutionTargetLabel}. */
+export const executionTargetSelectClassNames = {
+  item: stylex.props(styles.selectItem).className,
+  popup: stylex.props(styles.selectPopup).className,
+  value: moduleStyles.selectValue,
+};
+
+interface ExecutionTargetLabelProps {
+  compact?: boolean;
+  description: string;
+  device?: DeviceListItem;
+  label: string;
+  offlineLabel: string;
+  onlineLabel: string;
+  target: DeviceExecutionTarget;
+  unknownLabel: string;
+}
+
+export const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
+  ({ compact, description, device, label, offlineLabel, onlineLabel, target, unknownLabel }) => {
+    const icon = <ExecutionTargetIcon devicePlatform={device?.platform} target={target} />;
+    const secondary = device ? (
+      <ExecutionTargetDeviceStatus
+        offlineLabel={offlineLabel}
+        online={device.online}
+        onlineLabel={onlineLabel}
+        unknown={device.onlineUnknown}
+        unknownLabel={unknownLabel}
+      />
+    ) : (
+      description
+    );
+
+    if (compact) {
+      return (
+        <span className={stylex.props(styles.triggerLabel).className}>
+          <span aria-hidden className={stylex.props(styles.triggerIcon).className}>
+            {icon}
+          </span>
+          <span className={stylex.props(styles.triggerName).className}>{label}</span>
+          {device ? (
+            <span className={stylex.props(styles.optionDescription).className}>{secondary}</span>
+          ) : null}
+        </span>
+      );
+    }
+
+    return (
+      <span className={stylex.props(styles.option).className}>
+        <span aria-hidden className={stylex.props(styles.optionIcon).className}>
+          {icon}
+        </span>
+        <Flexbox flex={1} style={{ minWidth: 0 }}>
+          <span className={stylex.props(styles.optionName).className}>{label}</span>
+          <span className={stylex.props(styles.optionDescription).className}>{secondary}</span>
+        </Flexbox>
+      </span>
+    );
+  },
+);
+
+ExecutionTargetLabel.displayName = 'ExecutionTargetPicker.ExecutionTargetLabel';

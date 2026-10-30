@@ -1,0 +1,46 @@
+.editCell {
+  position: relative;
+}
+
+.editCell:hover [data-resize-handle],
+.editCell [data-resize-handle]:focus-visible,
+.editCell [data-resize-handle][data-active='true'] {
+  opacity: 1;
+}
+
+.resizeHandle {
+  touch-action: none;
+  cursor: nwse-resize;
+  position: absolute;
+  z-index: 1;
+  inset-block-end: 2px;
+  inset-inline-end: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--lobe-border-radius-sm);
+  color: var(--lobe-color-text-tertiary);
+  opacity: 0.6;
+  background: transparent;
+  transition: opacity var(--lobe-motion-duration-mid);
+}
+
+.resizeHandle:hover,
+.resizeHandle[data-active='true'] {
+  color: var(--lobe-color-text);
+  background: var(--lobe-color-fill-secondary);
+}
+
+.resizeHandle:focus-visible {
+  outline: 2px solid var(--lobe-color-primary);
+}
+
+@media (width <= 767px) {
+  .resizeHandle {
+    cursor: ns-resize;
+  }
+}

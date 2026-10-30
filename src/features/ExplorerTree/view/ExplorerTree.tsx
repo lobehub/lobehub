@@ -1,12 +1,13 @@
 'use client';
 
-import type {
-  FileTreeDirectoryHandle,
-  FileTreeItemHandle,
-  FileTreeOptions,
-  FileTreeRowDecoration,
+import {
+  FileTree as FileTreeModel,
+  type FileTreeDirectoryHandle,
+  type FileTreeItemHandle,
+  type FileTreeOptions,
+  type FileTreeRowDecoration,
 } from '@pierre/trees';
-import { FileTree as PierreFileTree, useFileTree, useFileTreeSelection } from '@pierre/trees/react';
+import { FileTree as PierreFileTree, useFileTreeSelection } from '@pierre/trees/react';
 import debug from 'debug';
 import type { DragEvent, ForwardedRef, KeyboardEvent, MouseEvent } from 'react';
 import {
@@ -42,8 +43,6 @@ const asDirectory = (
   handle: FileTreeItemHandle | null | undefined,
 ): FileTreeDirectoryHandle | null =>
   handle && handle.isDirectory() ? (handle as FileTreeDirectoryHandle) : null;
-
-type FileTreeModel = ReturnType<typeof useFileTree>['model'];
 
 // @pierre/trees walks a lookup path segment by segment and asks for each
 // intermediate node's directory child index *before* checking that the node is
@@ -293,7 +292,12 @@ function ExplorerTreeInner<TData>(
   }, []);
 
   const renamingNodeRef = useRef<ExplorerTreeNode<TData> | null>(null);
-  const { model } = useFileTree(initialOptions);
+  // Not `useFileTree`: it destroys the model in an effect cleanup, which also
+  // runs when an <Activity> ancestor hides the tree (the working sidebar). On
+  // reveal the tree kept using the destroyed model and fell back to the paths it
+  // was created with. The model holds no global listeners, so garbage collection
+  // releases it after a real unmount, and <PierreFileTree> detaches its DOM.
+  const model = useSingleton(() => new FileTreeModel(initialOptions));
 
   // Drops whatever the tree applied optimistically (rename, drop, new row) by
   // re-applying the current nodes, keeping expansion, selection and focus.

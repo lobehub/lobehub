@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
 
+import { canvasRuntime } from './plugins/vite/canvasRuntime';
 import { stylexPlugin, stylexTokenModules } from './plugins/vite/stylex';
 
 if (process.env.NODE_ENV === 'production') {
@@ -79,6 +80,7 @@ export default defineConfig({
     exclude: ['crypto', 'util', 'tty'],
   },
   plugins: [
+    canvasRuntime(),
     stylexPlugin(),
     tsconfigPaths({ projects: ['.', './apps/share', './apps/workbench'] }),
     // Let `.md` imports resolve to their raw text content so Rollup/Vitest

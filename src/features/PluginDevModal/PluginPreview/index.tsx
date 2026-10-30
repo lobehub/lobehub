@@ -12,9 +12,10 @@ import { pluginHelpers } from '@/store/tool';
 
 import ApiVisualizer from './ApiVisualizer';
 import PluginEmptyState from './EmptyState';
+import { getMcpManifestSummary } from './mcpManifestSummary';
 
 const PluginPreview = memo<{ form: FormInstance<LobeToolCustomPlugin> }>(({ form }) => {
-  const { t } = useTranslation('plugin');
+  const { t, i18n } = useTranslation('plugin');
   const manifest = useWatch(form, 'manifest');
   const meta = manifest?.meta;
 
@@ -48,7 +49,10 @@ const PluginPreview = memo<{ form: FormInstance<LobeToolCustomPlugin> }>(({ form
               <PluginTag type={'customPlugin'} />
             </Flexbox>
             <Text style={{ fontSize: 12 }} type={'secondary'}>
-              {pluginHelpers.getPluginDesc(meta) || 'Plugin Description'}
+              {pluginHelpers.getPluginDesc(meta) ||
+                (manifest.type === 'mcp'
+                  ? getMcpManifestSummary(manifest, t, i18n.resolvedLanguage)
+                  : 'Plugin Description')}
             </Text>
           </Flexbox>
         </Flexbox>
