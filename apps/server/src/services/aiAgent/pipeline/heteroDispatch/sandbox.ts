@@ -2,6 +2,7 @@ import type { ExecAgentResult } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { CLAUDE_CODE_TOKEN_CRED_KEY } from '@/helpers/claudeCodeTokenCred';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { spawnHeteroSandbox } from '@/server/services/heterogeneousAgent/sandboxRunner';
 
@@ -89,18 +90,25 @@ const hasHeteroRunStarted = async (
 };
 
 /**
- * The sandbox rejects a run whose agent credential is unset with prose such as
- * `CLAUDE_CODE_OAUTH_TOKEN 未设置。请先在凭证管理中添加该凭证…`. Pull out only
- * the variable name, and only when the text is about a credential, so an
- * operator-side variable (`E2B_API_KEY is not set`) is never presented to IM
- * members as something they should add under Credentials.
+ * Vault credentials the cloud sandbox injects for each agent. Only these can be
+ * named as missing: a sandbox provider may report its own variables the same
+ * way (`E2B_API_KEY is not set`), and those are not the user's to add.
  */
+const SANDBOX_AGENT_CREDENTIALS: Partial<Record<string, readonly string[]>> = {
+  'claude-code': [CLAUDE_CODE_TOKEN_CRED_KEY],
+};
+
 const MISSING_CREDENTIAL =
   /\b([A-Z][\dA-Z]*(?:_[\dA-Z]+)+)\s*(?:未设置|未配置|is not set|is not configured)/;
-const MENTIONS_CREDENTIAL = /凭证|credential/i;
 
-const readMissingCredential = (detail: string): string | undefined =>
-  MENTIONS_CREDENTIAL.test(detail) ? MISSING_CREDENTIAL.exec(detail)?.[1] : undefined;
+/**
+ * Name the agent credential the sandbox rejected the run for, e.g.
+ * `CLAUDE_CODE_OAUTH_TOKEN 未设置。请先在凭证管理中添加该凭证…`.
+ */
+const readMissingCredential = (heteroType: string, detail: string): string | undefined => {
+  const name = MISSING_CREDENTIAL.exec(detail)?.[1];
+  return name && SANDBOX_AGENT_CREDENTIALS[heteroType]?.includes(name) ? name : undefined;
+};
 
 /**
  * Spawn a local CLI hetero agent in the cloud sandbox. The spawn is
@@ -178,7 +186,7 @@ export const spawnInCloudSandbox = async (
     if (await hasHeteroRunStarted(deps, { operationId, topicId })) return;
 
     const detail = err instanceof Error ? err.message : String(err);
-    const missingCredential = readMissingCredential(detail);
+    const missingCredential = readMissingCredential(heteroType, detail);
     await finalizeHeteroDispatchError(deps, {
       agentId: resolvedAgentId,
       assistantMessageId,

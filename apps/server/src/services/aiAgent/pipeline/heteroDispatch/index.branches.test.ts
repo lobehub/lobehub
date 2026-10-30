@@ -803,10 +803,10 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
     it('reads the credential from English wording too', async () => {
       const params = await spawnFailure(
         sandboxAgent(),
-        'CODEX_API_KEY is not set. Add it under Credentials and retry.',
+        'CLAUDE_CODE_OAUTH_TOKEN is not set. Add it under Credentials and retry.',
       );
 
-      expect(params.dispatch.missingCredential).toBe('CODEX_API_KEY');
+      expect(params.dispatch.missingCredential).toBe('CLAUDE_CODE_OAUTH_TOKEN');
     });
 
     it('does not blame device access for an agent that targets the sandbox', async () => {
@@ -819,13 +819,13 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
       });
     });
 
-    it.each(['E2B_API_KEY is not set', 'Gateway Timeout'])(
-      'names no credential for a failure that is not about one (%s)',
-      async (detail) => {
-        const params = await spawnFailure(sandboxAgent(), detail);
+    it.each([
+      'E2B_API_KEY is not set; sandbox credential configuration is incomplete',
+      'Gateway Timeout',
+    ])('names no credential for a failure that is not about one (%s)', async (detail) => {
+      const params = await spawnFailure(sandboxAgent(), detail);
 
-        expect(params.dispatch).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
-      },
-    );
+      expect(params.dispatch).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
+    });
   });
 });
