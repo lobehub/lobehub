@@ -8,6 +8,7 @@ import {
   CalendarClockIcon,
   CpuIcon,
   FolderIcon,
+  HardDriveIcon,
   LayersIcon,
   type LucideIcon,
   MemoryStickIcon,
@@ -169,6 +170,9 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
                 label={t('devices.card.memoryUsage')}
                 value={usage.latest?.memoryPercent}
               />
+              {usage.reportsDisk && (
+                <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
+              )}
             </UsageMeterGroup>
           )}
         </div>
@@ -194,6 +198,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={MemoryStickIcon} label={t('devices.detail.memory')}>
         {summary.memoryTotalBytes ? formatSize(summary.memoryTotalBytes) : undefined}
       </InfoRow>
+      {summary.diskTotalBytes && (
+        <InfoRow icon={HardDriveIcon} label={t('devices.detail.disk')}>
+          {formatSize(summary.diskTotalBytes)}
+        </InfoRow>
+      )}
       <InfoRow icon={ServerIcon} label={t('devices.card.hostname')}>
         {summary.hostname ? (
           <span className={styles.code} title={summary.hostname}>
