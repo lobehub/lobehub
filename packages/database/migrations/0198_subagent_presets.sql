@@ -1,3 +1,7 @@
+-- threads is a large table: create threads_subagent_id_idx on production with CREATE INDEX CONCURRENTLY
+-- before this migration ships, so its CREATE INDEX no-ops there: drizzle runs a migration inside a
+-- transaction, where CONCURRENTLY is not allowed and a plain CREATE INDEX would block writes to threads
+-- for the whole build. Small databases (self-hosted, preview, tests) just build it here.
 CREATE TABLE IF NOT EXISTS "subagents" (
 	"id" text PRIMARY KEY NOT NULL,
 	"parent_agent_id" text NOT NULL,

@@ -55,7 +55,7 @@ const assertSubagentAttributable = async (
     throw new TRPCError({ code: 'NOT_FOUND', message: `Subagent ${subagentId} not found` });
 
   const topic = topicId ? await topicModel.findById(topicId) : undefined;
-  if (topic?.agentId && topic.agentId !== preset.parentAgentId)
+  if (topic?.agentId !== preset.parentAgentId)
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message: `Subagent ${subagentId} does not belong to the agent of topic ${topicId}`,

@@ -222,6 +222,19 @@ describe('threadRouter subagent attribution', () => {
     expect(threadMocks.create).not.toHaveBeenCalled();
   });
 
+  it('rejects a preset when the topic does not resolve to an agent', async () => {
+    subagentMocks.findById.mockResolvedValue(preset);
+    const caller = threadRouter.createCaller(ctx);
+
+    for (const topic of [undefined, { agentId: null }]) {
+      mockFindTopic.mockResolvedValue(topic);
+      await expect(
+        caller.createThread({ subagentId: 'sub_1', topicId: 'tpc_1', type: ThreadType.Isolation }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    }
+    expect(threadMocks.create).not.toHaveBeenCalled();
+  });
+
   it('re-checks the kept preset when a thread moves to another topic', async () => {
     threadMocks.findById.mockResolvedValue({
       subagentId: 'sub_1',
