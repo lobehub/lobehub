@@ -11,8 +11,9 @@ import { cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useFileStore } from '@/store/file';
+import { type TreeItem, useTreeStore } from '@/store/tree';
 
-import { useLibraryItemBackPath } from './useLibraryItemBackPath';
+import { findLoadedParentId, useLibraryItemBackPath } from './useLibraryItemBackPath';
 
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
@@ -44,13 +45,27 @@ const doc = (id: string, fields: { parentId?: string | null }) => ({
   updatedAt: new Date(0),
 });
 
+const treeRow = (id: string): TreeItem => ({
+  fileType: 'custom/document',
+  id,
+  isFolder: false,
+  name: id,
+  url: '',
+});
+
+/** Never-resolving fetch: the item's detail is still in flight. */
+const pending = () => new Promise<never>(() => {});
+
 /** @example Back from a library item returns to the folder that holds it. */
 describe('useLibraryItemBackPath', () => {
   beforeEach(() => {
     vi.spyOn(cacheScope, 'get').mockReturnValue('test:personal');
     vi.spyOn(cacheScope, 'use').mockReturnValue('test:personal');
     vi.spyOn(cacheScope, 'canPersist').mockReturnValue(false);
-    act(() => useFileStore.setState({ fileDetailMap: {} }));
+    act(() => {
+      useFileStore.setState({ fileDetailMap: {}, resourceMap: new Map() });
+      useTreeStore.setState({ children: {} });
+    });
   });
 
   afterEach(() => {
@@ -99,5 +114,58 @@ describe('useLibraryItemBackPath', () => {
       expect(useFileStore.getState().fileDetailMap['file_1']?.file).toBeDefined(),
     );
     expect(result.current).toBe('/resource/library/kb_1');
+  });
+
+  // ROOT CAUSE:
+  //
+  // The hook read only the item's detail, fetched after it opened, so Back
+  // pressed before that request landed (or after it failed) went to the
+  // library root even though the row the item was opened from knew its folder.
+  it('uses the sidebar tree while the detail is still loading', () => {
+    vi.mocked(lambdaClient.document.getDocumentById.query).mockImplementation(pending as any);
+    act(() => {
+      useTreeStore.setState({ children: { docs_folder: [treeRow('docs_page')] } });
+    });
+
+    const { result } = renderHook(() => useLibraryItemBackPath('kb_1', 'docs_page'), { wrapper });
+
+    expect(result.current).toBe('/resource/library/kb_1/folder/docs_folder');
+  });
+
+  it('uses the explorer row when the detail request fails', async () => {
+    vi.mocked(lambdaClient.file.getFileItemById.query).mockRejectedValue(new Error('offline'));
+    act(() => {
+      useFileStore.setState({
+        resourceMap: new Map([['file_1', { id: 'file_1', parentId: 'docs_folder' } as any]]),
+      });
+    });
+
+    const { result } = renderHook(() => useLibraryItemBackPath('kb_1', 'file_1'), { wrapper });
+
+    await waitFor(() => expect(lambdaClient.file.getFileItemById.query).toHaveBeenCalled());
+    expect(result.current).toBe('/resource/library/kb_1/folder/docs_folder');
+  });
+
+  it('lets the loaded detail win over a stale row', async () => {
+    vi.mocked(lambdaClient.document.getDocumentById.query).mockResolvedValue(
+      doc('docs_page', { parentId: 'docs_moved' }) as any,
+    );
+    act(() => {
+      useTreeStore.setState({ children: { docs_folder: [treeRow('docs_page')] } });
+    });
+
+    const { result } = renderHook(() => useLibraryItemBackPath('kb_1', 'docs_page'), { wrapper });
+
+    await waitFor(() => expect(result.current).toBe('/resource/library/kb_1/folder/docs_moved'));
+  });
+});
+
+describe('findLoadedParentId', () => {
+  it('returns the group key holding the item, null for the root group', () => {
+    const children = { '': [treeRow('docs_top')], 'docs_folder': [treeRow('docs_page')] };
+
+    expect(findLoadedParentId(children, 'docs_page')).toBe('docs_folder');
+    expect(findLoadedParentId(children, 'docs_top')).toBeNull();
+    expect(findLoadedParentId(children, 'docs_missing')).toBeUndefined();
   });
 });
