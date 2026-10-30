@@ -131,6 +131,59 @@ describe('useEscapeDiscardGuard', () => {
     expect(ctx.onEscape).not.toHaveBeenCalled();
   });
 
+  it('guards Escape after focus fell back to the page body', () => {
+    const ctx = setup(() => true);
+    cleanup = ctx.cleanup;
+
+    // Clicking the modal mask leaves focus on <body>, outside the popup.
+    pressEscape(document.body);
+
+    expect(ctx.onEscape).toHaveBeenCalledTimes(1);
+    expect(ctx.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('lets Escape on the page body close a clean modal', () => {
+    const ctx = setup(() => false);
+    cleanup = ctx.cleanup;
+
+    pressEscape(document.body);
+
+    expect(ctx.onEscape).not.toHaveBeenCalled();
+    expect(ctx.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves Escape on the page body to a dialog stacked above the modal', () => {
+    const ctx = setup(() => true);
+    const stacked = document.createElement('div');
+    stacked.setAttribute('role', 'dialog');
+    document.body.append(stacked);
+    cleanup = () => {
+      stacked.remove();
+      ctx.cleanup();
+    };
+
+    pressEscape(document.body);
+
+    expect(ctx.onEscape).not.toHaveBeenCalled();
+    expect(ctx.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a listbox that was already on the page below the modal', () => {
+    const listbox = document.createElement('div');
+    listbox.setAttribute('role', 'listbox');
+    document.body.prepend(listbox);
+    const ctx = setup(() => true);
+    cleanup = () => {
+      ctx.cleanup();
+      listbox.remove();
+    };
+
+    pressEscape(document.body);
+
+    expect(ctx.onEscape).toHaveBeenCalledTimes(1);
+    expect(ctx.dismiss).not.toHaveBeenCalled();
+  });
+
   it('does not intercept Escape from a picker portalled outside the popup', () => {
     const ctx = setup(() => true);
     cleanup = ctx.cleanup;

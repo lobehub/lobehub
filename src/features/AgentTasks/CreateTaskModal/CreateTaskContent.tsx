@@ -42,6 +42,7 @@ import TaskVisibilityTag from '../features/TaskVisibilityTag';
 import { UnassignedAssigneeIcon } from '../features/UnassignedAssigneeIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useAgentVisibility } from '../shared/useAgentVisibility';
+import { useEscapeDiscardGuard } from '../shared/useEscapeDiscardGuard';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import { hasUnsavedTaskDraft } from './hasUnsavedTaskDraft';
 import ScheduleChip from './ScheduleChip';
@@ -50,7 +51,6 @@ import {
   type ScheduleDraft,
   toScheduledCreateParams,
 } from './scheduleDraft';
-import { useEscapeDiscardGuard } from './useEscapeDiscardGuard';
 import { useTitleEnterToInstruction } from './useTitleEnterToInstruction';
 
 export interface CreateTaskContentProps {

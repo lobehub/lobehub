@@ -2242,6 +2242,11 @@ export default {
   'createGoal.criterionPlaceholder': 'Describe a result that can be clearly checked',
   'createGoal.criteriaHint': 'Review and edit these before the goal starts',
   'createGoal.criteriaTitle': 'Acceptance criteria',
+  'createGoal.discardConfirm.cancel': 'Keep editing',
+  'createGoal.discardConfirm.content':
+    'The goal description, attachments and acceptance criteria you added will be lost.',
+  'createGoal.discardConfirm.ok': 'Discard',
+  'createGoal.discardConfirm.title': 'Discard this goal?',
   'createGoal.describeTitle': 'What goal do you expect to achieve?',
   'createGoal.describeHint': 'Describe the outcome first, then complete its execution plan.',
   'createGoal.generateFailed':
