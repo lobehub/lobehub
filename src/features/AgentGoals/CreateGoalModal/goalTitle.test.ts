@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveGoalTitle, resolveFallbackTitle, resolveSubmittedGoalTitle } from './goalTitle';
+import {
+  deriveGoalTitle,
+  resolveDraftedTitle,
+  resolveFallbackTitle,
+  resolveSubmittedGoalTitle,
+} from './goalTitle';
 
 describe('deriveGoalTitle', () => {
   it('uses the first semantic clause instead of the entire instruction', () => {
@@ -69,5 +74,36 @@ describe('resolveFallbackTitle', () => {
 
   it('does not treat a title typed before the first draft as a stopgap', () => {
     expect(resolveFallbackTitle({ name: '我的标题', typed: '我的标题' })).toBeUndefined();
+  });
+});
+
+describe('resolveDraftedTitle', () => {
+  const generated = 'Generated';
+
+  it('uses the generated title on a first draft', () => {
+    expect(resolveDraftedTitle({ generated, retrying: false, typed: 'Typed' })).toBe(generated);
+  });
+
+  it('keeps a title edited before drafting again', () => {
+    expect(
+      resolveDraftedTitle({
+        generated,
+        previousFallback: 'Stopgap',
+        retrying: true,
+        typed: 'Mine',
+      }),
+    ).toBe('Mine');
+  });
+
+  it('replaces an untouched stopgap or a blank field when drafting again', () => {
+    expect(
+      resolveDraftedTitle({
+        generated,
+        previousFallback: 'Stopgap',
+        retrying: true,
+        typed: 'Stopgap',
+      }),
+    ).toBe(generated);
+    expect(resolveDraftedTitle({ generated, retrying: true, typed: '' })).toBe(generated);
   });
 });

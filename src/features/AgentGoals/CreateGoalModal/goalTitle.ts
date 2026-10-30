@@ -27,6 +27,25 @@ export const resolveSubmittedGoalTitle = ({
 };
 
 /**
+ * The title after a successful draft. Drafting again from the review step keeps
+ * a title the user edited there; otherwise the generated one is used.
+ */
+export const resolveDraftedTitle = ({
+  generated,
+  previousFallback,
+  retrying,
+  typed,
+}: {
+  generated: string;
+  /** The stopgap title the failed draft left in the field, if any. */
+  previousFallback?: string;
+  /** Drafting again from the review step, rather than for the first time. */
+  retrying: boolean;
+  /** What was in the field before the draft, trimmed. */
+  typed: string;
+}) => (retrying && typed && typed !== previousFallback ? typed : generated);
+
+/**
  * The stopgap title to remember when a criteria draft fails. Only a title the
  * user did not write stays a stopgap: one they typed or edited before this
  * draft is theirs, even when the draft fails again.

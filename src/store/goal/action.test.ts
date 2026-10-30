@@ -516,6 +516,20 @@ describe('GoalAction', () => {
       expect(titlesShown()).toEqual(['Second', 'Second', 'Second']);
     });
 
+    it('keeps a title saved by hand while the model was generating', async () => {
+      seedEverywhere();
+      vi.mocked(goalService.updateTitle).mockResolvedValue({} as never);
+      vi.mocked(aiChatService.generateJSON).mockImplementation(async () => {
+        await useGoalStore.getState().updateGoalTitle('goal-1', 'By hand');
+        return { data: { title: 'Generated' } } as never;
+      });
+
+      await useGoalStore.getState().autoRenameGoalTitle('goal-1');
+
+      expect(goalService.updateTitle).toHaveBeenCalledTimes(1);
+      expect(titlesShown()).toEqual(['By hand', 'By hand', 'By hand']);
+    });
+
     it('names the goal from its ask and progress with the topic title chain', async () => {
       seedEverywhere();
       vi.mocked(aiChatService.generateJSON).mockResolvedValue({

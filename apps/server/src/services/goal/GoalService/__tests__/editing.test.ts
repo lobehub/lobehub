@@ -235,6 +235,19 @@ describe('GoalService', () => {
     expect(topic.title).toBe('Goal management: New name');
   });
 
+  it('keeps the goal and its root question in step when two renames race', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Old name' });
+
+    await Promise.all([
+      service.updateTitle(graph.goal.id, 'Name A'),
+      service.updateTitle(graph.goal.id, 'Name B'),
+    ]);
+
+    const read = await service.graph(graph.goal.id);
+    expect(read.nodes.find((node) => node.kind === 'problem')?.title).toBe(read.goal.title);
+  });
+
   it('leaves a root question and a topic someone already renamed', async () => {
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Old name' });

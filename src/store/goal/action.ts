@@ -485,6 +485,8 @@ export class GoalActionImpl {
 
     try {
       const graph = this.#get().goalGraphById[goalId] ?? (await goalService.getGraph(goalId));
+      // A title saved by hand while the model was working is the newer choice.
+      const titleWhenAsked = this.#titleShown(goalId) ?? graph.goal.title;
       const { model, provider } = systemAgentSelectors.topic(useUserStore.getState());
       const { data } = await aiChatService.generateJSON(
         {
@@ -508,10 +510,26 @@ export class GoalActionImpl {
       const title = (data as { title?: string } | undefined)?.title?.trim();
       if (!title) throw new Error('No goal title was generated.');
 
+      if ((this.#titleShown(goalId) ?? titleWhenAsked) !== titleWhenAsked) return;
+
       await this.updateGoalTitle(goalId, title);
     } finally {
       this.#setGoalTitleRenaming(goalId, false);
     }
+  };
+
+  /** What the page or a list row shows now; a list row may be all that is loaded. */
+  #titleShown = (goalId: string): string | undefined => {
+    const state = this.#get();
+    const inList = (lists: Record<string, { goals: GoalListItem[] } | undefined>) =>
+      Object.values(lists)
+        .flatMap((list) => list?.goals ?? [])
+        .find((item) => item.goal.id === goalId)?.goal.title;
+    return (
+      state.goalGraphById[goalId]?.goal.title ??
+      inList(state.goalListByAgentId) ??
+      inList(state.homeGoalsByScope)
+    );
   };
 
   #setGoalTitleRenaming = (goalId: string, renaming: boolean) => {

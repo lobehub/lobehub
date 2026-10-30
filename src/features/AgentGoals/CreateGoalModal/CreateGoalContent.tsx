@@ -51,7 +51,12 @@ import { shinyTextStyles } from '@/styles';
 import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
-import { deriveGoalTitle, resolveFallbackTitle, resolveSubmittedGoalTitle } from './goalTitle';
+import {
+  deriveGoalTitle,
+  resolveDraftedTitle,
+  resolveFallbackTitle,
+  resolveSubmittedGoalTitle,
+} from './goalTitle';
 import { hasUnsavedGoalDraft } from './hasUnsavedGoalDraft';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -309,12 +314,18 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         goal: instruction,
       });
       instructionRef.current = generated.instruction;
+      const draftedTitle = resolveDraftedTitle({
+        generated: generated.title,
+        previousFallback: fallbackTitleRef.current,
+        retrying: generateFailed,
+        typed,
+      });
       fallbackTitleRef.current = undefined;
       setPlan((current) => ({
         ...current,
         criteria: generated.criteria,
         instruction: generated.instruction,
-        name: generated.title,
+        name: draftedTitle,
       }));
       setStep('review');
     } catch (error) {
@@ -336,7 +347,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       setStep('review');
       toast.warning(t('createGoal.generateFailed'));
     }
-  }, [canCreate, plan.instruction, plan.name, t]);
+  }, [canCreate, generateFailed, plan.instruction, plan.name, t]);
 
   const handleCreateBlank = useCallback(() => {
     if (!canCreate) return;
