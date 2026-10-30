@@ -95,6 +95,8 @@ export default {
   'currentPlan.cancelAlert':
     'Subscription will be cancelled after {{canceledAt}}. You can still restore it before then',
   'currentPlan.downgradeAlert': 'Will be downgraded to {{plan}} after {{downgradedAt}}.',
+  'currentPlan.legacyCancelAlert':
+    'Subscription will end after {{canceledAt}}. A canceled legacy plan cannot be restored, but you can upgrade to a new plan anytime.',
   'currentPlan.management': 'Manage Subscription',
   'currentPlan.notIncluded': 'Not included in current plan',
   'currentPlan.paymentExpired':
@@ -548,9 +550,11 @@ export default {
   'plans.downgradeWillCancel': 'This action will cancel your scheduled plan downgrade',
   'plans.cancelDowngrade': 'Cancel Scheduled Downgrade',
   'plans.cancelDowngradeSuccess': 'Scheduled downgrade has been cancelled',
-  'plans.legacy.desc':
-    'No longer on sale. Your subscription keeps renewing, and you can switch to a new plan anytime.',
-  'plans.legacy.tag': 'Legacy',
+  'plans.legacy.banner.desc':
+    'It keeps its current price. You can upgrade to a higher-tier plan anytime, and what you have used this billing period is on us.',
+  'plans.legacy.banner.downgrade': 'Switches to {{plan}} when this billing period ends',
+  'plans.legacy.banner.title': 'You are on {{plan}}, a legacy plan',
+  'plans.legacy.upgradeOnly': 'A legacy plan can only be upgraded to a higher-tier plan',
   'plans.limits.agentMemory.unavailable': 'Agent memory',
   'plans.limits.agentMemory.unlimited': 'Agent memory',
   'plans.limits.artifactSiteSize': 'Up to {{value}} per published site',
