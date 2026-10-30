@@ -337,7 +337,9 @@ export const toContextPlans = (
     const dossiers = cx.dossiers
       .filter((d) => d && Array.isArray(d.members))
       .map((d) => {
-        const memberIds = d.members.filter((m) => allowed.has(m) && !placed.has(m));
+        // Synthesis may repeat one evidence id inside a dossier; keep the first occurrence only,
+        // otherwise the plan inserts one activity per repetition.
+        const memberIds = [...new Set(d.members)].filter((m) => allowed.has(m) && !placed.has(m));
         for (const m of memberIds) placed.add(m);
         return {
           existingDossierId: knownDossiers.has(d.existing_dossier) ? d.existing_dossier : undefined,
