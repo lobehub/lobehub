@@ -6,7 +6,7 @@ import { type ResourceListParams, type ResourceListValue } from './projection';
 /**
  * Resource slice state.
  *
- * The list itself is a `@lobechat/replica` paged resource: `resourceListEntry`
+ * The list itself is a `local-replica` paged resource: `resourceListEntry`
  * is the replica view, and `resourceList` / `resourceMap` / `hasMore` / `total`
  * / `offset` / `queryParams` / `isLoadingMore` are derived from it by the
  * slice's lens, so every existing selector keeps reading the same place.

@@ -1,0 +1,16 @@
+// Cloud-only feature; namespace kept here so locale dictionary stays centralized.
+export default {
+  'popover.copyLink': 'Copy Link',
+  'popover.copyLinkSuccess': 'Link copied',
+  'popover.linkHint': 'Anyone with the link can view and download this file',
+  'popover.permissionLink': 'Anyone with the link',
+  'popover.permissionPrivate': 'Private',
+  'popover.privateHint': 'Only you can open this file',
+  'popover.sectionViews_one': '{{count}} view',
+  'popover.sectionViews_other': '{{count}} views',
+  'popover.title': 'Share File',
+  'popover.updateError': 'Failed to update sharing settings',
+  'popover.visibility': 'Visibility',
+  'popover.visibilityUpdated': 'Visibility updated',
+  'shareButton.label': 'Share',
+};

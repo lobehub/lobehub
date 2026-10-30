@@ -786,6 +786,13 @@ export interface GoalGraphSnapshot {
   goal: GoalItem;
   nodes: GoalGraphNode[];
   /**
+   * When the coordinator retries each active task node a usage window refused
+   * (the reset plus its safety margin). Such a Task is held `paused` with no
+   * running run, so it has no heartbeat — without this the client reads the
+   * wait as lost.
+   */
+  quotaRetryAt?: Record<string, Date>;
+  /**
    * The wrap-up report: whether it is being written, done or failed, and the
    * newest submitted version. Absent until the Goal-level acceptance has ended
    * and a wrap-up was dispatched.

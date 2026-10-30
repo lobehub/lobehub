@@ -3,7 +3,7 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { createStaticStyles, Flexbox, keyframes } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
-import { memo, useEffect, useLayoutEffect, useState } from 'react';
+import { memo, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { retainSkeleton } from '@/components/Skeleton/skeletonHandover';
@@ -16,6 +16,7 @@ import { styles as containerStyles } from '@/features/DesktopLayoutContainer/sty
 import { electronStylish } from '@/styles/electron';
 
 import { readBootShellGeometry } from './geometry';
+import { useLoadingHint } from './useLoadingHint';
 
 // antd emits its design tokens as `.lobe-vars{--ant-*: …}` — a plain global
 // class rule, not a `:root` one. The shell renders outside `AppTheme`, so it has
@@ -25,20 +26,16 @@ const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
 
-const HINT_DELAY = 1000;
-
-// The X half of the transform is the centering, not the motion — it has to be
-// restated in both frames or the keyframe overwrites it and the caption jumps
-// to the anchor's left edge.
-const slideUp = keyframes`
+// Opacity only: on an otherwise still boot screen a rising caption reads as
+// the layout jumping, and leaving `transform` alone keeps the centering in one
+// place.
+const fadeIn = keyframes`
   from {
     opacity: 0;
-    transform: translate(-50%, 10px);
   }
 
   to {
     opacity: 1;
-    transform: translate(-50%, 0);
   }
 `;
 
@@ -61,11 +58,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     inset-block-start: calc(100% + 8px);
     inset-inline-start: 50%;
+    transform: translateX(-50%);
 
     font-size: 13px;
     white-space: nowrap;
 
-    animation: ${slideUp} 0.42s ${cssVar.motionEaseOut} both;
+    &[data-enter] {
+      animation: ${fadeIn} 0.3s ${cssVar.motionEaseOut} both;
+
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    }
   `,
   brand: css`
     position: relative;
@@ -103,10 +107,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * i18n, so calling it up front would hit react-i18next with no instance —
  * a console warning and a first render that echoes the raw key.
  */
-const LoadingHint = memo(() => {
+const LoadingHint = memo<{ enter: boolean }>(({ enter }) => {
   const { t } = useTranslation('common');
 
-  return <div className={styles.hint}>{t('stillLoading')}</div>;
+  return (
+    <div className={styles.hint} data-enter={enter || undefined}>
+      {t('bootLoadingHint')}
+    </div>
+  );
 });
 
 LoadingHint.displayName = 'AppShellLoadingHint';
@@ -117,14 +125,9 @@ interface AppShellSkeletonProps {
 
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
-  const [waiting, setWaiting] = useState(false);
+  const hint = useLoadingHint();
 
   useLayoutEffect(retainSkeleton, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setWaiting(true), HINT_DELAY);
-    return () => clearTimeout(timer);
-  }, []);
 
   return (
     <div aria-hidden className={`${CSS_VAR_CLASS} ${styles.root}`} id={id}>
@@ -160,7 +163,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
             <div className={styles.contentBrand}>
               <div className={styles.brand}>
                 <LobeHub size={40} type={'text'} />
-                {waiting && <LoadingHint />}
+                {hint && <LoadingHint enter={hint === 'enter'} />}
               </div>
             </div>
           </Flexbox>

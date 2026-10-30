@@ -4,7 +4,6 @@ import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
 import {
   ActionIcon,
-  Avatar,
   Button,
   confirmModal,
   copyToClipboard,
@@ -30,6 +29,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -289,8 +289,14 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
                     }
                   }}
                 >
-                  <span {...stylex.props(styles.metaItem)}>
-                    <Avatar avatar={agentAvatar} size={16} />
+                  <span className={stylex.props(styles.metaItem).className}>
+                    <AgentAvatar
+                      agentId={run.targetAgentId}
+                      avatar={agentAvatar}
+                      name={agentTitle}
+                      shape={'circle'}
+                      size={16}
+                    />
                     {agentTitle}
                   </span>
                 </Flexbox>

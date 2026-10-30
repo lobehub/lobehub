@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentProviderAccounts, agents, users } from '../../schemas';
+import { agentOperations, agentProviderAccounts, agents, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import {
   AgentAccountBindingModel,
@@ -418,6 +418,45 @@ describe('quota data tables — range reads', () => {
     const rows = await ledger.listSince(account.id, new Date('2026-07-12T15:00:00Z'));
     expect(rows).toHaveLength(1);
     expect(Number(rows[0].costUsd)).toBe(2);
+  });
+
+  it('listActiveRuns lists in-flight runs that billed the account, once each, newest first', async () => {
+    const account = await accounts.create({ provider: 'claude-code' });
+    const other = await accounts.create({ provider: 'claude-code' });
+    await serverDB.update(agents).set({ title: 'Builder' }).where(eq(agents.id, agentId));
+    await serverDB.insert(topics).values({ id: 'quota-topic', title: 'Fix login', userId });
+    await serverDB.insert(agentOperations).values([
+      { agentId, id: 'op-running', status: 'running', topicId: 'quota-topic', userId },
+      { agentId, id: 'op-waiting', status: 'waiting_for_human', userId },
+      { agentId, id: 'op-done', status: 'done', userId },
+      { agentId, id: 'op-old', status: 'running', userId },
+      { agentId, id: 'op-other', status: 'running', userId },
+    ]);
+    const turn = (operationId: string, at: string, accountId = account.id) =>
+      ledger.append({
+        accountId,
+        occurredAt: new Date(at),
+        operationId,
+        provider: 'claude-code',
+      });
+    await turn('op-running', '2026-07-12T10:00:00Z');
+    await turn('op-running', '2026-07-12T11:00:00Z');
+    await turn('op-waiting', '2026-07-12T10:30:00Z');
+    await turn('op-done', '2026-07-12T10:45:00Z'); // settled
+    await turn('op-old', '2026-07-11T10:00:00Z'); // before the cutoff
+    await turn('op-other', '2026-07-12T10:50:00Z', other.id); // another account
+
+    const runs = await ledger.listActiveRuns(account.id, new Date('2026-07-12T00:00:00Z'));
+
+    expect(runs.map((r) => r.operationId)).toEqual(['op-running', 'op-waiting']);
+    expect(runs[0]).toMatchObject({
+      agentId,
+      agentTitle: 'Builder',
+      status: 'running',
+      topicId: 'quota-topic',
+      topicTitle: 'Fix login',
+    });
+    expect(runs[0].lastTurnAt).toEqual(new Date('2026-07-12T11:00:00Z'));
   });
 
   it('sumCostUsd returns 0 when nothing matches', async () => {

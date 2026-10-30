@@ -17,6 +17,7 @@ import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDe
 
 import type { ExecRunContext } from '../../types';
 import { markDegradedStage, traceDiscoveryStage } from '../discoveryTracing';
+import { readProjectToolScope } from './projectScope';
 import type { ToolDiscoveryDeps } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -46,6 +47,8 @@ export interface ToolReadsContext {
   candidateIds: string[];
   exclusivePluginIds?: string[];
   isGoalTurn: boolean;
+  /** Project the run belongs to (`appContext.projectId`). */
+  projectId?: string;
   requestedDeviceId?: string;
   resolvedAgentId: string;
   shareGate: ExecRunContext['shareGate'];
@@ -112,11 +115,24 @@ const refreshConnectorTokens = async (
   );
 };
 
-/**
- * Connector resolution: the gatekeeper decrypts the stored OAuth tokens, or
- * `buildConnectorManifests` gets no auth and every tool call 401s.
- */
-const readConnectors = async (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) => {
+/** Base marketplace OAuth rows require installation; agent-owned copies are independent. */
+const filterInstalledMarketplaceConnectors = (
+  connectors: DecryptedConnector[],
+  installedIds: Set<string>,
+) =>
+  connectors.filter(
+    (connector) =>
+      !!connector.agentId ||
+      connector.sourceType !== 'marketplace' ||
+      !connector.mcpServerUrl ||
+      installedIds.has(connector.identifier),
+  );
+
+const readConnectors = async (
+  deps: ToolDiscoveryDeps,
+  ctx: ToolReadsContext,
+  installedPluginIds: Promise<Set<string>>,
+) => {
   const { candidateIds, resolvedAgentId } = ctx;
   let connectorGateKeeper: KeyVaultsGateKeeper | undefined;
   try {
@@ -130,14 +146,19 @@ const readConnectors = async (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) =>
     const onRefreshTimeout = () => {
       refreshTimeouts += 1;
     };
-    const connectors =
+    const [resolved, installedIds] = await Promise.all([
       candidateIds.length > 0
-        ? await deps.connectorModel.resolveByIdentifiers(
+        ? deps.connectorModel.resolveByIdentifiers(
             candidateIds,
             resolvedAgentId,
             connectorGateKeeper,
           )
-        : [];
+        : [],
+      installedPluginIds,
+    ]);
+    // OAuth can connect after installation was canceled. A connected row alone
+    // must not make an unfinished marketplace install callable by a server run.
+    const connectors = filterInstalledMarketplaceConnectors(resolved, installedIds);
 
     // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
     // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Composio OAuth skills synced via
@@ -163,6 +184,7 @@ const readConnectors = async (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) =>
       ctx,
       connectorGateKeeper,
       onRefreshTimeout,
+      installedIds,
     );
     markDegradedStage(span, refreshTimeouts, 'connector token refreshes');
 
@@ -195,6 +217,7 @@ const readDiscoverableConnectors = async (
   ctx: ToolReadsContext,
   gateKeeper: KeyVaultsGateKeeper | undefined,
   onRefreshTimeout: () => void,
+  installedIds: Set<string>,
 ): Promise<{
   connectorsMcp: DecryptedConnector[];
   manifests: LobeToolManifest[];
@@ -218,7 +241,7 @@ const readDiscoverableConnectors = async (
     } else {
       resolved = await deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper);
     }
-    const connectorsMcp = resolved.filter(
+    const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
       (c) => !candidates.has(c.identifier) && (c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
     );
     if (connectorsMcp.length === 0) return none;
@@ -395,44 +418,51 @@ const readHasOversizedFiles = async (
 /**
  * Every other read this send needs, started together. They hit different
  * backends — Postgres rows, the Market's live skill discovery, the device
- * gateway — and none of them feeds another, so the user waits for the slowest
- * one instead of the sum of all of them. Each keeps the degrade-to-empty
+ * gateway. Connector visibility uses the same installed-plugin snapshot; the
+ * reads still start together. Each keeps the degrade-to-empty
  * behavior it had when it ran in sequence; only the plugin list still fails
  * the run, because a run with no plugins is not the same run.
  */
-export const startToolReads = (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) => ({
-  // The fallbacks sit OUTSIDE `traceDiscoveryStage` on purpose: the wrapper
-  // only marks a span errored when its callback throws, so absorbing the
-  // failure inside it would report a healthy stage for a failed read.
-  agentDocuments: started(
-    traceDiscoveryStage('agent_documents', () =>
-      deps.agentDocumentsService.hasDocuments(ctx.resolvedAgentId),
-    ).catch(() => false), // non-critical
-  ),
-  attachedFileTypes: started(readAttachedFileTypes(deps, ctx)),
-  oversizedFiles: started(readHasOversizedFiles(deps, ctx).catch(() => false)), // non-critical
-  // A share run reads only the granted Composio connections, and skips the
-  // read when nothing is granted.
-  composioManifests: started(
-    (ctx.shareGrantedExtensionIds?.size === 0
-      ? Promise.resolve<LobeToolManifest[]>([])
-      : traceDiscoveryStage('composio', () =>
-          deps.composioService.getComposioManifests(
-            ctx.resolvedAgentId,
-            ctx.shareGrantedExtensionIds && { identifiers: [...ctx.shareGrantedExtensionIds] },
-          ),
-        )
-    ).catch((error) => {
-      log('execAgent: failed to fetch composio manifests: %O', error);
-      return [] as LobeToolManifest[];
-    }),
-  ),
-  connectors: started(readConnectors(deps, ctx)),
-  devicePool: started(readDevicePool(deps, ctx)),
-  installedPlugins: started(
+export const startToolReads = (deps: ToolDiscoveryDeps, ctx: ToolReadsContext) => {
+  const installedPlugins = started(
     traceDiscoveryStage('installed_plugins', () => deps.pluginModel.query()),
-  ),
-  lobehubSkillManifests: started(readLobehubSkillManifests(deps, ctx)),
-});
+  );
+  const installedPluginIds = started(
+    installedPlugins.then((plugins) => new Set(plugins.map((plugin) => plugin.identifier))),
+  );
+  return {
+    // The fallbacks sit OUTSIDE `traceDiscoveryStage` on purpose: the wrapper
+    // only marks a span errored when its callback throws, so absorbing the
+    // failure inside it would report a healthy stage for a failed read.
+    agentDocuments: started(
+      traceDiscoveryStage('agent_documents', () =>
+        deps.agentDocumentsService.hasDocuments(ctx.resolvedAgentId),
+      ).catch(() => false), // non-critical
+    ),
+    attachedFileTypes: started(readAttachedFileTypes(deps, ctx)),
+    oversizedFiles: started(readHasOversizedFiles(deps, ctx).catch(() => false)), // non-critical
+    // A share run reads only the granted Composio connections, and skips the
+    // read when nothing is granted.
+    composioManifests: started(
+      (ctx.shareGrantedExtensionIds?.size === 0
+        ? Promise.resolve<LobeToolManifest[]>([])
+        : traceDiscoveryStage('composio', () =>
+            deps.composioService.getComposioManifests(
+              ctx.resolvedAgentId,
+              ctx.shareGrantedExtensionIds && { identifiers: [...ctx.shareGrantedExtensionIds] },
+            ),
+          )
+      ).catch((error) => {
+        log('execAgent: failed to fetch composio manifests: %O', error);
+        return [] as LobeToolManifest[];
+      }),
+    ),
+    connectors: started(readConnectors(deps, ctx, installedPluginIds)),
+    devicePool: started(readDevicePool(deps, ctx)),
+    installedPlugins,
+    lobehubSkillManifests: started(readLobehubSkillManifests(deps, ctx)),
+    projectScope: started(readProjectToolScope(deps, ctx)), // degrades to no project
+  };
+};
 
 export type ToolReads = ReturnType<typeof startToolReads>;

@@ -80,7 +80,25 @@ export interface AgentStreamAuthInfo {
   tokenType: AgentStreamTokenType;
 }
 
-export async function getAgentStreamAuthInfo(workspaceId?: string): Promise<AgentStreamAuthInfo> {
+export interface AgentStreamAuthOptions {
+  /**
+   * `false` for the auth resolver a socket reconnect calls.
+   *
+   * Exiting is right before a command has produced anything: there is no
+   * outcome to report and no channel to report it on. It is wrong for a
+   * reconnect in the middle of a run — the stored access token may still
+   * authenticate the journal and the status endpoint, and the caller has its
+   * own polling fallback. Throwing lets the transport fail as a Gateway
+   * problem and hand control back instead of killing the process.
+   */
+  exitOnMissing?: boolean;
+}
+
+export async function getAgentStreamAuthInfo(
+  workspaceId?: string,
+  options: AgentStreamAuthOptions = {},
+): Promise<AgentStreamAuthInfo> {
+  const { exitOnMissing = true } = options;
   const serverUrl = resolveServerUrl();
 
   const envJwt = process.env.LOBEHUB_JWT;
@@ -106,11 +124,12 @@ export async function getAgentStreamAuthInfo(workspaceId?: string): Promise<Agen
   const result = await getValidToken();
   if (result.status !== 'ok') {
     const report = describeTokenLookup(result);
-    log.error(
-      report
-        ? `${report.detail} ${report.fix}`
-        : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}.`,
-    );
+    const message = report
+      ? `${report.detail} ${report.fix}`
+      : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}.`;
+    if (!exitOnMissing) throw new Error(message);
+
+    log.error(message);
     process.exit(1);
 
     return {
@@ -128,3 +147,11 @@ export async function getAgentStreamAuthInfo(workspaceId?: string): Promise<Agen
     tokenType: 'jwt',
   };
 }
+
+/**
+ * Auth for a stream that may reconnect mid-run: same resolution as
+ * {@link getAgentStreamAuthInfo}, but a missing or unrefreshable credential
+ * throws instead of ending the process.
+ */
+export const resolveAgentStreamAuthInfo = (workspaceId?: string) =>
+  getAgentStreamAuthInfo(workspaceId, { exitOnMissing: false });

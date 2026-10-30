@@ -536,6 +536,53 @@ describe('AgentEvalRunService', () => {
       });
     });
 
+    it('does not double-count LLM calls when the completion hook runs locally', async () => {
+      const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+
+      await new AgentEvalRunModel(serverDB, userId).update(run.id, { status: 'failed' });
+      await runTopicModel.updateByRunAndTopic(run.id, topic.id, {
+        evalResult: {
+          completionReason: 'timeout',
+          duration: 1000,
+          llmCalls: 3,
+          rubricScores: [],
+        },
+        passed: false,
+        score: 0,
+        status: 'timeout',
+      });
+
+      let capturedHooks: any[] = [];
+      mockExecAgent.mockImplementation(async (params: any) => {
+        capturedHooks = params.hooks ?? [];
+        return { operationId: 'op-resume-2' };
+      });
+
+      await new AgentEvalRunService(serverDB, userId).executeResumedTrajectory({
+        appContext: { topicId: topic.id },
+        parentMessageId: 'parent-message-id',
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+        userId,
+      });
+
+      // The operation is seeded with the previous total, so the completion
+      // event is already cumulative and must not have `prevLlmCalls` added again.
+      expect(mockExecAgent).toHaveBeenCalledWith(expect.objectContaining({ initialLlmCalls: 3 }));
+
+      await capturedHooks[0].handler({
+        llmCalls: 7,
+        reason: 'done',
+        status: 'done',
+        steps: 9,
+      });
+
+      const refreshed = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
+      expect((refreshed?.evalResult as any)?.llmCalls).toBe(7);
+    });
+
     it('should cancel when the trajectory is not resumable', async () => {
       const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
 
@@ -630,6 +677,7 @@ describe('AgentEvalRunService', () => {
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           appContext: { threadId: thread!.id, topicId: topic.id },
+          initialLlmCalls: 3,
           initialStepCount: 7,
           parentMessageId: 'parent-message-id',
           prompt: '',

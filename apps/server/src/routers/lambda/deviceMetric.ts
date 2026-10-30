@@ -57,7 +57,7 @@ const deviceMetricProcedure = wsCompatProcedure.use(serverDatabase).use(async (o
 
 export const deviceMetricRouter = router({
   /**
-   * The machine's recent CPU / memory / load, read from the device gateway
+   * The machine's recent CPU / memory / load / disk, read from the device gateway
    * (the only store — it keeps two days) and averaged into buckets sized so
    * the window renders as roughly {@link TARGET_POINTS} points.
    */
@@ -96,6 +96,7 @@ export const deviceMetricRouter = router({
       return {
         bucketMs,
         cpuCount: latest?.cpuCount ?? null,
+        diskTotalBytes: samples.findLast((s) => s.diskTotalBytes)?.diskTotalBytes ?? null,
         from,
         memoryTotalBytes: latest?.memoryTotalBytes ?? null,
         points: bucketDeviceMetrics(samples, { bucketMs, from, to }),

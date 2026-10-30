@@ -4,6 +4,31 @@ import debug from 'debug';
 
 const log = debug('lobe-server:ai-agent-source-attribution');
 
+/**
+ * How many agent → agent sends may follow each other before a person has to
+ * step in. Each send started by an agent turn that was itself started by
+ * another agent's send counts one more (`AgentSenderMetadata.hop`); without a
+ * bound, two agents told to report back to each other wake each other forever.
+ */
+export const MAX_AGENT_RELAY_HOPS = 5;
+
+/** A send would exceed {@link MAX_AGENT_RELAY_HOPS}; the run is not started. */
+export class AgentRelayHopLimitError extends Error {
+  constructor(readonly hop: number) {
+    super(
+      `Agent relay limit reached: this would be agent-to-agent send #${hop} in a row (at most ${MAX_AGENT_RELAY_HOPS}). Ask the user how to continue instead of sending again.`,
+    );
+    this.name = 'AgentRelayHopLimitError';
+  }
+}
+
+/** Refuse a resolved sender past the relay bound — see {@link MAX_AGENT_RELAY_HOPS}. */
+export const assertAgentRelayHop = (sender: AgentSenderMetadata | undefined) => {
+  if (sender?.hop && sender.hop > MAX_AGENT_RELAY_HOPS) {
+    throw new AgentRelayHopLimitError(sender.hop);
+  }
+};
+
 /** The slice of an `agent_operations` row this decision reads. */
 export interface SourceOperationRow {
   /** The agent that RAN the operation — the sender, which is not always the topic's owner. */
@@ -40,6 +65,12 @@ export interface SourceAttributionDeps {
   findChatGroupVisibility: (chatGroupId: string) => Promise<'private' | 'public' | null>;
   findOperation: (operationId: string) => Promise<null | SourceOperationRow | undefined>;
   findTopic: (topicId: string) => Promise<null | SourceTopicRow | undefined>;
+  /**
+   * The relay hop of the newest user message on the sending conversation —
+   * the one that started (or last steered) the sending turn — or undefined when
+   * a person wrote it.
+   */
+  findTriggerHop: (params: { threadId?: string; topicId: string }) => Promise<number | undefined>;
   /** The authenticated caller — attribution may only rest on THEIR OWN work. */
   userId: string;
   /** The caller's active workspace; undefined in personal scope. */
@@ -147,12 +178,22 @@ export const resolveAgentSenderFromOperation = async (
     topicAgentId: topic?.agentId ?? undefined,
   });
 
+  // Counted on the conversation the sending turn runs in, whether or not its
+  // origin may be shown: the bound protects the runtime, not the display.
+  const triggerHop = await deps
+    .findTriggerHop({ threadId: operation.threadId ?? undefined, topicId: operation.topicId })
+    .catch((error) => {
+      log('failed to read the trigger hop of %s: %O', operation.topicId, error);
+      return undefined;
+    });
+
   const base: AgentSenderMetadata = {
     agentId: senderAgentId,
     // Group and thread are where the turn actually happened: without them the
     // jump-back opens the agent's own topic instead of the group, or the topic's
     // main transcript instead of the thread.
     chatGroupId: operation.chatGroupId ?? undefined,
+    hop: (triggerHop ?? 0) + 1,
     threadId: operation.threadId ?? undefined,
     topicAgentId: topic?.agentId ?? undefined,
     topicId: shareable ? operation.topicId : undefined,

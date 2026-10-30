@@ -445,6 +445,9 @@ describe('buildCriterionOutcomes', () => {
     expect(outcomes[1].summary).toBe('Two claims have no source');
     expect(outcomes[1].reason).toBe('Sources are missing');
     expect(outcomes[2].evidence).toEqual([]);
+    // The Portal's check view finds a criterion by its bundle row id.
+    expect(outcomes[0].checkId).toBe('c1');
+    expect(outcomes[2].checkId).toBeUndefined();
   });
 
   it('ignores results from earlier rounds', () => {

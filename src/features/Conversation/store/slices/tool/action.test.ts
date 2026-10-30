@@ -3,12 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
 import { createStore } from '../../index';
+import type { PendingIntervention } from '../data/pendingInterventions';
+import { dataSelectors } from '../data/selectors';
 
 // Mock dependencies
 const mockApproveToolCalling = vi.fn();
 const mockRejectToolCalling = vi.fn();
 const mockRejectAndContinueToolCalling = vi.fn();
 const mockSubmitHeteroIntervention = vi.fn();
+const mockApproveAllToolCalls = vi.fn();
+const mockAddToolToAllowList = vi.fn();
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
@@ -17,6 +21,7 @@ vi.mock('@/store/chat', () => ({
       messagesMap: {},
       operations: {},
       approveToolCalling: mockApproveToolCalling,
+      approveAllToolCalls: mockApproveAllToolCalls,
       rejectToolCalling: mockRejectToolCalling,
       rejectAndContinueToolCalling: mockRejectAndContinueToolCalling,
       submitHeteroIntervention: mockSubmitHeteroIntervention,
@@ -33,6 +38,10 @@ vi.mock('@/store/chat', () => ({
     })),
     setState: vi.fn(),
   },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: { getState: () => ({ addToolToAllowList: mockAddToolToAllowList }) },
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
@@ -548,6 +557,88 @@ describe('Tool Actions', () => {
         'Reason',
         context,
       );
+    });
+  });
+
+  describe('approveToolCallAndCovered', () => {
+    const context: ConversationContext = { agentId: 'agent', topicId: 'topic' };
+    const pending = (
+      toolMessageId: string,
+      apiName = 'dryRunWidget',
+      batchId = 'batch-1',
+    ): PendingIntervention =>
+      ({
+        apiName,
+        batchId,
+        identifier: 'builtin-dashboard',
+        operationId: 'op-1',
+        requestArgs: JSON.stringify({ versionId: toolMessageId }),
+        toolCallId: `call-${toolMessageId}`,
+        toolMessageId,
+      }) as PendingIntervention;
+
+    const withPending = (items: PendingIntervention[]) =>
+      vi.spyOn(dataSelectors, 'pendingInterventions').mockReturnValue(items);
+
+    it('approves siblings the remember now covers together with the card, in one batch', async () => {
+      withPending([pending('tool-a'), pending('tool-b'), pending('tool-c', 'requestPublish')]);
+      const store = createStore({ context });
+      const isCovered = vi.fn(async () => true);
+
+      await act(async () => {
+        await store.getState().approveToolCallAndCovered('tool-a', 'group-1', { isCovered });
+      });
+
+      // Only the same tool's calls are re-checked; another API in the batch still asks.
+      expect(isCovered).toHaveBeenCalledTimes(1);
+      expect(mockApproveAllToolCalls).toHaveBeenCalledWith(['tool-a', 'tool-b'], context);
+      expect(mockApproveToolCalling).not.toHaveBeenCalled();
+    });
+
+    it('approves the card alone when no sibling is covered', async () => {
+      withPending([pending('tool-a'), pending('tool-b')]);
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().approveToolCallAndCovered('tool-a', 'group-1', {
+          isCovered: async () => false,
+          rememberToolKey: 'builtin-dashboard/dryRunWidget',
+        });
+      });
+
+      expect(mockApproveAllToolCalls).not.toHaveBeenCalled();
+      expect(mockApproveToolCalling).toHaveBeenCalledWith('tool-a', 'group-1', context, {
+        editedArguments: undefined,
+        rememberToolKey: 'builtin-dashboard/dryRunWidget',
+      });
+    });
+
+    it('writes the allow-list itself when siblings ride along on the batch approval', async () => {
+      withPending([pending('tool-a'), pending('tool-b')]);
+      const store = createStore({ context });
+
+      await act(async () => {
+        await store.getState().approveToolCallAndCovered('tool-a', 'group-1', {
+          isCovered: async () => true,
+          rememberToolKey: 'builtin-dashboard/dryRunWidget',
+        });
+      });
+
+      expect(mockAddToolToAllowList).toHaveBeenCalledWith('builtin-dashboard/dryRunWidget');
+      expect(mockApproveAllToolCalls).toHaveBeenCalledWith(['tool-a', 'tool-b'], context);
+    });
+
+    it('never reaches into another batch', async () => {
+      withPending([pending('tool-a'), pending('tool-b', 'dryRunWidget', 'batch-2')]);
+      const store = createStore({ context });
+      const isCovered = vi.fn(async () => true);
+
+      await act(async () => {
+        await store.getState().approveToolCallAndCovered('tool-a', 'group-1', { isCovered });
+      });
+
+      expect(isCovered).not.toHaveBeenCalled();
+      expect(mockApproveToolCalling).toHaveBeenCalled();
     });
   });
 });

@@ -12,7 +12,9 @@ export const systemPrompt = `You have access to Task management tools. Use them 
 - **runTask**: Actually START a task — kicks off the assigned agent in a new (or continued) topic. Use this to launch execution; do NOT use updateTaskStatus(running) to start a task, that only flips a flag without executing. The task must have an assigneeAgentId
 - **runTasks**: Start multiple tasks in one call. Prefer this when launching a batch of related subtasks (e.g. all subtasks you just created); cuts down on tool calls and makes the start atomic from the user's perspective
 - **updateTaskStatus**: Change a task's status. If you mark a task as failed, include an error message explaining why. Use this to mark tasks completed/cancelled/paused/failed — NOT to start them (use runTask for that). Omitting identifier only works when there is a current task context
-- **deleteTask**: Delete a task. Subtasks become top-level (not cascaded); dependencies/topics/comments cascade-delete; irreversible. The freed identifier (e.g. "T-9") can be reused by a later task — always quote the identifier freshly returned by createTask/listTasks, never a remembered one
+- **deleteTask**: Delete a task. Subtasks become top-level (not cascaded); dependencies/topics/comments cascade-delete; irreversible. The freed identifier (e.g. "T-9") can be reused by a later task — use the stable id returned by createTask/listTasks in subsequent calls. User-provided identifiers remain accepted
+
+Task links: Use the display identifier in user-facing URLs, e.g. /task/T-3. Keep stable task ids for subsequent tool calls and internal references.
 
 Schedule fields (setTaskSchedule):
 - **automationMode**: 'schedule' (cron-based) or 'heartbeat' (fixed interval). Pass null to disable automation
@@ -37,6 +39,11 @@ When you dispatch an executable task to another agent (you set assigneeAgentId, 
 Assigning a task to a person (assigneeUserId):
 - A task has two independent assignees that can coexist: assigneeAgentId is the agent that executes it, assigneeUserId is the workspace member who owns the outcome. Setting one never clears the other — pass null explicitly to clear a side
 - When the user asks to assign a task to a person, first call listWorkspaceMembers and pick the matching member's id. Never guess or fabricate a user id; if no member matches (or several do), ask the user which one instead of assigning
+
+Images in the task instruction:
+- instruction is markdown. The task page renders an image only when it parses as a markdown image node — write images inline as ![alt](https://...), one per line, so the reader sees the picture instead of a URL
+- Never pass a bare URL (e.g. "参考图：https://…") or a link label when the intent is to show the image: a bare URL renders as a plain link, which is not the same thing
+- Keep a link only when the target is a page rather than an image, or when the URL cannot be loaded inline — and then say why in the text next to it
 
 Task creation and execution are separate user intents:
 - When the user describes new work without explicitly asking to start, run, execute, or do it now, create the task in backlog and stop. Do not call runTask or runTasks.

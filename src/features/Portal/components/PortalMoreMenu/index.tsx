@@ -1,6 +1,12 @@
 'use client';
 
-import { ActionIcon, copyToClipboard, DropdownMenu, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  type ActionIconOutdent,
+  copyToClipboard,
+  DropdownMenu,
+  toast,
+} from '@lobehub/ui';
 import { MoreHorizontal } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +16,7 @@ import { type PortalMoreMenuConfig } from './types';
 
 interface PortalMoreMenuProps {
   config?: PortalMoreMenuConfig;
+  outdent?: ActionIconOutdent;
 }
 
 /**
@@ -17,7 +24,7 @@ interface PortalMoreMenuProps {
  * render it themselves — they declare capabilities on `PortalImpl.useMoreMenu`
  * and the shared header mounts this menu in its title slot.
  */
-const PortalMoreMenu = memo<PortalMoreMenuProps>(({ config }) => {
+const PortalMoreMenu = memo<PortalMoreMenuProps>(({ config, outdent }) => {
   const { t } = useTranslation('portal');
 
   const items = useMemo(
@@ -44,6 +51,7 @@ const PortalMoreMenu = memo<PortalMoreMenuProps>(({ config }) => {
       <ActionIcon
         aria-label={t('moreMenu.trigger')}
         icon={MoreHorizontal}
+        outdent={outdent}
         size={'small'}
         style={{ flex: 'none' }}
         title={t('moreMenu.trigger')}

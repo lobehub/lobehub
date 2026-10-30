@@ -15,8 +15,7 @@ import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IndexedDBQueryProjectionStorage } from '@/libs/queryProjectionStorage';
-import { cacheScope } from '@/libs/replica';
+import { AppIndexedDBStorage, cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { gitService } from '@/services/git';
 import { initialGitStatusState, useGitStatusStore } from '@/store/device/gitStatus/store';
@@ -57,7 +56,7 @@ const DEVICE = 'device-1';
 const PATH = '/repo';
 /** The persisted row of `deviceId + path`, as the branch-list replica stores it. */
 const ROW_KEY = `${DEVICE}\u0000${PATH}`;
-const storage = new IndexedDBQueryProjectionStorage<{ value?: DeviceGitBranchListItem[] }>({
+const storage = new AppIndexedDBStorage<{ value?: DeviceGitBranchListItem[] }>({
   namespace: 'replica:deviceGitBranchList:v1',
 });
 

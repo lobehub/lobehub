@@ -2,7 +2,7 @@ import type { AgentState } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { type AgentExecutionResult } from '../types';
-import type { AgentRuntimeServiceContext } from './types';
+import type { AgentRuntimeDelegate, AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
 
@@ -11,6 +11,28 @@ export type ShareRunGateDeps = Pick<
   AgentRuntimeServiceContext,
   'completionLifecycle' | 'coordinator' | 'interruptOperation'
 >;
+
+/**
+ * Whether an Agent Share visitor run has lost its authorization. Fails closed:
+ * a read failure is treated as revoked. Non-share runs are never revoked.
+ */
+export async function isShareRunRevoked(
+  verify: AgentRuntimeDelegate['verifyShareRunStillAuthorized'],
+  operationId: string,
+  stepIndex: number,
+  agentState: AgentState,
+): Promise<boolean> {
+  if (!verify) return false;
+  const shareMarker = agentState.principal?.actor?.shareVisitor as
+    { agentId?: string; shareId?: string } | undefined;
+  if (!shareMarker?.agentId || !shareMarker.shareId) return false;
+  try {
+    return !(await verify({ agentId: shareMarker.agentId, shareId: shareMarker.shareId }));
+  } catch (error) {
+    log('[%s][%d] Share run authorization re-check failed: %O', operationId, stepIndex, error);
+    return true;
+  }
+}
 
 /**
  * Terminate an Agent Share visitor run whose authorization was revoked

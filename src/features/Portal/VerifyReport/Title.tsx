@@ -1,3 +1,4 @@
+import { Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useVerifyReportBundle } from '@/features/Acceptance/hooks';
@@ -8,7 +9,11 @@ const Title = memo(() => {
   const runId = useChatStore(chatPortalSelectors.verifyReportRunId);
   const { data } = useVerifyReportBundle(runId ?? null);
 
-  return data?.run.title || 'Verify report';
+  return (
+    <Text ellipsis={{ tooltipWhenOverflow: true }} style={{ minWidth: 0 }}>
+      {data?.run.title || 'Verify report'}
+    </Text>
+  );
 });
 
 export default Title;

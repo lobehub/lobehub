@@ -8,6 +8,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import ChannelList from '@/features/Channels/ChannelList';
 import Recents from '@/features/Home/Recents';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -25,6 +26,7 @@ import { isModifierClick } from '@/utils/navigation';
 
 import Agent from './Agent';
 import { openCustomizeSidebarModal } from './CustomizeSidebarModal';
+import Favorites from './Favorites';
 import Private from './Private';
 import Project from './Project';
 import { useSyncWorkspaceSidebarPreference } from './useSyncWorkspaceSidebarPreference';
@@ -32,6 +34,7 @@ import { useSyncWorkspaceSidebarPreference } from './useSyncWorkspaceSidebarPref
 export enum GroupKey {
   Agent = 'agent',
   Community = 'community',
+  Favorites = 'favorites',
   Pages = 'pages',
   Private = 'private',
   Project = 'project',
@@ -40,6 +43,7 @@ export enum GroupKey {
 }
 
 const ACCORDION_KEYS = new Set<string>([
+  GroupKey.Favorites,
   GroupKey.Project,
   GroupKey.Recents,
   GroupKey.Agent,
@@ -52,6 +56,7 @@ const HEADER_KEYS = new Set<string>(['home', 'search']);
 
 const accordionComponents: Record<string, (key: string) => ReactElement> = {
   [GroupKey.Agent]: (key) => <Agent itemKey={key} key={key} />,
+  [GroupKey.Favorites]: (key) => <Favorites itemKey={key} key={key} />,
   [GroupKey.Private]: (key) => <Private itemKey={key} key={key} />,
   [GroupKey.Project]: (key) => <Project itemKey={key} key={key} />,
   [GroupKey.Recents]: (key) => <Recents itemKey={key} key={key} />,
@@ -239,6 +244,11 @@ const Body = memo(() => {
       } else if (ACCORDION_KEYS.has(key)) {
         const comp = accordionComponents[key]?.(key);
         if (comp) accGroup.push({ element: comp, key });
+        // Channels sit right below Agents, in their own accordion.
+        if (key === GroupKey.Agent) {
+          flushAccordion();
+          elements.push(<ChannelList key="channels" />);
+        }
       } else {
         flushAccordion();
         const link = renderNavLink(key);

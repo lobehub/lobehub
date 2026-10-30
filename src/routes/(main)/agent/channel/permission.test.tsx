@@ -4,11 +4,12 @@
 import { useForm } from '@lobehub/ui/form';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import PlatformDetail, { type ChannelFormValues } from '@/features/AgentChannel/PlatformDetail';
 import Body from '@/features/AgentChannel/PlatformDetail/Body';
-import Footer from '@/features/AgentChannel/PlatformDetail/Footer';
+import { FooterActions } from '@/features/AgentChannel/PlatformDetail/Footer';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
 import Header from './Header';
@@ -29,6 +30,13 @@ vi.mock('react-i18next', () => ({
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   Link: ({ children }: { children?: ReactNode }) => <a>{children}</a>,
+}));
+
+// The channel body reads released-behind flags from the server config store, which is a
+// context store: without a provider it throws while rendering.
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (s: { featureFlags: Record<string, unknown> }) => unknown) =>
+    selector({ featureFlags: {} }),
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -78,7 +86,12 @@ vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       // The channel form names quick-created bot apps after the agent.
-      agentMap: {},
+      agentMap: {
+        // A name (who the agent is) and a title (the role it plays) that differ.
+        'agent-id': { name: 'Shadow Arvin', title: 'Simulated teammate' },
+      },
+      // The agent meta selector looks up the built-in agents for a default avatar.
+      builtinAgentIdMap: {},
       connectBot: vi.fn(),
       createBotProvider: vi.fn(),
       deleteAllBotProviders: vi.fn(),
@@ -212,12 +225,19 @@ const currentConfig = {
   settings: { charLimit: 2000 },
 };
 
-const BodyHarness = ({ disabled }: { disabled?: boolean }) => {
+const BodyHarness = ({
+  activeTab,
+  disabled,
+}: {
+  activeTab: 'advanced' | 'connect';
+  disabled?: boolean;
+}) => {
   const form = useForm<ChannelFormValues>();
 
   return (
     <Body
       hasConfig
+      activeTab={activeTab}
       currentConfig={currentConfig}
       disabled={disabled}
       form={form}
@@ -230,11 +250,10 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
   const form = useForm<ChannelFormValues>();
 
   return (
-    <Footer
+    <FooterActions
       hasConfig
       isDirty
       connecting={false}
-      currentConfig={currentConfig}
       disabled={disabled}
       form={form}
       platformDef={platformDef}
@@ -250,6 +269,11 @@ const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
   );
 };
 
+const LocationProbe = () => <output data-testid="location">{useLocation().search}</output>;
+
+// A saved bot folds its credentials away; open them the way a person would.
+const openCredentials = () => fireEvent.click(screen.getByText('channel.credentials'));
+
 describe('Agent channel permission gates', () => {
   beforeEach(() => {
     mocks.activeWorkspaceId = null;
@@ -257,30 +281,35 @@ describe('Agent channel permission gates', () => {
   });
 
   it('renders channel credentials as read-only when editing is denied', () => {
-    render(<BodyHarness disabled />);
+    const { unmount } = render(<BodyHarness disabled activeTab="connect" />);
 
-    expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toBeDisabled();
+    openCredentials();
+    expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toBeDisabled();
     expect(screen.queryByTestId('info-tooltip')).not.toBeInTheDocument();
     expect(screen.getByLabelText('channel.botToken')).toBeDisabled();
-    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeDisabled();
+    unmount();
+
+    render(<BodyHarness disabled activeTab="advanced" />);
+
+    expect(screen.getByRole('textbox', { name: /^channel.charLimit/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.settingsResetDefault' })).toBeDisabled();
   });
 
-  it('toggles advanced settings from the full header row', async () => {
-    render(<BodyHarness />);
+  it('shows one tab at a time and keeps the others mounted', () => {
+    const { rerender } = render(<BodyHarness activeTab="advanced" />);
 
-    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument();
-    const header = screen.getByRole('button', { name: 'channel.settings' });
+    expect(screen.getByRole('textbox', { name: /^channel.charLimit/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: /^channel.applicationId/ }),
+    ).not.toBeInTheDocument();
+    // The hidden panel is still in the document, so its values survive a save.
+    expect(document.querySelector('#channel-panel-connect')).toHaveAttribute('hidden');
 
-    fireEvent.click(header);
-    await waitFor(() =>
-      expect(screen.queryByRole('textbox', { name: 'channel.charLimit' })).not.toBeInTheDocument(),
-    );
+    rerender(<BodyHarness activeTab="connect" />);
 
-    fireEvent.click(header);
-    await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument(),
-    );
+    openCredentials();
+    expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /^channel.charLimit/ })).not.toBeInTheDocument();
   });
 
   it('disables mutating channel actions when editing is denied', () => {
@@ -292,12 +321,29 @@ describe('Agent channel permission gates', () => {
     expect(screen.getByRole('button', { name: 'channel.save' })).toBeDisabled();
   });
 
+  it("speaks as the agent's name, not its role title", async () => {
+    render(
+      <PlatformDetail agentId="agent-id" currentConfig={currentConfig} platformDef={platformDef} />,
+      { wrapper: MemoryRouter },
+    );
+
+    // The test window is narrow, so the preview opens from its button.
+    fireEvent.click(await screen.findByRole('button', { name: 'channel.quickView.open' }));
+    // The quick view's bot speaks under the name.
+    await waitFor(() => expect(screen.getAllByText('Shadow Arvin').length).toBeGreaterThan(0));
+    expect(screen.queryByText('Simulated teammate')).not.toBeInTheDocument();
+  });
+
   it('discards form edits and restores the persisted configuration', async () => {
     render(
       <PlatformDetail agentId="agent-id" currentConfig={currentConfig} platformDef={platformDef} />,
+      { wrapper: MemoryRouter },
     );
 
-    const applicationId = screen.getByRole('textbox', { name: 'channel.applicationId' });
+    // A saved bot opens on its first settings tab; the app ID lives on "connect".
+    fireEvent.click(screen.getByRole('tab', { name: 'channel.tab.connect' }));
+    openCredentials();
+    const applicationId = screen.getByRole('textbox', { name: /^channel.applicationId/ });
     await waitFor(() => expect(applicationId).toHaveValue('app-id'));
     expect(screen.queryByRole('button', { name: 'channel.discard' })).not.toBeInTheDocument();
 
@@ -309,9 +355,35 @@ describe('Agent channel permission gates', () => {
     );
     screen.getByRole('button', { name: 'channel.discard' }).click();
     await waitFor(() =>
-      expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toHaveValue('app-id'),
+      expect(screen.getByRole('textbox', { name: /^channel.applicationId/ })).toHaveValue('app-id'),
     );
   }, 15_000);
+
+  it('opens the tab named in the URL and writes the picked tab back to it', () => {
+    render(
+      <MemoryRouter initialEntries={['/agent/agent-id/channel/discord?tab=connect']}>
+        <PlatformDetail
+          agentId="agent-id"
+          currentConfig={currentConfig}
+          platformDef={platformDef}
+        />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+    // A saved bot would open on access; the URL asks for connect.
+    expect(screen.getByRole('tab', { name: 'channel.tab.connect' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    fireEvent.click(screen.getByRole('tab', { name: 'channel.tab.access' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('?tab=access');
+    expect(screen.getByRole('tab', { name: 'channel.tab.access' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
 
   it('disables the channel enable switch and status refresh when editing is denied', () => {
     render(
@@ -320,7 +392,6 @@ describe('Agent channel permission gates', () => {
         agentId="agent-id"
         currentConfig={currentConfig}
         platformDef={platformDef}
-        runtimeStatus="connected"
       />,
     );
 
@@ -418,6 +489,7 @@ describe('Agent channel permission gates', () => {
           name: 'WeChat',
         }}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const alert = screen.getByTestId('channel-paid-alert');
@@ -441,6 +513,7 @@ describe('Agent channel permission gates', () => {
           name: 'WeChat',
         }}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const title = screen.getByTestId('channel-paid-alert-title');
@@ -470,6 +543,7 @@ describe('Agent channel permission gates', () => {
           name: 'WeChat',
         }}
       />,
+      { wrapper: MemoryRouter },
     );
 
     const title = screen.getByTestId('channel-paid-alert-title');

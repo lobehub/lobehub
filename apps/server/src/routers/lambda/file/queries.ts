@@ -94,6 +94,7 @@ export const queriesRouter = router({
         id: item.id,
         metadata: item.metadata as Record<string, any> | null | undefined,
         name: item.name,
+        parentId: item.parentId,
         size: item.size,
         sourceType: 'file' as const,
         updatedAt: item.updatedAt,
@@ -189,6 +190,43 @@ export const queriesRouter = router({
       }
 
       return resultFiles;
+    }),
+  /**
+   * The Docs home list. `recent` is everything in scope, `mine` the caller's
+   * own rows, `shared` what other workspace members shared. Slim rows only:
+   * the list never renders a body, chunk status or a storage URL.
+   */
+  homeItems: fileProcedure
+    .input(
+      z.object({
+        limit: z.number().int().positive().max(100).optional(),
+        tab: z.enum(['recent', 'mine', 'shared']),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (input.tab === 'shared' && !ctx.workspaceId) return [];
+
+      const excludeKnowledgeBaseIds = ctx.workspaceId
+        ? await getRestrictedKnowledgeBaseIds(ctx)
+        : undefined;
+      const items = await ctx.knowledgeRepo.queryHomeItems({
+        creator: input.tab === 'mine' ? 'self' : input.tab === 'shared' ? 'others' : undefined,
+        excludeKnowledgeBaseIds,
+        limit: input.limit ?? 50,
+      });
+
+      return items.map((item) => ({
+        createdAt: item.createdAt,
+        fileType: item.fileType,
+        id: item.id,
+        knowledgeBaseIds: item.knowledgeBaseIds ?? [],
+        metadata: item.metadata,
+        name: item.name,
+        sourceType: item.sourceType,
+        updatedAt: item.updatedAt,
+        uploader: item.uploader,
+        userId: item.userId,
+      }));
     }),
   recentPages: fileProcedure
     .input(
