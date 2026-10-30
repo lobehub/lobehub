@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../../api/client';
+import { resolveWorkspaceId } from '../../api/workspace';
 import { resolveWorkspaceRef } from '../../api/workspaceRef';
 import {
   NEW_CONVERSATION_OPTIONS_HELP,
@@ -50,9 +51,15 @@ written by that agent, and the receiver answers with 'lh message reply'.`,
           workspace?: string;
         },
       ) => {
-        const client = await getTrpcClient(await resolveWorkspaceRef(options.workspace));
+        const workspace = await resolveWorkspaceRef(options.workspace);
+        const client = await getTrpcClient(workspace);
         await reportConversationSend(() => {
-          if (!options.topicId) return sendToNewConversation(client, { ...options });
+          if (!options.topicId) {
+            return sendToNewConversation(client, {
+              ...options,
+              workspaceId: resolveWorkspaceId(workspace),
+            });
+          }
           if (options.agentId || options.device || options.title) {
             throw new Error(
               '--agent-id, --device and --title only apply to a new conversation; drop --topic-id to open one.',

@@ -5,20 +5,25 @@ import { log } from '../../utils/logger';
 import { registerMessageSendCommand } from '../message/send';
 import { registerTopicSendCommand } from './send';
 
-const { client, mockGetTrpcClient, mockResolveLocalDeviceId } = vi.hoisted(() => ({
-  client: {
-    agentSteerQueue: { append: { mutate: vi.fn() } },
-    aiAgent: { execAgent: { mutate: vi.fn() } },
-    device: { listDevices: { query: vi.fn() } },
-    topic: { getTopicDetail: { query: vi.fn() } },
-  },
-  mockGetTrpcClient: vi.fn(),
-  mockResolveLocalDeviceId: vi.fn(),
-}));
+const { client, mockGetTrpcClient, mockResolveLocalDeviceId, mockResolveWorkspaceId } = vi.hoisted(
+  () => ({
+    client: {
+      agent: { getAgentConfigById: { query: vi.fn() } },
+      agentSteerQueue: { append: { mutate: vi.fn() } },
+      aiAgent: { execAgent: { mutate: vi.fn() } },
+      device: { listDevices: { query: vi.fn() } },
+      topic: { getTopicDetail: { query: vi.fn() } },
+    },
+    mockGetTrpcClient: vi.fn(),
+    mockResolveLocalDeviceId: vi.fn(),
+    mockResolveWorkspaceId: vi.fn(),
+  }),
+);
 
 vi.mock('../../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
 vi.mock('../../api/workspaceRef', () => ({ resolveWorkspaceRef: vi.fn(async () => undefined) }));
 vi.mock('../../utils/device', () => ({ resolveLocalDeviceId: mockResolveLocalDeviceId }));
+vi.mock('../../api/workspace', () => ({ resolveWorkspaceId: mockResolveWorkspaceId }));
 
 const run = async (...args: string[]) => {
   const program = new Command();
@@ -53,6 +58,8 @@ describe('sending into a new conversation', () => {
       { deviceId: 'dev-off', online: false },
     ]);
     mockResolveLocalDeviceId.mockReturnValue('dev-mac');
+    mockResolveWorkspaceId.mockReturnValue(undefined);
+    client.agent.getAgentConfigById.query.mockResolvedValue({ agencyConfig: {} });
     logged = [];
     vi.spyOn(console, 'log').mockImplementation((...parts) => {
       logged.push(parts.join(' '));
@@ -124,6 +131,58 @@ describe('sending into a new conversation', () => {
     expect(exit).toHaveBeenCalledTimes(2);
     expect(errorLogged()).toContain('"dev-off" is not online');
     expect(errorLogged()).toContain('"dev-gone" was not found');
+  });
+
+  // ROOT CAUSE:
+  //
+  // A workspace agent with a fixed execution target always runs on that target;
+  // the server drops a requested device for it. The CLI still reported a send
+  // to the requested machine, while the run went elsewhere.
+  //
+  // Before: --device passed the online check and was silently ignored.
+  // After: a device the fixed target would ignore is refused before dispatch.
+  it('refuses a device that a workspace agent with a fixed target would ignore', async () => {
+    mockResolveWorkspaceId.mockReturnValue('ws-1');
+    client.agent.getAgentConfigById.query.mockResolvedValue({
+      agencyConfig: {
+        boundDeviceId: 'dev-server',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+    });
+
+    await run('topic', 'send', '--new', '-c', 'x', '--device', 'local');
+    client.agent.getAgentConfigById.query.mockResolvedValue({
+      agencyConfig: { executionTarget: 'sandbox', executionTargetSelectionPolicy: 'fixed' },
+    });
+    await run('message', 'send', '-c', 'x', '--device', 'dev-mac');
+
+    expect(client.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
+    expect(exit).toHaveBeenCalledTimes(2);
+    expect(errorLogged()).toContain('would be ignored');
+  });
+
+  it('accepts the device a fixed target is pinned to, and ignores the policy outside a workspace', async () => {
+    mockResolveWorkspaceId.mockReturnValue('ws-1');
+    client.agent.getAgentConfigById.query.mockResolvedValue({
+      agencyConfig: {
+        boundDeviceId: 'dev-mac',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+    });
+    await run('topic', 'send', '--new', '-c', 'x', '--device', 'local');
+
+    // Personal scope: the server does not apply the policy, so nothing is read.
+    mockResolveWorkspaceId.mockReturnValue(undefined);
+    client.agent.getAgentConfigById.query.mockClear();
+    await run('topic', 'send', '--new', '-c', 'x', '--device', 'dev-mac');
+
+    expect(client.agent.getAgentConfigById.query).not.toHaveBeenCalled();
+    expect(client.aiAgent.execAgent.mutate).toHaveBeenCalledTimes(2);
+    expect(client.aiAgent.execAgent.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ deviceId: 'dev-mac' }),
+    );
   });
 
   it('needs exactly one of a topic id and --new, and keeps new-only options off existing topics', async () => {
