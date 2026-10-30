@@ -5,9 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGoalItemMenu } from './useGoalMenuItems';
 
 const mocks = vi.hoisted(() => ({
+  autoRename: vi.fn(),
   confirmDelete: vi.fn(),
   deleteOptions: undefined as { onDeleted?: () => void } | undefined,
   navigate: vi.fn(),
+  openRename: vi.fn(),
+  renameGoalId: undefined as string | undefined,
   store: {
     closeGoal: vi.fn(),
     pauseGoal: vi.fn(),
@@ -31,11 +34,21 @@ vi.mock('./useGoalActions', () => ({
     mocks.deleteOptions = options;
     return mocks.confirmDelete;
   },
+  useGoalRename: (goalId: string) => {
+    mocks.renameGoalId = goalId;
+    return { autoRename: mocks.autoRename, openRename: mocks.openRename, rename: vi.fn() };
+  },
   useGoalShareUrl: () => 'https://app.lobehub.com/goal/goal_1',
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
-const goal = { agentId: 'agt_1', id: 'goal_1', status: 'running', userId: 'user_1' };
+const goal = {
+  agentId: 'agt_1',
+  id: 'goal_1',
+  status: 'running',
+  title: 'Desk pet',
+  userId: 'user_1',
+};
 
 const pickStatus = (items: DropdownItem[], next: string) => {
   const status = items.find((item) => item && 'key' in item && item.key === 'status') as any;
@@ -94,5 +107,26 @@ describe('useGoalItemMenu', () => {
 
     const keys = result.current.map((item) => (item && 'key' in item ? item.key : item?.type));
     expect(keys.slice(-4)).toEqual(['copyLink', 'copy-goal', 'divider', 'delete']);
+  });
+
+  // Same pair, copy and order as a topic's menu.
+  it('leads with smart rename and rename, like a topic', () => {
+    const { result } = renderHook(() => useGoalItemMenu({ agentId: 'agt_1', goal }));
+    const keys = result.current.map((item) => (item && 'key' in item ? item.key : item?.type));
+
+    expect(keys.slice(0, 3)).toEqual(['autoRename', 'rename', 'divider']);
+    expect(result.current[0]).toMatchObject({ label: 'actions.autoRename' });
+    expect(result.current[1]).toMatchObject({ label: 'rename' });
+  });
+
+  it('renames the row it was opened on, prefilled with its title', () => {
+    const { result } = renderHook(() => useGoalItemMenu({ agentId: 'agt_1', goal }));
+
+    (result.current[0] as any).onClick();
+    (result.current[1] as any).onClick();
+
+    expect(mocks.renameGoalId).toBe('goal_1');
+    expect(mocks.autoRename).toHaveBeenCalled();
+    expect(mocks.openRename).toHaveBeenCalledWith('Desk pet');
   });
 });

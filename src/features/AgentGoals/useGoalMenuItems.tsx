@@ -1,5 +1,12 @@
 import { confirmModal, copyToClipboard, type DropdownItem, Icon, toast } from '@lobehub/ui';
-import { CircleDashedIcon, CopyIcon, LinkIcon, TrashIcon } from 'lucide-react';
+import {
+  CircleDashedIcon,
+  CopyIcon,
+  LinkIcon,
+  PencilLineIcon,
+  TrashIcon,
+  Wand2Icon,
+} from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +24,7 @@ import {
   type ManualGoalStatus,
   toManualStatus,
 } from './goalStatusMenu';
-import { useConfirmDeleteGoal, useGoalShareUrl } from './useGoalActions';
+import { useConfirmDeleteGoal, useGoalRename, useGoalShareUrl } from './useGoalActions';
 
 interface UseGoalMenuItemsOptions {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
@@ -30,6 +37,8 @@ interface UseGoalMenuItemsOptions {
   onStatusChanged?: () => void;
   projectId?: string | null;
   status?: string;
+  /** The current title, prefilled by the rename dialog. */
+  title?: string;
 }
 
 /** The goal's action menu, shared by the detail header's "more" button and the list rows. */
@@ -41,8 +50,9 @@ export const useGoalMenuItems = ({
   onStatusChanged,
   projectId,
   status,
+  title,
 }: UseGoalMenuItemsOptions): DropdownItem[] => {
-  const { t } = useTranslation(['chat', 'common']);
+  const { t } = useTranslation(['chat', 'common', 'topic']);
   const { allowed: canEditTask } = usePermission('create_content');
   const shareUrl = useGoalShareUrl({ agentId, goalId });
   const confirmDelete = useConfirmDeleteGoal({ agentId, goalId, onDeleted, projectId });
@@ -54,6 +64,9 @@ export const useGoalMenuItems = ({
   const startGoal = useGoalStore((s) => s.startGoal);
   const closeGoal = useGoalStore((s) => s.closeGoal);
   const transferItems = useGoalTransferMenuItem(goalId) as DropdownItem[] | null;
+  const { autoRename, openRename } = useGoalRename(goalId);
+  // The server lets a workspace goal be renamed only by its creator or an owner.
+  const canRename = canEditTask && canClose;
 
   const current = toManualStatus(status);
 
@@ -81,6 +94,24 @@ export const useGoalMenuItems = ({
 
   return useMemo<DropdownItem[]>(
     () => [
+      // The topic menu's pair, in the topic menu's order.
+      {
+        disabled: !canRename,
+        icon: <Icon icon={Wand2Icon} />,
+        key: 'autoRename',
+        label: t('actions.autoRename', { ns: 'topic' }),
+        onClick: autoRename,
+      },
+      {
+        disabled: !canRename || title === undefined,
+        icon: <Icon icon={PencilLineIcon} />,
+        key: 'rename',
+        label: t('rename', { ns: 'common' }),
+        onClick: () => {
+          if (title !== undefined) openRename(title);
+        },
+      },
+      { type: 'divider' },
       // Same shape as a task's status submenu: status-colored glyphs, a check on the current one.
       {
         children: MANUAL_STATUSES.map((next) => {
@@ -132,15 +163,19 @@ export const useGoalMenuItems = ({
       },
     ],
     [
+      autoRename,
       canClose,
       canEditTask,
+      canRename,
       changeStatus,
       confirmDelete,
       current,
       goalId,
+      openRename,
       shareUrl,
       status,
       t,
+      title,
       transferItems,
     ],
   );
@@ -151,7 +186,13 @@ interface UseGoalItemMenuOptions {
   agentId?: string | null;
   /** The cross-agent list rendering the row, refreshed in place of an agent's or project's. */
   globalScopeId?: string;
-  goal: { agentId?: string | null; id: string; status: string; userId?: string | null };
+  goal: {
+    agentId?: string | null;
+    id: string;
+    status: string;
+    title?: string;
+    userId?: string | null;
+  };
   /** The project whose goal page renders the row; absent on an agent's page. */
   projectId?: string;
   /** The route's agent, which keys the list scope on an agent's page. */
@@ -183,6 +224,7 @@ export const useGoalItemMenu = ({
     onStatusChanged: handleStatusChanged,
     projectId,
     status: goal.status,
+    title: goal.title,
   });
 };
 

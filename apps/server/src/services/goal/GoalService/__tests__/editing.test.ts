@@ -202,6 +202,20 @@ describe('GoalService', () => {
     await expect(service.updateRequirement('goal_missing', 'x')).rejects.toThrow();
   });
 
+  it('renames the goal without touching its requirement', async () => {
+    const service = new GoalService(serverDB, userId);
+    const longAsk = '继续并完成桌宠项目，在现有基础上完善 TTS 语音系统'.repeat(4);
+    const graph = await service.create({ requirement: longAsk, title: longAsk });
+
+    const updated = await service.updateTitle(graph.goal.id, '桌宠 TTS 语音系统');
+
+    expect(updated.title).toBe('桌宠 TTS 语音系统');
+    const read = (await service.graph(graph.goal.id)).goal;
+    expect(read.title).toBe('桌宠 TTS 语音系统');
+    expect(read.requirement).toBe(longAsk);
+    await expect(service.updateTitle('goal_missing', 'x')).rejects.toThrow();
+  });
+
   it('names the agent each dispatched task node is assigned to', async () => {
     await serverDB.insert(agents).values([{ id: 'agt_exec', slug: 'agt-exec', userId }]);
     const service = new GoalService(serverDB, userId);

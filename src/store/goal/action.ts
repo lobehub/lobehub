@@ -1,5 +1,20 @@
-import { GOAL_ACCEPTANCE_TASK_TITLE, type GoalStatus } from '@lobechat/const/goal';
-import type { GoalGraphSnapshot, GoalMetricCriterion, GoalTickResult } from '@lobechat/types';
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import {
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_TITLE_MAX_LENGTH,
+  type GoalStatus,
+} from '@lobechat/const/goal';
+import {
+  chainSummaryTitle,
+  TOPIC_TITLE_JSON_SCHEMA,
+  TOPIC_TITLE_PROMPT_VERSION,
+} from '@lobechat/prompts';
+import {
+  type GoalGraphSnapshot,
+  type GoalMetricCriterion,
+  type GoalTickResult,
+  RequestTrigger,
+} from '@lobechat/types';
 
 import {
   createReplicaSlice,
@@ -9,12 +24,16 @@ import {
 } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { goalKeys } from '@/libs/swr/keys';
+import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
 import type { StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { goalStatusesForFilter } from './goalListFilter';
+import { buildGoalTitleMessages } from './goalTitle';
 import { useGoalStore } from './index';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
 import {
@@ -395,6 +414,85 @@ export class GoalActionImpl {
   updateGoalRequirement = async (goalId: string, requirement: string): Promise<void> => {
     await goalService.updateRequirement(goalId, requirement);
     await this.refreshGoalGraph(goalId);
+  };
+
+  /**
+   * Rename a goal everywhere it is shown — the page header, every list tab,
+   * the home rail and the conversation that created it — before the server
+   * answers. A rejected rename re-reads them all from the server and rethrows,
+   * so the caller can say why.
+   */
+  updateGoalTitle = async (goalId: string, title: string): Promise<void> => {
+    const next = title.trim().slice(0, GOAL_TITLE_MAX_LENGTH);
+    if (!next) return;
+
+    this.#goalGraph.update(
+      goalId,
+      (graph) => graph && { ...graph, goal: { ...graph.goal, title: next } },
+    );
+    this.#goalListRows.update(goalId, (item) => ({ ...item, goal: { ...item.goal, title: next } }));
+
+    try {
+      await goalService.updateTitle(goalId, next);
+    } catch (error) {
+      await Promise.allSettled([
+        this.refreshGoalGraph(goalId),
+        revalidateReplica(goalListResource),
+        revalidateReplica(homeGoalListResource),
+        revalidateReplica(topicGoalListResource),
+      ]);
+      throw error;
+    }
+  };
+
+  /**
+   * Name the goal from what it asks and what it has produced so far, with the
+   * chain and model topics are named with (`summaryTopicTitle`). An empty answer
+   * leaves the title alone. Failures reach the caller: the menu reports them,
+   * the background rename after creation ignores them.
+   */
+  autoRenameGoalTitle = async (goalId: string): Promise<void> => {
+    if (this.#get().goalTitleRenamingIds.includes(goalId)) return;
+    this.#setGoalTitleRenaming(goalId, true);
+
+    try {
+      const graph = this.#get().goalGraphById[goalId] ?? (await goalService.getGraph(goalId));
+      const { model, provider } = systemAgentSelectors.topic(useUserStore.getState());
+      const { data } = await aiChatService.generateJSON(
+        {
+          ...chainSummaryTitle(
+            buildGoalTitleMessages(graph),
+            userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
+          ),
+          metadata: { trigger: RequestTrigger.Goal },
+          model,
+          provider,
+          schema: TOPIC_TITLE_JSON_SCHEMA,
+          tracing: {
+            promptVersion: TOPIC_TITLE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TopicTitle,
+            schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+          },
+        },
+        new AbortController(),
+      );
+
+      const title = (data as { title?: string } | undefined)?.title?.trim();
+      if (!title) throw new Error('No goal title was generated.');
+
+      await this.updateGoalTitle(goalId, title);
+    } finally {
+      this.#setGoalTitleRenaming(goalId, false);
+    }
+  };
+
+  #setGoalTitleRenaming = (goalId: string, renaming: boolean) => {
+    const ids = this.#get().goalTitleRenamingIds.filter((id) => id !== goalId);
+    this.#set(
+      { goalTitleRenamingIds: renaming ? [...ids, goalId] : ids },
+      false,
+      'setGoalTitleRenaming',
+    );
   };
 
   /**

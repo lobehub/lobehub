@@ -2,6 +2,7 @@
 
 import { resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
+import { GOAL_TITLE_MAX_LENGTH } from '@lobechat/const/goal';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
 import {
@@ -24,6 +25,7 @@ import {
   Pencil,
   PencilLine,
   Plus,
+  RotateCw,
   ShieldCheck,
   Trash2,
   X,
@@ -43,12 +45,13 @@ import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
 import { goalService } from '@/services/goal';
+import { useGoalStore } from '@/store/goal';
 import { shinyTextStyles } from '@/styles';
 
 import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
-import { deriveGoalTitle } from './goalTitle';
+import { deriveGoalTitle, resolveSubmittedGoalTitle } from './goalTitle';
 import { hasUnsavedGoalDraft } from './hasUnsavedGoalDraft';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -239,11 +242,16 @@ export interface CreateGoalContentProps {
 const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated, projectId } =
     props;
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const { close } = useModalContext();
   const { allowed: canCreate, reason } = usePermission('create_content');
 
   const [isCreating, setIsCreating] = useState(false);
+  // Drafting failed, so the review step offers to draft again.
+  const [generateFailed, setGenerateFailed] = useState(false);
+  // The stopgap title a failed draft leaves behind; still unedited at submit,
+  // it is replaced by a generated one once the goal exists.
+  const fallbackTitleRef = useRef<string>(undefined);
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -292,6 +300,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       name,
     }));
     instructionRef.current = instruction;
+    setGenerateFailed(false);
     setStep('preparing');
     try {
       const generated = await generateGoalCriteria({
@@ -308,12 +317,16 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       setStep('review');
     } catch (error) {
       console.error('[CreateGoalContent] generate failed:', error);
+      // Never the instruction itself: a pasted prompt as the title is what
+      // took over the goal page. The instruction stays the goal's body.
+      fallbackTitleRef.current = name;
       setPlan((current) => ({
         ...current,
         criteria: [createFallbackGoalCriterion(instruction)],
         instruction,
-        name: instruction,
+        name,
       }));
+      setGenerateFailed(true);
       setStep('review');
       toast.warning(t('createGoal.generateFailed'));
     }
@@ -378,7 +391,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     const reviewedCriteria = plan.criteria.filter((criterion) => criterion.title.trim());
     if (!instruction || reviewedCriteria.length === 0) return;
 
-    const title = plan.name.trim() || instruction;
+    const { needsGeneratedTitle, title } = resolveSubmittedGoalTitle({
+      fallbackTitle: fallbackTitleRef.current,
+      instruction,
+      name: plan.name,
+    });
     const budget = buildGoalCreateInput({
       costBudget: plan.maxTotalCost,
       instruction,
@@ -416,6 +433,13 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       // durable fallback — fired and forgotten so the modal still closes
       // immediately; the server dedupes a raced decomposition.
       void goalService.advance(graph.goal.id).catch(() => {});
+      // A stopgap title is named from the instruction once the goal exists;
+      // failing that, it keeps the stopgap rather than blocking the create.
+      if (needsGeneratedTitle)
+        void useGoalStore
+          .getState()
+          .autoRenameGoalTitle(graph.goal.id)
+          .catch(() => {});
       close();
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {
@@ -490,13 +514,32 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </Flexbox>
           )}
           {step === 'review' ? (
-            <input
-              className={styles.title}
-              disabled={!canCreate}
-              placeholder={t('createGoal.titlePlaceholder')}
-              value={plan.name}
-              onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
-            />
+            <>
+              <input
+                className={styles.title}
+                disabled={!canCreate}
+                maxLength={GOAL_TITLE_MAX_LENGTH}
+                placeholder={t('createGoal.titlePlaceholder')}
+                value={plan.name}
+                onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
+              />
+              {generateFailed && (
+                <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                  <Text fontSize={12} type={'warning'}>
+                    {t('createGoal.generateFailed')}
+                  </Text>
+                  <Button
+                    disabled={!canCreate}
+                    icon={RotateCw}
+                    size={'small'}
+                    type={'text'}
+                    onClick={() => void handleNext()}
+                  >
+                    {t('regenerate', { ns: 'common' })}
+                  </Button>
+                </Flexbox>
+              )}
+            </>
           ) : (
             <div className={styles.titleStatic}>{t('createGoal.describeTitle')}</div>
           )}

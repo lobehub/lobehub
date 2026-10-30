@@ -18,7 +18,8 @@ const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, proje
   const { t } = useTranslation('chat');
   const status = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.status);
   const creatorUserId = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.userId);
-  const items = useGoalMenuItems({ agentId, creatorUserId, goalId, projectId, status });
+  const title = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.title);
+  const items = useGoalMenuItems({ agentId, creatorUserId, goalId, projectId, status, title });
 
   return (
     <DropdownMenu items={items} placement={'bottomRight'}>

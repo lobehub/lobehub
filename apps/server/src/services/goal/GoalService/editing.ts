@@ -63,6 +63,16 @@ export const updateRequirement = async (
 };
 
 /**
+ * Rename the goal. Only the label changes: the requirement, the graph and the
+ * Tasks already dispatched keep their own text.
+ */
+export const updateTitle = async (ctx: GoalServiceContext, goalId: string, title: string) => {
+  const goal = await ctx.goalModel.update(goalId, { title });
+  if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+  return goal;
+};
+
+/**
  * Who works on a goal and with which model lives in `GoalAssignmentService`:
  * handoffs, the Task executor and both model slots share its locked
  * transactions, so these methods only bind it to this service's principal.
