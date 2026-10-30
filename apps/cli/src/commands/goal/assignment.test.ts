@@ -109,6 +109,23 @@ describe('goal model commands', () => {
     });
   });
 
+  // A follow-up write would change the config the turn's snapshot covers, and
+  // the printed token's first plan would be rejected as stale_input.
+  it('keeps the planning token valid when the server dropped the field', async () => {
+    const client = await mocks.getTrpcClient();
+
+    await ensureCreatedGoalTaskModel(
+      client,
+      { config: {}, id: 'goal_1' },
+      { model: 'gpt-5', provider: 'openai' },
+      'turn-token',
+    );
+
+    expect(mocks.setTaskModel).not.toHaveBeenCalled();
+    expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('Submit the plan first'));
+    expect(process.exitCode).toBe(1);
+  });
+
   it('keeps a created goal when its task model is refused, with a retry hint', async () => {
     const client = await mocks.getTrpcClient();
     mocks.setTaskModel.mockRejectedValueOnce(new Error('model is fixed'));
