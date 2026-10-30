@@ -4610,6 +4610,7 @@ table user_memories_activities {
     user_id [name: 'user_memories_activities_user_id_index']
     user_memory_id [name: 'user_memories_activities_user_memory_id_index']
     status [name: 'user_memories_activities_status_index']
+    dossier_id [name: 'user_memories_activities_dossier_id_index']
   }
 }
 
@@ -4697,6 +4698,8 @@ table user_memories_contexts {
     type [name: 'user_memories_contexts_type_index']
     user_id [name: 'user_memories_contexts_user_id_index']
     user_memory_ids [name: 'user_memories_contexts_user_memory_ids_gin_idx']
+    user_memory_id [name: 'user_memories_contexts_user_memory_id_index']
+    (user_id, last_evidence_at) [name: 'user_memories_contexts_user_id_last_evidence_at_index']
   }
 }
 
@@ -4863,6 +4866,7 @@ table user_memories_identities {
     type [name: 'user_memories_identities_type_index']
     user_id [name: 'user_memories_identities_user_id_index']
     user_memory_id [name: 'user_memories_identities_user_memory_id_index']
+    entity_id [name: 'user_memories_identities_entity_id_index']
   }
 }
 
@@ -4968,6 +4972,8 @@ table user_memories_preferences {
     conclusion_directives_vector [name: 'user_memories_preferences_conclusion_directives_vector_index']
     user_id [name: 'user_memories_preferences_user_id_index']
     user_memory_id [name: 'user_memories_preferences_user_memory_id_index']
+    holder_entity_id [name: 'user_memories_preferences_holder_entity_id_index']
+    applies_to_entity_id [name: 'user_memories_preferences_applies_to_entity_id_index']
   }
 }
 

@@ -56,6 +56,8 @@ export const userMemoriesPreferences = pgTable(
     ),
     index('user_memories_preferences_user_id_index').on(table.userId),
     index('user_memories_preferences_user_memory_id_index').on(table.userMemoryId),
+    index('user_memories_preferences_holder_entity_id_index').on(table.holderEntityId),
+    index('user_memories_preferences_applies_to_entity_id_index').on(table.appliesToEntityId),
   ],
 );
 

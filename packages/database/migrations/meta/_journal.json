@@ -1372,6 +1372,13 @@
       "when": 1793336966391,
       "tag": "0195_memory_columns_account_logins_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1793337113351,
+      "tag": "0196_memory_large_table_indexes",
+      "breakpoints": true
     }
   ],
   "version": "6"

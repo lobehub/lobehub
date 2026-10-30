@@ -45,6 +45,7 @@ export const userMemoriesIdentities = pgTable(
     index('user_memories_identities_type_index').on(table.type),
     index('user_memories_identities_user_id_index').on(table.userId),
     index('user_memories_identities_user_memory_id_index').on(table.userMemoryId),
+    index('user_memories_identities_entity_id_index').on(table.entityId),
   ],
 );
 
