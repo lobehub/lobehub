@@ -286,4 +286,33 @@ describe('wake-up turns that call tools after a toolless closing reply', () => {
     expect(groupStepIds(flatten(wakeUpScenario('toolWait')))).toEqual(everyStep);
     expect(contextTreeStepIds(wakeUpScenario('toolWait'))).toEqual(everyStep);
   });
+
+  // Before the read-side fix the STALE shape ended at WAKE1_REPLY, so a user who
+  // kept chatting replied to it, after FINAL already existed.
+  it('STALE: keeps a later follow-up sent to the formerly visible tail', () => {
+    const messages: Message[] = [
+      ...wakeUpScenario('toolWait'),
+      {
+        content: 'follow-up',
+        createdAt: 200,
+        id: 'u2',
+        parentId: 'WAKE1_REPLY',
+        role: 'user',
+        updatedAt: 200,
+      },
+      {
+        agentId: 'a',
+        content: 'answer',
+        createdAt: 210,
+        id: 'a2',
+        parentId: 'u2',
+        role: 'assistant',
+        updatedAt: 210,
+      },
+    ];
+    const flat = flatten(messages);
+
+    expect(groupStepIds(flat)).toEqual(everyStep);
+    expect(flat.map((m) => m.id)).toEqual(['u1', 'RUN', 'u2', 'a2']);
+  });
 });

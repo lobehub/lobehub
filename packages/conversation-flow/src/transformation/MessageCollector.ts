@@ -579,6 +579,40 @@ export class MessageCollector {
   }
 
   /**
+   * User turns that interrupted a folded group at `assistant`, an intermediate
+   * step whose next step in the chain is `next`. Branch selection among them
+   * stays with the caller.
+   *
+   * A user turn sent after the group's tail is a deliberate rewind and stays
+   * hidden, unless the chain reached `next` from the wake-up queue rather than
+   * from `assistant` itself. Nothing at `assistant` then competes with the user
+   * turn, and it can postdate the tail: before wake-ups joined the chain,
+   * `assistant` was where the rendered reply ended, so users replied to it.
+   */
+  collectGroupInterruptions(
+    assistant: Message,
+    next: Message,
+    tail: Message,
+    processedIds: Set<string>,
+  ): string[] {
+    const nextParent = next.parentId ? this.messageMap.get(next.parentId) : undefined;
+    const continuesHere =
+      next.parentId === assistant.id ||
+      (nextParent?.role === 'tool' && nextParent.parentId === assistant.id);
+
+    return (this.childrenMap.get(assistant.id) ?? []).filter((id) => {
+      const message = this.messageMap.get(id);
+      return (
+        message?.role === 'user' &&
+        !message.threadId &&
+        !processedIds.has(id) &&
+        toTime(message.createdAt) >= toTime(assistant.createdAt) &&
+        (!continuesHere || toTime(message.createdAt) <= toTime(tail.createdAt))
+      );
+    });
+  }
+
+  /**
    * Collect assistant messages for an AssistantGroup (contextTree version)
    * Only collects messages from the SAME agent (matching agentId)
    */
