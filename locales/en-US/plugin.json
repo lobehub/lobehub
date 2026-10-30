@@ -1,6 +1,9 @@
 {
   "arguments.moreParams": "{{count}} params in total",
   "arguments.title": "Arguments",
+  "builtins.builtin-dashboard.approve.dryRunWidget": "Approve dry run",
+  "builtins.builtin-dashboard.approve.requestPublish": "Approve publishing",
+  "builtins.builtin-dashboard.approveRemember.dryRunWidget": "Approve dry run, and don't ask again for the same access",
   "builtins.builtin-dashboard.apiName.addWidgetToDashboard": "Add widget to dashboard",
   "builtins.builtin-dashboard.apiName.createDashboard": "Create dashboard",
   "builtins.builtin-dashboard.apiName.createWidgetDraft": "Create widget draft",

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { type PendingIntervention } from '../store/slices/data/pendingInterventions';
 import { styles } from './style';
+import { interventionTabLabelKey } from './tabLabel';
 
 interface InterventionTabBarProps {
   activeIndex: number;
@@ -24,19 +25,23 @@ interface InterventionTabBarProps {
 
 const InterventionTabBar = memo<InterventionTabBarProps>(
   ({ interventions, activeIndex, approveAll, onTabChange }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'plugin']);
 
     return (
       <div className={styles.tabBar}>
-        {interventions.map((item, index) => (
-          <div
-            className={cx(styles.tab, index === activeIndex && styles.tabActive)}
-            key={item.toolCallId}
-            onClick={() => onTabChange(index)}
-          >
-            🔧 {item.apiName}
-          </div>
-        ))}
+        {interventions.map((item, index) => {
+          const labelKey = interventionTabLabelKey(item);
+          return (
+            <div
+              className={cx(styles.tab, index === activeIndex && styles.tabActive)}
+              key={item.toolCallId}
+              onClick={() => onTabChange(index)}
+            >
+              🔧{' '}
+              {labelKey ? t(labelKey, { defaultValue: item.apiName, ns: 'plugin' }) : item.apiName}
+            </div>
+          );
+        })}
         <div className={styles.tabTrailing}>
           <span className={styles.tabCounter}>
             {activeIndex + 1} / {interventions.length}

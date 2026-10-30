@@ -1,6 +1,8 @@
 'use client';
 
-import { Alert, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { Alert, cssVar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import dayjs from 'dayjs';
+import { CircleCheckIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +18,7 @@ import {
   reviewStyles,
   ReviewUnavailable,
 } from './ReviewFacts';
+import ReviewStage from './ReviewStage';
 import { useWidgetReview } from './useWidgetReview';
 
 interface PublishReviewProps {
@@ -71,10 +74,21 @@ const PublishReview = memo<PublishReviewProps>(
 
     return (
       <Flexbox data-widget-publish-review={widgetId} gap={12}>
-        <Flexbox gap={4}>
-          <Text weight={600}>{`${widget.title} · v${target.version}`}</Text>
+        <ReviewStage stage={'publish'} title={widget.title} version={target.version}>
           {summary && <Text fontSize={13}>{summary}</Text>}
-        </Flexbox>
+          {/* Says the dry run is behind it, so this does not read as approving it again. */}
+          {run && (
+            <Flexbox horizontal align={'center'} gap={4}>
+              <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={12} />
+              <Text fontSize={12} type={'secondary'}>
+                {t('publish.dryRunPassed', {
+                  time: dayjs(run.finishedAt ?? run.startedAt).fromNow(),
+                  version: target.version,
+                })}
+              </Text>
+            </Flexbox>
+          )}
+        </ReviewStage>
 
         {run ? (
           <ReviewSection title={t('review.expected')}>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  approveChoiceLabelKeys,
   canRememberViaAllowList,
   getApprovalChoices,
   isChoiceSubmitBlocked,
@@ -84,5 +85,36 @@ describe('canRememberViaAllowList', () => {
     expect(canRememberViaAllowList({ config: 'required', toolArgs: { command: 'rm -rf /' } })).toBe(
       false,
     );
+  });
+});
+
+describe('approveChoiceLabelKeys', () => {
+  it('lets each tool name its own approval so consecutive steps of one flow read differently', () => {
+    const dryRun = approveChoiceLabelKeys({
+      apiName: 'dryRunWidget',
+      choice: 'approve',
+      identifier: 'lobe-dashboard',
+    });
+    const publish = approveChoiceLabelKeys({
+      apiName: 'requestPublish',
+      choice: 'approve',
+      identifier: 'lobe-dashboard',
+    });
+    expect(dryRun.tool).toBe('builtins.lobe-dashboard.approve.dryRunWidget');
+    expect(publish.tool).toBe('builtins.lobe-dashboard.approve.requestPublish');
+    expect(dryRun.shared).toBe('tool.intervention.optionApprove');
+  });
+
+  it('keys the remember choice apart from the plain approve', () => {
+    expect(
+      approveChoiceLabelKeys({
+        apiName: 'dryRunWidget',
+        choice: 'approve-remember',
+        identifier: 'lobe-dashboard',
+      }),
+    ).toEqual({
+      shared: 'tool.intervention.optionApproveRemember',
+      tool: 'builtins.lobe-dashboard.approveRemember.dryRunWidget',
+    });
   });
 });

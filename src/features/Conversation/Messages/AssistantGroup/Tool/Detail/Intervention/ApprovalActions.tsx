@@ -13,6 +13,7 @@ import { useConversationResourceAccess } from '../../../../../hooks/useConversat
 import { useConversationStore } from '../../../../../store';
 import {
   type ApprovalChoice,
+  approveChoiceLabelKeys,
   canRememberViaAllowList,
   getApprovalChoices,
   isChoiceSubmitBlocked,
@@ -159,7 +160,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     rememberOption,
     toolArgs,
   }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'plugin']);
     const [choice, setChoice] = useState<Choice>('approve');
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
@@ -363,9 +364,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
 
     const rejectNumber = choices.indexOf('reject') + 1;
 
-    const approveLabel: Record<'approve' | 'approve-remember', string> = {
-      'approve': t('tool.intervention.optionApprove'),
-      'approve-remember': t('tool.intervention.optionApproveRemember'),
+    const approveLabelFor = (c: 'approve' | 'approve-remember') => {
+      const keys = approveChoiceLabelKeys({ apiName, choice: c, identifier });
+      return t(keys.tool, { defaultValue: t(keys.shared), ns: 'plugin' });
     };
 
     // View-only members see the pending intervention but get no approval
@@ -416,7 +417,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                 onClick={() => setChoice(c)}
               >
                 <span className={styles.number}>{index + 1}.</span>
-                <span className={styles.optionLabel}>{approveLabel[c]}</span>
+                <span className={styles.optionLabel}>{approveLabelFor(c)}</span>
               </div>
             );
           })}

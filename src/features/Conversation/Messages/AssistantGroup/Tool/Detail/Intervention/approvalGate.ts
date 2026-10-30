@@ -73,3 +73,27 @@ export const resolveRememberAction = ({
 }: {
   toolRemember: boolean;
 }): 'allow-list' | 'tool' => (toolRemember ? 'tool' : 'allow-list');
+
+const APPROVE_LABEL_KEY = {
+  'approve': ['approve', 'tool.intervention.optionApprove'],
+  'approve-remember': ['approveRemember', 'tool.intervention.optionApproveRemember'],
+} as const;
+
+/**
+ * The keys wording an approve choice: a builtin tool may name what approving
+ * its call does (`plugin` key, e.g. "Approve dry run" vs "Approve
+ * publishing"), so consecutive steps of one flow do not read as the same
+ * approval; the shared `chat` wording is the fallback for every other tool.
+ */
+export const approveChoiceLabelKeys = ({
+  apiName,
+  choice,
+  identifier,
+}: {
+  apiName: string;
+  choice: Exclude<ApprovalChoice, 'reject'>;
+  identifier: string;
+}) => {
+  const [toolKey, shared] = APPROVE_LABEL_KEY[choice];
+  return { shared, tool: `builtins.${identifier}.${toolKey}.${apiName}` };
+};

@@ -1,6 +1,9 @@
 {
   "arguments.moreParams": "等 {{count}} 个参数",
   "arguments.title": "参数列表",
+  "builtins.builtin-dashboard.approve.dryRunWidget": "批准试运行",
+  "builtins.builtin-dashboard.approve.requestPublish": "批准发布",
+  "builtins.builtin-dashboard.approveRemember.dryRunWidget": "批准试运行，且相同权限不再询问",
   "builtins.builtin-dashboard.apiName.addWidgetToDashboard": "添加组件到看板",
   "builtins.builtin-dashboard.apiName.createDashboard": "创建看板",
   "builtins.builtin-dashboard.apiName.createWidgetDraft": "创建组件草稿",
