@@ -104,7 +104,11 @@ describe('TopicRepository - batchMoveToAgent', () => {
     await serverDB
       .insert(subagents)
       .values({ id: 'sub-2', name: 'p', parentAgentId: 'target-agent' });
-    await serverDB.update(threads).set({ subagentId: 'sub-2' }).where(eq(threads.id, 'thread-1'));
+    // Router-created threads carry no agentId, so the check must not rely on it.
+    await serverDB
+      .update(threads)
+      .set({ agentId: null, subagentId: 'sub-2' })
+      .where(eq(threads.id, 'thread-1'));
     await topicRepo.batchMoveToAgent(['topic-t'], 'target-agent');
     const [sameAgent] = await serverDB.select().from(threads).where(eq(threads.id, 'thread-1'));
     expect(sameAgent.subagentId).toBe('sub-2');

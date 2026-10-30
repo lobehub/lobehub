@@ -32,7 +32,9 @@ const ThreadListSection = memo(({ topicId }: { topicId: string }) => {
   const { data: presets } = useSubagentPresets(activeAgentId, subagentIds.length > 0);
 
   const subagentNames = useMemo(() => {
-    const names = new Map(presets?.map((preset) => [preset.id, preset.name]));
+    // Without a response nothing is known about the presets: show plain rows, not fallback labels.
+    if (!presets) return;
+    const names = new Map(presets.map((preset) => [preset.id, preset.name]));
     for (const id of subagentIds) {
       if (!names.has(id)) names.set(id, t('workingPanel.overview.subagentFilter.unknown'));
     }
@@ -46,7 +48,7 @@ const ThreadListSection = memo(({ topicId }: { topicId: string }) => {
   const activeFilter =
     filter === SUBAGENT_FILTER_ALL ||
     (filter === SUBAGENT_FILTER_MAIN && hasMainThreads) ||
-    subagentIds.includes(filter)
+    (presets && subagentIds.includes(filter))
       ? filter
       : SUBAGENT_FILTER_ALL;
 
@@ -61,7 +63,7 @@ const ThreadListSection = memo(({ topicId }: { topicId: string }) => {
         <span className={sectionStyles.sectionTitle} style={{ flexShrink: 0 }}>
           {t(getThreadListHeadingKey(threads))}
         </span>
-        {subagentIds.length > 0 && (
+        {subagentNames && subagentIds.length > 0 && (
           // `Select` does not forward `aria-label`, so name the control through a group.
           <div aria-label={t('workingPanel.overview.subagentFilter.label')} role={'group'}>
             <Select

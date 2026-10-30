@@ -2,6 +2,8 @@
 -- before this migration ships, so its CREATE INDEX no-ops there: drizzle runs a migration inside a
 -- transaction, where CONCURRENTLY is not allowed and a plain CREATE INDEX would block writes to threads
 -- for the whole build. Small databases (self-hosted, preview, tests) just build it here.
+-- The threads FK is NOT VALID for the same reason: every existing row is NULL, so there is nothing to
+-- validate, and new rows and preset deletes are enforced regardless.
 CREATE TABLE IF NOT EXISTS "subagents" (
 	"id" text PRIMARY KEY NOT NULL,
 	"parent_agent_id" text NOT NULL,
@@ -24,5 +26,5 @@ ALTER TABLE "subagents" ADD CONSTRAINT "subagents_parent_agent_id_agents_id_fk" 
 CREATE INDEX IF NOT EXISTS "subagents_parent_agent_id_idx" ON "subagents" USING btree ("parent_agent_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "subagents_parent_agent_id_name_unique" ON "subagents" USING btree ("parent_agent_id","name");--> statement-breakpoint
 ALTER TABLE "threads" DROP CONSTRAINT IF EXISTS "threads_subagent_id_subagents_id_fk";--> statement-breakpoint
-ALTER TABLE "threads" ADD CONSTRAINT "threads_subagent_id_subagents_id_fk" FOREIGN KEY ("subagent_id") REFERENCES "public"."subagents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "threads" ADD CONSTRAINT "threads_subagent_id_subagents_id_fk" FOREIGN KEY ("subagent_id") REFERENCES "public"."subagents"("id") ON DELETE set null ON UPDATE no action NOT VALID;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "threads_subagent_id_idx" ON "threads" USING btree ("subagent_id");

@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
-import { agents, messages, threads, topics } from '../../schemas';
+import { agents, messages, subagents, threads, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { messageOwnership, topicOwnership, type TopicRepositoryScope } from './scope';
@@ -68,8 +68,8 @@ export const batchMoveToAgent = async (
       .update(threads)
       .set({
         agentId: targetAgentId,
-        // Presets belong to the source agent; a no-op move keeps the attribution.
-        subagentId: sql`CASE WHEN ${threads.agentId} IS DISTINCT FROM ${targetAgentId} THEN NULL ELSE ${threads.subagentId} END`,
+        // Presets stay with their agent: keep the link only if the target agent owns the preset.
+        subagentId: sql`(SELECT ${subagents.id} FROM ${subagents} WHERE ${subagents.id} = ${threads.subagentId} AND ${subagents.parentAgentId} = ${targetAgentId})`,
       })
       .where(
         and(
