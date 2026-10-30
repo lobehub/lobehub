@@ -622,11 +622,11 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                       onClick={handleRefresh}
                     >
                       <Icon
+                        icon={RefreshCwIcon}
+                        size={12}
                         className={
                           isRefreshing ? stylex.props(styles.spinning).className : undefined
                         }
-                        icon={RefreshCwIcon}
-                        size={12}
                       />
                     </div>
                   </div>

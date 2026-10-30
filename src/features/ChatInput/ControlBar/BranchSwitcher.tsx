@@ -515,11 +515,11 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                         onClick={() => handleCheckout(branch.name)}
                       >
                         <Icon
+                          icon={isBusy ? LoaderIcon : owner ? GitForkIcon : GitBranchIcon}
+                          size={14}
                           className={
                             stylex.props(styles.itemIcon, isBusy && styles.spinning).className
                           }
-                          icon={isBusy ? LoaderIcon : owner ? GitForkIcon : GitBranchIcon}
-                          size={14}
                         />
                         <div {...stylex.props(styles.itemMain)}>
                           <div {...stylex.props(styles.branchLabel)}>{branch.name}</div>

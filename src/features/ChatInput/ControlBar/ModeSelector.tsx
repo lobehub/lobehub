@@ -200,10 +200,10 @@ const ModeSelector = memo(() => {
       <Flexbox
         horizontal
         align="center"
+        gap={12}
         className={
           stylex.props(styles.option, currentMode === 'chat' && styles.activeOption).className
         }
-        gap={12}
         onClick={() => handleSelect('chat')}
       >
         <Flexbox
