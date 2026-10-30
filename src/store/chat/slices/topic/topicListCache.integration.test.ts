@@ -35,7 +35,7 @@ vi.mock('@/services/topic', () => ({
 }));
 
 const SCOPE_PREFIX = 'topic-cache-user:personal';
-const AGENT_ID = 'agent-lobe-14032';
+const AGENT_ID = 'agent-topic-cache-test';
 const CONTAINER_KEY = topicMapKey({ agentId: AGENT_ID });
 
 /** SWR provider as in the app: `topic:` (agent view, search) still persists via SWR. */
@@ -64,7 +64,7 @@ const wrapper =
       children,
     );
 
-const runningTopic = { id: 'tpc-lobe-14032', status: 'running', title: '抚州明天天气查询' };
+const runningTopic = { id: 'tpc-topic-cache-test', status: 'running', title: '抚州明天天气查询' };
 
 // Default sidebar params (no filters) — rows are stored per query.
 const SIDEBAR_STORAGE_KEY = topicListResource.storageKey({ agentId: AGENT_ID, pageSize: 20 });
