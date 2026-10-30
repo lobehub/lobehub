@@ -15,7 +15,7 @@ import {
   reactionModeField,
   watchKeywordsField,
 } from '../../const';
-import { deviceAccessFields } from '../../deviceAccess';
+import { deviceAccessFields, deviceChannelFields } from '../../deviceAccess';
 import { replyStyleFields } from '../../replyStyle';
 import type { FieldSchema } from '../../types';
 import { DEFAULT_FEISHU_CONNECTION_MODE, MAX_FEISHU_HISTORY_LIMIT } from '../const';
@@ -62,6 +62,7 @@ export const sharedSchema: FieldSchema[] = [
     properties: [
       makeUserIdField('feishu'),
       ...deviceAccessFields,
+      ...deviceChannelFields,
       {
         key: 'connectionMode',
         default: DEFAULT_FEISHU_CONNECTION_MODE,

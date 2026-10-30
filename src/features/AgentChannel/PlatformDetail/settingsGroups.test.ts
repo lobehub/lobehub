@@ -17,15 +17,25 @@ const field = (key: string): FieldSchema => ({ key, label: key, type: 'string' }
 describe('groupAccessFields', () => {
   it('splits access into owner identity, conversation and device blocks, in page order', () => {
     const sections = groupAccessFields(
-      ['deviceAllowFrom', 'groupPolicy', 'userId', 'devicePolicy', 'dmPolicy', 'serverId'].map(
-        field,
-      ),
+      [
+        'deviceChannelAllowFrom',
+        'deviceAllowFrom',
+        'groupPolicy',
+        'userId',
+        'deviceChannelPolicy',
+        'devicePolicy',
+        'dmPolicy',
+        'serverId',
+      ].map(field),
     );
 
     expect(sections.map((s) => [s.key, s.fields.map((f) => f.key)])).toEqual([
       ['identity', ['userId', 'serverId']],
       ['conversation', ['dmPolicy', 'groupPolicy']],
-      ['device', ['devicePolicy', 'deviceAllowFrom']],
+      [
+        'device',
+        ['devicePolicy', 'deviceAllowFrom', 'deviceChannelPolicy', 'deviceChannelAllowFrom'],
+      ],
     ]);
   });
 

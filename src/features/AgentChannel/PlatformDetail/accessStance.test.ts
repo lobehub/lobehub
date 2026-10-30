@@ -100,6 +100,24 @@ describe('dropHiddenIncompleteRows', () => {
     ).toEqual({});
   });
 
+  it('drops a half-added device channel row once devices are no longer limited to channels', () => {
+    expect(
+      dropHiddenIncompleteRows({
+        deviceChannelAllowFrom: [{ id: 'c1' }, { id: '' }],
+        deviceChannelPolicy: 'any',
+      }),
+    ).toEqual({ deviceChannelAllowFrom: [{ id: 'c1' }] });
+  });
+
+  it('keeps an incomplete device channel row while the channel list is shown', () => {
+    expect(
+      dropHiddenIncompleteRows({
+        deviceChannelAllowFrom: [{ id: '' }],
+        deviceChannelPolicy: 'allowlist',
+      }),
+    ).toEqual({});
+  });
+
   it('drops a half-added group row once groups are no longer limited to a list', () => {
     expect(
       dropHiddenIncompleteRows({

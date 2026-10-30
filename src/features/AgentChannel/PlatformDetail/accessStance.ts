@@ -80,6 +80,8 @@ export type AccessIssue = 'approverMissing' | 'groupListEmpty' | 'listEmpty';
 
 export interface AccessSettings extends StanceSettings {
   deviceAllowFrom?: unknown;
+  deviceChannelAllowFrom?: unknown;
+  deviceChannelPolicy?: string;
   devicePolicy?: string;
   groupAllowFrom?: unknown;
   groupPolicy?: string;
@@ -116,7 +118,9 @@ export const dropHiddenIncompleteRows = (
   settings: AccessSettings & { groupAllowFrom?: unknown; groupPolicy?: string },
 ): Record<string, unknown> => {
   const patch: Record<string, unknown> = {};
-  const prune = (key: 'allowFrom' | 'deviceAllowFrom' | 'groupAllowFrom') => {
+  const prune = (
+    key: 'allowFrom' | 'deviceAllowFrom' | 'deviceChannelAllowFrom' | 'groupAllowFrom',
+  ) => {
     const list = settings[key];
     if (Array.isArray(list) && list.some((entry) => !hasId(entry))) patch[key] = list.filter(hasId);
   };
@@ -127,6 +131,7 @@ export const dropHiddenIncompleteRows = (
   if (!peopleListShown) prune('allowFrom');
   if (settings.groupPolicy !== 'allowlist') prune('groupAllowFrom');
   if (settings.devicePolicy !== 'allowlist') prune('deviceAllowFrom');
+  if (settings.deviceChannelPolicy !== 'allowlist') prune('deviceChannelAllowFrom');
 
   return patch;
 };

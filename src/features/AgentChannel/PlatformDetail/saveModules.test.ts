@@ -23,6 +23,8 @@ describe('resolveSaveModules', () => {
     'groupPolicy',
     'devicePolicy',
     'deviceAllowFrom',
+    'deviceChannelPolicy',
+    'deviceChannelAllowFrom',
     'watchKeywords',
     'botWakeEnabled',
     'botWakeScope',
@@ -97,7 +99,10 @@ describe('resolveSaveModules', () => {
     expect(access.map((m) => [m.id, m.keys])).toEqual([
       ['access-identity', ['userId']],
       ['access-conversation', ['dmPolicy', 'groupPolicy']],
-      ['access-device', ['devicePolicy', 'deviceAllowFrom']],
+      [
+        'access-device',
+        ['devicePolicy', 'deviceAllowFrom', 'deviceChannelPolicy', 'deviceChannelAllowFrom'],
+      ],
     ]);
   });
 
