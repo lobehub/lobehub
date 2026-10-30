@@ -232,7 +232,10 @@ export const resolveGitWorktreeBase = async (payload: {
   if (baseRef && isInvalidBranchRef(baseRef))
     return { error: `Invalid base ref: ${baseRef}`, success: false };
 
-  const sha = await resolveCommit(baseRef || 'HEAD', dirPath);
+  // The dialog offers branch names, and bare `rev-parse` prefers a same-named tag.
+  const sha =
+    (baseRef && (await resolveCommit(`refs/heads/${baseRef}`, dirPath))) ||
+    (await resolveCommit(baseRef || 'HEAD', dirPath));
   if (!sha) return { error: `Unknown base ref: ${baseRef || 'HEAD'}`, success: false };
 
   if (baseRef && baseRef !== 'HEAD')

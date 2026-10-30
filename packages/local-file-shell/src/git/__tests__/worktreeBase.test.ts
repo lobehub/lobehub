@@ -67,6 +67,22 @@ describe('resolveGitWorktreeBase', () => {
     });
   });
 
+  it('prefers a branch over a same-named tag', async () => {
+    git(repo, 'tag', 'main', featureSha);
+
+    const { base } = await resolveGitWorktreeBase({ baseRef: 'main', path: repo });
+
+    expect(base?.sha).toBe(mainSha);
+  });
+
+  it('still resolves a tag with no same-named branch', async () => {
+    git(repo, 'tag', 'v1', mainSha);
+
+    const { base } = await resolveGitWorktreeBase({ baseRef: 'v1', path: repo });
+
+    expect(base?.sha).toBe(mainSha);
+  });
+
   it.each(['--upload-pack=evil', 'a b', 'main..feat/source', 'main~1', ':/init'])(
     'rejects the malformed ref %s',
     async (baseRef) => {
