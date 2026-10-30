@@ -492,7 +492,6 @@ export class TaskDetailSliceActionImpl {
   updateTaskVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
     try {
       await taskService.updateVisibility(id, visibility);
-      await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]);
     } catch (error) {
       // Surfaces a specific actionable error when the task's assignee is a
       // private agent. The generic "failed" toast hides what the user must
@@ -520,6 +519,14 @@ export class TaskDetailSliceActionImpl {
               }),
       );
       throw error;
+    }
+
+    // The write is committed; a failed refresh must not read as a failed
+    // change, or a caller chaining on it (assigning a private agent) would stop.
+    try {
+      await Promise.all([this.#get().refreshTaskList(), this.internal_refreshTaskDetail(id)]);
+    } catch (error) {
+      console.error('[task:updateTaskVisibility] refresh failed', error);
     }
   };
 
