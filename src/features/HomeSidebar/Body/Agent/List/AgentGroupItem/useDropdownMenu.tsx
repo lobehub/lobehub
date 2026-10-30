@@ -83,6 +83,13 @@ export const useGroupDropdownMenu = ({
                 onClick: () => pinAgentGroup(id, !pinned),
                 sfSymbol: pinned ? 'pin.slash' : 'pin',
               },
+            ]
+          : []),
+        // Favorites are per person, so the item sits beside Pin even for members
+        // who cannot configure the group.
+        ...(favoriteMenuItem ? [favoriteMenuItem] : []),
+        ...(canConfigure
+          ? [
               {
                 icon: <Icon icon={Pen} />,
                 key: 'rename',
@@ -115,7 +122,6 @@ export const useGroupDropdownMenu = ({
               },
             ]
           : []),
-        ...(favoriteMenuItem ? [favoriteMenuItem] : []),
         {
           icon: <Icon icon={PictureInPicture2Icon} />,
           key: 'openInNewWindow',
