@@ -5,7 +5,6 @@ import pc from 'picocolors';
 
 import type { TrpcClient } from '../../api/client';
 import { getTrpcClient } from '../../api/client';
-import { resolveWorkspaceId } from '../../api/workspace';
 import { resolveWorkspaceRef } from '../../api/workspaceRef';
 import { resolveLocalDeviceId } from '../../utils/device';
 import { outputJson } from '../../utils/format';
@@ -152,37 +151,6 @@ const resolveTargetDevice = async (client: TrpcClient, device: string): Promise<
 };
 
 /**
- * A workspace agent whose execution target is fixed (`executionTargetSelectionPolicy:
- * 'fixed'`) always runs on its configured target: the server drops a requested
- * device for it (`turnSetup`). Refuse a `--device` it would drop, rather than
- * report a send to a machine the run never reaches. The policy only applies in
- * a workspace, and a fixed device target equal to the requested one is fine.
- *
- * @throws with a message fit for the user when the device would be ignored
- */
-const assertDeviceHonored = async (
-  client: TrpcClient,
-  params: { agentId: string; deviceId: string; workspaceId?: string },
-) => {
-  if (!params.workspaceId) return;
-
-  const config = (await client.agent.getAgentConfigById.query({ agentId: params.agentId })) as {
-    agencyConfig?: {
-      boundDeviceId?: null | string;
-      executionTarget?: string;
-      executionTargetSelectionPolicy?: string;
-    };
-  } | null;
-  const agency = config?.agencyConfig;
-  if (agency?.executionTargetSelectionPolicy !== 'fixed') return;
-  if (agency.executionTarget === 'device' && agency.boundDeviceId === params.deviceId) return;
-
-  throw new Error(
-    `Agent ${params.agentId} always runs on its configured ${agency.executionTarget === 'device' ? `device (${agency.boundDeviceId})` : 'target'}, so --device ${params.deviceId} would be ignored. Drop --device, or have a workspace admin change the agent's execution target.`,
-  );
-};
-
-/**
  * Dispatch a message into a NEW conversation of an agent — the calling agent
  * itself by default — and start that agent on it: handing work to a fresh
  * conversation the way `sendToConversation` hands it to an existing one, with
@@ -198,8 +166,6 @@ export const sendToNewConversation = async (
     content: string;
     device?: string;
     title?: string;
-    /** The resolved workspace scope of the client; a fixed agent target only binds there. */
-    workspaceId?: string;
   },
 ): Promise<ConversationSendResult> => {
   const agentId = params.agentId ?? process.env.LOBEHUB_AGENT_ID;
@@ -218,11 +184,9 @@ export const sendToNewConversation = async (
   };
   if (params.device) {
     request.deviceId = await resolveTargetDevice(client, params.device);
-    await assertDeviceHonored(client, {
-      agentId,
-      deviceId: request.deviceId,
-      workspaceId: params.workspaceId,
-    });
+    // The server refuses (nothing written) when the agent's effective execution
+    // target would drop the device, instead of running the work elsewhere.
+    request.requireDevice = true;
   }
   if (params.title) request.title = params.title;
   const sourceOperationId = process.env.LOBEHUB_OPERATION_ID;
@@ -334,15 +298,11 @@ after a few rounds, so a person can step in.`,
           workspace?: string;
         },
       ) => {
-        const workspace = await resolveWorkspaceRef(options.workspace);
-        const client = await getTrpcClient(workspace);
+        const client = await getTrpcClient(await resolveWorkspaceRef(options.workspace));
         await reportConversationSend(() => {
           if (options.new) {
             if (topicId) throw new Error('Pass either <topicId> or --new, not both.');
-            return sendToNewConversation(client, {
-              ...options,
-              workspaceId: resolveWorkspaceId(workspace),
-            });
+            return sendToNewConversation(client, { ...options });
           }
           if (!topicId) {
             throw new Error('Pass the <topicId> to send to, or --new to open a new conversation.');

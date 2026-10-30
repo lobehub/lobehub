@@ -7,6 +7,7 @@ import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as InternalJwtModule from '@/libs/trpc/utils/internalJwt';
+import { AiAgentService } from '@/server/services/aiAgent';
 
 import { aiAgentRouter } from '../aiAgent';
 import { cleanupTestUser, createTestUser } from './integration/setup';
@@ -174,5 +175,26 @@ describe('aiAgent router - topic title', () => {
     });
 
     expect(await titleOf(topic.id)).toBe('Original');
+  });
+
+  // The title and a required device travel router → composerRun → service; a
+  // field dropped (or misplaced) in between would leave the service-level
+  // tests green while the route never honours it.
+  it('forwards the title and a required device to the run', async () => {
+    const spy = vi.spyOn(AiAgentService.prototype, 'execAgent');
+
+    await caller().execAgent({
+      agentId,
+      deviceId: 'device-001',
+      prompt: 'Run it there',
+      requireDevice: true,
+      title: 'On the Mac',
+    });
+
+    expect(spy.mock.calls[0][0]).toMatchObject({
+      deviceId: 'device-001',
+      requireDevice: true,
+      title: 'On the Mac',
+    });
   });
 });

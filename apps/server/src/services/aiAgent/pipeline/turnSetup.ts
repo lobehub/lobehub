@@ -361,6 +361,8 @@ export interface TurnSetupInput {
   prompt: string;
   providerOverride?: string;
   requestedDeviceId?: string;
+  /** See `InternalExecAgentParams.requireDevice`. */
+  requireDevice?: boolean;
   resolvedAgentId: string;
   /** Raw resume flag — a resume run must land on an existing topic. */
   resume?: boolean;
@@ -421,6 +423,16 @@ export interface TurnSetupResult {
   userMessageId?: string;
 }
 
+/** The agent's fixed execution target would drop a device the caller required. */
+export class RequestedDeviceIgnoredError extends Error {
+  constructor(readonly deviceId: string) {
+    super(
+      `This agent always runs on its configured execution target, so device ${deviceId} would be ignored. Drop the device, or have a workspace admin change the agent's execution target.`,
+    );
+    this.name = 'RequestedDeviceIgnoredError';
+  }
+}
+
 /**
  * Stage 3 + the shared turn setup of {@link AiAgentService.execAgent}: topic
  * creation/reuse (with the topic-pinned model), device-access policy, hetero
@@ -459,6 +471,7 @@ export const setupTurn = async (
     prompt,
     providerOverride,
     requestedDeviceId,
+    requireDevice,
     resolvedAgentId,
     resume,
     runFromHistory,
@@ -479,6 +492,19 @@ export const setupTurn = async (
     !!deps.workspaceId && agentConfig.agencyConfig?.executionTargetSelectionPolicy === 'fixed';
   const isFixedDeviceTarget =
     isFixedExecutionTargetSelection && agentConfig.agencyConfig?.executionTarget === 'device';
+  // A caller that needs the run on its device (`lh topic send --new --device`)
+  // must not be told it was sent there when the fixed target drops the device.
+  // `agentConfig` already carries the caller's EFFECTIVE policy (a managing
+  // caller's or a private agent's fixed policy is lifted upstream, in
+  // `resolveRunAgentConfig`), and nothing is written yet.
+  if (
+    requireDevice &&
+    requestedDeviceId &&
+    isFixedExecutionTargetSelection &&
+    !(isFixedDeviceTarget && agentConfig.agencyConfig?.boundDeviceId === requestedDeviceId)
+  ) {
+    throw new RequestedDeviceIgnoredError(requestedDeviceId);
+  }
   // `let`: a reused topic that already ran on a machine supplies the device
   // when the request names none (see the reuse branch below).
   let resolvedRequestedDeviceId = requestedDeviceId;

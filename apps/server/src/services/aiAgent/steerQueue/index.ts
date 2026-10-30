@@ -30,6 +30,7 @@ export type QueuedFollowUpRequest = Omit<
   | 'parentMessageId'
   | 'queuedSuccessor'
   | 'replacesOperationId'
+  | 'requireDevice'
   | 'resumeApproval'
   | 'resumeApprovals'
   | 'resumeToolResult'

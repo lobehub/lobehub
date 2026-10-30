@@ -34,6 +34,7 @@ export type ComposerRunRequest = Pick<
   | 'prompt'
   | 'queuedSuccessor'
   | 'replacesOperationId'
+  | 'requireDevice'
   | 'resumeApproval'
   | 'resumeApprovals'
   | 'resumeToolResult'
@@ -117,6 +118,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     // intentionally not part of the client-passable input schema.
     clientIp: ctx.clientIp,
     deviceId: input.deviceId,
+    requireDevice: input.requireDevice,
     localDeviceId: input.localDeviceId,
     existingMessageIds: input.existingMessageIds,
     ...(topicRun && {

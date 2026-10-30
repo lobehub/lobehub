@@ -200,6 +200,12 @@ export const ExecAgentFieldsSchema = z.object({
   clientIds: execAgentClientIdsSchema,
   /** Explicit device ID to bind to the topic and activate for this run */
   deviceId: z.string().optional(),
+  /**
+   * The run must take place on `deviceId`: refuse it (`PRECONDITION_FAILED`,
+   * nothing written) when the agent's effective execution target would drop
+   * that device. Sent by `lh topic send --new --device`.
+   */
+  requireDevice: z.boolean().optional(),
   /** Current desktop device hint, honored only for an effective local target */
   localDeviceId: z.string().optional(),
   /** Optional existing message IDs to include in context */

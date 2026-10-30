@@ -45,6 +45,7 @@ const QueuedRequestSchema = ExecAgentFieldsSchema.omit({
   resumeApproval: true,
   resumeApprovals: true,
   resumeToolResult: true,
+  requireDevice: true,
   steer: true,
   supersedeLiveRun: true,
   title: true,

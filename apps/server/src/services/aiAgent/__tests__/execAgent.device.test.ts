@@ -2,6 +2,7 @@ import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+import { RequestedDeviceIgnoredError } from '../pipeline/turnSetup';
 
 const {
   mockCreateOperation,
@@ -543,6 +544,81 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(mockCreateOperation).toHaveBeenCalled();
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBeUndefined();
+    });
+  });
+
+  // ROOT CAUSE:
+  //
+  // `lh topic send --new --device` reported a send to the requested machine
+  // while a fixed execution target dropped that device and ran the work
+  // elsewhere. Only the server knows the caller's effective policy (owners and
+  // private agents have the fixed policy lifted), so the refusal lives here.
+  //
+  // Before: a required device was silently overridden by a fixed target.
+  // After: `requireDevice` refuses before anything is created.
+  describe('a required device', () => {
+    const requireDevice = (deviceId: string) =>
+      service.execAgent({
+        agentId: 'agent-1',
+        deviceId,
+        prompt: 'Run a command',
+        requireDevice: true,
+      });
+
+    it('is refused when a fixed device target would drop it, creating nothing', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      await useAgencyConfig({
+        boundDeviceId: 'device-001',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      });
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+      await expect(requireDevice('device-002')).rejects.toBeInstanceOf(RequestedDeviceIgnoredError);
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+      expect(topicMock.create).not.toHaveBeenCalled();
+    });
+
+    it('is refused by a fixed sandbox target', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await useAgencyConfig({
+        executionTarget: 'sandbox',
+        executionTargetSelectionPolicy: 'fixed',
+      });
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+      await expect(requireDevice('device-001')).rejects.toBeInstanceOf(RequestedDeviceIgnoredError);
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+    });
+
+    it('runs when the fixed target is that same device', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await useAgencyConfig({
+        boundDeviceId: 'device-001',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      });
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+      await requireDevice('device-001');
+
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBe('device-001');
+    });
+
+    it('runs on the requested device when the effective policy is not fixed (e.g. lifted for a manager)', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      // What `resolveAgentAgencyConfig` leaves for a managing caller: the
+      // stored device target without the fixed selection policy.
+      await useAgencyConfig({ boundDeviceId: 'device-001', executionTarget: 'device' });
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+      await requireDevice('device-002');
+
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBe('device-002');
     });
   });
 
