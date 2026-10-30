@@ -55,10 +55,16 @@ export const countMiniMaxSpeechCharacters = (input: string) =>
  * @see https://platform.minimaxi.com/docs/api-reference/errorcode
  */
 const MINIMAX_ERROR_TYPES: Record<number, ILobeAgentRuntimeErrorType> = {
-  1002: AgentRuntimeErrorType.RateLimitExceeded,
-  1004: AgentRuntimeErrorType.InvalidProviderAPIKey,
-  1008: AgentRuntimeErrorType.InsufficientQuota,
-  2049: AgentRuntimeErrorType.InvalidProviderAPIKey,
+  1002: AgentRuntimeErrorType.RateLimitExceeded, // rate limit
+  1004: AgentRuntimeErrorType.InvalidProviderAPIKey, // not authorized
+  1008: AgentRuntimeErrorType.InsufficientQuota, // insufficient balance
+  1045: AgentRuntimeErrorType.RateLimitExceeded, // task concurrency limit
+  2045: AgentRuntimeErrorType.RateLimitExceeded, // rate growth limit
+  2049: AgentRuntimeErrorType.InvalidProviderAPIKey, // invalid API key
+  2053: AgentRuntimeErrorType.InsufficientQuota, // insufficient credit
+  2056: AgentRuntimeErrorType.InsufficientQuota, // usage limit exceeded
+  2062: AgentRuntimeErrorType.RateLimitExceeded, // M Plan rate limit
+  2067: AgentRuntimeErrorType.InsufficientQuota, // usage limit reached, auto credit off
 };
 
 const HTTP_ERROR_TYPES: Record<number, ILobeAgentRuntimeErrorType> = {

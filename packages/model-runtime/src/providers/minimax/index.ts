@@ -13,6 +13,7 @@ import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import { createMiniMaxImage } from './createImage';
@@ -440,13 +441,22 @@ const createOpenAIRouter = () => ({
   runtime: LobeMinimaxOpenAI,
 });
 
-// Speech always goes to the native t2a_v2 API on the OpenAI-style base URL, whatever
-// SDK type serves chat; the Anthropic-compatible runtime has no speech support.
+// Speech uses the OpenAI-style `/v1` root on the configured host: global (`api.minimax.io`)
+// and China (`api.minimaxi.com`) keys only work on their own region's endpoint.
+const normalizeMiniMaxSpeechBaseURL = (baseURL?: string | null) =>
+  baseURL
+    ? baseURL
+        .replace(MINIMAX_ANTHROPIC_MODEL_BASE_URL_PATTERN, '/v1')
+        .replace(MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN, '/v1')
+    : DEFAULT_MINIMAX_BASE_URL;
+
+// Speech always goes to the native t2a_v2 API, whatever SDK type serves chat; the
+// Anthropic-compatible runtime has no speech support.
 const createSpeechRouter = (baseURL?: string | null) => ({
   apiType: 'openai' as const,
   id: 'speech',
   options: {
-    baseURL: normalizeMiniMaxOpenAIModelBaseURL(baseURL),
+    baseURL: normalizeMiniMaxSpeechBaseURL(baseURL),
     remark: 'speech',
   },
   runtime: LobeMinimaxSpeechAI,
@@ -456,7 +466,11 @@ export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Minimax,
   models: fetchMiniMaxModelsWithOpenAI,
   routers: (options, context) => {
-    if (context?.model && MINIMAX_SPEECH_MODEL_PATTERN.test(context.model)) {
+    // Match the upstream id too, so an alias mapped onto `speech-*` still reaches t2a_v2.
+    if (
+      context?.model &&
+      MINIMAX_SPEECH_MODEL_PATTERN.test(resolveMappedModelId(context.model, options))
+    ) {
       return [createSpeechRouter(options.baseURL)];
     }
 
