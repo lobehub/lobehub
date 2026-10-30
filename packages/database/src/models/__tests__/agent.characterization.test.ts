@@ -79,6 +79,7 @@ const PUBLIC_METHODS = [
   'getAgentVisibilityMeta',
   'getAssignableSessionGroupVisibility',
   'getBuiltinAgent',
+  'getDeleteImpact',
   'getGroupMembershipImpact',
   'getTopicShareSubject',
   'hasTrashedOwner',
