@@ -43,6 +43,19 @@ const WAKE_PREFERENCE: Record<ScmWakeReason, keyof GithubIntegrationPreference> 
   review_commented: 'wakeOnReview',
 };
 
+/**
+ * Whether the row still holds a failure to report: a failing check on the
+ * commit that is the head now. A wake parked by the debounce window is
+ * delivered off a re-read row, and a push in between moves the head and
+ * resets the rollup — waking then would name the new commit with nothing
+ * under it and spend one of the pull request's wakes on a failure that is
+ * no longer there.
+ */
+const hasFailureOnHead = (row: ScmChangeRequestItem): boolean => {
+  if (row.headSha && row.ciHeadSha && row.headSha !== row.ciHeadSha) return false;
+  return (row.checks ?? []).some((check) => isFailingCheck(check));
+};
+
 export interface ScmControlEvent {
   event: Extract<ScmInboundEvent, { type: 'change_request' | 'checks' | 'review' }>;
   kind: string;
@@ -445,7 +458,8 @@ export class ScmControlService {
    * on a change request, so the last failure of a burst reaches the agent
    * on the next delivery instead of waiting for an unrelated one. The wake
    * itself re-reads the row, so the prompt carries every failing check by
-   * then — not just the one that was dropped.
+   * then — not just the one that was dropped — and a failure a push has
+   * since superseded is dropped with the marker instead of waking anyone.
    */
   private flushPendingWake = async (rowId: string): Promise<void> => {
     const fresh = await ScmChangeRequestModel.findById(this.db, rowId);
@@ -479,6 +493,11 @@ export class ScmControlService {
     if (row.isDraft) return { detail: 'draft pull request', outcome: 'skipped' };
     if (row.state !== 'open') return { detail: `pull request is ${row.state}`, outcome: 'skipped' };
     if (!row.topicId) return { detail: 'no linked conversation', outcome: 'skipped' };
+    // Checked before the window is claimed and the slot reserved, so a
+    // failure that went away costs neither.
+    if (reason === 'ci_failed' && !hasFailureOnHead(row)) {
+      return { detail: 'no failing check on the head commit', outcome: 'skipped' };
+    }
     // An early out on the snapshot so a capped pull request does not pay for
     // job logs; the cap itself is enforced by the reservation further down.
     if (row.wakeCount >= SCM_MAX_WAKES) {
