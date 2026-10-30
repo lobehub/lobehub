@@ -1,15 +1,16 @@
-import type { BotWakeUserLabel, SignalDecisionOutcome } from '@lobechat/types';
+import type {
+  BotWakeDecisionItem,
+  BotWakeDecisionPage,
+  BotWakeUserLabel,
+  SignalDecisionOutcome,
+} from '@lobechat/types';
 import { useCallback } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { botWakeKeys } from '@/libs/swr/keys';
-import {
-  agentBotProviderService,
-  type WakeDecisionItem,
-  type WakeDecisionPage,
-} from '@/services/agentBotProvider';
+import { agentBotProviderService } from '@/services/agentBotProvider';
 
 export const WAKE_RECORDS_PAGE_SIZE = 20;
 
@@ -23,10 +24,10 @@ type DecisionsKey = ReturnType<typeof botWakeKeys.decisions>;
 
 /** The page list with `decisionId`'s mark replaced; `undefined` pages stay as they are. */
 export const withUserLabel = (
-  pages: WakeDecisionPage[] | undefined,
+  pages: BotWakeDecisionPage[] | undefined,
   decisionId: string,
-  userLabel: WakeDecisionItem['userLabel'],
-): WakeDecisionPage[] | undefined =>
+  userLabel: BotWakeDecisionItem['userLabel'],
+): BotWakeDecisionPage[] | undefined =>
   pages?.map((page) => ({
     ...page,
     items: page.items.map((item) => (item.id === decisionId ? { ...item, userLabel } : item)),
@@ -45,7 +46,7 @@ export const useWakeDecisions = (botId: string, filters: WakeRecordFilters) => {
   const { followupOnly, outcome, unmarkedOnly } = filters;
 
   const getKey = useCallback(
-    (_index: number, previous: WakeDecisionPage | null): DecisionsKey | null => {
+    (_index: number, previous: BotWakeDecisionPage | null): DecisionsKey | null => {
       if (previous && !previous.nextCursor) return null;
 
       return botWakeKeys.decisions(

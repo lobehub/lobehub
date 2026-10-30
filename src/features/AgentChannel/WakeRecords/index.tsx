@@ -143,7 +143,7 @@ export const WakeRecords = ({ active = true, botId, disabled }: WakeRecordsProps
             <Empty
               title={t('channel.records.emptyFiltered.title')}
               action={
-                <Button size={'small'} onClick={() => setFilters(NO_FILTERS)}>
+                <Button onClick={() => setFilters(NO_FILTERS)}>
                   {t('channel.records.emptyFiltered.clear')}
                 </Button>
               }

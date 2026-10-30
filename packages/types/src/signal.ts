@@ -137,6 +137,67 @@ export const BOT_WAKE_USER_LABELS_BY_OUTCOME: Record<
   wake: ['correct', 'false_wake'],
 };
 
+/** Which model scored a wake decision: is the message for the bot, or within its duties. */
+export type BotWakeJudgeKind = 'addressed' | 'duty';
+
+/** The model score behind a wake decision, as the owner sees it next to the decision. */
+export interface BotWakeJudgeScore {
+  kind: BotWakeJudgeKind;
+  /** 0..1, as the judge returned it. */
+  score: number;
+  verdict: SignalDecisionVerdict['verdict'];
+}
+
+/** One bot wake decision as the bot's settings page lists it. */
+export interface BotWakeDecisionItem {
+  /** Where the message was addressed (`platform`, `platformThreadId`, `messageId`, …). */
+  address: Record<string, string> | null;
+  /** The agent's own silence label, when it woke and chose not to reply. */
+  agentLabel: { label: SignalDecisionLabel; reason?: string } | null;
+  createdAt: Date;
+  finalReason: string | null;
+  /** The bot woke on its own judgement, nobody addressed it. */
+  followup: boolean;
+  id: string;
+  /** The model score behind the decision; null when no model scored. */
+  judge: BotWakeJudgeScore | null;
+  outcome: SignalDecisionOutcome;
+  /** First 200 characters of the message; null once purged. */
+  text: string | null;
+  textPurged: boolean;
+  toTag: string | null;
+  /** The owner's current mark. */
+  userLabel: { createdAt: Date; label: SignalDecisionLabel; note?: string } | null;
+}
+
+export interface BotWakeDecisionPage {
+  items: BotWakeDecisionItem[];
+  /** Keyset position of the next page; absent on the last one. */
+  nextCursor?: { createdAt: string; id: string };
+}
+
+/** Counts of one bot's wake decisions over the last `days` days. */
+export interface BotWakeSummary {
+  days: number;
+  defer: number;
+  followupWakes: number;
+  /** Decisions the owner currently has a mark on. */
+  marked: number;
+  markedByLabel: Partial<Record<SignalDecisionLabel, number>>;
+  /** Wakes the agent stayed silent on (`false_wake` / `dup_wake` from its own label). */
+  silenced: number;
+  skip: number;
+  total: number;
+  wake: number;
+}
+
+/** The mark now in force after `labelWakeDecision`; null once it was taken back. */
+export type BotWakeUserMark = {
+  createdAt: Date;
+  label: BotWakeUserLabel;
+  note?: string;
+} | null;
+
 /**
  * How a bot wake reached the agent.
  *

@@ -1,3 +1,5 @@
+import type { BotWakeDecisionPage, BotWakeSummary, BotWakeUserMark } from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
 
 import type { BotRuntimeStatusSnapshot } from '../types/botRuntimeStatus';
@@ -80,17 +82,17 @@ class AgentBotProviderService {
   /** One bot's wake decisions, newest first; pass the previous page's `nextCursor` for more. */
   listWakeDecisions = async (
     params: Parameters<typeof lambdaClient.agentBotWake.listWakeDecisions.query>[0],
-  ) => {
+  ): Promise<BotWakeDecisionPage> => {
     return lambdaClient.agentBotWake.listWakeDecisions.query(params);
   };
 
-  getWakeSummary = async (botId: string) => {
+  getWakeSummary = async (botId: string): Promise<BotWakeSummary> => {
     return lambdaClient.agentBotWake.getWakeSummary.query({ botId });
   };
 
   labelWakeDecision = async (
     params: Parameters<typeof lambdaClient.agentBotWake.labelWakeDecision.mutate>[0],
-  ) => {
+  ): Promise<BotWakeUserMark> => {
     return lambdaClient.agentBotWake.labelWakeDecision.mutate(params);
   };
 
@@ -128,7 +130,3 @@ class AgentBotProviderService {
 }
 
 export const agentBotProviderService = new AgentBotProviderService();
-
-export type WakeDecisionPage = Awaited<ReturnType<AgentBotProviderService['listWakeDecisions']>>;
-export type WakeDecisionItem = WakeDecisionPage['items'][number];
-export type WakeSummary = Awaited<ReturnType<AgentBotProviderService['getWakeSummary']>>;

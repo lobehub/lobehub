@@ -1,19 +1,9 @@
-import type { SignalDecisionVerdict } from '@lobechat/types';
+import type { BotWakeJudgeKind, BotWakeJudgeScore, SignalDecisionVerdict } from '@lobechat/types';
 
 import { CLASSIFIER_POLICY_ID } from '@/server/services/agentSignal/scenarios/botWake/policies/classifier';
 import { DUTY_POLICY_ID } from '@/server/services/agentSignal/scenarios/botWake/policies/duty';
 
-/** Which model judged: is the message for the bot (`addressed`), or within its duties (`duty`). */
-export type WakeJudgeKind = 'addressed' | 'duty';
-
-export interface WakeJudgeScore {
-  kind: WakeJudgeKind;
-  /** 0..1, as the judge returned it. */
-  score: number;
-  verdict: SignalDecisionVerdict['verdict'];
-}
-
-const KIND_BY_POLICY: Record<string, WakeJudgeKind> = {
+const KIND_BY_POLICY: Record<string, BotWakeJudgeKind> = {
   [CLASSIFIER_POLICY_ID]: 'addressed',
   [DUTY_POLICY_ID]: 'duty',
 };
@@ -36,10 +26,11 @@ const isScored = (verdict: SignalDecisionVerdict) =>
 export const pickWakeJudgeScore = (
   verdicts: readonly SignalDecisionVerdict[] | null | undefined,
   finalReason: string | null,
-): WakeJudgeScore | undefined => {
+): BotWakeJudgeScore | undefined => {
   const scored = (verdicts ?? []).filter((v) => KIND_BY_POLICY[v.policyId] && isScored(v));
-  const byKind = (kind: WakeJudgeKind) => scored.find((v) => KIND_BY_POLICY[v.policyId] === kind);
-  const order: WakeJudgeKind[] =
+  const byKind = (kind: BotWakeJudgeKind) =>
+    scored.find((v) => KIND_BY_POLICY[v.policyId] === kind);
+  const order: BotWakeJudgeKind[] =
     finalReason === 'in-duty' ? ['duty', 'addressed'] : ['addressed', 'duty'];
 
   for (const kind of order) {

@@ -1,19 +1,18 @@
+import type { BotWakeDecisionPage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
-
-import type { WakeDecisionPage } from '@/services/agentBotProvider';
 
 import { withUserLabel } from './useWakeRecords';
 
 vi.mock('@/services/agentBotProvider', () => ({ agentBotProviderService: {} }));
 
 const item = (id: string, userLabel: any = null) =>
-  ({ id, outcome: 'wake', userLabel }) as WakeDecisionPage['items'][number];
+  ({ id, outcome: 'wake', userLabel }) as BotWakeDecisionPage['items'][number];
 
 describe('withUserLabel', () => {
   const pages = [
     { items: [item('a'), item('b')], nextCursor: { createdAt: 'x', id: 'b' } },
     { items: [item('c', { label: 'correct' })] },
-  ] as WakeDecisionPage[];
+  ] as BotWakeDecisionPage[];
 
   it('sets the mark on the one decision across pages and leaves the rest', () => {
     const mark = { createdAt: new Date(), label: 'false_wake' as const, note: undefined };

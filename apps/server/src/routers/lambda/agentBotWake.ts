@@ -2,7 +2,10 @@ import {
   BOT_WAKE_USER_LABEL_SOURCE,
   BOT_WAKE_USER_LABELS,
   BOT_WAKE_USER_LABELS_BY_OUTCOME,
+  type BotWakeDecisionPage,
+  type BotWakeSummary,
   type BotWakeUserLabel,
+  type BotWakeUserMark,
   SIGNAL_DECISION_LABEL_CLEARED,
   SIGNAL_DECISION_OUTCOMES,
   type SignalDecisionLabel,
@@ -81,7 +84,7 @@ export const agentBotWakeRouter = router({
         unmarkedOnly: z.boolean().optional(),
       }),
     )
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<BotWakeDecisionPage> => {
       const { decisions, scopeKey } = await resolveBotScope(ctx, input.botId);
       const followups = new Set(BOT_WAKE_FOLLOWUP_REASONS);
 
@@ -116,7 +119,7 @@ export const agentBotWakeRouter = router({
   /** Counts for the last {@link SCOPE_READ_DEFAULT_DAYS} days of one bot's wake decisions. */
   getWakeSummary: agentBotProviderProcedure
     .input(z.object({ botId: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<BotWakeSummary> => {
       const { decisions, scopeKey } = await resolveBotScope(ctx, input.botId);
 
       const summary = await decisions.summaryByScope({
@@ -160,7 +163,7 @@ export const agentBotWakeRouter = router({
         note: z.string().trim().max(500).optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }): Promise<BotWakeUserMark> => {
       const { decisions, scopeKey } = await resolveBotScope(ctx, input.botId);
 
       // The decision must be this bot's: same owner (the model is scoped to it) and same channel.

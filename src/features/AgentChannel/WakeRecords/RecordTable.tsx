@@ -1,14 +1,12 @@
 'use client';
 
-import type { BotWakeUserLabel } from '@lobechat/types';
+import type { BotWakeDecisionItem, BotWakeUserLabel } from '@lobechat/types';
 import { ActionIcon, Flexbox, Table, type TableColumn, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ExternalLink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-
-import type { WakeDecisionItem } from '@/services/agentBotProvider';
 
 import { MarkButtons } from './MarkButtons';
 import { platformMessageUrl } from './messageLink';
@@ -53,7 +51,7 @@ const styles = stylex.create({
 
 interface RecordTableProps {
   disabled?: boolean;
-  items: WakeDecisionItem[];
+  items: BotWakeDecisionItem[];
   onMark: (decisionId: string, label: BotWakeUserLabel | null) => Promise<void>;
 }
 
@@ -68,7 +66,7 @@ export const RecordTable = ({ disabled, items, onMark }: RecordTableProps) => {
   const translate = (group: string, value: string) =>
     t(`channel.records.${group}.${value}`, { defaultValue: value });
 
-  const columns: TableColumn<WakeDecisionItem>[] = [
+  const columns: TableColumn<BotWakeDecisionItem>[] = [
     {
       dataIndex: 'createdAt',
       key: 'time',
@@ -208,7 +206,7 @@ export const RecordTable = ({ disabled, items, onMark }: RecordTableProps) => {
   ];
 
   return (
-    <Table<WakeDecisionItem>
+    <Table<BotWakeDecisionItem>
       columns={columns}
       dataSource={items}
       pagination={false}
