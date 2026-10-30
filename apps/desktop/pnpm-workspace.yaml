@@ -64,7 +64,7 @@ overrides:
   react: 19.2.7
   react-dom: 19.2.7
   vitest: 5.0.3
-  'zod@^4': 4.6.5
+  'zod@^4': 4.6.6
 minimumReleaseAgeExclude:
   - '@auv-js/api-client@0.0.38'
   - '@auv-js/cli-darwin-arm64@0.0.38'

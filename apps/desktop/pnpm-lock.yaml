@@ -9,7 +9,7 @@ overrides:
   react: 19.2.7
   react-dom: 19.2.7
   vitest: 5.0.3
-  zod@^4: 4.6.5
+  zod@^4: 4.6.6
 
 importers:
 
@@ -117,7 +117,7 @@ importers:
         version: link:../../packages/utils
       '@lobehub/i18n-cli':
         specifier: ^1.27.0
-        version: 1.27.0(@types/react@19.3.0)(immer@11.1.18)(supports-color@9.4.0)(typescript@6.0.3)(use-sync-external-store@1.7.0(react@19.2.7))(ws@8.22.0)(zod@4.6.5)
+        version: 1.27.0(@types/react@19.3.0)(immer@11.1.18)(supports-color@9.4.0)(typescript@6.0.3)(use-sync-external-store@1.7.0(react@19.2.7))(ws@8.22.0)(zod@4.6.6)
       '@modelcontextprotocol/client':
         specifier: ~2.4.0
         version: 2.4.0
@@ -129,7 +129,7 @@ importers:
         version: 5.4.0(rollup@4.63.6)(supports-color@9.4.0)
       '@t3-oss/env-core':
         specifier: ^0.13.11
-        version: 0.13.11(typescript@6.0.3)(zod@4.6.5)
+        version: 0.13.11(typescript@6.0.3)(zod@4.6.6)
       '@types/resolve':
         specifier: ^1.20.6
         version: 1.20.6
@@ -263,11 +263,11 @@ importers:
         specifier: 5.0.3
         version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.1)(happy-dom@20.14.5)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
       zod-compiler:
         specifier: ^2.0.7
-        version: 2.0.7(esbuild@0.28.2)(rolldown@1.2.12)(rollup@4.63.6)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5)
+        version: 2.0.7(esbuild@0.28.2)(rolldown@1.2.12)(rollup@4.63.6)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.6)
     optionalDependencies:
       node-mac-permissions:
         specifier: ^2.5.0
@@ -304,7 +304,7 @@ importers:
     dependencies:
       chat:
         specifier: ~4.38.0
-        version: 4.38.1(supports-color@9.4.0)(zod@4.6.5)
+        version: 4.38.1(supports-color@9.4.0)(zod@4.6.6)
     devDependencies:
       '@types/node':
         specifier: ^24.13.2
@@ -532,10 +532,10 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.204
-        version: 0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)
+        version: 0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.6))(@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.6))(zod@4.6.6)
       '@anthropic-ai/sdk':
         specifier: ^0.93.0
-        version: 0.93.0(zod@4.6.5)
+        version: 0.93.0(zod@4.6.6)
       '@lobechat/agent-gateway-client':
         specifier: workspace:*
         version: link:../agent-gateway-client
@@ -561,8 +561,8 @@ importers:
         specifier: 19.2.7
         version: 19.2.7
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       '@modelcontextprotocol/client':
         specifier: ~2.4.0
@@ -623,8 +623,8 @@ importers:
         specifier: ^5.7.0
         version: 5.10.0
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
     devDependencies:
       tsdown:
         specifier: ^0.21.10
@@ -678,7 +678,7 @@ importers:
     dependencies:
       '@lobehub/market-sdk':
         specifier: 0.46.0
-        version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
+        version: 0.46.0(supports-color@9.4.0)(zod@4.6.6)
       '@lobehub/market-types':
         specifier: ^1.19.0
         version: 1.19.0
@@ -698,8 +698,8 @@ importers:
         specifier: ^4.41.0
         version: 4.41.0
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
       zustand:
         specifier: 5.0.4
         version: 5.0.4(@types/react@19.3.0)(immer@11.1.18)(react@19.2.7)(use-sync-external-store@1.7.0(react@19.2.7))
@@ -910,8 +910,8 @@ importers:
         specifier: 5.0.3
         version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.1)(happy-dom@20.14.5)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       zod:
-        specifier: 4.6.5
-        version: 4.6.5
+        specifier: 4.6.6
+        version: 4.6.6
 
 packages:
 
@@ -969,7 +969,7 @@ packages:
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
       '@modelcontextprotocol/sdk': ^1.29.0
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@anthropic-ai/sandbox-runtime@0.0.66':
     resolution: {integrity: sha512-OE7QiGZJXe7ZshP47U2vk2z9FGSyiSN4ca9krVrE28LS2Qj0AHRWZz+gAce6FzG3gx/4OjNFwIhDuHXnI0WWwA==}
@@ -985,7 +985,7 @@ packages:
     resolution: {integrity: sha512-q9vaSZQVFx6B/gPxetGYfLXSJD5v0sOmh0OpZDq7yCrTSA+Rscvrtyol7JJTW40wEpQB4U1B4JXzxQitbQ3CAA==}
     hasBin: true
     peerDependencies:
-      zod: 4.6.5
+      zod: 4.6.6
     peerDependenciesMeta:
       zod:
         optional: true
@@ -2292,7 +2292,7 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
-      zod: 4.6.5
+      zod: 4.6.6
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -2462,6 +2462,7 @@ packages:
   '@opentelemetry/sdk-trace-base@2.11.0':
     resolution: {integrity: sha512-H19x/TX/LZdqiYOjM7fqtSxwlplC5pgelavqbQdHbhdq0q/AI/TGkM2dfGuuynTXmJPeF2HoZVoPDu+TGoW78A==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
@@ -3352,7 +3353,7 @@ packages:
       arktype: ^2.1.0
       typescript: '>=5.0.0'
       valibot: ^1.0.0-beta.7 || ^1.0.0
-      zod: 4.6.5
+      zod: 4.6.6
     peerDependenciesMeta:
       arktype:
         optional: true
@@ -3769,6 +3770,11 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
+    peerDependencies:
+      ajv: ^8.0.0
+    peerDependenciesMeta:
+      ajv:
+        optional: true
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
@@ -4070,7 +4076,7 @@ packages:
     peerDependencies:
       ai: ^6.0.182 || ^7.0.0
       workflow: ^5.0.0-beta.35
-      zod: 4.6.5
+      zod: 4.6.6
     peerDependenciesMeta:
       ai:
         optional: true
@@ -4204,7 +4210,6 @@ packages:
 
   concat-stream@2.0.0:
     resolution: {integrity: sha512-MWufYdFw53ccGjCA+Ol7XJYpAlW6/prSMzuPOTRnJGcGzuhLn4Scrz7qf6o8bROZ514ltazcIFJZevcfbo0x7A==}
-    engines: {'0': node >= 6.0}
 
   conf@13.1.0:
     resolution: {integrity: sha512-Bi6v586cy1CoTFViVO4lGTtx780lfF96fUmS1lSX6wpZf6330NvHUu6fReVuDP1de8Mg0nkZb01c8tAQdz1o3w==}
@@ -8347,7 +8352,7 @@ packages:
     peerDependencies:
       '@rsbuild/core': ^1.0.0 || ^2.0.0
       '@swc/core': '>=1.3.0'
-      zod: 4.6.5
+      zod: 4.6.6
     peerDependenciesMeta:
       '@rsbuild/core':
         optional: true
@@ -8357,13 +8362,13 @@ packages:
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
     peerDependencies:
-      zod: 4.6.5
+      zod: 4.6.6
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.6.5:
-    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
   zustand@3.7.2:
     resolution: {integrity: sha512-PIJDIZKtokhof+9+60cpockVOq05sJzHCriyvaLBmEJixseQ1a5Kdov6fWZfWOu5SK9c+FhH1jU0tntLxRJYMA==}
@@ -8426,11 +8431,11 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.204':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)':
+  '@anthropic-ai/claude-agent-sdk@0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.6))(@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.6))(zod@4.6.6)':
     dependencies:
-      '@anthropic-ai/sdk': 0.93.0(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.32.1(supports-color@9.4.0)(zod@4.6.5)
-      zod: 4.6.5
+      '@anthropic-ai/sdk': 0.93.0(zod@4.6.6)
+      '@modelcontextprotocol/sdk': 1.32.1(supports-color@9.4.0)(zod@4.6.6)
+      zod: 4.6.6
     optionalDependencies:
       '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.204
       '@anthropic-ai/claude-agent-sdk-darwin-x64': 0.3.204
@@ -8455,11 +8460,11 @@ snapshots:
       node-forge: 1.4.0
       zod: 3.25.76
 
-  '@anthropic-ai/sdk@0.93.0(zod@4.6.5)':
+  '@anthropic-ai/sdk@0.93.0(zod@4.6.6)':
     dependencies:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@auv-js/api-client@0.0.38': {}
 
@@ -9458,7 +9463,7 @@ snapshots:
       react-dom: 19.2.7(react@19.2.7)
       url-join: 5.0.0
 
-  '@lobehub/i18n-cli@1.27.0(@types/react@19.3.0)(immer@11.1.18)(supports-color@9.4.0)(typescript@6.0.3)(use-sync-external-store@1.7.0(react@19.2.7))(ws@8.22.0)(zod@4.6.5)':
+  '@lobehub/i18n-cli@1.27.0(@types/react@19.3.0)(immer@11.1.18)(supports-color@9.4.0)(typescript@6.0.3)(use-sync-external-store@1.7.0(react@19.2.7))(ws@8.22.0)(zod@4.6.6)':
     dependencies:
       '@lobehub/cli-ui': 1.13.0(@types/react@19.3.0)
       chalk: 5.6.2
@@ -9477,7 +9482,7 @@ snapshots:
       json-stable-stringify: 1.3.0
       just-diff: 6.0.2
       lodash-es: 4.18.1
-      openai: 4.104.0(ws@8.22.0)(zod@4.6.5)
+      openai: 4.104.0(ws@8.22.0)(zod@4.6.6)
       p-map: 7.0.8
       pangu: 4.0.7
       react: 19.2.7
@@ -9512,14 +9517,14 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@lobehub/market-sdk@0.46.0(supports-color@9.4.0)(zod@4.6.5)':
+  '@lobehub/market-sdk@0.46.0(supports-color@9.4.0)(zod@4.6.6)':
     dependencies:
       '@lobehub/market-types': 1.22.0
       '@opentelemetry/api': 1.9.1
       debug: 4.4.3(supports-color@9.4.0)
       jose: 6.2.12
       url-join: 5.0.0
-      zod: 4.6.5
+      zod: 4.6.6
     transitivePeerDependencies:
       - supports-color
 
@@ -9718,11 +9723,11 @@ snapshots:
       eventsource-parser: 3.1.1
       jose: 6.2.12
       pkce-challenge: 5.0.1
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@modelcontextprotocol/core@2.4.0':
     dependencies:
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@modelcontextprotocol/node@2.1.2(@modelcontextprotocol/server@2.4.0)':
     dependencies:
@@ -9730,7 +9735,7 @@ snapshots:
       '@modelcontextprotocol/server': 2.4.0
       hono: 4.13.12
 
-  '@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5)':
+  '@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.6)':
     dependencies:
       '@hono/node-server': 2.1.3(hono@4.13.12)
       ajv: 8.20.0
@@ -9747,15 +9752,15 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.6.5
-      zod-to-json-schema: 3.25.2(zod@4.6.5)
+      zod: 4.6.6
+      zod-to-json-schema: 3.25.2(zod@4.6.6)
     transitivePeerDependencies:
       - supports-color
 
   '@modelcontextprotocol/server@2.4.0':
     dependencies:
       '@modelcontextprotocol/core': 2.4.0
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@moeru/std@0.1.0-beta.20': {}
 
@@ -10593,10 +10598,10 @@ snapshots:
     dependencies:
       defer-to-connect: 2.0.1
 
-  '@t3-oss/env-core@0.13.11(typescript@6.0.3)(zod@4.6.5)':
+  '@t3-oss/env-core@0.13.11(typescript@6.0.3)(zod@4.6.6)':
     optionalDependencies:
       typescript: 6.0.3
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@tanstack/devtools-event-client@0.4.4': {}
 
@@ -10992,7 +10997,7 @@ snapshots:
   '@vercel/cli-config@0.3.0':
     dependencies:
       xdg-app-paths: 5.5.1
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@vercel/cli-exec@1.0.1':
     dependencies:
@@ -11413,7 +11418,7 @@ snapshots:
 
   character-reference-invalid@2.0.1: {}
 
-  chat@4.38.1(supports-color@9.4.0)(zod@4.6.5):
+  chat@4.38.1(supports-color@9.4.0)(zod@4.6.6):
     dependencies:
       '@workflow/serde': 4.1.0-beta.2
       mdast-util-to-string: 4.0.0
@@ -11423,7 +11428,7 @@ snapshots:
       remend: 1.4.0
       unified: 11.0.5
     optionalDependencies:
-      zod: 4.6.5
+      zod: 4.6.6
     transitivePeerDependencies:
       - supports-color
 
@@ -14359,7 +14364,7 @@ snapshots:
       regex: 6.1.0
       regex-recursion: 6.0.2
 
-  openai@4.104.0(ws@8.22.0)(zod@4.6.5):
+  openai@4.104.0(ws@8.22.0)(zod@4.6.6):
     dependencies:
       '@types/node': 18.19.130
       '@types/node-fetch': 2.6.13
@@ -14370,7 +14375,7 @@ snapshots:
       node-fetch: 2.7.0
     optionalDependencies:
       ws: 8.22.0
-      zod: 4.6.5
+      zod: 4.6.6
     transitivePeerDependencies:
       - encoding
 
@@ -16226,7 +16231,7 @@ snapshots:
 
   yoga-layout@3.2.1: {}
 
-  zod-compiler@2.0.7(esbuild@0.28.2)(rolldown@1.2.12)(rollup@4.63.6)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.5):
+  zod-compiler@2.0.7(esbuild@0.28.2)(rolldown@1.2.12)(rollup@4.63.6)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))(zod@4.6.6):
     dependencies:
       '@jridgewell/remapping': 2.3.5
       acorn: 8.18.0
@@ -16236,7 +16241,7 @@ snapshots:
       magic-string: 0.30.21
       picomatch: 4.0.7
       unplugin: 3.4.0(esbuild@0.28.2)(rolldown@1.2.12)(rollup@4.63.6)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-      zod: 4.6.5
+      zod: 4.6.6
     transitivePeerDependencies:
       - '@farmfe/core'
       - '@rspack/core'
@@ -16248,13 +16253,13 @@ snapshots:
       - vite
       - webpack
 
-  zod-to-json-schema@3.25.2(zod@4.6.5):
+  zod-to-json-schema@3.25.2(zod@4.6.6):
     dependencies:
-      zod: 4.6.5
+      zod: 4.6.6
 
   zod@3.25.76: {}
 
-  zod@4.6.5: {}
+  zod@4.6.6: {}
 
   zustand@3.7.2(react@19.2.7):
     optionalDependencies:
