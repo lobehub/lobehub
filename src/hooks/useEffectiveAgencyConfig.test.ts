@@ -199,6 +199,24 @@ describe('useEffectiveAgencyConfig', () => {
     });
   });
 
+  // A fixed policy constrains members, not the shared default: the author or a
+  // Workspace admin must still be able to repoint it (e.g. off a deleted or
+  // offline device) from the profile picker.
+  it("keeps a fixed public Workspace Agent's target selectable for its author or admin", () => {
+    managementAccess.canManageAgent = true;
+    setupStores({
+      agencyConfig: { ...sharedConfig, executionTargetSelectionPolicy: 'fixed' },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1', { topicId: null }));
+
+    expect(result.current.agencyConfig).toEqual(sharedConfig);
+    expect(result.current.canSelectExecutionTarget).toBe(true);
+    expect(result.current.executionTargetOverridden).toBe(false);
+  });
+
   it('shows a read-only execution summary when an ordinary member is fixed to the shared target', () => {
     setupStores({
       agencyConfig: {
