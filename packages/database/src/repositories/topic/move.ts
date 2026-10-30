@@ -1,6 +1,6 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
-import { agents, messages, threads, topics } from '../../schemas';
+import { agents, messages, subagents, threads, topics } from '../../schemas';
 import { joinTopicAgentsToProjects } from '../../utils/projectTopicAgents';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { messageOwnership, topicOwnership, type TopicRepositoryScope } from './scope';
@@ -66,7 +66,11 @@ export const batchMoveToAgent = async (
 
     await tx
       .update(threads)
-      .set({ agentId: targetAgentId })
+      .set({
+        agentId: targetAgentId,
+        // Presets stay with their agent: keep the link only if the target agent owns the preset.
+        subagentId: sql`(SELECT ${subagents.id} FROM ${subagents} WHERE ${subagents.id} = ${threads.subagentId} AND ${subagents.parentAgentId} = ${targetAgentId})`,
+      })
       .where(
         and(
           inArray(threads.topicId, topicIds),

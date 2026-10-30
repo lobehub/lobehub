@@ -420,6 +420,8 @@ export class AgentCopyJobModel {
           parentThreadId: thread.parentThreadId
             ? (threadIdMap.get(thread.parentThreadId) ?? null)
             : null,
+          // Presets are not copied, so the copy must not point at the source agent's.
+          subagentId: null,
           sourceMessageId: thread.sourceMessageId
             ? (messageIdMap.get(thread.sourceMessageId) ?? null)
             : null,
@@ -517,6 +519,8 @@ export class AgentCopyJobModel {
           parentThreadId: thread.parentThreadId
             ? (threadIdMap.get(thread.parentThreadId) ?? null)
             : null,
+          // Presets are not copied, so the copy must not point at the source agent's.
+          subagentId: null,
           sourceMessageId: thread.sourceMessageId
             ? (messageIdMap.get(thread.sourceMessageId) ?? null)
             : null,

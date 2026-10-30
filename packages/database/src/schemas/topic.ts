@@ -21,6 +21,7 @@ import { chatGroups } from './chatGroup';
 import { documents } from './file';
 import { projects, projectWorkingDirectories } from './project';
 import { sessions } from './session';
+import { subagents } from './subagent';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -162,6 +163,11 @@ export const threads = pgTable(
 
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
     groupId: text('group_id').references(() => chatGroups.id, { onDelete: 'cascade' }),
+    /**
+     * Subagent preset that ran this thread; `null` means the main agent ran it
+     * directly. `set null` keeps history when a preset is deleted.
+     */
+    subagentId: text('subagent_id').references(() => subagents.id, { onDelete: 'set null' }),
     metadata: jsonb('metadata').$type<ThreadMetadata | undefined>(),
 
     userId: text('user_id')
@@ -183,6 +189,7 @@ export const threads = pgTable(
     index('threads_group_id_idx').on(t.groupId),
     index('threads_parent_thread_id_idx').on(t.parentThreadId),
     index('threads_workspace_id_idx').on(t.workspaceId),
+    index('threads_subagent_id_idx').on(t.subagentId),
   ],
 );
 

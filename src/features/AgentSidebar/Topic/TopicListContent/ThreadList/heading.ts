@@ -20,7 +20,7 @@ export const THREAD_LIST_HEADING: ThreadListHeadingKey = 'workingPanel.overview.
  * marker the thread portal uses.
  */
 export const getThreadListHeadingKey = (
-  threads: readonly { metadata?: null | ThreadMetadata }[],
+  threads: readonly { metadata?: null | ThreadMetadata; subagentId?: null | string }[],
 ): ThreadListHeadingKey =>
   threads.length > 0 && threads.every(isSubagentThread)
     ? SUBAGENT_LIST_HEADING

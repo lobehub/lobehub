@@ -99,6 +99,8 @@ export interface ThreadItem {
   parentThreadId?: string;
   sourceMessageId?: string | null;
   status: ThreadStatus;
+  /** Subagent preset that ran this thread; `null` when the main agent ran it. */
+  subagentId?: string | null;
   title: string;
   topicId: string;
   type: IThreadType;
@@ -125,6 +127,8 @@ export interface CreateThreadParams {
   sourceMessageId?: string;
   /** Initial status (defaults to Active) */
   status?: ThreadStatus;
+  /** Subagent preset running this thread; omitted when the main agent runs it. */
+  subagentId?: string | null;
   title?: string;
   topicId: string;
   type: IThreadType;
@@ -156,6 +160,7 @@ export const createThreadSchema = z.object({
   metadata: threadMetadataSchema.optional(),
   parentThreadId: z.string().optional(),
   sourceMessageId: z.string().optional(),
+  subagentId: z.string().nullish(),
   title: z.string().optional(),
   topicId: z.string(),
   type: z.enum([

@@ -9,6 +9,7 @@ import {
   agents,
   messagePlugins,
   messages,
+  subagents,
   threads,
   topics,
   users,
@@ -56,11 +57,15 @@ const seedSourceAgent = async () => {
     { agentId: agent.id, id: 'acj-t1', title: 't1', userId },
     { agentId: agent.id, id: 'acj-t2', title: 't2', userId },
   ]);
+  await serverDB
+    .insert(subagents)
+    .values({ id: 'acj-sub1', name: 'preset', parentAgentId: agent.id });
   await serverDB.insert(threads).values([
     {
       agentId: agent.id,
       id: 'acj-th1',
       sourceMessageId: 'acj-m1',
+      subagentId: 'acj-sub1',
       topicId: 'acj-t1',
       type: 'continuation',
       userId,
@@ -159,6 +164,8 @@ describe('AgentCopyJobModel', () => {
     expect(copiedThreads).toHaveLength(1);
     expect(copiedThreads[0].sourceMessageId).toBe(copiedParent.id);
     expect(copiedThreads[0].agentId).toBe(newAgent.id);
+    // presets are not copied, so the copy drops the link to the source agent's preset
+    expect(copiedThreads[0].subagentId).toBeNull();
     expect(copiedChild.threadId).toBe(copiedThreads[0].id);
 
     // plugin row followed its message and kept the tools[].id linkage

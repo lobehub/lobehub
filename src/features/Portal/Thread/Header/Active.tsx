@@ -7,6 +7,7 @@ import { memo } from 'react';
 import AgentAvatar from '@/components/AgentAvatar';
 import BubblesLoading from '@/components/BubblesLoading';
 import { LOADING_FLAT } from '@/const/message';
+import { useSubagentPreset } from '@/hooks/useSubagentPresets';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -16,6 +17,8 @@ import { oneLineEllipsis } from '@/styles';
 const Active = memo(() => {
   const currentThread = useChatStore(portalThreadSelectors.portalCurrentThread, isEqual);
   const agentMeta = useAgentStore(agentSelectors.getAgentMetaById(currentThread?.agentId || ''));
+
+  const { data: subagentPreset } = useSubagentPreset(currentThread?.subagentId);
 
   if (!currentThread) return null;
 
@@ -47,6 +50,14 @@ const Active = memo(() => {
           currentThread.title
         )}
       </Text>
+      {subagentPreset && (
+        <Tag
+          size={'small'}
+          style={{ color: cssVar.colorTextDescription, flexShrink: 0, fontSize: 11 }}
+        >
+          {subagentPreset.name}
+        </Tag>
+      )}
       {subagentTypeInfo && (
         <Tag
           icon={<Icon icon={subagentTypeInfo.icon} />}

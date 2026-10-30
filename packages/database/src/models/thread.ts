@@ -1,11 +1,23 @@
-import type { CreateThreadParams, ThreadMetadata } from '@lobechat/types';
+import type { CreateThreadParams, SubagentThreadStat, ThreadMetadata } from '@lobechat/types';
 import { RequestTrigger, ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, isNull, notExists, sql } from 'drizzle-orm';
+import {
+  and,
+  countDistinct,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notExists,
+  sql,
+} from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
 import { agentOperations, messages, threads } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+const assistantTotalTokens = sql<number>`COALESCE(SUM(CASE WHEN ${messages.role} = 'assistant' THEN (COALESCE(${messages.usage}, ${messages.metadata} -> 'usage') ->> 'totalTokens')::numeric END), 0)`;
 
 /**
  * Per-thread subagent metrics, derived from the child messages at read time
@@ -22,10 +34,7 @@ const subagentMetricColumns = {
   _totalToolCalls: sql<number>`COUNT(CASE WHEN ${messages.role} = 'tool' THEN 1 END)`.as(
     '_sa_tool_calls',
   ),
-  _totalTokens:
-    sql<number>`COALESCE(SUM(CASE WHEN ${messages.role} = 'assistant' THEN (COALESCE(${messages.usage}, ${messages.metadata} -> 'usage') ->> 'totalTokens')::numeric END), 0)`.as(
-      '_sa_total_tokens',
-    ),
+  _totalTokens: sql<number>`${assistantTotalTokens}`.as('_sa_total_tokens'),
 };
 
 type ThreadMetricRow = ThreadItem & {
@@ -59,6 +68,7 @@ const queryColumns = {
   parentThreadId: threads.parentThreadId,
   sourceMessageId: threads.sourceMessageId,
   status: threads.status,
+  subagentId: threads.subagentId,
   title: threads.title,
   topicId: threads.topicId,
   type: threads.type,
@@ -155,6 +165,55 @@ export class ThreadModel {
       .orderBy(desc(threads.updatedAt));
 
     return foldSubagentMetrics(data as ThreadMetricRow[]);
+  };
+
+  /** Threads a subagent preset ran, newest first, with the same metrics as `queryByTopicId`. */
+  queryBySubagentId = async (
+    subagentId: string,
+    { limit = 50, offset = 0 }: { limit?: number; offset?: number } = {},
+  ) => {
+    const data = await this.db
+      .select({ ...queryColumns, ...subagentMetricColumns })
+      .from(threads)
+      .leftJoin(messages, eq(messages.threadId, threads.id))
+      .where(and(eq(threads.subagentId, subagentId), this.ownership()))
+      .groupBy(threads.id)
+      .orderBy(desc(threads.updatedAt), desc(threads.id))
+      .limit(limit)
+      .offset(offset);
+
+    return foldSubagentMetrics(data as ThreadMetricRow[]);
+  };
+
+  /**
+   * Thread count and assistant token usage per subagent preset. Threads the
+   * main agent ran directly (`subagent_id IS NULL`) are not counted.
+   */
+  countBySubagentIds = async (subagentIds: string[]): Promise<SubagentThreadStat[]> => {
+    if (subagentIds.length === 0) return [];
+
+    const rows = await this.db
+      .select({
+        subagentId: threads.subagentId,
+        threadCount: countDistinct(threads.id),
+        totalTokens: assistantTotalTokens,
+      })
+      .from(threads)
+      .leftJoin(messages, eq(messages.threadId, threads.id))
+      .where(
+        and(
+          isNotNull(threads.subagentId),
+          inArray(threads.subagentId, subagentIds),
+          this.ownership(),
+        ),
+      )
+      .groupBy(threads.subagentId);
+
+    return rows.map((row) => ({
+      subagentId: row.subagentId!,
+      threadCount: Number(row.threadCount),
+      totalTokens: Number(row.totalTokens),
+    }));
   };
 
   findById = async (id: string) => {

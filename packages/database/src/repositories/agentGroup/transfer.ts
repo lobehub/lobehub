@@ -397,12 +397,12 @@ export const transferGroupToWorkspace = async (
         .where(and(eq(topics.groupId, groupId), eq(topics.agentId, sourceAgentId)));
       await trx
         .update(threads)
-        .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
+        .set({ agentId: newAgentId, subagentId: null, updatedAt: threads.updatedAt })
         .where(and(eq(threads.groupId, groupId), eq(threads.agentId, sourceAgentId)));
       if (movedTopicIds.length > 0) {
         await trx
           .update(threads)
-          .set({ agentId: newAgentId, updatedAt: threads.updatedAt })
+          .set({ agentId: newAgentId, subagentId: null, updatedAt: threads.updatedAt })
           .where(and(inArray(threads.topicId, movedTopicIds), eq(threads.agentId, sourceAgentId)));
       }
     }
