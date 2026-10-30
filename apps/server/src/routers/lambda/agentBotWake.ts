@@ -3,6 +3,7 @@ import {
   BOT_WAKE_USER_LABELS,
   BOT_WAKE_USER_LABELS_BY_OUTCOME,
   type BotWakeUserLabel,
+  SIGNAL_DECISION_LABEL_CLEARED,
   SIGNAL_DECISION_OUTCOMES,
   type SignalDecisionLabel,
 } from '@lobechat/types';
@@ -144,15 +145,16 @@ export const agentBotWakeRouter = router({
     }),
 
   /**
-   * The owner marks whether a decision was right. Labels are append-only, so a changed mind is a
-   * new row and the latest one is the mark; there is no "unmark", only switching to another label.
+   * The owner marks whether a decision was right, or takes the mark back (`label: null`). Labels are
+   * append-only, so a changed mind is a new row and the latest one is the mark; taking it back
+   * appends `cleared`, which reads as no mark. Returns the mark now in force.
    */
   labelWakeDecision: agentBotProviderProcedureWrite
     .input(
       z.object({
         botId: z.string(),
         decisionId: z.string().uuid(),
-        label: z.enum(BOT_WAKE_USER_LABELS),
+        label: z.enum(BOT_WAKE_USER_LABELS).nullable(),
         note: z.string().trim().max(500).optional(),
       }),
     )
@@ -163,6 +165,24 @@ export const agentBotWakeRouter = router({
       const decision = await decisions.findById(input.decisionId);
       if (!decision || decision.scopeKey !== scopeKey) {
         throw new TRPCError({ code: 'NOT_FOUND', message: DECISION_NOT_FOUND_MESSAGE });
+      }
+
+      if (input.label === null) {
+        const latest = (await decisions.listLabels(decision.id)).find(
+          (row) => row.source === BOT_WAKE_USER_LABEL_SOURCE,
+        );
+        // Nothing to take back: no row, so the history only records real changes of mind.
+        if (!latest || latest.label === SIGNAL_DECISION_LABEL_CLEARED) return null;
+
+        const row = await decisions.addLabel(decision.id, {
+          actor: ctx.userId,
+          label: SIGNAL_DECISION_LABEL_CLEARED,
+          metadata: { surface: 'bot_settings' },
+          source: BOT_WAKE_USER_LABEL_SOURCE,
+        });
+        if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: DECISION_NOT_FOUND_MESSAGE });
+
+        return null;
       }
 
       const allowed: readonly BotWakeUserLabel[] =
@@ -182,6 +202,10 @@ export const agentBotWakeRouter = router({
       });
       if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: DECISION_NOT_FOUND_MESSAGE });
 
-      return { createdAt: row.createdAt, label: row.label, note: row.metadata.rationale };
+      return {
+        createdAt: row.createdAt,
+        label: row.label as BotWakeUserLabel,
+        note: row.metadata.rationale,
+      };
     }),
 });

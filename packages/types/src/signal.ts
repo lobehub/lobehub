@@ -97,15 +97,24 @@ export interface SignalDecisionLabelMetadata {
   surface?: string;
 }
 
-/** Judgement attached to a decision after the fact. Append-only; a later label never edits an earlier one. */
+/**
+ * Judgement attached to a decision after the fact. Append-only; a later label never edits an earlier one.
+ *
+ * `cleared` is not a judgement: it withdraws the source's earlier label, so that source has no
+ * current opinion on the decision. Readers of the current label treat it as no label.
+ */
 export const SIGNAL_DECISION_LABELS = [
   'false_wake',
   'dup_wake',
   'bad_reply',
   'missed_wake',
   'correct',
+  'cleared',
 ] as const;
 export type SignalDecisionLabel = (typeof SIGNAL_DECISION_LABELS)[number];
+
+/** The label that withdraws a source's earlier one; see {@link SIGNAL_DECISION_LABELS}. */
+export const SIGNAL_DECISION_LABEL_CLEARED = 'cleared' satisfies SignalDecisionLabel;
 
 /** `signal_decision_labels.source` for a mark the bot's owner set in its settings. */
 export const BOT_WAKE_USER_LABEL_SOURCE = 'user';

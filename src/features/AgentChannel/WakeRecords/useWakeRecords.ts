@@ -75,18 +75,22 @@ export const useWakeDecisions = (botId: string, filters: WakeRecordFilters) => {
   const { data: pages, mutate: mutatePages } = swr;
 
   /**
-   * Shows the mark at once and saves it; a failed save puts the previous mark back and rethrows,
-   * so the caller can say so. The summary refreshes after a save.
+   * Shows the mark at once and saves it; `null` takes the mark back. A failed save puts the
+   * previous mark back and rethrows, so the caller can say so. The summary refreshes after a save.
    */
   const markDecision = useCallback(
-    async (decisionId: string, label: BotWakeUserLabel) => {
+    async (decisionId: string, label: BotWakeUserLabel | null) => {
       const previous = pages
         ?.flatMap((page) => page.items)
         .find((item) => item.id === decisionId)?.userLabel;
 
       await mutatePages(
         (current) =>
-          withUserLabel(current, decisionId, { createdAt: new Date(), label, note: undefined }),
+          withUserLabel(
+            current,
+            decisionId,
+            label ? { createdAt: new Date(), label, note: undefined } : null,
+          ),
         {
           revalidate: false,
         },

@@ -466,6 +466,7 @@
   "channel.records.mark.failed": "标记没保存，请重试",
   "channel.records.mark.false_wake": "不该唤醒",
   "channel.records.mark.missed_wake": "应该唤醒",
+  "channel.records.mark.undo": "再点一次取消标记",
   "channel.records.noReplyReason.already_handled": "已经有人处理",
   "channel.records.noReplyReason.duplicate": "已经回答过",
   "channel.records.noReplyReason.empty_completion": "回复为空",

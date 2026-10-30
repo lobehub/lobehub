@@ -32,6 +32,7 @@ const mockListByScope = vi.fn();
 const mockSummaryByScope = vi.fn();
 const mockFindDecision = vi.fn();
 const mockAddLabel = vi.fn();
+const mockListLabels = vi.fn();
 const decisionModelCtor = vi.fn();
 vi.mock('@/database/models/signalDecision', () => ({
   SCOPE_READ_DEFAULT_DAYS: 30,
@@ -41,6 +42,7 @@ vi.mock('@/database/models/signalDecision', () => ({
     return {
       addLabel: mockAddLabel,
       findById: mockFindDecision,
+      listLabels: mockListLabels,
       listByScope: mockListByScope,
       summaryByScope: mockSummaryByScope,
     };
@@ -260,6 +262,38 @@ describe('agentBotWakeRouter', () => {
       }
 
       expect(mockAddLabel).toHaveBeenCalledTimes(3);
+    });
+    it('takes the mark back by appending `cleared`', async () => {
+      mockListLabels.mockResolvedValue([
+        { label: 'false_wake', source: 'user' },
+        { label: 'correct', source: 'llm_judge' },
+      ]);
+
+      const result = await agentBotWakeRouter
+        .createCaller(ctx)
+        .labelWakeDecision({ botId: BOT_ID, decisionId: DECISION_ID, label: null });
+
+      expect(result).toBeNull();
+      expect(mockAddLabel).toHaveBeenCalledWith(DECISION_ID, {
+        actor: 'caller-1',
+        label: 'cleared',
+        metadata: { surface: 'bot_settings' },
+        source: 'user',
+      });
+    });
+
+    it.each([
+      ['never marked', [{ label: 'correct', source: 'llm_judge' }]],
+      ['already taken back', [{ label: 'cleared', source: 'user' }]],
+    ])('writes nothing to take back a mark when %s', async (_case, labels) => {
+      mockListLabels.mockResolvedValue(labels);
+
+      await expect(
+        agentBotWakeRouter
+          .createCaller(ctx)
+          .labelWakeDecision({ botId: BOT_ID, decisionId: DECISION_ID, label: null }),
+      ).resolves.toBeNull();
+      expect(mockAddLabel).not.toHaveBeenCalled();
     });
   });
 });

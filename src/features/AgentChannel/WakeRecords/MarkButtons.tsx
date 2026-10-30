@@ -19,13 +19,14 @@ const ICONS: Record<BotWakeUserLabel, typeof Check> = {
 interface MarkButtonsProps {
   current?: BotWakeUserLabel;
   disabled?: boolean;
-  onMark: (label: BotWakeUserLabel) => Promise<void>;
+  /** `null` takes the current mark back. */
+  onMark: (label: BotWakeUserLabel | null) => Promise<void>;
   outcome: SignalDecisionOutcome;
 }
 
 /**
- * Whether the bot judged this message right, one click. The current mark stays highlighted; there
- * is no unmark (marks are an append-only history), so changing your mind is picking the other one.
+ * Whether the bot judged this message right, one click. The current mark stays highlighted;
+ * clicking it again takes it back, clicking another switches to that one.
  */
 export const MarkButtons = ({ current, disabled, onMark, outcome }: MarkButtonsProps) => {
   const { t: _t } = useTranslation('agent');
@@ -34,10 +35,10 @@ export const MarkButtons = ({ current, disabled, onMark, outcome }: MarkButtonsP
   const choices = BOT_WAKE_USER_LABELS_BY_OUTCOME[outcome] ?? [];
 
   const mark = async (label: BotWakeUserLabel) => {
-    if (label === current || pending) return;
+    if (pending) return;
     setPending(label);
     try {
-      await onMark(label);
+      await onMark(label === current ? null : label);
     } catch {
       toast.error(t('channel.records.mark.failed'));
     } finally {
@@ -59,6 +60,7 @@ export const MarkButtons = ({ current, disabled, onMark, outcome }: MarkButtonsP
             key={label}
             loading={pending === label}
             size={'small'}
+            title={active ? t('channel.records.mark.undo') : undefined}
             type={active ? 'primary' : 'default'}
             onClick={() => void mark(label)}
           >

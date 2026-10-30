@@ -3,8 +3,9 @@ import type {
   SignalDecisionLabelMetadata,
   SignalDecisionOutcome,
 } from '@lobechat/types';
+import { SIGNAL_DECISION_LABEL_CLEARED } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
 
 import type { NewSignalDecision, SignalDecisionItem, SignalDecisionLabelItem } from '../schemas';
 import { signalDecisionLabels, signalDecisions, signals } from '../schemas';
@@ -48,7 +49,10 @@ export interface ListDecisionsByScopeParams {
   cursor?: ScopeDecisionCursor;
   /** Only decisions whose `final_reason` is one of these; ignored when empty. */
   finalReasons?: readonly string[];
-  /** `has: true`: only decisions holding a label from source `by`; `has: false`: only those without. */
+  /**
+   * `has: true`: only decisions whose current label from source `by` is set; `has: false`: only
+   * those without one (never labeled, or the latest label is `cleared`).
+   */
   labeled?: { by: string; has: boolean };
   /** 1..{@link SCOPE_READ_MAX_LIMIT}; defaults to 20. */
   limit?: number;
@@ -255,8 +259,13 @@ export class SignalDecisionModel {
         sql`(${signalDecisions.createdAt}, ${signalDecisions.id}) < (${params.cursor.createdAt}::timestamptz, ${params.cursor.id}::uuid)`,
       );
     if (params.labeled) {
-      const exists = sql`exists (select 1 from ${signalDecisionLabels} where ${signalDecisionLabels.decisionId} = ${signalDecisions.id} and ${signalDecisionLabels.source} = ${params.labeled.by})`;
-      conditions.push(params.labeled.has ? exists : sql`not ${exists}`);
+      // The source's latest label; `cleared` (or none) means it has no current opinion.
+      const latest = sql`coalesce((select ${signalDecisionLabels.label} from ${signalDecisionLabels} where ${signalDecisionLabels.decisionId} = ${signalDecisions.id} and ${signalDecisionLabels.source} = ${params.labeled.by} order by ${signalDecisionLabels.createdAt} desc, ${signalDecisionLabels.id} desc limit 1), ${SIGNAL_DECISION_LABEL_CLEARED})`;
+      conditions.push(
+        params.labeled.has
+          ? sql`${latest} <> ${SIGNAL_DECISION_LABEL_CLEARED}`
+          : sql`${latest} = ${SIGNAL_DECISION_LABEL_CLEARED}`,
+      );
     }
 
     const rows = await this.db
@@ -353,6 +362,7 @@ export class SignalDecisionModel {
           source: current.source,
         })
         .from(current)
+        .where(ne(current.label, SIGNAL_DECISION_LABEL_CLEARED))
         .groupBy(current.source, current.label);
 
       for (const row of grouped) {
@@ -370,7 +380,10 @@ export class SignalDecisionModel {
     };
   };
 
-  /** Current label per source for each decision, keyed by decision id. Callers pass owned ids. */
+  /**
+   * Current label per source for each decision, keyed by decision id; a source whose latest label
+   * is `cleared` is left out. Callers pass owned ids.
+   */
   private currentLabels = async (decisionIds: string[]) => {
     const byDecision = new Map<string, CurrentDecisionLabel[]>();
     if (decisionIds.length === 0) return byDecision;
@@ -393,6 +406,8 @@ export class SignalDecisionModel {
       );
 
     for (const { decisionId, ...label } of rows) {
+      // A withdrawn label leaves the source without a current one.
+      if (label.label === SIGNAL_DECISION_LABEL_CLEARED) continue;
       const list = byDecision.get(decisionId) ?? [];
       list.push(label);
       byDecision.set(decisionId, list);

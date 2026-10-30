@@ -716,6 +716,7 @@ export default {
   'channel.records.mark.false_wake': "Shouldn't have woken",
   'channel.records.mark.missed_wake': 'Should have woken',
   'channel.records.mark.failed': "Couldn't save your mark. Try again.",
+  'channel.records.mark.undo': 'Click again to remove the mark',
   'channel.records.empty.title': 'No records yet',
   'channel.records.empty.desc':
     'Records show up here once the bot judges a message in a channel it can see.',

@@ -176,6 +176,36 @@ describe('SignalDecisionModel scope reads', () => {
       ]);
     });
 
+    it('treats a mark taken back (`cleared`) as no mark', async () => {
+      const cleared = await seed('cleared', { minutesAgo: 3 });
+      const remarked = await seed('remarked', { minutesAgo: 2 });
+      await label(cleared.decision.id, 'user', 'false_wake', 5);
+      await label(cleared.decision.id, 'user', 'cleared', 1);
+      await label(remarked.decision.id, 'user', 'cleared', 5);
+      await label(remarked.decision.id, 'user', 'correct', 1);
+      const model = new SignalDecisionModel(serverDB, userId);
+
+      const items = (await model.listByScope({ scopeKey })).items;
+      const byId = new Map(items.map((i) => [i.id, i]));
+      expect(byId.get(cleared.decision.id)?.labels).toEqual([]);
+      expect(byId.get(remarked.decision.id)?.labels.map((l) => l.label)).toEqual(['correct']);
+
+      const ids = async (has: boolean) =>
+        (await model.listByScope({ labeled: { by: 'user', has }, scopeKey })).items.map(
+          (i) => i.id,
+        );
+      expect(await ids(true)).toEqual([remarked.decision.id]);
+      expect(await ids(false)).toEqual([cleared.decision.id]);
+
+      const summary = await model.summaryByScope({
+        followupReasons: FOLLOWUPS,
+        labelSources: SOURCES,
+        scopeKey,
+        since: new Date(Date.now() - 24 * 60 * 60_000),
+      });
+      expect(summary.labels).toEqual({ user: { correct: 1 } });
+    });
+
     it('cuts the preview and hides purged text while keeping the address', async () => {
       const long = await seed('long', { minutesAgo: 2, text: 'x'.repeat(500) });
       const purged = await seed('purged', { minutesAgo: 1 });

@@ -34,7 +34,7 @@ const styles = stylex.create({
 interface RecordItemProps {
   disabled?: boolean;
   item: WakeDecisionItem;
-  onMark: (decisionId: string, label: BotWakeUserLabel) => Promise<void>;
+  onMark: (decisionId: string, label: BotWakeUserLabel | null) => Promise<void>;
 }
 
 /** One judged message: when, what it said, what the bot did and why, and the owner's mark. */
