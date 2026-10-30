@@ -1,7 +1,7 @@
 import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { SELF_FEEDBACK_INTENT_IDENTIFIER } from '@lobechat/builtin-tool-self-iteration';
-import { BRANDING_INBOX_TITLE } from '@lobechat/business-const';
+import { promptAssistantName } from '@lobechat/const';
 import { RequestTrigger } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -450,7 +450,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     // Derived, not a literal: the assistant's name comes from the branding slot,
     // so a hardcoded 'Lobe' here only passes on the upstream default.
-    expect(callArgs.agentConfig.systemRole).toContain(`You are ${BRANDING_INBOX_TITLE}`);
+    expect(callArgs.agentConfig.systemRole).toContain(`You are ${promptAssistantName('Lobe')}`);
     // Model identity is injected by ModelInfoProvider now, not the `{{model}}`
     // template placeholder; `{{date}}` still proves the runtime template merged.
     expect(callArgs.agentConfig.systemRole).toContain('{{date}}');
