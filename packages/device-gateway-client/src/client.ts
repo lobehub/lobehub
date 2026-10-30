@@ -88,6 +88,12 @@ export interface GatewayClientOptions {
   deviceId?: string;
   gatewayUrl?: string;
   logger?: GatewayClientLogger;
+  /**
+   * Platform reported in the handshake. Defaults to `process.platform`; pass an
+   * explicit value when it is wrong for the device (e.g. `android` on an Android
+   * host whose kernel reports `linux`, or `ios` / `android` from a mobile client).
+   */
+  platform?: string;
   serverUrl?: string;
   token: string;
   tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
@@ -137,6 +143,7 @@ export class GatewayClient extends EventEmitter {
   private connectionId: string;
   private channel?: string;
   private gatewayUrl: string;
+  private platform: string;
   private token: string;
   private tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
   private userAgent?: string;
@@ -156,6 +163,7 @@ export class GatewayClient extends EventEmitter {
     this.deviceId = options.deviceId || randomUUID();
     this.connectionId = options.connectionId || randomUUID();
     this.channel = options.channel;
+    this.platform = options.platform || process.platform;
     this.serverUrl = options.serverUrl;
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
@@ -349,7 +357,7 @@ export class GatewayClient extends EventEmitter {
       connectionId: this.connectionId,
       deviceId: this.deviceId,
       hostname: os.hostname(),
-      platform: process.platform,
+      platform: this.platform,
     });
 
     if (this.channel) {
