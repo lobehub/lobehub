@@ -175,6 +175,23 @@ describe('AgentRuntimeService', () => {
       },
     );
 
+    it('mirrors a resumed LLM-call baseline into the usage counter old workers report', async () => {
+      await service.createOperation({ ...mockParams, autoStart: false, initialLlmCalls: 7 });
+
+      const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+      expect(savedState.llmCalls).toBe(7);
+      // A pre-`llmCalls` worker finalizes the operation from this field alone.
+      expect(savedState.usage.llm.apiCalls).toBe(7);
+    });
+
+    it('leaves usage absent when the run carries no baseline', async () => {
+      await service.createOperation({ ...mockParams, autoStart: false });
+
+      const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+      expect(savedState.llmCalls).toBe(0);
+      expect(savedState).not.toHaveProperty('usage');
+    });
+
     describe('file Works declaration (host.acceptsFileWorks)', () => {
       it('stores the declaration the client made', async () => {
         await service.createOperation({ ...mockParams, acceptsFileWorks: true, autoStart: false });

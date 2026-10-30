@@ -18,7 +18,10 @@ describe('resolveNavPanelKey', () => {
     ['/lobe-team/settings/general', 'lobe-team', 'workspace-settings'],
     ['/lobe-team/community', 'lobe-team', 'discover'],
     ['/lobe-team/resource', 'lobe-team', 'resource'],
-    ['/lobe-team/resource/library', 'lobe-team', 'resourceLibrary'],
+    // The library gallery keeps the Docs sidebar; one library has its own.
+    ['/lobe-team/resource/library', 'lobe-team', 'resource'],
+    ['/lobe-team/resource/library/kb-1', 'lobe-team', 'resourceLibrary'],
+    ['/resource/library/kb-1/folder', null, 'resourceLibrary'],
     ['/lobe-team/memory', 'lobe-team', 'memory'],
     ['/lobe-team/eval', 'lobe-team', 'eval'],
     ['/lobe-team/eval/bench/benchmark-1', 'lobe-team', 'evalBench'],

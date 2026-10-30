@@ -44,10 +44,10 @@ const AnchorPreview = memo<{ comment: TopicCommentItem }>(({ comment }) => {
   return (
     <Flexbox
       aria-disabled={canLocateMessage ? undefined : true}
+      className={stylex.props(styles.anchor, !canLocateMessage && styles.anchorDisabled).className}
       gap={4}
       role={canLocateMessage ? 'button' : undefined}
       tabIndex={canLocateMessage ? 0 : undefined}
-      className={stylex.props(styles.anchor, !canLocateMessage && styles.anchorDisabled).className}
       onClick={locateMessage}
       onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;

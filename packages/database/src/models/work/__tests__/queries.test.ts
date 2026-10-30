@@ -93,9 +93,9 @@ describe('WorkModel · queries', () => {
         rootOperationIds: ['op-batch-1', 'op-batch-2', 'op-batch-missing'],
       });
 
-      // One query per work type across all ids, not per (id x type). Four
-      // registered types now: document / external / file / task.
-      expect(selectSpy).toHaveBeenCalledTimes(4);
+      // One query per work type across all ids, not per (id x type). Five
+      // registered types now: canvas / document / external / file / task.
+      expect(selectSpy).toHaveBeenCalledTimes(5);
       expect(byOperations['op-batch-1']?.map((item) => item.resourceId)).toEqual([firstTask.id]);
       expect(byOperations['op-batch-2']?.map((item) => item.resourceId)).toEqual([secondTask.id]);
       expect(byOperations['op-batch-missing']).toEqual([]);
@@ -462,5 +462,38 @@ describe('WorkModel · queries', () => {
     expect(types(optedConversation)).toEqual(['file', 'task']);
     const optedWorkspace = await workModel.listByWorkspace({ includeFileWorks: true });
     expect(types(optedWorkspace.items)).toEqual(['file', 'task']);
+  });
+});
+
+describe('WorkModel · queries guard branches', () => {
+  it('returns [] for a root operation lookup without an id', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+
+    expect(await workModel.listByRootOperation({ rootOperationId: null })).toEqual([]);
+    expect(await workModel.listByRootOperation({})).toEqual([]);
+  });
+
+  it('returns an empty map when no root operation ids are requested', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+
+    expect(await workModel.listByRootOperations({ rootOperationIds: [] })).toEqual({});
+    // null entries are filtered out before the query runs
+    expect(await workModel.listByRootOperations({ rootOperationIds: [null, null] })).toEqual({});
+    expect(await workModel.listByRootOperations({})).toEqual({});
+  });
+
+  it('returns empty lists per requested root operation when nothing matches', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+
+    expect(
+      await workModel.listSummariesByRootOperations({ rootOperationIds: ['op-unknown'] }),
+    ).toEqual({ 'op-unknown': [] });
+    expect(await workModel.listSummariesByRootOperations({ rootOperationIds: [] })).toEqual({});
+  });
+
+  it('returns [] for a conversation lookup without a topic id', async () => {
+    const workModel = new WorkModel(serverDB, userId);
+
+    expect(await workModel.listByConversation({ topicId: null })).toEqual([]);
   });
 });

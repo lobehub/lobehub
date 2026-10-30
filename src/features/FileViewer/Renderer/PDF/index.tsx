@@ -9,6 +9,7 @@ import { Fragment, memo, useCallback, useState } from 'react';
 
 import { Document, Page, pdfjs } from '@/libs/pdfjs';
 
+import { toSameOriginFileProxyUrl } from '../../fileProxyUrl';
 import HighlightLayer from './HighlightLayer';
 import { styles } from './style';
 import { useChunkHighlights } from './useChunkHighlights';
@@ -66,7 +67,7 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId, showChunkHighlights = tru
       >
         <Document
           className={stylex.props(styles.document).className}
-          file={url}
+          file={url && toSameOriginFileProxyUrl(url)}
           loading={<Spin size="large" />}
           options={options}
           onLoadSuccess={onDocumentLoadSuccess}

@@ -114,7 +114,6 @@ const Body = memo(() => {
                 defaultValue={['deliverables', 'findings', 'activity']}
                 gap={0}
                 indicatorPlacement="inline"
-                styles={{ trigger: { paddingBlock: 6, paddingInline: 0 } }}
                 items={[
                   {
                     children: (
@@ -166,6 +165,10 @@ const Body = memo(() => {
                     ),
                   },
                 ]}
+                styles={{
+                  header: { marginInline: -8 },
+                  trigger: { paddingBlock: 6, paddingInline: 8 },
+                }}
               />
             </Flexbox>
           }

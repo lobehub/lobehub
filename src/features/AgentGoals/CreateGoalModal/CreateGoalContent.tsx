@@ -7,6 +7,7 @@ import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
   Button,
+  confirmModal,
   createStaticStyles,
   cssVar,
   Flexbox,
@@ -37,6 +38,7 @@ import {
   CriterionRow,
   openCriterionEditModal,
 } from '@/features/Acceptance';
+import { useEscapeDiscardGuard } from '@/features/AgentTasks/shared/useEscapeDiscardGuard';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
@@ -47,6 +49,7 @@ import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
 import { deriveGoalTitle } from './goalTitle';
+import { hasUnsavedGoalDraft } from './hasUnsavedGoalDraft';
 
 const styles = createStaticStyles(({ css }) => ({
   budgetField: css`
@@ -80,6 +83,7 @@ const styles = createStaticStyles(({ css }) => ({
     max-height: 320px;
   `,
   footer: css`
+    flex-shrink: 0;
     padding-block: 8px;
     padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -139,6 +143,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   head: css`
     position: relative;
+    min-height: 0;
     padding-block: 16px 8px;
     padding-inline: 16px;
   `,
@@ -146,6 +151,13 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     min-height: 208px;
     background: ${cssVar.colorBgElevated};
+  `,
+  /* A block (not flex) scroller: as a flex item the editor's overflow-hidden
+     wrapper would shrink to fit and clip instead of scrolling. */
+  inputScroller: css`
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
   `,
   instructionEditor: css`
     min-height: 36px;
@@ -436,10 +448,34 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     }
   }, []);
 
+  // Escape is easy to hit by accident, so it asks before throwing away a
+  // described or drafted goal; an untouched modal still closes straight away.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEscapeDiscardGuard(rootRef, {
+    hasUnsavedInput: () =>
+      hasUnsavedGoalDraft({
+        editorJson: editor?.getDocument?.('json'),
+        initialInstruction: initialRequirement ?? initialTitle,
+        instruction: instructionRef.current,
+        step,
+      }),
+    onEscape: () =>
+      confirmModal({
+        cancelText: t('createGoal.discardConfirm.cancel'),
+        content: t('createGoal.discardConfirm.content'),
+        okButtonProps: { danger: true },
+        okText: t('createGoal.discardConfirm.ok'),
+        onOk: close,
+        title: t('createGoal.discardConfirm.title'),
+      }),
+  });
+
   return (
-    <Flexbox onKeyDown={handleKeyDown}>
-      <Flexbox horizontal className={styles.head}>
-        <Flexbox flex={1} gap={6}>
+    <Flexbox flex={1} ref={rootRef} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
+      {/* The describe step's editor lives in the head, so the head shrinks and
+          its editor scrolls; on review only the body below scrolls. */}
+      <Flexbox horizontal className={styles.head} style={{ flexShrink: step === 'review' ? 0 : 1 }}>
+        <Flexbox flex={1} gap={6} style={{ minHeight: 0 }}>
           {step === 'review' && (
             <Flexbox horizontal align={'center'} gap={8}>
               <ActionIcon
@@ -467,16 +503,18 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
           {step !== 'review' && (
             <>
               <GeneratingBorder className={styles.inputShell} generating={step === 'preparing'}>
-                <EditorCanvas
-                  disabled={!canCreate || step === 'preparing'}
-                  editor={editor}
-                  editorData={{ content: plan.instruction }}
-                  entityId={'create-goal-description'}
-                  floatingToolbar={false}
-                  placeholder={t('createGoal.instructionPlaceholder')}
-                  style={{ fontSize: 14, minHeight: 206, padding: 16 }}
-                  onContentChange={handleContentChange}
-                />
+                <div className={styles.inputScroller}>
+                  <EditorCanvas
+                    disabled={!canCreate || step === 'preparing'}
+                    editor={editor}
+                    editorData={{ content: plan.instruction }}
+                    entityId={'create-goal-description'}
+                    floatingToolbar={false}
+                    placeholder={t('createGoal.instructionPlaceholder')}
+                    style={{ fontSize: 14, minHeight: 206, padding: 16 }}
+                    onContentChange={handleContentChange}
+                  />
+                </div>
               </GeneratingBorder>
               {step === 'preparing' ? (
                 <Flexbox
@@ -543,7 +581,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8}>
                 <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={16} />
-                <Text fontSize={13} weight={600}>
+                <Text fontSize={13} style={{ flex: 'none' }} weight={600}>
                   {t('createGoal.criteriaTitle')}
                 </Text>
                 <Text className={styles.sectionHint} fontSize={12}>

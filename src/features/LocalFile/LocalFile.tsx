@@ -14,12 +14,15 @@ import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
 const styles = stylex.create({
   container: {
-    cursor: 'pointer',
     paddingBlock: '2px',
     paddingInlineStart: '4px',
     paddingInlineEnd: '8px',
     borderRadius: '4px',
     color: cssVar.colorText,
+  },
+  interactive: {
+    cursor: 'pointer',
+    color: { 'default': null, ':hover': cssVar.colorText },
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
     backgroundImage: 'none',
     outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
@@ -52,6 +55,12 @@ interface LocalFileProps {
   conversation?: StartTopicConversation;
   isDirectory?: boolean;
   name: string;
+  /**
+   * Web only: opens the file in the right-side portal through the agent's
+   * bound device. Without it the web chip is a static reference — the web app
+   * has no Open / Show in Folder.
+   */
+  openInPortal?: () => void;
   path?: string;
   /**
    * When true, disable interactive actions (Open / Show in Folder).
@@ -65,11 +74,18 @@ export const LocalFile = ({
   name,
   path,
   isDirectory = false,
+  openInPortal,
   readonly = false,
 }: LocalFileProps) => {
   const { t } = useTranslation('components');
-  const { canPreview, handleClick, handleOpenFile, handleOpenFolder, handlePreview } =
-    useLocalFileActions({ isDirectory, path, readonly });
+  const {
+    canOpenNatively,
+    canPreview,
+    handleClick,
+    handleOpenFile,
+    handleOpenFolder,
+    handlePreview,
+  } = useLocalFileActions({ isDirectory, openInPortal, path, readonly });
   const { canStartTopic, startTopic } = useStartTopicInDirectory({
     conversation,
     isDirectory,
@@ -81,7 +97,10 @@ export const LocalFile = ({
     <Flexbox
       horizontal
       align={'center'}
-      className={stylex.props(styles.container).className}
+      className={
+        stylex.props(styles.container, (handleClick || canOpenNatively) && styles.interactive)
+          .className
+      }
       gap={4}
       // Inline chip, not a <button> (block layout inside markdown prose) — so
       // give the clickable state complete button semantics by hand.
@@ -106,8 +125,9 @@ export const LocalFile = ({
     </Flexbox>
   );
 
-  // Readonly mode (e.g. share page): no popover or local actions.
-  if (readonly) {
+  // Readonly mode (e.g. share page) and the web app have no system actions;
+  // there the chip only previews on click, so a hover menu would add nothing.
+  if (!canOpenNatively) {
     return fileContent;
   }
 

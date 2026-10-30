@@ -15,17 +15,28 @@ describe('createProjectCoordinatorAgentConfig', () => {
       avatar: 'avatar.png',
       description: 'Coordinates the LobeHub project',
       systemRole: [
-        'You are the coordinator for the project "LobeHub" (LOBE).',
-        'Project description: Ship the next release',
+        'You are the coordinator agent of a project.',
+        'The current project, its member agents, linked knowledge bases and open tasks are provided with each message; rely on them over anything you remember.',
         'Help the user resume work, turn intent into concrete tasks and goals, use project resources, and coordinate project agents.',
       ].join('\n'),
       title: 'LobeHub Coordinator',
     });
   });
 
-  it('omits the project description line when no description is provided', () => {
-    const config = createProjectCoordinatorAgentConfig({ identifier: 'LOBE', name: 'LobeHub' });
+  it('keeps project facts out of the systemRole so a rename never leaves it stale', () => {
+    const config = createProjectCoordinatorAgentConfig({
+      description: 'Ship the next release',
+      identifier: 'LOBE',
+      name: 'LobeHub',
+    });
 
-    expect(config.systemRole).not.toContain('Project description:');
+    expect(config.systemRole).not.toContain('LobeHub');
+    expect(config.systemRole).not.toContain('Ship the next release');
+  });
+
+  it('builds the config for a project without an identifier', () => {
+    const config = createProjectCoordinatorAgentConfig({ name: 'LobeHub' });
+
+    expect(config.title).toBe('LobeHub Coordinator');
   });
 });

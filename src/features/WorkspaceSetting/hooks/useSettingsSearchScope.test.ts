@@ -87,7 +87,7 @@ describe('workspace settings search scope', () => {
   it('keeps admin-only tabs searchable for admins', () => {
     const urls = search('prompt rewrite', adminGroups).map((result) => result.url);
 
-    expect(urls).toContain('/acme/settings/service-model#service-model-optional-features');
+    expect(urls).toContain('/acme/settings/service-model#service-model-advanced');
     expect(search('openai', adminGroups).map((result) => result.url)).toContain(
       '/acme/settings/provider/openai',
     );

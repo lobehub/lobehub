@@ -6,6 +6,7 @@ import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
+import { TASK_HOLD_VISUALS } from '@/features/AgentGoals/ProcessControl/taskHold';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { shinyTextStyles } from '@/styles';
 
@@ -25,12 +26,6 @@ const STEP_VISUAL: Record<
     icon: TASK_STATUS_VISUALS.failed.icon,
     labelKey: 'goalTask.status.error',
   },
-  lost: {
-    color: TASK_STATUS_VISUALS.failed.color,
-    icon: TASK_STATUS_VISUALS.failed.icon,
-    labelKey: 'goalProcess.tag.lost',
-    open: true,
-  },
   queued: {
     color: TASK_STATUS_VISUALS.backlog.color,
     icon: TASK_STATUS_VISUALS.backlog.icon,
@@ -45,6 +40,11 @@ const STEP_VISUAL: Record<
   running: {
     color: TASK_STATUS_VISUALS.running.color,
     labelKey: 'goalProcess.node.running',
+    open: true,
+  },
+  stalled: {
+    ...TASK_HOLD_VISUALS.stalled,
+    labelKey: 'goalProcess.tag.stalled',
     open: true,
   },
   stopped: {
@@ -62,6 +62,11 @@ const STEP_VISUAL: Record<
     color: TASK_STATUS_VISUALS.paused.color,
     icon: TASK_STATUS_VISUALS.paused.icon,
     labelKey: 'goalProcess.node.waiting',
+    open: true,
+  },
+  waitingQuota: {
+    ...TASK_HOLD_VISUALS.waitingQuota,
+    labelKey: 'goalProcess.tag.waitingQuota',
     open: true,
   },
 };

@@ -4,6 +4,8 @@ import type { RuntimeVideoGenParams } from 'model-bank';
 
 import { getVideoReferenceImages } from '../../core/usageConverters/utils/computeVideoCost';
 import type { CreateVideoResult, PollVideoStatusResult } from '../../types/video';
+import type { FalJsonSchema } from './schema';
+import { coerceFalInput } from './schema';
 
 const log = debug('lobe-video:fal');
 
@@ -44,7 +46,14 @@ const FAL_VIDEO_MODELS: Record<string, FalVideoModelSpec> = {
  */
 const REQUEST_PATH_SEPARATOR = '/requests/';
 
-export const isFalVideoModel = (model: string) => Object.hasOwn(FAL_VIDEO_MODELS, model);
+/** Video model cards whose task endpoint the runtime picks from the request params */
+export const isFalTaskRoutedVideoModel = (model: string) => Object.hasOwn(FAL_VIDEO_MODELS, model);
+
+const FAL_VIDEO_TASKS = ['text-to-video', 'image-to-video', 'reference-to-video'] as const;
+
+/** fal endpoints a task-routed video card sends requests to; empty for any other model */
+export const getFalTaskRoutedVideoEndpoints = (model: string) =>
+  isFalTaskRoutedVideoModel(model) ? FAL_VIDEO_TASKS.map((task) => `${model}/${task}`) : [];
 
 export const toFalVideoInferenceId = (appId: string, requestId: string) =>
   `${appId}${REQUEST_PATH_SEPARATOR}${requestId}`;
@@ -67,7 +76,7 @@ export const parseFalVideoInferenceId = (inferenceId: string) => {
  * - otherwise → `/text-to-video`
  */
 export const buildFalVideoRequest = (model: string, params: RuntimeVideoGenParams) => {
-  const spec = isFalVideoModel(model) ? FAL_VIDEO_MODELS[model] : undefined;
+  const spec = isFalTaskRoutedVideoModel(model) ? FAL_VIDEO_MODELS[model] : undefined;
   if (!spec) throw new Error(`Unsupported fal video model: ${model}`);
 
   const { aspectRatio, duration, endImageUrl, imageUrl, imageUrls, prompt, resolution, seed } =
@@ -78,7 +87,7 @@ export const buildFalVideoRequest = (model: string, params: RuntimeVideoGenParam
   if (resolution) input.resolution = resolution;
   if (typeof seed === 'number' && seed >= 0) input.seed = seed;
 
-  let task: 'image-to-video' | 'reference-to-video' | 'text-to-video';
+  let task: (typeof FAL_VIDEO_TASKS)[number];
   if (imageUrls?.length) {
     task = 'reference-to-video';
     // Shared with pricing so the billed reference tokens cover every image sent
@@ -100,6 +109,37 @@ export const buildFalVideoRequest = (model: string, params: RuntimeVideoGenParam
   return { endpoint: `${model}/${task}`, input };
 };
 
+/**
+ * Build the input of any other fal video endpoint, whose id already names its task (e.g.
+ * `fal-ai/kling-video/v2.1/master/image-to-video`). Fields use fal's common names; the caller
+ * fits them to the endpoint's schema with `coerceFalInput`.
+ */
+export const buildGenericFalVideoInput = (params: RuntimeVideoGenParams) => {
+  const {
+    aspectRatio,
+    duration,
+    endImageUrl,
+    generateAudio,
+    imageUrl,
+    imageUrls,
+    prompt,
+    resolution,
+    seed,
+  } = params;
+
+  const input: Record<string, unknown> = { prompt };
+  if (aspectRatio) input.aspect_ratio = aspectRatio;
+  if (duration) input.duration = duration;
+  if (resolution) input.resolution = resolution;
+  if (typeof seed === 'number' && seed >= 0) input.seed = seed;
+  if (imageUrl) input.image_url = imageUrl;
+  if (endImageUrl) input.end_image_url = endImageUrl;
+  if (imageUrls?.length) input.image_urls = imageUrls;
+  if (typeof generateAudio === 'boolean') input.generate_audio = generateAudio;
+
+  return input;
+};
+
 const getFalErrorMessage = (error: unknown): string => {
   const detail = (error as { body?: { detail?: unknown } } | undefined)?.body?.detail;
   if (typeof detail === 'string') return detail;
@@ -117,12 +157,22 @@ export const createFalVideo = async (
   client: FalClient,
   model: string,
   params: RuntimeVideoGenParams,
+  loadInputSchema?: (endpoint: string) => Promise<FalJsonSchema | undefined>,
 ): Promise<CreateVideoResult> => {
-  const { endpoint, input } = buildFalVideoRequest(model, params);
+  let endpoint: string;
+  let input: Record<string, unknown>;
+
+  if (isFalTaskRoutedVideoModel(model)) {
+    ({ endpoint, input } = buildFalVideoRequest(model, params));
+  } else {
+    endpoint = model;
+    input = coerceFalInput(buildGenericFalVideoInput(params), await loadInputSchema?.(endpoint));
+  }
   log('Submitting fal video request to %s with input: %O', endpoint, input);
 
   const { request_id } = await client.queue.submit(endpoint, { input });
 
+  // Status and result URLs only use `<owner>/<app>`, so a full endpoint id also works as app id
   return { inferenceId: toFalVideoInferenceId(model, request_id) };
 };
 
@@ -144,7 +194,8 @@ export const pollFalVideoStatus = async (
     return { error: getFalErrorMessage(error), status: 'failed' };
   }
 
-  const videoUrl = (data as { video?: { url?: string } } | undefined)?.video?.url;
+  const output = data as { video?: { url?: string }; videos?: { url?: string }[] } | undefined;
+  const videoUrl = output?.video?.url ?? output?.videos?.[0]?.url;
   if (!videoUrl) return { error: 'fal returned no video', status: 'failed' };
 
   return { status: 'success', videoUrl };

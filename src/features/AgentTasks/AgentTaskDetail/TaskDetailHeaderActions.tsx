@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { FavoriteButton, useFavoriteMenuItem } from '@/features/Favorites';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -33,6 +34,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { getArchiveErrorKey } from '../features/archiveErrorKey';
 import { useTaskArchiveGate } from '../features/useTaskArchiveGate';
 import { useTaskCopyActions } from './useTaskCopyActions';
+import { useTaskFavoriteTarget } from './useTaskFavoriteTarget';
 
 const TaskDetailHeaderActions = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
@@ -54,6 +56,8 @@ const TaskDetailHeaderActions = memo(() => {
   });
   const updateTaskVisibility = useTaskStore((s) => s.updateTaskVisibility);
   const transferItems = useTaskTransferMenuItem(taskId) as DropdownItem[] | null;
+  const favoriteTarget = useTaskFavoriteTarget();
+  const favoriteMenuItem = useFavoriteMenuItem(favoriteTarget);
 
   const triggerDelete = useCallback(() => {
     if (!canEditTask) return;
@@ -158,6 +162,7 @@ const TaskDetailHeaderActions = memo(() => {
         onClick: copyContent,
       },
       { type: 'divider' },
+      ...(favoriteMenuItem ? [favoriteMenuItem, { type: 'divider' as const }] : []),
       {
         desc: archiveDeniedKey && t(archiveDeniedKey),
         disabled: !canArchive,
@@ -229,6 +234,7 @@ const TaskDetailHeaderActions = memo(() => {
     ];
   }, [
     taskId,
+    favoriteMenuItem,
     copyId,
     copyLink,
     copyContent,
@@ -252,9 +258,12 @@ const TaskDetailHeaderActions = memo(() => {
   if (!taskId) return null;
 
   return (
-    <DropdownMenu items={menuItems}>
-      <ActionIcon icon={MoreHorizontal} size={'small'} />
-    </DropdownMenu>
+    <>
+      {favoriteTarget && <FavoriteButton {...favoriteTarget} />}
+      <DropdownMenu items={menuItems}>
+        <ActionIcon icon={MoreHorizontal} size={'small'} />
+      </DropdownMenu>
+    </>
   );
 });
 

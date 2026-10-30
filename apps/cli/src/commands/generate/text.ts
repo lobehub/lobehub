@@ -13,7 +13,6 @@ export function registerTextCommand(parent: Command) {
     .option('-s, --system <prompt>', 'System prompt')
     .option('--temperature <n>', 'Temperature (0-2)')
     .option('--max-tokens <n>', 'Maximum output tokens')
-    .option('--stream', 'Enable streaming (SSE, renders incrementally)')
     .option('--json', 'Output full JSON response')
     .option('--pipe', 'Pipe mode: read additional context from stdin')
     .action(
@@ -25,7 +24,6 @@ export function registerTextCommand(parent: Command) {
           model: string;
           pipe?: boolean;
           provider?: string;
-          stream?: boolean;
           system?: string;
           temperature?: string;
         },
@@ -54,15 +52,13 @@ export function registerTextCommand(parent: Command) {
         }
         messages.push({ content: fullPrompt, role: 'user' });
 
-        const useStream = options.stream === true;
-
         const payload: Record<string, any> = {
           messages,
           model,
-          // Ask for a plain JSON body when not streaming; runtimes that ignore
-          // responseMode still reply with SSE, handled below
-          responseMode: useStream ? 'stream' : 'json',
-          stream: useStream,
+          // Ask for a plain JSON body; runtimes that ignore responseMode still
+          // reply with SSE, which is collected into one complete result below
+          responseMode: 'json',
+          stream: false,
         };
         if (options.temperature) payload.temperature = Number.parseFloat(options.temperature);
         if (options.maxTokens) payload.max_tokens = Number.parseInt(options.maxTokens, 10);
@@ -109,11 +105,7 @@ export function registerTextCommand(parent: Command) {
           return;
         }
 
-        if (useStream) {
-          await streamSSEResponse(res.body, options.json);
-        } else {
-          await collectSSEResponse(res.body, options.json);
-        }
+        await collectSSEResponse(res.body, options.json);
       },
     );
 }
@@ -240,36 +232,6 @@ function warnImageOnlyReply(imageCount: number): void {
 function reportSSEError(data: unknown): void {
   log.error(`Text generation failed: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
   process.exit(1);
-}
-
-async function streamSSEResponse(body: ReadableStream<Uint8Array>, json?: boolean): Promise<void> {
-  let hasText = false;
-  let imageCount = 0;
-
-  for await (const event of parseSSE(body)) {
-    const payload = classifySSEEvent(event);
-    if (payload.kind === 'done') break;
-
-    if (json) {
-      console.log(JSON.stringify(event));
-      if (payload.kind === 'error') process.exit(1);
-      continue;
-    }
-
-    if (payload.kind === 'error') {
-      process.stdout.write('\n');
-      reportSSEError(payload.data);
-      return;
-    }
-    if (payload.kind === 'text') {
-      hasText = true;
-      process.stdout.write(payload.text);
-    } else if (payload.kind === 'image') imageCount++;
-  }
-
-  if (json) return;
-  process.stdout.write('\n');
-  if (!hasText && imageCount > 0) warnImageOnlyReply(imageCount);
 }
 
 async function collectSSEResponse(body: ReadableStream<Uint8Array>, json?: boolean): Promise<void> {

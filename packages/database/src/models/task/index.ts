@@ -7,7 +7,7 @@ import type {
   TaskVerifyConfig,
   WorkspaceData,
 } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { merge } from '@/utils/merge';
 
@@ -22,12 +22,14 @@ import type { LobeChatDatabase } from '../../type';
 import { ProjectModel } from '../project';
 import type { TaskListFilterOptions, TaskListOptions } from '../taskListFilters';
 import * as activities from './activities';
+import { checkpointTaskMatcher } from './checkpoint';
 import * as comments from './comments';
 import * as config from './config';
 import { getTaskVisibility, type TaskModelContext, taskOwnership } from './context';
 import * as dependencies from './dependencies';
 import * as documents from './documents';
 import * as queries from './queries';
+import { resolveRefs } from './refs';
 import * as rows from './rows';
 import type { OrphanedRunningTopic } from './scheduling';
 import * as scheduling from './scheduling';
@@ -80,15 +82,16 @@ export class TaskModel {
     }
 
     // A prefix is derived from placement, never accepted as a creation field.
+    // Anyone who can see a project may file work in it; project settings stay
+    // with its creator. A project without its own identifier keeps the scope's
+    // default prefix.
     let identifierPrefix = DEFAULT_TASK_IDENTIFIER_PREFIX;
     if (createData.projectId) {
-      const project = await new ProjectModel(
-        this.db,
-        this.userId,
-        this.workspaceId,
-      ).findManageableById(createData.projectId);
+      const project = await new ProjectModel(this.db, this.userId, this.workspaceId).findById(
+        createData.projectId,
+      );
       if (!project) throw new Error('Project not found');
-      identifierPrefix = project.identifier;
+      identifierPrefix = project.identifier ?? DEFAULT_TASK_IDENTIFIER_PREFIX;
     }
 
     return rows.insertWithNextSeq(this.ctx, createData, identifierPrefix, options.maxRetries ?? 5);
@@ -96,6 +99,22 @@ export class TaskModel {
 
   async findById(id: string): Promise<TaskItem | null> {
     return rows.findById(this.ctx, id);
+  }
+
+  /** Recover creation when a repair request lost its response before linking the Task. */
+  async findByRepairRequest(requestId: string): Promise<TaskItem | null> {
+    const [task] = await this.db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          taskOwnership(this.ctx),
+          eq(tasks.createdByUserId, this.userId),
+          sql`${tasks.config}->'acceptanceRepair'->>'requestId' = ${requestId}`,
+        ),
+      )
+      .limit(1);
+    return (task as TaskItem) ?? null;
   }
 
   async findByIds(ids: string[]): Promise<TaskItem[]> {
@@ -108,18 +127,15 @@ export class TaskModel {
     return rows.findAssigneesByIds(this.ctx, ids);
   }
 
-  async resolveMany(idsOrIdentifiers: string[]): Promise<TaskItem[]> {
-    return rows.resolveMany(this.ctx, idsOrIdentifiers);
+  async resolveRefs(refs: string[]) {
+    return resolveRefs(this.ctx, refs);
   }
 
-  // Resolve id or identifier (e.g. 'T-1') to a task
-  async resolve(idOrIdentifier: string): Promise<TaskItem | null> {
-    if (idOrIdentifier.startsWith('task_')) return this.findById(idOrIdentifier);
-    return this.findByIdentifier(idOrIdentifier.toUpperCase());
-  }
-
-  async findByIdentifier(identifier: string): Promise<TaskItem | null> {
-    return rows.findByIdentifier(this.ctx, identifier);
+  async resolve(ref: string): Promise<TaskItem | null> {
+    const result = await this.resolveRefs([ref]);
+    /* v8 ignore next -- unreachable: one ref matches at most one row, ids are primary keys and identifiers are unique per scope (tasks_identifier_idx / tasks_identifier_workspace_id_unique) */
+    if (result.ambiguous.length) throw new Error(`Ambiguous task reference: ${ref}`);
+    return result.byRef.get(ref) ?? null;
   }
 
   async update(
@@ -391,15 +407,21 @@ export class TaskModel {
   }
 
   // Check if a task should be paused before starting (parent's tasks.beforeIds)
-  shouldPauseBeforeStart(parentTask: TaskItem, childIdentifier: string): boolean {
+  shouldPauseBeforeStart(
+    parentTask: TaskItem,
+    child: Pick<TaskItem, 'id' | 'identifier'>,
+  ): boolean {
     const checkpoint = this.getCheckpointConfig(parentTask);
-    return checkpoint.tasks?.beforeIds?.includes(childIdentifier) ?? false;
+    return checkpointTaskMatcher(checkpoint.tasks?.beforeIds, checkpoint.tasks?.beforeTasks)(child);
   }
 
   // Check if a task should be paused after completing (parent's tasks.afterIds)
-  shouldPauseAfterComplete(parentTask: TaskItem, childIdentifier: string): boolean {
+  shouldPauseAfterComplete(
+    parentTask: TaskItem,
+    child: Pick<TaskItem, 'id' | 'identifier'>,
+  ): boolean {
     const checkpoint = this.getCheckpointConfig(parentTask);
-    return checkpoint.tasks?.afterIds?.includes(childIdentifier) ?? false;
+    return checkpointTaskMatcher(checkpoint.tasks?.afterIds, checkpoint.tasks?.afterTasks)(child);
   }
 
   // ========== Heartbeat ==========
@@ -645,6 +667,7 @@ export class TaskModel {
           }
         : data;
       const updated = await scoped.update(id, writeData);
+      /* v8 ignore next -- unreachable: the row was just locked FOR UPDATE in this transaction under the same ownership predicate, so the write always returns it */
       if (!updated) return null;
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];

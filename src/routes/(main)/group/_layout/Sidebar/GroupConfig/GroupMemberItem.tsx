@@ -1,15 +1,16 @@
 'use client';
 
-import { Avatar, Flexbox, Tag } from '@lobehub/ui';
+import { Flexbox, Tag } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
 
 interface GroupMemberItemProps {
   actions?: ReactNode;
+  agentId?: string;
   avatar?: string;
   background?: string;
   isExternal?: boolean;
@@ -18,17 +19,19 @@ interface GroupMemberItemProps {
 }
 
 const GroupMemberItem = memo<GroupMemberItemProps>(
-  ({ title, avatar, background, actions, isExternal }) => {
+  ({ title, agentId, avatar, background, actions, isExternal }) => {
     const { t } = useTranslation('chat');
 
     return (
       <NavItem
         actions={actions}
         icon={
-          <Avatar
-            emojiScaleWithBackground
-            avatar={avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={agentId}
+            avatar={avatar}
             background={background}
+            name={title}
+            shape={'circle'}
             size={24}
             style={{ flex: 'none' }}
           />

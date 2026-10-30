@@ -98,6 +98,25 @@ export const blockAt = (body: HTMLElement, target: EventTarget | null): HTMLElem
 };
 
 /**
+ * The editor's table scroll wrapper bleeds past the column on both sides
+ * (`--lobe-table-bleed`), so a table wider than the column scrolls into the
+ * margin the marker sits in.
+ */
+const TABLE_SCROLL_WRAPPER_SELECTOR = '.lobe-editor-table-scroll-wrapper';
+
+/**
+ * Whether `block` holds a table that overflows horizontally — its content then
+ * runs under the marker, which would float over the cells. Such a block gets
+ * no marker; its text can still be commented on through a selection.
+ */
+export const scrollsUnderMarker = (block: HTMLElement): boolean => {
+  const wrappers = block.matches(TABLE_SCROLL_WRAPPER_SELECTOR)
+    ? [block]
+    : Array.from(block.querySelectorAll<HTMLElement>(TABLE_SCROLL_WRAPPER_SELECTOR));
+  return wrappers.some((wrapper) => wrapper.scrollWidth > wrapper.clientWidth);
+};
+
+/**
  * Whether a point sits in the corridor bridging the body and the marker, at
  * the marker's own row height — the natural path from a highlighted line to
  * its (not directly adjoining) marker. Direction-agnostic: works whether the
@@ -172,8 +191,9 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
         return;
       }
       // A line with nothing to quote (an empty paragraph, a divider) has no
-      // marker: the anchor it would produce is empty.
-      const range = lineAt(block, event.clientY);
+      // marker: the anchor it would produce is empty. Nor does a table that
+      // scrolls under the marker's margin.
+      const range = scrollsUnderMarker(block) ? null : lineAt(block, event.clientY);
       if (!range) {
         setTarget(null);
         return;

@@ -6,8 +6,8 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
-import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -133,7 +133,9 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
       >
         <Flexbox horizontal align={'center'} gap={4}>
           <AgentAvatar
+            agentId={activeAgent?.id}
             avatar={typeof activeAgent?.avatar === 'string' ? activeAgent.avatar : undefined}
+            size={22}
           />
           <ChevronsUpDownIcon {...stylex.props(styles.chevron)} size={14} />
         </Flexbox>

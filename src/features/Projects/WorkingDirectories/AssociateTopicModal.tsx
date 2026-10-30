@@ -1,7 +1,6 @@
 import { getWorkingDirSourcePath } from '@lobechat/types';
 import {
   Alert,
-  Avatar,
   Button,
   createModal,
   Flexbox,
@@ -21,7 +20,8 @@ import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import { useProjectDirectories, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { openCreateProjectModal } from '../CreateProjectModal';
-import { getProjectConversationPath } from '../Layout/navigation';
+import { getProjectTopicPath } from '../Layout/navigation';
+import ProjectAvatar from '../ProjectAvatar';
 import { openBindDirectoryModal } from './BindDirectoryModal';
 
 function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?: string }) {
@@ -72,7 +72,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
       });
       await useChatStore.getState().refreshTopic();
       close();
-      navigate(getProjectConversationPath(projectId, topicId));
+      navigate(getProjectTopicPath(projectId, topicId));
     } catch (error) {
       console.error('Failed to associate topic', error);
       setError(error);
@@ -87,7 +87,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
         <Button
           onClick={() => {
             close();
-            navigate(getProjectConversationPath(projectId, topicId));
+            navigate(getProjectTopicPath(projectId, topicId));
           }}
         >
           {t('topics.viewProject')}
@@ -108,7 +108,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
             value: p.id,
             label: (
               <Flexbox horizontal align="center" gap={8}>
-                <Avatar avatar={p.avatar || '📁'} size={20} />
+                <ProjectAvatar avatar={p.avatar} name={p.name} />
                 {p.name}
               </Flexbox>
             ),

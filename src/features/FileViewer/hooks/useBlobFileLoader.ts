@@ -1,6 +1,8 @@
 import { readBlobWithLimit } from '@lobechat/utils/readBlobWithLimit';
 import { useEffect, useState } from 'react';
 
+import { toSameOriginFileProxyUrl } from '../fileProxyUrl';
+
 /** Mirrors the device-side document preview ceiling in `@lobechat/device-control`. */
 const MAX_BINARY_PREVIEW_BYTES = 20 * 1024 * 1024;
 
@@ -39,7 +41,9 @@ export const useBlobFileLoader = (url: string | null): BlobFileState => {
 
     const loadFile = async () => {
       try {
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await fetch(toSameOriginFileProxyUrl(url), {
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error(`Failed to load file: ${response.status}`);
         const blob = await readBlobWithLimit(response, MAX_BINARY_PREVIEW_BYTES);
         if (!controller.signal.aborted) setState({ blob, error: null, loading: false, url });

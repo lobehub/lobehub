@@ -1,4 +1,4 @@
-import type { DashboardItemLayout, WidgetLevelFilter } from '@lobechat/types';
+import type { DashboardItemLayout, DashboardVisibility, WidgetLevelFilter } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -17,6 +17,13 @@ export type DashboardWidgetDetail = QueryData<WidgetRouter['detail']>;
 export type DashboardWidgetVersionItem = QueryData<WidgetRouter['listVersions']>[number];
 export type DashboardWidgetRunItem = QueryData<WidgetRouter['listRuns']>[number];
 export type DashboardWidgetRunDetail = QueryData<WidgetRouter['getRun']>;
+
+/** The board fields its settings edit. */
+export interface DashboardSettingsPatch {
+  description?: string | null;
+  title?: string;
+  visibility?: DashboardVisibility;
+}
 
 export interface DashboardLayoutPatch {
   id: string;
@@ -73,8 +80,11 @@ class DashboardService {
     return data;
   };
 
-  rename = async (id: string, title: string) =>
-    lambdaClient.dashboard.update.mutate({ id, value: { title } });
+  /** Returns the saved row: the server may keep a board private that asked to be public. */
+  update = async (id: string, value: DashboardSettingsPatch) => {
+    const { data } = await lambdaClient.dashboard.update.mutate({ id, value });
+    return data;
+  };
 
   trash = async (id: string) => lambdaClient.dashboard.trash.mutate({ id });
 
@@ -121,6 +131,33 @@ class DashboardService {
     return data;
   };
 
+  updateWidget = async (
+    widgetId: string,
+    value: { description?: string | null; title?: string },
+  ) => {
+    const { data } = await lambdaClient.widget.update.mutate({ id: widgetId, value });
+    return data;
+  };
+
+  /** Stop asking before dry runs that need no more access than this version. */
+  grantDryRunAccess = async (widgetId: string, versionId: string) => {
+    const { data } = await lambdaClient.widget.grantDryRunAccess.mutate({ versionId, widgetId });
+    return data;
+  };
+
+  setWidgetSchedule = async (
+    widgetId: string,
+    pattern: string | null,
+    timezone?: string | null,
+  ) => {
+    const { data } = await lambdaClient.widget.setSchedule.mutate({
+      id: widgetId,
+      pattern,
+      timezone,
+    });
+    return data;
+  };
+
   publish = async (widgetId: string, versionId: string) => {
     const { data } = await lambdaClient.widget.publish.mutate({ versionId, widgetId });
     return data;
@@ -141,7 +178,7 @@ class DashboardService {
     return data;
   };
 
-  /** Run one `lobe-dashboard` agent tool call server-side (client agent runtime). */
+  /** Run one `builtin-dashboard` agent tool call server-side (client agent runtime). */
   runAgentTool = async (
     apiName: string,
     args: unknown,

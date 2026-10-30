@@ -159,6 +159,11 @@ export class FileService {
     return lambdaClient.file.updateFile.mutate({ id, ...data });
   };
 
+  /** The Docs home list: pages and files mixed, newest update first. */
+  getDocsHomeItems = async (tab: 'mine' | 'recent' | 'shared', limit?: number) => {
+    return lambdaClient.file.homeItems.query({ limit, tab });
+  };
+
   getRecentFiles = async (limit?: number, visibility?: QueryFileListParams['visibility']) => {
     return lambdaClient.file.recentFiles.query({ limit, visibility });
   };

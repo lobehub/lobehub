@@ -187,7 +187,10 @@ export interface TaskDetail {
   totalCost?: number;
   /** Total messages created during execution */
   totalMessages?: number;
-  /** Total execution steps */
+  /**
+   * Total LLM calls made during execution — the user-facing step metric.
+   * Tool-only runtime iterations are not counted here.
+   */
   totalSteps?: number;
   /** Total tokens consumed */
   totalTokens?: number;

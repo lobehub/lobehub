@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 
 import { FeishuUserIdExtras } from '@/features/AgentSetting/AgentChannel/feishu/UserIdExtras';
 
+import FeishuWakeNotice from './feishu/WakeNotice';
 import ImessageCredentialExtras from './imessage/CredentialExtras';
 import LineCredentialExtras from './line/CredentialExtras';
 import type {
@@ -49,4 +50,13 @@ export const platformSettingsFieldExtrasMap: Record<
 > = {
   'feishu:userId': FeishuUserIdExtras,
   'lark:userId': FeishuUserIdExtras,
+};
+
+/**
+ * A notice at the top of the wake tab, keyed by platform id, for what the platform needs before
+ * the bot can hear messages nobody addressed to it.
+ */
+export const platformWakeNoticeMap: Record<string, ComponentType> = {
+  feishu: FeishuWakeNotice,
+  lark: FeishuWakeNotice,
 };

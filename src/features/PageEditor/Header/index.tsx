@@ -1,21 +1,29 @@
 'use client';
 
-import { ActionIcon, Avatar, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ArrowLeftIcon, MessageSquareTextIcon, MoreHorizontal, SparklesIcon } from 'lucide-react';
+import {
+  ArrowLeftIcon,
+  GlobeIcon,
+  MessageSquareTextIcon,
+  MoreHorizontal,
+  SparklesIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ShareButton from '@/business/client/features/PageShare/ShareButton';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { AutoSaveHint } from '@/features/EditorCanvas';
+import { FavoriteButton } from '@/features/Favorites';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { usePermission } from '@/hooks/usePermission';
 
 import { useDocumentComments } from '../DocumentComments/context';
 import EditingIndicator from '../EditingIndicator';
+import { useIsHtmlPage } from '../HtmlPageBody';
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { selectors, usePageEditorStore } from '../store';
 import Breadcrumb from './Breadcrumb';
@@ -41,6 +49,7 @@ const Header = memo(() => {
     s.onBack,
   ]);
   const rightPanelMode = usePageEditorStore(selectors.rightPanelMode);
+  const isHtmlPage = useIsHtmlPage(documentId);
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const { menuItems } = useMenu();
@@ -75,7 +84,26 @@ const Header = memo(() => {
               </Text>
             </>
           )}
-          {documentId && <AutoSaveHint documentId={documentId} style={{ marginLeft: 6 }} />}
+          {documentId && (
+            <FavoriteButton
+              icon={emoji ?? null}
+              path={`/page/${documentId}`}
+              // An untitled page is loaded too; only `undefined` means still loading.
+              snapshotReady={title !== undefined}
+              targetId={documentId}
+              title={title || t('pageEditor.titlePlaceholder')}
+              type={'page'}
+            />
+          )}
+          {/* An artifact's body is never edited here, so a save status would only
+              ever read "latest version"; name what the page is instead. */}
+          {isHtmlPage ? (
+            <Tag icon={<Icon icon={GlobeIcon} />} style={{ marginLeft: 6 }}>
+              {t('pageEditor.artifactTag')}
+            </Tag>
+          ) : (
+            documentId && <AutoSaveHint documentId={documentId} style={{ marginLeft: 6 }} />
+          )}
         </>
       }
       right={

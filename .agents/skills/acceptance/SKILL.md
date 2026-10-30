@@ -2,18 +2,14 @@
 name: acceptance
 license: Apache-2.0
 metadata:
-  version: "0.8.1"
+  version: "0.10.0"
 description: >
-  End-to-end verification and self-evidence for a delivery in any repository,
-  with or without a preconfigured verify plan. Discover an existing plan when
-  one was handed to this run; otherwise author checks and publish a standalone
-  acceptance. Pick the proving surface (CLI / web / desktop / iOS Simulator),
-  drive the real product, capture visually confirmed evidence, and publish a
-  round with the lh CLI. Triggers on 'verify the task', 'collect evidence',
-  'prove it works', 'upload evidence', 'verify plan', 'requiredEvidence',
-  'local test', 'manual test', 'test report', 'test with cli', 'test in
-  electron', 'test desktop', or any local end-to-end verification task. Needs no
-  ambient ids, and never depends on running inside a LobeHub conversation.
+  Verify delivery outcomes on the real product, capture inspected evidence,
+  and deliver an acceptance report with the lh CLI: published to LobeHub when
+  signed in, or rendered as a local offline report when not. Use for product
+  acceptance, manual verification, evidence collection, or publishing an
+  existing report, with or without a supplied plan. Reuse valid evidence; run
+  new verification through bounded, lower-cost agent contexts when available.
 ---
 
 # Acceptance (Builder Self-Evidence)
@@ -24,21 +20,23 @@ declares `requiredEvidence` **cannot pass on your text alone**: a missing artifa
 marks it `uncertain` and holds the delivery.
 
 ```
-author (or discover) the plan  →  pick the surface  →  capture evidence  →  publish the round  →  self-check coverage
+author (or discover) the plan  →  pick the surface  →  capture evidence  →  publish or render the round  →  self-check coverage
 ```
 
 ## Decide whether to execute before starting a round
 
 Creating or updating a PR, marking it ready, or being asked to upload a report
 must not by itself start another verification run. First inspect the requested
-scope and the task's existing reports, evidence, and published acceptance links
-(from the conversation, PR, or local `.acceptances/` directory).
+scope and the task's existing reports, evidence, published acceptance links and
+local `report.html` pages (from the conversation, PR, or local `.acceptances/`
+directory).
 
 | Delivery state                                                                                                                       | Action                                                                                                                                                                                                                                                                                                      |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Documentation/instruction-only change, or pure refactor/tooling change with no product behavior change                               | Skip product acceptance and briefly state why. Keep any applicable quality checks.                                                                                                                                                                                                                          |
 | Gitlink-only sync                                                                                                                    | Do not launch a fresh acceptance. Link the upstream change and its existing acceptance when available; disclose missing upstream evidence without claiming it passed. Cloud changes accompanying the sync are assessed separately.                                                                          |
 | Completed acceptance already published and still covers the delivery                                                                 | Reuse its URL and coverage. Do not create a round or rerun cases just for the PR.                                                                                                                                                                                                                           |
+| Completed acceptance rendered locally (`report.html`) and still covers the delivery                                                  | Reuse its report and coverage. When the user now wants others to review it, publish the existing rounds with `lh acceptance publish <acceptanceDir>` — [Local reports](#local-reports-when-not-signed-in); never re-run cases to share them.                                                              |
 | Completed acceptance report and evidence exist locally and still cover the delivery                                                  | Inspect coverage and artifacts, then upload that report using [report.md](references/report.md). Preserve the original execution provenance; no product rerun, new plan, or repeated completed checker review is needed merely for upload.                                                                  |
 | The delivery was already exercised on the real product earlier in this session (observations and raw artifacts exist, no report yet) | Do not rerun, re-plan, or open a checker stage. Write `plan[]` and `cases[]` from the observations already made, attach the original artifacts (logs, command output, captures) with their original provenance, disclose any required medium that was never captured instead of recapturing it, and ingest. |
 | Product behavior lacks valid evidence, or relevant behavior changed after verification                                               | Execute only the missing or affected outcomes, retain unaffected evidence with its original provenance, and publish according to the round rules below.                                                                                                                                                     |
@@ -57,39 +55,42 @@ and evidence and complete the necessary publication/coverage steps; do not boot
 services or replay completed cases. Uploading does not change when or against
 which implementation the evidence was captured.
 
-## Independent acceptance review (first round only)
+## Execution ownership and independent review
 
-The primary checks the environment, writes the plan, executes cases, inspects
-evidence, repairs failures, and publishes. Use one `acceptance-checker` agent at two points
-in the first acceptance round: give at most two feedback responses on the plan and cases
-before execution, then perform exactly one quick report/evidence check against
-the agreed criteria before publishing. A second plan check is optional, only
-to check the primary's revisions; there is no third plan-feedback response.
-Count the two stages separately. After
-either stage's limit, the primary owns remaining corrections and verification.
-The acceptance-checker **is** the plan gate — never ask the user to approve a
-plan; ask the user only for a user-owned prerequisite or a product decision
-that changes the plan. In both stages, the primary supplies an explicit file
-list and the relevant diff text or prepared diff artifact paths. The acceptance-checker
-limits code reading to these materials; it must not run `git diff` or discover
-its own scope. This does not restrict inspection of the plan, report, or evidence.
-During evidence review, use it only to identify the updates and the agreed
-cases whose evidence needs checking; the core task is checking the report
-against the plan and artifacts. Do not reopen requirements, expand into code
-review, or investigate implementation details. Return contradictions to the
-primary for explanation or repair. Follow-up rounds have no acceptance-checker: the primary
-re-runs, inspects, and publishes itself. Do not delegate execution or require
-per-case approval.
+For new execution, use one fresh-context `acceptance-runner` for environment
+preflight, planning, product interaction, capture, report assembly, publication,
+and cleanup. Explicitly select a lighter model with the required tools; do not
+inherit the builder's full conversation or default high-cost model. The primary
+keeps scope, product decisions, code repairs, and delivery accountability, and
+coordinates through brief reports. Reuse the runner for follow-ups.
 
-Read [acceptance-checker.md](references/acceptance-checker.md) for the input/output
-contract, review boundaries, and follow-up rules. Acceptance review supplements the
-primary's own checks and any configured verifier; it does not replace either.
-If delegation or required media inspection is unavailable, disclose the missing
-review and unverified claims rather than claiming independent acceptance.
+Read [delegation.md](references/delegation.md) once to assign source ownership,
+model capability, budgets, and handoffs. Each unchanged source section, runtime
+probe, and evidence inspection has one owner: pass its acquired facts and
+provenance, rather than fetching it again in another agent. Workers load only
+their role instructions and needed references, not this entire entrypoint.
+
+Use one `acceptance-checker` in the first round: at most two plan-feedback
+responses before execution, then exactly one final report/evidence review.
+It is the default owner of verdict-bearing media inspection; the runner captures
+and indexes that media without pre-reviewing it. Read
+[acceptance-checker.md](references/acceptance-checker.md) only in that owner.
+The checker is the plan gate; never ask the user for routine plan approval.
+The primary resolves findings and tells the runner when execution or publication
+may proceed. There is no per-case approval loop or repeated full review after fixes.
+
+Follow-up rounds have no independent checker gate. Assign new artifact inspection
+to one capable owner and re-run only affected cases. If delegation is unavailable,
+use one bounded execution context and disclose missing independent review.
+If model selection is unavailable, record the actual or inherited model rather
+than claiming lower cost. Retain all evidence requirements in either fallback.
 
 ## Read the project layer first
 
-Before touching an environment, check for `.agents/acceptance/`:
+Before touching an environment, its execution owner checks for
+`.agents/acceptance/`. Reuse sections and facts already acquired for the same
+revision; other agents receive the relevant rules and provenance in their
+handoff instead of independently reading these files:
 
 | File                     | What it owns                                                 |
 | ------------------------ | ------------------------------------------------------------ |
@@ -108,12 +109,14 @@ in the adapter during the run instead of working around it. No
 
 ## Living logs — inject each by its own shape
 
-Both layers (this skill's generic copies and the project's own) are loaded once
-the target is known, silently:
+The execution owner acquires the relevant generic and project sections once
+the target is known and records their versions in the shared handoff:
 
-- **[common-mistakes.md](references/common-mistakes.md)** — read its
-  **Checklist** in full, now and again before marking any case `pass`. Pull an
-  entry by id only when a checklist line applies to a case.
+- **[common-mistakes.md](references/common-mistakes.md)** — acquire its
+  **Checklist** once. Assign applicable lines to the execution or inspection
+  owner, and apply those retained rules before `pass`; do not re-read the file
+  for each case. Pull an entry by id only when its detail is needed and not
+  already acquired.
 - **[probe-mock-patterns.md](references/probe-mock-patterns.md)** — read the
   heading index, then pull only the entries this round needs. Pick by meaning,
   not keyword; `rg` over the body is the fallback.
@@ -125,6 +128,21 @@ sed -n '<start>,<end>p' <file>   # one entry, in full
 
 Record new project-specific learnings in the project layer only.
 
+## CLI discovery
+
+Use the installed `lh` as the command reference. The assigned execution or
+publishing owner consults the relevant subcommand's `--help` only when syntax
+or capability is unknown, and records the learned usage by CLI version. Reuse
+that result across stages and agents; do not walk the whole help tree, repeat
+discovery for every case, or invoke a write command to probe support.
+
+Prefer CLI-provided schemas, examples and non-publishing validation. Read a
+linked payload schema or legacy recipe only when the installed CLI lacks that
+capability. Help teaches syntax; the rules below retain subject/operation
+identity, immutable rounds, evidence coverage, language and safe recovery.
+Inspect structured errors and ingest warnings; successful JSON parsing or a
+zero exit code alone does not establish publication or complete coverage.
+
 ## Two paths — no id is required
 
 Every evidence command targets a round. **The authored path is the default**; you
@@ -134,13 +152,13 @@ an operation is simply recorded as `standalone`.
 
 | You have                        | Path                                                                                                                                                   |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| No plan — you author the checks | Write `result.json` + `assets/`, publish with `lh acceptance run ingest` — [report.md](references/report.md)                                           |
+| No plan — you author the checks | Write `result.json` + `assets/`, publish with `lh acceptance run ingest`, or render locally with `lh acceptance run render` — [report.md](references/report.md) |
 | An operation id you were given  | Read the frozen plan, write the same round directory keyed by its check item ids, publish with `ingest --operation` — [plan-format.md](references/plan-format.md) |
 
 The paths differ only in where the checks come from and which round the ingest
 lands in. Capture is identical: the surface guides, recordings with
-[chapters](references/video-chapters.md), before/after pairs, screenshots you
-looked at, `proposal.md`. A handed-down plan never licenses a lighter capture.
+[chapters](references/video-chapters.md), before/after pairs, screenshots inspected
+by their designated owner, `proposal.md`. A handed-down plan never licenses a lighter capture.
 
 Pass `--subject` (`task:<id>` / `topic:<id>` / `document:<id>`) only when the
 caller named one; otherwise ingest attaches the round itself when it can and
@@ -148,8 +166,11 @@ creates a standalone acceptance when it cannot. On the first ingest, always supp
 `--requirement "<one-sentence business goal>"` — the durable goal of the whole
 acceptance, not this round's scope; it is immutable once recorded.
 
-Prerequisites: run `lh acceptance preflight --json` before writing any plan or
-report text — an auth error means stop and surface it — and install only the UI
+Prerequisites: the execution or publishing owner runs `lh acceptance preflight --json`
+once before writing any plan or report text, or reuses its recorded result while
+server, scope, credentials, and language configuration are unchanged. Its `mode`
+picks where the round goes — [Local reports](#local-reports-when-not-signed-in).
+On a signed-in machine an auth error means stop and surface it. Install only the UI
 driver the selected surface needs; probe before adding dependencies, and never
 substitute a private agent plugin. Its `language.locale` is the **report
 language**: write every human-readable field (title, plan, case names,
@@ -157,124 +178,56 @@ observations, evidence descriptions, conclusion, `report.md`, `proposal.md`) in
 it, even when the prompt that invoked you is in another language — a delegating
 agent's prompt does not show which language the user reads. The publish commands
 reject text in the wrong script, so run `lh acceptance run ingest <dir> --dry-run`
-as soon as the plan is in `result.json`, before executing it. When
+with the same target flags the publish will use as soon as the plan is in
+`result.json`, before executing it. Offline `validate` does not check account
+language or remote plan membership and never replaces this dry-run.
+Never publish merely to test whether a payload is accepted. When
 `language.status` is `unset`, use the language the user converses in. On a CLI
 without `preflight`, check auth with `lh acceptance run list --json`.
 
+## Local reports when not signed in
+
+`preflight` answers `mode`. **`publish`** (signed in): publish every round as this
+skill describes. **`local`** (this machine never signed in to LobeHub): the round
+is identical — same plan, capture, `result.json`, `proposal.md`, round directory
+and checker — but it is rendered instead of ingested, and nothing is uploaded:
+
+```bash
+lh acceptance run render "$REPORT_DIR" --requirement "<one-sentence business goal>" --json
+```
+
+The render writes `report.html` beside the acceptance's rounds: the acceptance
+page, offline, from every round of that directory, with the same check screening,
+evidence coverage and round history as ingest. The language is `unset`, so write
+in the language the user converses in, and use offline `lh acceptance run validate`
+where the published path runs `ingest --dry-run`. A render that reports
+`publicationStatus: partial` has the same meaning as a partial ingest.
+
+Pick the mode by these, in order:
+
+- The user's explicit wish wins: "keep it local" renders even when signed in.
+- **Collaboration needs LobeHub.** When the user wants others to comment, review or
+  open a link, they sign in (`lh login`, done by the user) and the existing rounds
+  are published with `lh acceptance publish <acceptanceDir> --json`: unpublished
+  rounds in order, then the reviewer's standing local decisions. It returns the
+  `acceptanceUrl`; later rounds publish with `ingest --acceptance <acceptanceId>`,
+  where `acceptanceId` is in the directory's `acceptance.json` (`remote`).
+- A supplied operation id, flows and regroup are LobeHub features; they publish.
+- Otherwise follow `mode`.
+
+The reader reviews in the page itself: accept, reject with a comment, circle a
+region on a screenshot, leave group feedback. **Save reviews** downloads those
+decisions; `lh acceptance feedback <acceptanceDir> --json` and
+`lh acceptance view <acceptanceDir> --json` pick the newest saved download up,
+file it as `reviews.json`, and answer in the same shape as for a published
+acceptance (`--reviews <file>` names the download explicitly). Comments,
+mentions, approvals and shared links do not exist locally.
+
 ## Optional user-journey flows
 
-Before authoring checks, identify the independently reviewable user tasks in the
-requirement. Use those tasks as business groups, not the PR title or test surface.
-For example, reassignment, scheduled continuation, and failure recovery can be
-separate groups when the delivery covers all three; do not impose these groups
-on unrelated work. Each check should have an outcome the user can accept or
-reject independently. Keep shared entry/accessibility checks separate and avoid
-repeating their expectations across business checks.
-
-When acceptance depends on a sequence of user states, publish its graph during
-planning, before implementation or verification begins. Keep the checklist paths
-above for independent checks;
-a graph is optional and does not replace evidence or human review.
-
-For flow-based plans, **each flow's title is its checks' default checklist category**.
-Publish independent user journeys as separate flows in the same acceptance/run;
-use subflows for actual composed journeys. An umbrella flow containing checks
-for several independent tasks collapses them into one checklist group. Edges
-must describe real user transitions, not artificial links added to make unrelated
-checks reachable. Start at the user entry and follow the journey through outcomes
-and recovery; UUIDs identify nodes and must not encode business order. Read back
-the published plan and inspect its groups and reading order before execution.
-
-For an existing acceptance that only needs different checklist groups, use
-`lh acceptance regroup <acceptanceId> --file groups.json`. Read the acceptance
-bundle first; write `{ expectedVersion, groups: [{ title, checkItemIds }] }`,
-using the exact union `checks[].id` values and
-`acceptance.metadata.checkGrouping.version` (0 when absent). The groups replace
-the current presentation grouping; an empty list restores plan categories.
-Unassigned checks keep their plan category. This preserves check IDs, numbering,
-evidence and review history without creating a round. It does not change flow
-transitions or verification conditions. Do not move execution nodes or start a
-new round just to reorganize the checklist; those operations have different
-execution semantics.
-
-1. Use the named acceptance, or create one before publishing the flow. If none
-   was named, first run `lh acceptance create --help` and confirm it shows
-   `Usage: lh acceptance create [options]` and `--requirement`. Parent-command
-   help or a zero exit code alone does not prove support. If unavailable, upgrade
-   `@lobehub/cli` to a release that supports this command and check again;
-   updating the skill alone does not upgrade the CLI. If still unavailable,
-   report flow-first creation as blocked. Do not invent a subject ID, upload an
-   empty report, or substitute `lh acceptance run create` (which creates a round).
-
-   ```bash
-   lh acceptance create --title "Checkout recovery" \
-     --requirement "Customers can recover from a declined payment and complete checkout" --json
-   ```
-
-   `--requirement` is a required, nonblank durable business goal; `--title` is
-   optional. Omit `--subject` for a fresh standalone subject, even when an ambient
-   topic exists. Pass `--subject task:<id>`, `topic:<id>`, `document:<id>`, or
-   `standalone:<id>` only for an explicitly supplied subject. Reusing a subject
-   preserves its recorded requirement, title, and state; it does not reopen it.
-   Creation does not create a verification round, report, results, or passing verdict.
-
-   The JSON contains `acceptanceId`, `acceptanceUrl`, `requirement`, `status`,
-   and `subject: { subjectType, subjectId }`. Use `acceptanceId` in all flow
-   commands below, **not** `subject.subjectId` or a verification run ID. Share
-   `acceptanceUrl` verbatim; it already uses the CLI's configured server.
-
-   Write a JSON file with `definition: { title, entryNodeId, nodes, edges }`.
-   Give nodes and edges stable UUIDs. Each node has `id` and exactly one of
-   `criterionId` (existing check asset), `check: { id, title, definition }`
-   (a check asset with steps, fixtures, preconditions and expected outcome), or
-   `subFlowId` (another flow in this acceptance). Edges have `id`, `sourceNodeId`,
-   `targetNodeId`, `trigger`, `required`, and optional `condition`. Every node must
-   be reachable from the entry. Publish child flows before referencing them.
-2. `lh acceptance flow publish <acceptanceId> --file flow.json` saves the
-   definition and returns `flowId`. To edit it, include that `flowId` and the
-   current `expectedHash` in the file. `lh acceptance flow view <acceptanceId>`
-   reads definitions, snapshots and results. Publishing does not execute checks.
-   Revise a graph in place rather than publishing a second one; a superseded
-   graph left behind still renders as its own journey with its own unexecuted
-   checks. `lh acceptance flow delete <acceptanceId> --flow <flowId>` removes
-   one that never should have existed, and only while it has no verified
-   history: it is refused once a settled round has run it, or while another
-   flow invokes it as a subflow.
-3. `lh acceptance flow plan <acceptanceId> --flow <flowId>` creates a draft round
-   with the graph and its plan. While the round is only planned it follows the
-   live graph: publishing an edit refreshes its snapshot and plan in place, and
-   running `flow plan` again refreshes the same draft instead of opening another
-   round. Add `--run <verifyRunId>` to attach another flow to the same draft. Read `lh acceptance run get <verifyRunId> --json` for
-   the actual plan IDs: each branch and subflow invocation has its own
-   `checkItemId`; never substitute the reusable asset ID.
-4. Share the acceptance link so the user can inspect the proposed nodes, branches
-   and expected outcomes before implementation. Read and address any actionable
-   feedback. Preparing a plan neither executes checks nor approves delivery;
-   there is no separate flow-confirmation action. Continue within the user's
-   authorized scope, or pause if the user explicitly asked to review before work.
-   For requested changes, publish the revised definition with its `flowId` and
-   `expectedHash`; the draft round follows automatically. Never open another
-   round or another flow just to revise a plan that has not executed.
-5. Implement the work and exercise the real product, then use
-   `lh acceptance flow record <acceptanceId> --file result.json`, containing
-   `verifyRunId`, `checkItemId`, `verdict` (`passed`, `failed`, `uncertain`, or
-   `blocked`) and `observation`. Record only what was observed. Use the returned
-   result ID to attach required artifacts through `lh acceptance run evidence`
-   (inspect its `--help`), following the same evidence rules as checklist checks.
-6. After all required checks are recorded and passed, run
-   `lh acceptance flow complete <acceptanceId> --run <verifyRunId>`. Completion
-   settles verification; it does not accept the delivery on the user's behalf.
-   Read back the round and verify evidence coverage before handing it over.
-
-To rerun the exact old graph, prepare a plan with `--from-run <sourceVerifyRunId>` and
-omit `--run` for a fresh round. This preserves the old definition and starts
-without results. Each replay starts as an unexecuted draft. A round is frozen
-by its first recorded result; only then does it keep its number. An
-`lh acceptance run ingest` that reaches an acceptance whose latest round is
-still a draft folds into that draft rather than opening a new round. Accepted or closed
-acceptances must be explicitly reopened
-before starting. Edges describe business transitions; they do not automatically
-schedule execution. Continue to read `lh acceptance feedback <acceptanceId> --actionable` before repairs and publish new rounds into the same acceptance.
+For a requirement with state transitions or independently reviewable journeys,
+read [flows.md](references/flows.md) only when authoring or updating that graph.
+Ordinary checklist rounds do not load it.
 
 ## HARD RULE — programmatic gates are NEVER acceptance checks
 
@@ -299,12 +252,13 @@ changing the code** — publish the re-verification as the next round and let th
 acceptance page show the progression.
 
 Before a repair round, read the aggregate with
-`lh acceptance view <acceptanceId | type:id> --json`. Omit checks whose latest
+`lh acceptance view <acceptanceId | type:id | acceptanceDir> --json`. Omit checks whose latest
 `userReview.action` is `accept`; address non-stale rejects under their exact
 stable ids; when a check semantically replaces another, declare
 `supersedes: ['old-id']` and repeat the full lineage in every later round that
 reuses the successor id. Pass `--acceptance <acceptanceId>` so the round joins
-the same history.
+the same history; a local round joins it by being written in the same
+acceptance directory.
 
 ## Rules you will be tempted to skip
 
@@ -412,65 +366,23 @@ Before declaring the task done, prove coverage: for each check with
 explicitly; a missing type holds the delivery at `uncertain` no matter how good
 the work is.
 
-**Storage limits require a user-facing recovery handoff.** For report ingest,
-atomic evidence upload, or result submission with a file, recognize
-`recovery.reason: "storage_quota"`, `failedEvidence[].reason: "storage_quota"`,
-or a `storage_block:` error. Do not stop at "upload failed" or "noted in the PR":
-
-- In the final response, state that storage limits blocked publication, distinguish
-  locally observed results from uploaded evidence, and report the actual coverage.
-  Include the saved acceptance/round links when available; do not invent them for
-  an atomic submission that failed before saving a result.
-- Give **both recovery options**, in the user's language, using available
-  `recovery.cleanupUrl` and `recovery.upgradeUrl` verbatim and following
-  `recovery.message`, applying the Cloud browser-link rule above. Never delete
-  user data automatically. Deletion is permanent.
-  - Personal scope: **clean up unneeded acceptances** or **upgrade the personal
-    plan**. Acceptance cleanup requires selecting "permanently delete all rounds,
-    reports, and evidence files"; deleting only a record or evidence association
-    does not free storage.
-  - Workspace scope (`recovery.scope: "workspace"`): **clean up that workspace's
-    files** or **upgrade that workspace's plan**. The cleanup link opens its
-    resource library, not an acceptance list; do not invent an acceptance-purge
-    checkbox there. Ask its owner/admin for cleanup or billing access. Personal
-    cleanup or a personal upgrade does not resolve a workspace limit.
-  - If the CLI reports unresolved workspace scope and omits recovery URLs, report
-    that limitation and its scope-check instructions. Do not invent links or
-    substitute personal pages.
-- For an older CLI without recovery metadata, resolve server and scope using
-  `lh doctor --offline --json` and `lh workspace current --json`. Personal scope
-  uses `/acceptance` and `/settings/plans`. For workspace scope, resolve its slug
-  with `lh workspace view --json`, verify the returned ID matches the active
-  workspace, and use `/:workspaceSlug/resource` and
-  `/:workspaceSlug/settings/plans`; there is no `/:workspaceSlug/acceptance`
-  route. If lookup fails, give scope-specific guidance without guessed links.
-  Strip URL username/password when constructing display links. For LobeHub Cloud,
-  personal cleanup uses `https://lobehub.com/acceptance`; personal plan upgrades use
-  `https://lobehub.com/settings/plans`. Workspace resource and plan paths use
-  `https://lobehub.com`. Keep self-hosted users on their configured server.
-- Preserve local reports, artifacts, and the returned retry instructions. Stop
-  blind retries until the user has addressed storage. For a partially ingested
-  report, retry only failed artifacts using `failedEvidence[].retryArgs` or
-  `retryCommand`, not the whole ingest. For an atomic upload/submission that saved
-  nothing, retry that command. Supplementing evidence does not change recorded
-  verdicts; read back coverage and do not claim the delivery is complete while
-  required evidence is missing.
-
-**Record the deployed preview.** When the delivery is deployed somewhere a
-reviewer can open (a pull-request preview, a staging URL, a dev server on this
-machine), run `lh acceptance preview <acceptanceId> <url>` after the round is
-published. The URL must be https, or http on `localhost`/`127.0.0.1`. The
-acceptance page then offers "Review on preview", where reviewers comment on the
-live page; `lh acceptance feedback` lists those comments with the page URL and
-the `file:line` they were pinned to. Skip this when nothing is deployed — never
-invent a URL.
+If publication returns a storage-quota failure, the publishing owner reads
+[publication-recovery.md](references/publication-recovery.md) once. Preserve
+local evidence, disclose incomplete uploaded coverage, and give the returned
+scope-specific cleanup and upgrade options. Never delete user data or blindly
+retry the whole ingest.
 
 The final response for a completed handoff MUST include the published acceptance
-URL together with the coverage result — never only a check-result id or a prose
-claim. Obtain the links from the path you actually executed:
+URL — or, for a local round, the report link — together with the coverage result,
+never only a check-result id or a prose claim. Obtain the links from the path you
+actually executed:
 
 - **Authored round:** copy `acceptanceUrl` returned by
   `lh acceptance run ingest --json` verbatim.
+- **Local round:** copy `reportUrl` returned by `lh acceptance run render --json`
+  (a `file://` link to `report.html`) verbatim, and tell the reader that
+  **Save reviews** in the page is how their decisions reach you. It is the one
+  local path the reply carries.
 - **Operation-plan round:** copy `acceptanceUrl` returned by
   `lh acceptance run ingest --operation <id> --json`. When the plan needed no
   ingest, or the CLI predates plan-round ingest, follow the read-only
@@ -483,8 +395,8 @@ the only reconstruction needed for CLIs whose submission output contains only an
 internal run URL. If the run has no acceptance association or the lookup fails,
 report the handoff as blocked and preserve the submitted evidence; do not declare
 delivery complete or fabricate a link.
-Put no images, local paths, local file links, or internal run-page paths in the
-chat reply.
+Put no images, other local paths or file links, or internal run-page paths in
+the chat reply.
 
 Write the link as a plain-text line, never inside a fenced or inline code block — the
 chat client only linkifies plain text, and a code block makes it unclickable.
@@ -494,6 +406,9 @@ below with the URL from the selected path:
 
 Acceptance: <acceptanceUrl, verbatim>
 Coverage: 2/2 criteria, all required evidence uploaded
+
+For a local round, the first line is `Report: <reportUrl, verbatim>` and coverage
+says "rendered" instead of "uploaded".
 
 ## Portability rules
 
@@ -513,16 +428,21 @@ simctl io` over host-window capture. Rounds land under `.acceptances/`;
 
 ## Reference map
 
-For both acceptance-checker handoffs and review output, read
-[acceptance-checker.md](references/acceptance-checker.md).
+Only the assigned owner reads the relevant reference or section, once per version;
+other roles use its acquired facts and instructions. The runner does not load
+the checker contract, and the primary does not re-open their documents or evidence.
 
 | Need                                           | Reference                                                                                                                                                                               |
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Execution delegation, models, context ownership | [delegation.md](references/delegation.md) |
+| First-round plan and evidence review | [acceptance-checker.md](references/acceptance-checker.md) |
+| Optional flow authoring or regrouping | [flows.md](references/flows.md) |
+| Storage-quota publication recovery | [publication-recovery.md](references/publication-recovery.md) |
 | Bounding a run's memory use                    | [resource-guard.md](references/resource-guard.md) |
 | The project layer, bootstrapping an adapter    | [project-adapter.md](references/project-adapter.md)                                                                                                                                     |
-| Mistakes checklist (read every round)          | [common-mistakes.md](references/common-mistakes.md)                                                                                                                                     |
+| Mistakes checklist (acquire once per version) | [common-mistakes.md](references/common-mistakes.md) |
 | Forcing state, error injection, runtime probes | [probe-mock-patterns.md](references/probe-mock-patterns.md)                                                                                                                             |
-| Authored rounds, `result.json`, ingest         | [report.md](references/report.md)                                                                                                                                                       |
+| Authored rounds, `result.json`, ingest, render | [report.md](references/report.md)                                                                                                                                                       |
 | Plan-driven rounds: plan, ingest, coverage     | [plan-format.md](references/plan-format.md)                                                                                                                                             |
 | Evidence media, provenance, submission, safety | [evidence.md](references/evidence.md)                                                                                                                                                   |
 | Interaction cost overlay                       | [interaction-cost.md](references/interaction-cost.md)                                                                                                                                   |

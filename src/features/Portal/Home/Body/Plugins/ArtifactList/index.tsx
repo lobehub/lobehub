@@ -1,13 +1,20 @@
 import { Avatar, Center, cssVar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Origami } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import Balancer from 'react-wrap-balancer';
 
 import { useChatStore } from '@/store/chat';
 import { dbMessageSelectors, displayMessageSelectors } from '@/store/chat/selectors';
 
 import ArtifactItem from './Item';
+
+/**
+ * Native balancing instead of react-wrap-balancer: this empty state is pre-rendered
+ * inside the hidden portal, and the library's layout-effect binary search forced
+ * ~20 synchronous page layouts in the commit that opens an artifact.
+ */
+const BALANCED_TEXT: CSSProperties = { textWrap: 'balance' };
 
 const ArtifactList = () => {
   const { t } = useTranslation('portal');
@@ -32,9 +39,9 @@ const ArtifactList = () => {
         shape={'square'}
         size={48}
       />
-      <Balancer>
-        <Text type={'secondary'}>{t('emptyArtifactList')}</Text>
-      </Balancer>
+      <Text style={BALANCED_TEXT} type={'secondary'}>
+        {t('emptyArtifactList')}
+      </Text>
     </Center>
   ) : (
     <Flexbox gap={12} paddingInline={12}>

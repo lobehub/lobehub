@@ -6,6 +6,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { finalizeVerifyRun } from './settle';
 import { VerifyStatusService } from './statusService';
+import { withErrorType } from './verifierError';
 
 const log = debug('lobe-server:verify-verifier-terminal');
 
@@ -14,6 +15,8 @@ const TERMINAL_RESULT_STATUSES = new Set(['passed', 'failed', 'errored', 'skippe
 export interface SettleVerifierCheckFromTerminalParams {
   checkItemId: string;
   errorMessage?: string;
+  /** Stable runtime code (e.g. `InsufficientBudgetForModel`) the terminal event carried. */
+  errorType?: string;
   parentOperationId: string;
   reason?: string;
   verifierOperationId: string;
@@ -30,7 +33,8 @@ export const settleVerifierCheckFromTerminal = async (
   params: SettleVerifierCheckFromTerminalParams,
   workspaceId?: string,
 ): Promise<void> => {
-  const { checkItemId, errorMessage, parentOperationId, reason, verifierOperationId } = params;
+  const { checkItemId, errorMessage, errorType, parentOperationId, reason, verifierOperationId } =
+    params;
 
   try {
     const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(
@@ -45,10 +49,13 @@ export const settleVerifierCheckFromTerminal = async (
 
     if (!result || TERMINAL_RESULT_STATUSES.has(result.status)) return;
 
+    // Keep the code beside the message: settle reads it to tell a credit
+    // refusal (no retry can help) from an error another attempt might clear.
+    const cause = withErrorType(errorMessage, errorType);
     const limitation =
       reason === 'done'
         ? 'Verifier completed without submitting a verdict.'
-        : `Verifier failed before submitting a verdict${errorMessage ? `: ${errorMessage}` : '.'}`;
+        : `Verifier failed before submitting a verdict${cause ? `: ${cause}` : '.'}`;
 
     await resultModel.updateByCheckItem(run.id, checkItemId, {
       completedAt: new Date(),

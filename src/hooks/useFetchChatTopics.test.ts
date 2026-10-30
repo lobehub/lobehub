@@ -15,7 +15,16 @@ const mocks = vi.hoisted(() => ({
   ),
   topicGroupMode: 'byStatus' as string,
   topicIncludeCompleted: false,
+  topicOnlyMine: false,
+  topicOnlyMineOwners: [] as (string | undefined)[],
   topicPageSize: 20,
+}));
+
+vi.mock('@/hooks/useTopicOnlyMine', () => ({
+  useTopicOnlyMine: (ownerId?: string) => {
+    mocks.topicOnlyMineOwners.push(ownerId);
+    return mocks.topicOnlyMine;
+  },
 }));
 
 vi.mock('@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode', () => ({
@@ -62,6 +71,8 @@ vi.mock('@/store/user/selectors', () => ({
 describe('chat topic list fetches', () => {
   beforeEach(() => {
     mocks.storeFetchTopics.mockClear();
+    mocks.topicOnlyMine = false;
+    mocks.topicOnlyMineOwners = [];
   });
 
   it('asks the same query for a named agent as the sidebar does for the active one', () => {
@@ -88,6 +99,26 @@ describe('chat topic list fetches', () => {
       sortBy: sidebarArgs.sortBy,
     });
     expect(panelArgs.excludeTriggers).toEqual(MAIN_SIDEBAR_EXCLUDE_TRIGGERS);
+  });
+
+  it('forwards the per-agent only-mine filter from both the sidebar and the panel', () => {
+    mocks.topicOnlyMine = true;
+
+    renderHook(() => useFetchChatTopics());
+    const [, sidebarArgs = {}] = mocks.storeFetchTopics.mock.calls.at(-1)!;
+
+    renderHook(() => useFetchAgentChatTopics('agent-1'));
+    const [, panelArgs = {}] = mocks.storeFetchTopics.mock.calls.at(-1)!;
+
+    expect(sidebarArgs.onlyMine).toBe(true);
+    expect(panelArgs.onlyMine).toBe(true);
+  });
+
+  /** @example A goal-chat panel reads the choice of the agent it names, not the active session's. */
+  it('reads the panel agent its own only-mine choice', () => {
+    renderHook(() => useFetchAgentChatTopics('agent-2'));
+
+    expect(mocks.topicOnlyMineOwners.at(-1)).toBe('agent-2');
   });
 
   it('stays disabled until the panel knows its agent', () => {

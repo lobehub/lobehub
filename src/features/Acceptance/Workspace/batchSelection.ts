@@ -141,7 +141,8 @@ export const acceptanceRedirectAfterDelete = (
   openId: string | undefined,
   targets: string[],
   failedIds: string[],
+  routeBase?: string,
 ): string | undefined =>
   openId && targets.includes(openId) && !failedIds.includes(openId)
-    ? acceptanceListPath()
+    ? acceptanceListPath(routeBase)
     : undefined;

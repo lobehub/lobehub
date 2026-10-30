@@ -15,6 +15,7 @@ import {
   type GoalNodeView,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KindDot } from '@/features/AgentGoals/ProcessControl/shared';
+import { TASK_HOLD_VISUALS } from '@/features/AgentGoals/ProcessControl/taskHold';
 import { formatElapsed, useElapsed } from '@/features/AgentGoals/ProcessControl/useElapsed';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
@@ -170,9 +171,10 @@ TaskStartDate.displayName = 'GoalMetricTaskStartDate';
 const STATE_VISUAL = {
   decision: TASK_STATUS_VISUALS.paused,
   done: TASK_STATUS_VISUALS.completed,
-  lost: TASK_STATUS_VISUALS.failed,
   queued: TASK_STATUS_VISUALS.backlog,
   retired: TASK_STATUS_VISUALS.canceled,
+  stalled: TASK_HOLD_VISUALS.stalled,
+  waitingQuota: TASK_HOLD_VISUALS.waitingQuota,
 } as const satisfies Record<Exclude<TaskRowState, 'running'>, unknown>;
 
 /**
