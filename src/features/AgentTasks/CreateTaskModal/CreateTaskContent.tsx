@@ -267,6 +267,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               fontWeight: 600,
               lineHeight: 1.4,
               minWidth: 0,
+              outline: 'none',
               padding: '4px 0',
             }}
             onChange={(e) => setTitle(e.target.value)}
