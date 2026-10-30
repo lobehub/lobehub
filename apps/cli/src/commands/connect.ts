@@ -792,6 +792,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
           removeWorkspaceEnrollment(wsId);
           continue;
         }
+        // The workspace row copied platform / metadata from the personal row at
+        // share time and nothing else refreshes it (e.g. an Android device shared
+        // while it still registered as `linux`). Best-effort: never block restore.
+        await registerWorkspaceDevice(auth, wsIdentity, wsId).catch((err) =>
+          error(`Failed to refresh workspace device info for ${wsId}: ${(err as Error).message}`),
+        );
         const minted = await mintWorkspaceConnectToken(auth, wsId);
         await openWorkspaceConnection(wsId, minted.token);
         info(`Restored workspace share connection: ${wsId}`);

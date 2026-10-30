@@ -9,14 +9,16 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as ApiClientModule from '../api/client';
+import { createLambdaClient } from '../api/client';
 import type * as RefreshModule from '../auth/refresh';
 import { resolveToken } from '../auth/resolveToken';
 import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
 import type * as DeviceRegister from '../device/register';
+import { resolveWorkspaceDeviceIdentity } from '../device/register';
 import type * as SystemInfoModule from '../device/systemInfo';
 import { cliVersion } from '../pkg';
 import type * as ServiceStatusModule from '../service/status';
-import { loadDeviceGatewayUrl, saveDeviceGatewayUrl } from '../settings';
+import { loadDeviceGatewayUrl, loadWorkspaceEnrollments, saveDeviceGatewayUrl } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
@@ -98,10 +100,14 @@ const getGlobalConfig = vi.hoisted(() => vi.fn());
 const createPublicLambdaClientMock = vi.hoisted(() =>
   vi.fn(() => ({ config: { getGlobalConfig: { query: getGlobalConfig } } })),
 );
-vi.mock('../api/client', async (importOriginal) => ({
-  ...(await importOriginal<typeof ApiClientModule>()),
-  createPublicLambdaClient: createPublicLambdaClientMock,
-}));
+vi.mock('../api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof ApiClientModule>();
+  return {
+    ...actual,
+    createLambdaClient: vi.fn(actual.createLambdaClient),
+    createPublicLambdaClient: createPublicLambdaClientMock,
+  };
+});
 
 const OFFICIAL_AUTH = {
   serverUrl: 'https://app.lobehub.com',
@@ -486,6 +492,34 @@ describe('connect command', () => {
         token: 'ws-token',
         workspaceId: 'ws-1',
       });
+    });
+
+    it('refreshes the workspace row platform when restoring a persisted share', async () => {
+      const wsIdentity = resolveWorkspaceDeviceIdentity('ws-1', undefined, 'test-connection-id');
+      vi.mocked(loadWorkspaceEnrollments).mockReturnValueOnce(['ws-1']);
+      vi.mocked(createLambdaClient).mockReturnValueOnce({
+        device: {
+          listDevices: {
+            query: vi.fn().mockResolvedValue([{ deviceId: wsIdentity.deviceId, registered: true }]),
+          },
+        },
+      } as any);
+      mintWorkspaceConnectTokenMock.mockResolvedValueOnce({
+        token: 'ws-token',
+        workspaceId: 'ws-1',
+      });
+      registerWorkspaceDeviceMock.mockResolvedValueOnce(undefined);
+
+      await connect();
+
+      await vi.waitFor(() =>
+        expect(clientOptions).toMatchObject({ token: 'ws-token', workspaceId: 'ws-1' }),
+      );
+      expect(registerWorkspaceDeviceMock).toHaveBeenCalledWith(
+        expect.objectContaining({ token: 'test-token' }),
+        wsIdentity,
+        'ws-1',
+      );
     });
 
     it('passes --gateway through to the daemon child, which resolves the same way', async () => {
