@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ANDROID_BUILD_PROP_PATH, resolveDevicePlatform, TERMUX_PREFIX } from './platform';
 
-// Xiaomi Pad 5 Pro (pangu build), Android 13 / SDK 33 — the device from T-1188.
+// A rooted Android 13 / SDK 33 tablet (Xiaomi Pad 5 Pro) running a Termux-style env.
 const XIAOMI_BUILD_PROP = `
 # begin common build properties
 ro.build.version.release=13
