@@ -122,6 +122,18 @@ vi.mock('@/store/user/selectors', () => ({
   },
 }));
 
+const mockOpenTrustedExternalUrl = vi.fn();
+
+vi.mock('@/utils/openTrustedExternalUrl', () => ({
+  openTrustedExternalUrl: (url: string) => mockOpenTrustedExternalUrl(url),
+}));
+
+let mockAppOrigin = 'https://app.lobehub.com';
+
+vi.mock('@/hooks/useAppOrigin', () => ({
+  useAppOrigin: () => mockAppOrigin,
+}));
+
 vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (s: unknown) => unknown) =>
     selector({ openInBrowserTab: mockOpenInBrowserTab }),
@@ -148,6 +160,7 @@ afterEach(() => {
   mockShowIcon = true;
   mockConst.isDesktop = false;
   mockEntityPreview = null;
+  mockAppOrigin = 'https://app.lobehub.com';
   vi.restoreAllMocks();
 });
 
@@ -258,6 +271,49 @@ describe('Link Render — internal entities', () => {
     fireEvent.mouseEnter(container.firstElementChild!);
     expect(getByText('Updated requirement')).toBeInTheDocument();
     expect(getByText('Updated acceptance')).toBeInTheDocument();
+  });
+
+  it('opens an acceptance in the browser from its preview, not the side panel', () => {
+    // A click on the link itself opens the side panel; the preview offers the
+    // full page as an explicit alternative, as an absolute URL so the desktop
+    // system browser can resolve it.
+    mockEntityPreview = { title: 'Workspace publishing' };
+    const { container, getByRole } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    fireEvent.mouseEnter(container.firstElementChild!);
+
+    fireEvent.click(getByRole('button', { name: 'report.actions.openInBrowser' }));
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/acceptance/acceptance-1',
+    );
+    expect(mockOpenAcceptance).not.toHaveBeenCalled();
+  });
+
+  it('offers no browser action without an app origin to resolve against', () => {
+    mockAppOrigin = '';
+    const { container, queryByRole } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    fireEvent.mouseEnter(container.firstElementChild!);
+
+    expect(queryByRole('button', { name: 'report.actions.openInBrowser' })).toBeNull();
+  });
+
+  it('keeps the browser action off previews of other entities', () => {
+    const { container, queryByRole } = renderLink({
+      linkHref: '/task/T-198',
+      linkKind: 'generic',
+      linkLabel: 'Task',
+    });
+    fireEvent.mouseEnter(container.firstElementChild!);
+
+    expect(queryByRole('button', { name: 'report.actions.openInBrowser' })).toBeNull();
   });
 
   it('replaces a pasted URL label with the resolved entity title', () => {
