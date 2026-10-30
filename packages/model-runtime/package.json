@@ -2,6 +2,8 @@
   "name": "@lobechat/model-runtime",
   "version": "1.0.0",
   "private": true,
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/model-runtime",
+  "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
     "./errors": "./src/errors/index.ts",
@@ -39,6 +41,7 @@
     "@lobechat/const": "workspace:*",
     "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/types": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "async-retry": "^1.3.3",
     "buffer.js": "npm:buffer@^6.0.3",
     "dayjs": "^1.11.21",
@@ -59,7 +62,5 @@
   },
   "peerDependencies": {
     "zod": "^4.4.3"
-  },
-  "license": "MIT",
-  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/model-runtime"
+  }
 }

@@ -444,6 +444,52 @@ describe('ModelRuntime', () => {
     });
   });
 
+  describe('ModelRuntime embeddings dimension normalization', () => {
+    it('pads provider-native vectors shorter than payload.dimensions', async () => {
+      const vector768 = Array.from({ length: 768 }, (_, i) => i / 768);
+      const payload = { dimensions: 1024, input: ['hello'], model: 'nomic-embed-text' };
+
+      vi.spyOn(LobeOpenAI.prototype, 'embeddings').mockResolvedValue([vector768]);
+
+      const result = await mockModelRuntime.embeddings(payload);
+
+      expect(result![0]).toHaveLength(1024);
+      expect(result![0]!.slice(0, 768)).toEqual(vector768);
+      expect(result![0]!.slice(768).every((v) => v === 0)).toBe(true);
+    });
+
+    it('truncates provider-native vectors larger than payload.dimensions', async () => {
+      const vector1536 = Array.from({ length: 1536 }, (_, i) => i / 1536);
+      const payload = { dimensions: 1024, input: ['hello'], model: 'text-embedding-ada-002' };
+
+      vi.spyOn(LobeOpenAI.prototype, 'embeddings').mockResolvedValue([vector1536]);
+
+      const result = await mockModelRuntime.embeddings(payload);
+
+      expect(result![0]).toHaveLength(1024);
+      expect(result![0]).toEqual(vector1536.slice(0, 1024));
+    });
+
+    it('returns provider vectors unchanged when payload.dimensions is not provided', async () => {
+      const mockEmbeddings = [[0.1, 0.2, 0.3]];
+      const payload = { input: ['hello'], model: 'text-embedding-ada-002' };
+
+      vi.spyOn(LobeOpenAI.prototype, 'embeddings').mockResolvedValue(mockEmbeddings);
+
+      const result = await mockModelRuntime.embeddings(payload);
+
+      expect(result).toBe(mockEmbeddings);
+    });
+
+    it('surfaces an error when the provider returns an empty vector for a dimensioned request', async () => {
+      const payload = { dimensions: 1024, input: ['hello'], model: 'nomic-embed-text' };
+
+      vi.spyOn(LobeOpenAI.prototype, 'embeddings').mockResolvedValue([[]]);
+
+      await expect(mockModelRuntime.embeddings(payload)).rejects.toThrow(/empty or missing/i);
+    });
+  });
+
   describe('ModelRuntime textToSpeech method', () => {
     it('should run correctly', async () => {
       const payload = {

@@ -1,5 +1,5 @@
 import type { ModelPerformance, ModelUsage, TracePayload } from '@lobechat/types';
-import { createTimingHelpers, getDurationMs } from '../utils/timing';
+import { padVector } from '@lobechat/utils/vectorPadding';
 import type { ClientOptions } from 'openai';
 
 import type { LobeBedrockAIParams } from '../providers/bedrock';
@@ -39,6 +39,7 @@ import type {
   VideoPollingRoute,
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
+import { createTimingHelpers, getDurationMs } from '../utils/timing';
 import { createVideoWithCompletionMode } from '../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from './BaseAI';
 
@@ -567,7 +568,17 @@ export class ModelRuntime {
           }
         : hookOptions;
 
-      return await this._runtime.embeddings?.(payload, finalOptions);
+      const vectors = await this._runtime.embeddings?.(payload, finalOptions);
+
+      // Normalize every vector to the requested `payload.dimensions` at this shared
+      // boundary: providers that ignore `dimensions` (e.g. Ollama's native 768-dim
+      // models) otherwise leak dimension mismatches into every persistence/query
+      // caller writing to fixed-width pgvector columns. `padVector` throws on
+      // empty vectors instead of fabricating a zero vector that would be silently
+      // unsearchable under `vector_cosine_ops`.
+      if (!vectors || !payload.dimensions) return vectors;
+
+      return vectors.map((vector) => padVector(vector, payload.dimensions));
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {
         await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {

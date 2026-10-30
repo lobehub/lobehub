@@ -30,4 +30,5 @@ export * from './truncateSurrogateSafe';
 export * from './uriParser';
 export * from './url';
 export * from './uuid';
+export * from './vectorPadding';
 export * from './videoToBase64';
