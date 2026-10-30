@@ -30,7 +30,9 @@ export class TaskSubtreeRepository {
    *   - the root task and every descendant in `tasks`;
    *   - `task_dependencies` and `task_documents` whose `task_id` is in the set;
    *   - the indexed visibility mirror on the tasks' Work rows, so gallery/list
-   *     queries cannot observe a stale public row after demotion.
+   *     queries cannot observe a stale public row after demotion;
+   *   - on demotion, `assignee_user_id` is cleared wherever it names someone
+   *     other than the task's creator, who could no longer open the task.
    *
    * `task_topics` and `task_comments` are direction-sensitive. Their
    * `visibility` column is a write-time mirror of the parent task used as a

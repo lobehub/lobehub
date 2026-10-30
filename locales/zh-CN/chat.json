@@ -2442,6 +2442,7 @@
   "taskDetail.latestActivity.topicFromSubtask": "{{identifier}} · {{topic}}",
   "taskDetail.latestActivity.topicWithSeq": "话题 #{{seq}}：{{title}}",
   "taskDetail.latestActivity.untitledTopic": "未命名话题",
+  "taskDetail.makePrivate.errorOtherCreators": "此任务包含其他成员创建的子任务，请先移走或删除这些子任务，再设为私人。",
   "taskDetail.modelConfig": "模型覆盖",
   "taskDetail.navigation": "导航",
   "taskDetail.nextRunCountdown": "{{countdown}} 后执行",

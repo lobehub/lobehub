@@ -2442,6 +2442,7 @@
   "taskDetail.latestActivity.topicFromSubtask": "{{identifier}} · {{topic}}",
   "taskDetail.latestActivity.topicWithSeq": "Topic #{{seq}}: {{title}}",
   "taskDetail.latestActivity.untitledTopic": "Untitled topic",
+  "taskDetail.makePrivate.errorOtherCreators": "This task has subtasks created by other members. Move or remove them before making it private.",
   "taskDetail.modelConfig": "Model Override",
   "taskDetail.navigation": "Navigation",
   "taskDetail.nextRunCountdown": "Next run in {{countdown}}",

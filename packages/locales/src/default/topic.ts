@@ -325,7 +325,12 @@ export default {
   'sidebar.expandAll': 'Expand all groups',
   'sidebar.title': 'Topics',
   'taskManager.agent': 'Task Agent',
+  'taskManager.agentSelector.makePrivateConfirm.hint':
+    'This agent is private, so the task and its subtasks become private before it is assigned. Members assigned to them are unassigned.',
+  'taskManager.agentSelector.makePrivateConfirm.ok': 'Make private and assign',
+  'taskManager.agentSelector.makePrivateConfirm.title': 'Assign to a private agent?',
   'taskManager.agentSelector.privateGroup': 'Private',
+  'taskManager.agentSelector.privateGroupMakesPrivate': 'Private · makes this task private',
   'taskManager.agentSelector.recentGroup': 'Recently assigned',
   'taskManager.agentSelector.workspaceGroup': 'Workspace',
   'taskManager.welcome': 'Ask me about your tasks',

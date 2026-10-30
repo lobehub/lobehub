@@ -1,5 +1,5 @@
 import type { TaskItem } from '@lobechat/types';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 
 import {
   taskActivities,
@@ -189,6 +189,23 @@ export const setSubtreeVisibility = async (
   const stamp = new Date();
 
   return ctx.db.transaction(async (tx) => {
+    // A private task is creator-only, so a member assignee would keep a task
+    // they can no longer open. Unassign them before the root is read back
+    // below; the creator's own assignment and the agent assignee stay.
+    if (visibility === 'private') {
+      await tx
+        .update(tasks)
+        .set({ assigneeUserId: null })
+        .where(
+          and(
+            inArray(tasks.id, taskIds),
+            taskOwnership(ctx),
+            isNotNull(tasks.assigneeUserId),
+            ne(tasks.assigneeUserId, tasks.createdByUserId),
+          ),
+        );
+    }
+
     // Update the root with RETURNING so we read the post-update row in the
     // same statement. A second SELECT filtered by `ownership()` would self-
     // cancel when a workspace owner demotes another member's task to private:

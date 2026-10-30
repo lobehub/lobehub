@@ -1906,21 +1906,19 @@ describe('Task Router Integration', () => {
         wsCaller.update({ assigneeUserId: otherUserId, id: privateTask.data.id }),
       ).rejects.toThrow('A private task can only be assigned to its creator');
 
-      // Demoting a member-assigned public task to private is rejected until unassigned.
+      // Demoting a member-assigned public task to private unassigns the member,
+      // who could no longer open it.
       const publicTask = await wsCaller.create({
         assigneeUserId: otherUserId,
         instruction: 'Public task assigned to member',
         visibility: 'public',
       });
-      await expect(
-        wsCaller.updateVisibility({ id: publicTask.data.id, visibility: 'private' }),
-      ).rejects.toThrow('A private task can only be assigned to its creator');
-      await wsCaller.update({ assigneeUserId: null, id: publicTask.data.id });
       const demoted = await wsCaller.updateVisibility({
         id: publicTask.data.id,
         visibility: 'private',
       });
       expect(demoted.data.visibility).toBe('private');
+      expect(demoted.data.assigneeUserId).toBeNull();
     });
 
     it('should preserve the responsible assignee independently of automation', async () => {

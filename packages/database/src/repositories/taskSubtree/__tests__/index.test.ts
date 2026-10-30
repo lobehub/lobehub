@@ -147,6 +147,45 @@ describe('TaskSubtreeRepository', () => {
       expect(reload?.visibility).toBe('private');
     });
 
+    it('should unassign other members across the subtree when demoting to private', async () => {
+      // A private task is creator-only: a member assignee could no longer open
+      // it, so demotion clears them. The creator's own assignment stays.
+      const alice = new TaskModel(serverDB, userId, wsId);
+
+      const root = await alice.create({
+        assigneeUserId: userId2,
+        instruction: 'Root assigned to Bob',
+        visibility: 'public',
+      });
+      const childForBob = await alice.create({
+        assigneeUserId: userId2,
+        instruction: 'Child assigned to Bob',
+        parentTaskId: root.id,
+        visibility: 'public',
+      });
+      const childForAlice = await alice.create({
+        assigneeUserId: userId,
+        instruction: 'Child assigned to Alice',
+        parentTaskId: root.id,
+        visibility: 'public',
+      });
+
+      const demoted = await subtreeRepo(userId, wsId).updateVisibility(root.id, 'private');
+      expect(demoted?.assigneeUserId).toBeNull();
+
+      expect((await alice.findById(childForBob.id))?.assigneeUserId).toBeNull();
+      expect((await alice.findById(childForAlice.id))?.assigneeUserId).toBe(userId);
+    });
+
+    it('should keep member assignees when promoting to public', async () => {
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const task = await alice.create({ instruction: 'Private', visibility: 'private' });
+      await alice.update(task.id, { assigneeUserId: userId2 });
+
+      const promoted = await subtreeRepo(userId, wsId).updateVisibility(task.id, 'public');
+      expect(promoted?.assigneeUserId).toBe(userId2);
+    });
+
     it('should NOT cascade updateVisibility into historical task_comments', async () => {
       // Comments are event-shaped historical rows whose visibility is fixed at
       // write time. Promoting the parent task to public must not retroactively

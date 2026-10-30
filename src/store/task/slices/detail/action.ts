@@ -500,6 +500,7 @@ export class TaskDetailSliceActionImpl {
       // or publish the agent first.
       const raw = (error as { message?: string })?.message ?? '';
       const isPrivateAgentBlock = /public task cannot be assigned to a private agent/i.test(raw);
+      const isOtherCreatorsBlock = /subtasks created by other members/i.test(raw);
       toast.error(
         isPrivateAgentBlock
           ? t('taskDetail.publishToWorkspace.errorPrivateAgent', {
@@ -507,10 +508,16 @@ export class TaskDetailSliceActionImpl {
                 'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
               ns: 'chat',
             })
-          : t('createTask.visibility.changeFailed', {
-              defaultValue: 'Failed to change task visibility',
-              ns: 'chat',
-            }),
+          : isOtherCreatorsBlock
+            ? t('taskDetail.makePrivate.errorOtherCreators', {
+                defaultValue:
+                  'This task has subtasks created by other members. Move or remove them before making it private.',
+                ns: 'chat',
+              })
+            : t('createTask.visibility.changeFailed', {
+                defaultValue: 'Failed to change task visibility',
+                ns: 'chat',
+              }),
       );
       throw error;
     }

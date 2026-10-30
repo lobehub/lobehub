@@ -226,16 +226,10 @@ export const updateRouter = router({
           }
         }
 
-        // Demoting a member-assigned task to private would strand the
-        // assignee: the task disappears from their view while still carrying
-        // their name. Reject early — unassign first, then demote.
-        if (input.visibility === 'private') {
-          ctx.taskService.assertAssigneeUserVisibilityCompat(
-            input.visibility,
-            resolved.assigneeUserId,
-            resolved.createdByUserId,
-          );
-        }
+        // A member assignee does not block demotion: the subtree write clears
+        // every assignee other than the creator in the same transaction, since
+        // the task disappears from that member's view (see
+        // `setSubtreeVisibility`).
 
         // A private assignee agent on a public task breaks the visibility
         // invariant. Reject early — reassign first, then promote.

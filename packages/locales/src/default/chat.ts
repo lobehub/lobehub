@@ -2225,6 +2225,8 @@ export default {
   'taskDetail.publishToWorkspace.confirmOk': 'Publish',
   'taskDetail.publishToWorkspace.errorPrivateAgent':
     'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
+  'taskDetail.makePrivate.errorOtherCreators':
+    'This task has subtasks created by other members. Move or remove them before making it private.',
 
   'createGoal.addCriterion': 'Add criterion',
   'createGoal.costBudgetHint':
