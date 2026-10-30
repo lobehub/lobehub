@@ -18,4 +18,18 @@ describe('visualOutputPrompt', () => {
     expect(visualOutputPrompt).toMatch(/Deliverables[^\n]*Artifact[^\n]*unavailable[^\n]*```html/);
     expect(visualOutputPrompt).toContain('<!DOCTYPE html>');
   });
+
+  it('sends dashboards to Canvas when available and builds without asking for data first', () => {
+    expect(visualOutputPrompt).toMatch(
+      /dashboards[^\n]*`lobe-canvas`[^\n]*otherwise[^\n]*deliverables/,
+    );
+    expect(visualOutputPrompt).toMatch(/instead of first asking[^\n]*sample data/);
+  });
+
+  it('activates Artifacts before building deliverables and exports requested files directly', () => {
+    expect(visualOutputPrompt).toMatch(/Deliverables[^\n]*activateSkill[^\n]*first/);
+    expect(visualOutputPrompt).toMatch(
+      /explicitly asks for a downloadable file[^\n]*export[^\n]*directly/,
+    );
+  });
 });
