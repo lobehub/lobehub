@@ -108,7 +108,6 @@ export type { PollVideoStatusResult };
 export * from './createVideo';
 export type {
   CreateImageOptions,
-  CreateSpeechOptions,
   CreateVideoOptions,
   CustomClientOptions,
   OpenAICompatibleFactoryOptions,
@@ -192,7 +191,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
   handleCreateVideoWebhook: customHandleCreateVideoWebhook,
   handlePollVideoStatus: customHandlePollVideoStatus,
   generateObject: generateObjectConfig,
-  textToSpeech: customTextToSpeech,
 }: OpenAICompatibleFactoryOptions<T>) => {
   const ErrorType = {
     bizError: errorType?.bizError || AgentRuntimeErrorType.ProviderBizError,
@@ -1171,16 +1169,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
-      if (customTextToSpeech) {
-        return customTextToSpeech(payload, {
-          ...this._options,
-          ...options,
-          apiKey: this._options.apiKey!,
-          modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
-          provider: this.id,
-        });
-      }
-
       return createOpenAICompatibleSpeech(this.client, payload, options, {
         handleError: (error) => this.handleError(error),
         logPrefix: this.logPrefix,

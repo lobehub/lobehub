@@ -4,13 +4,14 @@ import type { Pricing } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { USD_TO_CNY } from '../../const/currency';
-import type { CreateSpeechOptions } from '../../core/openaiCompatibleFactory';
 import { getModelPricing } from '../../utils/getModelPricing';
 import {
   buildMiniMaxSpeechRequest,
   createMiniMaxSpeech,
   decodeMiniMaxHexAudio,
   getMiniMaxSpeechErrorType,
+  LobeMinimaxSpeechAI,
+  type MiniMaxSpeechOptions,
 } from './createSpeech';
 import { LobeMinimaxAI } from './index';
 
@@ -21,7 +22,7 @@ const hdPricing: Pricing = {
   units: [{ name: 'textInput', rate: 350, strategy: 'fixed', unit: 'millionCharacters' }],
 };
 
-const options: CreateSpeechOptions = {
+const options: MiniMaxSpeechOptions = {
   apiKey: 'test-key',
   baseURL: 'https://api.minimaxi.com/v1',
   provider: 'minimax',
@@ -314,6 +315,12 @@ describe('createMiniMaxSpeech', () => {
         voice_id: 'female-shaonv',
       });
       expect(result.usage?.inputCharacters).toBe(12);
+    });
+
+    it('requires an API key', () => {
+      expect(
+        () => new LobeMinimaxSpeechAI({ baseURL: 'https://api.minimaxi.com/v1', id: 'minimax' }),
+      ).toThrow();
     });
 
     it('keeps a custom OpenAI-style base URL', async () => {
