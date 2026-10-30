@@ -35,6 +35,7 @@ export const resourcePath = {
       ? libraryItemPath(doc.id, doc.knowledgeBaseId)
       : docsPagePath(doc.id);
   },
+  /** A library file opens inside its library, else in Docs at `/resource/file/<id>`. */
   file: (file: { id?: Id; knowledgeBaseId?: Id }) => {
     if (!file.id) return undefined;
     return file.knowledgeBaseId
