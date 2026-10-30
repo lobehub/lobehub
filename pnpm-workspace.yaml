@@ -94,7 +94,7 @@ overrides:
   # 5.1 changes leading/trailing slash handling and breaks provider URL contracts.
   url-join: 5.0.0
   vitest: 5.0.0
-  'zod@^4': 4.6.5
+  'zod@^4': 4.6.6
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch
