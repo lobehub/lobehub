@@ -76,7 +76,7 @@ export const FeatureFlagsSchema = z.object({
   bot_wake: FeatureFlagValue.optional(),
 
   /**
-   * Dashboards: monitoring widgets built by the `lobe-dashboard` agent tool,
+   * Dashboards: monitoring widgets built by the `builtin-dashboard` agent tool,
    * the home / project dashboard pages, the widget Portal and in-chat widget
    * previews. Off: none of it is reachable and the tool is never offered;
    * already-published widgets keep refreshing on their schedule. Array values
