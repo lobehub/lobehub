@@ -312,6 +312,12 @@ export const ExecAgentFieldsSchema = z.object({
    * the message behind that run instead.
    */
   supersedeLiveRun: z.boolean().optional(),
+  /**
+   * Title of the topic this send creates (`lh topic send --new --title`).
+   * Ignored when the send continues an existing topic; without it the topic is
+   * named after the prompt.
+   */
+  title: z.string().max(255).optional(),
   trigger: z
     .string()
     .refine((value) => value !== RequestTrigger.Bot, {

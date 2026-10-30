@@ -35,6 +35,7 @@ export type QueuedFollowUpRequest = Omit<
   | 'resumeToolResult'
   | 'sourceOperationId'
   | 'steer'
+  | 'title'
 >;
 
 export interface QueuedFollowUp extends SteerQueueEntry {

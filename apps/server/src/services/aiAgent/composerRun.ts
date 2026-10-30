@@ -42,6 +42,7 @@ export type ComposerRunRequest = Pick<
   | 'slug'
   | 'sourceOperationId'
   | 'steer'
+  | 'title'
   | 'trigger'
   | 'userInterventionConfig'
   | 'userMessage'
@@ -159,6 +160,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     agentSender: input.agentSender,
     sourceOperationId: input.sourceOperationId,
     steer: input.steer,
+    title: input.title,
     trigger: input.trigger ?? RequestTrigger.Chat,
     userAgent: ctx.userAgent,
     userInterventionConfig: input.userInterventionConfig,
