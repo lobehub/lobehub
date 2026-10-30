@@ -5,6 +5,8 @@ import path from 'node:path';
 import type { LocalAcceptanceInfo } from '@lobechat/utils/verify/localAcceptance';
 import { LOCAL_ACCEPTANCE_FORMAT } from '@lobechat/utils/verify/localAcceptance';
 
+import { ACCEPTANCE_DIR } from '../../../utils/acceptanceDir';
+
 // ============================================
 // A local acceptance is a directory under `.acceptances/`: one subdirectory
 // per immutable round, plus `acceptance.json` (its identity), `reviews.json`
@@ -33,6 +35,19 @@ export const resolveAcceptanceDir = (target: string): string | undefined => {
   if (isRoundDir(dir)) return path.dirname(dir);
   if (existsSync(path.join(dir, ACCEPTANCE_FILE)) || listRoundDirs(dir).length > 0) return dir;
   return undefined;
+};
+
+/**
+ * How a command should name an acceptance directory: from the project root
+ * when it sits under an `.acceptances/` tree (independent of the shell's
+ * working directory), else its absolute path — the only unambiguous name for
+ * a directory kept anywhere else.
+ */
+export const commandAcceptanceDir = (acceptanceDir: string): string => {
+  const segments = path.resolve(acceptanceDir).split(path.sep);
+  const index = segments.lastIndexOf(ACCEPTANCE_DIR);
+  if (index <= 0 || index === segments.length - 1) return path.resolve(acceptanceDir);
+  return segments.slice(index).join('/');
 };
 
 /** Round directory names, oldest first — the order `new_round`'s timestamps sort in. */

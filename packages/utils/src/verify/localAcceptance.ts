@@ -208,6 +208,12 @@ export interface LocalReviewLog {
 /** Everything a local report renders from — what the CLI embeds into `report.html`. */
 export interface LocalAcceptanceSource {
   acceptance: LocalAcceptanceInfo;
+  /**
+   * The acceptance directory as a command names it: `.acceptances/<key>` from
+   * the project root, or an absolute path for one kept elsewhere. Pages
+   * rendered before it existed assume `.acceptances/<subjectKey>`.
+   */
+  acceptanceDir?: string;
   format: typeof LOCAL_ACCEPTANCE_FORMAT;
   generatedAt: IsoDate;
   reviews: LocalReviewEvent[];
