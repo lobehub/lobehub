@@ -18,7 +18,11 @@ const {
   mockOrgCredsList: vi.fn(async (): Promise<{ data: MockOrgCredRow[] }> => ({
     data: [{ id: 1, key: 'ORG_SECRET' }],
   })),
-  mockPersonalCredsList: vi.fn(async () => ({ data: [{ id: 2, key: 'PERSONAL_SECRET' }] })),
+  mockPersonalCredsList: vi.fn(
+    async (): Promise<{
+      data: Array<{ id: number; key: string; shares?: Array<{ workspaceId?: string }> }>;
+    }> => ({ data: [{ id: 2, key: 'PERSONAL_SECRET' }] }),
+  ),
   mockPersonalCredsPublish: vi.fn(async (id: number) => ({ id, visibility: 'public' })),
   mockPersonalCredsShare: vi.fn(async (id: number) => ({ id, visibility: 'private' })),
   mockPersonalCredsUnshare: vi.fn(async (id: number) => ({ id, visibility: 'private' })),
@@ -95,8 +99,7 @@ describe('credsRouter is always personal-scoped', () => {
   // instead of the caller's own personal creds — indistinguishable from
   // `workspaceCreds.list`. This must never happen again: `list` always
   // returns personal creds data, with or without an active (even verified)
-  // workspace — the org list is only ever consulted (below) to scope the
-  // `sharedToActiveWorkspace` enrichment, never to source the result.
+  // workspace.
   it('returns personal creds data, never the org list, when the caller is a verified workspace member', async () => {
     const { credsRouter } = await import('./creds');
 
@@ -166,59 +169,40 @@ describe('credsRouter list scopes sharing to the active workspace', () => {
     vi.clearAllMocks();
   });
 
-  // A personal credential can only be linked to one organization at a time —
-  // `organizationAccountId != null` alone can't tell "shared to *this*
-  // workspace" apart from "shared to some other workspace previously". `list`
-  // cross-references the active workspace's own merged view (by id, among
-  // entries it marks `ownerType: 'user'`) to compute this per credential.
-  it('flags sharedToActiveWorkspace: true only when the credential appears as a user-owned entry in the active workspace org list', async () => {
-    mockOrgCredsList.mockResolvedValueOnce({
-      data: [{ id: 2, key: 'PERSONAL_SECRET', ownerType: 'user' }],
+  const listIn = async (workspaceId: string | undefined) => {
+    const { credsRouter } = await import('./creds');
+    return credsRouter
+      .createCaller({ isWorkspaceMember: !!workspaceId, userId: 'user-1', workspaceId } as any)
+      .list();
+  };
+
+  it("flags sharedToActiveWorkspace from the credential's own shares", async () => {
+    mockPersonalCredsList.mockResolvedValueOnce({
+      data: [
+        { id: 2, key: 'HERE', shares: [{ workspaceId: 'other' }, { workspaceId: 'workspace-1' }] },
+        { id: 3, key: 'ELSEWHERE', shares: [{ workspaceId: 'other' }] },
+        { id: 4, key: 'UNSHARED', shares: [] },
+      ],
     });
-    const { credsRouter } = await import('./creds');
 
-    const caller = credsRouter.createCaller({
-      isWorkspaceMember: true,
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
-    } as any);
+    const result = await listIn('workspace-1');
 
-    const result = await caller.list();
-
-    expect(result.data).toEqual([{ id: 2, key: 'PERSONAL_SECRET', sharedToActiveWorkspace: true }]);
-  });
-
-  it('flags sharedToActiveWorkspace: false when the credential is not in the active workspace org list (e.g. shared to a different workspace)', async () => {
-    // Org list has no entry for id 2 at all — simulates the credential being
-    // linked to some *other* workspace instead.
-    const { credsRouter } = await import('./creds');
-
-    const caller = credsRouter.createCaller({
-      isWorkspaceMember: true,
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
-    } as any);
-
-    const result = await caller.list();
-
-    expect(result.data).toEqual([
-      { id: 2, key: 'PERSONAL_SECRET', sharedToActiveWorkspace: false },
+    expect(result.data?.map((c) => [c.key, c.sharedToActiveWorkspace])).toEqual([
+      ['HERE', true],
+      ['ELSEWHERE', false],
+      ['UNSHARED', false],
     ]);
+    expect(mockOrgCredsList).not.toHaveBeenCalled();
   });
 
-  it('still returns the personal list if the active-workspace org lookup fails (e.g. org not set up yet)', async () => {
-    mockOrgCredsList.mockRejectedValueOnce(new Error('org not found'));
-    const { credsRouter } = await import('./creds');
+  it('leaves the flag off outside a workspace', async () => {
+    mockPersonalCredsList.mockResolvedValueOnce({
+      data: [{ id: 2, key: 'HERE', shares: [{ workspaceId: 'workspace-1' }] }],
+    });
 
-    const caller = credsRouter.createCaller({
-      isWorkspaceMember: true,
-      userId: 'user-1',
-      workspaceId: 'workspace-1',
-    } as any);
+    const result = await listIn(undefined);
 
-    const result = await caller.list();
-
-    expect(result.data).toEqual([{ id: 2, key: 'PERSONAL_SECRET' }]);
+    expect(result.data?.[0]).not.toHaveProperty('sharedToActiveWorkspace');
   });
 });
 
@@ -260,7 +244,7 @@ describe('credsRouter share/publish/unshare', () => {
     expect(mockPersonalCredsShare).not.toHaveBeenCalled();
   });
 
-  it('publishes a draft-linked credential without requiring an org id', async () => {
+  it("publishes the credential's share into the caller-verified workspace", async () => {
     const { credsRouter } = await import('./creds');
 
     const caller = credsRouter.createCaller({
@@ -271,11 +255,13 @@ describe('credsRouter share/publish/unshare', () => {
 
     const result = await caller.publish({ id: 42 });
 
-    expect(mockPersonalCredsPublish).toHaveBeenCalledWith(42);
+    expect(mockPersonalCredsPublish).toHaveBeenCalledWith(42, undefined, {
+      orgId: 'workspace:workspace-1',
+    });
     expect(result).toEqual({ id: 42, visibility: 'public' });
   });
 
-  it('unshares a credential, clearing its workspace link', async () => {
+  it('unshares a credential from the caller-verified workspace only', async () => {
     const { credsRouter } = await import('./creds');
 
     const caller = credsRouter.createCaller({
@@ -286,7 +272,9 @@ describe('credsRouter share/publish/unshare', () => {
 
     const result = await caller.unshare({ id: 42 });
 
-    expect(mockPersonalCredsUnshare).toHaveBeenCalledWith(42);
+    expect(mockPersonalCredsUnshare).toHaveBeenCalledWith(42, undefined, {
+      orgId: 'workspace:workspace-1',
+    });
     expect(result).toEqual({ id: 42, visibility: 'private' });
   });
 

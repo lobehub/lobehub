@@ -1,6 +1,8 @@
 import urlJoin from 'url-join';
 
 import { OFFICIAL_SITE } from '@/const/url';
+import { cacheScope } from '@/libs/replica';
+import { errorInScope } from '@/utils/connectorActionError';
 
 import { type ToolStoreState } from '../../initialState';
 import { type LobehubSkillServer } from './types';
@@ -45,6 +47,9 @@ export const lobehubSkillStoreSelectors = {
    */
   getServerByIdentifier: (identifier: string) => (s: ToolStoreState) =>
     s.lobehubSkillServers?.find((server) => server.identifier === identifier),
+
+  getServerError: (identifier: string) => (s: ToolStoreState) =>
+    errorInScope(s.lobehubSkillErrors?.[identifier], cacheScope.get()),
 
   /**
    * Get all LobeHub Skill servers

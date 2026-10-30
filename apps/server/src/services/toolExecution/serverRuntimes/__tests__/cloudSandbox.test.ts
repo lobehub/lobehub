@@ -283,4 +283,34 @@ describe('cloudSandboxRuntime', () => {
       expect.objectContaining({ isShareVisitorRun: true }),
     );
   });
+
+  // The sandbox service stamps `metadata.agentShare` on visitor file writes
+  // (e.g. readFile image previews) so they stay out of the creator's library.
+  // It must see only the provenance ids — never permission fields like
+  // toolGrants from the full visitor context.
+  it('passes only the visitor provenance ids to the sandbox service for share-visitor runs', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(
+      buildContext({
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          toolGrants: [{ apiName: 'readFile', identifier: 'lobe-cloud-sandbox' }],
+          visitorUserId: 'visitor-1',
+        },
+      }),
+    );
+
+    expect(mocks.createSandboxService.mock.calls[0][0].agentShareVisitor).toEqual({
+      shareId: 'share-1',
+      visitorUserId: 'visitor-1',
+    });
+  });
+
+  it('passes no agentShareVisitor to the sandbox service for ordinary runs', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext());
+
+    expect(mocks.createSandboxService.mock.calls[0][0].agentShareVisitor).toBeUndefined();
+  });
 });

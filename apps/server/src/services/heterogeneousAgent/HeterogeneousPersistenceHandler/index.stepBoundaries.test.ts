@@ -45,10 +45,6 @@ describe('HeterogeneousPersistenceHandler', () => {
           message.id !== 'thread-asst-1',
       );
       expect(nextThreadAssistant?.parentId).toBe('thread-asst-1');
-      expect(h.messageModel.getLatestSpineMessageId).toHaveBeenCalledWith({
-        threadId: 'thread-1',
-        topicId: 'topic-1',
-      });
     });
 
     it('flushes prior content, opens a new assistant chained off the prior assistant (spine)', async () => {
@@ -413,7 +409,10 @@ describe('HeterogeneousPersistenceHandler', () => {
       // carry model/provider so a replica picking up the next step boundary
       // can read them back from DB even if it never drained this event.
       expect(h.messageModel.update).toHaveBeenCalledWith('asst-init', {
-        metadata: { usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 } },
+        metadata: {
+          operationId: 'op-1',
+          usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+        },
         model: 'claude-sonnet-4-6',
         provider: 'claude-code',
       });

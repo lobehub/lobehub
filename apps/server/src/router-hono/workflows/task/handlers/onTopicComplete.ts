@@ -24,7 +24,7 @@ export interface OnTopicCompletePayload {
   // Static body field set by TaskRunnerService — what triggered the run.
   runTrigger?: TaskRunTrigger;
   taskId: string;
-  taskIdentifier: string;
+  taskIdentifier?: string;
   topicId?: string;
   userId: string;
 }
@@ -45,7 +45,7 @@ export async function onTopicComplete(c: Context) {
       userId,
     } = body;
 
-    if (!taskId || !userId || !taskIdentifier || !operationId) {
+    if (!taskId || !userId || !operationId) {
       return c.json({ error: 'Missing required fields' }, 400);
     }
 
@@ -61,7 +61,7 @@ export async function onTopicComplete(c: Context) {
     // System-level callback: derive workspace from the task row so the
     // lifecycle service writes briefs / status into the correct workspace.
     const [taskRow] = await db
-      .select({ workspaceId: tasks.workspaceId })
+      .select({ identifier: tasks.identifier, workspaceId: tasks.workspaceId })
       .from(tasks)
       .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
       .limit(1);
@@ -93,7 +93,7 @@ export async function onTopicComplete(c: Context) {
       reason: reason || 'done',
       runTrigger,
       taskId,
-      taskIdentifier,
+      taskIdentifier: taskRow?.identifier ?? taskIdentifier ?? taskId,
       topicId,
     });
 

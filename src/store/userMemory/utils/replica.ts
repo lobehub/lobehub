@@ -1,19 +1,13 @@
 import {
-  cacheScope,
   definePagedReplica,
   defineReplica,
+  identityOnlyScope,
+  identityScopeOf,
   type ReplicaScope,
   stableQueryKey,
 } from '@/libs/replica';
 
-/**
- * The identity half of a cache scope (`${userId}:${workspaceId}`), with the
- * workspace replaced by a marker no workspace id can take.
- */
-export const identityScopeOf = (scope: string): string => {
-  const separator = scope.indexOf(':');
-  return `${separator === -1 ? scope : scope.slice(0, separator)}:*`;
-};
+export { identityScopeOf };
 
 /**
  * User memories belong to the user, not to a workspace: the server reads and
@@ -24,12 +18,7 @@ export const identityScopeOf = (scope: string): string => {
  * the rows written in every workspace, and a workspace switch keeps showing
  * the same user's memories.
  */
-export const userMemoryIdentityScope: ReplicaScope = {
-  canHydrate: () => cacheScope.canHydrate?.() ?? true,
-  canPersist: () => cacheScope.canPersist(),
-  get: () => identityScopeOf(cacheScope.get()),
-  use: () => identityScopeOf(cacheScope.use()),
-};
+export const userMemoryIdentityScope: ReplicaScope = identityOnlyScope;
 
 /**
  * How many distinct search / sort page sets each memory list keeps persisted

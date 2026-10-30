@@ -1,6 +1,6 @@
 import type { BuilderSuggestionItem, BuilderSuggestionMode } from '@lobechat/prompts';
 
-import type { LocalStorageQueryProjectionStorage } from '@/libs/queryProjectionStorage';
+import type { AppLocalStorage } from '@/libs/replica';
 import { cacheScope, defineReplica } from '@/libs/replica';
 
 export interface BuilderSuggestionParams {
@@ -66,7 +66,7 @@ export const peekBuilderSuggestions = (
 ): BuilderSuggestionBatch | undefined => {
   if (!cacheScope.canHydrate?.()) return undefined;
   const storage = builderSuggestionResource.storage as
-    LocalStorageQueryProjectionStorage<BuilderSuggestionBatch> | undefined;
+    AppLocalStorage<BuilderSuggestionBatch> | undefined;
   const data = storage?.getSync?.({
     queryKey: builderSuggestionResource.storageKey(params),
     scope,

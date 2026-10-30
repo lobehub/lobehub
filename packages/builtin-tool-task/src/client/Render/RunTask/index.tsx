@@ -1,12 +1,12 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Markdown } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Markdown } from '@lobehub/ui';
 import { Play } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { RunTaskParams, RunTaskState } from '../../../types';
 import { InlineField, monoChipClassName, SectionField, TaskResultCard } from '../shared';
 
@@ -45,6 +45,7 @@ export const RunTaskRender = memo<BuiltinRenderProps<RunTaskParams, RunTaskState
         icon={Play}
         iconColor={cssVar.colorWarning}
         identifier={identifier}
+        taskId={resolveTaskOpenTarget(pluginState, params)}
         title={t('builtins.lobe-task.apiName.runTask')}
       >
         {hasBody ? (

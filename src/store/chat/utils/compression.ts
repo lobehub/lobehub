@@ -9,11 +9,24 @@ import { type Operation } from '../slices/operation/types';
 export const isCompressionOperationType = (type?: string) =>
   type === 'contextCompression' || type === 'generateSummary';
 
-export const getCompressionCandidateMessageIds = (messages: UIChatMessage[]) =>
-  messages
+/**
+ * @param options.beforeMessageId Keep this message and everything after it out of the
+ * summary, e.g. the user turn a recovery card regenerates after compacting. Compressing it
+ * would hide it from the conversation, leaving nothing to regenerate.
+ */
+export const getCompressionCandidateMessageIds = (
+  messages: UIChatMessage[],
+  options?: { beforeMessageId?: string },
+) => {
+  const keepFrom = options?.beforeMessageId
+    ? messages.findIndex((message) => message.id === options.beforeMessageId)
+    : -1;
+
+  return (keepFrom === -1 ? messages : messages.slice(0, keepFrom))
     .filter((message) => message.role !== 'compressedGroup')
     .map((message) => message.id)
     .filter(Boolean);
+};
 
 export const createPendingCompressedGroup = ({
   agentId,

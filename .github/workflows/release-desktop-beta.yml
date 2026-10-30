@@ -54,12 +54,32 @@ jobs:
             echo "⏭️ Skipping: $version is a stable release (handled by release-desktop-stable.yml)"
           fi
 
+      # No checkout in this job, so the local overlay-token action is unavailable.
+      - name: Resolve overlay repository
+        id: overlay-repo
+        if: steps.check.outputs.is_beta == 'true'
+        env:
+          OVERLAY_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
+        run: |
+          echo "owner=${OVERLAY_REPOSITORY%%/*}" >> "$GITHUB_OUTPUT"
+          echo "name=${OVERLAY_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Create overlay token
+        id: overlay-token
+        if: steps.check.outputs.is_beta == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          owner: ${{ steps.overlay-repo.outputs.owner }}
+          repositories: ${{ steps.overlay-repo.outputs.name }}
+
       - name: Resolve Cloud revision
         id: cloud-ref
         if: steps.check.outputs.is_beta == 'true'
         env:
           CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
-          CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          CLOUD_TOKEN: ${{ steps.overlay-token.outputs.token }}
         run: |
           set -euo pipefail
           : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
@@ -102,13 +122,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
       - name: Setup build environment
         id: setup
         uses: ./.github/actions/desktop-build-setup
         with:
           cloud-ref: ${{ needs.check-beta.outputs.cloud_ref }}
           cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
-          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
+          cloud-token: ${{ steps.overlay-token.outputs.token }}
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Resolve core seq

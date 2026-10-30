@@ -704,3 +704,49 @@ describe('GenerationTopicModel', () => {
     });
   });
 });
+
+describe('GenerationTopicModel guards', () => {
+  it('finds an owned topic by id and hides another user topic', async () => {
+    const mine = await generationTopicModel.create('Mine');
+    const theirs = await new GenerationTopicModel(serverDB, otherUserId).create('Theirs');
+
+    await expect(generationTopicModel.findById(mine.id)).resolves.toMatchObject({
+      id: mine.id,
+      userId,
+    });
+    await expect(generationTopicModel.findById(theirs.id)).resolves.toBeUndefined();
+  });
+
+  it('publishes a private workspace topic', async () => {
+    const workspaceModel = new GenerationTopicModel(serverDB, userId, workspaceId);
+    const topic = await workspaceModel.create('Private', undefined, 'private');
+
+    const updated = await workspaceModel.setVisibility(topic.id, 'public');
+
+    expect(updated?.visibility).toBe('public');
+    const row = await serverDB.query.generationTopics.findFirst({
+      where: eq(generationTopics.id, topic.id),
+    });
+    expect(row?.visibility).toBe('public');
+  });
+
+  it('collects no cover url when the deleted topic has none', async () => {
+    const topic = await generationTopicModel.create('No cover');
+    await serverDB.insert(generationBatches).values({
+      generationTopicId: topic.id,
+      id: 'guard-batch',
+      model: 'test-model',
+      prompt: 'a cat',
+      provider: 'test-provider',
+      userId,
+    });
+    await serverDB
+      .insert(generations)
+      .values({ asset: { url: 'image.png' }, generationBatchId: 'guard-batch', userId });
+
+    const result = await generationTopicModel.delete(topic.id);
+
+    expect(result?.deletedTopic.id).toBe(topic.id);
+    expect(result?.filesToDelete).toEqual(['image.png']);
+  });
+});

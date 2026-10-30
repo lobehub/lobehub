@@ -63,6 +63,7 @@ describe('TaskSubtaskProgressTag', () => {
         subtasks={[
           {
             assignee: { avatar: null, backgroundColor: null, id: 'agt_child', title: 'Child' },
+            id: 'task_child',
             identifier: 'T-2',
             name: 'Child task',
             status: 'backlog',
@@ -72,7 +73,7 @@ describe('TaskSubtaskProgressTag', () => {
       />,
     );
 
-    fireEvent.click(screen.getByTestId('subtask-T-2'));
+    fireEvent.click(screen.getByTestId('subtask-task_child'));
 
     expect(onSubtaskClick).toHaveBeenCalledWith('T-2', 'agt_child', 'Child task');
   });
@@ -96,12 +97,16 @@ describe('TaskSubtaskProgressTag', () => {
   it('uses the list summary until detail is refreshed, then yields to a newer list summary', async () => {
     const onRequestSubtasks = vi
       .fn()
-      .mockResolvedValue([{ identifier: 'T-current', name: 'Current child', status: 'completed' }]);
+      .mockResolvedValue([
+        { id: 'T-current', identifier: 'T-current', name: 'Current child', status: 'completed' },
+      ]);
 
     const { rerender } = render(
       <TaskSubtaskProgressTag
         progress={{ completed: 1, total: 2 }}
-        subtasks={[{ identifier: 'T-stale', name: 'Stale child', status: 'completed' }]}
+        subtasks={[
+          { id: 'T-stale', identifier: 'T-stale', name: 'Stale child', status: 'completed' },
+        ]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,
@@ -114,7 +119,9 @@ describe('TaskSubtaskProgressTag', () => {
     rerender(
       <TaskSubtaskProgressTag
         progress={{ completed: 2, total: 3 }}
-        subtasks={[{ identifier: 'T-stale', name: 'Stale child', status: 'completed' }]}
+        subtasks={[
+          { id: 'T-stale', identifier: 'T-stale', name: 'Stale child', status: 'completed' },
+        ]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,
@@ -127,7 +134,7 @@ describe('TaskSubtaskProgressTag', () => {
     const onParentClick = vi.fn();
     const onRequestSubtasks = vi
       .fn()
-      .mockResolvedValue([{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
+      .mockResolvedValue([{ id: 'T-2', identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
     const onSubtaskClick = vi.fn();
 
     render(
@@ -150,7 +157,7 @@ describe('TaskSubtaskProgressTag', () => {
   it('keeps a hover-opened static menu open when the tag is clicked', async () => {
     render(
       <TaskSubtaskProgressTag
-        subtasks={[{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
+        subtasks={[{ id: 'T-2', identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
         onSubtaskClick={vi.fn()}
       />,
     );
@@ -166,12 +173,12 @@ describe('TaskSubtaskProgressTag', () => {
   it('closes an open subtask menu without refreshing it again', async () => {
     const onRequestSubtasks = vi
       .fn()
-      .mockResolvedValue([{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
+      .mockResolvedValue([{ id: 'T-2', identifier: 'T-2', name: 'Child task', status: 'backlog' }]);
 
     render(
       <TaskSubtaskProgressTag
         progress={{ completed: 0, total: 1 }}
-        subtasks={[{ identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
+        subtasks={[{ id: 'T-2', identifier: 'T-2', name: 'Child task', status: 'backlog' }]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,
@@ -192,7 +199,9 @@ describe('TaskSubtaskProgressTag', () => {
     const { rerender } = render(
       <TaskSubtaskProgressTag
         progress={{ completed: 0, total: 1 }}
-        subtasks={[{ identifier: 'T-stale', name: 'Removed child', status: 'backlog' }]}
+        subtasks={[
+          { id: 'T-stale', identifier: 'T-stale', name: 'Removed child', status: 'backlog' },
+        ]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,
@@ -206,7 +215,9 @@ describe('TaskSubtaskProgressTag', () => {
     rerender(
       <TaskSubtaskProgressTag
         progress={{ completed: 0, total: 1 }}
-        subtasks={[{ identifier: 'T-stale', name: 'Removed child', status: 'backlog' }]}
+        subtasks={[
+          { id: 'T-stale', identifier: 'T-stale', name: 'Removed child', status: 'backlog' },
+        ]}
         onRequestSubtasks={onRequestSubtasks}
         onSubtaskClick={vi.fn()}
       />,

@@ -97,9 +97,12 @@ export const params = {
     },
   },
   constructorOptions: {
+    // App attribution for OpenRouter rankings: https://openrouter.ai/docs/app-attribution
+    // Categories accept at most 2 recognized values per request and cannot be removed once merged.
     defaultHeaders: {
       'HTTP-Referer': 'https://lobehub.com',
-      'X-Title': 'LobeHub',
+      'X-OpenRouter-Categories': 'personal-agent,general-chat',
+      'X-OpenRouter-Title': 'LobeHub',
     },
   },
   debug: {

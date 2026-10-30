@@ -16,13 +16,16 @@ import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload, GenerateObjectOptions, GenerateObjectPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
+import { parseDataUri } from '../../utils/uriParser';
 import {
   isKimiNativeThinkingModel,
   isKimiPreserveThinkingModel,
   isKimiReasoningEffortModel,
   isKimiThinkingToggleModel,
+  resolveKimiReasoningEffort,
 } from './modelId';
 
 export interface MoonshotModelCard {
@@ -155,6 +158,56 @@ const normalizeMessagesForOpenAI = (
     return normalized;
   });
 
+/** Raw video bytes one request may inline, so long video threads cannot exhaust memory. */
+const KIMI_VIDEO_INPUT_MAX_BYTES = 100 * 1024 * 1024;
+const KIMI_VIDEO_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+/**
+ * Kimi rejects remote video URLs with "unsupported video url" but accepts base64 video
+ * blocks, so fetch remote videos and inline them before building the payload. Videos are
+ * downloaded one at a time against a shared byte budget; exceeding it fails the request
+ * instead of sending a truncated video.
+ */
+const inlineRemoteVideos = async (messages: ChatStreamPayload['messages']) => {
+  let remainingBytes = KIMI_VIDEO_INPUT_MAX_BYTES;
+  const result: ChatStreamPayload['messages'] = [];
+
+  for (const message of messages) {
+    if (!Array.isArray(message.content) || !message.content.some((p) => p.type === 'video_url')) {
+      result.push(message);
+      continue;
+    }
+
+    const content: typeof message.content = [];
+
+    for (const part of message.content) {
+      if (part.type !== 'video_url' || parseDataUri(part.video_url.url).type !== 'url') {
+        content.push(part);
+        continue;
+      }
+
+      if (remainingBytes <= 0) {
+        throw new RangeError(
+          `Videos in this conversation exceed the ${KIMI_VIDEO_INPUT_MAX_BYTES}-byte limit`,
+        );
+      }
+
+      // imageUrlToBase64 is the generic SSRF-safe binary downloader with a byte cap.
+      const { base64, mimeType } = await imageUrlToBase64(part.video_url.url, {
+        maxBytes: remainingBytes,
+        signal: AbortSignal.timeout(KIMI_VIDEO_DOWNLOAD_TIMEOUT_MS),
+      });
+      remainingBytes -= Math.floor((base64.length * 3) / 4);
+
+      content.push({ ...part, video_url: { url: `data:${mimeType};base64,${base64}` } });
+    }
+
+    result.push({ ...message, content });
+  }
+
+  return result;
+};
+
 /**
  * Build Moonshot Anthropic format payload with special handling for the kimi thinking toggle
  */
@@ -179,7 +232,10 @@ const buildMoonshotAnthropicPayload = async (
     ...payload,
     enabledSearch: false,
     max_tokens: resolvedMaxTokens,
-    messages: normalizeMessagesForAnthropic(payload.messages, isThinkingEnabled),
+    messages: normalizeMessagesForAnthropic(
+      await inlineRemoteVideos(payload.messages),
+      isThinkingEnabled,
+    ),
   });
 
   const tools = appendSearchTool(basePayload.tools, payload.enabledSearch);
@@ -192,7 +248,13 @@ const buildMoonshotAnthropicPayload = async (
   // https://platform.kimi.ai/docs/guide/kimi-k3-quickstart
   if (isKimiReasoningEffortModel(payload.model)) {
     const { temperature: _temperature, top_p: _topP, ...effortBase } = basePayloadWithSearch;
-    return effortBase;
+    // The Messages API ignores top-level `reasoning_effort`; it reads the strength from
+    // `output_config.effort` instead. https://platform.kimi.ai/docs/api/messages
+    const effort = resolveKimiReasoningEffort(payload.reasoning_effort);
+
+    return effort
+      ? ({ ...effortBase, output_config: { effort } } as Anthropic.MessageCreateParams)
+      : effortBase;
   }
 
   if (!isThinkingToggle && !isNativeThinking) return basePayloadWithSearch;
@@ -248,13 +310,11 @@ const buildMoonshotOpenAIPayload = (
       ...effortRest
     } = rest;
 
+    const effort = resolveKimiReasoningEffort(reasoning_effort);
+
     return {
       ...effortRest,
-      // K3 supports low/high/max. Filter generic values such as medium so stale
-      // cross-model settings cannot make the provider reject the whole request.
-      ...(reasoning_effort === 'low' || reasoning_effort === 'high' || reasoning_effort === 'max'
-        ? { reasoning_effort }
-        : {}),
+      ...(effort ? { reasoning_effort: effort } : {}),
       ...(max_tokens === undefined ? {} : { max_completion_tokens: max_tokens }),
       messages: normalizedMessages,
       model,

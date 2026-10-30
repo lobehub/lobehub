@@ -195,6 +195,23 @@ export class KnowledgeBaseCrudActionImpl {
       this.#get().internal_toggleKnowledgeBaseLoading(id, false);
     }
   };
+
+  /**
+   * Set (or with `null`, clear back to the generated default) a library's
+   * cover. The cover lives in `settings`, which the server merges into.
+   */
+  updateKnowledgeBaseCover = async (id: string, cover: string | null): Promise<void> => {
+    await this.#kbEntity.optimistic(
+      id,
+      (kb) => {
+        const { cover: _previous, ...settings } = (kb.settings ?? {}) as Record<string, unknown>;
+        return { ...kb, settings: cover ? { ...settings, cover } : settings };
+      },
+      () => knowledgeBaseService.updateKnowledgeBaseList(id, { cover }),
+    );
+
+    await this.#get().refreshKnowledgeBaseList();
+  };
 }
 
 export type KnowledgeBaseCrudAction = Pick<

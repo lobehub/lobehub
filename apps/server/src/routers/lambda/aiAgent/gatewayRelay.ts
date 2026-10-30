@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { isOperationOwnedByAnotherUser } from '@/server/routers/lambda/_helpers/operationReadGuard';
 
 import { LlmExecutorSchema } from './execSchemas';
 import { aiAgentProcedure, aiAgentWriteProcedure } from './procedures';
@@ -78,6 +79,26 @@ export const gatewayRelayRouter = router({
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: 'No running operation found on this topic',
+        });
+      }
+
+      // A workspace member can read a teammate's topic, but the gateway only
+      // streams an operation to the user who started it (it compares the
+      // token's `sub` with the registered owner). A caller-signed token would
+      // be refused as `auth_failed`, which the client reads as a dead run, so
+      // refuse here instead: FORBIDDEN tells the client the run is alive but
+      // not streamable to this caller. Signing for the owner is not an option
+      // — `signUserJWT` mints full account access.
+      if (
+        await isOperationOwnedByAnotherUser({
+          db: ctx.serverDB,
+          operationId: runningOperation.operationId,
+          userId: ctx.userId,
+        })
+      ) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'The running operation on this topic belongs to another user',
         });
       }
 

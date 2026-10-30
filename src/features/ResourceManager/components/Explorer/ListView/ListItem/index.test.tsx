@@ -5,7 +5,11 @@ import FileListItem from './index';
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  Avatar: ({ alt }: { alt: string }) => <span data-testid="avatar">{alt}</span>,
+  Avatar: ({ alt, fallbackVariant }: { alt: string; fallbackVariant?: string }) => (
+    <span data-fallback-variant={fallbackVariant} data-testid="avatar">
+      {alt}
+    </span>
+  ),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -128,6 +132,12 @@ describe('FileListItem', () => {
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
     expect(screen.queryByTestId('avatar')).not.toBeInTheDocument();
     expect(screen.getByText('1.0 KB')).toBeInTheDocument();
+  });
+
+  it('draws the pixel avatar for an uploader without a profile image', () => {
+    render(<FileListItem {...baseProps} />);
+
+    expect(screen.getByTestId('avatar')).toHaveAttribute('data-fallback-variant', 'pixel');
   });
 
   it('disables selection for rows the workspace member did not upload', () => {

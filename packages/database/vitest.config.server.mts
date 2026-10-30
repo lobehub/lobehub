@@ -38,6 +38,15 @@ export default defineConfig({
         '**/.{idea,git,cache,output,temp}/**',
         '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*',
         'src/server/core/dbForTest.ts',
+        // Test-only helpers and fixtures are not production surface. Vitest 4
+        // ships an empty `coverageConfigDefaults.exclude`, so without this
+        // `_test_template.ts` / `_fixtures.ts` leak into the package totals.
+        'src/**/__tests__/**',
+        // Scaffolding copied when a new model is added, never imported at
+        // runtime. The client-db coverage config already excludes it; keeping
+        // both configs on the same production surface avoids a copy-paste
+        // template counting against the package total.
+        'src/models/_template.ts',
       ],
       include: ['src/models/**/*.ts', 'src/server/**/*.ts'],
       provider: 'v8',

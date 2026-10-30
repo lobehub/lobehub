@@ -15,8 +15,7 @@ import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IndexedDBQueryProjectionStorage } from '@/libs/queryProjectionStorage';
-import { cacheScope } from '@/libs/replica';
+import { AppIndexedDBStorage, cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { deviceService } from '@/services/device';
 import { gitService } from '@/services/git';
@@ -64,13 +63,13 @@ const pending = () => new Promise<never>(() => {});
 const DEVICE = 'device-1';
 const CWD = '/repo';
 
-const remoteBranchStorage = new IndexedDBQueryProjectionStorage<{ value?: unknown }>({
+const remoteBranchStorage = new AppIndexedDBStorage<{ value?: unknown }>({
   namespace: 'replica:deviceGitRemoteBranchList:v1',
 });
-const tunnelStorage = new IndexedDBQueryProjectionStorage<unknown[]>({
+const tunnelStorage = new AppIndexedDBStorage<unknown[]>({
   namespace: 'replica:deviceTunnelLinks:v1',
 });
-const portStorage = new IndexedDBQueryProjectionStorage<DeviceListeningPortsResult>({
+const portStorage = new AppIndexedDBStorage<DeviceListeningPortsResult>({
   namespace: 'replica:deviceListeningPorts:v1',
 });
 

@@ -16,9 +16,9 @@ import type {
 import { experimentOwner } from '@lobechat/utils/goalGraph';
 import { TRPCError } from '@trpc/server';
 
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { GoalRepository } from '@/database/repositories/goal';
 
 import { collectStrandedDependents, GOAL_ACCEPTANCE_TASK_TITLE } from '../decideNextMove';
 import { answeredProblem, GoalManagerService, problemKey } from '../manager';
@@ -263,10 +263,10 @@ export const decide = async (
   // Serialized with `close`, which commits under this row lock: a goal that
   // ended while this answer was being written is left ended.
   await ctx.db.transaction(async (tx) => {
-    const current = await new GoalModel(tx, ctx.userId, ctx.workspaceId).lockById(goalId);
+    const current = await new GoalRepository(tx, ctx.userId, ctx.workspaceId).lockById(goalId);
     if (!current || GOAL_ENDED_STATUSES.has(current.status)) return;
     if (current.status === nextStatus) return;
-    await new GoalModel(tx, ctx.userId, ctx.workspaceId).updateStatus(goalId, nextStatus);
+    await new GoalRepository(tx, ctx.userId, ctx.workspaceId).updateStatus(goalId, nextStatus);
     await new GoalGraphModel(tx, ctx.userId, ctx.workspaceId, {
       id: GOAL_COORDINATOR_ACTOR_ID,
       type: 'system',
@@ -427,7 +427,7 @@ export const openFailureDecision = async (
   gate: FailureGateOptions = {},
 ): Promise<GoalTickResult> => {
   return ctx.db.transaction(async (tx) => {
-    const currentGoal = await new GoalModel(tx, ctx.userId, ctx.workspaceId).lockById(
+    const currentGoal = await new GoalRepository(tx, ctx.userId, ctx.workspaceId).lockById(
       graph.goal.id,
     );
     const service = ctx.inTransaction(tx);

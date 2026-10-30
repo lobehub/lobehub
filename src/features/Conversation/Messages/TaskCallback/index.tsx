@@ -67,7 +67,7 @@ const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   const reason = (callback.reason ?? 'done') as CallbackReason;
   const { color, i18nKey, icon } = reasonMeta[reason] ?? reasonMeta.done;
   const content = typeof item?.content === 'string' ? item.content : '';
-  const openTask = () => openTaskDetail(callback.identifier);
+  const openTask = () => openTaskDetail(callback.taskId ?? callback.identifier);
 
   const viewTaskButton = (
     <Button icon={SquareArrowOutUpRight} size={'small'} type={'text'} onClick={openTask}>
