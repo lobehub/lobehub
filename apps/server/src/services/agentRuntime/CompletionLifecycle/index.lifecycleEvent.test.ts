@@ -398,6 +398,34 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     });
   });
 
+  it('carries the allowlisted cause of a failed sandbox dispatch', () => {
+    const { event } = callBuild(
+      {
+        error: {
+          body: {
+            dispatch: {
+              agentType: 'claude-code',
+              deviceAccessDenied: true,
+              missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+              stage: 'sandbox_spawn',
+            },
+          },
+          message: 'Hetero sandbox spawn failed',
+          type: 'ServerAgentRuntimeError',
+        },
+        origin: { agentId: 'agent-1', userId: 'user-1' },
+      },
+      'error',
+    );
+
+    expect(event.errorDispatch).toEqual({
+      agentType: 'claude-code',
+      deviceAccessDenied: true,
+      missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+      stage: 'sandbox_spawn',
+    });
+  });
+
   it('populates errorType + attribution from the normalized error on the error path', () => {
     // Regression: the event previously carried only errorDetail/errorMessage, so
     // bot reply renderers never saw the stable code/attribution and always fell

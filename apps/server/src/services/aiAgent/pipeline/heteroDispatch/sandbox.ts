@@ -89,6 +89,20 @@ const hasHeteroRunStarted = async (
 };
 
 /**
+ * The sandbox rejects a run whose agent credential is unset with prose such as
+ * `CLAUDE_CODE_OAUTH_TOKEN 未设置。请先在凭证管理中添加该凭证…`. Pull out only
+ * the variable name, and only when the text is about a credential, so an
+ * operator-side variable (`E2B_API_KEY is not set`) is never presented to IM
+ * members as something they should add under Credentials.
+ */
+const MISSING_CREDENTIAL =
+  /\b([A-Z][\dA-Z]*(?:_[\dA-Z]+)+)\s*(?:未设置|未配置|is not set|is not configured)/;
+const MENTIONS_CREDENTIAL = /凭证|credential/i;
+
+const readMissingCredential = (detail: string): string | undefined =>
+  MENTIONS_CREDENTIAL.test(detail) ? MISSING_CREDENTIAL.exec(detail)?.[1] : undefined;
+
+/**
  * Spawn a local CLI hetero agent in the cloud sandbox. The spawn is
  * fire-and-forget; its failure is settled in the background unless the run
  * demonstrably started (see `hasHeteroRunStarted`).
@@ -99,9 +113,14 @@ const hasHeteroRunStarted = async (
 export const spawnInCloudSandbox = async (
   deps: HeteroDispatchDeps,
   run: HeteroRun,
-  params: { heteroType: HeteroDispatchInput['heteroType']; prepared: PreparedHeteroRun },
+  params: {
+    /** The sender may not use the agent's device, which is why this run landed here. */
+    deviceAccessDenied?: boolean;
+    heteroType: HeteroDispatchInput['heteroType'];
+    prepared: PreparedHeteroRun;
+  },
 ): Promise<ExecAgentResult | undefined> => {
-  const { heteroType, prepared } = params;
+  const { deviceAccessDenied, heteroType, prepared } = params;
   const { heteroExecArgs, heteroParams, sandbox } = prepared;
   const { agentId: resolvedAgentId, assistantMessageId, operationId, topicId } = run;
 
@@ -158,10 +177,18 @@ export const spawnInCloudSandbox = async (
     // ran — see `hasHeteroRunStarted`.
     if (await hasHeteroRunStarted(deps, { operationId, topicId })) return;
 
+    const detail = err instanceof Error ? err.message : String(err);
+    const missingCredential = readMissingCredential(detail);
     await finalizeHeteroDispatchError(deps, {
       agentId: resolvedAgentId,
       assistantMessageId,
-      detail: err instanceof Error ? err.message : String(err),
+      detail,
+      dispatch: {
+        agentType: heteroType,
+        ...(deviceAccessDenied && { deviceAccessDenied }),
+        ...(missingCredential && { missingCredential }),
+        stage: 'sandbox_spawn',
+      },
       message: 'Hetero sandbox spawn failed',
       operationId,
       topicId,

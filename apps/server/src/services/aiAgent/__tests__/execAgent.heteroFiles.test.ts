@@ -2437,7 +2437,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect(errorBubbleUpdates()[0][1]).toEqual(
         expect.objectContaining({
           error: expect.objectContaining({
-            body: { detail: 'Gateway Timeout' },
+            body: expect.objectContaining({ detail: 'Gateway Timeout' }),
             message: 'Hetero sandbox spawn failed',
           }),
         }),

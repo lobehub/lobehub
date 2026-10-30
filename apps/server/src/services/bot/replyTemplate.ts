@@ -3,7 +3,11 @@ import {
   getErrorCodeSpec,
   normalizeChatMessageError,
 } from '@lobechat/model-runtime/errors';
-import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
+import type {
+  ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
+  ChatErrorHeterogeneousContext,
+} from '@lobechat/types';
 
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
@@ -13,6 +17,7 @@ import { getExtremeAck } from './ackPhrases';
 // Telegram Guest outbound path import this template for localized copy.
 import { type BotReplyLocale } from './platforms/const';
 import { formatDuration } from './platforms/utils';
+import { renderDispatchError } from './renderDispatchError';
 import { renderHeterogeneousError } from './renderHeterogeneousError';
 
 // Use raw Unicode emoji instead of Chat SDK emoji placeholders,
@@ -728,6 +733,9 @@ const isCommandConnectionClosedError = (
  *    learns who owns the failure and whether to retry.
  * 3. **Legacy** — when neither is known, the opaque `Operation ID` template.
  *
+ * Allowlisted external-agent (`heterogeneous`) and fail-fast dispatch
+ * (`dispatch`) contexts take precedence over all three tiers.
+ *
  * The Operation ID is appended as a footer to every tier (not the whole
  * message) so it stays traceable in logs without being the only thing the
  * user sees.
@@ -740,10 +748,15 @@ export function renderAgentError(
   attribution?: string,
   budget?: ChatErrorBudgetContext,
   heterogeneous?: ChatErrorHeterogeneousContext,
+  dispatch?: ChatErrorDispatchContext,
 ): string {
   const strings = getSystemStrings(lng);
   const heteroReply = renderHeterogeneousError(heterogeneous);
   if (heteroReply) return appendOperationId(heteroReply, operationId);
+  // A run that failed before its agent started: name the cause (missing
+  // sandbox credential, device-access fallback) instead of the bare legacy tier.
+  const dispatchReply = renderDispatchError(dispatch, lng);
+  if (dispatchReply) return appendOperationId(dispatchReply, operationId);
 
   const normalized = normalizeChatMessageError({
     message: errorMessage,
