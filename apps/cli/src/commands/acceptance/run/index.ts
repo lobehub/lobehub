@@ -37,6 +37,7 @@ import {
   withRunCreateOptions,
   withRunDeleteOptions,
 } from './session';
+import { attachTerminalEvidenceCommands } from './terminal';
 
 // ── Actions ────────────────────────────────────────────────
 //
@@ -172,8 +173,11 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
   withEvidenceUploadOptions(
     evidence
       .command('upload')
-      .description('Attach an evidence artifact (file or inline text) to a check result'),
+      .description(
+        'Attach an evidence artifact (file, inline text, or terminal bundle) to a check result',
+      ),
   ).action(evidenceUploadAction);
+  attachTerminalEvidenceCommands(evidence);
   evidence
     .command('list <checkResultId>')
     .description('List evidence for a check result')

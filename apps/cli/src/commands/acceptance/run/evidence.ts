@@ -10,7 +10,7 @@ import {
   evidenceMetadataFromOptions,
   inlineTextEvidenceForFile,
 } from '../utils';
-import { uploadAcceptanceFile } from './evidenceUpload';
+import { terminalEvidenceFor, uploadAcceptanceFile } from './evidenceUpload';
 
 // ── evidence ──
 
@@ -24,12 +24,20 @@ export interface EvidenceUploadOptions {
   fileId?: string;
   json?: boolean | string;
   metadata?: string;
-  type: string;
+  terminal?: string;
+  type?: string;
 }
 
 export async function evidenceUploadAction(options: EvidenceUploadOptions): Promise<void> {
-  if ([options.file, options.content, options.fileId].filter(Boolean).length !== 1) {
-    log.error('Provide exactly one of --file, --file-id or --content');
+  if (
+    [options.file, options.content, options.fileId, options.terminal].filter(Boolean).length !== 1
+  ) {
+    log.error('Provide exactly one of --file, --file-id, --content or --terminal');
+    process.exit(1);
+  }
+  if (options.terminal) return terminalEvidenceUploadAction(options);
+  if (!options.type) {
+    log.error('--type is required (or publish a terminal bundle with --terminal <dir>)');
     process.exit(1);
   }
   const metadata = evidenceMetadataFromOptions(options);
@@ -41,7 +49,7 @@ export async function evidenceUploadAction(options: EvidenceUploadOptions): Prom
   let fileId = options.fileId;
   let inlineContent = options.content;
   if (options.file) {
-    inlineContent = inlineTextEvidenceForFile(options.file, options.type);
+    inlineContent = inlineTextEvidenceForFile(options.file, options.type!);
     if (inlineContent === undefined) {
       const uploaded = await uploadAcceptanceFile(client, options.file, options.json);
       if (!uploaded) return;
@@ -62,6 +70,30 @@ export async function evidenceUploadAction(options: EvidenceUploadOptions): Prom
     return;
   }
   console.log(`${pc.green('✓')} Evidence ${pc.bold(ev.id)}${fileId ? ` (file ${fileId})` : ''}`);
+}
+
+async function terminalEvidenceUploadAction(options: EvidenceUploadOptions): Promise<void> {
+  if (options.type && options.type !== 'terminal') {
+    log.error('--terminal publishes terminal evidence; drop --type or pass --type terminal');
+    process.exit(1);
+  }
+  if (options.chapters || options.metadata) {
+    log.error('--terminal carries its own record; drop --chapters/--metadata');
+    process.exit(1);
+  }
+  const client = await getTrpcClient();
+  await assertReportLanguage(client, [{ path: '--desc', text: options.desc }]);
+  const terminal = await terminalEvidenceFor(client, options.terminal!, options);
+  if (!terminal) return;
+  const ev = await client.verify.uploadEvidence.mutate({
+    ...terminal,
+    checkResultId: options.check,
+  });
+  if (options.json !== undefined) {
+    outputJson(ev, typeof options.json === 'string' ? options.json : undefined);
+    return;
+  }
+  console.log(`${pc.green('✓')} Terminal evidence ${pc.bold(ev.id)} (${terminal.description})`);
 }
 
 export async function evidenceListAction(
@@ -103,11 +135,15 @@ export async function evidenceDeleteAction(
 export function withEvidenceUploadOptions(cmd: Command): Command {
   return cmd
     .requiredOption('--check <checkResultId>', 'Target check result id')
-    .requiredOption(
+    .option(
       '--type <type>',
-      'screenshot|gif|video|audio|text|markdown|dom_snapshot|transcript',
+      'screenshot|gif|video|audio|text|markdown|dom_snapshot|transcript (implied by --terminal)',
     )
     .option('--file <path>', 'Local file to upload as the artifact')
+    .option(
+      '--terminal <dir>',
+      'Terminal evidence bundle written by `lh acceptance run evidence capture|import`',
+    )
     .option('--file-id <id>', 'Attach an already-uploaded file without uploading it again')
     .option('--content <text>', 'Inline text payload (instead of a file)')
     .option('--metadata <json>', 'Evidence metadata, preserved when retrying an attachment')

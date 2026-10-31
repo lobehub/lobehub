@@ -413,12 +413,12 @@ export async function ingestReportAction(reportDir: string, options: IngestRepor
     inlined += uploaded.inlined;
     failedEvidence.push(...uploaded.failedEvidence.map((failure) => ({ ...failure, checkItemId })));
     publishedEvidence.push(...uploaded.published.map((item) => ({ ...item, checkItemId })));
-    const gaps = requiredEvidenceGaps(plan, checkItemId, uploaded.types);
+    const { executionGaps, gaps } = requiredEvidenceGaps(plan, checkItemId, uploaded.coverage);
     const publishedVerdict = publishedVerdictFor(verdict, gaps);
     publishedVerdicts.push(publishedVerdict);
     if (gaps.length > 0) {
       missingEvidence.push({ checkItemId, types: gaps });
-      const limitation = missingEvidenceLimitation(gaps);
+      const limitation = missingEvidenceLimitation(gaps, executionGaps);
       log.warn(`${checkItemId}: ${limitation}`);
       await client.verify.ingestResult.mutate({
         ...checkInput,
