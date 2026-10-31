@@ -254,7 +254,7 @@ jobs:
 
     runs-on: ubuntu-latest
     # checks + pull-requests: the alint steps publish an "ALint" check run and
-    # keep one summary comment on the PR up to date.
+    # keep one summary review on the PR up to date.
     permissions:
       actions: read
       checks: write
@@ -316,11 +316,16 @@ jobs:
 
       # ---- alint: model-backed lint rules (packages/alint) on this push's diff ----
       # Findings are published as a separate "ALint" check (red when a rule at
-      # `error` level fires) plus one summary comment on the PR, rewritten on
-      # every push. This job itself never fails because of alint. Skipped when
-      # the provider secret is unavailable (forks) and for weekly release PRs and
-      # pushes to main (see ALINT_SKIP_REASON). Runs here to reuse the root
-      # install instead of paying for another job.
+      # `error` level fires) plus one PR review: its summary body is rewritten
+      # on every push, and every finding gets an inline comment on its own line
+      # — like an eslint run. A file that piles up more than 5 findings is
+      # commented once instead, which keeps a runaway run inside the 1000
+      # requests/hour GITHUB_TOKEN budget of the whole repository; at the
+      # observed volume (a handful of warnings, one per file) per-line comments
+      # cost one request each. This job itself never fails because of alint.
+      # Skipped when the provider secret is unavailable (forks) and for weekly
+      # release PRs and pushes to main (see ALINT_SKIP_REASON). Runs here to
+      # reuse the root install instead of paying for another job.
       - name: alint · report a skipped run
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON != '' }}
         run: echo "::notice::ALint skipped for this ${ALINT_SKIP_REASON}"

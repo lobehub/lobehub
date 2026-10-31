@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  COMMENT_MARKER,
+  AGGREGATE_THRESHOLD,
+  REVIEW_MARKER,
+  findingMarker,
   toAnnotations,
   toConclusion,
+  toFindingComments,
   toFindings,
   toMarkdown,
   toTitle,
@@ -114,6 +117,100 @@ describe('verdict', () => {
   });
 });
 
+describe('toFindingComments', () => {
+  const file = 'apps/server/src/services/x.ts';
+  const on = (line: number) =>
+    diagnostic({ loc: { start: { column: 0, line } }, message: `finding at ${line}` });
+  const commentsFor = (...lines: number[]) =>
+    toFindingComments(toFindings({ diagnostics: lines.map(on) }, '/repo'));
+
+  it('comments one line per finding, like an eslint run', () => {
+    expect(commentsFor(12, 40)).toEqual([
+      {
+        body: [
+          findingMarker(`${file}:12`),
+          '**`pmap-over-promise-all`** · error',
+          '',
+          'finding at 12',
+        ].join('\n'),
+        key: `${file}:12`,
+        line: 12,
+        path: file,
+        side: 'RIGHT',
+      },
+      {
+        body: [
+          findingMarker(`${file}:40`),
+          '**`pmap-over-promise-all`** · error',
+          '',
+          'finding at 40',
+        ].join('\n'),
+        key: `${file}:40`,
+        line: 40,
+        path: file,
+        side: 'RIGHT',
+      },
+    ]);
+  });
+
+  it('keys findings that share a line apart, so fixing one leaves no comment behind', () => {
+    const comments = toFindingComments(
+      toFindings(
+        {
+          diagnostics: [
+            diagnostic({ message: 'first rule' }),
+            diagnostic({ message: 'second rule', ruleId: 'lobehub/no-mode-flags' }),
+            diagnostic({ message: 'first rule, again' }),
+          ],
+        },
+        '/repo',
+      ),
+    );
+
+    expect(comments.map((comment) => comment.key)).toEqual([
+      `${file}:12:pmap-over-promise-all`,
+      `${file}:12:no-mode-flags`,
+      `${file}:12:pmap-over-promise-all#2`,
+    ]);
+    for (const comment of comments)
+      expect(comment.body.startsWith(findingMarker(comment.key))).toBe(true);
+  });
+
+  it(`keeps the per-line comments up to ${5} findings and aggregates above`, () => {
+    expect(commentsFor(1, 2, 3, 4, 5)).toHaveLength(AGGREGATE_THRESHOLD);
+
+    const [aggregated] = commentsFor(1, 2, 3, 4, 5, 6);
+    expect(aggregated.key).toBe(file);
+    expect(aggregated.line).toBe(1);
+    expect(aggregated.body).toContain('**ALint · 6 findings in this file**');
+    expect(aggregated.body.match(/^- /gm)).toHaveLength(6);
+  });
+
+  it('carries the suggestion inline, and leaves it out when the rule has none', () => {
+    const [withSuggestion] = toFindingComments(
+      toFindings({ diagnostics: [diagnostic()] }, '/repo'),
+    );
+    expect(withSuggestion.body).toContain('💡 use pMap with a cap');
+
+    const [without] = toFindingComments(
+      toFindings({ diagnostics: [diagnostic({ message: 'fans out' })] }, '/repo'),
+    );
+    expect(without.body).not.toContain('💡');
+  });
+
+  it('caps a run at 50 comments, like the annotations', () => {
+    const findings = toFindings(
+      {
+        diagnostics: Array.from({ length: 60 }, (_, index) =>
+          diagnostic({ filePath: `/repo/src/file-${index}.ts` }),
+        ),
+      },
+      '/repo',
+    );
+    expect(toFindingComments(findings)).toHaveLength(50);
+  });
+});
+
 describe('toMarkdown', () => {
   it('renders a marked comment with a linked row per finding and escaped cells', () => {
     const markdown = toMarkdown(toFindings({ diagnostics: [diagnostic()] }, '/repo'), {
@@ -121,7 +218,7 @@ describe('toMarkdown', () => {
       runUrl: 'https://example.com/run',
       sha: 'abcdef1234567',
     });
-    expect(markdown.startsWith(COMMENT_MARKER)).toBe(true);
+    expect(markdown.startsWith(REVIEW_MARKER)).toBe(true);
     expect(markdown).toContain('### ❌ ALint · 1 error');
     expect(markdown).toContain(
       '[`apps/server/src/services/x.ts:12`](https://github.com/lobehub/lobehub/blob/abcdef1234567/apps/server/src/services/x.ts#L12)',
