@@ -19,6 +19,7 @@ import {
 import { resolveDeviceWorkingDirectoryConfig } from '../../resolveDeviceWorkingDirectory';
 import type { ExecRunContext } from '../../types';
 import { selectCodexDeviceDispatch } from '../codexDeviceRuntime';
+import { buildCodexWorktreeWritableArgs } from './codexWorktreeArgs';
 import type { PreparedHeteroRun } from './prepare';
 import { scheduleTimedOutDispatchConfirmation } from './timeoutConfirmation';
 import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types';
@@ -173,6 +174,17 @@ export const dispatchToCliDevice = async (
   const worktreeContext = worktreePath
     ? { activeWorktree: { path: worktreePath, sourceDirectory: deviceCwd } }
     : {};
+  const worktreeArgs =
+    heteroType === 'codex'
+      ? buildCodexWorktreeWritableArgs({
+          providerArgs:
+            heterogeneousProvider?.type === heteroType ? heterogeneousProvider.args : undefined,
+          sourceDirectory: deviceCwd,
+          worktreePath,
+        })
+      : [];
+  const deviceArgs =
+    worktreeArgs.length > 0 ? [...(heteroExecArgs ?? []), ...worktreeArgs] : heteroExecArgs;
 
   // An unbound topic has no pinned cwd yet: the directory was only
   // recorded at agent level (`workingDirByDevice`) when no topic existed.
@@ -224,7 +236,7 @@ export const dispatchToCliDevice = async (
         ...heteroParams,
         agentId: resolvedAgentId,
         // Only a live client advertising the native protocol receives these wrapper flags.
-        args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
+        args: nativeCodex ? [...(deviceArgs ?? []), ...nativeCodex.args] : deviceArgs,
         ...(claudeAccountRouting && { claudeAccountRouting }),
         clientKinds: nativeCodex?.clientKinds,
         cwd: deviceCwd,
