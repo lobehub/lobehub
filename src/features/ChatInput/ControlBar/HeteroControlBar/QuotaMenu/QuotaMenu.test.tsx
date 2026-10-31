@@ -155,13 +155,15 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
     async (importOriginal) => ({
       ...((await importOriginal()) as Record<string, unknown>),
       ActionIcon: ({
+        'aria-label': ariaLabel,
         onClick,
         title,
         disabled,
       }: {
-        disabled?: boolean;
-        onClick?: (e: React.MouseEvent) => void;
-        title?: string;
+        'aria-label'?: string;
+        'disabled'?: boolean;
+        'onClick'?: (e: React.MouseEvent) => void;
+        'title'?: string;
       }) => (
         <button
           aria-label={ariaLabel ?? title}
