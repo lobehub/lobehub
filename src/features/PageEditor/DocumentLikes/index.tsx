@@ -1,7 +1,9 @@
 'use client';
 
 import type { DocumentLikeSummary } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
+import { Flexbox, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ThumbsUp } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,94 +22,67 @@ import { resolveDocumentSectionState } from '../isDocumentUnavailableError';
 const BUTTON_SIZE = 56;
 const ICON_SIZE = 22;
 
-const styles = createStaticStyles(({ css }) => ({
-  avatars: css`
-    flex-wrap: wrap;
-    justify-content: center;
-
-    /* ~15 avatars per row: 15 × (32px avatar + 8px gap) */
-    max-width: 600px;
-    min-height: 32px;
-  `,
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: ${BUTTON_SIZE}px;
-    height: ${BUTTON_SIZE}px;
-    padding: 0;
-    border: 1px solid ${cssVar.colorPrimary};
-    border-radius: 50%;
-
-    color: ${cssVar.colorPrimary};
-
-    background: transparent;
-
-    transition:
-      transform ${cssVar.motionDurationMid} ${cssVar.motionEaseOutBack},
-      background-color ${cssVar.motionDurationMid},
-      border-color ${cssVar.motionDurationMid},
-      color ${cssVar.motionDurationMid},
-      box-shadow ${cssVar.motionDurationMid};
-
-    &:hover {
-      transform: scale(1.06);
-      background: ${cssVar.colorPrimaryBg};
-    }
-
-    &:active {
-      transform: scale(0.94);
-    }
-
-    &:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 3px ${cssVar.colorPrimaryBg};
-    }
-
-    &[aria-pressed='true'] {
-      border-color: ${cssVar.colorWarning};
-      color: ${cssVar.colorWhite};
-      background: ${cssVar.colorWarning};
-      box-shadow: 0 8px 24px ${cssVar.colorWarningBg};
-
-      &:hover {
-        background: ${cssVar.colorWarningHover};
-      }
-
-      &:focus-visible {
-        box-shadow: 0 0 0 3px ${cssVar.colorWarningBg};
-      }
-    }
-
-    &:disabled {
-      cursor: progress;
-      opacity: 0.7;
-    }
-  `,
-  caption: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-
-    &::before,
-    &::after {
-      content: '';
-      width: 40px;
-      height: 1px;
-      background: ${cssVar.colorBorderSecondary};
-    }
-  `,
-  section: css`
-    width: 100%;
-    margin-block-start: 48px;
-  `,
-}));
+const styles = stylex.create({
+  // ~15 avatars per row: 15 × (32px avatar + 8px gap)
+  avatars: {
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    maxWidth: '600px',
+    minHeight: '32px',
+  },
+  button: {
+    cursor: { 'default': 'pointer', ':disabled': 'progress' },
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: `${BUTTON_SIZE}px`,
+    height: `${BUTTON_SIZE}px`,
+    padding: 0,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorPrimary,
+    borderRadius: '50%',
+    color: cssVar.colorPrimary,
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorPrimaryBg },
+    backgroundImage: 'none',
+    opacity: { 'default': null, ':disabled': 0.7 },
+    transform: { 'default': null, ':hover': 'scale(1.06)', ':active': 'scale(0.94)' },
+    transition: `transform ${cssVar.motionDurationMid} ${cssVar.motionEaseOutBack}, background-color ${cssVar.motionDurationMid}, border-color ${cssVar.motionDurationMid}, color ${cssVar.motionDurationMid}, box-shadow ${cssVar.motionDurationMid}`,
+    outlineStyle: { 'default': null, ':focus-visible': 'none' },
+    boxShadow: { 'default': null, ':focus-visible': `0 0 0 3px ${cssVar.colorPrimaryBg}` },
+  },
+  buttonPressed: {
+    borderColor: cssVar.colorWarning,
+    color: cssVar.colorWhite,
+    backgroundColor: { 'default': cssVar.colorWarning, ':hover': cssVar.colorWarningHover },
+    boxShadow: {
+      'default': `0 8px 24px ${cssVar.colorWarningBg}`,
+      ':focus-visible': `0 0 0 3px ${cssVar.colorWarningBg}`,
+    },
+  },
+  caption: {
+    'display': 'flex',
+    'gap': '16px',
+    'alignItems': 'center',
+    'color': cssVar.colorTextTertiary,
+    'whiteSpace': 'nowrap',
+    '::before': {
+      content: '""',
+      width: '40px',
+      height: '1px',
+      backgroundColor: cssVar.colorBorderSecondary,
+      backgroundImage: 'none',
+    },
+    '::after': {
+      content: '""',
+      width: '40px',
+      height: '1px',
+      backgroundColor: cssVar.colorBorderSecondary,
+      backgroundImage: 'none',
+    },
+  },
+  section: { width: '100%', marginBlockStart: '48px' },
+});
 
 const useDocumentLikeSummary = (workspaceId: string | null, documentId?: string | null) =>
   useClientDataSWR<DocumentLikeSummary>(
@@ -201,7 +176,12 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   if (sectionState === 'hidden') return null;
   if (sectionState === 'error')
     return (
-      <Flexbox data-document-likes align={'center'} className={styles.section} gap={16}>
+      <Flexbox
+        data-document-likes
+        align={'center'}
+        className={stylex.props(styles.section).className}
+        gap={16}
+      >
         <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
       </Flexbox>
     );
@@ -210,7 +190,12 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   // flashing the finished idle state ahead of the rest of the content.
   if (isLoading && !data)
     return (
-      <Flexbox data-document-likes align={'center'} className={styles.section} gap={16}>
+      <Flexbox
+        data-document-likes
+        align={'center'}
+        className={stylex.props(styles.section).className}
+        gap={16}
+      >
         <Skeleton.Avatar shape={'circle'} size={BUTTON_SIZE} />
         <Skeleton height={20} width={200} />
       </Flexbox>
@@ -230,14 +215,14 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
     <Flexbox
       data-document-likes
       align={'center'}
-      className={styles.section}
+      className={stylex.props(styles.section).className}
       gap={16}
       onClick={(event) => event.stopPropagation()}
     >
       <button
         aria-label={ariaLabel}
         aria-pressed={liked}
-        className={styles.button}
+        {...stylex.props(styles.button, liked && styles.buttonPressed)}
         disabled={isLoading || !data}
         type={'button'}
         onClick={() => void toggle()}
@@ -248,13 +233,13 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
           strokeWidth={liked ? 0 : 1.5}
         />
       </button>
-      <span className={styles.caption}>
+      <span {...stylex.props(styles.caption)}>
         <Text as={'span'} color={'inherit'} fontSize={13}>
           {label}
         </Text>
       </span>
       {(likers.length > 0 || overflow > 0) && (
-        <Flexbox horizontal className={styles.avatars} gap={8}>
+        <Flexbox horizontal className={stylex.props(styles.avatars).className} gap={8}>
           {likers.map((liker) => {
             const name = liker.fullName || liker.username || liker.id;
             return (

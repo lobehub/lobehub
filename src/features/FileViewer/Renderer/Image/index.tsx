@@ -1,11 +1,14 @@
 'use client';
 
-import { Button, Center, confirmModal, createStaticStyles, cssVar, Spin, Text } from '@lobehub/ui';
+import { Button, Center, confirmModal, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getFileDownloadUrl } from '@/features/EditorCanvas/fileDownload';
+import { sx } from '@/styles/sx';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import {
@@ -35,48 +38,26 @@ const STAGE_PADDING = { block: 56, inline: 16 };
 /** Below this viewer width the tool bars switch to icons so they never wrap. */
 const COMPACT_WIDTH = 640;
 
-const styles = createStaticStyles(({ css }) => ({
-  frame: css`
-    position: absolute;
-    inset-block-start: 50%;
-    inset-inline-start: 50%;
-  `,
-  image: css`
-    user-select: none;
-
-    display: block;
-
-    width: 100%;
-    height: 100%;
-
-    -webkit-user-drag: none;
-  `,
-  overlay: css`
-    position: absolute;
-    inset: 0;
-  `,
-  root: css`
-    position: relative;
-
-    overflow: hidden;
-
-    width: 100%;
-    height: 100%;
-    min-height: 240px;
-
-    background: ${cssVar.colorFillQuaternary};
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: -2px;
-    }
-  `,
-  stage: css`
-    touch-action: none;
-    position: absolute;
-    inset: 0;
-  `,
-}));
+const styles = stylex.create({
+  frame: { position: 'absolute', insetBlockStart: '50%', insetInlineStart: '50%' },
+  // The <img> is also `draggable={false}`, which covers `-webkit-user-drag: none`.
+  image: { userSelect: 'none', display: 'block', width: '100%', height: '100%' },
+  overlay: { position: 'absolute', inset: 0 },
+  root: {
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
+    minHeight: '240px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+  },
+  stage: { touchAction: 'none', position: 'absolute', inset: 0 },
+});
 
 interface ImageViewerProps {
   fileId: string;
@@ -371,7 +352,7 @@ const ImageViewer = ({
       <div
         aria-label={name}
         aria-roledescription={'image viewer'}
-        className={styles.root}
+        {...stylex.props(styles.root)}
         data-testid={'image-viewer'}
         ref={rootRef}
         role={'region'}
@@ -379,30 +360,28 @@ const ImageViewer = ({
         onKeyDown={handleKeyDown}
       >
         <div
-          className={styles.stage}
           ref={stageRef}
-          style={{
+          {...sx(styles.stage, undefined, {
             cursor: zoom > 1 ? 'grab' : undefined,
             insetBlockEnd: reserve.bottom ?? 0,
             insetInlineEnd: reserve.right ?? 0,
-          }}
+          })}
           onPointerCancel={endPan}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={endPan}
         >
           <div
-            className={styles.frame}
-            style={{
+            {...sx(styles.frame, undefined, {
               height: box.height,
               transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg)`,
               visibility: status === 'loaded' ? 'visible' : 'hidden',
               width: box.width,
-            }}
+            })}
           >
             <img
               alt={name || 'image'}
-              className={styles.image}
+              {...stylex.props(styles.image)}
               draggable={false}
               key={`${url}:${attempt}`}
               src={url}
@@ -414,7 +393,7 @@ const ImageViewer = ({
               }}
             />
             <div
-              className={styles.overlay}
+              {...stylex.props(styles.overlay)}
               data-testid={'image-viewer-overlay'}
               ref={setOverlayElement}
             />

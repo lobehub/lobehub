@@ -1,6 +1,8 @@
 import type { GoalEventType, GoalGraphEvent, GoalNodeKind } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar as cssVarValue, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   Archive,
@@ -36,6 +38,7 @@ import type {
 import { KIND_ICON } from '@/features/AgentGoals/ProcessControl/shared';
 import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalProcessActions';
 import { goalSelectors, useGoalStore } from '@/store/goal';
+import { sx } from '@/styles/sx';
 
 import type { LifecycleNote } from './lifecycleEvent';
 import { buildLifecycleDays, type LifecycleGroup, type LifecycleRow } from './lifecycleRows';
@@ -59,170 +62,150 @@ const PANEL_PADDING = 16;
 /** How much closer to the panel title a stuck day label sits than at rest. */
 const STUCK_LIFT = 12;
 
-const styles = createStaticStyles(({ css }) => ({
-  artifact: css`
-    margin: 0;
-    padding-block: 8px;
-    padding-inline: 10px;
-    border: none;
-    border-radius: ${cssVar.borderRadius};
-
-    font: inherit;
-    color: ${cssVar.colorText};
-    text-align: start;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  artifactIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  artifactOpenable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  badge: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: ${BADGE}px;
-    height: ${BADGE}px;
-    border-radius: 50%;
-  `,
+const styles = stylex.create({
+  artifact: {
+    margin: 0,
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    fontStyle: 'inherit',
+    fontWeight: 'inherit',
+    lineHeight: 'inherit',
+    color: cssVar.colorText,
+    textAlign: 'start',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  artifactIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadiusSM,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  artifactOpenable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+  },
+  badge: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: `${BADGE}px`,
+    height: `${BADGE}px`,
+    borderRadius: '50%',
+  },
   // Sticks past the panel's top edge instead of at the scroller's padding edge,
   // so rows scrolling by never show through a gap above it, and a stuck label
   // sits close under the panel title rather than a full padding below it. The
   // negative margin cancels the extra padding, leaving the resting layout as is.
   // Each day's header is bounded by its own group, so the next day pushes it out.
-  day: css`
-    position: sticky;
-    z-index: 1;
-    inset-block-start: -${PANEL_PADDING + STUCK_LIFT}px;
-
-    margin-block-start: -${PANEL_PADDING}px;
-    padding-block: ${PANEL_PADDING + 6}px 6px;
-
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  // The same header for a host that scrolls the whole page instead of owning a
-  // padded scroller: nothing to cancel, so it simply reads as a label.
-  dayPlain: css`
-    padding-block: 12px 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  item: css`
-    position: relative;
-    padding-block-end: 14px;
-
-    /* The next day's header reaches ${PANEL_PADDING}px up above it; the last
-       row leaves that much room so a card's bottom edge is never covered. */
-    &:last-child {
-      padding-block-end: ${PANEL_PADDING}px;
-    }
-
-    /* The rail: runs from under this badge to the next one. */
-    &:not(:last-child)::before {
-      content: '';
-
-      position: absolute;
-      inset-block: ${BADGE + 4}px 2px;
-      inset-inline-start: ${BADGE / 2 - 0.5}px;
-
-      width: 1px;
-
-      background: ${cssVar.colorBorderSecondary};
-    }
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-  reason: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    overflow-wrap: anywhere;
-    white-space: pre-line;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  subject: css`
-    cursor: pointer;
-
-    overflow: hidden;
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    margin: 0;
-    padding-block: 1px;
-    padding-inline: 6px;
-    border: none;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font: inherit;
-    color: ${cssVar.colorText};
-    text-align: start;
-
-    background: none;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  subjectTitle: css`
-    overflow: hidden;
-    font-size: 13px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+  day: {
+    position: 'sticky',
+    zIndex: 1,
+    insetBlockStart: `-${PANEL_PADDING + STUCK_LIFT}px`,
+    marginBlockStart: `-${PANEL_PADDING}px`,
+    paddingBlockStart: `${PANEL_PADDING + 6}px`,
+    paddingBlockEnd: '6px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  dayPlain: {
+    paddingBlockStart: '12px',
+    paddingBlockEnd: '6px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: cssVar.colorTextTertiary,
+  },
+  item: { position: 'relative', paddingBlockEnd: '14px' },
+  // The next day's header reaches PANEL_PADDING up above it; the last row
+  // leaves that much room so a card's bottom edge is never covered.
+  itemLast: { paddingBlockEnd: `${PANEL_PADDING}px` },
+  // The rail: runs from under this badge to the next one.
+  itemRail: {
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      insetBlockStart: `${BADGE + 4}px`,
+      insetBlockEnd: '2px',
+      insetInlineStart: `${BADGE / 2 - 0.5}px`,
+      width: '1px',
+      backgroundColor: cssVar.colorBorderSecondary,
+      backgroundImage: 'none',
+    },
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+  reason: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 3,
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+    overflowWrap: 'anywhere',
+    whiteSpace: 'pre-line',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  subject: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: 0,
+    margin: 0,
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadiusSM,
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    fontStyle: 'inherit',
+    fontWeight: 'inherit',
+    lineHeight: 'inherit',
+    color: cssVar.colorText,
+    textAlign: 'start',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+  },
+  subjectTitle: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface Tone {
   bg: string;
   fg: string;
 }
 
-const NEUTRAL: Tone = { bg: cssVar.colorFillTertiary, fg: cssVar.colorTextSecondary };
+const NEUTRAL: Tone = { bg: cssVarValue.colorFillTertiary, fg: cssVarValue.colorTextSecondary };
 
 const EVENT_VISUAL: Record<GoalEventType, { icon: LucideIcon; tone: Tone }> = {
   // Starting an attempt is progress, not an outcome — it stays neutral so only
@@ -230,8 +213,8 @@ const EVENT_VISUAL: Record<GoalEventType, { icon: LucideIcon; tone: Tone }> = {
   activated: { icon: Play, tone: NEUTRAL },
   created: { icon: Plus, tone: NEUTRAL },
   linked: { icon: Link2, tone: NEUTRAL },
-  rejected: { icon: X, tone: { bg: cssVar.colorErrorBg, fg: cssVar.colorError } },
-  resolved: { icon: Check, tone: { bg: cssVar.colorSuccessBg, fg: cssVar.colorSuccess } },
+  rejected: { icon: X, tone: { bg: cssVarValue.colorErrorBg, fg: cssVarValue.colorError } },
+  resolved: { icon: Check, tone: { bg: cssVarValue.colorSuccessBg, fg: cssVarValue.colorSuccess } },
   retired: { icon: Archive, tone: NEUTRAL },
   unlinked: { icon: Unlink, tone: NEUTRAL },
   updated: { icon: Pencil, tone: NEUTRAL },
@@ -304,9 +287,13 @@ const eventKind = (
 const Subject = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView }>(
   ({ onSelect, view }) => (
     // A real button, so the node is reachable by Tab and opens on Enter / Space.
-    <button className={styles.subject} type={'button'} onClick={() => onSelect(view.node.id)}>
-      <Icon color={cssVar.colorTextTertiary} icon={KIND_ICON[view.node.kind]} size={13} />
-      <span className={styles.subjectTitle}>{view.node.title}</span>
+    <button
+      {...stylex.props(styles.subject)}
+      type={'button'}
+      onClick={() => onSelect(view.node.id)}
+    >
+      <Icon color={cssVarValue.colorTextTertiary} icon={KIND_ICON[view.node.kind]} size={13} />
+      <span {...stylex.props(styles.subjectTitle)}>{view.node.title}</span>
     </button>
   ),
 );
@@ -354,12 +341,12 @@ const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
       horizontal
       align={'center'}
       as={openable ? 'button' : 'div'}
-      className={cx(styles.artifact, openable && styles.artifactOpenable)}
+      className={stylex.props(styles.artifact, openable && styles.artifactOpenable).className}
       gap={10}
       {...(openable ? { onClick: () => open(artifact), type: 'button' as const } : {})}
     >
-      <span className={styles.artifactIcon}>
-        <Icon color={cssVar.colorTextSecondary} icon={icon} size={16} />
+      <span {...stylex.props(styles.artifactIcon)}>
+        <Icon color={cssVarValue.colorTextSecondary} icon={icon} size={16} />
       </span>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Text ellipsis fontSize={13} weight={500}>
@@ -371,7 +358,7 @@ const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
           </Text>
         )}
       </Flexbox>
-      {openable && <Icon color={cssVar.colorTextQuaternary} icon={ArrowUpRight} size={14} />}
+      {openable && <Icon color={cssVarValue.colorTextQuaternary} icon={ArrowUpRight} size={14} />}
     </Flexbox>
   );
 });
@@ -406,8 +393,10 @@ const noteText = (note: LifecycleNote, t: (key: any, options?: any) => string) =
 const EventItem = memo<{
   graph: GoalGraphView;
   group: LifecycleGroup;
+  /** The day's last event: leaves room for the next day's header, and ends the rail. */
+  last: boolean;
   onSelect: (nodeId: string) => void;
-}>(({ graph, group, onSelect }) => {
+}>(({ graph, group, last, onSelect }) => {
   const { t } = useTranslation('chat');
   const { event, presentation } = group.rows[0] as LifecycleRow;
   const visual = EVENT_VISUAL[event.eventType] ?? { icon: History, tone: NEUTRAL };
@@ -438,8 +427,12 @@ const EventItem = memo<{
   const note = presentation.note ? noteText(presentation.note, t) : undefined;
 
   return (
-    <Flexbox horizontal className={styles.item} gap={10}>
-      <span className={styles.badge} style={{ background: tone.bg }}>
+    <Flexbox
+      horizontal
+      className={stylex.props(styles.item, last ? styles.itemLast : styles.itemRail).className}
+      gap={10}
+    >
+      <span {...sx(styles.badge, undefined, { background: tone.bg })}>
         <Icon color={tone.fg} icon={icon} size={12} />
       </span>
       <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
@@ -465,7 +458,7 @@ const EventItem = memo<{
             </Flexbox>
           ))}
           <Text
-            className={styles.mono}
+            className={stylex.props(styles.mono).className}
             fontSize={12}
             style={{ flex: 'none', marginInlineStart: 'auto', paddingInlineStart: 8 }}
             title={dayjs(event.createdAt).format('YYYY-MM-DD HH:mm:ss')}
@@ -478,7 +471,7 @@ const EventItem = memo<{
           <ArtifactCard artifact={artifact} key={artifact.workVersionId} />
         ))}
         {note && (
-          <div className={styles.reason} title={note}>
+          <div {...stylex.props(styles.reason)} title={note}>
             {note}
           </div>
         )}
@@ -548,13 +541,14 @@ const Lifecycle = memo<LifecycleProps>(({ goalId, graph, stickyDays = true, onSe
     <Flexbox gap={0}>
       {days.map(({ day, groups }) => (
         <Flexbox gap={2} key={day.valueOf()}>
-          <div className={stickyDays ? styles.day : styles.dayPlain}>{dayLabel(day)}</div>
+          <div {...stylex.props(stickyDays ? styles.day : styles.dayPlain)}>{dayLabel(day)}</div>
           <Flexbox gap={0}>
-            {groups.map((group) => (
+            {groups.map((group, index) => (
               <EventItem
                 graph={graph}
                 group={group}
                 key={group.rows[0].event.id}
+                last={index === groups.length - 1}
                 onSelect={select}
               />
             ))}

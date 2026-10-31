@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, keyframes } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CircleAlertIcon,
   EraserIcon,
@@ -15,6 +17,8 @@ import type { PointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { useImageStage } from '../../context';
 import {
@@ -51,74 +55,66 @@ const BrushDot = ({ index }: { index: number }) => (
   />
 );
 
-const sweep = keyframes`
-  from { transform: translateX(-100%); }
-  to { transform: translateX(100%); }
-`;
-const spin = keyframes`
-  to { transform: rotate(360deg); }
-`;
+const sweep = stylex.keyframes({
+  from: { transform: 'translateX(-100%)' },
+  to: { transform: 'translateX(100%)' },
+});
+const spin = stylex.keyframes({
+  to: { transform: 'rotate(360deg)' },
+});
 
-const styles = createStaticStyles(({ css }) => ({
-  error: css`
-    overflow: hidden;
-    display: flex;
-    flex-shrink: 1;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 420px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    color: ${cssVar.colorError};
-    white-space: nowrap;
-  `,
-  mask: css`
-    opacity: 0.5;
-  `,
-  progress: css`
-    pointer-events: none;
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset: 0;
-
-      background: linear-gradient(
-        90deg,
-        transparent 0%,
-        rgb(255 255 255 / 35%) 50%,
-        transparent 100%
-      );
-
-      animation: ${sweep} 1.6s ease-in-out infinite;
-    }
-  `,
-  spinner: css`
-    animation: ${spin} 1s linear infinite;
-  `,
-  status: css`
-    overflow: hidden;
-    display: flex;
-    flex-shrink: 1;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  error: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: 0,
+    maxWidth: '420px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorError,
+    whiteSpace: 'nowrap',
+  },
+  mask: { opacity: 0.5 },
+  progress: {
+    'pointerEvents': 'none',
+    'position': 'absolute',
+    'inset': 0,
+    'overflow': 'hidden',
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      inset: 0,
+      backgroundImage:
+        'linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 35%) 50%, transparent 100%)',
+      animationName: sweep,
+      animationDuration: '1.6s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite',
+    },
+  },
+  spinner: {
+    animationName: spin,
+    animationDuration: '1s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+  status: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: 0,
+    paddingInline: '8px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface AIEditModeProps {
   /** Injected in tests; defaults to the real image generation services. */
@@ -242,8 +238,8 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
     if (state.status === 'running') {
       const seconds = Math.max(0, Math.round((now - state.startedAt) / 1000));
       return (
-        <span aria-live={'polite'} className={styles.status} role={'status'}>
-          <LoaderCircleIcon className={styles.spinner} size={14} />
+        <span aria-live={'polite'} {...stylex.props(styles.status)} role={'status'}>
+          <LoaderCircleIcon className={stylex.props(styles.spinner).className} size={14} />
           {t(`imageViewer.ai.phase.${state.phase}`, { seconds })}
         </span>
       );
@@ -252,7 +248,7 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
       return (
         // The provider's raw message stays one hover away instead of in the line.
         <span
-          className={styles.error}
+          {...stylex.props(styles.error)}
           role={'alert'}
           title={state.kind === 'failed' ? state.message : undefined}
         >
@@ -266,7 +262,7 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
       );
     }
     return (
-      <span className={toolStyles.hint}>
+      <span {...stylex.props(toolStyles.hint)}>
         {t(isErase ? 'imageViewer.ai.erase.hint' : 'imageViewer.ai.removeBackground.hint')}
       </span>
     );
@@ -280,28 +276,29 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
             {isErase && (
               <canvas
                 aria-label={t('imageViewer.ai.erase.hint')}
-                className={`${toolStyles.overlayFill} ${styles.mask}`}
                 data-testid={'image-erase-canvas'}
                 ref={canvasRef}
                 role={'img'}
-                style={{
+                {...sx([toolStyles.overlayFill, styles.mask], undefined, {
                   cursor: running ? 'progress' : 'crosshair',
                   height: '100%',
                   touchAction: 'none',
                   width: '100%',
-                }}
+                })}
                 onPointerCancel={handlePointerUp}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
               />
             )}
-            {running && <div className={styles.progress} data-testid={'image-ai-progress'} />}
+            {running && (
+              <div {...stylex.props(styles.progress)} data-testid={'image-ai-progress'} />
+            )}
           </>,
           overlayElement,
         )}
-      <div className={toolStyles.dock}>
-        <div aria-label={label} className={toolStyles.bar} role={'toolbar'}>
+      <div {...stylex.props(toolStyles.dock)}>
+        <div aria-label={label} {...stylex.props(toolStyles.bar)} role={'toolbar'}>
           {isErase && !running && (
             <>
               {compact ? (
@@ -349,11 +346,11 @@ const AIEditMode = ({ deps, onExit, operation }: AIEditModeProps) => {
                 title={t('imageViewer.annotate.clear')}
                 onClick={() => setStrokes([])}
               />
-              <span className={toolStyles.divider} />
+              <span {...stylex.props(toolStyles.divider)} />
             </>
           )}
           {renderStatus()}
-          <span className={toolStyles.divider} />
+          <span {...stylex.props(toolStyles.divider)} />
           {running ? (
             <BarButton icon={XIcon} label={t('imageViewer.cancel')} onClick={cancel} />
           ) : (

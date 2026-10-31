@@ -14,7 +14,7 @@ import {
 } from '@/features/Portal/TopicComments/editorUtils';
 import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 
-import { styles } from './styles';
+import moduleStyles from './styles.module.css';
 import { useFreezeHeightWhileResizingImage } from './useFreezeHeightWhileResizingImage';
 
 export type DocumentCommentEditorValue = TopicCommentEditorValue;
@@ -94,8 +94,8 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
       <div
         ref={rootRef}
         className={cx(
-          styles.commentEditor,
-          flush && styles.commentEditorFlush,
+          moduleStyles.commentEditor,
+          flush && moduleStyles.commentEditorFlush,
           mentionPlainClassName,
         )}
       >
@@ -116,7 +116,7 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
             // padding lives here: the editor forwards this style to its
             // absolutely positioned placeholder as well, so a horizontal
             // padding would push the placeholder 8px past the caret. The
-            // inline padding sits on `styles.commentEditor` instead.
+            // inline padding sits on `moduleStyles.commentEditor` instead.
             paddingBlock: '6px 10px',
           }}
           onContentChange={() => onChange?.(readTopicCommentEditorValue(editor))}

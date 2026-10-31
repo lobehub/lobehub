@@ -1,12 +1,14 @@
 'use client';
 
 import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
+import { DEFAULT_BLOCK_ANCHOR_PADDING } from '@lobehub/editor/react';
 import { ActionIcon } from '@lobehub/ui';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
+import { sx } from '@/styles/sx';
 
 import { usePageEditorStore } from '../store';
 import { useCommentAnchors } from './anchor/context';
@@ -238,7 +240,13 @@ const BlockCommentMarker = memo<{ hostRef: React.RefObject<HTMLElement | null> }
     // Leaving the marker for anywhere else in the host, including the gap
     // back to the body, is covered by the host-level pointermove above; no
     // listener of its own needed here.
-    <div className={styles.blockMarker} ref={markerRef} style={{ top: target.top }}>
+    <div
+      ref={markerRef}
+      {...sx(styles.blockMarker, undefined, {
+        top: target.top,
+        width: DEFAULT_BLOCK_ANCHOR_PADDING,
+      })}
+    >
       <ActionIcon
         aria-label={t('pageEditor.comments.anchor.addToLine')}
         icon={MessageSquarePlus}

@@ -1,7 +1,9 @@
 'use client';
 
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
-import { Checkbox, createStaticStyles, cssVar, cx, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Checkbox, cssVar as cssVarValue, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +12,7 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useNotebookStore } from '@/store/notebook';
 import { notebookSelectors } from '@/store/notebook/selectors';
+import { sx } from '@/styles/sx';
 
 interface TodoItem {
   completed: boolean;
@@ -21,98 +24,73 @@ interface TodoState {
   updatedAt: string;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  collapsed: css`
-    overflow-y: hidden;
-    max-height: 0;
-    padding-block: 0 !important;
-    opacity: 0;
-  `,
-  container: css`
-    cursor: pointer;
-    user-select: none;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    background: ${cssVar.colorBgElevated};
-
-    transition: all 0.2s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  count: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  expanded: css`
-    overflow-y: auto;
-    max-height: 300px;
-    opacity: 1;
-  `,
-  header: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  itemRow: css`
-    padding-block: 6px;
-    padding-inline: 4px;
-    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-    font-size: 13px;
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  listContainer: css`
-    overflow-x: hidden;
-
-    /* Blockify the inline-flex Base UI Checkbox labels — without this the todo
-       rows flow inline and wrap several per line. */
-    display: flex;
-    flex-direction: column;
-
-    margin-block-start: 8px;
-    padding-block: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    transition:
-      max-height 0.25s ${cssVar.motionEaseInOut},
-      opacity 0.2s ${cssVar.motionEaseInOut},
-      padding 0.2s ${cssVar.motionEaseInOut};
-  `,
-  progress: css`
-    flex: 1;
-    height: 4px;
-    border-radius: 2px;
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressFill: css`
-    height: 100%;
-    border-radius: 2px;
-    background: ${cssVar.colorSuccess};
-    transition: width 0.3s ${cssVar.motionEaseInOut};
-  `,
-  root: css`
-    flex-shrink: 0;
-    padding-block-end: 12px;
-    padding-inline: 12px;
-  `,
-  textChecked: css`
-    color: ${cssVar.colorTextQuaternary};
-    text-decoration: line-through;
-  `,
-}));
+const styles = stylex.create({
+  collapsed: { overflowY: 'hidden', maxHeight: 0, paddingBlock: 0, opacity: 0 },
+  container: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+    backgroundColor: { 'default': cssVar.colorBgElevated, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    transition: `all 0.2s ${cssVar.motionEaseInOut}`,
+  },
+  count: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  expanded: { overflowY: 'auto', maxHeight: '300px', opacity: 1 },
+  header: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  itemRow: {
+    paddingBlock: '6px',
+    paddingInline: '4px',
+    borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
+    borderBlockEndStyle: { 'default': 'dashed', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontSize: '13px',
+  },
+  listContainer: {
+    overflowX: 'hidden',
+    // Blockify the inline-flex Base UI Checkbox labels — without this the todo
+    // rows flow inline and wrap several per line.
+    display: 'flex',
+    flexDirection: 'column',
+    marginBlockStart: '8px',
+    paddingBlock: '4px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    transition: `max-height 0.25s ${cssVar.motionEaseInOut}, opacity 0.2s ${cssVar.motionEaseInOut}, padding 0.2s ${cssVar.motionEaseInOut}`,
+  },
+  progress: {
+    flex: '1',
+    height: '4px',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+    transition: `width 0.3s ${cssVar.motionEaseInOut}`,
+  },
+  root: { flexShrink: 0, paddingBlockEnd: '12px', paddingInline: '12px' },
+  textChecked: { color: cssVar.colorTextQuaternary, textDecoration: 'line-through' },
+});
 
 const TodoList = memo(() => {
   const { t } = useTranslation('portal');
@@ -143,17 +121,21 @@ const TodoList = memo(() => {
   const toggleExpanded = () => setExpanded(!expanded);
 
   return (
-    <div className={styles.root}>
-      <div className={styles.container} onClick={toggleExpanded}>
+    <div {...stylex.props(styles.root)}>
+      <div {...stylex.props(styles.container)} onClick={toggleExpanded}>
         {/* Header */}
         <Flexbox horizontal align="center" gap={8} justify="space-between">
           <Flexbox horizontal align="center" gap={8} style={{ flex: 1, minWidth: 0 }}>
-            <Icon icon={ListTodo} size={16} style={{ color: cssVar.colorPrimary, flexShrink: 0 }} />
-            <span className={styles.header}>
+            <Icon
+              icon={ListTodo}
+              size={16}
+              style={{ color: cssVarValue.colorPrimary, flexShrink: 0 }}
+            />
+            <span {...stylex.props(styles.header)}>
               {currentPendingTask?.text || t('document.todos.allCompleted')}
             </span>
             <Tag size="small" style={{ flexShrink: 0 }}>
-              <span className={styles.count}>
+              <span {...stylex.props(styles.count)}>
                 {completed}/{total}
               </span>
             </Tag>
@@ -161,29 +143,29 @@ const TodoList = memo(() => {
           <Icon
             icon={expanded ? ChevronUp : ChevronDown}
             size={16}
-            style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }}
+            style={{ color: cssVarValue.colorTextTertiary, flexShrink: 0 }}
           />
         </Flexbox>
 
         {/* Progress Bar */}
         <Flexbox horizontal gap={8} style={{ marginTop: 8 }}>
-          <div className={styles.progress}>
-            <div className={styles.progressFill} style={{ width: `${progressPercent}%` }} />
+          <div {...stylex.props(styles.progress)}>
+            <div {...sx(styles.progressFill, undefined, { width: `${progressPercent}%` })} />
           </div>
         </Flexbox>
 
         {/* Expandable Todo List */}
-        <div className={cx(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}>
+        <div {...stylex.props(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}>
           {items.map((item, index) => (
             <Checkbox
-              backgroundColor={cssVar.colorSuccess}
+              backgroundColor={cssVarValue.colorSuccess}
               checked={item.completed}
               key={index}
               shape="circle"
               style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
               classNames={{
-                text: item.completed ? styles.textChecked : undefined,
-                wrapper: styles.itemRow,
+                text: item.completed ? stylex.props(styles.textChecked).className : undefined,
+                wrapper: stylex.props(styles.itemRow).className,
               }}
               textProps={{
                 type: item.completed ? 'secondary' : undefined,

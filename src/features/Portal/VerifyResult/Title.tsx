@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, Circle, CircleAlert, LoaderCircle, XCircle } from 'lucide-react';
 
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
@@ -7,21 +9,19 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { oneLineEllipsis } from '@/styles';
 
-const styles = createStaticStyles(({ css }) => ({
-  badge: css`
-    display: inline-flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    font-weight: 600;
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontWeight: 600,
+  },
+});
 
 const statusMeta = (
   status: VerifyCheckResultItem['status'] | undefined,
@@ -64,7 +64,7 @@ const Title = () => {
       </Text>
       {label && (
         <span
-          className={styles.badge}
+          className={stylex.props(styles.badge).className}
           style={{
             background: `color-mix(in srgb, ${cssVar[sIcon.bg]} 12%, transparent)`,
             color: cssVar[sIcon.text],

@@ -1,101 +1,82 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css }) => ({
-  anchor: css`
-    cursor: pointer;
-
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-    border-radius: 0 ${cssVar.borderRadius} ${cssVar.borderRadius} 0;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &[aria-disabled='true'] {
-      cursor: default;
-
-      &:hover {
-        color: ${cssVar.colorTextSecondary};
-        background: ${cssVar.colorFillQuaternary};
-      }
-    }
-  `,
-  body: css`
-    overflow: hidden;
-    flex: 1;
-    min-height: 0;
-  `,
-  card: css`
-    position: relative;
-    padding-block: 14px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:hover .topic-comment-actions {
-      opacity: 1;
-    }
-  `,
-  cardActions: css`
-    position: absolute;
-    inset-block-start: 8px;
-    inset-inline-end: 0;
-
-    opacity: 1;
-
-    transition: opacity ${cssVar.motionDurationFast};
-
-    @media (hover: hover) {
-      opacity: 0;
-    }
-  `,
-  composer: css`
-    flex-shrink: 0;
-    margin-block: 12px 16px;
-    margin-inline: 16px;
-  `,
-  deleted: css`
-    font-style: italic;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  editEditor: css`
-    padding-block: 8px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-
-    &:focus-within {
-      border-color: ${cssVar.colorPrimary};
-    }
-  `,
-  edited: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  empty: css`
-    flex: 1;
-    min-height: 240px;
-  `,
-  list: css`
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    flex: 1;
-
-    min-height: 0;
-    padding-inline: 16px;
-  `,
-  moderatedContent: css`
-    opacity: 0.62;
-  `,
-  reply: css`
-    margin-inline-start: 20px;
-    padding-inline-start: 12px;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+export const styles = stylex.create({
+  anchor: {
+    cursor: 'pointer',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorder,
+    borderStartStartRadius: 0,
+    borderStartEndRadius: cssVar.borderRadius,
+    borderEndEndRadius: cssVar.borderRadius,
+    borderEndStartRadius: 0,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  // The quoted message is gone: not a jump target, so hover does not react.
+  anchorDisabled: {
+    cursor: 'default',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  body: { overflow: 'hidden', flex: '1', minHeight: 0 },
+  // The card is the marker that reveals `cardActions` on hover.
+  card: {
+    position: 'relative',
+    paddingBlock: '14px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  cardActions: {
+    position: 'absolute',
+    insetBlockStart: '8px',
+    insetInlineEnd: 0,
+    opacity: {
+      'default': 1,
+      '@media (hover: hover)': {
+        default: 0,
+        [stylex.when.ancestor(':hover')]: 1,
+      },
+    },
+    transition: `opacity ${cssVar.motionDurationFast}`,
+  },
+  composer: {
+    flexShrink: 0,
+    marginBlockStart: '12px',
+    marginBlockEnd: '16px',
+    marginInline: '16px',
+  },
+  deleted: { fontStyle: 'italic', color: cssVar.colorTextTertiary },
+  editEditor: {
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorder, ':focus-within': cssVar.colorPrimary },
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  edited: { color: cssVar.colorTextTertiary },
+  empty: { flex: '1', minHeight: '240px' },
+  list: {
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    flex: '1',
+    minHeight: 0,
+    paddingInline: '16px',
+  },
+  moderatedContent: { opacity: 0.62 },
+  reply: {
+    marginInlineStart: '20px',
+    paddingInlineStart: '12px',
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+  },
+});

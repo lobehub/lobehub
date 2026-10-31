@@ -1,12 +1,16 @@
 'use client';
 
 import { nanoid } from '@lobechat/utils';
-import { ActionIcon, Button, createStaticStyles, cssVar, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ListIcon, Trash2Icon } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { useImageStage } from '../../context';
 import { imagePointToScreenFraction, type Point } from '../../geometry';
@@ -28,55 +32,49 @@ import CommentMarkers, { markerStyles } from './CommentMarkers';
 /** A drag shorter than this (in image fractions) is a click on a point. */
 const REGION_MIN_SIZE = 0.02;
 
-const styles = createStaticStyles(({ css }) => ({
-  draft: css`
-    position: absolute;
-    z-index: 2;
-
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-
-    width: 240px;
-    padding: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  item: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-
-    padding: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover,
-    &[data-active='true'] {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  pinBadge: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 10px;
-
-    font-size: 11px;
-    font-weight: 600;
-    color: #fff;
-
-    background: ${cssVar.colorInfo};
-  `,
-}));
+const styles = stylex.create({
+  draft: {
+    position: 'absolute',
+    zIndex: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    width: '240px',
+    padding: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  item: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'flex-start',
+    padding: '8px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  itemActive: { backgroundColor: cssVar.colorFillTertiary },
+  pinBadge: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '10px',
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#fff',
+    backgroundColor: cssVar.colorInfo,
+    backgroundImage: 'none',
+  },
+});
 
 interface CommentModeProps {
   markup: ImageMarkup;
@@ -203,9 +201,8 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
         createPortal(
           <div
             aria-label={t('imageViewer.comment.hint')}
-            className={toolStyles.overlayFill}
             data-testid={'image-comment-layer'}
-            style={{ cursor: 'crosshair', touchAction: 'none' }}
+            {...sx(toolStyles.overlayFill, undefined, { cursor: 'crosshair', touchAction: 'none' })}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -223,13 +220,12 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
             {pendingAnchor?.type === 'region' && (
               <span
                 data-active
-                className={markerStyles.region}
-                style={{
+                {...sx([markerStyles.region, markerStyles.regionActive], undefined, {
                   height: `${pendingAnchor.rect.height * 100}%`,
                   left: `${pendingAnchor.rect.x * 100}%`,
                   top: `${pendingAnchor.rect.y * 100}%`,
                   width: `${pendingAnchor.rect.width * 100}%`,
-                }}
+                })}
               />
             )}
             {draftAnchor && draftOrigin && (
@@ -237,24 +233,22 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
                 <span
                   aria-hidden
                   data-active
-                  className={markerStyles.pin}
-                  style={{
+                  {...sx([markerStyles.pin, markerStyles.pinActive], undefined, {
                     left: `${draftOrigin.x * 100}%`,
                     top: `${draftOrigin.y * 100}%`,
                     transform: `rotate(${-rotation}deg)`,
-                  }}
+                  })}
                 >
                   {comments.length + 1}
                 </span>
                 <div
-                  className={styles.draft}
                   data-testid={'image-comment-draft'}
-                  style={{
+                  {...sx(styles.draft, undefined, {
                     left: `${draftOrigin.x * 100}%`,
                     top: `${draftOrigin.y * 100}%`,
                     transform: `rotate(${-rotation}deg) translate(${draftScreen && draftScreen.x > 0.6 ? 'calc(-100% - 16px)' : '16px'}, ${draftScreen && draftScreen.y > 0.6 ? '-100%' : '0'})`,
                     transformOrigin: '0 0',
-                  }}
+                  })}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
                   <TextArea
@@ -302,7 +296,7 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
       {listOpen && (
         <aside
           aria-label={t('imageViewer.comment.title')}
-          className={compact ? toolStyles.sheet : toolStyles.panel}
+          {...stylex.props(compact ? toolStyles.sheet : toolStyles.panel)}
           data-placement={compact ? 'bottom' : 'side'}
           data-testid={'image-comment-panel'}
           ref={panelRef}
@@ -320,7 +314,7 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
             <span>{t('imageViewer.comment.title')}</span>
             {comments.length > 0 && <Text type={'secondary'}>{comments.length}</Text>}
           </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: 4 }}>
+          <div style={{ flex: '1', overflow: 'auto', padding: 4 }}>
             {comments.length === 0 ? (
               <Text style={{ display: 'block', padding: 12 }} type={'secondary'}>
                 {t('imageViewer.comment.empty')}
@@ -329,13 +323,13 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
               <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                 {comments.map((comment, index) => (
                   <li
-                    className={styles.item}
                     data-active={activeId === comment.id}
+                    {...stylex.props(styles.item, activeId === comment.id && styles.itemActive)}
                     key={comment.id}
                     onClick={() => setActiveId(comment.id)}
                   >
-                    <span className={styles.pinBadge}>{index + 1}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <span {...stylex.props(styles.pinBadge)}>{index + 1}</span>
+                    <div style={{ flex: '1', minWidth: 0 }}>
                       <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                         {comment.text}
                       </div>
@@ -361,9 +355,15 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
         </aside>
       )}
 
-      <div className={toolStyles.dock}>
-        <div aria-label={t('imageViewer.tool.comment')} className={toolStyles.bar} role={'toolbar'}>
-          {!compact && <span className={toolStyles.hint}>{t('imageViewer.comment.hint')}</span>}
+      <div {...stylex.props(toolStyles.dock)}>
+        <div
+          aria-label={t('imageViewer.tool.comment')}
+          {...stylex.props(toolStyles.bar)}
+          role={'toolbar'}
+        >
+          {!compact && (
+            <span {...stylex.props(toolStyles.hint)}>{t('imageViewer.comment.hint')}</span>
+          )}
           <ActionIcon
             active={listOpen}
             aria-expanded={listOpen}
@@ -373,7 +373,7 @@ const CommentMode = ({ markup, onChange, onExit, onSent }: CommentModeProps) => 
             title={t('imageViewer.comment.title')}
             onClick={() => setListOpen((value) => !value)}
           />
-          <span className={toolStyles.divider} />
+          <span {...stylex.props(toolStyles.divider)} />
           <BarButton
             icon={CheckIcon}
             label={t('imageViewer.done')}

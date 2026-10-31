@@ -1,3 +1,4 @@
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo } from 'react';
 
 import type { BodyItem, SheetOutline, SheetSection } from './classifySheet';
@@ -14,12 +15,16 @@ const SectionTable = memo<{
   const columns = header.map((cell) => cell.c);
 
   return (
-    <div className={styles.table}>
-      <table>
+    <div {...stylex.props(styles.tableContainer)}>
+      <table {...stylex.props(styles.table)}>
         <thead>
           <tr>
             {header.map((cell, index) => (
-              <th data-align={index === 0 ? undefined : alignOf(cell)} key={cell.c}>
+              <th
+                {...stylex.props(styles.tableHead)}
+                data-align={index === 0 ? undefined : alignOf(cell)}
+                key={cell.c}
+              >
                 {cell.t}
               </th>
             ))}
@@ -38,14 +43,14 @@ const SectionTable = memo<{
                       : '';
                   if (!cell)
                     return (
-                      <td key={column}>
-                        {extras ? <span className={styles.extra}>{extras}</span> : null}
+                      <td {...stylex.props(styles.tableCell)} key={column}>
+                        {extras ? <span {...stylex.props(styles.extra)}>{extras}</span> : null}
                       </td>
                     );
                   return (
-                    <td data-align={alignOf(cell)} key={column}>
+                    <td {...stylex.props(styles.tableCell)} data-align={alignOf(cell)} key={column}>
                       {cell.t}
-                      {extras ? <span className={styles.extra}>{extras}</span> : null}
+                      {extras ? <span {...stylex.props(styles.extra)}>{extras}</span> : null}
                     </td>
                   );
                 })}
@@ -62,25 +67,25 @@ SectionTable.displayName = 'SectionTable';
 
 const KeyValueList = memo<{ bodyFontSize: number; rows: CellModel[][] }>(
   ({ bodyFontSize, rows }) => (
-    <dl className={styles.kv}>
+    <dl {...stylex.props(styles.kv)}>
       {rows.map((cells, index) => {
         const [label, ...rest] = cells;
         return (
           <Fragment key={index}>
-            <dt>{label.t}</dt>
-            <dd>
+            <dt {...stylex.props(styles.kvLabel)}>{label.t}</dt>
+            <dd {...stylex.props(styles.kvValue)}>
               {rest.length === 0
                 ? '—'
                 : rest.map((cell, cellIndex) => (
                     <span
                       key={cell.c}
-                      className={
+                      {...stylex.props(
                         cell.s.bg && cell.s.b
                           ? styles.chip
                           : (cell.s.fs ?? 11) < bodyFontSize
                             ? styles.hint
-                            : undefined
-                      }
+                            : undefined,
+                      )}
                     >
                       {cellIndex > 0 ? ' ' : ''}
                       {cell.t}
@@ -104,11 +109,11 @@ const SectionBlock = memo<{ bodyFontSize: number; section: SheetSection }>(
     const listRows = section.body.filter((item) => item.kind === 'kv').map((item) => item.cells);
 
     return (
-      <section className={styles.section}>
+      <section {...stylex.props(styles.section)}>
         {section.title ? (
-          <div className={styles.sectionHead}>
+          <div {...stylex.props(styles.sectionHead)}>
             <span>{section.title}</span>
-            <span className={styles.sectionRule} />
+            <span {...stylex.props(styles.sectionRule)} />
           </div>
         ) : null}
         {section.header && tableRows.length > 0 ? (
@@ -116,7 +121,7 @@ const SectionBlock = memo<{ bodyFontSize: number; section: SheetSection }>(
         ) : null}
         {listRows.length > 0 ? <KeyValueList bodyFontSize={bodyFontSize} rows={listRows} /> : null}
         {section.notes.length > 0 ? (
-          <div className={styles.hint}>
+          <div {...stylex.props(styles.hint)}>
             {section.notes.map((note, index) => (
               <div key={index}>{note}</div>
             ))}
@@ -134,12 +139,14 @@ interface SheetDocumentProps {
 }
 
 const SheetDocument = memo<SheetDocumentProps>(({ outline }) => (
-  <div className={styles.container}>
-    <div className={styles.doc}>
+  <div {...stylex.props(styles.container)}>
+    <div {...stylex.props(styles.doc)}>
       {outline.title || outline.subtitle ? (
-        <div className={styles.docHead}>
-          {outline.title ? <div className={styles.docTitle}>{outline.title.t}</div> : null}
-          {outline.subtitle ? <div className={styles.docSubtitle}>{outline.subtitle.t}</div> : null}
+        <div {...stylex.props(styles.docHead)}>
+          {outline.title ? <div {...stylex.props(styles.docTitle)}>{outline.title.t}</div> : null}
+          {outline.subtitle ? (
+            <div {...stylex.props(styles.docSubtitle)}>{outline.subtitle.t}</div>
+          ) : null}
         </div>
       ) : null}
       {outline.sections.map((section, index) => (

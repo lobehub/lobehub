@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cx, Flexbox, Modal } from '@lobehub/ui';
+import { Flexbox, Modal } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,11 +11,12 @@ import { portalThreadSelectors } from '@/store/chat/selectors';
 
 import { PortalContent } from './router';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    background: linear-gradient(${cssVar.colorBgElevated}, ${cssVar.colorBgContainer}) !important;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    backgroundColor: 'transparent',
+    backgroundImage: `linear-gradient(${cssVar.colorBgElevated}, ${cssVar.colorBgContainer})`,
+  },
+});
 
 const MobilePortal = () => {
   const [showMobilePortal, isPortalThread, clearPortalStack] = useChatStore((state) => [
@@ -41,7 +44,7 @@ const MobilePortal = () => {
     // global ModalHost — above every route match, where those params are empty.
     <Modal
       allowFullscreen
-      className={cx(isPortalThread && styles.container)}
+      className={isPortalThread ? stylex.props(styles.container).className : undefined}
       draggable={false}
       footer={null}
       height={'95%'}

@@ -1,16 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import {
-  Center,
-  createStaticStyles,
-  cssVar,
-  Empty,
-  Flexbox,
-  Image,
-  Markdown,
-  Text,
-  ToggleGroup,
-} from '@lobehub/ui';
+import { Center, Empty, Flexbox, Image, Markdown, Text, ToggleGroup } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CodeIcon, ExternalLinkIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,7 +28,7 @@ import {
 
 import { getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
-import PreviewToolbar, { ToolbarActionButton } from './PreviewToolbar';
+import PreviewToolbar, { ToolbarActionButton, toolbarToggleClassNames } from './PreviewToolbar';
 import UnsupportedPreview from './UnsupportedPreview';
 import VideoPreview from './VideoPreview';
 
@@ -81,38 +73,34 @@ ImagePreview.displayName = 'ImagePreview';
 
 const MARKDOWN_EXTS = new Set(['md', 'mdx', 'markdown']);
 
-const frontmatterStyles = createStaticStyles(({ css }) => ({
-  card: css`
-    margin-block: 8px 12px;
-    margin-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  key: css`
-    flex-shrink: 0;
-
-    width: 96px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  row: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  value: css`
-    min-width: 0;
-    font-size: 12px;
-    white-space: pre-wrap;
-  `,
-}));
+const frontmatterStyles = stylex.create({
+  card: {
+    marginBlockStart: '8px',
+    marginBlockEnd: '12px',
+    marginInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  key: {
+    flexShrink: 0,
+    width: '96px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  row: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  value: { minWidth: 0, fontSize: '12px', whiteSpace: 'pre-wrap' },
+});
 
 interface SkillFrontmatterPreviewCardProps {
   metadata: SkillMarkdownMetadataItem[];
@@ -122,11 +110,16 @@ const SkillFrontmatterPreviewCard = memo<SkillFrontmatterPreviewCardProps>(({ me
   if (metadata.length === 0) return null;
 
   return (
-    <Flexbox className={frontmatterStyles.card} style={{ flexShrink: 0 }}>
+    <Flexbox className={stylex.props(frontmatterStyles.card).className} style={{ flexShrink: 0 }}>
       {metadata.map((item) => (
-        <Flexbox horizontal align={'flex-start'} className={frontmatterStyles.row} key={item.key}>
-          <Text className={frontmatterStyles.key}>{item.key}</Text>
-          <Text className={frontmatterStyles.value}>{item.value}</Text>
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          className={stylex.props(frontmatterStyles.row).className}
+          key={item.key}
+        >
+          <Text className={stylex.props(frontmatterStyles.key).className}>{item.key}</Text>
+          <Text className={stylex.props(frontmatterStyles.value).className}>{item.value}</Text>
         </Flexbox>
       ))}
     </Flexbox>
@@ -317,6 +310,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                 )}
                 {canRender && (
                   <ToggleGroup
+                    classNames={toolbarToggleClassNames}
                     value={mode}
                     variant={'outlined'}
                     options={[

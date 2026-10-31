@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Center,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Highlighter,
-  Icon,
-  Markdown,
-  Spin,
-  Tabs,
-} from '@lobehub/ui';
+import { Center, Flexbox, Highlighter, Icon, Markdown, Spin, Tabs } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CodeIcon, EyeIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,37 +12,32 @@ import AsyncError from '@/components/AsyncError';
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 import NotSupport from '../../NotSupport';
 
-const styles = createStaticStyles(({ css }) => ({
-  // Same floating-controls treatment as the LocalFile portal's text preview, so
-  // the render/raw toggle reads identically across both file-preview surfaces.
-  controls: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 8px;
-    inset-inline-end: 12px;
-
-    padding: 4px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    opacity: 0.55;
-    background: ${cssVar.colorBgElevated};
-    backdrop-filter: blur(8px);
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    transition: opacity 150ms ease;
-
-    &:hover {
-      opacity: 1;
-    }
-  `,
-  page: css`
-    position: relative;
-    overflow: hidden auto;
-    width: 100%;
-    height: 100%;
-  `,
-}));
+const styles = stylex.create({
+  controls: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: '8px',
+    insetInlineEnd: '12px',
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    opacity: { 'default': 0.55, ':hover': 1 },
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(8px)',
+    boxShadow: cssVar.boxShadowTertiary,
+    transition: 'opacity 150ms ease',
+  },
+  page: {
+    position: 'relative',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    width: '100%',
+    height: '100%',
+  },
+});
 
 type PreviewMode = 'render' | 'raw';
 
@@ -85,8 +72,13 @@ const MarkdownViewer = memo<MarkdownViewerProps>(({ url }) => {
     );
 
   return (
-    <Flexbox className={styles.page}>
-      <Flexbox horizontal align={'center'} className={styles.controls} gap={4}>
+    <Flexbox className={stylex.props(styles.page).className}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.controls).className}
+        gap={4}
+      >
         <Tabs
           activeKey={mode}
           size={'small'}

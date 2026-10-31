@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, cx, Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, EyeIcon, FolderOpen, MessageSquarePlus } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,91 +11,82 @@ import { type StartTopicConversation } from './StartTopicConversation';
 import { useLocalFileActions } from './useLocalFileActions';
 import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    padding-block: 2px;
-    padding-inline: 4px 8px;
-    border-radius: 4px;
-    color: ${cssVar.colorText};
-  `,
-  interactive: css`
-    cursor: pointer;
-
-    :hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  segment: css`
-    cursor: pointer;
-
-    position: relative;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 5px;
-    padding-inline: 11px;
-    border: none;
-
-    font-family: inherit;
-    font-size: 13px;
-    line-height: 20px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    background: transparent;
-
-    & + &::before {
-      content: '';
-
-      position: absolute;
-      inset-block: 5px;
-      inset-inline-start: 0;
-
-      width: 1px;
-
-      background: ${cssVar.colorBorderSecondary};
-    }
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:hover::before,
-    &:hover + &::before {
-      background: transparent;
-    }
-
-    &:focus-visible {
-      border-radius: 6px;
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: -2px;
-    }
-  `,
-  segmented: css`
-    overflow: hidden;
-    display: inline-flex;
-    align-items: stretch;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  title: css`
-    overflow: hidden;
-    display: block;
-
-    line-height: 20px;
-    color: inherit;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  segment: {
+    'cursor': 'pointer',
+    'position': 'relative',
+    'display': 'inline-flex',
+    'gap': '6px',
+    'alignItems': 'center',
+    'paddingBlock': '5px',
+    'paddingInline': '11px',
+    'borderStyle': 'none',
+    'borderWidth': 'medium',
+    'borderColor': 'currentColor',
+    'fontFamily': 'inherit',
+    'fontSize': '13px',
+    'lineHeight': '20px',
+    'color': { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    'whiteSpace': 'nowrap',
+    'backgroundColor': { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    'backgroundImage': 'none',
+    'borderRadius': { 'default': null, ':focus-visible': '6px' },
+    'outlineColor': { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    'outlineStyle': { 'default': null, ':focus-visible': 'solid' },
+    'outlineWidth': { 'default': null, ':focus-visible': '2px' },
+    'outlineOffset': { 'default': null, ':focus-visible': '-2px' },
+    '::before': {
+      content: { 'default': null, ':is([data-local-file-segment] + *)': "''" },
+      position: { 'default': null, ':is([data-local-file-segment] + *)': 'absolute' },
+      insetBlock: { 'default': null, ':is([data-local-file-segment] + *)': '5px' },
+      insetInlineStart: { 'default': null, ':is([data-local-file-segment] + *)': 0 },
+      width: { 'default': null, ':is([data-local-file-segment] + *)': '1px' },
+      backgroundColor: {
+        'default': null,
+        ':is([data-local-file-segment] + *)': cssVar.colorBorderSecondary,
+        ':hover': 'transparent',
+        ':is([data-local-file-segment]:hover + *)': 'transparent',
+      },
+      backgroundImage: {
+        'default': null,
+        ':is([data-local-file-segment] + *)': 'none',
+        ':hover': 'none',
+        ':is([data-local-file-segment]:hover + *)': 'none',
+      },
+    },
+  },
+  container: {
+    paddingBlock: '2px',
+    paddingInlineStart: '4px',
+    paddingInlineEnd: '8px',
+    borderRadius: '4px',
+    color: cssVar.colorText,
+  },
+  interactive: {
+    cursor: 'pointer',
+    color: { 'default': null, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+  },
+  segmented: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    alignItems: 'stretch',
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  title: {
+    overflow: 'hidden',
+    display: 'block',
+    lineHeight: '20px',
+    color: 'inherit',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface LocalFileProps {
   /**
@@ -142,17 +135,20 @@ export const LocalFile = ({
     readonly,
   });
 
+  // Inline chip, not a <button> (block layout inside markdown prose) — so
+  // give the clickable state complete button semantics by hand.
   const fileContent = (
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.container, (handleClick || canOpenNatively) && styles.interactive)}
       gap={4}
-      // Inline chip, not a <button> (block layout inside markdown prose) — so
-      // give the clickable state complete button semantics by hand.
       role={handleClick ? 'button' : undefined}
       style={{ display: 'inline-flex', verticalAlign: 'middle' }}
       tabIndex={handleClick ? 0 : undefined}
+      className={
+        stylex.props(styles.container, (handleClick || canOpenNatively) && styles.interactive)
+          .className
+      }
       onClick={handleClick}
       onKeyDown={
         handleClick
@@ -166,7 +162,7 @@ export const LocalFile = ({
     >
       <FileIcon fileName={name} isDirectory={isDirectory} size={22} variant={'raw'} />
       <Flexbox horizontal align={'baseline'} gap={4} style={{ overflow: 'hidden', width: '100%' }}>
-        <div className={styles.title}>{name}</div>
+        <div {...stylex.props(styles.title)}>{name}</div>
       </Flexbox>
     </Flexbox>
   );
@@ -181,26 +177,46 @@ export const LocalFile = ({
   // keep their direct click-to-open behavior while exposing the contextual
   // "start topic here" action without adding persistent markdown clutter.
   const popoverContent = (
-    <div className={styles.segmented}>
+    <div {...stylex.props(styles.segmented)}>
       {canPreview && (
-        <button className={styles.segment} type={'button'} onClick={handlePreview}>
+        <button
+          data-local-file-segment
+          {...stylex.props(styles.segment)}
+          type={'button'}
+          onClick={handlePreview}
+        >
           <EyeIcon size={15} />
           {t('LocalFile.action.preview')}
         </button>
       )}
-      <button className={styles.segment} type={'button'} onClick={handleOpenFile}>
+      <button
+        data-local-file-segment
+        {...stylex.props(styles.segment)}
+        type={'button'}
+        onClick={handleOpenFile}
+      >
         <ExternalLink size={15} />
         {t('LocalFile.action.open')}
       </button>
       {isDirectory ? (
         canStartTopic && (
-          <button className={styles.segment} type={'button'} onClick={() => void startTopic()}>
+          <button
+            data-local-file-segment
+            {...stylex.props(styles.segment)}
+            type={'button'}
+            onClick={() => void startTopic()}
+          >
             <MessageSquarePlus size={15} />
             {t('LocalFile.action.startTopic')}
           </button>
         )
       ) : (
-        <button className={styles.segment} type={'button'} onClick={handleOpenFolder}>
+        <button
+          data-local-file-segment
+          {...stylex.props(styles.segment)}
+          type={'button'}
+          onClick={handleOpenFolder}
+        >
           <FolderOpen size={15} />
           {t('LocalFile.action.showInFolder')}
         </button>

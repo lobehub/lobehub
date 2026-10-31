@@ -1,4 +1,5 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,14 +11,15 @@ import { MAX_PREVIEW_ROWS, readWorkbook, type SheetModel } from './model';
 import SheetDocument from './SheetDocument';
 import SheetGrid from './SheetGrid';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface XlsxPaneProps {
   blob: Blob;
@@ -57,7 +59,7 @@ const XlsxPane = memo<XlsxPaneProps>(({ blob, onError }) => {
   const resolvedMode = mode === 'auto' ? outline.mode : mode;
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       {resolvedMode === 'reflow' ? (
         <SheetDocument outline={outline} />
       ) : (

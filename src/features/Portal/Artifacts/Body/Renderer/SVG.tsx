@@ -1,6 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { copyImageToClipboard } from '@lobechat/utils/client';
-import { Button, css, cx, DropdownMenu, Flexbox, toast, Tooltip } from '@lobehub/ui';
+import { Button, DropdownMenu, Flexbox, toast, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CopyIcon, DownloadIcon } from 'lucide-react';
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,21 +11,17 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import { getSvgFrameProps, rasterizeSvg } from './svgDocument';
 
-const svgFrame = css`
-  width: 100%;
-  height: 100%;
-  border: none;
-
-  /* Matches the srcdoc's light scheme so prefers-color-scheme inside the SVG resolves to light,
-     consistent with the white preview canvas, even when the app runs in dark mode. */
-  color-scheme: light;
-`;
-
-const actions = css`
-  position: absolute;
-  inset-block-end: 8px;
-  inset-inline-end: 8px;
-`;
+const styles = stylex.create({
+  actions: { position: 'absolute', insetBlockEnd: '8px', insetInlineEnd: '8px' },
+  svgFrame: {
+    width: '100%',
+    height: '100%',
+    borderStyle: 'none',
+    // Matches the srcdoc's light scheme so prefers-color-scheme inside the SVG resolves to light,
+    // consistent with the white preview canvas, even when the app runs in dark mode.
+    colorScheme: 'light',
+  },
+});
 
 interface SVGRendererProps {
   content: string;
@@ -71,8 +68,13 @@ const SVGRenderer = ({ content }: SVGRendererProps) => {
       height={'100%'}
       style={{ position: 'relative' }}
     >
-      <iframe className={cx(svgFrame)} ref={frameRef} title={'svg-renderer'} {...frameProps} />
-      <Flexbox horizontal className={cx(actions)} gap={4}>
+      <iframe
+        {...stylex.props(styles.svgFrame)}
+        ref={frameRef}
+        title={'svg-renderer'}
+        {...frameProps}
+      />
+      <Flexbox horizontal className={stylex.props(styles.actions).className} gap={4}>
         <DropdownMenu
           items={[
             {

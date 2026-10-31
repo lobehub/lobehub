@@ -1,5 +1,7 @@
 import { type NotebookDocument } from '@lobechat/types';
-import { ActionIcon, confirmModal, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, confirmModal, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileTextIcon, Trash2Icon } from 'lucide-react';
 import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';
@@ -8,26 +10,17 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { useNotebookStore } from '@/store/notebook';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    cursor: pointer;
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    cursor: 'pointer',
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  description: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
+  title: { fontWeight: 500 },
+});
 
 interface DocumentItemProps {
   document: NotebookDocument;
@@ -65,11 +58,16 @@ const DocumentItem = memo<DocumentItemProps>(({ document, topicId }) => {
   };
 
   return (
-    <Flexbox horizontal className={styles.container} gap={8} onClick={handleClick}>
+    <Flexbox
+      horizontal
+      className={stylex.props(styles.container).className}
+      gap={8}
+      onClick={handleClick}
+    >
       <FileTextIcon size={16} />
       <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
         <Flexbox horizontal align={'center'} distribution={'space-between'}>
-          <Text ellipsis className={styles.title}>
+          <Text ellipsis className={stylex.props(styles.title).className}>
             {document.title}
           </Text>
           <ActionIcon
@@ -81,7 +79,7 @@ const DocumentItem = memo<DocumentItemProps>(({ document, topicId }) => {
           />
         </Flexbox>
         {document.description && (
-          <Text className={styles.description} ellipsis={{ rows: 2 }}>
+          <Text className={stylex.props(styles.description).className} ellipsis={{ rows: 2 }}>
             {document.description}
           </Text>
         )}

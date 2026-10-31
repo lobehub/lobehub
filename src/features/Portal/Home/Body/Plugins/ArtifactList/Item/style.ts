@@ -1,46 +1,36 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    cursor: pointer;
-
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 8px;
-    padding-inline-end: 12px;
-    border-radius: 8px;
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgElevated};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  plugin: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    width: fit-content;
-  `,
-  tag: css`
-    cursor: default;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
-  `,
-  tagBlue: css`
-    color: ${cssVar.geekblue};
-    background: ${cssVar.geekblue1};
-  `,
-  tagGreen: css`
-    color: ${cssVar.green};
-    background: ${cssVar.green1};
-  `,
-}));
+export const styles = stylex.create({
+  container: {
+    cursor: 'pointer',
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '12px',
+    borderRadius: '8px',
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorBgElevated, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
+  plugin: { display: 'flex', gap: '4px', alignItems: 'center', width: 'fit-content' },
+  tag: {
+    cursor: 'default',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '4px',
+  },
+  tagBlue: {
+    color: cssVar.geekblue,
+    backgroundColor: cssVar.geekblue1,
+    backgroundImage: 'none',
+  },
+  tagGreen: {
+    color: cssVar.green,
+    backgroundColor: cssVar.green1,
+    backgroundImage: 'none',
+  },
+});

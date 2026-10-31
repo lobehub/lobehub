@@ -4,7 +4,9 @@ import type { DocumentCommentSelectionAnchor } from '@lobechat/types';
 import { type IEditor } from '@lobehub/editor';
 import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Block, createStaticStyles, cssVar, Icon } from '@lobehub/ui';
+import { Block, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessageSquarePlus } from 'lucide-react';
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,16 +16,12 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { usePageEditorStore } from '../store';
 
-const styles = createStaticStyles(({ css }) => ({
-  addComment: css`
-    border-radius: 6px;
-    color: ${cssVar.colorTextDescription};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  addComment: {
+    borderRadius: '6px',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorTextSecondary },
+  },
+});
 
 /**
  * The "Comment" action on the body's selection toolbar — the entry point for an
@@ -61,7 +59,7 @@ export const useAddCommentItem = (
             clickable
             horizontal
             align="center"
-            className={styles.addComment}
+            className={stylex.props(styles.addComment).className}
             gap={8}
             paddingBlock={6}
             paddingInline={12}

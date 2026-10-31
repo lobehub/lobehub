@@ -2,7 +2,9 @@
 
 import type { LexicalDiffProps } from '@lobehub/editor/renderer';
 import { LexicalDiff } from '@lobehub/editor/renderer';
-import { createStaticStyles, cssVar, Empty, Flexbox } from '@lobehub/ui';
+import { Empty, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { SerializedEditorState } from 'lexical';
 import { GitCompareArrowsIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -15,26 +17,19 @@ import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-
-    min-height: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  content: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  empty: css`
-    padding: 24px;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    minHeight: '0',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  content: { overflow: 'auto', flex: '1', minHeight: '0' },
+  empty: { padding: '24px' },
+});
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
@@ -88,17 +83,25 @@ const DocumentHistoryDiff = memo<DocumentHistoryDiffProps>(({ documentId, histor
   }, [data?.from.editorData, data?.to.editorData]);
 
   return (
-    <Flexbox className={styles.container} flex={1} gap={0}>
+    <Flexbox className={stylex.props(styles.container).className} flex={1} gap={0}>
       {isLoading && !data ? (
-        <Flexbox align={'center'} className={styles.empty} justify={'center'}>
+        <Flexbox
+          align={'center'}
+          className={stylex.props(styles.empty).className}
+          justify={'center'}
+        >
           <CircleLoading />
         </Flexbox>
       ) : error || !data || !normalizedValues.oldValue || !normalizedValues.newValue ? (
-        <Flexbox align={'center'} className={styles.empty} justify={'center'}>
+        <Flexbox
+          align={'center'}
+          className={stylex.props(styles.empty).className}
+          justify={'center'}
+        >
           <Empty description={t('pageEditor.history.compareError')} icon={GitCompareArrowsIcon} />
         </Flexbox>
       ) : (
-        <div className={styles.content}>
+        <div {...stylex.props(styles.content)}>
           <LexicalDiff
             appearance={'borderless'}
             labels={labels}

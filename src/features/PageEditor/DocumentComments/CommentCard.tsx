@@ -5,12 +5,12 @@ import {
   Avatar,
   Button,
   confirmModal,
-  cx,
   Flexbox,
   Markdown,
   Text,
   toast,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, MessageCircle, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,7 +36,8 @@ import DocumentCommentEditor, {
 } from './DocumentCommentEditor';
 import type { DocumentCommentUpdateHandler } from './optimistic';
 import { isOptimisticDocumentComment } from './optimistic';
-import { COMMENT_INPUT_MAX_HEIGHT, styles } from './styles';
+import { COMMENT_INPUT_MAX_HEIGHT, HIGHLIGHTED_CLASS_NAMES, styles } from './styles';
+import moduleStyles from './styles.module.css';
 
 interface CommentCardProps {
   comment: DocumentCommentItem;
@@ -70,7 +71,7 @@ const hasDocumentCommentEditorData = (editorData: DocumentCommentItem['editorDat
 const CommentContent = memo<
   Pick<DocumentCommentItem, 'content' | 'editorData'> & { compact?: boolean }
 >(({ compact, content, editorData }) => (
-  <div className={styles.commentContent}>
+  <div className={moduleStyles.commentContent}>
     {hasDocumentCommentEditorData(editorData) ? (
       <RichTextMessage editorState={editorData} variant={'default'} />
     ) : (
@@ -138,11 +139,11 @@ const CommentCard = memo<CommentCardProps>(
       }
       // Panel cards are placed level with their run instead of being tinted.
       if (compact) return;
-      node.classList.add(styles.highlighted);
-      const timer = setTimeout(() => node.classList.remove(styles.highlighted), 2400);
+      node.classList.add(...HIGHLIGHTED_CLASS_NAMES);
+      const timer = setTimeout(() => node.classList.remove(...HIGHLIGHTED_CLASS_NAMES), 2400);
       return () => {
         clearTimeout(timer);
-        node.classList.remove(styles.highlighted);
+        node.classList.remove(...HIGHLIGHTED_CLASS_NAMES);
       };
     }, [compact, focusScroll, focusToken]);
 
@@ -212,11 +213,13 @@ const CommentCard = memo<CommentCardProps>(
       <Flexbox
         data-document-comment-id={comment.id}
         ref={cardRef}
-        className={cx(
-          styles.card,
-          variant === 'reply' && styles.replyCard,
-          compact && styles.cardCompact,
-        )}
+        className={
+          stylex.props(
+            styles.card,
+            variant === 'reply' && styles.replyCard,
+            compact && styles.cardCompact,
+          ).className
+        }
         onMouseEnter={anchor && !anchorOrphaned ? () => setHoveredRootId(comment.id) : undefined}
         onMouseLeave={
           anchor && !anchorOrphaned
@@ -228,15 +231,15 @@ const CommentCard = memo<CommentCardProps>(
         {anchor && compact && (
           <AnchorQuote
             anchor={anchor}
-            className={styles.cardAnchorCompact}
             orphaned={anchorOrphaned}
+            xstyle={styles.cardAnchorCompact}
             onLocate={() => locateInBody(comment.id)}
           />
         )}
         <Flexbox
           horizontal
           align={compact ? 'flex-start' : 'center'}
-          className={cx(styles.header, compact && styles.headerCompact)}
+          className={stylex.props(styles.header, compact && styles.headerCompact).className}
           gap={compact ? 8 : 8}
         >
           <Avatar
@@ -252,7 +255,7 @@ const CommentCard = memo<CommentCardProps>(
                 </Text>
                 {replyToName && (
                   <>
-                    <ChevronRight aria-hidden className={styles.replyTargetIcon} size={12} />
+                    <ChevronRight aria-hidden {...stylex.props(styles.replyTargetIcon)} size={12} />
                     <Text ellipsis fontSize={13} weight={600}>
                       {replyToName}
                     </Text>
@@ -260,7 +263,11 @@ const CommentCard = memo<CommentCardProps>(
                 )}
               </Flexbox>
               {time && (
-                <Text className={styles.meta} fontSize={12} title={timeTitle}>
+                <Text
+                  className={stylex.props(styles.meta).className}
+                  fontSize={12}
+                  title={timeTitle}
+                >
                   {time}
                   {edited && !deleted ? ` · ${t('pageEditor.comments.edited')}` : ''}
                   {comment.author.status === 'former'
@@ -276,24 +283,24 @@ const CommentCard = memo<CommentCardProps>(
           )}
           {!compact && replyToName && (
             <>
-              <ChevronRight aria-hidden className={styles.replyTargetIcon} size={14} />
+              <ChevronRight aria-hidden {...stylex.props(styles.replyTargetIcon)} size={14} />
               <Text fontSize={14} weight={600}>
                 {replyToName}
               </Text>
             </>
           )}
           {!compact && comment.author.status === 'former' && (
-            <Text className={styles.meta} fontSize={12}>
+            <Text className={stylex.props(styles.meta).className} fontSize={12}>
               {t('pageEditor.comments.author.former')}
             </Text>
           )}
           {!compact && time && (
-            <Text className={styles.meta} fontSize={14} title={timeTitle}>
+            <Text className={stylex.props(styles.meta).className} fontSize={14} title={timeTitle}>
               {time}
             </Text>
           )}
           {!compact && edited && !deleted && (
-            <Text className={styles.meta} fontSize={12}>
+            <Text className={stylex.props(styles.meta).className} fontSize={12}>
               {t('pageEditor.comments.edited')}
             </Text>
           )}
@@ -302,24 +309,26 @@ const CommentCard = memo<CommentCardProps>(
         {anchor && !compact && (
           <AnchorQuote
             anchor={anchor}
-            className={styles.cardAnchor}
             orphaned={anchorOrphaned}
+            xstyle={styles.cardAnchor}
             onLocate={() => locateInBody(comment.id)}
           />
         )}
 
         <div
-          className={cx(
+          {...stylex.props(
             styles.body,
             variant === 'reply' && styles.replyBody,
             compact && styles.bodyCompact,
           )}
         >
           {deleted ? (
-            <Text className={styles.deleted}>{t('pageEditor.comments.deleted')}</Text>
+            <Text className={stylex.props(styles.deleted).className}>
+              {t('pageEditor.comments.deleted')}
+            </Text>
           ) : editing ? (
             <ChatInput
-              className={styles.editComposer}
+              className={stylex.props(styles.editComposer).className}
               header={showTypoBar ? <TypoBar editor={editEditor} /> : undefined}
               maxHeight={COMMENT_INPUT_MAX_HEIGHT}
               minHeight={64}
@@ -399,11 +408,13 @@ const CommentCard = memo<CommentCardProps>(
           <Flexbox
             horizontal
             gap={4}
-            className={cx(
-              styles.actions,
-              variant === 'reply' && styles.replyCardActions,
-              compact && styles.actionsCompact,
-            )}
+            className={
+              stylex.props(
+                styles.actions,
+                variant === 'reply' && styles.replyCardActions,
+                compact && styles.actionsCompact,
+              ).className
+            }
           >
             {onReply && (
               <ActionIcon

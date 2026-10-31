@@ -1,6 +1,7 @@
 'use client';
 
-import { cx, Empty, Flexbox, Text } from '@lobehub/ui';
+import { Empty, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MessageSquareTextIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,7 @@ import NavHeader from '@/features/NavHeader';
 import RightPanel from '@/features/RightPanel';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { usePermission } from '@/hooks/usePermission';
+import { sx } from '@/styles/sx';
 
 import { usePageAgentPanelControl } from '../../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../../store';
@@ -20,6 +22,7 @@ import { useDocumentComments } from '../context';
 import { styles } from '../styles';
 import Thread from '../Thread';
 import type { DocumentCommentsState } from '../useDocumentCommentsState';
+import { GUTTER_INSET_END, GUTTER_INSET_START } from './constants';
 import { useForwardWheel } from './useForwardWheel';
 import { PENDING_CARD_ID, useGutterLayout } from './useGutterLayout';
 
@@ -76,12 +79,15 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
       <div
         key={id}
         ref={registerCard(id)}
-        style={{ top }}
-        className={cx(
-          styles.gutterCard,
-          top !== undefined && styles.gutterCardPositioned,
-          active && styles.gutterCardActive,
-          id === PENDING_CARD_ID && styles.gutterCardComposer,
+        {...sx(
+          [
+            styles.gutterCard,
+            top !== undefined && styles.gutterCardPositioned,
+            active && styles.gutterCardActive,
+            id === PENDING_CARD_ID && styles.gutterCardComposer,
+          ],
+          undefined,
+          { insetInlineEnd: GUTTER_INSET_END, insetInlineStart: GUTTER_INSET_START, top },
         )}
         onClick={id === PENDING_CARD_ID ? undefined : () => selectRoot(id)}
       >
@@ -91,14 +97,18 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
   };
 
   return (
-    <div data-document-comment-gutter className={styles.gutter} ref={hostRef}>
+    <div data-document-comment-gutter {...stylex.props(styles.gutter)} ref={hostRef}>
       {isAnchoredInitialError ? (
         <AsyncError error={anchoredError} variant={'block'} onRetry={() => void reloadAnchored()} />
       ) : isAnchoredLoading ? (
         <SurfaceSkeleton header={false} variant={'list'} />
       ) : (
         isEmpty && (
-          <Flexbox align={'center'} className={styles.gutterEmpty} justify={'center'}>
+          <Flexbox
+            align={'center'}
+            className={stylex.props(styles.gutterEmpty).className}
+            justify={'center'}
+          >
             <Empty
               icon={MessageSquareTextIcon}
               description={t(
@@ -118,7 +128,7 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
           onRetry={() => void reloadAnchored()}
         />
       )}
-      <div className={styles.gutterTrack} ref={trackRef}>
+      <div {...stylex.props(styles.gutterTrack)} ref={trackRef}>
         {hasPending &&
           renderCard(
             PENDING_CARD_ID,
@@ -205,7 +215,11 @@ const PanelContent = memo(() => {
       {state ? (
         <PanelBody state={state} />
       ) : (
-        <Flexbox align={'center'} className={styles.gutterEmpty} justify={'center'}>
+        <Flexbox
+          align={'center'}
+          className={stylex.props(styles.gutterEmpty).className}
+          justify={'center'}
+        >
           <Empty description={t('pageEditor.comments.gutterEmpty')} icon={MessageSquareTextIcon} />
         </Flexbox>
       )}

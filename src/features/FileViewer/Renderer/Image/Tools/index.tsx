@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Badge } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   CropIcon,
   EraserIcon,
@@ -74,11 +75,11 @@ const ImageEditTools = () => {
   const hasMarkup = !isMarkupEmpty(markup);
 
   return (
-    <div className={styles.dock}>
+    <div {...stylex.props(styles.dock)}>
       <MarkupPreview comments={markup.comments} shapes={markup.shapes} />
       <div
         aria-label={t('imageViewer.editTools')}
-        className={styles.bar}
+        {...stylex.props(styles.bar)}
         data-testid={'image-edit-toolbar'}
         role={'toolbar'}
       >
@@ -134,7 +135,7 @@ const ImageEditTools = () => {
         />
         {hasMarkup && (
           <>
-            <span className={styles.divider} />
+            <span {...stylex.props(styles.divider)} />
             <ActionIcon
               aria-label={t('imageViewer.markup.discard')}
               icon={XIcon}

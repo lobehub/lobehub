@@ -1,5 +1,6 @@
 import { type ChatPluginPayload } from '@lobechat/types';
-import { cx, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { CircuitBoard } from 'lucide-react';
 import { memo } from 'react';
@@ -10,6 +11,7 @@ import { useYamlArguments } from '@/hooks/useYamlArguments';
 import { useChatStore } from '@/store/chat';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
+import { sx } from '@/styles/sx';
 
 import { styles } from './style';
 
@@ -33,7 +35,7 @@ const ArtifactItem = memo<ArtifactItemProps>(({ payload, messageId, identifier =
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       gap={8}
       onClick={() => {
         if (!isToolHasUI || !identifier) return;
@@ -58,7 +60,7 @@ const ArtifactItem = memo<ArtifactItemProps>(({ payload, messageId, identifier =
         </Flexbox>
         <Flexbox>
           {isToolHasUI && (
-            <div className={cx(styles.tag, styles.tagBlue)} style={{ cursor: 'pointer' }} title="">
+            <div {...sx([styles.tag, styles.tagBlue], undefined, { cursor: 'pointer' })} title="">
               <Icon icon={CircuitBoard} />
             </div>
           )}

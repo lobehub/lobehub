@@ -1,11 +1,14 @@
 'use client';
 
 import { ActionIcon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { BrushIcon, CheckIcon, SquareIcon, Trash2Icon, Undo2Icon } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { useImageStage } from '../../context';
 import type { Point } from '../../geometry';
@@ -154,11 +157,15 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
         createPortal(
           <canvas
             aria-label={t('imageViewer.annotate.hint')}
-            className={styles.overlayFill}
             data-testid={'image-annotate-canvas'}
             ref={canvasRef}
             role={'img'}
-            style={{ cursor: 'crosshair', height: '100%', touchAction: 'none', width: '100%' }}
+            {...sx(styles.overlayFill, undefined, {
+              cursor: 'crosshair',
+              height: '100%',
+              touchAction: 'none',
+              width: '100%',
+            })}
             onPointerCancel={handlePointerUp}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -166,8 +173,12 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
           />,
           overlayElement,
         )}
-      <div className={styles.dock}>
-        <div aria-label={t('imageViewer.tool.annotate')} className={styles.bar} role={'toolbar'}>
+      <div {...stylex.props(styles.dock)}>
+        <div
+          aria-label={t('imageViewer.tool.annotate')}
+          {...stylex.props(styles.bar)}
+          role={'toolbar'}
+        >
           <ActionIcon
             active={tool === 'brush'}
             aria-label={t('imageViewer.annotate.brush')}
@@ -186,13 +197,12 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
             title={t('imageViewer.annotate.rect')}
             onClick={() => setTool('rect')}
           />
-          <span className={styles.divider} />
+          <span {...stylex.props(styles.divider)} />
           {compact ? (
             // One swatch that steps through the colors keeps a narrow bar on one line.
             <button
               aria-label={`${t('imageViewer.annotate.color')}: ${t(`imageViewer.annotate.colorName.${ANNOTATION_COLOR_NAMES[color as AnnotationColor]}`)}`}
-              className={styles.swatch}
-              style={{ background: color }}
+              {...sx(styles.swatch, undefined, { background: color })}
               title={t('imageViewer.annotate.color')}
               type={'button'}
               onClick={() => setColor(nextOf(ANNOTATION_COLORS, color as AnnotationColor))}
@@ -207,16 +217,17 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
                 <button
                   aria-label={t(`imageViewer.annotate.colorName.${ANNOTATION_COLOR_NAMES[value]}`)}
                   aria-pressed={color === value}
-                  className={styles.swatch}
                   key={value}
-                  style={{ background: value }}
+                  {...sx([styles.swatch, color === value && styles.swatchPressed], undefined, {
+                    background: value,
+                  })}
                   type={'button'}
                   onClick={() => setColor(value)}
                 />
               ))}
             </div>
           )}
-          <span className={styles.divider} />
+          <span {...stylex.props(styles.divider)} />
           {compact ? (
             <ActionIcon
               aria-label={t('imageViewer.annotate.size')}
@@ -244,7 +255,7 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
               ))}
             </div>
           )}
-          <span className={styles.divider} />
+          <span {...stylex.props(styles.divider)} />
           <ActionIcon
             aria-label={t('imageViewer.annotate.undo')}
             disabled={shapes.length === 0}
@@ -261,7 +272,7 @@ const AnnotateMode = ({ markup, onChange, onExit, onSent }: AnnotateModeProps) =
             title={t('imageViewer.annotate.clear')}
             onClick={() => setShapes(() => [])}
           />
-          <span className={styles.divider} />
+          <span {...stylex.props(styles.divider)} />
           <BarButton icon={CheckIcon} label={t('imageViewer.done')} onClick={onExit} />
           <SendToChatButton markup={markup} onSent={onSent} />
         </div>

@@ -1,5 +1,7 @@
 import { HTML_DOCUMENT_FILE_TYPE } from '@lobechat/const';
-import { Avatar, createStaticStyles, cssVar, Icon, Tooltip } from '@lobehub/ui';
+import { Avatar, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileTextIcon, GlobeIcon, LockIcon } from 'lucide-react';
 import { type MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
@@ -21,25 +23,17 @@ import { useDropdownMenu } from './useDropdownMenu';
 // The lock sits right after the title instead of at the row's end: the end is
 // where the hover actions overlay the row, which would hide the lock exactly
 // when the pointer reaches it.
-const styles = createStaticStyles(({ css }) => ({
-  lock: css`
-    flex: none;
-  `,
-  title: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  titleRow: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    max-width: 100%;
-
-    vertical-align: middle;
-  `,
-}));
+const styles = stylex.create({
+  lock: { flex: 'none' },
+  title: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  titleRow: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    maxWidth: '100%',
+    verticalAlign: 'middle',
+  },
+});
 
 interface DocumentItemProps {
   className?: string;
@@ -127,12 +121,12 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
         key={pageId}
         title={
           isPrivate ? (
-            <span className={styles.titleRow}>
-              <span className={styles.title}>{title}</span>
+            <span {...stylex.props(styles.titleRow)}>
+              <span {...stylex.props(styles.title)}>{title}</span>
               <Tooltip title={t('pageList.privateTooltip')}>
                 <Icon
                   aria-label={t('pageList.privateTooltip')}
-                  className={styles.lock}
+                  className={stylex.props(styles.lock).className}
                   color={cssVar.colorTextDescription}
                   icon={LockIcon}
                   size={14}

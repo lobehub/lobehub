@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -16,82 +18,66 @@ import DocumentHistoryDiff from '../DocumentHistoryDiff';
 import { formatHistoryAbsoluteTime } from '../formatHistoryDate';
 import HistorySidebar from './HistorySidebar';
 
-const styles = createStaticStyles(({ css }) => ({
-  arrow: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  badgeNew: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 4px;
-
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1.2;
-    color: ${cssVar.colorSuccess};
-
-    background: ${cssVar.colorSuccessBg};
-  `,
-  badgeOld: css`
-    display: inline-flex;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 4px;
-
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1.2;
-    color: ${cssVar.colorError};
-
-    background: ${cssVar.colorErrorBg};
-  `,
-  cmpbar: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgLayout};
-  `,
-  diffArea: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-
-    min-width: 0;
-    min-height: 0;
-  `,
-  diffBody: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  meta: css`
-    margin-inline-start: 8px;
-    font-size: 11px;
-    line-height: 1.2;
-  `,
-  root: css`
-    overflow: hidden;
-    display: flex;
-
-    width: 100%;
-    height: 100%;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  arrow: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  badgeNew: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: 1.2,
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
+  badgeOld: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: 1.2,
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  cmpbar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  diffArea: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    minWidth: '0',
+    minHeight: '0',
+  },
+  diffBody: { overflow: 'auto', flex: '1', minHeight: '0' },
+  meta: { marginInlineStart: '8px', fontSize: '11px', lineHeight: 1.2 },
+  root: {
+    overflow: 'hidden',
+    display: 'flex',
+    width: '100%',
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 export interface CompareContentProps {
   documentId: string;
@@ -119,21 +105,27 @@ const CompareContent = memo<CompareContentProps>(
     const canRestore = !selectedItem.isCurrent;
 
     return (
-      <div className={styles.root}>
-        <div className={styles.diffArea}>
-          <div className={styles.cmpbar}>
+      <div {...stylex.props(styles.root)}>
+        <div {...stylex.props(styles.diffArea)}>
+          <div {...stylex.props(styles.cmpbar)}>
             <Flexbox horizontal align={'center'} gap={4}>
-              <span className={styles.badgeNew}>{t('pageEditor.history.compareCurrentLabel')}</span>
-              <Text className={styles.arrow}>→</Text>
-              <span className={styles.badgeOld}>
+              <span {...stylex.props(styles.badgeNew)}>
+                {t('pageEditor.history.compareCurrentLabel')}
+              </span>
+              <Text className={stylex.props(styles.arrow).className}>→</Text>
+              <span {...stylex.props(styles.badgeOld)}>
                 {formatHistoryAbsoluteTime(selectedItem.savedAt)}
               </span>
-              <Text className={styles.meta} type={'secondary'}>
+              <Text className={stylex.props(styles.meta).className} type={'secondary'}>
                 {dayjs(selectedItem.savedAt).fromNow()} ·{' '}
                 {saveSourceLabels[selectedItem.saveSource]}
               </Text>
               {authorInfo?.fullName && (
-                <Text className={styles.meta} title={authorInfo.fullName} type={'secondary'}>
+                <Text
+                  className={stylex.props(styles.meta).className}
+                  title={authorInfo.fullName}
+                  type={'secondary'}
+                >
                   · {authorInfo.fullName}
                 </Text>
               )}
@@ -144,7 +136,7 @@ const CompareContent = memo<CompareContentProps>(
               </Button>
             )}
           </div>
-          <div className={styles.diffBody}>
+          <div {...stylex.props(styles.diffBody)}>
             <DocumentHistoryDiff documentId={documentId} historyId={selectedItem.id} />
           </div>
         </div>

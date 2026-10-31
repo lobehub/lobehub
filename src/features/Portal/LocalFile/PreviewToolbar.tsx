@@ -1,107 +1,66 @@
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Loader2Icon, type LucideIcon } from 'lucide-react';
 import type { MouseEventHandler, ReactNode } from 'react';
 import { memo } from 'react';
 
 import PathBreadcrumb from './PathBreadcrumb';
 
-const styles = createStaticStyles(({ css }) => ({
-  action: css`
-    cursor: pointer;
+const styles = stylex.create({
+  action: {
+    cursor: { 'default': 'pointer', ':disabled': 'not-allowed' },
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    height: '28px',
+    paddingInline: '8px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    lineHeight: 1,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+    opacity: { 'default': null, ':disabled': 0.45 },
+  },
+  actionActive: { color: cssVar.colorText, backgroundColor: cssVar.colorFillSecondary },
+  actionIcon: { display: 'inline-flex', alignItems: 'center' },
+  actionLabel: {
+    whiteSpace: 'nowrap',
+    display: { 'default': null, '@container (max-width: 300px)': 'none' },
+  },
+  toggleLabel: { display: { 'default': null, '@container (max-width: 300px)': 'none' } },
+  bar: {
+    containerType: 'inline-size',
+    flexShrink: 0,
+    height: '40px',
+    paddingInlineStart: '12px',
+    paddingInlineEnd: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  path: {
+    display: {
+      'default': null,
+      '@container (max-width: 440px)': {
+        'default': null,
+        ':has(~ [data-toolbar-actions] > *)': 'none',
+      },
+    },
+    overflow: 'hidden',
+    minWidth: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+  },
+});
 
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 8px;
-    border: none;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    line-height: 1;
-    color: ${cssVar.colorTextSecondary};
-
-    background: none;
-
-    /* Icon renders an inline .anticon span whose svg sits on the text
-       baseline, floating icons a few px above center — flex-normalize it. */
-    .anticon {
-      display: inline-flex;
-      align-items: center;
-    }
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.45;
-    }
-  `,
-  actionActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  actionLabel: css`
-    white-space: nowrap;
-
-    @container (max-width: 300px) {
-      display: none;
-    }
-  `,
-  actions: css`
-    @container (max-width: 300px) {
-      .toggle-group-item-label {
-        display: none;
-      }
-    }
-  `,
-  bar: css`
-    container-type: inline-size;
-    flex-shrink: 0;
-
-    height: 40px;
-    padding-inline: 12px 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  crumbGroup: css`
-    overflow: hidden;
-
-    /* Ancestors give up their width long before the filename does, so the file
-       being previewed is the last thing to ellipsize. */
-    flex-shrink: 100;
-    min-width: 0;
-
-    &:last-child {
-      flex-shrink: 1;
-    }
-  `,
-  separator: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  path: css`
-    overflow: hidden;
-    min-width: 0;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-
-    /* Yield to the actions only when they actually rendered something —
-       an all-hidden actions slot (e.g. plain code files) keeps the path. */
-    @container (max-width: 440px) {
-      &:has(~ [data-toolbar-actions] > *) {
-        display: none;
-      }
-    }
-  `,
-}));
+export const toolbarToggleClassNames = {
+  itemLabel: stylex.props(styles.toggleLabel).className,
+};
 
 interface ToolbarActionButtonProps {
   active?: boolean;
@@ -119,13 +78,18 @@ export const ToolbarActionButton = memo<ToolbarActionButtonProps>(
       <button
         aria-label={title ?? (typeof label === 'string' ? label : undefined)}
         aria-pressed={active}
-        className={cx(styles.action, active && styles.actionActive)}
+        className={stylex.props(styles.action, active && styles.actionActive).className}
         disabled={disabled || loading}
         type={'button'}
         onClick={onClick}
       >
-        <Icon icon={loading ? Loader2Icon : icon} size={14} spin={loading} />
-        {label && <span className={styles.actionLabel}>{label}</span>}
+        <Icon
+          className={stylex.props(styles.actionIcon).className}
+          icon={loading ? Loader2Icon : icon}
+          size={14}
+          spin={loading}
+        />
+        {label && <span {...stylex.props(styles.actionLabel)}>{label}</span>}
       </button>
     );
 
@@ -145,9 +109,15 @@ interface PreviewToolbarProps {
 }
 
 const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, deviceId, path, rootPath }) => (
-  <Flexbox horizontal align={'center'} className={styles.bar} gap={8} justify={'space-between'}>
+  <Flexbox
+    horizontal
+    align={'center'}
+    className={stylex.props(styles.bar).className}
+    gap={8}
+    justify={'space-between'}
+  >
     <Tooltip title={path}>
-      <Flexbox horizontal align={'center'} className={styles.path} flex={1}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.path).className} flex={1}>
         <PathBreadcrumb deviceId={deviceId} path={path} rootPath={rootPath} />
       </Flexbox>
     </Tooltip>
@@ -156,7 +126,6 @@ const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, deviceId, path, roo
         data-toolbar-actions
         horizontal
         align={'center'}
-        className={styles.actions}
         flex={'none'}
         gap={2}
         style={{ marginInlineStart: 'auto' }}

@@ -16,7 +16,7 @@ import {
   ReactVideoPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import type { CSSProperties, RefObject } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -50,13 +50,9 @@ const VIDEO_FILTERS: FileFilter[] = [
 // Force the Lexical FileNode's outer `<span>` to render as its own block-
 // level row inside the paragraph. The inner card visuals (icon + name + size
 // + download button) live in `LinearFilePlugin`.
-const fileNodeStyles = createStaticStyles(({ css }) => ({
-  fileWrapper: css`
-    display: block !important;
-    width: 100% !important;
-    margin-block: 8px !important;
-  `,
-}));
+const fileNodeStyles = stylex.create({
+  fileWrapper: { display: 'block', width: '100%', marginBlock: '8px' },
+});
 
 /**
  * Base plugins for the editor (without image and toolbar, which need dynamic config)
@@ -201,7 +197,7 @@ const InternalEditor = memo<InternalEditorProps>(
 
       const filePlugin = Editor.withProps(LinearFilePlugin, {
         handleUpload: handleFileUpload,
-        theme: { file: fileNodeStyles.fileWrapper as unknown as string },
+        theme: { file: stylex.props(fileNodeStyles.fileWrapper).className },
       });
 
       const mathPlugin = Editor.withProps(ReactMathPlugin, { enableInlineMath });

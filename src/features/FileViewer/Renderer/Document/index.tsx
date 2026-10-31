@@ -3,7 +3,9 @@
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-import { Button, Center, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Button, Center, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,31 +28,31 @@ const pdfOptions = {
 
 const maxPageWidth = 1200;
 
-const styles = createStaticStyles(({ css }) => ({
-  fallbackIcon: css`
-    width: 64px;
-    height: 64px;
-    border-radius: 14px;
-    background: ${cssVar.colorFillTertiary};
-  `,
-  page: css`
-    overflow: hidden;
-    margin-block-end: 12px;
-    border-radius: 4px;
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-  pdfContainer: css`
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-
-    height: 100%;
-    padding-block: 10px;
-
-    background: ${cssVar.colorBgLayout};
-  `,
-}));
+const styles = stylex.create({
+  fallbackIcon: {
+    width: '64px',
+    height: '64px',
+    borderRadius: '14px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  page: {
+    overflow: 'hidden',
+    marginBlockEnd: '12px',
+    borderRadius: '4px',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  pdfContainer: {
+    overflow: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    height: '100%',
+    paddingBlock: '10px',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+});
 
 const PdfPane = memo<{ blob: Blob }>(({ blob }) => {
   const [numPages, setNumPages] = useState(0);
@@ -70,7 +72,7 @@ const PdfPane = memo<{ blob: Blob }>(({ blob }) => {
   const width = containerWidth ? Math.min(containerWidth - 32, maxPageWidth) : undefined;
 
   return (
-    <div className={styles.pdfContainer} ref={setContainer}>
+    <div {...stylex.props(styles.pdfContainer)} ref={setContainer}>
       <Document
         file={blob}
         loading={<Loading />}
@@ -79,7 +81,7 @@ const PdfPane = memo<{ blob: Blob }>(({ blob }) => {
       >
         {Array.from({ length: numPages }, (_, index) => (
           <Page
-            className={styles.page}
+            className={stylex.props(styles.page).className}
             key={`page_${index + 1}`}
             pageNumber={index + 1}
             width={width}
@@ -159,7 +161,7 @@ const DocumentPreview = memo<DocumentPreviewProps>(
 
     return (
       <Center gap={16} height={'100%'} width={'100%'}>
-        <Center className={styles.fallbackIcon}>
+        <Center className={stylex.props(styles.fallbackIcon).className}>
           <FileIcon fileName={filename} size={40} />
         </Center>
         <Flexbox align={'center'} gap={4}>

@@ -1,0 +1,41 @@
+/* `::highlight()` is a document-level pseudo-element, so its rules can't live in
+   a scoped class. Only a handful of properties are honoured on it (colour,
+   background, text-decoration, text-shadow), which is exactly the vocabulary an
+   annotation highlight needs. Registry names mirror HIGHLIGHT_REGISTRY in
+   highlights.ts (HighlightStyle.test.ts keeps them in sync).
+
+   The warning ramp is the amber one in LobeHub's token set — the colour readers
+   already associate with "someone annotated this", not with an error.
+
+   The underline carries the signal, not the fill: an annotation has to be
+   visible on a dense page without turning the sentence into a highlighter
+   stripe. It is drawn at `colorWarning` (warning-6, the saturated gold), not at
+   a border-weight token — warning-3 is pale enough to disappear against body
+   text. The three registries then step the fill rather than the hue: warning-1
+   resting, -2 while composing, -3 for the picked thread. */
+::highlight(lobe-document-comment) {
+  text-decoration: underline;
+  text-decoration-color: var(--lobe-color-warning);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+
+  background-color: var(--lobe-color-warning-bg);
+}
+
+::highlight(lobe-document-comment-pending) {
+  text-decoration: underline;
+  text-decoration-color: var(--lobe-color-warning);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+
+  background-color: var(--lobe-color-warning-bg-hover);
+}
+
+::highlight(lobe-document-comment-active) {
+  text-decoration: underline;
+  text-decoration-color: var(--lobe-color-warning-active);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+
+  background-color: var(--lobe-color-warning-border);
+}

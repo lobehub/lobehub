@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { sx } from '@/styles/sx';
+
 import { useImageStage } from '../context';
 import { type AnnotationShape, drawShapes } from './Annotate/shapes';
 import CommentMarkers from './Comment/CommentMarkers';
@@ -50,9 +52,8 @@ const MarkupPreview = ({ comments = [], shapes = [] }: MarkupPreviewProps) => {
 
   return createPortal(
     <div
-      className={toolStyles.overlayFill}
       data-testid={'image-markup-preview'}
-      style={{ pointerEvents: 'none' }}
+      {...sx(toolStyles.overlayFill, undefined, { pointerEvents: 'none' })}
     >
       {shapes.length > 0 && (
         <canvas

@@ -1,0 +1,20 @@
+/* docx-preview renders fixed-size "pages" into the pane; StyleX cannot reach
+   its DOM. Keep them centered with a gap. "safe center" falls back to
+   flex-start when the page is wider than the pane, so the left edge stays
+   reachable by horizontal scroll. */
+.scroll :global(.docx-wrapper) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: safe center;
+
+  padding: 10px;
+
+  background: transparent;
+}
+
+.scroll :global(.docx-wrapper > section.docx) {
+  margin-block-end: 0;
+  border-radius: 4px;
+  box-shadow: var(--lobe-box-shadow-tertiary);
+}

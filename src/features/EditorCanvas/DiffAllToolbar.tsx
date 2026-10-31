@@ -2,7 +2,9 @@
 
 import type { IEditor } from '@lobehub/editor';
 import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
-import { Block, Button, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,29 +12,22 @@ import { useTranslation } from 'react-i18next';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useDocumentStore } from '@/store/document';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: absolute;
-    z-index: 1000;
-    inset-block-end: 24px;
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-  `,
-  toolbar: css`
-    border-color: ${cssVar.colorFillSecondary};
-    background: ${cssVar.colorBgElevated};
-  `,
-  toolbarDark: css`
-    box-shadow:
-      0 14px 28px -6px #0003,
-      0 2px 4px -1px #0000001f;
-  `,
-  toolbarLight: css`
-    box-shadow:
-      0 14px 28px -6px #0000001a,
-      0 2px 4px -1px #0000000f;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    position: 'absolute',
+    zIndex: 1000,
+    insetBlockEnd: '24px',
+    insetInlineStart: '50%',
+    transform: 'translateX(-50%)',
+  },
+  toolbar: {
+    borderColor: cssVar.colorFillSecondary,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  toolbarDark: { boxShadow: '0 14px 28px -6px #0003,\n      0 2px 4px -1px #0000001f' },
+  toolbarLight: { boxShadow: '0 14px 28px -6px #0000001a,\n      0 2px 4px -1px #0000000f' },
+});
 
 const useIsEditorInit = (editor?: IEditor) => {
   const [isEditInit, setEditInit] = useState<boolean>(!!editor?.getLexicalEditor());
@@ -121,14 +116,17 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
   };
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       <Block
         horizontal
         shadow
-        className={cx(styles.toolbar, isDarkMode ? styles.toolbarDark : styles.toolbarLight)}
         gap={8}
         padding={4}
         variant="outlined"
+        className={
+          stylex.props(styles.toolbar, isDarkMode ? styles.toolbarDark : styles.toolbarLight)
+            .className
+        }
       >
         <Flexbox horizontal align={'center'} gap={8}>
           <Button

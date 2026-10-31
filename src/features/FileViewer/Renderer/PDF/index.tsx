@@ -4,6 +4,7 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
 import { Flexbox, Spin } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo, useCallback, useState } from 'react';
 
 import { Document, Page, pdfjs } from '@/libs/pdfjs';
@@ -56,16 +57,16 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId, showChunkHighlights = tru
   const dataSource = useChunkHighlights(fileId, showChunkHighlights);
 
   return (
-    <Flexbox className={styles.container}>
+    <Flexbox className={stylex.props(styles.container).className}>
       <Flexbox
         align={'center'}
-        className={styles.documentContainer}
+        className={stylex.props(styles.documentContainer).className}
         justify={isLoaded ? undefined : 'center'}
         padding={24}
         ref={setContainerRef}
       >
         <Document
-          className={styles.document}
+          className={stylex.props(styles.document).className}
           file={url && toSameOriginFileProxyUrl(url)}
           loading={<Spin size="large" />}
           options={options}
@@ -76,7 +77,11 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId, showChunkHighlights = tru
 
             return (
               <Fragment key={`page_${index + 1}`}>
-                <Page className={styles.page} pageNumber={index + 1} width={width}>
+                <Page
+                  className={stylex.props(styles.page).className}
+                  pageNumber={index + 1}
+                  width={width}
+                >
                   <HighlightLayer dataSource={dataSource} pageNumber={index + 1} width={width} />
                 </Page>
               </Fragment>

@@ -12,6 +12,7 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -154,9 +155,11 @@ const CommentCard = memo<CommentCardProps>(
 
     return (
       <Flexbox
-        className={`${styles.card} ${replyStyle ? styles.reply : ''}`}
         data-topic-comment-id={comment.id}
         gap={8}
+        className={
+          stylex.props(styles.card, replyStyle && styles.reply, stylex.defaultMarker()).className
+        }
       >
         <Flexbox horizontal align={'center'} gap={8}>
           <Avatar avatar={comment.author.avatar || authorName} size={24} />
@@ -180,7 +183,7 @@ const CommentCard = memo<CommentCardProps>(
             )
           )}
           {edited && !deleted && (
-            <Text className={styles.edited} fontSize={12}>
+            <Text className={stylex.props(styles.edited).className} fontSize={12}>
               {t('topicComment.edited')}
             </Text>
           )}
@@ -189,10 +192,12 @@ const CommentCard = memo<CommentCardProps>(
         <AnchorPreview comment={comment} />
 
         {deleted ? (
-          <Text className={styles.deleted}>{t('topicComment.deleted')}</Text>
+          <Text className={stylex.props(styles.deleted).className}>
+            {t('topicComment.deleted')}
+          </Text>
         ) : moderated ? (
           <Flexbox gap={8}>
-            <Text className={styles.deleted}>
+            <Text className={stylex.props(styles.deleted).className}>
               {comment.moderationIsOwn
                 ? t('topicComment.removedOwn')
                 : comment.canRestore
@@ -200,7 +205,7 @@ const CommentCard = memo<CommentCardProps>(
                   : t('topicComment.removed')}
             </Text>
             {comment.canRestore && comment.content && (
-              <div className={styles.moderatedContent}>
+              <div {...stylex.props(styles.moderatedContent)}>
                 <CommentContent content={comment.content} editorData={comment.editorData} />
               </div>
             )}
@@ -219,7 +224,7 @@ const CommentCard = memo<CommentCardProps>(
           </Flexbox>
         ) : editing ? (
           <Flexbox gap={8}>
-            <div className={styles.editEditor}>
+            <div {...stylex.props(styles.editEditor)}>
               <TopicCommentEditor
                 autoFocus
                 disabled={mutating}
@@ -262,7 +267,7 @@ const CommentCard = memo<CommentCardProps>(
         )}
 
         {!editing && menuItems.length > 0 && (
-          <div className={`${styles.cardActions} topic-comment-actions`}>
+          <div {...stylex.props(styles.cardActions)}>
             <DropdownMenu items={menuItems}>
               <ActionIcon icon={MoreHorizontal} loading={mutating} size={'small'} />
             </DropdownMenu>

@@ -1,50 +1,49 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { parseSkillMarkdownMetadata } from '@/utils/skillMarkdown';
 
-const styles = createStaticStyles(({ css }) => ({
-  frontmatter: css`
-    margin-block: 16px 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-    background: ${cssVar.colorBgContainer};
-  `,
-  metadataKey: css`
-    flex-shrink: 0;
-    width: 112px;
-    font-family: ${cssVar.fontFamilyCode};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  metadataRow: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  metadataValue: css`
-    min-width: 0;
-    white-space: pre-wrap;
-  `,
-  sectionHeaderCollapsed: css`
-    border-block-end: none;
-  `,
-  sectionHeaderToggle: css`
-    cursor: pointer;
-    user-select: none;
-  `,
-  sectionHeader: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  frontmatter: {
+    marginBlockStart: '16px',
+    marginBlockEnd: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  metadataKey: {
+    flexShrink: 0,
+    width: '112px',
+    fontFamily: cssVar.fontFamilyCode,
+    color: cssVar.colorTextSecondary,
+  },
+  metadataRow: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  metadataValue: { minWidth: '0', whiteSpace: 'pre-wrap' },
+  sectionHeaderCollapsed: { borderBlockEndStyle: 'none' },
+  sectionHeaderToggle: { cursor: 'pointer', userSelect: 'none' },
+  sectionHeader: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 interface SkillFrontmatterCardProps {
   /** Replaces the key/value rows, e.g. the raw YAML while editing. */
@@ -68,18 +67,23 @@ const SkillFrontmatterCard = memo<SkillFrontmatterCardProps>(
     const [collapsed, setCollapsed] = useState(!!defaultCollapsed);
 
     return (
-      <Flexbox className={styles.frontmatter} data-collapsed={collapsed || undefined}>
+      <Flexbox
+        className={stylex.props(styles.frontmatter).className}
+        data-collapsed={collapsed || undefined}
+      >
         <Flexbox
           horizontal
           align="center"
           aria-expanded={collapsible ? !collapsed : undefined}
           justify="space-between"
           role={collapsible ? 'button' : undefined}
-          className={cx(
-            styles.sectionHeader,
-            collapsible && styles.sectionHeaderToggle,
-            collapsed && styles.sectionHeaderCollapsed,
-          )}
+          className={
+            stylex.props(
+              styles.sectionHeader,
+              collapsible && styles.sectionHeaderToggle,
+              collapsed && styles.sectionHeaderCollapsed,
+            ).className
+          }
           onClick={collapsible ? () => setCollapsed((value) => !value) : undefined}
         >
           <Flexbox horizontal align="center" gap={6}>
@@ -105,15 +109,15 @@ const SkillFrontmatterCard = memo<SkillFrontmatterCardProps>(
                 <Flexbox
                   horizontal
                   align="flex-start"
-                  className={styles.metadataRow}
+                  className={stylex.props(styles.metadataRow).className}
                   key={item.key}
                 >
-                  <Text className={styles.metadataKey}>{item.key}</Text>
-                  <Text className={styles.metadataValue}>{item.value}</Text>
+                  <Text className={stylex.props(styles.metadataKey).className}>{item.key}</Text>
+                  <Text className={stylex.props(styles.metadataValue).className}>{item.value}</Text>
                 </Flexbox>
               ))
             ) : (
-              <Flexbox className={styles.metadataRow}>
+              <Flexbox className={stylex.props(styles.metadataRow).className}>
                 <Text type="secondary">{t('skillFrontmatter.empty')}</Text>
               </Flexbox>
             )))}

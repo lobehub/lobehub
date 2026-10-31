@@ -1,7 +1,9 @@
 'use client';
 
 import { FilePlugin, UploadPlugin, useLexicalComposerContext } from '@lobehub/editor';
-import { ActionIcon, createStaticStyles } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { DownloadIcon } from 'lucide-react';
 import {
   type FC,
@@ -15,6 +17,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { sx } from '@/styles/sx';
 import { formatSize, formatSpeed, formatTime } from '@/utils/format';
 
 import { preserveInsertedFileSize } from './editorAttachments';
@@ -23,126 +26,109 @@ import { createEditorFileUploadTracker } from './editorFileUploadTracker';
 import { openFileDownload } from './fileDownload';
 import type { EditorAttachmentUpload } from './useImageUpload';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    box-sizing: border-box;
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: background ${cssVar.motionDurationMid};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:hover [data-lobehub-file-download] {
-      opacity: 1;
-    }
-  `,
-  download: css`
-    flex-shrink: 0;
-    opacity: 0;
-    transition: opacity ${cssVar.motionDurationMid};
-  `,
-  info: css`
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-  `,
-  name: css`
-    overflow: hidden;
-
-    font-size: ${cssVar.fontSize};
-    font-weight: 500;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  progress: css`
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline-start: 0;
-
-    height: 3px;
-
-    background: ${cssVar.colorPrimary};
-
-    transition: width ${cssVar.motionDurationMid} ease-out;
-  `,
-  progressTrack: css`
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline: 0;
-
-    height: 3px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  size: css`
-    margin-block-start: 2px;
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  state: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  uploadCard: css`
-    position: relative;
-
-    overflow: hidden;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    box-sizing: border-box;
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  uploadMeta: css`
-    overflow: hidden;
-
-    margin-block-start: 2px;
-
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    boxSizing: 'border-box',
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    transitionProperty: 'background',
+    transitionDuration: cssVar.motionDurationMid,
+  },
+  download: {
+    flexShrink: 0,
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transitionProperty: 'opacity',
+    transitionDuration: cssVar.motionDurationMid,
+  },
+  info: { overflow: 'hidden', flex: '1', minWidth: 0 },
+  name: {
+    overflow: 'hidden',
+    fontSize: cssVar.fontSize,
+    fontWeight: 500,
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  progress: {
+    position: 'absolute',
+    insetBlockEnd: 0,
+    insetInlineStart: 0,
+    height: '3px',
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+    transitionProperty: 'width',
+    transitionDuration: cssVar.motionDurationMid,
+    transitionTimingFunction: 'ease-out',
+  },
+  progressTrack: {
+    position: 'absolute',
+    insetBlockEnd: 0,
+    insetInline: 0,
+    height: '3px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  size: {
+    marginBlockStart: '2px',
+    fontSize: cssVar.fontSizeSM,
+    lineHeight: 1.4,
+    color: cssVar.colorTextTertiary,
+  },
+  state: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  uploadCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    boxSizing: 'border-box',
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  uploadMeta: {
+    overflow: 'hidden',
+    marginBlockStart: '2px',
+    fontSize: cssVar.fontSizeSM,
+    lineHeight: 1.4,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface FileNodeLike {
   fileUrl?: string;
@@ -210,11 +196,11 @@ export const LinearFileCard = memo<LinearFileCardProps>(({ node, uploadTracker }
     ].filter(Boolean);
 
     return (
-      <div className={styles.uploadCard}>
+      <div {...stylex.props(styles.uploadCard)}>
         <FileIcon fileName={name} fileType={upload?.file.type} size={36} />
-        <div className={styles.info}>
-          <div className={styles.name}>{name}</div>
-          <div className={styles.uploadMeta}>
+        <div {...stylex.props(styles.info)}>
+          <div {...stylex.props(styles.name)}>{name}</div>
+          <div {...stylex.props(styles.uploadMeta)}>
             {[statusText, ...details].filter(Boolean).join(' · ')}
           </div>
         </div>
@@ -223,17 +209,19 @@ export const LinearFileCard = memo<LinearFileCardProps>(({ node, uploadTracker }
           aria-valuemax={100}
           aria-valuemin={0}
           aria-valuenow={progress}
-          className={styles.progressTrack}
+          {...stylex.props(styles.progressTrack)}
           role="progressbar"
         >
-          <div className={styles.progress} style={{ width: `${progress}%` }} />
+          <div {...sx(styles.progress, undefined, { width: `${progress}%` })} />
         </div>
       </div>
     );
   }
   if (status === 'error') {
     return (
-      <div className={styles.state}>{t('file.error', { message: message || 'Unknown error' })}</div>
+      <div {...stylex.props(styles.state)}>
+        {t('file.error', { message: message || 'Unknown error' })}
+      </div>
     );
   }
 
@@ -245,15 +233,15 @@ export const LinearFileCard = memo<LinearFileCardProps>(({ node, uploadTracker }
   };
 
   return (
-    <div className={styles.card}>
+    <div {...stylex.props(styles.card, stylex.defaultMarker())}>
       <FileIcon fileName={name} size={36} />
-      <div className={styles.info}>
-        <div className={styles.name}>{name}</div>
+      <div {...stylex.props(styles.info)}>
+        <div {...stylex.props(styles.name)}>{name}</div>
         {typeof size === 'number' && size > 0 ? (
-          <div className={styles.size}>{formatSize(size)}</div>
+          <div {...stylex.props(styles.size)}>{formatSize(size)}</div>
         ) : null}
       </div>
-      <div className={styles.download} data-lobehub-file-download="">
+      <div {...stylex.props(styles.download)} data-lobehub-file-download="">
         <ActionIcon
           aria-label="Download"
           icon={DownloadIcon}

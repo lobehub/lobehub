@@ -1,4 +1,5 @@
 import { Button, Center, Empty, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MessageCircle } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -45,19 +46,19 @@ const Body = memo(() => {
   if (!view) return null;
   if (isInitialError) {
     return (
-      <Flexbox className={styles.body}>
+      <Flexbox className={stylex.props(styles.body).className}>
         <AsyncError error={error} variant={'page'} onRetry={() => void reload()} />
       </Flexbox>
     );
   }
 
   return (
-    <Flexbox className={styles.body}>
-      <Flexbox className={styles.list}>
+    <Flexbox className={stylex.props(styles.body).className}>
+      <Flexbox className={stylex.props(styles.list).className}>
         {isLoadingInitial ? (
           <SurfaceSkeleton header={false} variant={'list'} />
         ) : items.length === 0 ? (
-          <Center className={styles.empty}>
+          <Center className={stylex.props(styles.empty).className}>
             <Empty description={t('topicComment.empty')} icon={MessageCircle} />
           </Center>
         ) : (

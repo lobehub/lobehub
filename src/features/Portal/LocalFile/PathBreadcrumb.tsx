@@ -2,7 +2,8 @@
 
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 
@@ -16,60 +17,45 @@ import {
   toBreadcrumbSegments,
 } from './filePathBreadcrumb';
 
-const styles = createStaticStyles(({ css }) => ({
-  crumb: css`
-    cursor: pointer;
-
-    overflow: hidden;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 4px;
-    border: none;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-family: inherit;
-    font-size: inherit;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  crumbStatic: css`
-    cursor: default;
-
-    &:hover {
-      color: ${cssVar.colorTextTertiary};
-      background: none;
-    }
-  `,
-  /* The previewed file is the crumb a reader always needs in full, so it is the
-     last one to give up width. */
-  group: css`
-    overflow: hidden;
-    flex-shrink: 1;
-    min-width: 0;
-  `,
-  groupLast: css`
-    flex-shrink: 0;
-
-    span {
-      color: ${cssVar.colorText};
-    }
-  `,
-  separator: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  crumb: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    minWidth: 0,
+    paddingBlock: '2px',
+    paddingInline: '4px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadiusSM,
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  // The previewed file's crumb reads in full-strength text.
+  crumbLast: { color: cssVar.colorText },
+  crumbStatic: {
+    cursor: 'default',
+    color: cssVar.colorTextTertiary,
+    backgroundColor: 'transparent',
+  },
+  crumbStaticLast: {
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorTextTertiary },
+  },
+  // The previewed file is the crumb a reader always needs in full, so it is the
+  // last one to give up width.
+  group: { overflow: 'hidden', flexShrink: 1, minWidth: 0 },
+  groupLast: { flexShrink: 0 },
+  separator: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    color: cssVar.colorTextQuaternary,
+  },
+  separatorLast: { color: cssVar.colorText },
+});
 
 interface BuildMenuParams {
   byParent: Map<string, ProjectFileIndexEntry[]>;
@@ -162,7 +148,16 @@ const Crumb = memo<{
   // A span rather than a button: the menu's trigger applies its own button
   // semantics, and base-ui rejects a native button as the element it renders.
   const crumb = (
-    <span className={cx(styles.crumb, !canBrowse && styles.crumbStatic)}>{segment.name}</span>
+    <span
+      {...stylex.props(
+        styles.crumb,
+        isLast && styles.crumbLast,
+        !canBrowse && styles.crumbStatic,
+        !canBrowse && isLast && styles.crumbStaticLast,
+      )}
+    >
+      {segment.name}
+    </span>
   );
 
   if (!canBrowse) return crumb;
@@ -195,11 +190,11 @@ const PathBreadcrumb = memo<PathBreadcrumbProps>(({ deviceId, path, rootPath }) 
           <Flexbox
             horizontal
             align={'center'}
-            className={cx(styles.group, isLast && styles.groupLast)}
+            className={stylex.props(styles.group, isLast && styles.groupLast).className}
             key={segment.path}
           >
             {index > 0 && (
-              <span aria-hidden className={styles.separator}>
+              <span aria-hidden {...stylex.props(styles.separator, isLast && styles.separatorLast)}>
                 <Icon icon={ChevronRightIcon} size={12} />
               </span>
             )}

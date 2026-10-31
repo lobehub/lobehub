@@ -17,19 +17,7 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   const factories: ((original: typeof importOriginal) => unknown)[] = [
     async (importOriginal) => ({
       ...((await importOriginal()) as Record<string, unknown>),
-      createStaticStyles: () => ({
-        card: 'card',
-        key: 'key',
-        row: 'row',
-        value: 'value',
-      }),
       cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
-      cssVar: {
-        colorBgContainer: 'var(--color-bg-container)',
-        colorBorderSecondary: 'var(--color-border-secondary)',
-        colorTextSecondary: 'var(--color-text-secondary)',
-        fontFamilyCode: 'monospace',
-      },
     }),
     () => ({
       ActionIcon: () => null,

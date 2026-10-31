@@ -1,0 +1,5 @@
+/* The chart names each series path after its category; dash the target line.
+   Targets the chart library's own DOM, which StyleX cannot reach. */
+.chart path[name='target'] {
+  stroke-dasharray: 4 4;
+}

@@ -1,7 +1,9 @@
 'use client';
 
-import { createStaticStyles, cssVar, Empty, Flexbox } from '@lobehub/ui';
+import { Empty, Flexbox } from '@lobehub/ui';
 import { Button, confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, Clock3Icon } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
@@ -35,47 +37,35 @@ interface HistoryDayGroup {
   label: string;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  empty: css`
-    height: 100%;
-    padding: 24px;
-  `,
-  groupHeader: css`
-    position: sticky;
-    z-index: 1;
-    inset-block-start: 0;
-
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-
-    padding-block: 14px 6px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  groupTitle: css`
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  groupCount: css`
-    font-size: 11px;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  headerButton: css`
-    padding-inline: 8px;
-  `,
-  list: css`
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-    padding-block: 0 20px;
-  `,
-}));
+const styles = stylex.create({
+  empty: { height: '100%', padding: '24px' },
+  groupHeader: {
+    position: 'sticky',
+    zIndex: 1,
+    insetBlockStart: '0',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'baseline',
+    paddingBlockStart: '14px',
+    paddingBlockEnd: '6px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  groupTitle: { fontSize: '12px', fontWeight: 700, lineHeight: 1, color: cssVar.colorText },
+  groupCount: { fontSize: '11px', lineHeight: 1, color: cssVar.colorTextTertiary },
+  headerButton: { paddingInline: '8px' },
+  list: {
+    overflowY: 'auto',
+    flex: '1',
+    minHeight: '0',
+    paddingBlockStart: '0',
+    paddingBlockEnd: '20px',
+  },
+});
 
 const HistoryPanel = memo(() => {
   const { t } = useTranslation(['common', 'file']);
@@ -223,7 +213,7 @@ const HistoryPanel = memo(() => {
         right={
           <>
             <Button
-              className={styles.headerButton}
+              className={stylex.props(styles.headerButton).className}
               icon={ArrowLeftIcon}
               size={'small'}
               type={'text'}
@@ -241,21 +231,29 @@ const HistoryPanel = memo(() => {
       />
 
       {isLoading && !data ? (
-        <Flexbox align={'center'} className={styles.empty} justify={'center'}>
+        <Flexbox
+          align={'center'}
+          className={stylex.props(styles.empty).className}
+          justify={'center'}
+        >
           <SurfaceSkeleton header={false} variant={'list'} />
         </Flexbox>
       ) : items.length === 0 ? (
-        <Flexbox align={'center'} className={styles.empty} justify={'center'}>
+        <Flexbox
+          align={'center'}
+          className={stylex.props(styles.empty).className}
+          justify={'center'}
+        >
           <Empty description={t('pageEditor.history.empty', { ns: 'file' })} icon={Clock3Icon} />
         </Flexbox>
       ) : (
         <HistoryItemsProvider items={items} restoringHistoryId={restoringHistoryId}>
-          <Flexbox className={styles.list} gap={0}>
+          <Flexbox className={stylex.props(styles.list).className} gap={0}>
             {groups.map((group) => (
               <Flexbox gap={0} key={group.key}>
-                <div className={styles.groupHeader}>
-                  <span className={styles.groupTitle}>{group.label}</span>
-                  <span className={styles.groupCount}>
+                <div {...stylex.props(styles.groupHeader)}>
+                  <span {...stylex.props(styles.groupTitle)}>{group.label}</span>
+                  <span {...stylex.props(styles.groupCount)}>
                     {t('pageEditor.history.versionCount', {
                       count: group.historyIds.length,
                       ns: 'file',

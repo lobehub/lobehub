@@ -3,14 +3,15 @@
 import { LineChart } from '@lobehub/charts';
 import {
   Button,
-  createStaticStyles,
-  cssVar,
+  cssVar as cssVarValue,
   Flexbox,
   Icon,
   Skeleton,
   Text,
   useTheme,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ListChecks } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -30,6 +31,7 @@ import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalP
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
+import moduleStyles from './Body.module.css';
 import { useNorthStarCard } from './useNorthStarCard';
 
 /**
@@ -38,53 +40,21 @@ import { useNorthStarCard } from './useNorthStarCard';
  * observation or adjusting the clause itself.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-  /* The chart names each series path after its category; dash the target line. */
-  chart: css`
-    & path[name='target'] {
-      stroke-dasharray: 4 4;
-    }
-  `,
-  row: css`
-    padding-block: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  task: css`
-    overflow: hidden;
-    min-width: 0;
-    max-width: 100%;
-  `,
-  taskCell: css`
-    overflow: hidden;
-    min-width: 0;
-  `,
-  taskTitle: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  time: css`
-    flex: none;
-    width: 72px;
-  `,
-  value: css`
-    flex: none;
-    min-width: 96px;
-  `,
-  section: css`
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+  row: {
+    paddingBlock: '8px',
+    borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  task: { overflow: 'hidden', minWidth: 0, maxWidth: '100%' },
+  taskCell: { overflow: 'hidden', minWidth: 0 },
+  taskTitle: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  time: { flex: 'none', width: '72px' },
+  value: { flex: 'none', minWidth: '96px' },
+  section: { fontSize: '12px', fontWeight: 600, color: cssVar.colorTextSecondary },
+});
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -106,9 +76,9 @@ const observationSource = (row: NorthStarObservationRow): 'agent' | 'api' | 'man
   row.actorType === 'agent' ? 'agent' : (row.sourceType ?? 'manual');
 
 const DELTA_COLOR: Record<DeltaTone, string> = {
-  bad: cssVar.colorError,
-  good: cssVar.colorSuccess,
-  neutral: cssVar.colorTextTertiary,
+  bad: cssVarValue.colorError,
+  good: cssVarValue.colorSuccess,
+  neutral: cssVarValue.colorTextTertiary,
 };
 
 const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, metricKey }) => {
@@ -152,7 +122,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
       </Flexbox>
     );
 
-  const accent = card.met ? cssVar.colorSuccess : cssVar.colorInfo;
+  const accent = card.met ? cssVarValue.colorSuccess : cssVarValue.colorInfo;
   const unit = card.unit ? ` ${card.unit}` : '';
   // Literal theme colors: the chart ids its SVG gradients by the color string.
   const chartColors = [card.met ? theme.colorSuccess : theme.colorInfo, theme.colorTextQuaternary];
@@ -174,7 +144,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
         </Flexbox>
         <Text
           fontSize={12}
-          style={card.stale ? { color: cssVar.colorWarning } : undefined}
+          style={card.stale ? { color: cssVarValue.colorWarning } : undefined}
           type={'secondary'}
         >
           {card.latestAt == null
@@ -185,7 +155,9 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
       </Flexbox>
 
       <Flexbox gap={8}>
-        <Text className={styles.section}>{t('goalProcess.northStar.detail.trend')}</Text>
+        <Text className={stylex.props(styles.section).className}>
+          {t('goalProcess.northStar.detail.trend')}
+        </Text>
         {chartRows.length < 2 ? (
           <Text fontSize={12} type={'secondary'}>
             {t('goalProcess.northStar.detail.trendEmpty')}
@@ -194,7 +166,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
           <LineChart
             autoMinValue
             categories={['value', 'target']}
-            className={styles.chart}
+            className={moduleStyles.chart}
             colors={chartColors}
             data={chartRows}
             height={200}
@@ -211,7 +183,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
       </Flexbox>
 
       <Flexbox gap={4}>
-        <Text className={styles.section}>
+        <Text className={stylex.props(styles.section).className}>
           {t('goalProcess.northStar.detail.history', { count: history.length })}
         </Text>
         {history.length === 0 ? (
@@ -224,25 +196,30 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
               <Flexbox
                 horizontal
                 align={'center'}
-                className={styles.row}
+                className={stylex.props(styles.row).className}
                 gap={12}
                 key={row.observedAt.getTime()}
               >
                 <Text
-                  className={styles.time}
+                  className={stylex.props(styles.time).className}
                   fontSize={12}
                   title={dayjs(row.observedAt).format('YYYY-MM-DD HH:mm:ss')}
                   type={'secondary'}
                 >
                   {dayjs(row.observedAt).fromNow()}
                 </Text>
-                <Flexbox horizontal align={'baseline'} className={styles.value} gap={6}>
-                  <Text className={styles.mono} weight={500}>
+                <Flexbox
+                  horizontal
+                  align={'baseline'}
+                  className={stylex.props(styles.value).className}
+                  gap={6}
+                >
+                  <Text className={stylex.props(styles.mono).className} weight={500}>
                     {formatMetricValue(row.value)}
                   </Text>
                   {row.delta != null && (
                     <Text
-                      className={styles.mono}
+                      className={stylex.props(styles.mono).className}
                       fontSize={12}
                       style={{
                         color: DELTA_COLOR[deltaTone(card.op, row.value, row.delta, card.target)],
@@ -255,7 +232,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
                 <Flexbox
                   horizontal
                   align={'center'}
-                  className={styles.taskCell}
+                  className={stylex.props(styles.taskCell).className}
                   flex={1}
                   gap={6}
                   justify={'flex-end'}
@@ -264,7 +241,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
                     <>
                       {row.tasks.slice(0, TASKS_PER_ROW).map((task) => (
                         <Button
-                          className={styles.task}
+                          className={stylex.props(styles.task).className}
                           icon={<Icon icon={ListChecks} size={12} />}
                           key={task.id}
                           size={'small'}
@@ -272,7 +249,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
                           type={'text'}
                           onClick={() => openNode(task.id)}
                         >
-                          <span className={styles.taskTitle}>{task.title}</span>
+                          <span {...stylex.props(styles.taskTitle)}>{task.title}</span>
                         </Button>
                       ))}
                       {row.tasks.length > TASKS_PER_ROW && (

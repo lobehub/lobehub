@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, Freeze } from '@lobehub/ui';
+import { Freeze } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { AnimatePresence, useIsPresent } from 'motion/react';
 import * as m from 'motion/react-m';
 import { type ReactNode } from 'react';
@@ -23,33 +24,28 @@ import HistoryPanel from '../History';
 import { selectors, usePageEditorStore } from '../store';
 import { usePageAgentPanelControl } from './OverrideContext';
 
-const styles = createStaticStyles(({ css }) => ({
-  inner: css`
-    position: relative;
-
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-  `,
-  layer: css`
-    will-change: opacity, transform;
-
-    position: absolute;
-    inset: 0;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    min-height: 100%;
-    max-height: 100%;
-  `,
-}));
+const styles = stylex.create({
+  inner: {
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    width: '100%',
+    height: '100%',
+    minHeight: '0',
+  },
+  layer: {
+    willChange: 'opacity, transform',
+    position: 'absolute',
+    inset: '0',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '100%',
+    maxHeight: '100%',
+  },
+});
 
 const ExitingFrozenContent = memo<{ children: ReactNode }>(({ children }) => {
   const isPresent = useIsPresent();
@@ -81,14 +77,14 @@ const PageEditorRightPanelContent = memo(() => {
   );
 
   if (!shouldUseMotion) {
-    return <div className={styles.layer}>{activeContent.node}</div>;
+    return <div {...stylex.props(styles.layer)}>{activeContent.node}</div>;
   }
 
   return (
     <AnimatePresence custom={directionRef.current} initial={false} mode="sync">
       <m.div
         animate="animate"
-        className={styles.layer}
+        {...stylex.props(styles.layer)}
         custom={directionRef.current}
         exit="exit"
         initial="initial"
@@ -133,7 +129,7 @@ const PageEditorRightPanel = memo(() => {
         }
       }}
     >
-      <div className={styles.inner}>
+      <div {...stylex.props(styles.inner)}>
         <PageEditorRightPanelContent />
       </div>
     </RightPanel>

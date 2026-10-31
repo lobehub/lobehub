@@ -1,11 +1,15 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, Input, Select } from '@lobehub/ui';
+import { ActionIcon, Input, Select } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LinkIcon, SaveIcon, UnlinkIcon, XIcon } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { useImageStage } from '../../context';
 import type { NormalizedRect, Point, Size } from '../../geometry';
@@ -26,58 +30,53 @@ import {
   resolveOutputSize,
 } from './crop';
 
-const styles = createStaticStyles(({ css }) => ({
-  box: css`
-    cursor: move;
-    position: absolute;
-    border: 1px solid #fff;
-    box-shadow: 0 0 0 9999px rgb(0 0 0 / 45%);
-
-    &::before,
-    &::after {
-      pointer-events: none;
-      content: '';
-      position: absolute;
-      border: 0 dashed rgb(255 255 255 / 60%);
-    }
-
-    &::before {
-      inset-block: 0;
-      inset-inline: 33.33%;
-      border-inline-width: 1px;
-    }
-
-    &::after {
-      inset-block: 33.33%;
-      inset-inline: 0;
-      border-block-width: 1px;
-    }
-  `,
-  clip: css`
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-  `,
-  handle: css`
-    position: absolute;
-    z-index: 1;
-
-    width: 14px;
-    height: 14px;
-    border: 2px solid ${cssVar.colorPrimary};
-    border-radius: 3px;
-
-    background: #fff;
-  `,
-  sizeInput: css`
-    flex-shrink: 0;
-    width: 84px;
-
-    &[data-compact='true'] {
-      width: 72px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  box: {
+    'cursor': 'move',
+    'position': 'absolute',
+    'borderWidth': '1px',
+    'borderStyle': 'solid',
+    'borderColor': '#fff',
+    'boxShadow': '0 0 0 9999px rgb(0 0 0 / 45%)',
+    '::before': {
+      pointerEvents: 'none',
+      content: '""',
+      position: 'absolute',
+      borderWidth: 0,
+      borderStyle: 'dashed',
+      borderColor: 'rgb(255 255 255 / 60%)',
+      insetBlock: 0,
+      insetInline: '33.33%',
+      borderInlineWidth: '1px',
+    },
+    '::after': {
+      pointerEvents: 'none',
+      content: '""',
+      position: 'absolute',
+      borderWidth: 0,
+      borderStyle: 'dashed',
+      borderColor: 'rgb(255 255 255 / 60%)',
+      insetBlock: '33.33%',
+      insetInline: 0,
+      borderBlockWidth: '1px',
+    },
+  },
+  clip: { position: 'absolute', inset: 0, overflow: 'hidden' },
+  handle: {
+    position: 'absolute',
+    zIndex: 1,
+    width: '14px',
+    height: '14px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorPrimary,
+    borderRadius: '3px',
+    backgroundColor: '#fff',
+    backgroundImage: 'none',
+  },
+  sizeInput: { flexShrink: 0, width: '84px' },
+  sizeInputCompact: { width: '72px' },
+});
 
 // Handles sit just inside the crop corners so they stay grabbable when the
 // crop reaches the image edge (the layer clips anything outside the image).
@@ -174,22 +173,21 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
       {overlayElement &&
         createPortal(
           <div
-            className={styles.clip}
+            {...stylex.props(styles.clip)}
             data-testid={'image-resize-layer'}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <div
               aria-label={`${cropSize.width} × ${cropSize.height}`}
-              className={styles.box}
               data-testid={'image-crop-box'}
               role={'group'}
-              style={{
+              {...sx(styles.box, undefined, {
                 height: `${crop.height * 100}%`,
                 left: `${crop.x * 100}%`,
                 top: `${crop.y * 100}%`,
                 touchAction: 'none',
                 width: `${crop.width * 100}%`,
-              }}
+              })}
               onPointerCancel={endDrag}
               onPointerDown={startDrag('move')}
               onPointerMove={moveDrag}
@@ -197,10 +195,14 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
             >
               {HANDLES.map(({ cursor, handle, x, y }) => (
                 <span
-                  className={styles.handle}
+                  {...sx(styles.handle, undefined, {
+                    cursor,
+                    left: x,
+                    top: y,
+                    touchAction: 'none',
+                  })}
                   data-handle={handle}
                   key={handle}
-                  style={{ cursor, left: x, top: y, touchAction: 'none' }}
                   onPointerCancel={endDrag}
                   onPointerDown={startDrag(handle)}
                   onPointerMove={moveDrag}
@@ -211,8 +213,12 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
           </div>,
           overlayElement,
         )}
-      <div className={toolStyles.dock}>
-        <div aria-label={t('imageViewer.tool.resize')} className={toolStyles.bar} role={'toolbar'}>
+      <div {...stylex.props(toolStyles.dock)}>
+        <div
+          aria-label={t('imageViewer.tool.resize')}
+          {...stylex.props(toolStyles.bar)}
+          role={'toolbar'}
+        >
           <Select
             aria-label={t('imageViewer.resize.aspectLabel')}
             prefix={compact ? undefined : t('imageViewer.resize.aspectLabel')}
@@ -232,10 +238,10 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
               setCrop(centeredCrop(natural, aspectRatioOf(next, natural)));
             }}
           />
-          <span className={toolStyles.divider} />
+          <span {...stylex.props(toolStyles.divider)} />
           <Input
             aria-label={t('imageViewer.resize.width')}
-            className={styles.sizeInput}
+            className={stylex.props(styles.sizeInput, compact && styles.sizeInputCompact).className}
             data-compact={compact}
             inputMode={'numeric'}
             max={MAX_OUTPUT_EDGE}
@@ -263,7 +269,7 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
           />
           <Input
             aria-label={t('imageViewer.resize.height')}
-            className={styles.sizeInput}
+            className={stylex.props(styles.sizeInput, compact && styles.sizeInputCompact).className}
             data-compact={compact}
             inputMode={'numeric'}
             max={MAX_OUTPUT_EDGE}
@@ -275,7 +281,7 @@ const ResizeMode = ({ onExit }: ResizeModeProps) => {
             onBlur={() => setTyping(null)}
             onChange={(event) => updateOutput('height', event.target.value)}
           />
-          <span className={toolStyles.divider} />
+          <span {...stylex.props(toolStyles.divider)} />
           <BarButton
             disabled={saving}
             icon={XIcon}

@@ -1,35 +1,32 @@
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import path from 'path-browserify-esm';
 import React from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { localFileService } from '@/services/electron/localFileService';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    cursor: pointer;
-
-    padding-block: 2px;
-    padding-inline: 4px 8px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    :hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  title: css`
-    overflow: hidden;
-    display: block;
-
-    line-height: 20px;
-    color: inherit;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    cursor: 'pointer',
+    paddingBlock: '2px',
+    paddingInlineStart: '4px',
+    paddingInlineEnd: '8px',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  title: {
+    overflow: 'hidden',
+    display: 'block',
+    lineHeight: '20px',
+    color: 'inherit',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface LocalFolderProps {
   path: string;
@@ -49,14 +46,14 @@ export const LocalFolder = ({ path: pathname, size = 22 }: LocalFolderProps) => 
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       gap={4}
       style={{ display: 'inline-flex', verticalAlign: 'middle' }}
       onClick={handleClick}
     >
       <FileIcon isDirectory fileName={base} size={size} variant={'raw'} />
       <Flexbox horizontal align={'baseline'} gap={4} style={{ overflow: 'hidden', width: '100%' }}>
-        <div className={styles.title}>{base}</div>
+        <div {...stylex.props(styles.title)}>{base}</div>
       </Flexbox>
     </Flexbox>
   );

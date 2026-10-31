@@ -1,6 +1,13 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { RESIZED_IMAGE_SELECTOR } from './styles';
+import {
+  COMMENT_CONTENT_IMAGE_MAX_HEIGHT,
+  COMMENT_EDITOR_IMAGE_MAX_HEIGHT,
+  RESIZED_IMAGE_SELECTOR,
+} from './styles';
 
 const matches = (style: string) => {
   const img = document.createElement('img');
@@ -26,5 +33,21 @@ describe('RESIZED_IMAGE_SELECTOR', () => {
   it('does not treat max-width alone as a resize', () => {
     expect(matches('max-width: 500px;')).toBe(false);
     expect(matches('')).toBe(false);
+  });
+});
+
+describe('styles.module.css', () => {
+  const css = readFileSync(path.resolve(__dirname, 'styles.module.css'), 'utf8').replaceAll(
+    '"',
+    "'",
+  );
+
+  it('carries the resized-image selector (StyleX cannot interpolate it)', () => {
+    expect(css).toContain(`img:not(${RESIZED_IMAGE_SELECTOR.replaceAll('"', "'")})`);
+  });
+
+  it('carries the image height caps', () => {
+    expect(css).toContain(`max-height: ${COMMENT_CONTENT_IMAGE_MAX_HEIGHT}px`);
+    expect(css).toContain(`max-height: ${COMMENT_EDITOR_IMAGE_MAX_HEIGHT}px`);
   });
 });

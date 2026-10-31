@@ -1,4 +1,4 @@
-import { styles } from '../styles';
+import { HIGHLIGHTED_CLASS_NAMES } from '../styles';
 
 /** How long a located card / anchor keeps its emphasis before settling back. */
 export const LOCATE_FLASH_DURATION = 2400;
@@ -48,8 +48,8 @@ export const focusCommentCard = (
   const inGutter = hasGutter ?? Boolean(card.closest('[data-document-comment-gutter]'));
   if (scroll || !inGutter) card.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
   if (inGutter) return true;
-  card.classList.add(styles.highlighted);
-  setTimeout(() => card.classList.remove(styles.highlighted), LOCATE_FLASH_DURATION);
+  card.classList.add(...HIGHLIGHTED_CLASS_NAMES);
+  setTimeout(() => card.classList.remove(...HIGHLIGHTED_CLASS_NAMES), LOCATE_FLASH_DURATION);
   return true;
 };
 
