@@ -142,10 +142,11 @@ const livePrivateWhere = (): SQL =>
  * `registerMany`), so making a still-live parent public later does not expose
  * it.
  *
- * It fails closed: a root that cannot prove it was shared stays on its
- * deleter's private side — one registered before the snapshot existed (its
- * parents may have changed since), or one whose source row or recorded
- * project was removed outside the trash (a hard delete or an FK cascade).
+ * A root registered before the snapshot existed has no `meta.private`; it
+ * falls back to the live check, like every other workspace list. Otherwise it
+ * fails closed: a root whose source row or recorded project was removed
+ * outside the trash (a hard delete or an FK cascade) cannot prove it was
+ * shared, so it stays on its deleter's private side.
  */
 const privateRootWhere = (): SQL =>
   or(
@@ -156,7 +157,7 @@ const privateRootWhere = (): SQL =>
     ),
     // COALESCE: a NULL here would turn the whole OR, and its NOT, into NULL.
     sql`COALESCE((${trashItems.meta} ->> 'private') = 'true', false)`,
-    sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'private'), false)`,
+    and(sql`NOT COALESCE(jsonb_exists(${trashItems.meta}, 'private'), false)`, livePrivateWhere()),
   ) as SQL;
 
 const toTrashItem = (row: TrashItemRow): TrashItem => ({
