@@ -20,6 +20,7 @@ import {
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
 } from './protocol';
+import { recordProviderReportedCost } from './providerReportedCost';
 
 export const transformAnthropicStream = (
   chunk: Anthropic.MessageStreamEvent,
@@ -316,15 +317,17 @@ export const AnthropicStream = (
   stream: Stream<Anthropic.MessageStreamEvent> | ReadableStream,
   { callbacks, inputStartAt, enableStreaming = true, payload }: AnthropicStreamOptions = {},
 ) => {
-  const streamStack: StreamContext = { id: '' };
+  const streamStack: StreamContext = { id: '', pricingOptions: payload?.pricingOptions };
 
   const readableStream =
     stream instanceof ReadableStream
       ? stream
       : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
-  const transformWithPayload: typeof transformAnthropicStream = (chunk, ctx) =>
-    transformAnthropicStream(chunk, ctx, payload);
+  const transformWithPayload: typeof transformAnthropicStream = (chunk, ctx) => {
+    recordProviderReportedCost(streamStack, chunk);
+    return transformAnthropicStream(chunk, ctx, payload);
+  };
 
   return readableStream
     .pipeThrough(createFirstErrorHandleTransformer(undefined, payload?.provider))

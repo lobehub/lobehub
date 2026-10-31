@@ -20,6 +20,7 @@ import {
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
 } from '../protocol';
+import { recordProviderReportedCost } from '../providerReportedCost';
 import type { OpenAIStreamOptions } from './openai';
 
 const toResponsesError = (error: { code?: string | null; message?: string | null }) =>
@@ -351,8 +352,10 @@ export const OpenAIResponsesStream = (
       : convertIterableToStream(stream, { model: payload?.model, provider: payload?.provider });
 
   // use closure to pass payload to transformOpenAIStream
-  const transformWithPayload: typeof transformOpenAIStream = (chunk, streamContext) =>
-    transformOpenAIStream(chunk, streamContext, payload);
+  const transformWithPayload: typeof transformOpenAIStream = (chunk, streamContext) => {
+    recordProviderReportedCost(streamStack, chunk);
+    return transformOpenAIStream(chunk, streamContext, payload);
+  };
 
   return (
     readableStream
