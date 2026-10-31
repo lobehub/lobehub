@@ -10,6 +10,7 @@ import {
   agentEvalRunTopics,
   agentEvalTestCases,
 } from './agentEvals';
+import { agentLikes } from './agentLike';
 import { agentShares } from './agentShare';
 import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
@@ -209,7 +210,23 @@ export const agentsRelations = relations(agents, ({ many, one }) => ({
   chatGroups: many(chatGroupsAgents),
   files: many(agentsFiles),
   knowledgeBases: many(agentsKnowledgeBases),
+  likes: many(agentLikes),
   share: one(agentShares, { fields: [agents.id], references: [agentShares.agentId] }),
+}));
+
+export const agentLikesRelations = relations(agentLikes, ({ one }) => ({
+  agent: one(agents, {
+    fields: [agentLikes.agentId],
+    references: [agents.id],
+  }),
+  user: one(users, {
+    fields: [agentLikes.userId],
+    references: [users.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [agentLikes.workspaceId],
+    references: [workspaces.id],
+  }),
 }));
 
 export const agentsToSessionsRelations = relations(agentsToSessions, ({ one }) => ({

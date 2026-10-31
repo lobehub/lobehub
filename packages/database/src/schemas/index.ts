@@ -10,6 +10,7 @@ export * from './agentHistoryJob';
 export * from './agentInboxMessage';
 export * from './agentIntervention';
 export * from './agentLabel';
+export * from './agentLike';
 export * from './agentMail';
 export * from './agentOperations';
 export * from './agentQuota';
