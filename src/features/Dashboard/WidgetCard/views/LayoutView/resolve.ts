@@ -200,11 +200,30 @@ export const resolveSurface = (
     : 'default';
 };
 
-/** The array at `path`, as numbers — read from `key` when the items are objects. */
-export const resolveNumbers = (path: string, scope: LayoutScope, key?: string): number[] => {
+/** Most points a sparkline draws; a card is a few hundred pixels wide at most. */
+export const LAYOUT_SERIES_MAX_POINTS = 240;
+
+/**
+ * The array at `path`, as numbers — read from `key` when the items are
+ * objects. A longer array is sampled evenly down to `maxPoints` (first and
+ * last kept), so a large output never reaches the spread-based extrema or
+ * allocates one SVG element per entry.
+ */
+export const resolveNumbers = (
+  path: string,
+  scope: LayoutScope,
+  key?: string,
+  maxPoints = LAYOUT_SERIES_MAX_POINTS,
+): number[] => {
   const list = getPath(scope, path);
   if (!Array.isArray(list)) return [];
-  return list
-    .map((entry) => toNumber(key ? getPath(entry, key) : entry))
-    .filter((entry): entry is number => entry !== undefined);
+  const count = Math.min(list.length, maxPoints);
+  const step = count > 1 ? (list.length - 1) / (count - 1) : 0;
+  const values: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const entry = list[Math.round(index * step)];
+    const value = toNumber(key ? getPath(entry, key) : entry);
+    if (value !== undefined) values.push(value);
+  }
+  return values;
 };

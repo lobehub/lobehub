@@ -5,6 +5,7 @@ import {
   createLayoutScope,
   formatLayoutValue,
   getPath,
+  LAYOUT_SERIES_MAX_POINTS,
   resolveColor,
   resolveNumbers,
   resolveRaw,
@@ -108,5 +109,18 @@ describe('resolveNumbers', () => {
   it('reads one key of each item and skips non-numbers', () => {
     expect(resolveNumbers('data.hourly', scope, 'temp')).toEqual([18, 17.5]);
     expect(resolveNumbers('data.city', scope)).toEqual([]);
+  });
+
+  it('samples a huge array down to the point cap, keeping both ends', () => {
+    const big = createLayoutScope({
+      data: { values: Array.from({ length: 130_000 }, (_, index) => index) },
+      type: 'data',
+    });
+
+    const values = resolveNumbers('data.values', big);
+
+    expect(values).toHaveLength(LAYOUT_SERIES_MAX_POINTS);
+    expect(values[0]).toBe(0);
+    expect(values.at(-1)).toBe(129_999);
   });
 });
