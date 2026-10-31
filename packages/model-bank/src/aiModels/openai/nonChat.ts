@@ -49,9 +49,11 @@ export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
 // Text-to-speech models
 export const openaiTTSModels: AITTSModelCard[] = [
   {
-    description: 'The latest text-to-speech model optimized for real-time speed.',
+    description:
+      'Legacy text-to-speech model optimized for real-time speed. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'TTS-1',
     id: 'tts-1',
+    legacy: true,
     parameters: openaiTTS1Schema,
     pricing: {
       units: [{ name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionCharacters' }],
@@ -60,9 +62,11 @@ export const openaiTTSModels: AITTSModelCard[] = [
     voices: openaiTTS1Voices,
   },
   {
-    description: 'The latest text-to-speech model optimized for quality.',
+    description:
+      'Legacy text-to-speech model optimized for quality. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'TTS-1 HD',
     id: 'tts-1-hd',
+    legacy: true,
     parameters: openaiTTS1Schema,
     pricing: {
       units: [{ name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionCharacters' }],
@@ -72,9 +76,10 @@ export const openaiTTSModels: AITTSModelCard[] = [
   },
   {
     description:
-      'GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, converting text into natural-sounding speech with a max input of 2000 tokens.',
+      'GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, converting text into natural-sounding speech with a max input of 2000 tokens. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'GPT-4o Mini TTS',
     id: 'gpt-4o-mini-tts',
+    legacy: true,
     parameters: openaiGpt4oMiniTTSSchema,
     pricing: {
       units: [
