@@ -187,6 +187,16 @@ export const artifactBoardToFrameInput = (
       ];
     })
     .reverse()
+    // Two rounds can settle on the same Canvas page; it is one candidate, labelled by its latest round.
+    .filter(
+      (version, index, list) =>
+        list.findIndex(
+          (other) =>
+            other.canvasId === version.canvasId &&
+            other.canvasVersion === version.canvasVersion &&
+            other.page === version.page,
+        ) === index,
+    )
     // An acceptance frame holds at most 8 versions; the latest rounds matter most.
     .slice(0, 8);
   if (versions.length === 0) return null;

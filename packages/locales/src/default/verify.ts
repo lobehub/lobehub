@@ -204,7 +204,8 @@ export default {
   'frames.compare.reference': 'Canvas reference',
   'frames.compare.prototype': 'Baseline reference',
   'frames.compare.real': 'Real capture',
-  'frames.compare.history': '{{count}} captures, showing the latest',
+  'frames.compare.history':
+    'An earlier capture of {{count}}; the verdict is given on the latest one',
   'frames.compare.noReal': 'No real capture yet. This node has not passed delivery.',
   'frames.compare.needBaseline':
     'Lock the Canvas reference as the baseline first. The real capture is judged against it.',

@@ -6,7 +6,17 @@ import type {
   AcceptanceFrameBoardView,
   AcceptanceFrameOperation,
 } from '@lobechat/types';
-import { ActionIcon, Button, Center, Flexbox, Icon, Tag, Text, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Center,
+  Flexbox,
+  Icon,
+  Segmented,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CircleAlert, CircleCheck, ImagePlus, Maximize2 } from 'lucide-react';
@@ -82,8 +92,13 @@ const FrameCompare = ({
   const [uploading, setUploading] = useState(false);
   const reference = shownVersionOf(frame, previewVersionId);
   const baseline = frame.baseline ? reference : undefined;
-  const capture = frame.captures.at(-1);
-  const review = frame.realReview?.captureId === capture?.id ? frame.realReview : undefined;
+  const [shownCaptureId, setShownCaptureId] = useState<string>();
+  const latest = frame.captures.at(-1);
+  // Earlier captures stay reachable, with the pins reviewers dropped on them;
+  // the verdict always belongs to the latest one.
+  const capture = frame.captures.find((item) => item.id === shownCaptureId) ?? latest;
+  const isLatest = capture?.id === latest?.id;
+  const review = frame.realReview?.captureId === latest?.id ? frame.realReview : undefined;
   const canAttach = board.canEdit && Boolean(baseline);
 
   const attach = async (file: File | undefined) => {
@@ -173,9 +188,15 @@ const FrameCompare = ({
             <SourceBadge source={'real'} />
             <span {...stylex.props(styles.caption)}>{t('frames.compare.real')}</span>
             {frame.captures.length > 1 && (
-              <Text fontSize={11} type={'secondary'}>
-                {t('frames.compare.history', { count: frame.captures.length })}
-              </Text>
+              <Segmented
+                size={'small'}
+                value={capture?.id}
+                options={frame.captures.map((item, index) => ({
+                  label: `#${index + 1}`,
+                  value: item.id,
+                }))}
+                onChange={(value) => setShownCaptureId(String(value))}
+              />
             )}
           </Flexbox>
           {capture ? (
@@ -201,7 +222,12 @@ const FrameCompare = ({
         </Flexbox>
       </Flexbox>
 
-      {capture && (
+      {capture && !isLatest && (
+        <Text fontSize={12} type={'secondary'}>
+          {t('frames.compare.history', { count: frame.captures.length })}
+        </Text>
+      )}
+      {capture && isLatest && (
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
           {review ? (
             <>

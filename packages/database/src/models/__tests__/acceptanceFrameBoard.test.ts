@@ -146,6 +146,31 @@ describe('publishAcceptanceFrameBoard', () => {
   });
 });
 
+describe('publishAcceptanceFrameBoard · repeated references', () => {
+  it('keeps distinct version ids when one Canvas page is listed twice', () => {
+    const twice: AcceptanceFrameBoardInput = {
+      ...input,
+      frames: [
+        {
+          key: 'empty',
+          title: 'Empty',
+          versions: [
+            { canvasId: 'cvs-setup', canvasVersion: 1, label: 'A', page: 'empty-a.html' },
+            { canvasId: 'cvs-setup', canvasVersion: 1, label: 'A again', page: 'empty-a.html' },
+          ],
+        },
+      ],
+      transitions: [],
+    };
+    const first = publishAcceptanceFrameBoard(undefined, twice, NOW);
+    const second = publishAcceptanceFrameBoard(first, twice, NOW);
+
+    const ids = second.frames[0].versions.map((version) => version.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual(first.frames[0].versions.map((version) => version.id));
+  });
+});
+
 describe('publishAcceptanceFrameBoard · transitions', () => {
   it('keeps distinct ids for two events between the same frames across republishes', () => {
     const parallel: AcceptanceFrameBoardInput = {

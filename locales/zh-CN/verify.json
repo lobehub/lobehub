@@ -815,7 +815,7 @@
   "frames.compare.awaitingVerdict": "对照左右两侧后判定：",
   "frames.compare.clearVerdict": "撤销判定",
   "frames.compare.deviates": "有偏差",
-  "frames.compare.history": "共 {{count}} 张，显示最新一张",
+  "frames.compare.history": "这是 {{count}} 张中较早的一张；判定针对最新一张",
   "frames.compare.matches": "符合 baseline",
   "frames.compare.needBaseline": "先把 Canvas 参考稿锁定为 baseline，真实截图要对照它来判定。",
   "frames.compare.noReal": "还没有真实截图，这个节点尚未通过上线验收。",

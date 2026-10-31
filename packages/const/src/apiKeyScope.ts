@@ -205,6 +205,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // keys must not mint or manage keys
   apiKey: 'blocked',
   asr: { any: 'model:invoke' },
+  // boards reference canvases and publish into acceptances; same call as `canvas`
+  artifactBoard: 'blocked',
   artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',

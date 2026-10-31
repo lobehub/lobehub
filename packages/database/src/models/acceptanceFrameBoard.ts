@@ -4,6 +4,7 @@ import type {
   AcceptanceFrameBoardInput,
   AcceptanceFrameCriteria,
   AcceptanceFrameOperation,
+  AcceptanceFrameVersion,
 } from '@lobechat/types';
 import { isAcceptanceFrameCriteriaComplete } from '@lobechat/types';
 import { eq, sql } from 'drizzle-orm';
@@ -57,11 +58,15 @@ export const publishAcceptanceFrameBoard = (
   const previousByKey = new Map((current?.frames ?? []).map((frame) => [frame.key, frame]));
   const frames = input.frames.map((definition): AcceptanceFrame => {
     const previous = previousByKey.get(definition.key);
-    const previousVersions = new Map(
-      (previous?.versions ?? []).map((version) => [canvasRefKey(version), version]),
-    );
+    // The same Canvas page may be listed twice; each earlier version is kept
+    // by at most one entry, in order, so ids never repeat within a frame.
+    const previousVersions = new Map<string, AcceptanceFrameVersion[]>();
+    for (const version of previous?.versions ?? []) {
+      const key = canvasRefKey(version);
+      previousVersions.set(key, [...(previousVersions.get(key) ?? []), version]);
+    }
     const versions = definition.versions.map((version) => {
-      const kept = previousVersions.get(canvasRefKey(version));
+      const kept = previousVersions.get(canvasRefKey(version))?.shift();
       return {
         canvasId: version.canvasId,
         canvasVersion: version.canvasVersion,

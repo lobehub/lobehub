@@ -120,6 +120,33 @@ describe('artifactBoardToFrameInput', () => {
     });
   });
 
+  it('lists a Canvas page picked in two rounds once, under its latest round', () => {
+    const repeated = artifactBoardManifestSchema.parse({
+      ...manifest,
+      rounds: [
+        manifest.rounds[0],
+        {
+          id: 'confirm',
+          options: [
+            {
+              canvasId: 'cvs_a',
+              canvasVersion: 2,
+              id: 'same',
+              label: 'B again',
+              page: 'cards.html',
+            },
+          ],
+          title: 'Confirm',
+        },
+      ],
+    });
+    const frame = artifactBoardToFrameInput('board_x1', repeated, [
+      choice('direction', 'b'),
+      choice('confirm', 'same'),
+    ]);
+    expect(frame?.versions.map((version) => version.label)).toEqual(['R2 · B again']);
+  });
+
   it('publishes nothing before a pick', () => {
     expect(artifactBoardToFrameInput('board_x1', manifest, [])).toBeNull();
   });

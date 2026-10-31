@@ -815,7 +815,7 @@
   "frames.compare.awaitingVerdict": "Compare both sides, then judge:",
   "frames.compare.clearVerdict": "Undo verdict",
   "frames.compare.deviates": "Deviates",
-  "frames.compare.history": "{{count}} captures, showing the latest",
+  "frames.compare.history": "An earlier capture of {{count}}; the verdict is given on the latest one",
   "frames.compare.matches": "Matches baseline",
   "frames.compare.needBaseline": "Lock the Canvas reference as the baseline first. The real capture is judged against it.",
   "frames.compare.noReal": "No real capture yet. This node has not passed delivery.",
