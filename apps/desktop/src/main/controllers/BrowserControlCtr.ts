@@ -1,25 +1,37 @@
+import type { BrowserKeyCombo } from '@lobechat/device-control/browser-input';
+import {
+  browserEditCommandOf,
+  parseBrowserKey,
+  parseBrowserViewport,
+} from '@lobechat/device-control/browser-input';
 import type {
   BrowserControlClickParams,
   BrowserControlClickResult,
   BrowserControlFillParams,
+  BrowserControlPanelSizeParams,
   BrowserControlParams,
   BrowserControlPressParams,
   BrowserControlReadPageResult,
   BrowserControlResult,
   BrowserControlScreenshotResult,
   BrowserControlScrollParams,
+  BrowserControlSetViewportParams,
+  BrowserControlSetViewportResult,
   BrowserControlSnapshotResult,
   BrowserControlWaitForParams,
   BrowserGatewayToolResultParams,
   BrowserToolCallResult,
 } from '@lobechat/electron-client-ipc';
-import type { NativeImage, WebContents } from 'electron';
+import type { KeyboardInputEvent, NativeImage, Rectangle, WebContents } from 'electron';
+import { clipboard } from 'electron';
 
 import {
   OVERLAY_REMOVE_SCRIPT,
   overlayControllingScript,
   overlayCursorScript,
 } from '@/modules/browser/agentOverlayScript';
+import type { GuestViewport } from '@/modules/browser/guestViewport';
+import { guestViewports, guestViewportScale } from '@/modules/browser/guestViewport';
 import { createLogger } from '@/utils/logger';
 
 import BrowserSidebarCtr from './BrowserSidebarCtr';
@@ -49,13 +61,71 @@ const CAPTURE_TIMEOUT_MS = 15_000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const captureOnce = (guest: WebContents) =>
+/** `KeyboardEvent.key` names Electron's `sendInputEvent` spells differently (and silently drops). */
+const ELECTRON_KEY_CODES: Record<string, string> = {
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  ArrowUp: 'Up',
+};
+
+const ELECTRON_MODIFIERS = {
+  Alt: 'alt',
+  Control: 'control',
+  Meta: 'meta',
+  Shift: 'shift',
+} as const;
+
+/**
+ * The `sendInputEvent` sequence for one key press. Only a key that types text
+ * gets a `char` event, and never under Control/Alt/Meta: a `char` is what
+ * inserts text, so `Control+a` must not type an "a".
+ */
+export const keyInputEvents = ({ key, modifiers }: BrowserKeyCombo) => {
+  const keyCode = ELECTRON_KEY_CODES[key] ?? key;
+  const electronModifiers = modifiers.map((modifier) => ELECTRON_MODIFIERS[modifier]);
+  const events: KeyboardInputEvent[] = [{ keyCode, modifiers: electronModifiers, type: 'keyDown' }];
+
+  const typesText = [...key].length === 1 || key === 'Enter' || key === 'Space';
+  const chorded = modifiers.some((modifier) => modifier !== 'Shift');
+  if (typesText && !chorded) {
+    events.push({
+      keyCode: key === 'Space' ? ' ' : key,
+      modifiers: electronModifiers,
+      type: 'char',
+    });
+  }
+
+  events.push({ keyCode, modifiers: electronModifiers, type: 'keyUp' });
+  return events;
+};
+
+const fitViewport = (
+  size: { height: number; width: number },
+  panel: GuestViewport['panel'],
+): GuestViewport => ({
+  ...size,
+  panel,
+  scale: Math.min(1, panel.width / size.width, panel.height / size.height),
+});
+
+const emulateViewport = (guest: WebContents, { height, scale, width }: GuestViewport) =>
+  guest.enableDeviceEmulation({
+    deviceScaleFactor: 0,
+    scale,
+    screenPosition: 'desktop',
+    screenSize: { height, width },
+    viewPosition: { x: 0, y: 0 },
+    viewSize: { height, width },
+  });
+
+const captureOnce = (guest: WebContents, rect?: Rectangle) =>
   new Promise<NativeImage>((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`capturePage did not settle within ${CAPTURE_TIMEOUT_MS}ms`)),
       CAPTURE_TIMEOUT_MS,
     );
-    guest.capturePage().then(
+    (rect ? guest.capturePage(rect) : guest.capturePage()).then(
       (image) => {
         clearTimeout(timer);
         resolve(image);
@@ -67,10 +137,10 @@ const captureOnce = (guest: WebContents) =>
     );
   });
 
-export const captureGuest = async (guest: WebContents): Promise<NativeImage> => {
+export const captureGuest = async (guest: WebContents, rect?: Rectangle): Promise<NativeImage> => {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      const image = await captureOnce(guest);
+      const image = await captureOnce(guest, rect);
       if (!image.isEmpty()) return image;
       if (attempt >= CAPTURE_RETRY_DELAYS_MS.length) {
         throw new Error('The page has not been drawn yet (empty capture)');
@@ -238,6 +308,8 @@ export default class BrowserControlCtr extends ControllerModule {
   static override readonly groupName = 'browserControl';
 
   private idleTimers = new Map<string, NodeJS.Timeout>();
+  /** Latest panel size per session, reported by the renderer as the panel resizes. */
+  private panelSizes = new Map<string, GuestViewport['panel']>();
   private pendingGatewayCalls = new Map<
     string,
     { reject: (reason: Error) => void; resolve: (result: BrowserToolCallResult) => void }
@@ -342,9 +414,12 @@ export default class BrowserControlCtr extends ControllerModule {
       this.showCursor(guest, x, y, true);
       await sleep(CURSOR_TRAVEL_MS);
 
-      guest.sendInputEvent({ type: 'mouseMove', x, y });
-      guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseDown', x, y });
-      guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseUp', x, y });
+      // The cursor overlay lives in the page (CSS pixels); input lands on the panel.
+      const scale = guestViewportScale(guest);
+      const at = { x: Math.round(x * scale), y: Math.round(y * scale) };
+      guest.sendInputEvent({ type: 'mouseMove', ...at });
+      guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseDown', ...at });
+      guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseUp', ...at });
 
       await sleep(300);
       return { success: true, title: guest.getTitle(), url: guest.getURL() };
@@ -361,7 +436,7 @@ export default class BrowserControlCtr extends ControllerModule {
 
       if (params.submit) {
         await sleep(80);
-        this.sendKey(guest, 'Enter');
+        await this.sendKey(guest, parseBrowserKey('Enter'));
       }
 
       return { success: true };
@@ -370,11 +445,86 @@ export default class BrowserControlCtr extends ControllerModule {
 
   @IpcMethod()
   async press(params: BrowserControlPressParams): Promise<BrowserControlResult> {
-    return this.withGuest(params.sessionId, (guest) => {
+    let combo: BrowserKeyCombo;
+    try {
+      combo = parseBrowserKey(params.key);
+    } catch (error) {
+      return { error: (error as Error).message, success: false };
+    }
+
+    return this.withGuest(params.sessionId, async (guest) => {
       this.markControlling(params.sessionId, guest);
-      this.sendKey(guest, params.key);
+      await this.sendKey(guest, combo);
       return { success: true };
     });
+  }
+
+  /**
+   * Lays the page out at a fixed size, e.g. a desktop width while the panel is
+   * narrow, and shrinks it to fit the panel. Without a size the page goes back
+   * to the panel's own size.
+   */
+  @IpcMethod()
+  async setViewport(
+    params: BrowserControlSetViewportParams,
+  ): Promise<BrowserControlSetViewportResult> {
+    let size: { height: number; width: number } | undefined;
+    try {
+      size = parseBrowserViewport(params);
+    } catch (error) {
+      return { error: (error as Error).message, success: false };
+    }
+
+    return this.withGuest(params.sessionId, async (guest) => {
+      const current = guestViewports.get(guest);
+      if (!size) {
+        if (current) {
+          guestViewports.delete(guest);
+          guest.disableDeviceEmulation();
+        }
+        return { scale: 1, success: true };
+      }
+
+      const panel =
+        this.panelSizes.get(params.sessionId) ??
+        current?.panel ??
+        (JSON.parse(
+          await evaluate(guest, 'JSON.stringify({ height: innerHeight, width: innerWidth })'),
+        ) as GuestViewport['panel']);
+      const viewport = fitViewport(size, panel);
+
+      // Chromium drops the emulation with each new document, so re-apply it.
+      if (!current) {
+        guest.on('did-navigate', () => {
+          const latest = guestViewports.get(guest);
+          if (latest) emulateViewport(guest, latest);
+        });
+      }
+      guestViewports.set(guest, viewport);
+      emulateViewport(guest, viewport);
+      return { scale: viewport.scale, success: true };
+    });
+  }
+
+  /**
+   * The renderer reports the panel's size whenever it changes. A fixed viewport
+   * is refitted to it, or the page would stay scaled for the old panel: clipped
+   * when it shrinks, with clicks landing outside the visible guest.
+   */
+  @IpcMethod()
+  reportPanelSize(params: BrowserControlPanelSizeParams): void {
+    const panel = { height: params.height, width: params.width };
+    if (panel.width <= 0 || panel.height <= 0) return;
+    this.panelSizes.set(params.sessionId, panel);
+
+    const guest = this.sidebar.getSessionWebContents(params.sessionId);
+    const current = guest && !guest.isDestroyed() ? guestViewports.get(guest) : undefined;
+    if (!guest || !current) return;
+    if (current.panel.width === panel.width && current.panel.height === panel.height) return;
+
+    const viewport = fitViewport(current, panel);
+    guestViewports.set(guest, viewport);
+    emulateViewport(guest, viewport);
   }
 
   @IpcMethod()
@@ -397,7 +547,17 @@ export default class BrowserControlCtr extends ControllerModule {
       // overlay in the frame it just asked for.
       await evaluate(guest, OVERLAY_REMOVE_SCRIPT).catch(() => {});
 
-      let image = await captureGuest(guest);
+      // A fitted viewport leaves the rest of the panel blank; capture the page only.
+      const viewport = guestViewports.get(guest);
+      let image = await captureGuest(
+        guest,
+        viewport && {
+          height: Math.floor(viewport.height * viewport.scale),
+          width: Math.floor(viewport.width * viewport.scale),
+          x: 0,
+          y: 0,
+        },
+      );
       const size = image.getSize();
       if (size.width > SCREENSHOT_MAX_WIDTH) image = image.resize({ width: SCREENSHOT_MAX_WIDTH });
       const resized = image.getSize();
@@ -459,11 +619,23 @@ export default class BrowserControlCtr extends ControllerModule {
     }
   }
 
-  private sendKey(guest: WebContents, key: string) {
+  private async sendKey(guest: WebContents, combo: BrowserKeyCombo) {
     guest.focus();
-    guest.sendInputEvent({ keyCode: key, type: 'keyDown' });
-    if (key.length === 1 || key === 'Enter') guest.sendInputEvent({ keyCode: key, type: 'char' });
-    guest.sendInputEvent({ keyCode: key, type: 'keyUp' });
+    for (const event of keyInputEvents(combo)) guest.sendInputEvent(event);
+    // On macOS, Chromium leaves Meta+A/C/V/X/Z to the app menu, which a
+    // synthesized key event never reaches.
+    const editCommand = browserEditCommandOf(combo);
+    if (!editCommand) return;
+    // `guest.selectAll()`/`paste()` act on the guest's focused frame, which the
+    // in-app <webview> often does not have, so they silently did nothing. The
+    // page runs the command itself; the user gesture lets copy/cut through.
+    // Pages may not read the clipboard, so paste inserts the text read here
+    // (`readText` resolves asynchronously since Electron 44).
+    const script =
+      editCommand === 'paste'
+        ? `document.execCommand('insertText', false, ${JSON.stringify(await clipboard.readText())})`
+        : `document.execCommand(${JSON.stringify(editCommand)})`;
+    await guest.mainFrame.executeJavaScript(script, true);
   }
 
   /**

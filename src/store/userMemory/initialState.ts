@@ -9,6 +9,10 @@ import { agentMemoryInitialState } from './slices/agent';
 import { type MemoryDetailDisplay } from './slices/base/projection';
 import { type ContextSliceState } from './slices/context/initialState';
 import { contextInitialState } from './slices/context/initialState';
+import {
+  contextStoryInitialState,
+  type ContextStorySliceState,
+} from './slices/contextStory/initialState';
 import { type ExperienceSliceState } from './slices/experience/initialState';
 import { experienceInitialState } from './slices/experience/initialState';
 import { homeInitialState, type HomeSliceState } from './slices/home/initialState';
@@ -24,6 +28,7 @@ export interface UserMemoryStoreState
     ActivitySliceState,
     AgentMemorySliceState,
     ContextSliceState,
+    ContextStorySliceState,
     ExperienceSliceState,
     HomeSliceState,
     IdentitySliceState,
@@ -50,6 +55,7 @@ export const initialState: UserMemoryStoreState = {
   ...activityInitialState,
   ...agentMemoryInitialState,
   ...contextInitialState,
+  ...contextStoryInitialState,
   ...experienceInitialState,
   ...homeInitialState,
   ...identityInitialState,

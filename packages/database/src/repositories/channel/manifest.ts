@@ -84,6 +84,7 @@ export const readManifestMessages = async (
       content: channelMessages.content,
       id: channelMessages.id,
       sequence: channelMessages.sequence,
+      replyToId: channelMessages.replyToId,
       threadId: channelMessages.threadId,
     })
     .from(channelMessages)
@@ -115,6 +116,7 @@ export const readManifestMessages = async (
       ...(attachments.has(message.id) && { fileIds: attachments.get(message.id) }),
       id: message.id,
       sequence: message.sequence,
+      replyToId: message.replyToId,
       threadId: message.threadId,
     };
   });

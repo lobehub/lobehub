@@ -30,15 +30,15 @@ on:
         required: true
         type: string
       cloud_ref:
-        description: 'Cloud SHA for import, or verify the SHA already bound in the hotfix Release'
+        description: 'Cloud SHA for import, or verify the SHA already bound in the hotfix/recovery Release'
         required: false
         type: string
         default: ''
       release_mode:
-        description: 'Rebuild pinned sources, resume a PR-bound hotfix, or import historical sources only'
+        description: 'Rebuild pinned sources, resume a PR-bound hotfix/recovery, or import historical sources only'
         required: true
         type: choice
-        options: [rebuild, hotfix, import]
+        options: [rebuild, hotfix, recovery, import]
         default: rebuild
       source_ref:
         description: 'Product source ref; defaults to the target version tag and must resolve to its SHA'
@@ -49,7 +49,7 @@ on:
         type: string
         default: ''
       cloud_override_reason:
-        description: 'Optional verification of the Cloud repair reason already bound in the hotfix Release'
+        description: 'Optional verification of the Cloud repair reason already bound in the hotfix/recovery Release'
         type: string
         default: ''
       evidence_run_id:

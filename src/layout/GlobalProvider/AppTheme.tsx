@@ -28,8 +28,6 @@ import { resolveLang } from '@/utils/client/switchLang';
 
 import { resolveFontFamilyOverride } from './fontFamilyOverride';
 
-import moduleStyles from './AppTheme.module.css';
-
 const styles = stylex.create({
   app: {
     position: 'relative',
@@ -142,7 +140,7 @@ const AppTheme = memo<AppThemeProps>(
           proxy: globalCDN ? 'unpkg' : undefined,
         }}
       >
-        <div {...sx([styles.app], moduleStyles.scrollbar)}>
+        <div {...sx(styles.app)}>
           {!!customFontURL && <FontLoader url={customFontURL} />}
           {children}
         </div>
