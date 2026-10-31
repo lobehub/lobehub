@@ -1,17 +1,9 @@
 'use client';
 
 import { SparkAreaChart } from '@lobehub/charts';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Skeleton,
-  Text,
-  Tooltip,
-  useTheme,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Skeleton, Text, Tooltip, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { Plus, Target } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -24,6 +16,7 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import { handleCardKeyDown } from './cardKeyboard';
 import { openDeclareMetricModal } from './DeclareMetricModal';
+import moduleStyles from './index.module.css';
 import MetBadge from './MetBadge';
 import { buildNorthStarCards, formatMetricValue, type NorthStarCard } from './northStar';
 import { openRecordObservationModal } from './RecordObservationModal';
@@ -38,51 +31,28 @@ import { openRecordObservationModal } from './RecordObservationModal';
  * right-hand Portal: the full trend, the observation history and the actions.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    flex: 1;
-
-    min-width: 236px;
-    max-width: 340px;
-    padding-block: 12px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: border-color 0.2s;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  metValue: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  /*
-   * The chart has no dashed-series option. It names each series path after its
-   * category, so the target reference line is styled from here: a dashed stroke
-   * with no area under it.
-   */
-  spark: css`
-    & path[name='target'] {
-      stroke-dasharray: 3 3;
-    }
-
-    & path.recharts-area-area[name='target'] {
-      fill: none;
-    }
-  `,
-  stale: css`
-    color: ${cssVar.colorWarning};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    flex: '1',
+    minWidth: '236px',
+    maxWidth: '340px',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: 'border-color 0.2s',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  metValue: { color: cssVar.colorSuccess },
+  stale: { color: cssVar.colorWarning },
+});
 
 const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string }>(
   ({ canEdit, card, goalId }) => {
@@ -99,7 +69,7 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
 
     return (
       <Flexbox
-        className={styles.card}
+        className={stylex.props(styles.card).className}
         gap={6}
         role={'button'}
         style={{ cursor: 'pointer' }}
@@ -112,7 +82,11 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
         </Text>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Flexbox horizontal align={'baseline'} gap={6}>
-            <Text className={card.met ? styles.metValue : ''} fontSize={20} weight={700}>
+            <Text
+              className={stylex.props(card.met && styles.metValue).className}
+              fontSize={20}
+              weight={700}
+            >
               {formatMetricValue(card.current)}
             </Text>
             <Text fontSize={12} type={'secondary'}>
@@ -124,7 +98,7 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
             <SparkAreaChart
               autoMinValue
               categories={['value', 'target']}
-              className={styles.spark}
+              className={moduleStyles.spark}
               // The chart ids its SVG gradient by the color string, so it needs a
               // literal theme color: a `var(--…)` id breaks the `url(#…)` fill.
               colors={[card.met ? theme.colorSuccess : theme.colorInfo, theme.colorTextQuaternary]}
@@ -143,7 +117,7 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
             {card.met && <MetBadge />}
             <Text
               ellipsis
-              className={card.stale ? styles.stale : ''}
+              className={stylex.props(card.stale && styles.stale).className}
               fontSize={11}
               type={'secondary'}
             >

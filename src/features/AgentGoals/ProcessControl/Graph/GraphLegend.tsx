@@ -1,40 +1,29 @@
-import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { GoalGraphNodeKind } from '../../Experiments/model';
 import { KindDot } from '../shared';
 
-const styles = createStaticStyles(({ css }) => ({
-  legend: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  legendItem: css`
-    cursor: pointer;
-    user-select: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  /* The mainline is drawn as a ring on its cards, so the swatch is a ring too. */
-  legendMainlineSwatch: css`
-    width: 10px;
-    height: 10px;
-    border: 1.5px solid ${cssVar.colorInfo};
-    border-radius: 3px;
-  `,
-  /* A hidden kind stays in the legend as a dimmed toggle — the way back must
-     be exactly where the way in was. */
-  legendOff: css`
-    opacity: 0.35;
-
-    &:hover {
-      opacity: 0.65;
-    }
-  `,
-}));
+const styles = stylex.create({
+  legend: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  legendItem: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    color: { 'default': null, ':hover': cssVar.colorText },
+  },
+  legendMainlineSwatch: {
+    width: '10px',
+    height: '10px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorInfo,
+    borderRadius: '3px',
+  },
+  legendOff: { opacity: { 'default': 0.35, ':hover': 0.65 } },
+});
 
 const LegendToggle = ({
   children,
@@ -51,7 +40,7 @@ const LegendToggle = ({
     horizontal
     align={'center'}
     aria-pressed={on}
-    className={cx(styles.legendItem, !on && styles.legendOff)}
+    className={stylex.props(styles.legendItem, !on && styles.legendOff).className}
     gap={4}
     role={'button'}
     tabIndex={0}
@@ -86,14 +75,19 @@ const GraphLegend = memo<GraphLegendProps>(
   ({ hasMainline, hiddenKinds, kinds, onToggleKind, onToggleMainline, showMainline }) => {
     const { t } = useTranslation('chat');
     return (
-      <Flexbox horizontal align={'center'} className={styles.legend} gap={10}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.legend).className}
+        gap={10}
+      >
         {hasMainline && (
           <LegendToggle
             on={showMainline}
             title={t('goalProcess.graph.legend.mainlineHint')}
             onToggle={onToggleMainline}
           >
-            <span className={styles.legendMainlineSwatch} />
+            <span {...stylex.props(styles.legendMainlineSwatch)} />
             <span>{t('goalProcess.graph.legend.mainline')}</span>
           </LegendToggle>
         )}

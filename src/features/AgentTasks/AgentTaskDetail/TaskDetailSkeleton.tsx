@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
@@ -10,56 +12,79 @@ import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import { taskDetailLayoutStyles as layout } from './taskDetailLayoutStyles';
 
-const styles = createStaticStyles(({ css }) => ({
-  acceptance: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  divider: css`
-    width: 100%;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  control: css`
-    height: 32px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  acceptance: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  divider: {
+    width: '100%',
+    height: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  control: {
+    height: '32px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const TaskDetailBodySkeleton = () => (
-  <Flexbox aria-busy className={layout.root} flex={1}>
-    <div className={layout.header}>
-      <Flexbox className={layout.main} gap={12}>
+  <Flexbox aria-busy className={stylex.props(layout.root).className} flex={1}>
+    <div className={stylex.props(layout.header).className}>
+      <Flexbox className={stylex.props(layout.main).className} gap={12}>
         <Flexbox style={{ paddingBottom: 5, paddingTop: 5 }}>
           <SkeletonBar height={24} width={'min(520px, 56%)'} />
         </Flexbox>
         <Flexbox horizontal gap={8} wrap={'wrap'}>
-          <Flexbox horizontal align={'center'} className={styles.control} gap={8} width={76}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.control).className}
+            gap={8}
+            width={76}
+          >
             <SkeletonBar height={12} radius={3} width={12} />
             <SkeletonBar height={10} width={36} />
           </Flexbox>
-          <Flexbox horizontal align={'center'} className={styles.control} gap={8} width={96}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.control).className}
+            gap={8}
+            width={96}
+          >
             <SkeletonBar height={16} radius={'50%'} width={16} />
             <SkeletonBar height={10} width={48} />
           </Flexbox>
-          <Flexbox horizontal align={'center'} className={styles.control} gap={8} width={176}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.control).className}
+            gap={8}
+            width={176}
+          >
             <SkeletonBar height={16} radius={'50%'} width={16} />
             <SkeletonBar height={10} width={116} />
           </Flexbox>
         </Flexbox>
       </Flexbox>
-      <div className={layout.side}>
-        <div className={layout.properties}>
+      <div className={stylex.props(layout.side).className}>
+        <div className={stylex.props(layout.properties).className}>
           {Array.from({ length: 3 }).map((_, index) => (
             <Flexbox
               horizontal
               align={'center'}
-              className={layout.propertyItem}
+              className={stylex.props(layout.propertyItem).className}
               gap={8}
               key={index}
             >
@@ -83,10 +108,10 @@ const TaskDetailBodySkeleton = () => (
           <SkeletonBar height={16} radius={'50%'} width={16} />
           <SkeletonBar height={18} width={112} />
         </Flexbox>
-        <Flexbox className={styles.acceptance}>
+        <Flexbox className={stylex.props(styles.acceptance).className}>
           {Array.from({ length: 3 }).map((_, index) => (
             <Flexbox key={index}>
-              {index > 0 && <div className={styles.divider} />}
+              {index > 0 && <div {...stylex.props(styles.divider)} />}
               <Flexbox horizontal align={'center'} gap={10} padding={'12px'}>
                 <SkeletonBar height={16} radius={'50%'} width={16} />
                 <SkeletonBar height={12} width={24} />

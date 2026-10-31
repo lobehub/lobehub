@@ -1,5 +1,7 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Center, createStaticStyles, cx, Flexbox, Popover } from '@lobehub/ui';
+import { Center, Flexbox, Popover } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';
@@ -17,32 +19,25 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chevron: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  container: css`
-    cursor: pointer;
-
-    border-radius: 12px;
-    border-start-start-radius: 8px;
-    border-end-start-radius: 8px;
-
-    background: ${cssVar.colorFillTertiary};
-
-    :hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  sectionHeader: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  chevron: { color: cssVar.colorTextQuaternary },
+  container: {
+    cursor: 'pointer',
+    borderStartStartRadius: '8px',
+    borderStartEndRadius: '12px',
+    borderEndStartRadius: '8px',
+    borderEndEndRadius: '12px',
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
+  sectionHeader: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 interface AgentSelectorActionProps {
   onAgentChange: (id: string) => void;
@@ -143,7 +138,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
         <>
           {privateAgents.length > 0 && (
             <>
-              <div className={styles.sectionHeader}>
+              <div className={stylex.props(styles.sectionHeader).className}>
                 {t('taskManager.agentSelector.privateGroup', { ns: 'topic' })}
               </div>
               {renderAgentItems(privateAgents)}
@@ -151,7 +146,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
           )}
           {workspaceAgents.length > 0 && (
             <>
-              <div className={styles.sectionHeader}>
+              <div className={stylex.props(styles.sectionHeader).className}>
                 {t('taskManager.agentSelector.workspaceGroup', { ns: 'topic' })}
               </div>
               {renderAgentItems(workspaceAgents)}
@@ -184,7 +179,12 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
       }}
       onOpenChange={setOpen}
     >
-      <Center horizontal className={cx(styles.container)} height={28} paddingInline={6}>
+      <Center
+        horizontal
+        className={stylex.props(styles.container).className}
+        height={28}
+        paddingInline={6}
+      >
         <Flexbox horizontal align={'center'} gap={4}>
           <AgentAvatar
             agentId={activeAgent?.id}
@@ -193,7 +193,7 @@ const AgentSelectorAction = memo<AgentSelectorActionProps>(({ onAgentChange }) =
             name={activeAgent ? agentDisplayName(activeAgent) : undefined}
             size={22}
           />
-          <ChevronsUpDownIcon className={styles.chevron} size={14} />
+          <ChevronsUpDownIcon className={stylex.props(styles.chevron).className} size={14} />
         </Flexbox>
       </Center>
     </Popover>

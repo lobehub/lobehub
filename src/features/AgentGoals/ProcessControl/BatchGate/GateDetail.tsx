@@ -1,5 +1,7 @@
 import { GOAL_BATCH_RELEASE_OPTION } from '@lobechat/const/goal';
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { CircleCheck, CircleDashed, CircleX, GraduationCap } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
@@ -29,60 +31,52 @@ import { type GateCheckLike, useGateCheckCopy } from './useGateCheckCopy';
  * behind any that failed, then every verdict this round took.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  check: css`
-    padding-block: 6px;
-
-    & + & {
-      border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
-    }
-  `,
-  /* A rule this gate taught, as a card of its own — it outlives the round. */
-  learnedCard: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  label: css`
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  /* A unit behind a failed check, as the card it is on the map — not a line of text. */
-  unitCard: css`
-    cursor: pointer;
-
-    padding-block: 8px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: border-color 0.15s;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  unitGlyph: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-}));
+const styles = stylex.create({
+  check: {
+    paddingBlock: '6px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'dashed' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  // A rule this gate taught, as a card of its own — it outlives the round.
+  learnedCard: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  label: { fontSize: '12px', fontWeight: 600, color: cssVar.colorTextSecondary },
+  // A unit behind a failed check, as the card it is on the map — not a line of text.
+  unitCard: {
+    cursor: 'pointer',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: 'border-color 0.15s',
+  },
+  unitGlyph: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '26px',
+    height: '26px',
+    borderRadius: '6px',
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+});
 
 const GATE_VISUAL: Record<BatchGateState, (typeof CELL_VISUAL)[keyof typeof CELL_VISUAL]> = {
   checking: CELL_VISUAL.running,
@@ -96,7 +90,7 @@ const Section = memo<{ children: ReactNode; extra?: ReactNode; title: string }>(
   ({ children, extra, title }) => (
     <Flexbox gap={6}>
       <Flexbox horizontal align={'baseline'} gap={8} justify={'space-between'}>
-        <span className={styles.label}>{title}</span>
+        <span className={stylex.props(styles.label).className}>{title}</span>
         {extra}
       </Flexbox>
       {children}
@@ -180,7 +174,7 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.unitCard}
+        className={stylex.props(styles.unitCard).className}
         data-unit={nodeId}
         gap={8}
         key={nodeId}
@@ -188,12 +182,12 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
         onClick={() => onOpenNode(nodeId)}
       >
         <span
-          className={styles.unitGlyph}
+          className={stylex.props(styles.unitGlyph).className}
           style={{ background: KIND_COLOR[kind].soft, color: KIND_COLOR[kind].line }}
         >
           <Icon icon={KIND_ICON[kind]} size={14} />
         </span>
-        <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }} weight={500}>
+        <Text ellipsis fontSize={13} style={{ flex: '1', minWidth: 0 }} weight={500}>
           {view.node.title}
         </Text>
         {kind === 'task' && (
@@ -272,24 +266,28 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
               <Flexbox
                 horizontal
                 align={'flex-start'}
-                className={styles.learnedCard}
+                className={stylex.props(styles.learnedCard).className}
                 gap={10}
                 key={learning.lessonId}
               >
                 <span
-                  className={styles.unitGlyph}
+                  className={stylex.props(styles.unitGlyph).className}
                   style={{ background: cssVar.colorFillTertiary, color: cssVar.colorTextSecondary }}
                 >
                   <Icon icon={GraduationCap} size={14} />
                 </span>
                 <Text
                   fontSize={13}
-                  style={{ flex: 1, minWidth: 0, paddingBlockStart: 3, whiteSpace: 'pre-wrap' }}
+                  style={{ flex: '1', minWidth: 0, paddingBlockStart: 3, whiteSpace: 'pre-wrap' }}
                 >
                   {learning.rule ?? learning.title}
                 </Text>
                 {learning.lessonCode && (
-                  <Text className={styles.mono} fontSize={12} type={'secondary'}>
+                  <Text
+                    className={stylex.props(styles.mono).className}
+                    fontSize={12}
+                    type={'secondary'}
+                  >
                     {learning.lessonCode}
                   </Text>
                 )}
@@ -305,7 +303,7 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
       <Section
         title={t('goalBatch.gatePanel.checks')}
         extra={
-          <Text className={styles.mono} fontSize={11} type={'secondary'}>
+          <Text className={stylex.props(styles.mono).className} fontSize={11} type={'secondary'}>
             {latest
               ? latest.seq
                 ? t('goalBatch.gatePanel.checksAt', {
@@ -337,7 +335,7 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
                   : cssVar.colorTextQuaternary;
             return (
               <Flexbox
-                className={styles.check}
+                className={stylex.props(styles.check, stylex.defaultMarker()).className}
                 data-check={check.key}
                 data-state={state}
                 gap={4}
@@ -345,11 +343,15 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
               >
                 <Flexbox horizontal align={'center'} gap={8}>
                   <Icon color={color} icon={icon} size={14} />
-                  <Text fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+                  <Text fontSize={13} style={{ flex: '1', minWidth: 0 }}>
                     {label}
                   </Text>
                   {detail && (
-                    <Text className={styles.mono} fontSize={12} type={'secondary'}>
+                    <Text
+                      className={stylex.props(styles.mono).className}
+                      fontSize={12}
+                      type={'secondary'}
+                    >
                       {detail}
                     </Text>
                   )}
@@ -397,11 +399,11 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
                       icon={passed ? CircleCheck : CircleX}
                       size={12}
                     />
-                    <Text fontSize={12} style={{ flex: 1, minWidth: 0 }}>
+                    <Text fontSize={12} style={{ flex: '1', minWidth: 0 }}>
                       {text}
                     </Text>
                     <Text
-                      className={styles.mono}
+                      className={stylex.props(styles.mono).className}
                       fontSize={12}
                       style={{ flex: 'none' }}
                       type={'secondary'}

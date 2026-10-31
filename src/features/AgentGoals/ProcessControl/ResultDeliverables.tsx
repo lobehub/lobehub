@@ -4,9 +4,6 @@ import {
   ActionIcon,
   Button,
   Center,
-  createStaticStyles,
-  cssVar,
-  cx,
   Flexbox,
   Icon,
   Input,
@@ -15,6 +12,8 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowRight, PackageOpen, SearchIcon, SearchX, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,43 +50,36 @@ import { anchorProps } from './resultAnchors';
  * lives: a document in the side panel, a file or link at its own target.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    overflow: hidden;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  groupTitle: css`
-    padding-block: 12px 4px;
-    padding-inline: 12px;
-  `,
-  row: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: none;
-
-    text-align: start;
-
-    background: none;
-  `,
-  rowOpenable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  groupTitle: { paddingBlockStart: '12px', paddingBlockEnd: '4px', paddingInline: '12px' },
+  row: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderStyle: 'none',
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  rowOpenable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+});
 
 const ProducerAndTime = ({ item }: { item: DeliverableItem }) => {
   const { t } = useTranslation('chat');
@@ -116,7 +108,7 @@ const DeliverableRow = ({ item, onOpen }: { item: DeliverableItem; onOpen: () =>
       horizontal
       align={'center'}
       as={openable ? 'button' : 'div'}
-      className={cx(styles.row, openable && styles.rowOpenable)}
+      className={stylex.props(styles.row, openable && styles.rowOpenable).className}
       data-testid={'goal-deliverable-row'}
       gap={12}
       {...(openable ? { onClick: onOpen, type: 'button' as const } : {})}
@@ -141,7 +133,12 @@ const DeliverableRow = ({ item, onOpen }: { item: DeliverableItem; onOpen: () =>
 };
 
 const LoadingRows = () => (
-  <Flexbox className={styles.card} data-testid={'goal-deliverables-loading'} gap={14} padding={16}>
+  <Flexbox
+    className={stylex.props(styles.card).className}
+    data-testid={'goal-deliverables-loading'}
+    gap={14}
+    padding={16}
+  >
     {[0, 1, 2].map((key) => (
       <Flexbox horizontal align={'center'} gap={12} key={key}>
         <Skeleton height={18} radius={4} width={18} />
@@ -157,7 +154,12 @@ const LoadingRows = () => (
 const EmptyState = () => {
   const { t } = useTranslation('chat');
   return (
-    <Center className={styles.card} data-testid={'goal-deliverables-empty'} gap={8} padding={32}>
+    <Center
+      className={stylex.props(styles.card).className}
+      data-testid={'goal-deliverables-empty'}
+      gap={8}
+      padding={32}
+    >
       <Icon color={cssVar.colorTextQuaternary} icon={PackageOpen} size={28} />
       <Text weight={600}>{t('goalProcess.result.deliverables.empty.title')}</Text>
       <Text align={'center'} fontSize={13} style={{ maxWidth: 420 }} type={'secondary'}>
@@ -283,7 +285,7 @@ const ResultDeliverables = ({
         <LoadingRows />
       ) : visible.length === 0 ? (
         <Center
-          className={styles.card}
+          className={stylex.props(styles.card).className}
           data-testid={'goal-deliverables-no-match'}
           gap={8}
           padding={24}
@@ -306,7 +308,7 @@ const ResultDeliverables = ({
           </Button>
         </Center>
       ) : (
-        <Flexbox className={styles.card} paddingBlock={4}>
+        <Flexbox className={stylex.props(styles.card).className} paddingBlock={4}>
           {groups.map((group) => (
             <Flexbox
               key={group.nodeId ?? 'rest'}
@@ -319,7 +321,7 @@ const ResultDeliverables = ({
             >
               {groups.length > 1 && (
                 <Text
-                  className={styles.groupTitle}
+                  className={stylex.props(styles.groupTitle).className}
                   data-testid={'goal-deliverables-group'}
                   fontSize={12}
                   type={'secondary'}

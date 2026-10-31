@@ -1,5 +1,7 @@
 import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Spin } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LockIcon, UsersIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -12,31 +14,21 @@ import { useTaskStore } from '@/store/task';
 import { renderMenuCheck } from './menuExtra';
 import { getTaskVisibilityDefaultLabel, getTaskVisibilityLabelKey } from './taskVisibilityLabel';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  trigger: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-
-    color: ${cssVar.colorTextDescription};
-
-    transition: color ${cssVar.motionDurationMid};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  triggerDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextDescription};
-      filter: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  trigger: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorText },
+    transition: `color ${cssVar.motionDurationMid}`,
+  },
+  triggerDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.5,
+    color: { 'default': null, ':hover': cssVar.colorTextDescription },
+    filter: { 'default': null, ':hover': 'none' },
+  },
+});
 
 const VISIBILITY_OPTIONS: Array<'private' | 'public'> = ['private', 'public'];
 
@@ -131,7 +123,7 @@ const TaskVisibilityTag = memo<TaskVisibilityTagProps>(
       <Spin size={size} style={{ color: cssVar.colorTextDescription }} />
     ) : (
       <Tooltip title={label}>
-        <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>
+        <span {...stylex.props(styles.trigger)} onClick={(e) => e.stopPropagation()}>
           <IconComp size={size} />
         </span>
       </Tooltip>
@@ -142,7 +134,7 @@ const TaskVisibilityTag = memo<TaskVisibilityTagProps>(
       return (
         <Tooltip title={lockedReason}>
           <span
-            className={styles.triggerDisabled}
+            className={stylex.props(styles.triggerDisabled).className}
             style={{ display: 'inline-flex' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -154,7 +146,7 @@ const TaskVisibilityTag = memo<TaskVisibilityTagProps>(
       return (
         <Tooltip title={reason}>
           <span
-            className={styles.triggerDisabled}
+            className={stylex.props(styles.triggerDisabled).className}
             style={{ display: 'inline-flex' }}
             onClick={(e) => e.stopPropagation()}
           >

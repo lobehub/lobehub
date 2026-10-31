@@ -1,7 +1,9 @@
 'use client';
 
 import type { VerifyCheckTally } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BadgeCheck,
   CheckCheck,
@@ -17,122 +19,97 @@ import { useTranslation } from 'react-i18next';
 import { rowKeyDownHandler } from '@/features/Acceptance';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { sx } from '@/styles/sx';
 
 import type { AcceptanceLevelState, AcceptanceTree } from './goalAcceptanceTree';
 import { GroupLabel } from './GoalResultFollowUps';
 import { useAcceptanceSignOff } from './useAcceptanceSignOff';
 
-const styles = createStaticStyles(({ css }) => ({
-  /* One row per level. The row itself opens the level's acceptance report in
-     the side Portal (the acceptance page's own criterion-row grammar), so the
-     level's title, its sign-off, its count and the chevron are all inside one
-     clickable band. */
-  row: css`
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    width: 100%;
-    min-height: 38px;
-    padding-block: 8px;
-    padding-inline: 12px 6px;
-
-    /* The sign-off appears under the pointer, the way the acceptance page's own
-       per-group accept does: a permanently visible button on every waiting row
-       turns the list into a column of buttons and begs a misclick. */
-    &:hover .acc-hierarchy-action {
-      opacity: 1;
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-  rowInteractive: css`
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  /* The row whose report the side Portal is showing, so the list still says
-     which level the reader is looking at. */
-  rowActive: css`
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowTarget: css`
-    display: flex;
-    flex: 1;
-    gap: 10px;
-    align-items: center;
-
-    min-width: 0;
-    padding: 0;
-    border: none;
-
-    color: inherit;
-    text-align: start;
-
-    background: none;
-  `,
-  rowTargetInteractive: css`
-    cursor: pointer;
-  `,
-  /* Hover-revealed, and held visible while its own request is in flight: a
-     spinner that disappears the moment the pointer leaves reads as "nothing
-     happened". */
-  levelAction: css`
-    flex: none;
-    opacity: 0;
-    transition: opacity 0.15s;
-
-    &:focus-within,
-    &[data-pending='true'] {
-      opacity: 1;
-    }
-  `,
-  /* The task's position in the Goal graph, the same handle the process view
-     refers to it by — quiet, but a step above the faintest tone so a row can
-     still be read back and pointed at. */
-  seq: css`
-    flex: none;
-    min-width: 22px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  /* Sized to its own text, so what follows it — the sign-off — sits directly
-     after the title rather than out at the row's trailing edge. It still gives
-     way (truncating) when the title is the long thing on the row. */
-  title: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    min-width: 0;
-
-    font-size: 14px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  /* Everything after the sign-off is right-aligned: the count is the row's own
-     trailing meta, not a neighbour of the title. */
-  spacer: css`
-    flex: 1 1 0;
-    min-width: 0;
-  `,
-  /* A level with nothing produced yet drops one step of text colour. A failed
-     level keeps full weight: a failure is a result, an absence is not. */
-  titleQuiet: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  meta: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  // One row per level. The row itself is the expand target (the acceptance
+  // page's own criterion-row grammar), so the level's title, its sign-off, its
+  // count and the chevron are all inside one clickable band.
+  row: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: '38px',
+    paddingBlock: '8px',
+    paddingInlineStart: '12px',
+    paddingInlineEnd: '6px',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  rowInteractive: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  rowTargetInteractive: { cursor: 'pointer' },
+  rowTarget: {
+    display: 'flex',
+    flex: '1',
+    gap: '10px',
+    alignItems: 'center',
+    minWidth: 0,
+    padding: 0,
+    borderStyle: 'none',
+    color: 'inherit',
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  // Hover-revealed, and held visible while its own request is in flight: a
+  // spinner that disappears the moment the pointer leaves reads as "nothing
+  // happened". The sign-off appears under the pointer, the way the acceptance
+  // page's own per-group accept does: a permanently visible button on every
+  // waiting row turns the list into a column of buttons and begs a misclick.
+  levelAction: {
+    flex: 'none',
+    opacity: {
+      'default': 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      ':focus-within': 1,
+      ':is([data-pending="true"])': 1,
+    },
+    transition: 'opacity 0.15s',
+  },
+  // The task's position in the Goal graph, the same handle the process view
+  // refers to it by — quiet, but a step above the faintest tone so a row can
+  // still be read back and pointed at.
+  seq: {
+    flex: 'none',
+    minWidth: '22px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  // Sized to its own text, so what follows it — the sign-off — sits directly
+  // after the title rather than out at the row's trailing edge. It still gives
+  // way (truncating) when the title is the long thing on the row.
+  title: {
+    overflow: 'hidden',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
+    fontSize: '14px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // Everything after the sign-off is right-aligned: the count is the row's own
+  // trailing meta, not a neighbour of the title.
+  spacer: { flexGrow: '1', flexShrink: '1', flexBasis: '0', minWidth: 0 },
+  // A level with nothing produced yet drops one step of text colour. A failed
+  // level keeps full weight: a failure is a result, an absence is not.
+  titleQuiet: { color: cssVar.colorTextSecondary },
+  meta: { flex: 'none', fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 /** A level's own state, as a glyph. Never derived from the levels beneath it. */
 const LEVEL_GLYPH: Record<AcceptanceLevelState, typeof CircleDot> = {
@@ -206,18 +183,23 @@ const LevelRow = memo<LevelRowProps>(
     const { t } = useTranslation('chat');
     return (
       <div
-        className={cx(
-          styles.row,
-          onOpen && styles.rowInteractive,
-          active && styles.rowActive,
+        {...sx(
+          [
+            styles.row,
+            onOpen && styles.rowInteractive,
+            active && styles.rowActive,
+            stylex.defaultMarker(),
+          ],
           'acc-hierarchy-row',
         )}
       >
         <div
-          className={cx(styles.rowTarget, onOpen && styles.rowTargetInteractive)}
           role={onOpen ? 'button' : undefined}
           tabIndex={onOpen ? 0 : undefined}
           title={onOpen ? undefined : hint}
+          className={
+            stylex.props(styles.rowTarget, onOpen && styles.rowTargetInteractive).className
+          }
           onClick={onOpen}
           onKeyDown={onOpen ? rowKeyDownHandler(onOpen) : undefined}
         >
@@ -228,11 +210,13 @@ const LevelRow = memo<LevelRowProps>(
             size={16}
             style={{ flex: 'none' }}
           />
-          {seq && <span className={styles.seq}>{seq}</span>}
-          <span className={cx(styles.title, dim && styles.titleQuiet)}>{title}</span>
+          {seq && <span className={stylex.props(styles.seq).className}>{seq}</span>}
+          <span className={stylex.props(styles.title, dim && styles.titleQuiet).className}>
+            {title}
+          </span>
           {action}
-          <span className={styles.spacer} />
-          {meta && <span className={styles.meta}>{meta}</span>}
+          <span className={stylex.props(styles.spacer).className} />
+          {meta && <span className={stylex.props(styles.meta).className}>{meta}</span>}
           {onOpen && (
             <Icon
               color={cssVar.colorTextQuaternary}
@@ -329,7 +313,7 @@ const GoalAcceptanceHierarchy = memo<GoalAcceptanceHierarchyProps>(
                 action={
                   canReview && level.state === 'awaitingSignOff' && acceptanceId ? (
                     <span
-                      className={cx(styles.levelAction, 'acc-hierarchy-action')}
+                      {...sx([styles.levelAction], 'acc-hierarchy-action')}
                       data-pending={pendingKey === level.key || undefined}
                     >
                       <Button

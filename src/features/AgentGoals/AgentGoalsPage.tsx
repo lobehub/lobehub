@@ -4,14 +4,14 @@ import {
   ActionIcon,
   Block,
   Button,
-  createStaticStyles,
-  cssVar,
   Empty,
   Flexbox,
   ScrollShadow,
   Segmented,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LayoutGridIcon, ListIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,50 +35,43 @@ import type { GoalExampleSeed } from './goalExamples';
 import { GoalListItem } from './GoalListItem';
 import { useGoalListAutoLoad } from './useGoalListAutoLoad';
 
-const styles = createStaticStyles(({ css }) => ({
-  countBadge: css`
-    padding-block: 1px;
-    padding-inline: 7px;
-    border-radius: 99px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    line-height: 18px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  overview: css`
-    padding-block: 6px 18px;
-  `,
-  list: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-
-    @media (width <= 900px) {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  `,
-  listRows: css`
-    display: flex;
-    flex-direction: column;
-    border-block: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  metric: css`
-    min-width: 88px;
-    padding-inline-start: 16px;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:first-child {
-      padding-inline-start: 0;
-      border-inline-start: 0;
-    }
-  `,
-  sentinel: css`
-    height: 1px;
-  `,
-}));
+const styles = stylex.create({
+  countBadge: {
+    paddingBlock: '1px',
+    paddingInline: '7px',
+    borderRadius: '99px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  overview: { paddingBlockStart: '6px', paddingBlockEnd: '18px' },
+  list: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'repeat(2, minmax(0, 1fr))',
+      '@media (width <= 900px)': 'minmax(0, 1fr)',
+    },
+    gap: '12px',
+  },
+  listRows: {
+    display: 'flex',
+    flexDirection: 'column',
+    borderBlockWidth: '1px',
+    borderBlockStyle: 'solid',
+    borderBlockColor: cssVar.colorBorderSecondary,
+  },
+  metric: {
+    minWidth: '88px',
+    paddingInlineStart: { 'default': '16px', ':first-child': '0' },
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: { 'default': 'solid', ':first-child': 'none' },
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+  },
+  sentinel: { height: '1px' },
+});
 
 /**
  * The list failed to load — the page's own read, or the selected tab's. Both
@@ -265,7 +258,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
             {/* The overview sizes up one agent's or project's goals; across
               every agent the list and its tabs already carry that. */}
             {!isGlobal && (
-              <Flexbox className={styles.overview}>
+              <Flexbox className={stylex.props(styles.overview).className}>
                 <Flexbox
                   horizontal
                   align={'center'}
@@ -280,7 +273,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                     <Text type={'secondary'}>{t('goalPage.description')}</Text>
                   </Flexbox>
                   <Flexbox horizontal gap={20}>
-                    <Flexbox className={styles.metric} gap={2}>
+                    <Flexbox className={stylex.props(styles.metric).className} gap={2}>
                       <Text fontSize={20} weight={600}>
                         {summary.total}
                       </Text>
@@ -288,7 +281,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                         {t('goalPage.metrics.total')}
                       </Text>
                     </Flexbox>
-                    <Flexbox className={styles.metric} gap={2}>
+                    <Flexbox className={stylex.props(styles.metric).className} gap={2}>
                       <Text fontSize={20} weight={600}>
                         {summary.pursuing ?? '—'}
                       </Text>
@@ -296,7 +289,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                         {t('goalPage.metrics.pursuing')}
                       </Text>
                     </Flexbox>
-                    <Flexbox className={styles.metric} gap={2}>
+                    <Flexbox className={stylex.props(styles.metric).className} gap={2}>
                       <Text fontSize={20} weight={600}>
                         {summary.delivered ?? '—'}
                       </Text>
@@ -315,7 +308,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                   <Text fontSize={16} weight={600}>
                     {t('goalPage.listTitle')}
                   </Text>
-                  <span className={styles.countBadge}>{visibleGoalCount}</span>
+                  <span {...stylex.props(styles.countBadge)}>{visibleGoalCount}</span>
                 </Flexbox>
                 {/* On a phone the filters can outgrow the row; the edge fade shows it scrolls. */}
                 <ScrollShadow
@@ -375,7 +368,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                   />
                 </ScrollShadow>
               </Flexbox>
-              <div className={viewMode === 'card' ? styles.list : styles.listRows}>
+              <div {...stylex.props(viewMode === 'card' ? styles.list : styles.listRows)}>
                 {isTabError ? (
                   <GoalLoadError onRetry={() => void refreshGoals(scopeId)} />
                 ) : isTabPending ? (
@@ -400,7 +393,9 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                     ))
                 )}
               </div>
-              {hasMoreGoals && <div aria-hidden className={styles.sentinel} ref={sentinelRef} />}
+              {hasMoreGoals && (
+                <div aria-hidden {...stylex.props(styles.sentinel)} ref={sentinelRef} />
+              )}
             </Flexbox>
           </>
         )}

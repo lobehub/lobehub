@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, CircleCheck, CircleDashed, CircleX } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,50 +22,37 @@ import type { CriterionOutcome, CriterionOutcomeState } from './goalResultState'
  * view the acceptance page itself opens, rather than a thinner copy inlined here.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  arrow: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  item: css`
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  reason: css`
-    color: ${cssVar.colorError};
-  `,
-  row: css`
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 0;
-    border: none;
-
-    text-align: start;
-
-    background: none;
-  `,
-  rowOpenable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-  /* The criterion whose check the side Portal is showing. */
-  rowActive: css`
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  arrow: { flex: 'none', color: cssVar.colorTextQuaternary, transition: 'transform 0.2s' },
+  item: {
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  reason: { color: cssVar.colorError },
+  row: {
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '0',
+    borderStyle: 'none',
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  rowOpenable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+});
 
 const STATE_ICON: Record<CriterionOutcomeState, typeof CircleCheck> = {
   failed: CircleX,
@@ -87,17 +76,25 @@ interface CriterionRowProps {
 
 const CriterionRow = ({ active, index, onOpen, outcome }: CriterionRowProps) => {
   const { t } = useTranslation('chat');
+
   const { criterion, evidence, reason, state } = outcome;
   const color = STATE_COLOR[state];
 
   return (
-    <div className={styles.item} data-criterion-id={criterion.id} data-criterion-state={state}>
+    <div
+      {...stylex.props(styles.item)}
+      data-criterion-id={criterion.id}
+      data-criterion-state={state}
+    >
       <Flexbox
         horizontal
         align={'flex-start'}
         as={onOpen ? 'button' : 'div'}
-        className={cx(styles.row, onOpen && styles.rowOpenable, active && styles.rowActive)}
         gap={10}
+        className={
+          stylex.props(styles.row, onOpen && styles.rowOpenable, active && styles.rowActive)
+            .className
+        }
         {...(onOpen ? { onClick: onOpen, type: 'button' as const } : {})}
       >
         <Icon
@@ -116,7 +113,11 @@ const CriterionRow = ({ active, index, onOpen, outcome }: CriterionRowProps) => 
             </Text>
           </Flexbox>
           {state === 'failed' && reason && (
-            <Text className={styles.reason} fontSize={13} style={{ wordBreak: 'break-word' }}>
+            <Text
+              className={stylex.props(styles.reason).className}
+              fontSize={13}
+              style={{ wordBreak: 'break-word' }}
+            >
               {reason}
             </Text>
           )}
@@ -138,7 +139,7 @@ const CriterionRow = ({ active, index, onOpen, outcome }: CriterionRowProps) => 
                 {t('goalProcess.result.criteria.evidenceCount', { count: evidence.length })}
               </Text>
             )}
-            <Icon className={styles.arrow} icon={ChevronRight} size={14} />
+            <Icon className={stylex.props(styles.arrow).className} icon={ChevronRight} size={14} />
           </Flexbox>
         )}
       </Flexbox>

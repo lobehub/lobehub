@@ -1,6 +1,8 @@
 import type { IconType } from '@lobehub/icons';
 import { type DropdownItem, DropdownMenu, type MenuInfo, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Spin } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,37 +34,27 @@ export const PRIORITY_META: Record<number, PriorityMeta> = {
 
 const PRIORITY_LEVELS = [0, 1, 2, 3, 4];
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  trigger: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-
-    color: ${cssVar.colorTextDescription};
-
-    transition: color ${cssVar.motionDurationMid};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  triggerUrgent: css`
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    color: ${cssVar.orange};
-  `,
-  triggerDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      color: ${cssVar.colorTextDescription};
-      filter: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  trigger: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorText },
+    transition: `color ${cssVar.motionDurationMid}`,
+  },
+  triggerUrgent: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    color: cssVar.orange,
+  },
+  triggerDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.5,
+    color: { 'default': null, ':hover': cssVar.colorTextDescription },
+    filter: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface TaskPriorityTagProps {
   children?: ReactNode;
@@ -157,7 +149,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     ) : (
       <Tooltip title={t(`taskDetail.${meta.labelKey}` as never, { defaultValue: meta.label })}>
         <span
-          className={isUrgent ? styles.triggerUrgent : styles.trigger}
+          {...stylex.props(isUrgent ? styles.triggerUrgent : styles.trigger)}
           onClick={(e) => e.stopPropagation()}
         >
           <IconRender size={size} />
@@ -171,7 +163,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
       return (
         <Tooltip title={reason}>
           <span
-            className={styles.triggerDisabled}
+            className={stylex.props(styles.triggerDisabled).className}
             style={{ display: 'inline-flex' }}
             onClick={(e) => e.stopPropagation()}
           >

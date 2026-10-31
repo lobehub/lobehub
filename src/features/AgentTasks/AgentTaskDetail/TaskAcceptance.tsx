@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  Collapsible,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Spin,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Collapsible, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronRight,
   ChevronsDownUp,
@@ -52,27 +44,25 @@ import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProject
 import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 import TaskVerifyConfig from './TaskVerifyConfig';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    padding-inline: 12px;
-  `,
-  error: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorErrorBg};
-  `,
-  group: css`
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  groupHeader: css`
-    cursor: pointer;
-    padding-block: 9px;
-    padding-inline: 12px;
-  `,
-}));
+const styles = stylex.create({
+  body: { paddingInline: '12px' },
+  error: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  group: {
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  groupHeader: { cursor: 'pointer', paddingBlock: '9px', paddingInline: '12px' },
+});
 
 interface AcceptanceErrorProps {
   onRetry: () => void;
@@ -82,7 +72,7 @@ const AcceptanceError = memo<AcceptanceErrorProps>(({ onRetry }) => {
   const { t } = useTranslation('chat');
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.error} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.error).className} gap={8}>
       <Text fontSize={12} style={{ flex: 1 }} type={'danger'}>
         {t('taskDetail.acceptance.loadError')}
       </Text>
@@ -279,7 +269,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     return (
       <Flexbox gap={8}>
         {header}
-        <Flexbox className={styles.body}>
+        <Flexbox className={stylex.props(styles.body).className}>
           <AcceptanceError onRetry={() => void mutateSubject()} />
         </Flexbox>
       </Flexbox>
@@ -290,7 +280,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     <Flexbox gap={8}>
       {header}
       <Collapsible open={sectionExpanded}>
-        <Flexbox className={styles.body} gap={14}>
+        <Flexbox className={stylex.props(styles.body).className} gap={14}>
           {bundleLoading && <Spin size="middle" />}
           {bundleError ? <AcceptanceError onRetry={() => void mutateBundle()} /> : null}
           {bundle && (
@@ -342,11 +332,14 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
                         const collapsed = collapsedGroups.has(group.key);
 
                         return (
-                          <Flexbox className={styles.group} key={group.key}>
+                          <Flexbox
+                            className={stylex.props(styles.group, stylex.defaultMarker()).className}
+                            key={group.key}
+                          >
                             <Flexbox
                               horizontal
                               align={'center'}
-                              className={styles.groupHeader}
+                              className={stylex.props(styles.groupHeader).className}
                               gap={8}
                               onClick={() =>
                                 setCollapsedGroups((previous) => {

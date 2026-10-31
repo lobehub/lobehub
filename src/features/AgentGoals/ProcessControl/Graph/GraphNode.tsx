@@ -1,7 +1,9 @@
 'use client';
 
 import type { GoalNodeStatus } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { FileBox, Info, type LucideIcon, Repeat2, ShieldCheck } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
@@ -10,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { shinyTextStyles } from '@/styles';
+import { sx } from '@/styles/sx';
 
 import type { GoalGraphNodeKind } from '../../Experiments/model';
 import AssigneeProfileAvatar from '../AssigneeProfileAvatar';
@@ -63,176 +66,138 @@ export interface GraphNodeData extends Record<string, unknown> {
   view: GoalNodeView;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    box-sizing: border-box;
-    width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
+const ghostPulse = stylex.keyframes({
+  '0%, 100%': { opacity: 1 },
+  '50%': { opacity: 0.4 },
+});
 
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      opacity 0.2s,
-      border-color 0.15s;
-  `,
-  chipText: css`
-    font-size: 11px;
-    line-height: 16px;
-    white-space: nowrap;
-  `,
-  dim: css`
-    opacity: 0.45;
-  `,
-  statusRow: css`
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    padding-block: 10px 0;
-    padding-inline: 12px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-
-    /* The row owns the card's top padding; keep the head snug beneath it. */
-    & + div {
-      padding-block-start: 6px;
-    }
-  `,
-  gate: css`
-    border-color: ${cssVar.colorWarningBorder};
-    background: ${cssVar.colorWarningBg};
-  `,
-  ghost: css`
-    border-style: dashed;
-  `,
-  highlighted: css`
-    border-color: ${cssVar.colorWarning};
-    border-style: dashed;
-    box-shadow: 0 0 0 3px ${cssVar.colorWarningBg};
-  `,
-  ghostBar: css`
-    height: 8px;
-    border-radius: 4px;
-    background: ${cssVar.colorFillSecondary};
-    animation: goal-ghost-pulse 1.6s ease-in-out infinite;
-
-    @keyframes goal-ghost-pulse {
-      0%,
-      100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.4;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-  glyph: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 30px;
-    height: 30px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  handle: css`
-    width: 1px;
-    min-width: 0;
-    height: 1px;
-    min-height: 0;
-    border: none;
-
-    opacity: 0;
-  `,
-  head: css`
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-  `,
-  human: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-
-    font-size: 9px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  metric: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-  `,
-  metrics: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  /* A ring, not a fill: the kind tint and the state chip must stay readable.
-     Blue, not `colorPrimary` — the primary is near-black here, so the ring read
-     as a heavier version of the plain card border and told nothing apart. The
-     cards carry the mainline; the lines between them stay ordinary. */
-  mainline: css`
-    border-color: ${cssVar.colorInfo};
-    box-shadow: 0 0 0 1px ${cssVar.colorInfo};
-  `,
-  selected: css`
-    border-color: ${cssVar.colorPrimaryBorder};
-  `,
-  stale: css`
-    border-color: ${cssVar.colorWarningBorder};
-  `,
-  subtitle: css`
-    overflow: hidden;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  hint: css`
-    cursor: help;
-
-    display: inline-flex;
-
-    margin-inline-start: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-    vertical-align: -2px;
-  `,
-  title: css`
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.35;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    boxSizing: 'border-box',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: 'opacity 0.2s, border-color 0.15s',
+  },
+  chipText: { fontSize: '11px', lineHeight: '16px', whiteSpace: 'nowrap' },
+  dim: { opacity: 0.45 },
+  statusRow: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    paddingBlockStart: '10px',
+    paddingBlockEnd: 0,
+    paddingInline: '12px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  gate: {
+    borderColor: cssVar.colorWarningBorder,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+  ghost: { borderStyle: 'dashed' },
+  highlighted: {
+    borderColor: cssVar.colorWarning,
+    borderStyle: 'dashed',
+    boxShadow: `0 0 0 3px ${cssVar.colorWarningBg}`,
+  },
+  ghostBar: {
+    height: '8px',
+    borderRadius: '4px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+    animationName: { default: ghostPulse, [REDUCED_MOTION]: 'none' },
+    animationDuration: '1.6s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
+  },
+  glyph: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '30px',
+    height: '30px',
+    borderRadius: cssVar.borderRadius,
+  },
+  handle: {
+    width: '1px',
+    minWidth: 0,
+    height: '1px',
+    minHeight: 0,
+    borderStyle: 'none',
+    opacity: 0,
+  },
+  head: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'flex-start',
+    // The status row owns the card's top padding; keep the head snug beneath it.
+    paddingBlockStart: { default: '10px', [stylex.when.siblingBefore(':is(*)')]: '6px' },
+    paddingBlockEnd: '10px',
+    paddingInline: '12px',
+  },
+  human: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    height: '16px',
+    borderRadius: '50%',
+    fontSize: '9px',
+    fontWeight: 600,
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  metric: { display: 'flex', gap: '4px', alignItems: 'center' },
+  metrics: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+  // A ring, not a fill: the kind tint and the state chip must stay readable.
+  // Blue, not `colorPrimary` — the primary is near-black here, so the ring read
+  // as a heavier version of the plain card border and told nothing apart. The
+  // cards carry the mainline; the lines between them stay ordinary.
+  mainline: {
+    borderColor: cssVar.colorInfo,
+    boxShadow: `0 0 0 1px ${cssVar.colorInfo}`,
+  },
+  selected: { borderColor: cssVar.colorPrimaryBorder },
+  stale: { borderColor: cssVar.colorWarningBorder },
+  subtitle: {
+    overflow: 'hidden',
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  hint: {
+    cursor: 'help',
+    display: 'inline-flex',
+    marginInlineStart: '4px',
+    color: cssVar.colorTextTertiary,
+    verticalAlign: '-2px',
+  },
+  title: { fontSize: '13px', fontWeight: 500, lineHeight: 1.35 },
+});
 
 export interface StateChip {
   color: string;
@@ -334,14 +299,14 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
   return (
     <div style={{ position: 'relative' }}>
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
         isConnectable={false}
         position={Position.Top}
         type={'target'}
       />
       {/* A later round's plan is fed from beside it, by the group the break surfaced in. */}
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
         id={'l'}
         isConnectable={false}
         position={Position.Left}
@@ -349,27 +314,35 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
       />
       <div
         data-mainline={mainline || undefined}
-        className={cx(
-          styles.card,
-          isGate && styles.gate,
-          stale && styles.stale,
-          dim && styles.dim,
-          highlighted && styles.highlighted,
-          selected && styles.selected,
-          mainline && styles.mainline,
-        )}
+        className={
+          stylex.props(
+            styles.card,
+            isGate && styles.gate,
+            stale && styles.stale,
+            dim && styles.dim,
+            highlighted && styles.highlighted,
+            selected && styles.selected,
+            mainline && styles.mainline,
+          ).className
+        }
       >
         {/* Status reads first: its own top row, left-aligned, with the running
             clock riding right behind it (review: bottom placements read poorly). */}
         {!presentation?.trailingChip && (chip || highlighted || view.humanTouches.length > 0) && (
-          <div className={styles.statusRow}>
+          <div className={stylex.props(styles.statusRow, stylex.defaultMarker()).className}>
             {highlighted && (
-              <span className={styles.chipText} style={{ color: cssVar.colorWarningText }}>
+              <span
+                className={stylex.props(styles.chipText).className}
+                style={{ color: cssVar.colorWarningText }}
+              >
                 {t('goalProcess.result.story.detourTag')}
               </span>
             )}
             {kind === 'experiment' && (
-              <span className={styles.chipText} style={{ color: palette.line }}>
+              <span
+                className={stylex.props(styles.chipText).className}
+                style={{ color: palette.line }}
+              >
                 {t('goalExperiment.number', { number: view.seq })}
               </span>
             )}
@@ -380,7 +353,10 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
                 ) : chip.icon === null ? null : (
                   <RunningGlyph size={13} />
                 )}
-                <span className={styles.chipText} style={{ color: chip.color }}>
+                <span
+                  className={stylex.props(styles.chipText).className}
+                  style={{ color: chip.color }}
+                >
                   {chip.text}
                 </span>
               </Flexbox>
@@ -388,7 +364,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
             {running && <RunningClock startedAt={view.startedAt} />}
             {view.humanTouches.length > 0 && (
               <Tooltip title={t('goalProcess.node.humanTouched')}>
-                <span className={styles.human}>@</span>
+                <span className={stylex.props(styles.human).className}>@</span>
               </Tooltip>
             )}
             {/* Top-right corner: who is doing this Task, with their profile on hover. */}
@@ -399,54 +375,62 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
             )}
           </div>
         )}
-        <div className={styles.head}>
-          <div className={styles.glyph} style={{ background: palette.soft, color: palette.line }}>
+        <div className={stylex.props(styles.head).className}>
+          <div
+            className={stylex.props(styles.glyph).className}
+            style={{ background: palette.soft, color: palette.line }}
+          >
             <Icon icon={presentation?.icon ?? KIND_ICON[kind]} size={16} />
           </div>
-          <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
-            <span className={styles.title}>
+          <Flexbox gap={2} style={{ flex: '1', minWidth: 0 }}>
+            <span className={stylex.props(styles.title).className}>
               {presentation?.title ??
                 (coordinatorTitleKey ? t(coordinatorTitleKey as any) : node.title)}
               {presentation?.hint && (
                 <Tooltip placement={presentation.hintPlacement} title={presentation.hint}>
-                  <span data-hint className={cx('nodrag', styles.hint)} role="img">
+                  <span data-hint {...sx([styles.hint], 'nodrag')} role="img">
                     <Icon icon={Info} size={13} />
                   </span>
                 </Tooltip>
               )}
             </span>
             {(presentation?.subtitle ?? subtitle) && (
-              <span className={styles.subtitle}>{presentation?.subtitle ?? subtitle}</span>
+              <span className={stylex.props(styles.subtitle).className}>
+                {presentation?.subtitle ?? subtitle}
+              </span>
             )}
           </Flexbox>
           {presentation?.trailingChip && chip && (
             <Flexbox horizontal align={'center'} gap={5} style={{ flex: 'none' }}>
               {chip.icon && <Icon color={chip.color} icon={chip.icon} size={13} />}
-              <span className={styles.chipText} style={{ color: chip.color }}>
+              <span
+                className={stylex.props(styles.chipText).className}
+                style={{ color: chip.color }}
+              >
                 {chip.text}
               </span>
             </Flexbox>
           )}
         </div>
         {node.kind === 'experiment' && (
-          <div className={styles.metrics}>
+          <div className={stylex.props(styles.metrics).className}>
             {t('goalExperiment.members', { count: nodeData.memberCount ?? 0 })} ·{' '}
             {t('goalExperiment.enter')}
           </div>
         )}
         {isTask && (
-          <div className={styles.metrics}>
+          <div className={stylex.props(styles.metrics).className}>
             {/* This Task carries its own verifier. Icon only — the word added
                 nothing the hover hint doesn't say better. */}
             {node.taskId && (
               <Tooltip title={t('goalProcess.node.verifierTooltip')}>
-                <span className={styles.metric}>
+                <span className={stylex.props(styles.metric).className}>
                   <Icon icon={ShieldCheck} size={13} />
                 </span>
               </Tooltip>
             )}
             <Tooltip title={t('goalProcess.node.attemptsTooltip', { count: attempts })}>
-              <span className={styles.metric}>
+              <span className={stylex.props(styles.metric).className}>
                 <Icon icon={Repeat2} size={13} />
                 {attempts}
               </span>
@@ -455,7 +439,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
               <Tooltip
                 title={t('goalProcess.node.artifactsTooltip', { count: view.artifacts.length })}
               >
-                <span className={styles.metric}>
+                <span className={stylex.props(styles.metric).className}>
                   <Icon icon={FileBox} size={13} />
                   {view.artifacts.length}
                 </span>
@@ -465,7 +449,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
         )}
       </div>
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
         isConnectable={false}
         position={Position.Bottom}
         type={'source'}
@@ -486,25 +470,25 @@ export const GhostNodeView = memo(() => {
   return (
     <div style={{ position: 'relative' }}>
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
         isConnectable={false}
         position={Position.Top}
         type={'target'}
       />
-      <div className={cx(styles.card, styles.ghost)}>
-        <div className={styles.head}>
+      <div className={stylex.props(styles.card, styles.ghost).className}>
+        <div className={stylex.props(styles.head).className}>
           <div
-            className={styles.glyph}
+            className={stylex.props(styles.glyph).className}
             style={{ background: KIND_COLOR.task.soft, color: KIND_COLOR.task.line }}
           >
             <Icon icon={KIND_ICON.task} size={16} />
           </div>
-          <Flexbox gap={7} style={{ flex: 1, minWidth: 0, paddingBlockStart: 1 }}>
-            <span className={cx(styles.title, shinyTextStyles.shinyText)}>
+          <Flexbox gap={7} style={{ flex: '1', minWidth: 0, paddingBlockStart: 1 }}>
+            <span {...sx([styles.title], shinyTextStyles.shinyText)}>
               {t('goalProcess.node.generating')}
             </span>
-            <span className={styles.ghostBar} style={{ width: '84%' }} />
-            <span className={styles.ghostBar} style={{ width: '56%' }} />
+            <span className={stylex.props(styles.ghostBar).className} style={{ width: '84%' }} />
+            <span className={stylex.props(styles.ghostBar).className} style={{ width: '56%' }} />
           </Flexbox>
         </div>
       </div>

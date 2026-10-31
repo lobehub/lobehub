@@ -1,5 +1,7 @@
 import type { GoalRolloutGateCheckKey } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleCheck, CircleDashed, CircleX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,21 +11,11 @@ import { type GateCheckLike, useGateCheckCopy } from './useGateCheckCopy';
 /** Checks a batch's retro answers for; every other check is about the execution. */
 const RETRO_CHECKS = new Set<GoalRolloutGateCheckKey>(['interventions_accounted', 'reverified']);
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    min-width: 220px;
-    max-width: 300px;
-    padding-block: 2px;
-    font-size: 12px;
-  `,
-  section: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  detail: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  root: { minWidth: '220px', maxWidth: '300px', paddingBlock: '2px', fontSize: '12px' },
+  section: { fontSize: '11px', color: cssVar.colorTextTertiary },
+  detail: { color: cssVar.colorTextTertiary },
+});
 
 const CheckRow = memo<{ check: GateCheckLike }>(({ check }) => {
   const copy = useGateCheckCopy();
@@ -43,7 +35,7 @@ const CheckRow = memo<{ check: GateCheckLike }>(({ check }) => {
       />
       <span>
         {label}
-        {detail && <span className={styles.detail}> · {detail}</span>}
+        {detail && <span {...stylex.props(styles.detail)}> · {detail}</span>}
       </span>
     </Flexbox>
   );
@@ -63,10 +55,12 @@ const GateChecksHint = memo<{ checks: GateCheckLike[] }>(({ checks }) => {
     { checks: checks.filter((check) => RETRO_CHECKS.has(check.key)), key: 'retro' as const },
   ].filter((section) => section.checks.length);
   return (
-    <Flexbox className={styles.root} gap={8}>
+    <Flexbox className={stylex.props(styles.root).className} gap={8}>
       {sections.map((section) => (
         <Flexbox gap={4} key={section.key}>
-          <span className={styles.section}>{t(`goalBatch.gate.hintSection.${section.key}`)}</span>
+          <span {...stylex.props(styles.section)}>
+            {t(`goalBatch.gate.hintSection.${section.key}`)}
+          </span>
           {section.checks.map((check) => (
             <CheckRow check={check} key={check.key} />
           ))}

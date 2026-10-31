@@ -1,6 +1,9 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, responsive, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,17 +17,13 @@ import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 
 const EMPTY_STATE_RECOMMEND_COUNT = 10;
 
-const styles = createStaticStyles(({ css }) => ({
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-
-    ${responsive.md} {
-      grid-template-columns: 1fr;
-    }
-  `,
-}));
+const styles = stylex.create({
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: { default: 'repeat(2, 1fr)', [media.md]: '1fr' },
+    gap: '12px',
+  },
+});
 
 interface EmptyStateProps {
   /** When set, scopes task creation to this agent and locks the assignee. */
@@ -77,7 +76,7 @@ const EmptyState = memo<EmptyStateProps>(({ agentId, projectId }) => {
               </Flexbox>
             )}
           </Flexbox>
-          <div className={styles.grid}>
+          <div {...stylex.props(styles.grid)}>
             {templatesState.mode === 'skeleton'
               ? Array.from({ length: templatesState.skeletonCount }).map((_, i) => (
                   <TaskTemplateCardSkeleton

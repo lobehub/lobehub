@@ -1,18 +1,15 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Popover, Text } from '@lobehub/ui';
+import { Flexbox, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  label: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  value: css`
-    font-size: 12px;
-  `,
-}));
+const styles = stylex.create({
+  label: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  value: { fontSize: '12px' },
+});
 
 /** Cost is fractions of a cent per round — two decimals would read as "$0.00". */
 export const formatRoundCost = (cost: number): string =>
@@ -97,8 +94,8 @@ const GoalRoundPopover = memo<GoalRoundPopoverProps>(
                 justify={'space-between'}
                 key={row.label}
               >
-                <span className={styles.label}>{row.label}</span>
-                <span className={styles.value}>{row.value}</span>
+                <span {...stylex.props(styles.label)}>{row.label}</span>
+                <span {...stylex.props(styles.value)}>{row.value}</span>
               </Flexbox>
             ))}
           </Flexbox>

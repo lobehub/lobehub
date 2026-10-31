@@ -1,4 +1,5 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 /**
  * Shared look for the task-side execution chips (environment + working
@@ -8,30 +9,28 @@ import { createStaticStyles, cssVar } from '@lobehub/ui';
  * the two chips sit next to each other in the same bar, so any drift between
  * two copies of these rules reads as a rendering bug rather than a choice.
  */
-export const taskExecutionStyles = createStaticStyles(({ css }) => ({
+export const taskExecutionStyles = stylex.create({
   /**
    * The compact chip used in the create composer's action bar. A caller that
    * wants its own row idiom (the task detail's properties rail does) passes a
    * class of its own instead — the two then never fight over the same box,
    * which inline sizing and a caller class would.
    */
-  chip: css`
-    flex: none;
-
-    height: 24px;
-    padding-block: 3px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
-  chipLabel: css`
-    overflow: hidden;
-    max-width: 160px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
+  chip: {
+    flex: 'none',
+    height: '24px',
+    paddingBlock: '3px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+  },
+  chipLabel: {
+    overflow: 'hidden',
+    maxWidth: '160px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   /**
    * The directory axis' trigger — deliberately NOT the chip the run location
    * wears.
@@ -42,99 +41,91 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
    * chat composer's own directory / repo pickers use, so the two surfaces agree
    * on the hierarchy as well.
    */
-  directoryTrigger: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-
-    transition: background 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  check: css`
-    flex: none;
-    margin-inline-start: auto;
-    color: ${cssVar.colorPrimary};
-  `,
+  directoryTrigger: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: 0,
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: 'background 0.2s',
+  },
+  check: { flex: 'none', marginInlineStart: 'auto', color: cssVar.colorPrimary },
   /** Provenance tag on a directory row (the device's own default). */
-  badge: css`
-    flex: none;
-
-    padding-inline: 5px;
-    border-radius: 999px;
-
-    font-size: 10px;
-    line-height: 15px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
+  badge: {
+    flex: 'none',
+    paddingInline: '5px',
+    borderRadius: '999px',
+    fontSize: '10px',
+    lineHeight: '15px',
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
   /**
    * Slot for the design-system checkbox in a clickable row: the ROW is the
    * control, so the box must not take the click a second time.
    */
-  checkboxSlot: css`
-    pointer-events: none;
-    display: inline-flex;
-    flex: none;
-  `,
-  /** What "follow the agent" resolves to, under the switch's description. */
-  followSummary: css`
-    min-width: 0;
-    padding-block-start: 2px;
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  /** The "follow the agent" row: a label block and its switch, aligned with the picker rows. */
-  switchRow: css`
-    padding-block: 6px;
-    padding-inline: 8px;
-  `,
-  emptyHint: css`
-    padding-block: 12px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: center;
-  `,
-  hintValue: css`
-    overflow: hidden;
-    max-width: 200px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  icon: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-  `,
+  checkboxSlot: { pointerEvents: 'none', display: 'inline-flex', flex: 'none' },
+  followSummary: {
+    minWidth: 0,
+    paddingBlockStart: '2px',
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+  switchRow: { paddingBlock: '6px', paddingInline: '8px' },
+  emptyHint: {
+    paddingBlock: '12px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'center',
+  },
+  /**
+   * A selection the task does NOT own, reported rather than offered.
+   *
+   * The directory axis follows the target: on a machine it is a path, in the
+   * cloud it is a repo, and when the task's target leaves nothing choosable the
+   * honest answer is a muted line saying what the run will use — not an
+   * interactive chip that looks like it can change something.
+   */
+  hint: {
+    display: 'flex',
+    flex: 'none',
+    gap: '4px',
+    alignItems: 'center',
+    minWidth: 0,
+    paddingInline: '6px',
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+    whiteSpace: 'nowrap',
+  },
+  hintValue: {
+    overflow: 'hidden',
+    maxWidth: '200px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  icon: { flex: 'none', color: cssVar.colorTextTertiary },
   /**
    * A trigger the caller may not use (no edit permission, or the agent's
    * execution environment is author-fixed). Dimmed and cursor-stopped so a chip
    * that cannot open its picker does not read as one that can.
    */
-  triggerDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.55;
-
-    &:hover {
-      background: transparent;
-    }
-  `,
+  triggerDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.55,
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
   /**
    * A picker row. Rendered on a native `<button>` (see `TaskPickerOption`), so
    * the reset below is what keeps it looking like the plain row it replaced:
@@ -145,64 +136,48 @@ export const taskExecutionStyles = createStaticStyles(({ css }) => ({
    * (`ConfigProvider` installs it) around whatever is focused, so a local
    * outline would only draw a second ring inside it.
    */
-  row: css`
-    cursor: pointer;
-
-    display: block;
-
-    box-sizing: border-box;
-    width: 100%;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border: none;
-    border-radius: ${cssVar.borderRadius};
-
-    font: inherit;
-    color: inherit;
-    text-align: start;
-
-    background: transparent;
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-    }
-  `,
-  rowActive: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  rowDesc: css`
-    overflow: hidden;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextDescription};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  rowTitle: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  scroll: css`
-    overflow-y: auto;
-    max-height: 320px;
-  `,
-  sectionTitle: css`
-    padding-block: 6px 2px;
-    padding-inline: 8px;
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+  row: {
+    cursor: { 'default': 'pointer', ':disabled': 'not-allowed' },
+    display: 'block',
+    boxSizing: 'border-box',
+    width: '100%',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
+    font: 'inherit',
+    color: 'inherit',
+    textAlign: 'start',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    transition: 'background-color 0.2s',
+  },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  rowDesc: {
+    overflow: 'hidden',
+    fontSize: '11px',
+    color: cssVar.colorTextDescription,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rowTitle: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  scroll: { overflowY: 'auto', maxHeight: '320px' },
+  sectionTitle: {
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '2px',
+    paddingInline: '8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: cssVar.colorTextQuaternary,
+  },
+});

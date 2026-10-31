@@ -1,5 +1,7 @@
 import { canWorkspaceRoleBeTaskAssignee } from '@lobechat/const/rbac';
-import { createStaticStyles, cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { UserRoundX } from 'lucide-react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -35,34 +37,31 @@ type MemberOption =
   | { key: 'unassigned'; kind: 'unassigned' }
   | { key: string; kind: 'member'; member: WorkspaceMemberRow };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  searchInput: css`
-    width: 100%;
-    padding-block: 6px;
-    padding-inline: 10px;
-    border: none;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: inherit;
-    font-size: 13px;
-    color: ${cssVar.colorText};
-
-    background: transparent;
-    outline: none;
-
-    &::placeholder {
-      color: ${cssVar.colorTextPlaceholder};
-    }
-  `,
-  sectionHeader: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  searchInput: {
+    'width': '100%',
+    'paddingBlock': '6px',
+    'paddingInline': '10px',
+    'borderStyle': 'none',
+    'borderBlockEndWidth': '1px',
+    'borderBlockEndStyle': 'solid',
+    'borderBlockEndColor': cssVar.colorBorderSecondary,
+    'fontFamily': 'inherit',
+    'fontSize': '13px',
+    'color': cssVar.colorText,
+    'backgroundColor': 'transparent',
+    'backgroundImage': 'none',
+    'outlineStyle': 'none',
+    '::placeholder': { color: cssVar.colorTextPlaceholder },
+  },
+  sectionHeader: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const memberName = (member: WorkspaceMemberRow) =>
   member.user?.fullName?.trim() ||
@@ -290,7 +289,7 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
             {activeWorkspaceId && (
               <input
                 autoFocus
-                className={styles.searchInput}
+                {...stylex.props(styles.searchInput)}
                 placeholder={t('taskList.assigneeSearch.memberPlaceholder')}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -315,7 +314,7 @@ const AssigneeMemberSelector = memo<AssigneeMemberSelectorProps>(
                 {showUnassigned && renderOption({ key: 'unassigned', kind: 'unassigned' })}
                 {selfMember && renderOption(toMemberOption(selfMember))}
                 {otherMembers.length > 0 && (
-                  <div className={styles.sectionHeader}>
+                  <div {...stylex.props(styles.sectionHeader)}>
                     {t('taskList.assigneeSelector.workspaceMemberGroup')}
                   </div>
                 )}

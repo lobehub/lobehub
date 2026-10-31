@@ -4,8 +4,6 @@ import type { TaskStatus } from '@lobechat/types';
 import {
   Button,
   createModal,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   ScrollArea,
@@ -13,35 +11,37 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { STATUS_META } from './taskStatusMeta';
 
-const styles = createStaticStyles(({ css }) => ({
-  actions: css`
-    padding: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  content: css`
-    padding-block: 20px 16px;
-    padding-inline: 20px;
-  `,
-  list: css`
-    max-height: 280px;
-    margin-block-start: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  row: css`
-    padding-block: 6px;
-    padding-inline: 12px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    padding: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  content: { paddingBlockStart: '20px', paddingBlockEnd: '16px', paddingInline: '20px' },
+  list: {
+    maxHeight: '280px',
+    marginBlockStart: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  row: {
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+});
 
 interface TaskStatusCascadeModalContentProps {
   onApply: (includeSubtasks: boolean) => Promise<void>;
@@ -114,7 +114,7 @@ const TaskStatusCascadeModalContent = ({
 
   return (
     <Flexbox>
-      <Flexbox className={styles.content} gap={8}>
+      <Flexbox className={stylex.props(styles.content).className} gap={8}>
         <Text as={'h3'} weight={'bold'}>
           {t('taskDetail.statusCascade.title')}
         </Text>
@@ -124,7 +124,7 @@ const TaskStatusCascadeModalContent = ({
             status: t(`taskDetail.status.${targetStatus}`),
           })}
         </Text>
-        <ScrollArea className={styles.list}>
+        <ScrollArea className={stylex.props(styles.list).className}>
           {subtasks.map((task) => {
             const status = task.status as TaskStatus | undefined;
             const meta = status ? STATUS_META[status] : STATUS_META.backlog;
@@ -133,7 +133,7 @@ const TaskStatusCascadeModalContent = ({
               <Flexbox
                 horizontal
                 align={'center'}
-                className={styles.row}
+                className={stylex.props(styles.row).className}
                 gap={10}
                 key={task.identifier}
               >
@@ -149,7 +149,12 @@ const TaskStatusCascadeModalContent = ({
           })}
         </ScrollArea>
       </Flexbox>
-      <Flexbox horizontal className={styles.actions} gap={8} justify={'space-between'}>
+      <Flexbox
+        horizontal
+        className={stylex.props(styles.actions).className}
+        gap={8}
+        justify={'space-between'}
+      >
         <Button disabled={!!loadingAction} onClick={handleCancel}>
           {t('taskDetail.statusCascade.cancel')}
         </Button>

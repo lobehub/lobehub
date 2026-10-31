@@ -5,7 +5,7 @@ import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { styles } from '@/features/AgentTasks/shared/style';
+import breadcrumbStyles from '@/features/AgentTasks/shared/breadcrumb.module.css';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -35,7 +35,7 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
 
   return (
     <Breadcrumb
-      className={styles.breadcrumb}
+      className={breadcrumbStyles.breadcrumb}
       separator={<Icon icon={ChevronRight} />}
       items={
         goalsEnabled

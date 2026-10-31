@@ -1,17 +1,9 @@
 'use client';
 
 import type { AcceptanceStatus } from '@lobechat/types';
-import {
-  Block,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Divider,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { Block, Button, Divider, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronRight, History, ListTodo, Plus } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -50,90 +42,74 @@ import { useElapsed } from './useElapsed';
  * the rows carry.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  attempt: css`
-    padding-block: 6px;
-
-    & + & {
-      border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
-    }
-  `,
-  blockedHead: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  body: css`
-    /* Aligned with the row title (glyph + gap), not floated on its own indent. */
-    padding-block: 8px 14px;
-    padding-inline: 26px 12px;
-  `,
+const styles = stylex.create({
+  attempt: {
+    paddingBlock: '6px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'dashed' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  blockedHead: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+  },
+  // Aligned with the row title (glyph + gap), not floated on its own indent.
+  body: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '14px',
+    paddingInlineStart: '26px',
+    paddingInlineEnd: '12px',
+  },
   // A gate is an intent card: lifted off the list so it reads as the one thing
   // asking for the owner, not another row.
-  decisionCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-  deps: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  dim: css`
-    opacity: 0.55;
-    transition: opacity 0.15s;
-
-    &:hover {
-      opacity: 1;
-    }
-  `,
-  label: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  list: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgContainer};
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-  num: css`
-    flex: none;
-
-    min-width: 22px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  option: css`
-    display: grid;
-    grid-template-columns: 128px 1fr;
-    gap: 8px;
-    align-items: baseline;
-  `,
-}));
+  decisionCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  deps: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+  },
+  dim: {
+    opacity: { 'default': 0.55, ':hover': 1 },
+    transition: 'opacity 0.15s',
+  },
+  label: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  list: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+  num: {
+    flex: 'none',
+    minWidth: '22px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+  },
+});
 
 export interface FrontierActions {
   addTask: (title: string, description?: string) => Promise<void>;
@@ -206,7 +182,7 @@ const AttemptReason = memo<{ reason?: string | null }>(({ reason }) => {
   const { t } = useTranslation('chat');
   const copies = coordinatorReasonCopies(reason);
   return (
-    <Text ellipsis fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
+    <Text ellipsis fontSize={12} style={{ flex: '1', minWidth: 0 }} type={'secondary'}>
       {copies ? copies.map((copy) => t(copy.key as any, copy.params)).join('; ') : (reason ?? '')}
     </Text>
   );
@@ -220,17 +196,19 @@ const AttemptLedger = memo<{ view: GoalNodeView }>(({ view }) => {
 
   return (
     <Flexbox gap={0}>
-      <span className={styles.label}>{t('goalProcess.attempts.title')}</span>
+      <span className={stylex.props(styles.label).className}>
+        {t('goalProcess.attempts.title')}
+      </span>
       {view.attempts.map((attempt) => (
         <Flexbox
           horizontal
           align={'baseline'}
-          className={styles.attempt}
+          className={stylex.props(styles.attempt, stylex.defaultMarker()).className}
           gap={10}
           key={attempt.index}
         >
           <Text
-            className={styles.mono}
+            className={stylex.props(styles.mono).className}
             fontSize={12}
             style={{ flex: 'none', width: 60 }}
             type={'secondary'}
@@ -264,7 +242,7 @@ const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
   const elapsed = useElapsed(startedAt);
   if (!elapsed) return null;
   return (
-    <Text className={styles.mono} fontSize={12} type={'secondary'}>
+    <Text className={stylex.props(styles.mono).className} fontSize={12} type={'secondary'}>
       {elapsed}
     </Text>
   );
@@ -288,7 +266,12 @@ QuotaResumeTime.displayName = 'GoalQuotaResumeTime';
 const DoneTime = memo<{ view: GoalNodeView }>(({ view }) => {
   const { text, title } = useActivityTime(view.node.resolvedAt ?? view.node.updatedAt);
   return (
-    <Text className={styles.mono} fontSize={12} title={title} type={'secondary'}>
+    <Text
+      className={stylex.props(styles.mono).className}
+      fontSize={12}
+      title={title}
+      type={'secondary'}
+    >
       {text || '—'}
     </Text>
   );
@@ -441,7 +424,10 @@ const GateCard = memo<{
         : undefined;
     if (releaseGateAcceptanceId)
       return (
-        <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
+        <div
+          className={stylex.props(styles.decisionCard).className}
+          data-goal-gate={view.decision!.id}
+        >
           <ReleaseGateEntry
             acceptanceId={releaseGateAcceptanceId}
             decision={view.decision!}
@@ -450,7 +436,10 @@ const GateCard = memo<{
         </div>
       );
     return (
-      <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
+      <div
+        className={stylex.props(styles.decisionCard).className}
+        data-goal-gate={view.decision!.id}
+      >
         <GoalDecisionCase
           agentId={goalAgentId}
           basis={view.node.description}
@@ -544,13 +533,15 @@ const FrontierRow = memo<{
   return (
     <Block
       clickable
-      className={item.kind === 'done' ? styles.dim : undefined}
+      className={stylex.props(item.kind === 'done' && styles.dim).className}
       padding={12}
       variant={'borderless'}
       onClick={() => onSelect(node.id)}
     >
       <Flexbox horizontal align={'center'} gap={10}>
-        {view.seq !== undefined && <span className={styles.num}>#{view.seq}</span>}
+        {view.seq !== undefined && (
+          <span className={stylex.props(styles.num).className}>#{view.seq}</span>
+        )}
         <RowGlyph kind={item.kind} view={view} />
         {view.assigneeAgentId && <AssigneeProfileAvatar agentId={view.assigneeAgentId} />}
         <Text ellipsis style={{ flexShrink: 1, maxWidth: '60%', minWidth: 0 }} weight={500}>
@@ -562,7 +553,7 @@ const FrontierRow = memo<{
           </Tag>
         )}
         {deps.length > 0 && (
-          <span className={styles.deps}>
+          <span className={stylex.props(styles.deps).className}>
             {t('goalProcess.frontier.dependsOn', { refs: deps.map((d) => `#${d}`).join(' ') })}
           </span>
         )}
@@ -583,7 +574,7 @@ const FrontierRow = memo<{
         // height, so a click aimed anywhere natural landed in dead space while
         // the pointer cursor still promised otherwise. Only the form below opts
         // out.
-        <Flexbox className={styles.body} gap={14}>
+        <Flexbox className={stylex.props(styles.body).className} gap={14}>
           {item.kind === 'gate' && view.decision && (
             <Text fontSize={13} weight={500}>
               {gateReasonText ?? view.decision.question}
@@ -705,7 +696,7 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
         pendingClarifications.length > 0 ||
         graph.blocked.length > 0 ||
         graph.frontier.length === 0) && (
-        <div className={styles.list}>
+        <div className={stylex.props(styles.list).className}>
           <Block gap={0} padding={2} variant={'borderless'}>
             {graph.frontier.length === 0 &&
               (planning ? (
@@ -764,7 +755,10 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
           {graph.blocked.length > 0 && (
             <>
               <Divider dashed style={{ margin: 0 }} />
-              <div className={styles.blockedHead} onClick={() => setShowBlocked(!showBlocked)}>
+              <div
+                className={stylex.props(styles.blockedHead).className}
+                onClick={() => setShowBlocked(!showBlocked)}
+              >
                 <Icon icon={showBlocked ? ChevronDown : ChevronRight} size={12} />
                 <span>{t('goalProcess.frontier.blocked', { count: graph.blocked.length })}</span>
               </div>

@@ -1,4 +1,6 @@
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -27,49 +29,45 @@ const AUTO_DISMISS_DELAY = 3000;
 /** Lets a burst of dismissals finish before the dock changes shape. */
 const SHAPE_SETTLE_DELAY = 400;
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: fixed;
-    z-index: 100;
-    inset-block-end: 24px;
-    inset-inline-end: 24px;
-
-    overflow: hidden;
-
-    width: 340px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  groupHead: css`
-    border-block-end: 1px solid ${cssVar.colorFillQuaternary};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextDescription};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  head: css`
-    cursor: pointer;
-    padding-block: 9px;
-    padding-inline: 12px;
-  `,
-  headDivider: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  list: css`
-    overflow-y: auto;
-    max-height: 340px;
-  `,
-  row: css`
-    &:not(:first-child) {
-      border-block-start: 1px solid ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    position: 'fixed',
+    zIndex: 100,
+    insetBlockEnd: '24px',
+    insetInlineEnd: '24px',
+    overflow: 'hidden',
+    width: '340px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  groupHead: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorFillQuaternary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextDescription,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  head: { cursor: 'pointer', paddingBlock: '9px', paddingInline: '12px' },
+  headDivider: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  list: { overflowY: 'auto', maxHeight: '340px' },
+  row: {
+    borderBlockStartWidth: { 'default': null, ':not(:first-child)': '1px' },
+    borderBlockStartStyle: { 'default': null, ':not(:first-child)': 'solid' },
+    borderBlockStartColor: { 'default': null, ':not(:first-child)': cssVar.colorFillQuaternary },
+  },
+});
 
 const useSettledShape = (count: number): 'solo' | 'panel' => {
   const [shape, setShape] = useState<'solo' | 'panel'>(count > 1 ? 'panel' : 'solo');
@@ -171,18 +169,18 @@ const TaskDock = memo(() => {
   // whatever it left behind.
   if (shape === 'solo') {
     return (
-      <Flexbox className={styles.container}>
+      <Flexbox className={stylex.props(styles.container).className}>
         <Item {...tasks[0]} solo />
       </Flexbox>
     );
   }
 
   return (
-    <Flexbox className={styles.container}>
+    <Flexbox className={stylex.props(styles.container).className}>
       <Flexbox
         horizontal
         align={'center'}
-        className={`${styles.head} ${expand ? styles.headDivider : ''}`}
+        className={stylex.props(styles.head, expand && styles.headDivider).className}
         gap={10}
         onClick={() => setExpand(!expand)}
       >
@@ -235,13 +233,13 @@ const TaskDock = memo(() => {
             style={{ overflow: 'hidden' }}
             transition={{ duration: 0.22, ease: 'easeInOut' }}
           >
-            <Flexbox className={styles.list}>
+            <Flexbox className={stylex.props(styles.list).className}>
               {groups.map((group) => (
                 <Flexbox key={group.label}>
                   <Flexbox
                     horizontal
                     align={'center'}
-                    className={styles.groupHead}
+                    className={stylex.props(styles.groupHead).className}
                     justify={'space-between'}
                     paddingBlock={5}
                     // The count aligns with the rows' action glyphs, which sit
@@ -256,7 +254,7 @@ const TaskDock = memo(() => {
                     </span>
                   </Flexbox>
                   {group.tasks.map((task) => (
-                    <Flexbox className={styles.row} key={task.id}>
+                    <Flexbox className={stylex.props(styles.row).className} key={task.id}>
                       <Item {...task} />
                     </Flexbox>
                   ))}

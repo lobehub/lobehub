@@ -1,0 +1,39 @@
+/* Squeezes the lobe-ui Breadcrumb's list onto one line. It targets the <ol> /
+   <li> the component renders, which StyleX cannot reach. */
+.breadcrumb {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.breadcrumb ol {
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+}
+
+.breadcrumb li {
+  overflow: hidden;
+  display: flex;
+  flex-shrink: 1;
+  align-items: center;
+
+  min-width: 0;
+}
+
+.breadcrumb li > [aria-hidden='true'] {
+  overflow: visible;
+  flex-shrink: 0;
+  min-width: auto;
+  margin-inline: 2px;
+}
+
+.breadcrumb li > :not([aria-hidden='true']) {
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+
+  min-width: 0;
+  padding-block: 2px;
+  padding-inline: 6px;
+  border-radius: var(--lobe-border-radius);
+}

@@ -1,174 +1,102 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  breadcrumb: css`
-    overflow: hidden;
-    min-width: 0;
-
-    ol {
-      flex-wrap: nowrap;
-      align-items: center;
-      min-width: 0;
-    }
-
-    li {
-      overflow: hidden;
-      display: flex;
-      flex-shrink: 1;
-      align-items: center;
-
-      min-width: 0;
-    }
-
-    li > [aria-hidden='true'] {
-      overflow: visible;
-      flex-shrink: 0;
-      min-width: auto;
-      margin-inline: 2px;
-    }
-
-    li > :not([aria-hidden='true']) {
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-
-      min-width: 0;
-      padding-block: 2px;
-      padding-inline: 6px;
-      border-radius: ${cssVar.borderRadius};
-    }
-  `,
-
-  subtaskTreeTitle: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
+// The task breadcrumb's list reset lives in `breadcrumb.module.css`: it selects
+// the <ol> / <li> the Breadcrumb renders.
+export const styles = stylex.create({
+  subtaskTreeTitle: { color: cssVar.colorTextSecondary },
 
   /**
    * One line of the activity timeline. The rail is drawn per line so a run of
    * lines joins up; the first and last line of a run only draw their inner
    * half, so the rail starts and ends at a mark.
+   *
+   * Inset so the 16px mark is centred under the 24px avatar inside a comment
+   * card (8px card padding + 12px to the avatar's centre): the rail and the
+   * faces in the cards sit on one vertical line, the cards just run wider.
    */
-  activityLine: css`
-    position: relative;
-
-    /*
-     * Inset so the 16px mark is centred under the 24px avatar inside a comment
-     * card (8px card padding + 12px to the avatar's centre): the rail and the
-     * faces in the cards sit on one vertical line, the cards just run wider.
-     */
-    padding-block: 5px;
-    padding-inline-start: 12px;
-
-    &::before {
-      content: '';
-
-      position: absolute;
-      inset-block: 0;
-      inset-inline-start: 19.5px;
-
-      width: 1px;
-
-      background: ${cssVar.colorBorderSecondary};
-    }
-
-    &:first-child::before {
-      inset-block-start: 50%;
-    }
-
-    &:last-child::before {
-      inset-block-end: 50%;
-    }
-
-    &:only-child::before {
-      display: none;
-    }
-  `,
+  activityLine: {
+    'position': 'relative',
+    'paddingBlock': '5px',
+    'paddingInlineStart': '12px',
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      insetBlockStart: { 'default': 0, ':first-child': '50%' },
+      insetBlockEnd: { 'default': 0, ':last-child': '50%' },
+      insetInlineStart: '19.5px',
+      display: { 'default': null, ':only-child': 'none' },
+      width: '1px',
+      backgroundColor: cssVar.colorBorderSecondary,
+      backgroundImage: 'none',
+    },
+  },
 
   /** The 16px mark on the rail: a type icon or a face. Opaque so it covers the rail. */
-  activityMark: css`
-    position: relative;
-    z-index: 1;
-
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorBgContainer};
-  `,
+  activityMark: {
+    position: 'relative',
+    zIndex: 1,
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '16px',
+    height: '16px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
 
   /** A run of adjacent lines; cancels the feed's card gap so they sit tight. */
-  activityTimeline: css`
-    margin-block: -4px;
-  `,
+  activityTimeline: { marginBlock: '-4px' },
 
-  activityAvatar: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
+  activityAvatar: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    color: cssVar.colorTextQuaternary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
 
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
+  /** The comment actions appear while the card is hovered or holds focus. */
+  commentCard: { position: 'relative' },
 
-    color: ${cssVar.colorTextQuaternary};
+  commentActions: {
+    position: 'absolute',
+    insetBlockStart: '8px',
+    insetInlineEnd: '8px',
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':focus-within')]: 1,
+    },
+    transition: 'opacity 0.15s ease',
+  },
 
-    background: ${cssVar.colorFillTertiary};
-  `,
+  agentAuthorName: {
+    cursor: 'pointer',
+    color: { 'default': null, ':hover': cssVar.colorText },
+    transition: 'color 0.15s ease',
+  },
 
-  commentCard: css`
-    position: relative;
-
-    .comment-actions {
-      opacity: 0;
-      transition: opacity 0.15s ease;
-    }
-
-    &:hover .comment-actions,
-    &:focus-within .comment-actions {
-      opacity: 1;
-    }
-  `,
-
-  commentActions: css`
-    position: absolute;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
-  `,
-
-  agentAuthorName: css`
-    cursor: pointer;
-    transition: color 0.15s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-
-  commentInputCard: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-    border: 1px solid transparent;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillTertiary};
-
-    transition:
-      background 0.15s ease,
-      border-color 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-within {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+  commentInputCard: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': 'transparent', ':focus-within': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: {
+      'default': cssVar.colorFillTertiary,
+      ':hover': cssVar.colorFillSecondary,
+      ':focus-within': cssVar.colorFillTertiary,
+    },
+    backgroundImage: 'none',
+    transition: 'background 0.15s ease, border-color 0.15s ease',
+  },
+});

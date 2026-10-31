@@ -2,7 +2,8 @@
 
 import type { WorkingDirConfig, WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
-import { cx, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ChevronDownIcon, FolderPlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +17,7 @@ import {
 } from '@/helpers/workingDirectoryPath';
 import { deviceService } from '@/services/device';
 import { useDeviceList } from '@/store/device';
+import { sx } from '@/styles/sx';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
 import TaskPickerOption from './TaskPickerOption';
@@ -134,10 +136,12 @@ const TaskWorkingDirectoryChip = memo<TaskWorkingDirectoryChipProps>(
         role={'group'}
         style={{ maxWidth: 'calc(100vw - 48px)', width: 320 }}
       >
-        <div className={styles.sectionTitle}>{t('taskExecution.workingDirectory')}</div>
-        <div className={styles.scroll}>
+        <div className={stylex.props(styles.sectionTitle).className}>
+          {t('taskExecution.workingDirectory')}
+        </div>
+        <div className={stylex.props(styles.scroll).className}>
           {recents.length === 0 ? (
-            <div className={styles.emptyHint}>
+            <div className={stylex.props(styles.emptyHint).className}>
               {t('workingDirectory.noRecent', { ns: 'device' })}
             </div>
           ) : (
@@ -156,33 +160,48 @@ const TaskWorkingDirectoryChip = memo<TaskWorkingDirectoryChipProps>(
                   <DirIcon repoType={entry.repoType} />
                   <Flexbox flex={1} style={{ minWidth: 0 }}>
                     <Flexbox horizontal align={'center'} gap={6}>
-                      <div className={styles.rowTitle}>{getWorkingDirectoryName(path) ?? path}</div>
+                      <div className={stylex.props(styles.rowTitle).className}>
+                        {getWorkingDirectoryName(path) ?? path}
+                      </div>
                       {isDefault && (
-                        <span className={styles.badge}>
+                        <span className={stylex.props(styles.badge).className}>
                           {t('workingDirectory.defaultBadge', { ns: 'device' })}
                         </span>
                       )}
                     </Flexbox>
-                    <div className={styles.rowDesc}>{path}</div>
+                    <div className={stylex.props(styles.rowDesc).className}>{path}</div>
                   </Flexbox>
-                  {isActive && <Icon className={styles.check} icon={CheckIcon} size={14} />}
+                  {isActive && (
+                    <Icon
+                      className={stylex.props(styles.check).className}
+                      icon={CheckIcon}
+                      size={14}
+                    />
+                  )}
                 </TaskPickerOption>
               );
             })
           )}
         </div>
         <TaskPickerOption disabled={disabled} onSelect={() => handleAdd()}>
-          <Icon className={styles.icon} icon={FolderPlusIcon} size={16} />
-          <div className={styles.rowTitle}>{t('workingDirectory.addFolder', { ns: 'device' })}</div>
+          <Icon className={stylex.props(styles.icon).className} icon={FolderPlusIcon} size={16} />
+          <div className={stylex.props(styles.rowTitle).className}>
+            {t('workingDirectory.addFolder', { ns: 'device' })}
+          </div>
         </TaskPickerOption>
       </Flexbox>
     );
 
     // The muted directory trigger, not a chip — see `directoryTrigger`.
     const trigger = (
-      <div className={cx(className ?? styles.directoryTrigger, disabled && styles.triggerDisabled)}>
+      <div
+        {...sx(
+          [className ? null : styles.directoryTrigger, disabled && styles.triggerDisabled],
+          className,
+        )}
+      >
         <DirIcon repoType={current?.repoType} size={14} />
-        <Text ellipsis className={styles.chipLabel} fontSize={12}>
+        <Text ellipsis className={stylex.props(styles.chipLabel).className} fontSize={12}>
           {chipLabel}
         </Text>
         <Icon icon={ChevronDownIcon} size={12} />

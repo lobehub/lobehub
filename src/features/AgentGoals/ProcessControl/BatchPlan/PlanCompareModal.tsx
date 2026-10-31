@@ -1,15 +1,8 @@
 'use client';
 
-import {
-  CodeDiff,
-  createModal,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  type ModalInstance,
-  Select,
-  Text,
-} from '@lobehub/ui';
+import { CodeDiff, createModal, Flexbox, type ModalInstance, Select, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,30 +12,27 @@ import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 
 import type { PlanVersion } from './planVersion';
 
-const styles = createStaticStyles(({ css }) => ({
-  bar: css`
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorBgLayout};
-  `,
-  body: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-    padding: 16px;
-  `,
-  root: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: 100%;
-    height: 100%;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  bar: {
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  body: { overflow: 'auto', flex: '1', minHeight: '0', padding: '16px' },
+  root: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface PlanCompareProps {
   /** Compared with by default; the version before `target` when omitted. */
@@ -69,8 +59,8 @@ const PlanCompare = memo<PlanCompareProps>(({ base, target, versions }) => {
   const after = bodyOf(versions.find((version) => version.revision === to));
 
   return (
-    <div data-plan-compare className={styles.root}>
-      <Flexbox horizontal align={'center'} className={styles.bar} gap={8}>
+    <div data-plan-compare {...stylex.props(styles.root)}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.bar).className} gap={8}>
         <Select
           options={options}
           size={'small'}
@@ -87,7 +77,7 @@ const PlanCompare = memo<PlanCompareProps>(({ base, target, versions }) => {
           onChange={(value) => setTo(Number(value))}
         />
       </Flexbox>
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         {before.trim() === after.trim() ? (
           <Text type={'secondary'}>{t('goalBatch.planPanel.same', { base: from })}</Text>
         ) : (

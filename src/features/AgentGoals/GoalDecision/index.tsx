@@ -2,16 +2,9 @@
 
 import { GOAL_BATCH_BREAK_OPTION, GOAL_BATCH_RELEASE_OPTION } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
-import {
-  Avatar,
-  Center,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Avatar, Center, Flexbox, Icon, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MonitorCog } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -185,43 +178,34 @@ export const useGateOptionCopy = () => {
   }, [i18n.language, t]);
 };
 
-const contextStyles = createStaticStyles(({ css, cssVar }) => ({
-  block: css`
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 8px 16px;
-
-    padding-block: 12px;
-    padding-inline: 14px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    margin-block-start: 2px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  label: css`
-    font-size: 13px;
-    line-height: 22px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    cursor: pointer;
-    font-weight: 500;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-}));
+const contextStyles = stylex.create({
+  block: {
+    display: 'grid',
+    gridTemplateColumns: 'max-content 1fr',
+    rowGap: '8px',
+    columnGap: '16px',
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    marginBlockStart: '2px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  label: { fontSize: '13px', lineHeight: '22px', color: cssVar.colorTextSecondary },
+  title: {
+    cursor: 'pointer',
+    fontWeight: 500,
+    color: { 'default': null, ':hover': cssVar.colorPrimary },
+  },
+});
 
 /**
  * What the owner needs before reading the question: the Task that stopped —
@@ -237,23 +221,27 @@ const GateContext = ({
 }) => {
   const { t } = useTranslation('chat');
   return (
-    <div className={contextStyles.block}>
+    <div {...stylex.props(contextStyles.block)}>
       {task && (
         <>
-          <span className={contextStyles.label}>{t('goalProcess.decision.context.task')}</span>
+          <span {...stylex.props(contextStyles.label)}>
+            {t('goalProcess.decision.context.task')}
+          </span>
           <div style={{ lineHeight: '22px', minWidth: 0 }}>
-            <span className={contextStyles.title} onClick={task.onOpen}>
+            <span {...stylex.props(contextStyles.title)} onClick={task.onOpen}>
               {task.title}
             </span>
             {task.description && (
-              <div className={contextStyles.description}>{task.description}</div>
+              <div {...stylex.props(contextStyles.description)}>{task.description}</div>
             )}
           </div>
         </>
       )}
       {summary && (
         <>
-          <span className={contextStyles.label}>{t('goalProcess.decision.context.decision')}</span>
+          <span {...stylex.props(contextStyles.label)}>
+            {t('goalProcess.decision.context.decision')}
+          </span>
           <span style={{ lineHeight: '22px' }}>{summary}</span>
         </>
       )}

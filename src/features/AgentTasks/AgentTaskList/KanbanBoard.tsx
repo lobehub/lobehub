@@ -9,7 +9,8 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Center, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -44,17 +45,17 @@ import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from
 import type { TaskListViewOptions } from './listViewOptions';
 import { getCompletedWithin, HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
 
-const styles = createStaticStyles(({ css }) => ({
-  board: css`
-    overflow-x: auto;
-    display: flex;
-    flex: 1;
-    gap: 8px;
-
-    padding-block: 0 16px;
-    padding-inline: 12px;
-  `,
-}));
+const styles = stylex.create({
+  board: {
+    overflowX: 'auto',
+    display: 'flex',
+    flex: '1',
+    gap: '8px',
+    paddingBlockStart: '0',
+    paddingBlockEnd: '16px',
+    paddingInline: '12px',
+  },
+});
 
 interface KanbanBoardProps {
   /** When set, scopes the board (and task creation) to a single agent. */
@@ -283,7 +284,7 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
         }));
 
   const skeletonBoard = (
-    <Flexbox horizontal className={styles.board}>
+    <Flexbox horizontal className={stylex.props(styles.board).className}>
       {skeletonColumns.map((col) => (
         <KanbanColumn
           loading
@@ -313,7 +314,7 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
     >
-      <Flexbox horizontal className={styles.board}>
+      <Flexbox horizontal className={stylex.props(styles.board).className}>
         {visibleColumns.map((col) => {
           const group = currentTaskGroups.find((item) => item.key === col.key);
           // "My tasks" offers no create entry (its list view has none either):

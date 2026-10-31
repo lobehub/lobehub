@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,58 +22,44 @@ interface GoalRound {
   usage?: { cost: number; tokens: number } | null;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  dot: css`
-    position: absolute;
-    inset-block-end: -2px;
-    inset-inline-end: -2px;
+const ACTIVE = ':is([data-active="true"])';
 
-    width: 7px;
-    height: 7px;
-    border: 2px solid ${cssVar.colorBgContainer};
-    border-radius: 50%;
-
-    background: ${cssVar.colorError};
-  `,
-  rail: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  round: css`
-    cursor: pointer;
-
-    position: relative;
-
-    height: 11px;
-    border-radius: 4px;
-
-    background: ${cssVar.colorInfoBgHover};
-
-    transition:
-      transform 0.15s,
-      filter 0.15s;
-
-    &[data-active='true'] {
-      background: ${cssVar.colorInfo};
-    }
-
-    /* Grow vertically and brighten — never horizontally: width is what encodes
-      the round's duration, so stretching it on hover would lie about the data. */
-    &:hover {
-      transform: scaleY(1.45);
-      filter: brightness(1.25);
-    }
-  `,
-  total: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  dot: {
+    position: 'absolute',
+    insetBlockEnd: '-2px',
+    insetInlineEnd: '-2px',
+    width: '7px',
+    height: '7px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorError,
+    backgroundImage: 'none',
+  },
+  rail: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '5px',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  round: {
+    cursor: 'pointer',
+    position: 'relative',
+    height: '11px',
+    borderRadius: '4px',
+    backgroundColor: { default: cssVar.colorInfoBgHover, [ACTIVE]: cssVar.colorInfo },
+    backgroundImage: 'none',
+    transition: 'transform 0.15s, filter 0.15s',
+    // Grow vertically and brighten — never horizontally: width is what encodes
+    // the round's duration, so stretching it on hover would lie about the data.
+    transform: { 'default': null, ':hover': 'scaleY(1.45)' },
+    filter: { 'default': null, ':hover': 'brightness(1.25)' },
+  },
+  total: { flex: 'none', fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 export const formatGoalDuration = (milliseconds: number) => {
   const minutes = milliseconds / 60_000;
@@ -147,7 +135,7 @@ const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
       <Text fontSize={12} type={'secondary'}>
         {t('taskDetail.goalTimeline.title')}
       </Text>
-      <div className={styles.rail}>
+      <div className={stylex.props(styles.rail).className}>
         {rounds.map(({ report, run, usage }, index) => (
           <GoalRoundPopover
             duration={formatGoalDuration(durations[index])}
@@ -158,7 +146,7 @@ const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
             verdict={report?.verdict}
           >
             <div
-              className={styles.round}
+              className={stylex.props(styles.round).className}
               data-active={run.status === 'running' || index === rounds.length - 1}
               data-goal-round={run.roundIndex ?? index + 1}
               style={{ width: goalRoundWidth(durations[index], base) }}
@@ -166,13 +154,13 @@ const GoalRoundTimeline = memo<{ rounds?: GoalRound[] }>(({ rounds = [] }) => {
               {/* An agent-verified round may carry no report at all, so the
                 run's own status is the more reliable failure signal. */}
               {(report?.verdict === 'failed' || run.status === 'failed') && (
-                <span className={styles.dot} />
+                <span className={stylex.props(styles.dot).className} />
               )}
             </div>
           </GoalRoundPopover>
         ))}
         {/* Reads as the rail's own caption, right where the rounds end. */}
-        <span className={styles.total}>
+        <span className={stylex.props(styles.total).className}>
           {t('taskDetail.goalTimeline.rounds', { count: rounds.length })} ·{' '}
           {formatGoalDuration(elapsed)}
         </span>

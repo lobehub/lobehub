@@ -1,15 +1,8 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import {
-  confirmModal,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Popover,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { confirmModal, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronRight, UserRoundX } from 'lucide-react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';
@@ -87,70 +80,57 @@ interface PickerScope {
 
 const RECENT_SECTION_ID = 'recent';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  searchInput: css`
-    width: 100%;
-    padding-block: 6px;
-    padding-inline: 10px;
-    border: none;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: inherit;
-    font-size: 13px;
-    color: ${cssVar.colorText};
-
-    background: transparent;
-    outline: none;
-
-    &::placeholder {
-      color: ${cssVar.colorTextPlaceholder};
-    }
-  `,
-  sectionHeader: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sectionToggle: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    width: 100%;
-    padding-block: 4px;
-    padding-inline: 4px 8px;
-    border: none;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-family: inherit;
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-    text-align: start;
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  sectionToggleTitle: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
-
+const styles = stylex.create({
+  searchInput: {
+    'width': '100%',
+    'paddingBlock': '6px',
+    'paddingInline': '10px',
+    'borderStyle': 'none',
+    'borderBlockEndWidth': '1px',
+    'borderBlockEndStyle': 'solid',
+    'borderBlockEndColor': cssVar.colorBorderSecondary,
+    'fontFamily': 'inherit',
+    'fontSize': '13px',
+    'color': cssVar.colorText,
+    'backgroundColor': 'transparent',
+    'backgroundImage': 'none',
+    'outlineStyle': 'none',
+    '::placeholder': { color: cssVar.colorTextPlaceholder },
+  },
+  sectionHeader: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: cssVar.colorTextTertiary,
+  },
+  sectionToggle: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    width: '100%',
+    paddingBlock: '4px',
+    paddingInlineStart: '4px',
+    paddingInlineEnd: '8px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadiusSM,
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    textAlign: 'start',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  sectionToggleTitle: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 const triggerStyle: CSSProperties = {
   alignItems: 'center',
   display: 'inline-flex',
@@ -588,20 +568,20 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       if (row.kind === 'option') return renderOption(row.option);
       if (row.kind === 'scope')
         return (
-          <div className={styles.sectionHeader} key={`scope:${row.key}`}>
+          <div className={stylex.props(styles.sectionHeader).className} key={`scope:${row.key}`}>
             {row.title}
           </div>
         );
       if (!row.collapsible)
         return (
-          <div className={styles.sectionHeader} key={`section:${row.id}`}>
+          <div className={stylex.props(styles.sectionHeader).className} key={`section:${row.id}`}>
             {row.title}
           </div>
         );
       return (
         <button
           aria-expanded={!row.collapsed}
-          className={styles.sectionToggle}
+          className={stylex.props(styles.sectionToggle).className}
           key={`section:${row.id}`}
           type={'button'}
           onClick={() => toggleSection(row.id, row.collapsed)}
@@ -609,7 +589,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
           onMouseDown={(event) => event.preventDefault()}
         >
           <Icon icon={row.collapsed ? ChevronRight : ChevronDown} size={14} />
-          <span className={styles.sectionToggleTitle}>{row.title}</span>
+          <span className={stylex.props(styles.sectionToggleTitle).className}>{row.title}</span>
           {row.collapsed && <span>{row.count}</span>}
         </button>
       );
@@ -649,7 +629,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
               <Flexbox onClick={(event) => event.stopPropagation()}>
                 <input
                   autoFocus
-                  className={styles.searchInput}
+                  {...stylex.props(styles.searchInput)}
                   placeholder={t('taskList.assigneeSearch.agentPlaceholder', { ns: 'chat' })}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}

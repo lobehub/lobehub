@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { TargetIcon } from 'lucide-react';
 import {
   CalendarClockIcon,
@@ -19,100 +21,77 @@ import type { GoalExampleKey, GoalExampleSeed } from './goalExamples';
 import { buildGoalExampleSeed, GOAL_EXAMPLE_KEYS } from './goalExamples';
 import { createGoalHowItWorksModal } from './GoalHowItWorksModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  example: css`
-    cursor: pointer;
-
-    padding-block: 12px;
-    padding-inline: 14px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    transition: all 0.15s ${cssVar.motionEaseOut};
-
-    &:hover {
-      border-color: ${cssVar.colorPrimaryBorder};
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  exampleIconBox: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  exampleGrid: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-
-    @media (width <= 860px) {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  `,
-  hero: css`
-    isolation: isolate;
-    position: relative;
-
-    overflow: hidden;
-
-    padding-block: 40px 32px;
-    padding-inline: 40px;
-
-    text-align: center;
-  `,
-  heroIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 104px;
-    height: 72px;
-
-    color: ${cssVar.colorTextTertiary};
-  `,
-  heroInner: css`
-    position: relative;
-    z-index: 1;
-  `,
-  heroLead: css`
-    max-width: 560px;
-    line-height: 1.7;
-  `,
-  /* Doubled selectors on purpose: base-ui's text variant pins the colour through
-     `&, &:hover, &:active`, so a single-class rule here loses the cascade and the
-     hint renders at full text weight. */
-  howHint: css`
-    margin-inline-end: -8px;
-
-    &&,
-    &&:active {
-      color: ${cssVar.colorTextTertiary};
-    }
-
-    &&:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  judge: css`
-    padding-block: 10px;
-    padding-inline: 14px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  section: css`
-    padding-block: 24px;
-    padding-inline: 40px;
-  `,
-}));
+const styles = stylex.create({
+  example: {
+    cursor: 'pointer',
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorPrimaryBorder },
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: `all 0.15s ${cssVar.motionEaseOut}`,
+  },
+  exampleIconBox: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  exampleGrid: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'repeat(3, minmax(0, 1fr))',
+      '@media (width <= 860px)': 'minmax(0, 1fr)',
+    },
+    gap: '10px',
+  },
+  hero: {
+    isolation: 'isolate',
+    position: 'relative',
+    overflow: 'hidden',
+    paddingBlockStart: '40px',
+    paddingBlockEnd: '32px',
+    paddingInline: '40px',
+    textAlign: 'center',
+  },
+  heroIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '104px',
+    height: '72px',
+    color: cssVar.colorTextTertiary,
+  },
+  heroInner: { position: 'relative', zIndex: 1 },
+  heroLead: { maxWidth: '560px', lineHeight: 1.7 },
+  // base-ui's text variant pins the colour through `&, &:hover, &:active`; the
+  // hint restates all three so it stays muted instead of full text weight.
+  howHint: {
+    marginInlineEnd: '-8px',
+    color: {
+      'default': cssVar.colorTextTertiary,
+      ':hover': cssVar.colorTextSecondary,
+      ':active': cssVar.colorTextTertiary,
+    },
+  },
+  judge: {
+    paddingBlock: '10px',
+    paddingInline: '14px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  section: { paddingBlock: '24px', paddingInline: '40px' },
+});
 
 const EXAMPLE_ICONS: Record<GoalExampleKey, typeof TargetIcon> = {
   backlog: TablePropertiesIcon,
@@ -140,16 +119,20 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
 
   return (
     <Block padding={0} variant={'borderless'}>
-      <Flexbox align={'center'} className={styles.hero}>
-        <Flexbox align={'center'} className={styles.heroInner} gap={16}>
-          <div className={styles.heroIcon}>
+      <Flexbox align={'center'} className={stylex.props(styles.hero).className}>
+        <Flexbox align={'center'} className={stylex.props(styles.heroInner).className} gap={16}>
+          <div {...stylex.props(styles.heroIcon)}>
             <InfinityIcon aria-hidden size={64} strokeWidth={1.75} />
           </div>
           <Flexbox align={'center'} gap={8}>
             <Text fontSize={20} weight={600}>
               {t('goalEmpty.title')}
             </Text>
-            <Text className={styles.heroLead} fontSize={14} type={'secondary'}>
+            <Text
+              className={stylex.props(styles.heroLead).className}
+              fontSize={14}
+              type={'secondary'}
+            >
               {t('goalEmpty.lead')}
             </Text>
           </Flexbox>
@@ -159,13 +142,13 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
         </Flexbox>
       </Flexbox>
 
-      <Flexbox className={styles.section} gap={12}>
+      <Flexbox className={stylex.props(styles.section).className} gap={12}>
         <Flexbox horizontal align={'center'} justify={'space-between'}>
           <Text fontSize={13} type={'secondary'} weight={600}>
             {t('goalEmpty.examplesTitle')}
           </Text>
           <Button
-            className={styles.howHint}
+            className={stylex.props(styles.howHint).className}
             icon={CircleHelpIcon}
             size={'small'}
             type={'text'}
@@ -174,7 +157,7 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
             {t('goalEmpty.howHint')}
           </Button>
         </Flexbox>
-        <div className={styles.exampleGrid}>
+        <div {...stylex.props(styles.exampleGrid)}>
           {GOAL_EXAMPLE_KEYS.map((key) => {
             const seed = buildGoalExampleSeed(key, (localeKey) => t(localeKey as never));
 
@@ -182,7 +165,7 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
               <Flexbox
                 horizontal
                 align={'center'}
-                className={styles.example}
+                className={stylex.props(styles.example).className}
                 gap={12}
                 key={key}
                 role={'button'}
@@ -194,7 +177,7 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
                   onCreate(seed);
                 }}
               >
-                <div className={styles.exampleIconBox}>
+                <div {...stylex.props(styles.exampleIconBox)}>
                   <Icon icon={EXAMPLE_ICONS[key]} size={16} />
                 </div>
                 <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
@@ -210,7 +193,7 @@ const GoalEmptyState = memo<GoalEmptyStateProps>(({ onCreate }) => {
           })}
         </div>
 
-        <Flexbox className={styles.judge} gap={6}>
+        <Flexbox className={stylex.props(styles.judge).className} gap={6}>
           <Flexbox horizontal align={'flex-start'} gap={8}>
             <Icon
               color={cssVar.colorError}

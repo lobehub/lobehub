@@ -1,18 +1,8 @@
 'use client';
 
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Markdown,
-  Skeleton,
-  Spin,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Markdown, Skeleton, Spin, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BookOpen,
   ChevronRight,
@@ -28,6 +18,7 @@ import { useEntityMarkdown } from '@/features/EntityLink';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 import { shinyTextStyles } from '@/styles';
+import { sx } from '@/styles/sx';
 
 import { coordinatorNodeTitleKey } from './coordinatorCopy';
 import { openTargetOf, useOpenGoalArtifact } from './Deliverables';
@@ -56,153 +47,114 @@ import { KIND_COLOR, KIND_ICON } from './shared';
  * falls back to the trail `buildResultTrail` derives per task.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  arrow: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  /** One stage's outputs, framed as a single list like the frontier's. */
-  list: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorBgContainer};
-
-    /* Outranks the row's own "border: none", which would otherwise erase it. */
-    & > :not(:first-child) {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  row: css`
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: none;
-
-    text-align: start;
-
-    background: none;
-  `,
-  rowOpenable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-  /** The rail ties the numbered stages into one sequence. */
-  rail: css`
-    position: relative;
-    flex: none;
-    width: 24px;
-
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset-block: 30px 0;
-      inset-inline-start: 11px;
-
-      width: 1px;
-
-      background: ${cssVar.colorBorderSecondary};
-    }
-  `,
-  railLast: css`
-    &::after {
-      display: none;
-    }
-  `,
-  stageNumber: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 50%;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  /** Same colour as the mainline on the exploration map, so the two read as one path. */
-  stageMainline: css`
-    border-color: ${cssVar.colorPrimary};
-    color: ${cssVar.colorPrimary};
-  `,
-  mainlineTag: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorPrimary};
-  `,
-  stepMuted: css`
-    opacity: 0.55;
-  `,
-  /**
-   * Review: the count is a note about the chapter, not a badge — plain gray
-   * text, with no tinted fill or pill around it, so it never competes with the
-   * chapter title it sits beside.
-   */
-  detour: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-
-    /* Reset the native button chrome — the hint is text, not a control. */
-    padding: 0;
-    border: none;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-  `,
-  narrative: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  stageTitle: css`
-    cursor: pointer;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-  tile: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  time: css`
-    flex: none;
-    min-width: 60px;
-    text-align: end;
-  `,
-}));
+const styles = stylex.create({
+  arrow: { flex: 'none', color: cssVar.colorTextQuaternary },
+  // One stage's outputs, framed as a single list like the frontier's.
+  list: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  row: {
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderBlockStartStyle: { default: 'none', [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockEndStyle: 'none',
+    borderInlineStartStyle: 'none',
+    borderInlineEndStyle: 'none',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  rowOpenable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  // The rail ties the numbered stages into one sequence.
+  rail: {
+    'position': 'relative',
+    'flex': 'none',
+    'width': '24px',
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      insetBlockStart: '30px',
+      insetBlockEnd: 0,
+      insetInlineStart: '11px',
+      width: '1px',
+      backgroundColor: cssVar.colorBorderSecondary,
+      backgroundImage: 'none',
+    },
+  },
+  railLast: { '::after': { display: 'none' } },
+  stageNumber: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '50%',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  // Same colour as the mainline on the exploration map, so the two read as one path.
+  stageMainline: { borderColor: cssVar.colorPrimary, color: cssVar.colorPrimary },
+  mainlineTag: { flex: 'none', fontSize: '12px', color: cssVar.colorPrimary },
+  stepMuted: { opacity: 0.55 },
+  // Review: the count is a note about the chapter, not a badge — plain gray
+  // text, with no tinted fill or pill around it, so it never competes with the
+  // chapter title it sits beside. Resets the native button chrome — the hint is
+  // text, not a control.
+  detour: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flex: 'none',
+    alignItems: 'center',
+    padding: 0,
+    borderStyle: 'none',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  narrative: { color: cssVar.colorTextSecondary },
+  stageTitle: {
+    cursor: 'pointer',
+    color: { 'default': null, ':hover': cssVar.colorPrimary },
+  },
+  tile: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+  },
+  time: { flex: 'none', minWidth: '60px', textAlign: 'end' },
+});
 
 /** First line of a finding's evidence, as the item's one-line summary. */
 const summaryOf = (description?: string | null) =>
@@ -232,11 +184,13 @@ const TrailItem = ({
     horizontal
     align={'center'}
     as={onClick ? 'button' : 'div'}
-    className={cx(styles.row, onClick && styles.rowOpenable)}
     gap={12}
+    className={
+      stylex.props(styles.row, stylex.defaultMarker(), onClick && styles.rowOpenable).className
+    }
     {...(onClick ? { onClick, type: 'button' as const } : {})}
   >
-    <span className={styles.tile} style={{ background: tone.soft }}>
+    <span {...sx([styles.tile], undefined, { background: tone.soft })}>
       <Icon color={tone.line} icon={icon} size={16} />
     </span>
     <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
@@ -274,9 +228,11 @@ const TrailFinding = ({
       icon={KIND_ICON.finding}
       title={view.node.title}
       tone={KIND_COLOR.finding}
-      trailing={<Icon className={styles.arrow} icon={ChevronRight} size={14} />}
       subtitle={
         summary ? `${t('goalProcess.kind.finding')} · ${summary}` : t('goalProcess.kind.finding')
+      }
+      trailing={
+        <Icon className={stylex.props(styles.arrow).className} icon={ChevronRight} size={14} />
       }
       onClick={() => onOpen(view.node.id)}
     />
@@ -307,7 +263,12 @@ const TrailArtifact = ({
       title={artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled')}
       tone={ARTIFACT_TONE}
       meta={
-        <Text className={styles.time} fontSize={12} title={title} type={'secondary'}>
+        <Text
+          className={stylex.props(styles.time).className}
+          fontSize={12}
+          title={title}
+          type={'secondary'}
+        >
           {text}
         </Text>
       }
@@ -324,7 +285,12 @@ const TrailArtifact = ({
 const StepTime = ({ view }: { view: GoalNodeView }) => {
   const { text, title } = useActivityTime(view.node.resolvedAt ?? view.node.updatedAt);
   return (
-    <Text className={styles.time} fontSize={12} title={title} type={'secondary'}>
+    <Text
+      className={stylex.props(styles.time).className}
+      fontSize={12}
+      title={title}
+      type={'secondary'}
+    >
       {text}
     </Text>
   );
@@ -345,9 +311,18 @@ const Stage = ({
   index: number;
   last: boolean;
 }) => (
-  <Flexbox horizontal className={cx(emphasis === 'muted' && styles.stepMuted)} gap={12}>
-    <div className={cx(styles.rail, last && styles.railLast)}>
-      <span className={cx(styles.stageNumber, emphasis === 'mainline' && styles.stageMainline)}>
+  <Flexbox
+    horizontal
+    className={stylex.props(emphasis === 'muted' && styles.stepMuted).className}
+    gap={12}
+  >
+    <div className={stylex.props(styles.rail, last && styles.railLast).className}>
+      <span
+        className={
+          stylex.props(styles.stageNumber, emphasis === 'mainline' && styles.stageMainline)
+            .className
+        }
+      >
         {index + 1}
       </span>
     </div>
@@ -397,26 +372,28 @@ const TrailStep = ({
             // The run itself is the deepest layer: open it for the full account.
             <Text
               ellipsis
-              className={styles.stageTitle}
-              style={{ flex: 1, minWidth: 0 }}
+              className={stylex.props(styles.stageTitle).className}
+              style={{ flex: '1', minWidth: 0 }}
               weight={600}
               onClick={() => onSelect(view.node.id)}
             >
               {title}
             </Text>
           ) : (
-            <Text style={{ flex: 1, minWidth: 0 }} type={'secondary'} weight={600}>
+            <Text style={{ flex: '1', minWidth: 0 }} type={'secondary'} weight={600}>
               {title}
             </Text>
           )}
           {emphasis === 'mainline' && (
-            <span className={styles.mainlineTag}>{t('goalProcess.graph.legend.mainline')}</span>
+            <span className={stylex.props(styles.mainlineTag).className}>
+              {t('goalProcess.graph.legend.mainline')}
+            </span>
           )}
           {view && <StepTime view={view} />}
         </>
       }
     >
-      <div className={styles.list}>
+      <div className={stylex.props(styles.list).className}>
         {step.findings.map((finding) => (
           <TrailFinding key={finding.node.id} view={finding} onOpen={onSelect} />
         ))}
@@ -459,7 +436,7 @@ const DetourHint = ({
         </Flexbox>
       }
     >
-      <button className={styles.detour} type={'button'} onClick={onOpen}>
+      <button className={stylex.props(styles.detour).className} type={'button'} onClick={onOpen}>
         {t('goalProcess.result.story.detours', { count })}
       </button>
     </Tooltip>
@@ -492,7 +469,7 @@ const StoryChapter = ({
       last={last}
       header={
         <>
-          <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={600}>
+          <Text ellipsis style={{ flex: '1', minWidth: 0 }} weight={600}>
             {chapter.title}
           </Text>
           {chapter.detours.length > 0 && (
@@ -501,11 +478,16 @@ const StoryChapter = ({
         </>
       }
     >
-      <Markdown className={styles.narrative} fontSize={14} variant={'chat'} {...markdownProps}>
+      <Markdown
+        className={stylex.props(styles.narrative).className}
+        fontSize={14}
+        variant={'chat'}
+        {...markdownProps}
+      >
         {chapter.narrative}
       </Markdown>
       {hasItems && (
-        <div className={styles.list}>
+        <div className={stylex.props(styles.list).className}>
           {view.findings.map((finding) => (
             <TrailFinding key={finding.node.id} view={finding} onOpen={onSelect} />
           ))}

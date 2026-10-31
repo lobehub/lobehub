@@ -1,53 +1,51 @@
-import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CopyIcon, ExternalLinkIcon, RotateCwIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import type { DockTask } from './type';
 
-const styles = createStaticStyles(({ css }) => ({
-  action: css`
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  `,
-  container: css`
-    &:hover .dock-task-action {
-      opacity: 1;
-    }
-  `,
-  progress: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline-start: 0;
-
-    height: 2px;
-
-    background: ${cssVar.geekblue};
-
-    transition: inset-inline-end 0.2s linear;
-  `,
-  result: css`
-    border-block-start: 1px solid ${cssVar.colorFillQuaternary};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  resultLabel: css`
-    min-width: 0;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM}px;
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-size: 14px;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-  `,
-}));
+const styles = stylex.create({
+  action: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: 'opacity 0.2s ease',
+  },
+  progress: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockEnd: 0,
+    insetInlineStart: 0,
+    height: '2px',
+    backgroundColor: cssVar.geekblue,
+    backgroundImage: 'none',
+    transition: 'inset-inline-end 0.2s linear',
+  },
+  result: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorFillQuaternary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  resultLabel: {
+    minWidth: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: `${cssVar.fontSizeSM}px`,
+  },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 1,
+    fontSize: '14px',
+    lineHeight: 1.4,
+    textOverflow: 'ellipsis',
+  },
+});
 
 interface ItemProps extends DockTask {
   /** A solo card has no group gutter, so its result strip is flush left. */
@@ -66,7 +64,7 @@ const Item = memo<ItemProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.container}
+          className={stylex.props(stylex.defaultMarker()).className}
           gap={12}
           paddingBlock={8}
           paddingInline={12}
@@ -74,14 +72,14 @@ const Item = memo<ItemProps>(
         >
           {icon}
           <Flexbox flex={1} gap={2} style={{ overflow: 'hidden' }}>
-            <div className={styles.title}>{title}</div>
+            <div className={stylex.props(styles.title).className}>{title}</div>
             {detail}
             {extra}
           </Flexbox>
 
           {cancel && (
             <ActionIcon
-              className={`${styles.action} dock-task-action`}
+              className={stylex.props(styles.action).className}
               icon={XIcon}
               size="small"
               title={t('cancel')}
@@ -98,7 +96,7 @@ const Item = memo<ItemProps>(
           )}
 
           {status === 'running' && progress !== undefined && (
-            <div className={styles.progress} style={{ insetInlineEnd: `${100 - progress}%` }} />
+            <div {...sx([styles.progress], undefined, { insetInlineEnd: `${100 - progress}%` })} />
           )}
         </Flexbox>
 
@@ -106,14 +104,14 @@ const Item = memo<ItemProps>(
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.result}
+            className={stylex.props(styles.result).className}
             gap={8}
             paddingBlock={6}
             style={{ paddingInlineEnd: 8, paddingInlineStart: solo ? 12 : 48 }}
           >
             <Text
               ellipsis
-              className={styles.resultLabel}
+              className={stylex.props(styles.resultLabel).className}
               type={result.onOpen ? undefined : 'secondary'}
             >
               {result.label}

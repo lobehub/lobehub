@@ -1,4 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import TaskAcceptance from './TaskAcceptance';
@@ -24,9 +25,9 @@ import TaskSubtasks from './TaskSubtasks';
  */
 const TaskDetailSections = memo(() => {
   return (
-    <div className={styles.root}>
-      <div className={styles.header}>
-        <Flexbox className={styles.main} gap={12}>
+    <div className={stylex.props(styles.root).className}>
+      <div className={stylex.props(styles.header).className}>
+        <Flexbox className={stylex.props(styles.main).className} gap={12}>
           <TaskGoalBar />
           <TaskParentBar />
           <TaskDetailTitleInput />
@@ -37,7 +38,7 @@ const TaskDetailSections = memo(() => {
             <TaskExecutionConfig />
           </Flexbox>
         </Flexbox>
-        <div className={styles.side}>
+        <div className={stylex.props(styles.side).className}>
           <TaskProperties />
         </div>
       </div>

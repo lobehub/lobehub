@@ -1,5 +1,6 @@
 import { SendButton, useEditor } from '@lobehub/editor/react';
 import { Avatar, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { $getRoot } from 'lexical';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -66,7 +67,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   });
 
   return (
-    <Flexbox className={styles.commentInputCard} gap={6}>
+    <Flexbox className={stylex.props(styles.commentInputCard).className} gap={6}>
       <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0, width: '100%' }}>
         <Avatar avatar={userAvatar} size={24} style={{ flexShrink: 0 }} />
         <div

@@ -1,8 +1,6 @@
 import {
   Accordion,
   Checkbox,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   InputNumber,
@@ -10,6 +8,8 @@ import {
   Text,
   ToggleGroup,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Globe, Hash, SlidersHorizontal } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -25,26 +25,22 @@ import {
   WEEKDAYS,
 } from './CronConfig';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  fieldLabel: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  timezoneOffset: css`
-    flex-shrink: 0;
-    margin-inline-start: 12px;
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  timezoneOption: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  fieldLabel: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  timezoneOffset: {
+    flexShrink: 0,
+    marginInlineStart: '12px',
+    fontSize: '12px',
+    color: cssVar.colorTextDescription,
+  },
+  timezoneOption: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: '0',
+  },
+});
 
 const DEFAULT_PATTERN = '0 9 * * *';
 const DEFAULT_TIMEZONE = 'UTC';
@@ -214,7 +210,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
     <Flexbox gap={16}>
       <Flexbox horizontal gap={12}>
         <Flexbox flex={1} gap={6}>
-          <Text className={styles.fieldLabel}>{t('taskSchedule.frequency')}</Text>
+          <Text className={stylex.props(styles.fieldLabel).className}>
+            {t('taskSchedule.frequency')}
+          </Text>
           <Select
             value={scheduleType}
             variant="filled"
@@ -227,7 +225,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         </Flexbox>
         {showTimeRow && (
           <Flexbox flex={1} gap={6}>
-            <Text className={styles.fieldLabel}>{t('taskSchedule.time')}</Text>
+            <Text className={stylex.props(styles.fieldLabel).className}>
+              {t('taskSchedule.time')}
+            </Text>
             <Select
               options={TIME_OPTIONS}
               value={triggerTime.hour() * 60 + triggerTime.minute()}
@@ -238,7 +238,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
         )}
         {scheduleType === 'hourly' && (
           <Flexbox flex={1.5} gap={6} style={{ minWidth: 0 }}>
-            <Text className={styles.fieldLabel}>{t('taskSchedule.every')}</Text>
+            <Text className={stylex.props(styles.fieldLabel).className}>
+              {t('taskSchedule.every')}
+            </Text>
             <Flexbox horizontal align="center" gap={6}>
               <InputNumber
                 max={24}
@@ -268,7 +270,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
 
       {scheduleType === 'weekly' && (
         <Flexbox gap={6}>
-          <Text className={styles.fieldLabel}>{t('taskSchedule.weekday')}</Text>
+          <Text className={stylex.props(styles.fieldLabel).className}>
+            {t('taskSchedule.weekday')}
+          </Text>
           <ToggleGroup
             multiple
             options={weekdayOptions}
@@ -291,7 +295,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                 <Flexbox gap={6}>
                   <Flexbox horizontal align="center" gap={6}>
                     <Icon color={cssVar.colorTextDescription} icon={Globe} size={14} />
-                    <Text className={styles.fieldLabel}>{t('taskSchedule.timezone')}</Text>
+                    <Text className={stylex.props(styles.fieldLabel).className}>
+                      {t('taskSchedule.timezone')}
+                    </Text>
                   </Flexbox>
                   <Select
                     showSearch
@@ -302,11 +308,11 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                     optionRender={(option) => {
                       const data = option as TimezoneOption;
                       return (
-                        <div className={styles.timezoneOption}>
+                        <div {...stylex.props(styles.timezoneOption)}>
                           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {data.label}
                           </span>
-                          <span className={styles.timezoneOffset}>{data.offset}</span>
+                          <span {...stylex.props(styles.timezoneOffset)}>{data.offset}</span>
                         </div>
                       );
                     }}
@@ -317,7 +323,9 @@ const SchedulerForm = memo<SchedulerFormProps>(({ maxExecutions, onChange, patte
                 <Flexbox gap={6}>
                   <Flexbox horizontal align="center" gap={6}>
                     <Icon color={cssVar.colorTextDescription} icon={Hash} size={14} />
-                    <Text className={styles.fieldLabel}>{t('taskSchedule.maxExecutions')}</Text>
+                    <Text className={stylex.props(styles.fieldLabel).className}>
+                      {t('taskSchedule.maxExecutions')}
+                    </Text>
                   </Flexbox>
                   <Flexbox horizontal align="center" gap={12}>
                     <InputNumber

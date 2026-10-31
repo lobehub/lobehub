@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Flexbox, Icon, Popover, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,13 +14,16 @@ import {
 import SchedulerForm from '../AgentTaskDetail/scheduler/SchedulerForm';
 import type { ScheduleDraft } from './scheduleDraft';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  popover: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  popover: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface ScheduleChipProps {
   disabled?: boolean;
@@ -41,7 +46,7 @@ const ScheduleChip = memo<ScheduleChipProps>(({ disabled, onChange, value }) => 
 
   return (
     <Popover
-      className={styles.popover}
+      className={stylex.props(styles.popover).className}
       disabled={disabled}
       placement="topLeft"
       trigger="click"

@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,44 +19,27 @@ import { KindDot } from './shared';
  * the question it answers and the task that produced it.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  arrow: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-    transition: transform 0.2s;
-  `,
-  arrowOpen: css`
-    transform: rotate(90deg);
-  `,
-  body: css`
-    padding-block: 0 10px;
-    padding-inline: 30px 8px;
-  `,
-  source: css`
-    flex: none;
-    max-width: 40%;
-    text-align: end;
-  `,
-  /** Matches the deliverables list, so both sections share one column edge. */
-  time: css`
-    flex: none;
-    min-width: 60px;
-    text-align: end;
-  `,
-  row: css`
-    cursor: pointer;
-
-    /* The hover wash keeps its inset; the row's content lines up with the section title. */
-    margin-inline: -8px;
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  arrow: { flex: 'none', color: cssVar.colorTextQuaternary, transition: 'transform 0.2s' },
+  arrowOpen: { transform: 'rotate(90deg)' },
+  body: {
+    paddingBlockStart: '0',
+    paddingBlockEnd: '10px',
+    paddingInlineStart: '30px',
+    paddingInlineEnd: '8px',
+  },
+  source: { flex: 'none', maxWidth: '40%', textAlign: 'end' },
+  time: { flex: 'none', minWidth: '60px', textAlign: 'end' },
+  row: {
+    cursor: 'pointer',
+    marginInline: '-8px',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusSM,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView }>(
   ({ onSelect, view }) => {
@@ -69,12 +54,12 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.row}
+          className={stylex.props(styles.row).className}
           gap={8}
           onClick={() => setOpen(!open)}
         >
           <Icon
-            className={cx(styles.arrow, open && styles.arrowOpen)}
+            className={stylex.props(styles.arrow, open && styles.arrowOpen).className}
             icon={ChevronRight}
             size={14}
           />
@@ -86,19 +71,29 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
           <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
             {view.node.title}
           </Text>
-          <Text ellipsis className={styles.source} fontSize={12} type={'secondary'}>
+          <Text
+            ellipsis
+            className={stylex.props(styles.source).className}
+            fontSize={12}
+            type={'secondary'}
+          >
             {answered
               ? t('goalProcess.findings.answers', { title: answered.title })
               : view.producedBy
                 ? t('goalProcess.findings.from', { title: view.producedBy.title })
                 : ''}
           </Text>
-          <Text className={styles.time} fontSize={12} title={title} type={'secondary'}>
+          <Text
+            className={stylex.props(styles.time).className}
+            fontSize={12}
+            title={title}
+            type={'secondary'}
+          >
             {text}
           </Text>
         </Flexbox>
         {open && (
-          <Flexbox className={styles.body} gap={8}>
+          <Flexbox className={stylex.props(styles.body).className} gap={8}>
             {view.answers.map((problem) => (
               <Flexbox
                 horizontal

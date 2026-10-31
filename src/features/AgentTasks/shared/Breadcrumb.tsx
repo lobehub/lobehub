@@ -10,7 +10,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useTaskStore } from '@/store/task';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
-import { styles } from './style';
+import styles from './breadcrumb.module.css';
 import { taskDetailPath } from './taskDetailPath';
 import { useAgentDisplayMeta } from './useAgentDisplayMeta';
 

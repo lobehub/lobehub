@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, FileDown, FileText, Link2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,49 +36,30 @@ import { KindDot } from './shared';
  * reading. Only a resource that genuinely lives outside the product leaves.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  producer: css`
-    flex: none;
-    justify-content: flex-end;
-    max-width: 40%;
-  `,
-  /**
-   * A fixed slot for the timestamp. Without it the attribution column ends
-   * wherever the relative time happens to start, so a list mixing "几秒前" with
-   * "8 小时前" loses the very alignment this row is built for.
-   */
-  time: css`
-    flex: none;
-    min-width: 60px;
-    text-align: end;
-  `,
-  row: css`
-    width: calc(100% + 16px);
-
-    /* Same column edge as the section title, like the findings and activity rows. */
-    margin-inline: -8px;
-    padding-block: 8px;
-    padding-inline: 8px;
-    border: none;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    text-align: start;
-
-    background: none;
-  `,
-  rowOpenable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  producer: { flex: 'none', justifyContent: 'flex-end', maxWidth: '40%' },
+  time: { flex: 'none', minWidth: '60px', textAlign: 'end' },
+  row: {
+    width: 'calc(100% + 16px)',
+    marginInline: '-8px',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadiusSM,
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  rowOpenable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+});
 
 /**
  * Where a row actually goes, or `undefined` when it goes nowhere: an external
@@ -136,7 +119,7 @@ const DeliverableRow = memo<{
       horizontal
       align={'center'}
       as={openable ? 'button' : 'div'}
-      className={cx(styles.row, openable && styles.rowOpenable)}
+      className={stylex.props(styles.row, openable && styles.rowOpenable).className}
       gap={8}
       // A real button carries focus, Enter/Space and the right semantics for
       // free; a row with nowhere to go stays inert rather than faking an
@@ -151,14 +134,24 @@ const DeliverableRow = memo<{
         {artifact.title || artifact.identifier || t('goalProcess.deliverables.untitled')}
       </Text>
       {!!producerTitle && (
-        <Flexbox horizontal align={'center'} className={styles.producer} gap={6}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.producer).className}
+          gap={6}
+        >
           <KindDot kind={'task'} />
           <Text ellipsis fontSize={12} type={'secondary'}>
             {t('goalProcess.deliverables.from', { title: producerTitle })}
           </Text>
         </Flexbox>
       )}
-      <Text className={styles.time} fontSize={12} title={title} type={'secondary'}>
+      <Text
+        className={stylex.props(styles.time).className}
+        fontSize={12}
+        title={title}
+        type={'secondary'}
+      >
         {text}
       </Text>
     </Flexbox>

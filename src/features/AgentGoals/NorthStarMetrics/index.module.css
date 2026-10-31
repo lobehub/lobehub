@@ -1,0 +1,10 @@
+/* The chart has no dashed-series option. It names each series path after its
+   category, so the target reference line is styled from here: a dashed stroke
+   with no area under it. Targets recharts' own DOM, which StyleX cannot reach. */
+.spark path[name='target'] {
+  stroke-dasharray: 3 3;
+}
+
+.spark path:global(.recharts-area-area)[name='target'] {
+  fill: none;
+}

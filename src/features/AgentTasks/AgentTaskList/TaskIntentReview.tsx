@@ -1,7 +1,9 @@
 'use client';
 
 import type { TaskIntentAnalysis } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft, Sparkles, Target } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,72 +15,46 @@ import ClarificationQuestions, {
 
 import type { ClarificationAnswers } from './taskIntent';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-
-    /* Viewport-relative, because the footer holds the only way forward: a fixed
-       cap sized for a tall window pushed "create" below the fold on a short one,
-       leaving the panel's primary action unreachable without scrolling. The
-       question list scrolls inside this box instead, and the footer stays put.
-       (The absolute cap is the leftover from the confirm step's instruction
-        editor, which no longer exists — the questions never needed it.) */
-    max-height: min(420px, 42dvh);
-    padding-block: 12px 16px;
-    padding-inline: 16px;
-  `,
-  footer: css`
-    padding-block: 8px;
-    padding-inline: 8px 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  goalCallout: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  head: css`
-    padding-block: 12px 0;
-    padding-inline: 16px;
-  `,
-  // Reuses OptionCard's row rhythm so the recap reads as the same list the
-  // user just answered, not as a different kind of object.
-  answerRow: css`
-    cursor: pointer;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 8px;
-
-    transition: background 0.12s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  instruction: css`
-    overflow-y: auto;
-    max-height: 220px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  title: css`
-    box-sizing: border-box;
-    width: 100%;
-    padding-block: 2px;
-    border: none;
-
-    font-family: inherit;
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: inherit;
-
-    background: transparent;
-    outline: none;
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    maxHeight: 'min(420px, 42dvh)',
+    paddingBlockStart: '12px',
+    paddingBlockEnd: '16px',
+    paddingInline: '16px',
+  },
+  footer: {
+    paddingBlock: '8px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  goalCallout: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  head: { paddingBlockStart: '12px', paddingBlockEnd: '0', paddingInline: '16px' },
+  title: {
+    boxSizing: 'border-box',
+    width: '100%',
+    paddingBlock: '2px',
+    borderStyle: 'none',
+    fontFamily: 'inherit',
+    fontSize: '16px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    color: 'inherit',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outlineStyle: 'none',
+  },
+});
 
 export interface TaskIntentReviewProps {
   analysis: TaskIntentAnalysis;
@@ -156,7 +132,7 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
 
   return (
     <>
-      <Flexbox className={styles.head} gap={6}>
+      <Flexbox className={stylex.props(styles.head).className} gap={6}>
         <Flexbox horizontal align={'center'} gap={6}>
           <Icon color={cssVar.colorTextDescription} icon={Sparkles} size={13} />
           <Text fontSize={12} type={'secondary'}>
@@ -164,20 +140,25 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
           </Text>
         </Flexbox>
         <input
-          className={styles.title}
+          {...stylex.props(styles.title)}
           placeholder={t('createTask.titlePlaceholder')}
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
         />
       </Flexbox>
 
-      <Flexbox className={styles.body} gap={16}>
+      <Flexbox className={stylex.props(styles.body).className} gap={16}>
         <Text fontSize={13} type={'secondary'}>
           {analysis.summary}
         </Text>
 
         {showGoalExit && (
-          <Flexbox horizontal align={'center'} className={styles.goalCallout} gap={12}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.goalCallout).className}
+            gap={12}
+          >
             <Icon color={cssVar.colorTextSecondary} icon={Target} size={16} />
             <Flexbox flex={1} gap={2}>
               <Text fontSize={13} weight={500}>
@@ -210,7 +191,12 @@ const TaskIntentReview = memo<TaskIntentReviewProps>((props) => {
         )}
       </Flexbox>
 
-      <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.footer).className}
+        justify={'space-between'}
+      >
         <Button icon={ArrowLeft} size={'small'} type={'text'} onClick={onBack}>
           {t('taskIntent.back')}
         </Button>

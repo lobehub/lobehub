@@ -1,17 +1,9 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import {
-  Block,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Input,
-  Popover,
-  Text,
-} from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Input, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { CheckIcon, ChevronDownIcon, UsersIcon } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
@@ -28,11 +20,13 @@ import { homeAgentListSelectors } from '@/store/home/selectors';
 import type { GoalAgentFilterOption } from './goalAgentFilterOptions';
 import { matchGoalAgentFilterOptions } from './goalAgentFilterOptions';
 
-const styles = createStaticStyles(({ css }) => ({
-  search: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  search: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 /**
  * Display names of the filter's agents, resolved the way the rest of the goal
@@ -163,7 +157,7 @@ const GoalAgentFilter = memo<GoalAgentFilterProps>(({ onChange, options, value }
         <Flexbox>
           <Input
             autoFocus
-            className={styles.search}
+            className={stylex.props(styles.search).className}
             placeholder={t('taskList.assigneeSearch.agentPlaceholder')}
             value={search}
             variant={'borderless'}

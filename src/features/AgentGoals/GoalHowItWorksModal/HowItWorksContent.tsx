@@ -1,23 +1,23 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, Steps, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Steps, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  loopBack: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  loopIcon: css`
-    flex: none;
-    margin-block-start: 1px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  loopBack: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  loopIcon: { flex: 'none', marginBlockStart: '1px', color: cssVar.colorTextQuaternary },
+});
 
 /**
  * The mechanism behind a goal: what each round does and how it ends.
@@ -49,8 +49,13 @@ const HowItWorksContent = memo(() => {
           title: { fontSize: 13, fontWeight: 600 },
         }}
       />
-      <Flexbox horizontal align={'flex-start'} className={styles.loopBack} gap={8}>
-        <Icon className={styles.loopIcon} icon={RotateCcwIcon} size={13} />
+      <Flexbox
+        horizontal
+        align={'flex-start'}
+        className={stylex.props(styles.loopBack).className}
+        gap={8}
+      >
+        <Icon className={stylex.props(styles.loopIcon).className} icon={RotateCcwIcon} size={13} />
         <Text fontSize={12} style={{ lineHeight: 1.6 }} type={'secondary'}>
           {t('goalEmpty.loop')}
         </Text>

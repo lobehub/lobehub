@@ -1,7 +1,9 @@
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { TaskStatus } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
-import { ActionIcon, createStaticStyles, cx, Skeleton, Text } from '@lobehub/ui';
+import { ActionIcon, cx, Skeleton, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { EyeOff, MoreHorizontal, Plus } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,38 +19,12 @@ import {
   getKanbanCreateTaskModalProps,
   type KanbanColumnCreateDefaults,
 } from './kanbanBoardModel';
+import moduleStyles from './KanbanColumn.module.css';
 import type { TaskGroupMeta } from './listViewOptions';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 
 export const COLUMN_WIDTH = 300;
-
-const cardStyles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgElevated};
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 4%),
-      0 2px 6px rgb(0 0 0 / 3%);
-
-    &,
-    & * {
-      cursor: default;
-    }
-
-    &:active,
-    &:active * {
-      cursor: grabbing;
-    }
-
-    &:hover > * {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  dragging: css`
-    visibility: hidden;
-  `,
-}));
 
 const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskListItem }>(
   ({ routeScope, task }) => {
@@ -59,7 +35,7 @@ const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskList
 
     return (
       <div
-        className={cx(cardStyles.card, isDragging && cardStyles.dragging)}
+        className={cx(moduleStyles.card, isDragging && moduleStyles.dragging)}
         ref={setNodeRef}
         {...listeners}
         {...attributes}
@@ -70,102 +46,79 @@ const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskList
   },
 );
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = stylex.create({
   // The empty-column add pill stays hidden until the column is hovered, or
   // keyboard focus lands inside it.
-  action: css`
-    opacity: 0;
-    transition: opacity 0.2s;
-
-    &:focus-within {
-      opacity: 1;
-    }
-  `,
-  addPill: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    justify-content: center;
-
-    height: 36px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 999px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition:
-      border-color 0.2s,
-      color 0.2s,
-      background 0.2s;
-
-    &:hover {
-      border-color: ${cssVar.colorPrimaryBorder};
-      color: ${cssVar.colorPrimary};
-      background: ${cssVar.colorBgContainer};
-    }
-  `,
-  body: css`
-    overflow-y: auto;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 6px;
-
-    padding-block: 4px 12px;
-    padding-inline: 8px;
-  `,
-  column: css`
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-
-    width: ${COLUMN_WIDTH}px;
-    max-height: 100%;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-
-    transition:
-      background 0.2s,
-      box-shadow 0.2s;
-
-    &:hover .kanban-col-action {
-      opacity: 1;
-    }
-  `,
-  dropActive: css`
-    background: ${cssVar.colorFillTertiary};
-    box-shadow: inset 0 0 0 1px ${cssVar.colorPrimaryBorderHover};
-  `,
-  emptyText: css`
-    padding-block: 24px;
-    padding-inline: 16px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: center;
-  `,
-  header: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 10px 8px;
-    padding-inline: 10px 6px;
-  `,
-  headerActions: css`
-    display: flex;
-    gap: 2px;
-    align-items: center;
-    margin-inline-start: auto;
-  `,
-  notDroppable: css`
-    pointer-events: none;
-    opacity: 0.4;
-  `,
-}));
+  action: {
+    opacity: { 'default': 0, [stylex.when.ancestor(':hover')]: 1, ':focus-within': 1 },
+    transition: 'opacity 0.2s',
+  },
+  addPill: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '36px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorPrimaryBorder },
+    borderRadius: '999px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorPrimary },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorBgContainer },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: 'border-color 0.2s, color 0.2s, background 0.2s',
+  },
+  body: {
+    overflowY: 'auto',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    gap: '6px',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '12px',
+    paddingInline: '8px',
+  },
+  column: {
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    width: `${COLUMN_WIDTH}px`,
+    maxHeight: '100%',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    transition: 'background 0.2s, box-shadow 0.2s',
+  },
+  dropActive: {
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+    boxShadow: `inset 0 0 0 1px ${cssVar.colorPrimaryBorderHover}`,
+  },
+  emptyText: {
+    paddingBlock: '24px',
+    paddingInline: '16px',
+    fontSize: '13px',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'center',
+  },
+  header: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlockStart: '10px',
+    paddingBlockEnd: '8px',
+    paddingInlineStart: '10px',
+    paddingInlineEnd: '6px',
+  },
+  headerActions: {
+    display: 'flex',
+    gap: '2px',
+    alignItems: 'center',
+    marginInlineStart: 'auto',
+  },
+  notDroppable: { pointerEvents: 'none', opacity: 0.4 },
+});
 
 export const COLUMN_I18N_KEYS: Record<string, string> = {
   backlog: 'taskList.kanban.backlog',
@@ -262,13 +215,16 @@ const KanbanColumn = memo<KanbanColumnProps>(
     return (
       <div
         ref={setNodeRef}
-        className={cx(
-          styles.column,
-          showDropHighlight && styles.dropActive,
-          showDisabled && styles.notDroppable,
-        )}
+        className={
+          stylex.props(
+            styles.column,
+            stylex.defaultMarker(),
+            showDropHighlight && styles.dropActive,
+            showDisabled && styles.notDroppable,
+          ).className
+        }
       >
-        <div className={styles.header}>
+        <div className={stylex.props(styles.header).className}>
           {headerVariant === 'loading' ? (
             <>
               <Skeleton.Avatar
@@ -295,7 +251,7 @@ const KanbanColumn = memo<KanbanColumnProps>(
               </Text>
             </>
           )}
-          <div className={cx(styles.headerActions, 'kanban-col-action')}>
+          <div className={stylex.props(styles.headerActions).className}>
             {menuItems.length > 0 && (
               <DropdownMenu items={menuItems}>
                 <ActionIcon icon={MoreHorizontal} size={'small'} />
@@ -311,10 +267,10 @@ const KanbanColumn = memo<KanbanColumnProps>(
             )}
           </div>
         </div>
-        <div className={styles.body}>
+        <div className={stylex.props(styles.body).className}>
           {loading ? (
             Array.from({ length: 3 }).map((_, index) => (
-              <div className={cardStyles.card} key={`kanban-skeleton-${columnKey}-${index}`}>
+              <div className={moduleStyles.card} key={`kanban-skeleton-${columnKey}-${index}`}>
                 <TaskItemSkeleton variant={'compact'} />
               </div>
             ))
@@ -324,14 +280,16 @@ const KanbanColumn = memo<KanbanColumnProps>(
             ))
           ) : canCreate ? (
             <div
-              className={cx(styles.addPill, styles.action, 'kanban-col-action')}
+              className={stylex.props(styles.addPill, styles.action).className}
               title={t('taskList.kanban.addTask')}
               onClick={openCreate}
             >
               <Icon icon={Plus} size={16} />
             </div>
           ) : (
-            <div className={styles.emptyText}>{t('taskList.kanban.emptyColumn')}</div>
+            <div className={stylex.props(styles.emptyText).className}>
+              {t('taskList.kanban.emptyColumn')}
+            </div>
           )}
         </div>
       </div>

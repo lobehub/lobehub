@@ -4,16 +4,9 @@ import '@xyflow/react/dist/style.css';
 
 import type { GoalGraphEdge } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Segmented,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Button, cx, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Background,
   BackgroundVariant,
@@ -29,7 +22,16 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import { ChevronRight, DoorOpen, HandIcon, Maximize2, X } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  memo,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
@@ -72,6 +74,7 @@ import {
   verdictChecks,
 } from './batchModel';
 import { batchStageId, batchStages, layoutBatchScope } from './batchScopeLayout';
+import moduleStyles from './canvas.module.css';
 import { edgeDirection } from './edgeRouting';
 import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
 import { batchContainerStatus } from './experimentStatus';
@@ -106,146 +109,58 @@ import { type GraphViewMode, isStageWholeMap, stageNodeIds } from './viewMode';
  * node drill-down keeps working.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  canvas: css`
-    position: relative;
-    width: 100%;
-    height: 560px;
+const EDGE_OPACITY_VARS = {
+  '--goal-muted-edge-opacity': MUTED_EDGE_OPACITY,
+  '--goal-muted-edge-opacity-dark': MUTED_EDGE_OPACITY_DARK,
+} as CSSProperties;
 
-    .react-flow__attribution {
-      display: none;
-    }
-
-    .react-flow__edge-path {
-      stroke: ${cssVar.colorBorder};
-      stroke-width: 1.25;
-    }
-
-    /* Provenance links can cross cards, but must not intercept their actions. */
-    .react-flow__edge,
-    .react-flow__edge * {
-      pointer-events: none;
-    }
-
-    .react-flow__edge.goal-dep .react-flow__edge-path {
-      stroke-dasharray: 5 4;
-    }
-
-    /* A chapter map's detours: the line into a stray card reads in the same
-       orange dash as the card's own frame. */
-    .react-flow__edge.goal-detour .react-flow__edge-path {
-      stroke: ${cssVar.colorWarning};
-      stroke-dasharray: 6 4;
-      stroke-width: 1.75;
-    }
-
-    .react-flow__edge.goal-muted:not(.goal-hot) {
-      opacity: ${MUTED_EDGE_OPACITY};
-    }
-
-    .react-flow__edge.goal-hot .react-flow__edge-path {
-      stroke: ${cssVar.colorPrimary};
-      stroke-width: 1.75;
-    }
-
-    /* Off-mainline lines keep their step-back on the light canvas. On the dark
-       one that same border token at a third opacity turns into background, so
-       the line is lifted just enough to read; the mainline's lines stay at full
-       strength either way, so the hierarchy is not flattened. These
-       dark-theme overrides carry higher specificity, so they sit last to keep
-       the cascade ascending. */
-    html[data-theme='dark'] & .react-flow__edge.goal-muted:not(.goal-hot) {
-      opacity: ${MUTED_EDGE_OPACITY_DARK};
-    }
-
-    html[data-theme='dark'] & .react-flow__edge.goal-muted:not(.goal-hot) .react-flow__edge-path {
-      stroke: ${cssVar.colorTextQuaternary};
-    }
-
-    /* The mainline is carried by its cards' ring; its lines stay ordinary, at
-       full strength while the rest steps back. On the dark canvas they take the
-       same lifted token as the muted lines so they never read fainter. */
-    html[data-theme='dark']
-      &
-      .react-flow__edge.goal-mainline:not(.goal-hot)
-      .react-flow__edge-path {
-      stroke: ${cssVar.colorTextQuaternary};
-    }
-
-    .react-flow__edge-textbg {
-      fill: ${cssVar.colorBgLayout};
-    }
-
-    .react-flow__edge-text {
-      font-size: 10px;
-      fill: ${cssVar.colorTextTertiary};
-    }
-
-    .react-flow__controls-button {
-      border-color: ${cssVar.colorBorderSecondary};
-      background: ${cssVar.colorBgContainer};
-      fill: ${cssVar.colorTextSecondary};
-
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-    }
-  `,
-  full: css`
-    height: 100%;
-  `,
-  /* Fullscreen chrome floats over the canvas in two corner cards instead of a
-     full-width bar, so a node panned to the top edge is never hidden behind an
-     opaque header strip. */
-  float: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 16px;
-
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 14px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-  navigation: css`
-    max-width: calc(100% - 32px);
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowTertiary};
-  `,
-  floatRight: css`
-    inset-inline-end: 16px;
-  `,
-  overlay: css`
-    position: fixed;
-    z-index: 1000;
-    inset: 0;
-
-    display: flex;
-    flex-direction: row;
-
-    background: ${cssVar.colorBgLayout};
-  `,
-  /* The corner cards anchor to the canvas area, not the whole overlay, so the
-     portal panel opening on the right never slides under them. */
-  overlayMain: css`
-    position: relative;
-    flex: 1;
-    min-width: 0;
-    height: 100%;
-  `,
-}));
+const styles = stylex.create({
+  // Fullscreen chrome floats over the canvas in two corner cards instead of a
+  // full-width bar, so a node panned to the top edge is never hidden behind an
+  // opaque header strip.
+  float: {
+    position: 'absolute',
+    zIndex: 1,
+    insetBlockStart: '16px',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '14px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  navigation: {
+    maxWidth: 'calc(100% - 32px)',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  floatRight: { insetInlineEnd: '16px' },
+  overlay: {
+    position: 'fixed',
+    zIndex: 1000,
+    inset: 0,
+    display: 'flex',
+    flexDirection: 'row',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  // The corner cards anchor to the canvas area, not the whole overlay, so the
+  // portal panel opening on the right never slides under them.
+  overlayMain: { position: 'relative', flex: '1', minWidth: 0, height: '100%' },
+});
 
 interface GraphProps {
   /**
@@ -1006,7 +921,7 @@ const Canvas = memo<
       <div
         className={className}
         ref={containerRef}
-        style={fullscreen ? undefined : { height: inlineHeight }}
+        style={fullscreen ? EDGE_OPACITY_VARS : { ...EDGE_OPACITY_VARS, height: inlineHeight }}
       >
         {/* Embedded graphs keep ordinary scrolling available to the page.
             Both views support drag, pinch, double-click and zoom controls;
@@ -1045,7 +960,7 @@ const Canvas = memo<
           }}
         >
           {navigation && (
-            <Panel className={styles.navigation} position={'top-left'}>
+            <Panel className={stylex.props(styles.navigation).className} position={'top-left'}>
               {navigation}
             </Panel>
           )}
@@ -1257,13 +1172,13 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
   );
   if (fullscreen)
     return (
-      <div className={styles.overlay}>
-        <div className={styles.overlayMain}>
+      <div className={stylex.props(styles.overlay).className}>
+        <div className={stylex.props(styles.overlayMain).className}>
           <ReactFlowProvider>
             <Canvas
               {...props}
               fullscreen
-              className={cx(styles.canvas, styles.full)}
+              className={cx(moduleStyles.canvas, moduleStyles.full)}
               collapsed={collapsed}
               graph={scopedGraph}
               hiddenKinds={hiddenKinds}
@@ -1290,7 +1205,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
           </ReactFlowProvider>
           {/* Corner cards float over the canvas — the map owns the whole screen
               and panned content stays visible between them. */}
-          <div className={cx(styles.float, styles.floatRight)}>
+          <div className={stylex.props(styles.float, styles.floatRight).className}>
             {legend}
             {toggle}
           </div>
@@ -1328,7 +1243,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       <ReactFlowProvider>
         <Canvas
           {...props}
-          className={styles.canvas}
+          className={moduleStyles.canvas}
           collapsed={collapsed}
           fullscreen={false}
           graph={scopedGraph}

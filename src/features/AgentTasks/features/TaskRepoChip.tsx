@@ -1,7 +1,8 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Checkbox, cx, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { Checkbox, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, SquircleDashed } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { formatLockedControlTooltip } from '@/features/ChatInput/utils/lockedControlTooltip';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { sx } from '@/styles/sx';
 
 import { taskExecutionStyles as styles } from './taskExecutionStyles';
 import TaskPickerOption from './TaskPickerOption';
@@ -93,8 +95,10 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
         role={'group'}
         style={{ minWidth: 280 }}
       >
-        <div className={styles.sectionTitle}>{t('heteroAgent.cloudRepo.sectionTitle')}</div>
-        <div className={styles.scroll}>
+        <div className={stylex.props(styles.sectionTitle).className}>
+          {t('heteroAgent.cloudRepo.sectionTitle')}
+        </div>
+        <div className={stylex.props(styles.scroll).className}>
           {availableRepos.map((repo) => {
             const isChecked = selected.includes(repo);
             return (
@@ -108,15 +112,15 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
                     through the design-system checkbox so the glyph, the corner
                     and the contrast follow the theme instead of a hand-rolled
                     box that only looked right in one of them. */}
-                <span className={styles.checkboxSlot}>
+                <span className={stylex.props(styles.checkboxSlot).className}>
                   <Checkbox checked={isChecked} />
                 </span>
-                <span className={styles.icon}>
+                <span className={stylex.props(styles.icon).className}>
                   <Github size={16} />
                 </span>
                 <Flexbox flex={1} style={{ minWidth: 0 }}>
-                  <div className={styles.rowTitle}>{getRepoName(repo)}</div>
-                  <div className={styles.rowDesc}>{repo}</div>
+                  <div className={stylex.props(styles.rowTitle).className}>{getRepoName(repo)}</div>
+                  <div className={stylex.props(styles.rowDesc).className}>{repo}</div>
                 </Flexbox>
               </TaskPickerOption>
             );
@@ -127,9 +131,14 @@ const TaskRepoChip = memo<TaskRepoChipProps>(
 
     // The muted directory trigger, not a chip — see `directoryTrigger`.
     const trigger = (
-      <div className={cx(className ?? styles.directoryTrigger, disabled && styles.triggerDisabled)}>
+      <div
+        {...sx(
+          [className ? null : styles.directoryTrigger, disabled && styles.triggerDisabled],
+          className,
+        )}
+      >
         {selected.length > 0 ? <Github size={14} /> : <Icon icon={SquircleDashed} size={14} />}
-        <Text ellipsis className={styles.chipLabel} fontSize={12}>
+        <Text ellipsis className={stylex.props(styles.chipLabel).className} fontSize={12}>
           {chipLabel}
         </Text>
         <Icon icon={ChevronDownIcon} size={12} />

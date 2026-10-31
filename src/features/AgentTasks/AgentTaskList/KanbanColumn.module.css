@@ -1,0 +1,27 @@
+/* A draggable task card. The grab cursor and the child hover wash reach the
+   card's descendants (`*`, `> *`), which StyleX cannot select. */
+.card {
+  border-radius: var(--lobe-border-radius-lg);
+  background: var(--lobe-color-bg-elevated);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 4%),
+    0 2px 6px rgb(0 0 0 / 3%);
+}
+
+.card,
+.card * {
+  cursor: default;
+}
+
+.card:active,
+.card:active * {
+  cursor: grabbing;
+}
+
+.card:hover > * {
+  background: var(--lobe-color-fill-quaternary);
+}
+
+.dragging {
+  visibility: hidden;
+}

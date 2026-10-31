@@ -1,5 +1,7 @@
-import { createStaticStyles, cssVar, Icon, Text } from '@lobehub/ui';
+import { Icon, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Boxes,
   CircleHelp,
@@ -10,6 +12,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { memo } from 'react';
+
+import { sx } from '@/styles/sx';
 
 import type { GoalGraphNodeKind } from '../Experiments/model';
 
@@ -59,32 +63,25 @@ export const KIND_ICON: Record<GoalGraphNodeKind, LucideIcon> = {
   task: ListChecks,
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  dot: css`
-    display: inline-block;
-    flex: none;
-
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-}));
-
-export const monoClass = styles.mono;
+const styles = stylex.create({
+  dot: { display: 'inline-block', flex: 'none', width: '8px', height: '8px', borderRadius: '2px' },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+});
 
 export const KindDot = memo<{ kind: GoalGraphNodeKind }>(({ kind }) => (
-  <span className={styles.dot} style={{ background: KIND_COLOR[kind].line }} />
+  <span {...sx([styles.dot], undefined, { background: KIND_COLOR[kind].line })} />
 ));
 
 KindDot.displayName = 'GoalKindDot';
 
 export const MonoText = memo<{ children: React.ReactNode; title?: string }>(
   ({ children, title }) => (
-    <Text className={styles.mono} fontSize={12} title={title} type={'secondary'}>
+    <Text
+      className={stylex.props(styles.mono).className}
+      fontSize={12}
+      title={title}
+      type={'secondary'}
+    >
       {children}
     </Text>
   ),

@@ -1,6 +1,8 @@
 import type { TaskStatus } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Spin } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,27 +15,21 @@ import { useTaskStatusChange } from './useTaskStatusChange';
 
 export { STATUS_META, USER_SELECTABLE_STATUSES } from './taskStatusMeta';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  trigger: css`
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    transition: filter ${cssVar.motionDurationMid};
-
-    &:hover {
-      filter: brightness(0.85);
-    }
-  `,
-  triggerDisabled: css`
-    cursor: not-allowed;
-    display: inline-flex;
-    opacity: 0.5;
-
-    &:hover {
-      filter: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  trigger: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    transition: `filter ${cssVar.motionDurationMid}`,
+    filter: { 'default': null, ':hover': 'brightness(0.85)' },
+  },
+  triggerDisabled: {
+    cursor: 'not-allowed',
+    display: 'inline-flex',
+    opacity: 0.5,
+    filter: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface TaskStatusTagProps {
   children?: ReactNode;
@@ -119,7 +115,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
         <Spin size={size} style={{ color: cssVar.colorTextDescription }} />
       ) : (
         <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: meta.label })}>
-          <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>
+          <span {...stylex.props(styles.trigger)} onClick={(e) => e.stopPropagation()}>
             <Icon color={meta.color} icon={meta.icon} size={size} />
           </span>
         </Tooltip>
@@ -130,7 +126,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
     if (!canEditTask)
       return (
         <Tooltip title={reason}>
-          <span className={styles.triggerDisabled} onClick={(e) => e.stopPropagation()}>
+          <span {...stylex.props(styles.triggerDisabled)} onClick={(e) => e.stopPropagation()}>
             {triggerNode}
           </span>
         </Tooltip>
