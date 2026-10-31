@@ -37,6 +37,7 @@ const PendingRetryTurn = memo<PendingRetryTurnProps>(({ userMessageId }) => {
     <ChatItem
       loading
       showTitle
+      agentId={agentId ?? null}
       avatar={avatar}
       id={`${userMessageId}-pending-retry`}
       placement={'left'}

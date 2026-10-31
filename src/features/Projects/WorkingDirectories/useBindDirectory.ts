@@ -1,3 +1,5 @@
+import { toast } from '@lobehub/ui';
+import { t } from 'i18next';
 import { useState } from 'react';
 
 import { useChatStore } from '@/store/chat';
@@ -13,7 +15,7 @@ export function useBindDirectory(options: BindDirectoryOptions, onSaved: () => v
     setPending(true);
     setError(undefined);
     try {
-      await bind({
+      const directory = await bind({
         agentId: options.agentId,
         deviceId: options.deviceId,
         environmentId,
@@ -24,6 +26,11 @@ export function useBindDirectory(options: BindDirectoryOptions, onSaved: () => v
       });
       await useChatStore.getState().refreshTopic();
       onSaved();
+      // The directory is linked even when some topics stay where they are.
+      if (directory.skippedTopics.length)
+        toast.warning(
+          t('directories.topicsSkipped', { count: directory.skippedTopics.length, ns: 'project' }),
+        );
     } catch (error) {
       console.error('Failed to bind project directory', error);
       setError(error);

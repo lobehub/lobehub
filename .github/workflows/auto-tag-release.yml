@@ -39,11 +39,11 @@ jobs:
           # Match "🚀 release: v{x.x.x}" format (strict semver: x.y.z with optional -prerelease or +build)
           if [[ "$PR_TITLE" =~ ^🚀[[:space:]]+release:[[:space:]]*v([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?)$ ]]; then
             VERSION="${BASH_REMATCH[1]}"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "should_tag=true" >> "$GITHUB_OUTPUT"
             echo "✅ Detected release PR, version: v$VERSION"
           else
-            echo "should_tag=false" >> $GITHUB_OUTPUT
+            echo "should_tag=false" >> "$GITHUB_OUTPUT"
             echo "⏭️ Not a release PR"
           fi
 
@@ -59,17 +59,17 @@ jobs:
 
           # Priority 1: hotfix/* or release/* branch always triggers, ignore PR title gate.
           if [[ "$HEAD_REF" == hotfix/* ]] || [[ "$HEAD_REF" == release/* ]]; then
-            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "should_tag=true" >> "$GITHUB_OUTPUT"
             echo "✅ Detected auto-release PR from $HEAD_REF branch (title gate bypassed)"
             exit 0
           fi
 
           # Priority 2: fallback to PR title prefix gate (legacy behavior).
           if echo "$PR_TITLE" | grep -qiE '^(💄[[:space:]]*)?style(\(.+\))?:|^(✨[[:space:]]*)?feat(\(.+\))?:|^(🐛[[:space:]]*)?fix(\(.+\))?:|^(♻️[[:space:]]*)?refactor(\(.+\))?:|^((🐛|🩹)[[:space:]]*)?hotfix(\(.+\))?:|^(👷[[:space:]]*)?build(\(.+\))?:'; then
-            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "should_tag=true" >> "$GITHUB_OUTPUT"
             echo "✅ Detected patch PR from title prefix gate"
           else
-            echo "should_tag=false" >> $GITHUB_OUTPUT
+            echo "should_tag=false" >> "$GITHUB_OUTPUT"
             echo "⏭️ Not a patch PR (neither hotfix/release branch nor style/feat/fix/refactor/hotfix/build title prefix)"
           fi
 
@@ -101,16 +101,20 @@ jobs:
       - name: Set context (release)
         if: steps.release.outputs.should_tag == 'true'
         run: |
-          echo "SHOULD_TAG=true" >> $GITHUB_ENV
-          echo "KIND=release" >> $GITHUB_ENV
-          echo "VERSION=${{ steps.release.outputs.version }}" >> $GITHUB_ENV
+          {
+            echo "SHOULD_TAG=true"
+            echo "KIND=release"
+            echo "VERSION=${{ steps.release.outputs.version }}"
+          } >> "$GITHUB_ENV"
 
       - name: Set context (patch)
         if: steps.patch.outputs.should_tag == 'true'
         run: |
-          echo "SHOULD_TAG=true" >> $GITHUB_ENV
-          echo "KIND=patch" >> $GITHUB_ENV
-          echo "VERSION=${{ steps.patch-version.outputs.version }}" >> $GITHUB_ENV
+          {
+            echo "SHOULD_TAG=true"
+            echo "KIND=patch"
+            echo "VERSION=${{ steps.patch-version.outputs.version }}"
+          } >> "$GITHUB_ENV"
 
       - name: Check if tag already exists
         if: env.SHOULD_TAG == 'true'
@@ -118,20 +122,29 @@ jobs:
         run: |
           VERSION="${{ env.VERSION }}"
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "⚠️ Tag v$VERSION already exists"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "✅ Tag v$VERSION does not exist, can create"
           fi
 
+      - name: Validate and bind desktop release sources
+        id: desktop-sources
+        if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false' && !contains(env.VERSION, '-')
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_VERSION: ${{ env.VERSION }}
+        run: node .github/scripts/desktopReleaseCli.mjs prepare-release
+
       - name: Create GitHub Release
         if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
           name: 🚀 Release v${{ env.VERSION }}
+          body_path: ${{ steps.desktop-sources.outputs.body_file }}
           body: |
             ## 📦 Release v${{ env.VERSION }}
 

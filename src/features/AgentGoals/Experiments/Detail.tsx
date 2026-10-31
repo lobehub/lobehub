@@ -1,5 +1,5 @@
 import type { GoalGraphSnapshot } from '@lobechat/types';
-import { Accordion, Button, Flexbox, Markdown, Tag, Text } from '@lobehub/ui';
+import { Accordion, Button, Flexbox, Markdown, Text } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,16 +33,6 @@ export const ExperimentDetail = ({
   return (
     <Flexbox flex={1} style={{ minHeight: 0 }}>
       <Flexbox gap={10} padding={16} style={{ flexShrink: 0 }}>
-        <Flexbox horizontal gap={8} wrap={'wrap'}>
-          <Tag>{t('goalExperiment.number', { number: view.seq })}</Tag>
-          <Tag>
-            {t(
-              view.isVerifying
-                ? 'goalProcess.tag.verifying'
-                : `goalProcess.nodeStatus.${view.node.status}`,
-            )}
-          </Tag>
-        </Flexbox>
         <Text as={'h2'} fontSize={18} weight={600}>
           {view.node.title}
         </Text>
@@ -74,7 +64,7 @@ export const ExperimentDetail = ({
             <Flexbox gap={6} key={finding.id}>
               <Text weight={500}>{finding.title}</Text>
               {finding.description && (
-                <Markdown fontSize={13} style={{ flexShrink: 0 }} variant={'chat'}>
+                <Markdown headerMultiple={0.25} style={{ flexShrink: 0 }}>
                   {finding.description}
                 </Markdown>
               )}

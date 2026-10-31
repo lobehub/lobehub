@@ -19,6 +19,7 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { ProductLogo } from '@/components/Branding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
@@ -156,11 +157,12 @@ const NotificationItem = memo<NotificationItemProps>(
                 style={{ flex: 'none' }}
               />
             ) : agent ? (
-              <Avatar
-                emojiScaleWithBackground
+              <AgentAvatar
+                agentId={agent.id}
                 alt={agent.title}
                 avatar={agent.avatar}
                 background={agent.backgroundColor}
+                name={agent.title}
                 shape="circle"
                 size={32}
                 style={{ flex: 'none' }}

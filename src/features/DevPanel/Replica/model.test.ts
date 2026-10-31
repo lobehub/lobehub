@@ -1,4 +1,4 @@
-import type { ReplicaState } from '@lobechat/replica';
+import type { ReplicaState } from 'local-replica';
 import { describe, expect, it } from 'vitest';
 
 import type { ReplicaDevtoolsEntry } from '@/libs/replica/devtools';

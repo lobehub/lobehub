@@ -81,6 +81,12 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_SERVICE_TOKEN: z.string().optional(),
       ENABLE_AGENT_GATEWAY: z.boolean().optional(),
       /**
+       * Realtime page collaboration through the gateway's document rooms
+       * (LobeHub Cloud only; the self-hosted gateway has no rooms). Off: pages
+       * save over HTTP and the page agent writes back to the stored row.
+       */
+      ENABLE_PAGE_COLLAB: z.boolean().optional(),
+      /**
        * Server-to-server Agent Gateway endpoint, e.g. a Docker Compose service
        * name the browser cannot resolve. Falls back to AGENT_GATEWAY_URL.
        */
@@ -146,6 +152,7 @@ export const getAppConfig = () => {
 
       AGENT_GATEWAY_SERVICE_TOKEN: process.env.AGENT_GATEWAY_SERVICE_TOKEN,
       ENABLE_AGENT_GATEWAY: process.env.ENABLE_AGENT_GATEWAY === '1',
+      ENABLE_PAGE_COLLAB: process.env.ENABLE_PAGE_COLLAB === '1',
       AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
       AGENT_GATEWAY_PROTOCOL: process.env.AGENT_GATEWAY_PROTOCOL || undefined,
       AGENT_GATEWAY_INTERNAL_URL: process.env.AGENT_GATEWAY_INTERNAL_URL || undefined,

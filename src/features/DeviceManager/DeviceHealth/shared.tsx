@@ -1,35 +1,35 @@
-import type { DeviceMetricSeries, DeviceScope } from '@lobechat/types';
+import type { DeviceScope } from '@lobechat/types';
 import { cssVar, Flexbox, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { deviceService } from '@/services/device';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 
 import type { HealthSlotStatus, HealthStripBlock } from './buildHealthTimeline';
 import { formatPercent, peakUsageLevel, type UsageLevel } from './format';
 
-const DEVICE_METRICS_SWR_KEY = 'device/metricSeries';
-/** Devices upload every 5 minutes; polling faster only re-reads the same samples. */
-const REFRESH_INTERVAL_MS = 5 * 60_000;
-
 /**
- * The device's health series. The list-row preview and the detail panel read
- * the same key, so opening a device reuses the preview's data. `scope` is the
- * list item's, so a deviceId enrolled both personally and in the workspace
- * reads the row it was listed as. `enabled: false` (an off-screen row) stops
- * fetching; cached data comes back when it is on screen again.
+ * The device's health series, from the device store's replica. The list-row
+ * preview, the hover panel, the composer chip and the detail panel read the
+ * same entry, so opening a device reuses the preview's data, and a revisit
+ * charts the persisted copy before the server answers. `scope` is the list
+ * item's, so a deviceId enrolled both personally and in the workspace reads
+ * the row it was listed as. `enabled: false` (an off-screen row) stops
+ * fetching; the stored series stays.
  */
 export const useDeviceMetricSeries = (
   deviceId: string,
   scope: DeviceScope | undefined,
   enabled = true,
-) =>
-  useClientDataSWR<DeviceMetricSeries>(
-    enabled ? [DEVICE_METRICS_SWR_KEY, deviceId, scope] : null,
-    () => deviceService.getMetricSeries(deviceId, scope),
-    { refreshInterval: REFRESH_INTERVAL_MS },
+) => {
+  const params = { deviceId, scope };
+  const { error, isValidating, revalidate } = useDeviceStore((s) => s.useFetchDeviceMetricSeries)(
+    params,
+    enabled && !!deviceId,
   );
+  const data = useDeviceStore(deviceSelectors.getMetricSeries(params));
+  return { data, error, isValidating, mutate: revalidate };
+};
 
 export const USAGE_COLOR: Record<UsageLevel, string> = {
   critical: cssVar.colorError,

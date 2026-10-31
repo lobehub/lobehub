@@ -190,7 +190,7 @@ interface ExpertiseRunDescriptor {
   operationId?: string;
   reflectionKey: string;
   subjectId: string;
-  subjectType: 'document' | 'goal_gate' | 'standalone' | 'task' | 'topic';
+  subjectType: 'document' | 'goal_gate' | 'site' | 'standalone' | 'task' | 'topic';
 }
 
 /** An observation ready to persist, after whichever analysis produced it. */

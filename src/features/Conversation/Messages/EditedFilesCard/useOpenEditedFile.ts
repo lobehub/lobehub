@@ -1,3 +1,4 @@
+import type { OperationEditedFile } from '@lobechat/builtin-tools/operationArtifacts';
 import { useCallback } from 'react';
 
 import { isDesktop } from '@/const/version';
@@ -10,7 +11,6 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import { useConversationStore } from '../../store';
-import type { OperationEditedFile } from './deriveEditedFiles';
 
 // Home-relative paths are already anchored: the file tools expand exactly `~`,
 // `~/…`, and `~\…` at write time (see local-file-shell's `expandTilde`). A

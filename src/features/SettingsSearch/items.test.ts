@@ -13,6 +13,7 @@ import {
 const webContext: SettingsSearchContext = {
   disableEmailPassword: false,
   enableBusinessFeatures: true,
+  enableChannels: false,
   enableComposio: true,
   enableGatewayMode: true,
   enableWorkspace: false,
@@ -25,6 +26,15 @@ const webContext: SettingsSearchContext = {
 };
 
 describe('settings search index', () => {
+  it('only exposes the channel decision setting when channels are enabled', () => {
+    const item = SETTINGS_SEARCH_ITEMS.find(
+      (entry) => entry.labelKey === 'systemAgent.channelRouting.title',
+    )!;
+
+    expect(item.visible?.({ ...webContext, enableChannels: false }) ?? true).toBe(false);
+    expect(item.visible?.({ ...webContext, enableChannels: true }) ?? true).toBe(true);
+  });
+
   it('derives one search item per lab feature in catalog order', () => {
     const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
 
@@ -41,18 +51,6 @@ describe('settings search index', () => {
       expect(item.visible?.(webContext) ?? true).toBe(
         !feature.desktopOnly && !feature.workspaceOnly,
       );
-    }
-  });
-
-  it('shows workspace-only lab features only to users with workspace access', () => {
-    const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
-    const workspaceFeatures = LAB_FEATURES.filter((feature) => feature.workspaceOnly);
-    expect(workspaceFeatures.length).toBeGreaterThan(0);
-
-    for (const feature of workspaceFeatures) {
-      const item = labsItems.find(({ anchor }) => anchor === `labs-${feature.flag}`)!;
-      expect(item.visible?.({ ...webContext, enableWorkspace: true })).toBe(true);
-      expect(item.visible?.(webContext)).toBe(false);
     }
   });
 

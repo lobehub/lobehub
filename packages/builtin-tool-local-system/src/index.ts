@@ -1,6 +1,5 @@
 export { createPathScopeAudit, pathScopeAudit } from './interventionAudit';
 export { LocalSystemManifest } from './manifest';
-export { resolveLocalSystemManifest } from './resolveManifest';
 export { getShellSyntaxGuidance } from './shellSyntaxGuidance';
 export { systemPrompt } from './systemRole';
 export {

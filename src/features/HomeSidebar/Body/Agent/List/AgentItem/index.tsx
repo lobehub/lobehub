@@ -8,6 +8,7 @@ import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
@@ -19,7 +20,6 @@ import { useHomeStore } from '@/store/home';
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
-import Avatar from './Avatar';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
 const styles = stylex.create({
@@ -143,10 +143,12 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     }
 
     const avatarNode = (
-      <Avatar
+      <AgentAvatar
+        agentId={id}
         avatar={typeof avatar === 'string' ? avatar : undefined}
-        avatarBackground={backgroundColor || undefined}
-        title={displayTitle}
+        background={backgroundColor || undefined}
+        name={displayTitle}
+        size={22}
       />
     );
 
@@ -171,7 +173,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     }
 
     return avatarNode;
-  }, [isUpdating, isLoading, avatar, backgroundColor, displayTitle, unreadCount]);
+  }, [isUpdating, isLoading, id, avatar, backgroundColor, displayTitle, unreadCount]);
 
   const dropdownMenu = useAgentDropdownMenu({
     avatar: typeof avatar === 'string' ? avatar : undefined,

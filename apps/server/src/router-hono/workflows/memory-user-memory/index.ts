@@ -3,6 +3,7 @@ import { serve } from '@upstash/workflow/hono';
 import { Hono } from 'hono';
 
 import { createWorkflowQstashClient } from '../qstashClient';
+import { consolidationHandler, consolidationWorkflowOptions } from './workflows/consolidation';
 import { hourlyWorkflowHandler, hourlyWorkflowOptions } from './workflows/hourly';
 import { personaUpdateHandler, personaUpdateWorkflowOptions } from './workflows/personaUpdate';
 import { processTopicHandler, processTopicWorkflowOptions } from './workflows/processTopic';
@@ -25,6 +26,16 @@ app.post(
       ...hourlyWorkflowOptions,
       qstashClient: createWorkflowQstashClient(),
     },
+  ),
+);
+
+app.post(
+  '/pipelines/consolidation/run',
+  serve(
+    withOtelMetricsForUpstashWorkflows(consolidationHandler, {
+      url: '/api/workflows/memory-user-memory/pipelines/consolidation/run',
+    }),
+    { ...consolidationWorkflowOptions, qstashClient: createWorkflowQstashClient() },
   ),
 );
 

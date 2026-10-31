@@ -80,6 +80,11 @@ vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
   useIsWorkspaceOwner: () => mocks.isWorkspaceOwner,
 }));
 
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
+  useCurrentFavoritePath: () => '/favorite-path',
+  useFavoriteMenuItem: () => null,
+}));
 vi.mock('@/features/VisibilityConfirmContent', () => ({
   default: () => <div />,
 }));
@@ -175,23 +180,28 @@ describe('TaskDetailHeaderActions', () => {
     expect(mocks.dropdownItems.map((item) => item?.key)).toContain('makePrivate');
   });
 
-  it('hides "make private" from a workspace owner who is not the creator ', () => {
-    mocks.isWorkspaceOwner = true;
+  it('offers a non-creator member to take the public task over as private', () => {
     mocks.taskState.taskDetailMap = {
       'T-1': { createdByUserId: 'someone-else', visibility: 'public' },
     };
     render(<TaskDetailHeaderActions />);
+    const item = mocks.dropdownItems.find((i) => i?.key === 'makePrivate') as
+      { label?: string; onClick?: () => void } | undefined;
+    expect(item?.label).toBe('taskDetail.takeOver.menuLabel');
+    item?.onClick?.();
 
-    expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('makePrivate');
-  });
-
-  it('hides "make private" from non-creator members', () => {
-    mocks.taskState.taskDetailMap = {
-      'T-1': { createdByUserId: 'someone-else', visibility: 'public' },
+    const opts = mocks.confirmModal.mock.calls[0][0] as {
+      okButtonProps?: { danger?: boolean };
+      onOk: () => Promise<void>;
+      title: string;
     };
-    render(<TaskDetailHeaderActions />);
-
-    expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('makePrivate');
+    expect(opts.title).toBe('taskDetail.takeOver.confirmTitle');
+    expect(opts.okButtonProps?.danger).toBe(true);
+    return opts.onOk().then(() => {
+      expect(mocks.updateTaskVisibility).toHaveBeenCalledWith('T-1', 'private', {
+        takeOwnership: true,
+      });
+    });
   });
 
   it('hides "make private" on private tasks', () => {

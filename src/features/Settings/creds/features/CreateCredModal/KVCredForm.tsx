@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Input, InputPassword, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Input, InputPassword, TextArea, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
@@ -8,7 +8,8 @@ import { Minus, Plus } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CredsApi } from '../useCredsApi';
+import { credErrorKey } from '../credError';
+import { createExtras, type CredsApi } from '../useCredsApi';
 
 const styles = stylex.create({
   footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
@@ -58,7 +59,11 @@ const KVCredForm: FC<KVCredFormProps> = ({ credsApi, type, disabled, onBack, onS
         name: values.name,
         type,
         values: valuesObj,
+        ...createExtras(credsApi),
       });
+    },
+    onError: (error) => {
+      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
     },
     onSuccess: () => {
       onSuccess();

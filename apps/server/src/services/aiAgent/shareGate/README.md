@@ -32,7 +32,7 @@ Confirmed leak paths (a concrete visitor→creator-data route was found):
   system-only tools whose every API WRITES agent-document rows under the
   creator's account. No write grant exists to honor.
 
-- `lobe-task` / `lobe-goal`: `TaskModel`/`taskRouter` are scoped only by
+- `lobe-task` / `builtin-goal`: `TaskModel`/`taskRouter` are scoped only by
   `userId`/`workspaceId` — the CREATOR's. Every mutating and single-task-read
   API takes a model-supplied identifier resolved with no topic/conversation
   check, letting a visitor read, edit, delete, reschedule or RUN (spending

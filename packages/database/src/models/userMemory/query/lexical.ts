@@ -1,14 +1,14 @@
-import type { SearchMemoryParams } from '@lobechat/types';
+import type {
+  SearchMemoryParams,
+  UserMemoryActivityWithoutVectors,
+  UserMemoryContextWithoutVectors,
+  UserMemoryExperienceWithoutVectors,
+  UserMemoryIdentityWithoutVectors,
+  UserMemoryPreferenceWithoutVectors,
+} from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 
-import type {
-  UserMemoryActivitiesWithoutVectors,
-  UserMemoryContextsWithoutVectors,
-  UserMemoryExperiencesWithoutVectors,
-  UserMemoryIdentitiesWithoutVectors,
-  UserMemoryPreferencesWithoutVectors,
-} from '../../../schemas';
 import {
   userMemories,
   userMemoriesActivities,
@@ -97,6 +97,8 @@ export async function searchActivitiesLexical(
 
   const rowsQuery = ctx.db
     .select({
+      dossierId: userMemoriesActivities.dossierId,
+      injectable: userMemoriesActivities.injectable,
       accessedAt: userMemoriesActivities.accessedAt,
       associatedLocations: userMemoriesActivities.associatedLocations,
       associatedObjects: userMemoriesActivities.associatedObjects,
@@ -124,7 +126,7 @@ export async function searchActivitiesLexical(
     .orderBy(desc(userMemoriesActivities.capturedAt), desc(userMemoriesActivities.createdAt))
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryActivitiesWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryActivityWithoutVectors[]>;
 }
 
 export async function searchContextsLexical(
@@ -174,6 +176,13 @@ export async function searchContextsLexical(
   const contextCandidates = ctx.db.$with('lexical_context_candidates').as(
     ctx.db
       .select({
+        firstSeenAt: userMemoriesContexts.firstSeenAt,
+        lastEvidenceAt: userMemoriesContexts.lastEvidenceAt,
+        nextSteps: userMemoriesContexts.nextSteps,
+        now: userMemoriesContexts.now,
+        openQuestions: userMemoriesContexts.openQuestions,
+        synthesizedAt: userMemoriesContexts.synthesizedAt,
+        userMemoryId: userMemoriesContexts.userMemoryId,
         accessedAt: userMemoriesContexts.accessedAt,
         associatedObjects: userMemoriesContexts.associatedObjects,
         associatedSubjects: userMemoriesContexts.associatedSubjects,
@@ -232,6 +241,13 @@ export async function searchContextsLexical(
       type: contextCandidates.type,
       updatedAt: contextCandidates.updatedAt,
       userId: contextCandidates.userId,
+      firstSeenAt: contextCandidates.firstSeenAt,
+      lastEvidenceAt: contextCandidates.lastEvidenceAt,
+      nextSteps: contextCandidates.nextSteps,
+      now: contextCandidates.now,
+      openQuestions: contextCandidates.openQuestions,
+      synthesizedAt: contextCandidates.synthesizedAt,
+      userMemoryId: contextCandidates.userMemoryId,
       userMemoryIds: contextCandidates.userMemoryIds,
     })
     .from(contextCandidates)
@@ -239,7 +255,7 @@ export async function searchContextsLexical(
     .orderBy(desc(contextCandidates.capturedAt), desc(contextCandidates.createdAt))
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryContextsWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryContextWithoutVectors[]>;
 }
 
 export async function searchExperiencesLexical(
@@ -319,7 +335,7 @@ export async function searchExperiencesLexical(
     .orderBy(desc(userMemoriesExperiences.capturedAt), desc(userMemoriesExperiences.createdAt))
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryExperiencesWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryExperienceWithoutVectors[]>;
 }
 
 export async function searchPreferencesLexical(
@@ -373,6 +389,12 @@ export async function searchPreferencesLexical(
 
   const rowsQuery = ctx.db
     .select({
+      appliesToEntityId: userMemoriesPreferences.appliesToEntityId,
+      evidenceCount: userMemoriesPreferences.evidenceCount,
+      evidenceSource: userMemoriesPreferences.evidenceSource,
+      holderEntityId: userMemoriesPreferences.holderEntityId,
+      lastEvidenceAt: userMemoriesPreferences.lastEvidenceAt,
+      scope: userMemoriesPreferences.scope,
       accessedAt: userMemoriesPreferences.accessedAt,
       capturedAt: userMemoriesPreferences.capturedAt,
       conclusionDirectives: userMemoriesPreferences.conclusionDirectives,
@@ -393,7 +415,7 @@ export async function searchPreferencesLexical(
     .orderBy(desc(userMemoriesPreferences.capturedAt), desc(userMemoriesPreferences.createdAt))
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryPreferencesWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryPreferenceWithoutVectors[]>;
 }
 
 export async function searchIdentitiesLexical(
@@ -442,6 +464,7 @@ export async function searchIdentitiesLexical(
 
   const rowsQuery = ctx.db
     .select({
+      entityId: userMemoriesIdentities.entityId,
       accessedAt: userMemoriesIdentities.accessedAt,
       capturedAt: userMemoriesIdentities.capturedAt,
       createdAt: userMemoriesIdentities.createdAt,
@@ -463,5 +486,5 @@ export async function searchIdentitiesLexical(
     .orderBy(desc(userMemoriesIdentities.capturedAt), desc(userMemoriesIdentities.createdAt))
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryIdentitiesWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryIdentityWithoutVectors[]>;
 }

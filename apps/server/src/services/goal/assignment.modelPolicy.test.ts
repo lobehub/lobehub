@@ -137,6 +137,8 @@ describe('goal model overrides on a fixed-model Agent', () => {
     const { taskId } = await memberGoals.tick(graph.goal.id);
     const ownTask = () => new TaskModel(db, memberId, workspaceId).findById(taskId!);
     expect((await ownTask())?.visibility).toBe('private');
+    // A goal from before goal visibility: public, over the member's private work.
+    await db.update(goals).set({ visibility: 'public' }).where(eq(goals.id, graph.goal.id));
 
     // The Workspace owner acts on the member's goal; the Task is still the member's.
     await new GoalAssignmentService(db, authorId, workspaceId).setTaskModel(graph.goal.id, gemini);
@@ -165,6 +167,8 @@ describe('goal model overrides on a fixed-model Agent', () => {
     const { taskId } = await memberGoals.tick(graph.goal.id);
     const ownTask = () => new TaskModel(db, memberId, workspaceId).findById(taskId!);
     expect((await ownTask())?.assigneeAgentId).toBe(privateExecutorId);
+    // A goal from before goal visibility: public, over a private executor.
+    await db.update(goals).set({ visibility: 'public' }).where(eq(goals.id, graph.goal.id));
 
     const admin = new GoalAssignmentService(db, authorId, workspaceId);
     await admin.setTaskModel(graph.goal.id, gemini);

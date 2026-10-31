@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "지식 베이스에 추가",
   "addToKnowledgeBase.totalFiles": "{{count}}개의 파일이 선택되었습니다",
   "createNew.confirm": "새로 만들기",
+  "createNew.cover.label": "표지",
   "createNew.description.label": "라이브러리 설명 (선택 사항)",
   "createNew.description.placeholder": "설명은 LLM이 라이브러리를 더 잘 이해하는 데 도움이 됩니다",
   "createNew.edit.confirm": "변경 사항 저장",

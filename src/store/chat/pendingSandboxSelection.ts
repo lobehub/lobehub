@@ -1,4 +1,6 @@
-import type { SandboxSelection } from '@/features/ChatInput/ControlBar/SandboxInstancePicker';
+import type { ChatTopicMetadata } from '@lobechat/types';
+
+import type { SandboxSelection } from '@/features/ChatInput/ControlBar/useSandboxPlacement';
 
 /**
  * Module-level singleton for a sandbox selection made before the topic exists.
@@ -11,7 +13,7 @@ import type { SandboxSelection } from '@/features/ChatInput/ControlBar/SandboxIn
  *
  * Deliberately not the agent's `agencyConfig`, which is where the device picker
  * keeps its equivalent pre-topic choice. That row is shared by every member of a
- * workspace agent, while an instance belongs to one member — writing it there
+ * workspace agent, while a folder choice belongs to one member — writing it there
  * would point other members at storage that is not theirs.
  *
  * Deliberately not persisted either: this is a choice about the conversation
@@ -66,3 +68,14 @@ export const consumePendingSandboxSelection = (agentId: string): SandboxSelectio
   emit();
   return selection;
 };
+
+/** The topic metadata a pending selection becomes when the topic is created with it. */
+export const toSandboxTopicMetadata = (
+  selection: SandboxSelection | undefined,
+): ChatTopicMetadata | undefined =>
+  selection && {
+    sandboxDrive: selection.drive,
+    sandboxEnvironmentId: selection.environmentId,
+    sandboxInstanceId: selection.instanceId,
+    sandboxWorkingDirectory: selection.workingDirectory,
+  };

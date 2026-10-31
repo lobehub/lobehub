@@ -553,7 +553,9 @@ export class GoalGraphModel {
 
     const depthOfRow = (row: (typeof rows)[number]) =>
       Math.min(
+        /* v8 ignore start -- unreachable `?? Infinity`: the join keeps only nodes whose taskId is in taskIds, which are exactly depthOf's keys */
         row.nodeTaskId ? (depthOf.get(row.nodeTaskId) ?? Infinity) : Infinity,
+        /* v8 ignore stop */
         row.subjectType === 'task' && row.carrierTaskId
           ? (depthOf.get(row.carrierTaskId) ?? Infinity)
           : Infinity,
@@ -800,6 +802,32 @@ export class GoalGraphModel {
 
   /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
   /** `confidence` travels with the description when the planner re-reads the problem. */
+  /** Follow a goal rename on the root question, while it still carries the goal's old title. */
+  renameProblemNode = async (goalId: string, from: string, to: string) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [node] = await tx
+        .update(goalNodes)
+        .set({ title: to, updatedAt: new Date() })
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.kind, 'problem'),
+            eq(goalNodes.title, from),
+          ),
+        )
+        .returning();
+      if (!node) return undefined;
+      await this.appendEvent(tx, goalId, {
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'updated',
+        reason: 'Goal renamed',
+        taskId: node.taskId ?? undefined,
+      });
+      return node;
+    });
+
   updateNodeDescription = async (
     goalId: string,
     nodeId: string,

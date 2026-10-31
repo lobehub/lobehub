@@ -19,12 +19,14 @@ const mocks = vi.hoisted(() => ({
     taskDetailMap: {
       'T-parent': {
         agentId: 'agt_parent',
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
         subtasks: [
           {
             assignee: { avatar: null, backgroundColor: null, id: 'agt_child', title: 'Child' },
+            id: 'T-child',
             identifier: 'T-child',
             name: 'Child task',
             status: 'backlog',
@@ -190,6 +192,7 @@ describe('TaskSubtasks', () => {
     mocks.taskState.taskDetailMap['T-parent'].subtasks = [
       {
         assignee: { avatar: null, backgroundColor: null, id: 'agt_child', title: 'Child' },
+        id: 'T-child',
         identifier: 'T-child',
         name: 'Child task',
         status: 'backlog',
@@ -221,6 +224,7 @@ describe('TaskSubtasks', () => {
     mocks.taskState.taskDetailMap['T-parent'].subtasks = [
       {
         assigneeUserId: 'member-1',
+        id: 'T-child',
         identifier: 'T-child',
         name: 'Child task',
         status: 'backlog',
@@ -232,6 +236,7 @@ describe('TaskSubtasks', () => {
 
     const expectedTarget = expect.objectContaining({
       assigneeUserId: 'member-1',
+      id: 'T-child',
       identifier: 'T-child',
     });
     expect(mocks.buildContextMenuItems).toHaveBeenCalledWith(expectedTarget);
@@ -243,6 +248,7 @@ describe('TaskSubtasks', () => {
       {
         assigneeUserId: 'member-1',
         automationMode: 'schedule',
+        id: 'T-child',
         identifier: 'T-child',
         name: 'Scheduled child task',
         status: 'scheduled',
@@ -259,6 +265,7 @@ describe('TaskSubtasks', () => {
     mocks.taskState.taskDetailMap['T-parent'].subtasks = [
       {
         assigneeUserId: 'member-1',
+        id: 'T-child',
         identifier: 'T-child',
         name: 'Child task',
         status: 'backlog',
@@ -273,6 +280,7 @@ describe('TaskSubtasks', () => {
   it('falls back to the global task route when the selected subtask has no assignee', () => {
     mocks.taskState.taskDetailMap['T-parent'].subtasks = [
       {
+        id: 'T-child',
         identifier: 'T-child',
         name: 'Child task',
         status: 'backlog',
@@ -290,6 +298,7 @@ describe('TaskSubtasks', () => {
     mocks.taskState.taskDetailMap['T-parent'].subtasks = [
       {
         assignee: { avatar: null, backgroundColor: null, id: 'agt_child', title: 'Child' },
+        id: 'T-child',
         identifier: 'T-child',
         name: 'Child task',
         runningTopic: { id: 'topic-running', operationId: 'op-running' },

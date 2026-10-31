@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import os from 'node:os';
 import { promisify } from 'node:util';
 
+import { BROWSER_IDENTIFIER } from '@lobechat/device-control/agent-browser';
 import { COMPUTER_USE_IDENTIFIER } from '@lobechat/device-control/computer-use';
 import type { DeviceSystemInfo } from '@lobechat/device-gateway-client';
 import type { RuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
@@ -58,7 +59,7 @@ export const collectGatewaySystemInfo = async (
 ): Promise<DeviceSystemInfo> => {
   const { getShellInfo } = await import('@lobechat/local-file-shell/shell');
   return {
-    supportedTools: [COMPUTER_USE_IDENTIFIER],
+    supportedTools: [COMPUTER_USE_IDENTIFIER, BROWSER_IDENTIFIER],
     supportedAgentRuntimes: await agentRuntimes.get(),
     arch: os.arch(),
     // Tell the server-side prompt builder which shell runCommand spawns here.

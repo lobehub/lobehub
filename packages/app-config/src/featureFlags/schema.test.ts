@@ -193,6 +193,18 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
+  it('should keep topic previews off by default and enable them for listed users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.topic_preview).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableTopicPreview).toBe(
+      false,
+    );
+
+    const config = { topic_preview: ['user-123'] };
+
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableTopicPreview).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableTopicPreview).toBe(false);
+  });
+
   it('should gate the mobile gateway mux independently from the Web flag', () => {
     expect(DEFAULT_FEATURE_FLAGS.agent_gateway_mux_mobile).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableGatewayMuxMobile).toBe(
@@ -223,6 +235,18 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableDashboard).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableDashboard).toBe(false);
     expect(mapFeatureFlagsEnvToState(config).enableDashboard).toBe(false);
+  });
+
+  it('should keep Channels off by default and enable them per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.channel).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableChannels).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ channel: true }).enableChannels).toBe(true);
+
+    const config = { channel: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableChannels).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableChannels).toBe(false);
+    expect(mapFeatureFlagsEnvToState(config).enableChannels).toBe(false);
   });
 
   it('should correctly map boolean feature flags to state', () => {

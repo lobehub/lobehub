@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useTaskStore } from '@/store/task';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { styles } from './style';
 import { taskDetailPath } from './taskDetailPath';
@@ -21,21 +22,28 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const { aid } = useParams<{ aid?: string }>();
   const agentMeta = useAgentDisplayMeta(aid);
-  const taskTitle = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
+  const taskTitle = useTaskStore((s) =>
+    taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.name : undefined,
+  );
   const taskIdentifier = useTaskStore((s) =>
-    taskId ? s.taskDetailMap[taskId]?.identifier : undefined,
+    taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.identifier : undefined,
   );
   const ancestors = useTaskStore(
     useShallow((s) => {
       if (!taskId) return [];
-      const chain: Array<{ agentId?: string | null; identifier: string; name?: string | null }> =
-        [];
+      const chain: Array<{
+        id: string;
+        agentId?: string | null;
+        identifier: string;
+        name?: string | null;
+      }> = [];
       const visited = new Set<string>([taskId]);
-      let cursor = s.taskDetailMap[taskId]?.parent;
-      while (cursor?.identifier && !visited.has(cursor.identifier)) {
-        const detail = s.taskDetailMap[cursor.identifier];
-        visited.add(cursor.identifier);
+      let cursor = s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.parent;
+      while (cursor?.id && !visited.has(cursor.id)) {
+        const detail = s.taskDetailMap[cursor.id];
+        visited.add(cursor.id);
         chain.push({
+          id: cursor.id,
           agentId: cursor.agentId === undefined ? detail?.agentId : cursor.agentId,
           identifier: cursor.identifier,
           name: cursor.name ?? detail?.name,
@@ -47,7 +55,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   );
 
   const allTasksLabel = (
-    <Text color={'inherit'} weight={500}>
+    <Text color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
       {t('taskList.all')}
     </Text>
   );
@@ -80,8 +88,8 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
         }
       : agentCrumb;
 
-  const ancestorCrumbs = ancestors.map(({ identifier, agentId, name }) => ({
-    key: identifier,
+  const ancestorCrumbs = ancestors.map(({ id, identifier, agentId, name }) => ({
+    key: id,
     title: (
       <WorkspaceLink to={taskDetailPath(identifier, agentId ?? undefined, name)}>
         <Text color={'inherit'} weight={500}>
@@ -133,14 +141,20 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
       className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} />}
       items={[
-        {
-          title:
-            taskId || agentCrumbNode ? (
-              <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
-            ) : (
-              allTasksLabel
-            ),
-        },
+        // On a phone the header's back button already leads up, and there is
+        // no room for the root crumb beside the task title.
+        ...(isMobileSurface() && (taskId || agentCrumbNode)
+          ? []
+          : [
+              {
+                title:
+                  taskId || agentCrumbNode ? (
+                    <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
+                  ) : (
+                    allTasksLabel
+                  ),
+              },
+            ]),
         ...(agentCrumbNode ? [agentCrumbNode] : []),
         ...ancestorCrumbs,
         ...(currentTaskCrumb ? [currentTaskCrumb] : []),

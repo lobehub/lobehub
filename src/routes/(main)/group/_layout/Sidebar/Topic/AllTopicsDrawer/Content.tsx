@@ -8,6 +8,7 @@ import { VList } from 'virtua';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import TopicEmpty from '@/features/TopicEmpty';
+import { useSidebarTopicSearch } from '@/hooks/useSidebarTopicSearch';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
@@ -32,8 +33,6 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
     isLoadingMore,
     isExpandingPageSize,
     loadMoreTopics,
-    activeAgentId,
-    useSearchTopics,
   ] = useChatStore((s) => [
     s.activeTopicId,
     s.activeThreadId,
@@ -41,8 +40,6 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
     topicSelectors.isLoadingMoreTopics(s),
     topicSelectors.isExpandingPageSize(s),
     s.loadMoreTopics,
-    s.activeAgentId,
-    s.useSearchTopics,
   ]);
 
   // Use server-side search if there's a keyword
@@ -60,11 +57,7 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   }, [isSearching]);
 
   // Only search when there's a keyword (pass undefined to disable SWR)
-  // Note: searchTopics uses sessionId in the service, but agentId in the hook
-  useSearchTopics(isSearching ? trimmedKeyword : undefined, {
-    agentId: activeAgentId,
-    groupId: undefined,
-  });
+  useSidebarTopicSearch(isSearching ? trimmedKeyword : undefined);
 
   const searchResults = useChatStore(topicSelectors.searchTopics, isEqual);
   const allTopicList = useChatStore(topicSelectors.displayTopics, isEqual);

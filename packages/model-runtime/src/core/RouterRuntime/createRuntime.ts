@@ -1,10 +1,7 @@
-/**
- * @see https://github.com/lobehub/lobe-chat/discussions/6563
- */
+/** @see https://github.com/lobehub/lobe-chat/discussions/6563 */
 import type { GoogleGenAIOptions } from '@google/genai';
 import type { ModelPricingContext, RouterRuntimeRequestContext } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
-import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import debug from 'debug';
 import { nanoid } from 'nanoid';
 
@@ -21,11 +18,13 @@ import type {
   CreateVideoPayload,
   DecisionOptions,
   DecisionPayload,
+  DecisionQuestions,
   EmbeddingsOptions,
   EmbeddingsPayload,
   GenerateObjectOptions,
   GenerateObjectPayload,
   HandleCreateVideoWebhookPayload,
+  TextToSpeechOptions,
   TextToSpeechPayload,
   VideoPollingRoute,
 } from '../../types';
@@ -35,12 +34,15 @@ import { postProcessModelList } from '../../utils/postProcessModelList';
 import { isImageDecodingRequestError, shouldStopFallbackForError } from '../../utils/routeFallback';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { setRuntimeSignatureScopeSource } from '../../utils/signatureScope';
+import { createTimingHelpers, getDurationMs } from '../../utils/timing';
 import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from '../BaseAI';
 import type { ApiType } from './apiTypes';
 import { getChatAttemptObservation, observeChatAttempt } from './chatAttempt';
+import { createChatAttemptFallbackCheck, resolveHoldReasoning } from './chatFallbackHooks';
 import type { ChatStreamFallbackAttempt } from './chatStreamFallback';
 import { createChatStreamFallbackResponse } from './chatStreamFallback';
+import { runDecision } from './decisionRuntime';
 import type { RouteAttemptResult, RouteAttemptStart } from './routeAttempt';
 import { createRouteRequestTasks } from './routeRequestTasks';
 import type {
@@ -139,7 +141,10 @@ export const createRouterRuntime = ({
       const trigger = metadata?.trigger;
       const traceId = typeof metadata?.traceId === 'string' ? metadata.traceId : undefined;
 
-      if (this._id !== 'lobehub' || (effectiveUserId && trigger)) return effectiveUserId;
+      /** Pre-auth flows have no user id yet, so their stable trace id identifies the request. */
+      if (this._id !== 'lobehub' || ((effectiveUserId || traceId) && trigger)) {
+        return effectiveUserId;
+      }
       if (process.env.NODE_ENV !== 'development') return effectiveUserId;
 
       const diagnostic = {
@@ -534,6 +539,8 @@ export const createRouterRuntime = ({
         }
       };
 
+      const holdReasoning = await resolveHoldReasoning(params.isImageOutputModel, payload.model);
+
       const startAttempt = async (optionIndex: number): Promise<ChatStreamFallbackAttempt> => {
         const optionItem = routerOptions[optionIndex];
         const {
@@ -579,7 +586,7 @@ export const createRouterRuntime = ({
               if (routeTasks) routeTasks.track(Promise.resolve(task));
               else return task;
             },
-            { deferCallbacks: true },
+            { deferCallbacks: true, holdReasoning },
           );
           const durationMs = Date.now() - attempt.startedAt;
           reportReturnedAttempt(attempt, {
@@ -665,14 +672,7 @@ export const createRouterRuntime = ({
       try {
         return await createChatStreamFallbackResponse({
           onSettled: routeTasks?.settle,
-          shouldFallback: async (result) => {
-            try {
-              return Boolean(await params.shouldFallbackChatAttempt?.(result));
-            } catch (error) {
-              log('shouldFallbackChatAttempt callback error: %O', error);
-              return false;
-            }
-          },
+          shouldFallback: createChatAttemptFallbackCheck(params.shouldFallbackChatAttempt),
           startAttempt,
           totalAttempts: routerOptions.length,
         });
@@ -1194,7 +1194,7 @@ export const createRouterRuntime = ({
       );
     }
 
-    async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
+    async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
       return this.runWithFallback(
         payload.model,
         (runtime) => runtime.textToSpeech!(payload, options),
@@ -1215,21 +1215,13 @@ export const createRouterRuntime = ({
       );
     }
 
-    async decide(payload: DecisionPayload, options?: DecisionOptions) {
+    async decide<Q extends DecisionQuestions>(
+      payload: DecisionPayload<Q>,
+      options?: DecisionOptions,
+    ) {
       return this.runWithFallback(
         payload.model,
-        (runtime) => {
-          // Route options pick runtimes by apiType, and most of those classes cannot serve
-          // decision models; fail this attempt explicitly so fallback can move on.
-          if (!runtime.decide) {
-            throw AgentRuntimeError.chat({
-              error: new Error('Decision models are not supported by the matched runtime'),
-              errorType: AgentRuntimeErrorType.CapabilityNotSupported,
-              provider: this._id,
-            });
-          }
-          return runtime.decide(payload, options);
-        },
+        (runtime) => runDecision(runtime, payload, options, this._id),
         {
           metadata: options?.metadata,
           method: 'decide',

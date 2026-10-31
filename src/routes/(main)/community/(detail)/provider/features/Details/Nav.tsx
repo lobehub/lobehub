@@ -1,7 +1,9 @@
 'use client';
 
 import { BRANDING_PROVIDER, SOCIAL_URL } from '@lobechat/business-const';
-import { createStaticStyles, Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { Flexbox, Icon, Tabs } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BookOpenIcon, BrainCircuitIcon, ListIcon, SquareArrowOutUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,22 +14,18 @@ import { ProviderNavKey } from '@/types/discover';
 
 import { useDetailContext } from '../DetailProvider';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    link: css`
-      display: inline-flex;
-      gap: 4px;
-      align-items: center;
-      color: ${cssVar.colorTextDescription};
-
-      &:hover {
-        color: ${cssVar.colorInfo};
-      }
-    `,
-    nav: css`
-      border-block-end: 1px solid ${cssVar.colorBorder};
-    `,
-  };
+const styles = stylex.create({
+  link: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorInfo },
+  },
+  nav: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+  },
 });
 
 interface NavProps {
@@ -77,7 +75,12 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ProviderNavKey.O
   return mobile ? (
     nav
   ) : (
-    <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.nav).className}
+      justify={'space-between'}
+    >
       {nav}
       <Flexbox
         horizontal
@@ -85,13 +88,18 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ProviderNavKey.O
         gap={12}
         style={{ marginInlineStart: 12, whiteSpace: 'nowrap' }}
       >
-        <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
+        <a
+          {...stylex.props(styles.link)}
+          href={SOCIAL_URL.discord}
+          rel="noreferrer"
+          target="_blank"
+        >
           {t('mcp.details.nav.needHelp')}
           <Icon icon={SquareArrowOutUpRight} size={12} />
         </a>
         {identifier && (
           <a
-            className={styles.link}
+            {...stylex.props(styles.link)}
             href={urlJoin(GITHUB, 'tree/main/src/config/modelProviders', `${identifier}.ts`)}
             rel="noreferrer"
             target="_blank"
@@ -100,7 +108,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ProviderNavKey.O
             <Icon icon={SquareArrowOutUpRight} size={12} />
           </a>
         )}
-        <a className={styles.link} href={GITHUB_ISSUES} rel="noreferrer" target="_blank">
+        <a {...stylex.props(styles.link)} href={GITHUB_ISSUES} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.reportIssue')}
           <Icon icon={SquareArrowOutUpRight} size={12} />
         </a>

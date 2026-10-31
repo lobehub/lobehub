@@ -1,6 +1,6 @@
 import { open } from 'node:fs/promises';
 
-import { resolveClaudeCodeTranscriptPath } from './ensureResumeTranscript';
+import { findClaudeCodeTranscriptPath } from './ensureResumeTranscript';
 
 /** Tail window read per step while scanning backwards for the last cost-state. */
 const CHUNK_BYTES = 64 * 1024;
@@ -116,7 +116,7 @@ export const readClaudeCodeSessionCost = async (params: {
   sessionId: string;
 }): Promise<number | undefined> => {
   try {
-    const filePath = await resolveClaudeCodeTranscriptPath(params);
+    const filePath = await findClaudeCodeTranscriptPath(params);
     return filePath ? await readTranscriptSessionCost(filePath) : undefined;
   } catch {
     return undefined;

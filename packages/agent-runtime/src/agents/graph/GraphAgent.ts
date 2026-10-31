@@ -1,9 +1,9 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { AgentGraph, AgentGraphEdge, AgentGraphNode } from '@lobechat/types';
 import { AGENT_GRAPH_ROOT_NODE_ID } from '@lobechat/types/agent/graph';
-import { toJsonSafe } from '@lobechat/utils/json';
-import type { UnknownRecord } from '@lobechat/utils/object';
-import { isRecord } from '@lobechat/utils/object';
+import { toJsonSafe } from '../../utils/json';
+import type { UnknownRecord } from '../../utils/object';
+import { isRecord } from '../../utils/object';
 import Ajv from 'ajv';
 
 import type {

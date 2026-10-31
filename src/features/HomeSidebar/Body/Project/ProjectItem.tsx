@@ -1,18 +1,25 @@
 'use client';
 
 import type { DropdownItem } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal, DropdownMenu, Icon, toast } from '@lobehub/ui';
-import { FolderClosedIcon, MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
+import { ActionIcon, confirmModal, DropdownMenu, Icon, toast } from '@lobehub/ui';
+import { MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import ProjectAvatar from '@/features/Projects/ProjectAvatar';
 import { openRenameProjectModal } from '@/features/Projects/RenameProjectModal';
+import { useCanManageProject } from '@/features/Projects/useCanManageProject';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import type { ProjectListItem } from '@/store/project';
 import { useProjectStore } from '@/store/project';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+
+// `avatar` is an emoji or image URL, not a component: `Icon` would pass it to
+// createElement as a tag name and crash the whole page.
+export const projectIcon = (project: Pick<ProjectListItem, 'avatar' | 'name'>) => (
+  <ProjectAvatar avatar={project.avatar} name={project.name} size={18} />
+);
 
 interface ProjectItemProps {
   project: ProjectListItem;
@@ -22,8 +29,20 @@ const ProjectItem = memo<ProjectItemProps>(({ project }) => {
   const { t } = useTranslation(['project', 'common']);
   const [deleting, setDeleting] = useState(false);
   const deleteProject = useProjectStore((s) => s.deleteProject);
-  const currentUserId = useUserStore(userProfileSelectors.userId);
-  const canManage = currentUserId === project.userId;
+  const canManage = useCanManageProject();
+  const projectPath = `/project/${project.slug ?? project.id}`;
+  const favoriteMenuItem = useFavoriteMenuItem(
+    {
+      icon: project.avatar ?? null,
+      // The slug can be renamed from Project Settings, where this row is not
+      // mounted to refresh the snapshot; the id link always resolves.
+      path: `/project/${project.id}`,
+      targetId: project.id,
+      title: project.name,
+      type: 'project',
+    },
+    { showHotkey: false },
+  );
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -37,54 +56,48 @@ const ProjectItem = memo<ProjectItemProps>(({ project }) => {
     }
   };
 
-  const menuItems: DropdownItem[] = canManage
-    ? [
-        {
-          icon: <Icon icon={PencilIcon} />,
-          key: 'rename',
-          label: t('rename.action'),
-          onClick: () => openRenameProjectModal(project),
-        },
-        { type: 'divider' },
-        {
-          danger: true,
-          icon: <Icon icon={TrashIcon} />,
-          key: 'delete',
-          label: t('list.deleteAction'),
-          onClick: () =>
-            confirmModal({
-              cancelText: t('cancel', { ns: 'common' }),
-              content: t('list.deleteConfirmDescription', { name: project.name }),
-              okButtonProps: { danger: true },
-              okText: t('delete', { ns: 'common' }),
-              onOk: () => void handleDelete(),
-              title: t('list.deleteConfirmTitle'),
-            }),
-        },
-      ]
-    : [];
+  const menuItems: DropdownItem[] = [
+    ...(favoriteMenuItem ? [favoriteMenuItem] : []),
+    ...(canManage
+      ? ([
+          { type: 'divider' },
+          {
+            icon: <Icon icon={PencilIcon} />,
+            key: 'rename',
+            label: t('rename.action'),
+            onClick: () => openRenameProjectModal(project),
+          },
+          { type: 'divider' },
+          {
+            danger: true,
+            icon: <Icon icon={TrashIcon} />,
+            key: 'delete',
+            label: t('list.deleteAction'),
+            onClick: () =>
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                content: t('list.deleteConfirmDescription', { name: project.name }),
+                okButtonProps: { danger: true },
+                okText: t('delete', { ns: 'common' }),
+                onOk: () => void handleDelete(),
+                title: t('list.deleteConfirmTitle'),
+              }),
+          },
+        ] satisfies DropdownItem[])
+      : []),
+  ];
 
   return (
-    <WorkspaceLink to={`/project/${project.slug ?? project.id}`}>
+    <WorkspaceLink to={projectPath}>
       <NavItem
-        contextMenuItems={canManage ? menuItems : undefined}
+        contextMenuItems={menuItems}
         disabled={deleting}
+        icon={projectIcon(project)}
         title={project.name}
         actions={
-          canManage ? (
-            <DropdownMenu items={menuItems}>
-              <ActionIcon icon={MoreHorizontalIcon} loading={deleting} size={'small'} />
-            </DropdownMenu>
-          ) : undefined
-        }
-        // `avatar` is an emoji or image URL, not a component: `Icon` would pass it to
-        // createElement as a tag name and crash the whole page.
-        icon={
-          project.avatar ? (
-            <Avatar avatar={project.avatar} shape={'square'} size={18} />
-          ) : (
-            FolderClosedIcon
-          )
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontalIcon} loading={deleting} size={'small'} />
+          </DropdownMenu>
         }
       />
     </WorkspaceLink>

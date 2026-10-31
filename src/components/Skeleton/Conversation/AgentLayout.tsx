@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import {
   OVERVIEW_PANEL_WIDTH,
@@ -12,17 +14,22 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import SkeletonBar from '../Bar';
 import ConversationLayoutSkeleton from './Layout';
 
-const styles = createStaticStyles(({ css }) => ({
-  overviewCard: css`
-    margin: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-    background: ${cssVar.colorBgContainer};
-  `,
-  rightPanel: css`
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  overviewCard: {
+    margin: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  rightPanel: {
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const PanelRows = ({ rows }: { rows: number }) => (
   <Flexbox gap={12} padding={16}>
@@ -51,7 +58,7 @@ const AgentConversationLayoutSkeleton = () => {
         aside={
           overview && (
             <Flexbox flex={'none'} width={OVERVIEW_PANEL_WIDTH + 32}>
-              <Flexbox className={styles.overviewCard}>
+              <Flexbox className={stylex.props(styles.overviewCard).className}>
                 <PanelRows rows={5} />
               </Flexbox>
             </Flexbox>
@@ -59,7 +66,11 @@ const AgentConversationLayoutSkeleton = () => {
         }
       />
       {rightPanelWidth && (
-        <Flexbox className={styles.rightPanel} flex={'none'} width={rightPanelWidth}>
+        <Flexbox
+          className={stylex.props(styles.rightPanel).className}
+          flex={'none'}
+          width={rightPanelWidth}
+        >
           <PanelRows rows={8} />
         </Flexbox>
       )}

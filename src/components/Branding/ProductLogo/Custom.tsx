@@ -1,22 +1,17 @@
 import { BRANDING_LOGO_URL, BRANDING_NAME } from '@lobechat/business-const';
 import { type IconType } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { type LobeChatProps } from '@lobehub/ui/brand';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import { type ImageProps } from '@/libs/next/Image';
 import Image from '@/libs/next/Image';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    extraTitle: css`
-      font-weight: 300;
-      white-space: nowrap;
-    `,
-  };
-});
+const styles = stylex.create({ extraTitle: { fontWeight: 300, whiteSpace: 'nowrap' } });
 
 const CustomTextLogo = memo<FlexboxProps & { size: number }>(({ size, style, ...rest }) => {
   return (
@@ -118,7 +113,7 @@ const CustomLogo = memo<LobeChatProps>(({ extra, size = 32, className, style, ty
     <Flexbox horizontal align={'center'} className={className} flex={'none'} {...rest}>
       {logoComponent}
       <Divider size={extraSize} style={{ color: cssVar.colorFill }} />
-      <div className={styles.extraTitle} style={{ fontSize: extraSize }}>
+      <div className={stylex.props(styles.extraTitle).className} style={{ fontSize: extraSize }}>
         {extra}
       </div>
     </Flexbox>
