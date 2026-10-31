@@ -1,10 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Button, cx, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
 import { AlertTriangle, ListTree } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +14,34 @@ import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 import { stripSubAgentReference } from '../../../subAgentReference';
 import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
 
-const styles = stylex.create({ container: { paddingBlock: "4px" }, label: { paddingInlineStart: "4px", fontSize: "12px", color: cssVar.colorTextTertiary }, labelRow: { marginBlockEnd: "4px" }, openThread: { height: "22px", paddingInline: "6px", fontSize: "12px" }, promptBox: { paddingBlock: "8px", paddingInline: "12px", borderRadius: cssVar.borderRadiusLG, backgroundColor: cssVar.colorFillTertiary, backgroundImage: "none" }, resultBox: { paddingBlock: "8px", paddingInline: "12px", borderRadius: cssVar.borderRadiusLG, backgroundColor: cssVar.colorBgContainer, backgroundImage: "none" }, stoppedLabel: { fontSize: "12px", color: cssVar.colorWarning }, stoppedResultBox: { borderWidth: "1px", borderStyle: "solid", borderColor: cssVar.colorWarningBorder, backgroundColor: cssVar.colorWarningBg, backgroundImage: "none" } });
+const styles = stylex.create({
+  container: { paddingBlock: '4px' },
+  label: { paddingInlineStart: '4px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  labelRow: { marginBlockEnd: '4px' },
+  openThread: { height: '22px', paddingInline: '6px', fontSize: '12px' },
+  promptBox: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  resultBox: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  stoppedLabel: { fontSize: '12px', color: cssVar.colorWarning },
+  stoppedResultBox: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorWarningBorder,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * Render for lobe-agent's `callSubAgent` tool.
@@ -107,7 +133,9 @@ export const CallSubAgentRender = memo<
                 {t('builtins.lobe-agent.subAgent.backgroundRunning')}
               </Text>
             ) : (
-              <Text className={stylex.props(styles.label).className}>{t('builtins.lobe-claude-code.agent.result')}</Text>
+              <Text className={stylex.props(styles.label).className}>
+                {t('builtins.lobe-claude-code.agent.result')}
+              </Text>
             )}
             {subagentThread && (
               <Button
@@ -124,10 +152,16 @@ export const CallSubAgentRender = memo<
             )}
           </Flexbox>
           {runningInBackground && (
-            <Text className={stylex.props(styles.label).className}>{t('builtins.lobe-agent.subAgent.backgroundHint')}</Text>
+            <Text className={stylex.props(styles.label).className}>
+              {t('builtins.lobe-agent.subAgent.backgroundHint')}
+            </Text>
           )}
           {result && (
-            <Flexbox className={stylex.props(styles.resultBox, stopped && styles.stoppedResultBox).className}>
+            <Flexbox
+              className={
+                stylex.props(styles.resultBox, stopped && styles.stoppedResultBox).className
+              }
+            >
               <Markdown style={{ maxHeight: 320, overflow: 'auto' }} variant={'chat'}>
                 {result}
               </Markdown>

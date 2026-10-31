@@ -4,7 +4,6 @@ import type { BuiltinStreamingProps } from '@lobechat/types';
 import { Flexbox, Markdown, useTheme } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
 import { memo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
@@ -13,7 +12,16 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTaskParams } from '../../../types';
 
-const styles = stylex.create({ agentTitle: { fontSize: "14px", fontWeight: 500, color: cssVar.colorText }, container: { padding: "12px", borderRadius: "8px", backgroundColor: cssVar.colorFillQuaternary, backgroundImage: "none" }, task: { fontSize: "13px", color: cssVar.colorTextSecondary } });
+const styles = stylex.create({
+  agentTitle: { fontSize: '14px', fontWeight: 500, color: cssVar.colorText },
+  container: {
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  task: { fontSize: '13px', color: cssVar.colorTextSecondary },
+});
 
 export const ExecuteTaskStreaming = memo<BuiltinStreamingProps<ExecuteTaskParams>>(({ args }) => {
   const { agentId, instruction } = args || {};

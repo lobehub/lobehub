@@ -6,7 +6,6 @@ import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { Flexbox, useTheme } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,7 +13,57 @@ import AgentAvatar from '@/components/AgentAvatar';
 
 import type { AgentSearchItem, SearchAgentParams, SearchAgentState } from '../../../types';
 
-const styles = stylex.create({ agentItem: { paddingBlock: "8px", paddingInline: "12px", borderRadius: "6px", backgroundColor: cssVar.colorFillQuaternary, backgroundImage: "none" }, agentRole: { fontSize: "12px", color: cssVar.colorTextTertiary }, agentTitle: { fontSize: "13px", fontWeight: 500 }, container: { display: "flex", flexDirection: "column", gap: "8px", padding: "12px", borderRadius: "8px", backgroundColor: cssVar.colorFillQuaternary, backgroundImage: "none" }, description: { overflow: "hidden", fontSize: "12px", color: cssVar.colorTextSecondary, textOverflow: "ellipsis", whiteSpace: "nowrap" }, heteroBadge: { paddingBlock: "2px", paddingInline: "6px", borderRadius: "4px", fontSize: "10px", color: cssVar.colorTextSecondary, backgroundColor: cssVar.colorFillSecondary, backgroundImage: "none" }, marketBadge: { paddingBlock: "2px", paddingInline: "6px", borderRadius: "4px", fontSize: "10px", color: cssVar.colorPrimary, backgroundColor: cssVar.colorPrimaryBg, backgroundImage: "none" }, noResults: { padding: "12px", fontSize: "13px", color: cssVar.colorTextSecondary, textAlign: "center" } });
+const styles = stylex.create({
+  agentItem: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: '6px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  agentRole: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  agentTitle: { fontSize: '13px', fontWeight: 500 },
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  description: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  heteroBadge: {
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  marketBadge: {
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    color: cssVar.colorPrimary,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+  noResults: {
+    padding: '12px',
+    fontSize: '13px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+});
 
 export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, SearchAgentState>>(
   ({ pluginState }) => {

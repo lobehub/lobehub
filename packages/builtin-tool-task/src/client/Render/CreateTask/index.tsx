@@ -4,7 +4,6 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { ActionIcon, Block, Markdown, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
 import { PanelRight, PanelRightClose } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +15,51 @@ import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { CreateTaskParams, CreateTaskState } from '../../../types';
 import { useTaskDetailToggle } from '../shared';
 
-const styles = stylex.create({ description: { overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "3", fontSize: "12px", lineHeight: 1.5, color: cssVar.colorTextTertiary }, identifier: { flexShrink: 0, paddingBlock: "1px", paddingInline: "6px", borderRadius: "4px", fontFamily: cssVar.fontFamilyCode, fontSize: "12px", color: cssVar.colorTextSecondary, backgroundColor: cssVar.colorFillTertiary, backgroundImage: "none" }, instruction: { overflow: "hidden", maxHeight: "132px", maskImage: "linear-gradient(to bottom, black 78%, transparent)" }, row: { display: "flex", gap: "8px", alignItems: "center" }, taskItem: { display: "flex", flexDirection: "column", gap: "6px", paddingBlock: "10px", paddingInline: "12px" }, title: { overflow: "hidden", flex: "1", minWidth: "0", fontSize: "13px", lineHeight: 1.4, color: cssVar.colorText, textOverflow: "ellipsis", whiteSpace: "nowrap" } });
+const styles = stylex.create({
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '3',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextTertiary,
+  },
+  identifier: {
+    flexShrink: 0,
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  instruction: {
+    overflow: 'hidden',
+    maxHeight: '132px',
+    maskImage: 'linear-gradient(to bottom, black 78%, transparent)',
+  },
+  row: { display: 'flex', gap: '8px', alignItems: 'center' },
+  taskItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+  },
+  title: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    fontSize: '13px',
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 export const CreateTaskRender = memo<BuiltinRenderProps<CreateTaskParams, CreateTaskState>>(
   ({ args, pluginState }) => {

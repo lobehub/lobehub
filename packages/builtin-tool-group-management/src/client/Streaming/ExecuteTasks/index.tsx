@@ -4,7 +4,6 @@ import type { AgentGroupMember, BuiltinStreamingProps } from '@lobechat/types';
 import { Flexbox, Markdown, useTheme } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
 import { memo, useMemo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
@@ -13,7 +12,17 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTasksParams } from '../../../types';
 
-const styles = stylex.create({ container: { display: "flex", flexDirection: "column", gap: "12px" }, instruction: { fontSize: "13px", color: cssVar.colorTextSecondary }, taskCard: { padding: "12px", borderRadius: "8px", backgroundColor: cssVar.colorFillQuaternary, backgroundImage: "none" }, taskTitle: { fontSize: "13px", fontWeight: 500, color: cssVar.colorText } });
+const styles = stylex.create({
+  container: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  instruction: { fontSize: '13px', color: cssVar.colorTextSecondary },
+  taskCard: {
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  taskTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorText },
+});
 
 export const ExecuteTasksStreaming = memo<BuiltinStreamingProps<ExecuteTasksParams>>(({ args }) => {
   const { tasks } = args || {};
@@ -50,7 +59,9 @@ export const ExecuteTasksStreaming = memo<BuiltinStreamingProps<ExecuteTasksPara
                 shape={'square'}
                 size={20}
               />
-              <span {...stylex.props(styles.taskTitle)}>{task.title || task.agent?.title || 'Task'}</span>
+              <span {...stylex.props(styles.taskTitle)}>
+                {task.title || task.agent?.title || 'Task'}
+              </span>
             </Flexbox>
             {task.instruction && (
               <div {...stylex.props(styles.instruction)}>

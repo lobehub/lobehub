@@ -41,7 +41,13 @@ export const cleanupSourceSnapshots = async (output: string) => {
         throw new Error('SOURCE_METADATA_ESCAPE');
       const destination = path.join(root, 'source-metadata', name, relative);
       await mkdir(path.dirname(destination), { recursive: true });
-      await copyFile(source, destination, constants.COPYFILE_EXCL);
+      try {
+        await copyFile(source, destination, constants.COPYFILE_EXCL);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        if ((await digestFile(source)) !== (await digestFile(destination)))
+          throw new Error('SOURCE_METADATA_ALREADY_DIFFERENT', { cause: error });
+      }
       metadata.push({
         path: path.relative(root, destination),
         sha256: await digestFile(destination),
@@ -52,21 +58,32 @@ export const cleanupSourceSnapshots = async (output: string) => {
         await preserve(`${prefix}${input}`);
       }
     }
-    const preserveLogs = async (relative: string, depth: number): Promise<void> => {
+    const preserveLogs = async (relative: string): Promise<void> => {
       const directory = path.join(root, name, relative);
       const stat = await statIfPresent(directory);
       if (!stat) return;
       if (stat.isSymbolicLink() || !stat.isDirectory())
         throw new Error('UNSAFE_SOURCE_LOG_DIRECTORY');
-      if (depth === 0) throw new Error('SOURCE_LOG_DEPTH_EXCEEDED');
       for (const entry of await readdir(directory, { withFileTypes: true })) {
         if (entry.isSymbolicLink()) throw new Error('UNSAFE_SOURCE_LOG_SYMLINK');
-        if (entry.isDirectory()) await preserveLogs(path.join(relative, entry.name), depth - 1);
-        else if (entry.name.endsWith('.log')) await preserve(path.join(relative, entry.name));
+        if (entry.isFile() && entry.name.endsWith('.log'))
+          await preserve(path.join(relative, entry.name));
       }
     };
-    await preserveLogs('.stylex-tools', 6);
-    await preserveLogs('.stylex-dependencies/.stylex-tools', 6);
+    await preserveLogs('.stylex-tools');
+    await preserveLogs('.stylex-dependencies/.stylex-tools');
+    // Build workers write one log per fixture. Do not traverse pnpm caches.
+    const fixtures = path.join(root, name, '.stylex-tools/fixtures');
+    const fixtureStat = await statIfPresent(fixtures);
+    if (fixtureStat) {
+      if (!fixtureStat.isDirectory() || fixtureStat.isSymbolicLink())
+        throw new Error('UNSAFE_FIXTURE_LOG_DIRECTORY');
+      for (const fixture of await readdir(fixtures, { withFileTypes: true })) {
+        if (!fixture.isDirectory() || fixture.isSymbolicLink())
+          throw new Error('UNSAFE_FIXTURE_LOG_DIRECTORY');
+        await preserveLogs(path.join('.stylex-tools/fixtures', fixture.name));
+      }
+    }
     await rm(path.join(root, name), { recursive: true });
   }
   return { metadata, metadataHash: sha256(JSON.stringify(metadata)), removed: present };
