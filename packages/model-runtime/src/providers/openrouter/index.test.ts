@@ -430,7 +430,7 @@ describe('LobeOpenRouterAI - custom features', () => {
   });
 
   describe('models mapping', () => {
-    it('should map extendParams for gpt-5.x reasoning and verbosity', async () => {
+    it('should declare the effort control for gpt-5.x reasoning and verbosity', async () => {
       const mockModels = [
         {
           architecture: { input_modalities: ['text'] },
@@ -477,18 +477,18 @@ describe('LobeOpenRouterAI - custom features', () => {
       const gpt52 = models.find((m) => m.id === 'openai/gpt-5.2-mini');
       const gpt51 = models.find((m) => m.id === 'openai/gpt-5.1-mini');
 
-      expect(gpt55?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
-      );
-      expect(gpt52?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
-      );
-      expect(gpt51?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5_1ReasoningEffort', 'textVerbosity']),
-      );
+      expect(gpt55?.settings?.extendParams).toEqual(['textVerbosity']);
+      expect(gpt55?.settings?.reasoningEffort).toEqual({
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh'],
+      });
+      expect(gpt52?.settings?.reasoningEffort).toEqual(gpt55?.settings?.reasoningEffort);
+      expect(gpt51?.settings?.extendParams).toEqual(['textVerbosity']);
+      const gpt51Levels = gpt51?.settings?.reasoningEffort?.levels;
+      expect(gpt51Levels).toEqual(['none', 'low', 'medium', 'high']);
     });
 
-    it('should map thinkingLevel for gemini-3 flash/pro reasoning', async () => {
+    it('should declare the effort control for gemini-3 flash/pro reasoning', async () => {
       const mockModels = [
         {
           architecture: { input_modalities: ['text'] },
@@ -524,10 +524,10 @@ describe('LobeOpenRouterAI - custom features', () => {
       const geminiPro = models.find((m) => m.id === 'google/gemini-3-pro');
       const geminiFlash = models.find((m) => m.id === 'google/gemini-3-flash');
 
-      expect(geminiPro?.settings?.extendParams).toEqual(expect.arrayContaining(['thinkingLevel2']));
-      expect(geminiFlash?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['thinkingLevel']),
-      );
+      const proEffort = geminiPro?.settings?.reasoningEffort;
+      expect(proEffort).toEqual({ default: 'high', levels: ['low', 'high'] });
+      const flashLevels = geminiFlash?.settings?.reasoningEffort?.levels;
+      expect(flashLevels).toEqual(['minimal', 'low', 'medium', 'high']);
     });
   });
 

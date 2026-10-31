@@ -24,7 +24,7 @@ const antgroupChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-15',
     settings: {
-      extendParams: ['ring2_6ReasoningEffort'],
+      reasoningEffort: { default: 'xhigh', levels: ['high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',

@@ -1,3 +1,4 @@
+import type { AiModelReasoningEffortSettings } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,30 +9,37 @@ import {
 } from './resolveModelParams';
 import type { ModelCardFacts, ModelParamsProviders, ModelParamsRequest } from './types';
 
+const GPT_EFFORT: AiModelReasoningEffortSettings = {
+  default: 'medium',
+  levels: ['low', 'medium', 'high'],
+};
+
 const cards: ModelCardFacts[] = [
   {
     abilities: { functionCall: true, vision: true },
     displayName: 'GPT-4',
-    extendParams: ['reasoningEffort'],
+    extendParams: ['urlContext'],
     id: 'gpt-4',
     knowledgeCutoff: '2024-01',
     providerId: 'openai',
+    reasoningEffort: GPT_EFFORT,
   },
   {
     abilities: {},
     displayName: 'DeepSeek V4 Pro',
-    extendParams: ['deepseekV4ReasoningEffort'],
     id: 'deepseek-v4-pro',
     providerId: 'deepseek',
+    reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
   },
   { abilities: { functionCall: false }, displayName: 'Plain', id: 'plain', providerId: 'openai' },
   {
     abilities: { vision: true },
     displayName: 'GPT-4 (hub)',
-    extendParams: ['reasoningEffort'],
+    extendParams: ['urlContext'],
     id: 'gpt-4',
     knowledgeCutoff: '2024-01',
     providerId: 'lobehub',
+    reasoningEffort: GPT_EFFORT,
   },
 ];
 
@@ -56,7 +64,8 @@ describe('resolveModelParams', () => {
         providers({ getUserModelRow: async () => ({ extendParams: ['thinking'] }) }),
       );
       expect(own.modelExtendParams).toEqual(['thinking']);
-      expect(own.modelHasReasoningExtendParams).toBe(false);
+      // A user row without its own effort control keeps the card's.
+      expect(own.modelHasReasoningControls).toBe(true);
 
       const optedOut = await resolveModelParams(
         request(),
@@ -65,18 +74,22 @@ describe('resolveModelParams', () => {
       expect(optedOut.modelExtendParams).toEqual([]);
 
       const fromCard = await resolveModelParams(request(), providers());
-      expect(fromCard.modelExtendParams).toEqual(['reasoningEffort']);
-      expect(fromCard.modelHasReasoningExtendParams).toBe(true);
+      expect(fromCard.modelExtendParams).toEqual(['urlContext']);
+      expect(fromCard.modelHasReasoningControls).toBe(true);
     });
 
     it('falls back to the canonical card for an aggregation provider', async () => {
       const facts = await resolveModelParams(
         request({ provider: 'lobehub' }),
         providers({
-          listModelCards: () => [{ ...cards[3], extendParams: undefined }, cards[0]],
+          listModelCards: () => [
+            { ...cards[3], extendParams: undefined, reasoningEffort: undefined },
+            cards[0],
+          ],
         }),
       );
-      expect(facts.modelExtendParams).toEqual(['reasoningEffort']);
+      expect(facts.modelExtendParams).toEqual(['urlContext']);
+      expect(facts.modelReasoningEffort).toEqual(GPT_EFFORT);
       expect(facts.modelKnowledgeCutoff).toBe('2024-01');
     });
 
@@ -85,6 +98,25 @@ describe('resolveModelParams', () => {
         request(),
         providers({ getModelReasoningConfig: async () => ({ reasoningEffort: 'high' }) }),
       );
+      expect(facts.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
+    });
+
+    // LOBE-14979: the shown default must be the level that is sent.
+    it('sends the card default effort when nothing was picked', async () => {
+      const facts = await resolveModelParams(request(), providers());
+      expect(facts.resolvedExtendParams).toMatchObject({ reasoning_effort: 'medium' });
+    });
+
+    it('lets a user row spec win over the card spec', async () => {
+      const facts = await resolveModelParams(
+        request(),
+        providers({
+          getUserModelRow: async () => ({
+            reasoningEffort: { default: 'high', levels: ['low', 'high'] },
+          }),
+        }),
+      );
+      expect(facts.modelReasoningEffort).toEqual({ default: 'high', levels: ['low', 'high'] });
       expect(facts.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
     });
   });
@@ -150,7 +182,8 @@ describe('resolveModelParams', () => {
         }),
       );
       expect(getModelReasoningConfig).not.toHaveBeenCalled();
-      expect(pinned.resolvedExtendParams).toEqual({});
+      // An empty pin runs at the card default, not the user-level pick.
+      expect(pinned.resolvedExtendParams).toEqual({ reasoning_effort: 'medium' });
 
       const legacy = await resolveModelParams(
         request(),
@@ -219,7 +252,7 @@ describe('resolveModelParams', () => {
       const disabled = await resolveModelParams(
         request({ model: 'deepseek-v4-pro', provider: 'deepseek' }),
         providers({
-          getModelReasoningConfig: async () => ({ deepseekV4ReasoningEffort: 'none' }),
+          getModelReasoningConfig: async () => ({ reasoningEffort: 'none' }),
         }),
       );
       expect(disabled.shouldReplayAssistantReasoning).toBe(false);

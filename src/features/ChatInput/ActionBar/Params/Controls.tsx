@@ -20,7 +20,6 @@ import { useForm } from '@lobehub/ui/form';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -311,8 +310,6 @@ const PARAM_CONFIG = {
 
 const PARAM_ORDER: ParamKey[] = ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty'];
 
-const REASONING_PARAMS_SET = new Set<string>(MODEL_REASONING_EXTEND_PARAMS);
-
 const ADVANCED_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-advanced-open';
 const MODEL_CONFIG_OPEN_STORAGE_KEY = 'lobehub-chat-input-params-model-config-open';
 
@@ -439,19 +436,15 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     isEqual,
   );
   const { disabledParams, model, provider } = useParamsModelConfig(agentId);
-  const modelExtendParamsList = useAiInfraStore(
-    aiModelSelectors.modelExtendParams(model, provider),
-    isEqual,
-  );
   // Reasoning fields are user-level model-instance settings now (edited via
   // the ChatInput Effort control); only non-reasoning params warrant this section
-  const hasModelConfig = (modelExtendParamsList ?? []).some(
-    (param) => !REASONING_PARAMS_SET.has(param),
+  const hasModelConfig = useAiInfraStore(
+    aiModelSelectors.isModelHasNonReasoningExtendParams(model, provider),
   );
   // Same reason: hide the legacy Advanced raw `params.reasoning_effort` for
   // those models — the send path strips it in favor of the instance config
-  const hasReasoningExtendParams = (modelExtendParamsList ?? []).some((param) =>
-    REASONING_PARAMS_SET.has(param),
+  const hasReasoningExtendParams = useAiInfraStore(
+    aiModelSelectors.isModelHasReasoningControls(model, provider),
   );
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
   const form = useForm();
@@ -547,7 +540,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     : undefined;
   const rawSubAgentChatConfig = config.agencyConfig?.subagent?.chatConfig;
   const subAgentHasReasoningParams = useAiInfraStore(
-    aiModelSelectors.isModelHasReasoningExtendParams(
+    aiModelSelectors.isModelHasReasoningControls(
       subAgentModelValue?.model || '',
       subAgentModelValue?.provider || '',
     ),

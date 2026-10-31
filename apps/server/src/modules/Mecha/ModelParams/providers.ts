@@ -1,6 +1,6 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ModelCardFacts, ModelParamsProviders } from '@lobechat/mecha';
-import type { AiModelConfig, LobeDefaultAiModelListItem } from 'model-bank';
+import type { ModelCardFacts, ModelParamsProviders, UserModelRowFacts } from '@lobechat/mecha';
+import type { AiModelConfig, AiModelSettings, LobeDefaultAiModelListItem } from 'model-bank';
 
 import { AiModelModel } from '@/database/models/aiModel';
 import { TopicModel } from '@/database/models/topic';
@@ -13,17 +13,45 @@ export interface ServerModelParamsSource {
   workspaceId?: string;
 }
 
-const toModelCard = (item: LobeDefaultAiModelListItem): ModelCardFacts => ({
-  abilities: item.abilities,
-  deploymentName: item.config?.deploymentName,
-  displayName: item.displayName,
-  extendParams:
+const toModelCard = (item: LobeDefaultAiModelListItem): ModelCardFacts => {
+  const settings =
     'settings' in item && item.settings && typeof item.settings === 'object'
-      ? ((item.settings as { extendParams?: string[] }).extendParams ?? undefined)
-      : undefined,
-  id: item.id,
-  knowledgeCutoff: item.knowledgeCutoff,
-  providerId: item.providerId,
+      ? (item.settings as AiModelSettings)
+      : undefined;
+  return {
+    abilities: item.abilities,
+    deploymentName: item.config?.deploymentName,
+    displayName: item.displayName,
+    extendParams: settings?.extendParams ?? undefined,
+    id: item.id,
+    knowledgeCutoff: item.knowledgeCutoff,
+    providerId: item.providerId,
+    reasoningEffort: settings?.reasoningEffort,
+  };
+};
+
+/** The `ai_models` columns the model-parameter rules read from a user's own row. */
+interface UserModelRow {
+  abilities?: UserModelRowFacts['abilities'] | null;
+  config?: unknown;
+  displayName?: string | null;
+  settings?: AiModelSettings | null;
+}
+
+/**
+ * The model-parameter facts of the user's own AI model row: custom/remote
+ * models miss both bundled cards entirely, and builtin models may carry
+ * user-edited settings.
+ */
+export const toUserModelRowFacts = (row: UserModelRow): UserModelRowFacts => ({
+  abilities: row.abilities ?? undefined,
+  // Deployment-catalog providers resolve the request model by this alias
+  // (merged over the bundled card when the facts freeze); without it the
+  // transport injects the catalog default instead of the user's endpoint.
+  deploymentName: (row.config as AiModelConfig | null)?.deploymentName ?? null,
+  displayName: row.displayName,
+  extendParams: row.settings?.extendParams ?? undefined,
+  reasoningEffort: row.settings?.reasoningEffort,
 });
 
 /**
@@ -62,20 +90,9 @@ export const createServerModelParamsProviders = ({
     },
     getModelReasoningConfig: (model, provider) =>
       aiModelModel.getModelReasoningConfig(model, provider),
-    // The user's own AI model row: custom/remote models miss both bundled
-    // cards entirely, and builtin models may carry user-edited settings.
     getUserModelRow: async (model, provider) => {
       const row = await aiModelModel.findByIdAndProvider(model, provider);
-      if (!row) return null;
-      return {
-        abilities: row.abilities,
-        // Deployment-catalog providers resolve the request model by this alias
-        // (merged over the bundled card when the facts freeze); without it the
-        // transport injects the catalog default instead of the user's endpoint.
-        deploymentName: (row.config as AiModelConfig | null)?.deploymentName ?? null,
-        displayName: row.displayName,
-        extendParams: row.settings?.extendParams ?? undefined,
-      };
+      return row ? toUserModelRowFacts(row) : null;
     },
   };
 };

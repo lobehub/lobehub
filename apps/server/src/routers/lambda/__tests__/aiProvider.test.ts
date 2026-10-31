@@ -240,7 +240,7 @@ describe('aiProviderRouter', () => {
       vi.mocked(AiInfraRepos).prototype.getAiProviderRuntimeState = vi
         .fn()
         .mockResolvedValue(mockRuntimeState);
-      const modelReasoningConfigs = { 'openai/gpt-5.6-sol': { gpt5_6ReasoningEffort: 'high' } };
+      const modelReasoningConfigs = { 'openai/gpt-5.6-sol': { reasoningEffort: 'high' } };
       vi.mocked(AiModelModel).prototype.getAllModelReasoningConfigs = vi
         .fn()
         .mockResolvedValue(modelReasoningConfigs);

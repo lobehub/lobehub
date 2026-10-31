@@ -58,21 +58,33 @@ beforeEach(() => {
       displayName: 'GPT-4',
       id: 'gpt-4',
       providerId: 'openai',
-      settings: { extendParams: ['reasoningEffort'] },
+      settings: { reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] } },
     },
     {
       abilities: {},
       displayName: 'DeepSeek V4 Pro',
       id: 'deepseek-v4-pro',
       providerId: 'deepseek',
-      settings: { extendParams: ['deepseekV4ReasoningEffort'] },
+      settings: {
+        reasoningEffort: {
+          controlsThinking: true,
+          default: 'high',
+          levels: ['none', 'high', 'max'],
+        },
+      },
     },
     {
       abilities: {},
       displayName: 'DeepSeek V4 Flash',
       id: 'deepseek-v4-flash',
       providerId: 'deepseek',
-      settings: { extendParams: ['deepseekV4GAReasoningEffort'] },
+      settings: {
+        reasoningEffort: {
+          controlsThinking: true,
+          default: 'high',
+          levels: ['none', 'low', 'high', 'max'],
+        },
+      },
     },
     {
       abilities: {},
@@ -335,8 +347,9 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
       provider: 'openai',
     });
 
+    // An empty pin runs at the card default, not the instance config
     expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
-    expect(hints.resolvedExtendParams).toEqual({});
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'medium' });
   });
 
   it('should ignore a topic pin taken for another model (sub-agent modelOverride)', async () => {
@@ -482,7 +495,7 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
   it('should resolve extend params from the user DB row for custom models', async () => {
     findByIdAndProviderMock.mockResolvedValue({
       displayName: 'My Custom Reasoner',
-      settings: { extendParams: ['reasoningEffort'] },
+      settings: { reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] } },
     });
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
@@ -502,7 +515,7 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     // Provider-settings edits store extendParams on the user's own model row;
     // the client merges them over the bundled card, so the server must too
     findByIdAndProviderMock.mockResolvedValue({
-      settings: { extendParams: ['reasoningEffort'] },
+      settings: { reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] } },
     });
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
@@ -518,10 +531,10 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
   });
 
-  it('should treat an explicitly emptied extendParams row as an opt-out', async () => {
-    // Clearing extendParams in provider settings replaces the card's list on
-    // the client (array-replacement merge); the server must not fall back to
-    // the bundled card and resurrect the removed reasoning params
+  it('should keep the card effort control when a row only empties extendParams', async () => {
+    // Clearing extendParams in provider settings opts out of the card's extend
+    // params, but the effort control lives in `settings.reasoningEffort`, which
+    // the row does not override, so it still resolves from the card
     findByIdAndProviderMock.mockResolvedValue({ settings: { extendParams: [] } });
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
@@ -533,8 +546,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
       provider: 'openai',
     });
 
-    expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
-    expect(hints.resolvedExtendParams).toEqual({});
+    expect(getModelReasoningConfigMock).toHaveBeenCalledWith('gpt-4', 'openai');
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
   });
 
   it('should skip the reasoning config DB read for models without reasoning extend params', async () => {
@@ -559,7 +572,8 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
       provider: 'openai',
     });
 
-    expect(hints.resolvedExtendParams).toEqual({});
+    // The stale agent value is dropped; the card default applies
+    expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'medium' });
   });
 
   it('should apply extend params from instance config even without agent chatConfig', async () => {
@@ -595,12 +609,12 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
   });
 
   it('should derive the DeepSeek V4 thinking opt-out from the instance config', async () => {
-    getModelReasoningConfigMock.mockResolvedValue({ deepseekV4ReasoningEffort: 'none' });
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'none' });
 
     const hints = await resolveServerCallLlmContextHints({
       // stale agent value says 'high', but the instance config opts out
       ctx: createCtx(),
-      world: { agent: { chatConfig: { deepseekV4ReasoningEffort: 'high' } } },
+      world: { agent: { chatConfig: { reasoningEffort: 'high' } } },
       llmPayload,
       model: 'deepseek-v4-pro',
       provider: 'deepseek',
@@ -611,11 +625,11 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
   });
 
   it('should derive the DeepSeek V4 GA thinking opt-out from the instance config', async () => {
-    getModelReasoningConfigMock.mockResolvedValue({ deepseekV4GAReasoningEffort: 'none' });
+    getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'none' });
 
     const hints = await resolveServerCallLlmContextHints({
       ctx: createCtx(),
-      world: { agent: { chatConfig: { deepseekV4GAReasoningEffort: 'high' } } },
+      world: { agent: { chatConfig: { reasoningEffort: 'high' } } },
       llmPayload,
       model: 'deepseek-v4-flash',
       provider: 'deepseek',
@@ -623,27 +637,6 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
 
     expect(hints.shouldReplayAssistantReasoning).toBe(false);
     expect(hints.resolvedExtendParams).toEqual({ thinking: { type: 'disabled' } });
-  });
-
-  /**
-   * Replay-off is not the official 400. A leftover preview `none` on a GA-only
-   * card still suppresses replay today, but `applyModelExtendParams` ignores
-   * that leftover so thinking stays on and the payload builder emits the
-   * whitespace placeholder rather than omitting the thinking field.
-   */
-  it('does not disable thinking for leftover preview none on a GA-only card', async () => {
-    getModelReasoningConfigMock.mockResolvedValue({ deepseekV4ReasoningEffort: 'none' });
-
-    const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx(),
-      world: { agent: { chatConfig: {} } },
-      llmPayload,
-      model: 'deepseek-v4-flash',
-      provider: 'deepseek',
-    });
-
-    expect(hints.shouldReplayAssistantReasoning).toBe(false);
-    expect(hints.resolvedExtendParams?.thinking).not.toEqual({ type: 'disabled' });
   });
 
   it('should keep DeepSeek V4 forced reasoning replay when no opt-out is saved', async () => {
@@ -683,8 +676,8 @@ describe('resolveServerCallLlmContextHints - frozen operation facts', () => {
           {
             abilities: { functionCall: true, vision: true },
             displayName: 'GPT-4 (frozen)',
-            extendParams: ['reasoningEffort'],
             id: 'gpt-4',
+            reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
             knowledgeCutoff: '2024-01',
             providerId: 'openai',
           },
@@ -732,7 +725,7 @@ describe('resolveServerCallLlmContextHints - frozen operation facts', () => {
     findByIdAndProviderMock.mockResolvedValue({
       abilities: { vision: true },
       displayName: 'My GPT-4',
-      settings: { extendParams: ['reasoningEffort'] },
+      settings: { reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] } },
     });
     const ctx = createCtx();
     const args = {

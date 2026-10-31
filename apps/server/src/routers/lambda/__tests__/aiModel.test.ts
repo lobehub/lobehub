@@ -301,7 +301,7 @@ describe('aiModelRouter', () => {
   });
 
   it('should get model reasoning config', async () => {
-    const mockGet = vi.fn().mockResolvedValue({ gpt5_6ReasoningEffort: 'high' });
+    const mockGet = vi.fn().mockResolvedValue({ reasoningEffort: 'high' });
     vi.mocked(AiModelModel).mockImplementation(function () {
       return {
         getModelReasoningConfig: mockGet,
@@ -316,7 +316,7 @@ describe('aiModelRouter', () => {
     });
 
     expect(mockGet).toHaveBeenCalledWith('gpt-5.6-sol', 'openai');
-    expect(result).toEqual({ gpt5_6ReasoningEffort: 'high' });
+    expect(result).toEqual({ reasoningEffort: 'high' });
   });
 
   it('should update model reasoning config', async () => {
@@ -332,11 +332,11 @@ describe('aiModelRouter', () => {
     await caller.updateAiModelReasoningConfig({
       id: 'gpt-5.6-sol',
       providerId: 'openai',
-      value: { gpt5_6ReasoningEffort: 'xhigh', reasoningMode: 'pro' },
+      value: { reasoningEffort: 'xhigh', reasoningMode: 'pro' },
     });
 
     expect(mockUpdate).toHaveBeenCalledWith('gpt-5.6-sol', 'openai', {
-      gpt5_6ReasoningEffort: 'xhigh',
+      reasoningEffort: 'xhigh',
       reasoningMode: 'pro',
     });
   });
@@ -355,7 +355,7 @@ describe('aiModelRouter', () => {
       caller.updateAiModelReasoningConfig({
         id: 'gpt-5.6-sol',
         providerId: 'openai',
-        value: { gpt5_6ReasoningEffort: 'ultra' } as any,
+        value: { reasoningEffort: 'ultra' } as any,
       }),
     ).rejects.toThrow();
 

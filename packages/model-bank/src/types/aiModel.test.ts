@@ -20,19 +20,11 @@ describe('AI model mutation schemas', () => {
   });
 });
 
-describe('Gemini reasoning config persistence', () => {
-  it('preserves supported thinking levels and rejects invalid levels', () => {
-    const config = {
-      thinkingLevel: 'minimal',
-      thinkingLevel2: 'low',
-      thinkingLevel3: 'medium',
-      thinkingLevel4: 'high',
-    };
+describe('AiModelReasoningConfigSchema', () => {
+  it('keeps a known effort level and rejects an unknown one', () => {
+    const config = { reasoningEffort: 'minimal', reasoningMode: 'pro' };
     expect(AiModelReasoningConfigSchema.parse(config)).toEqual(config);
-    expect(AiModelReasoningConfigSchema.safeParse({ thinkingLevel3: 'minimal' }).success).toBe(
-      false,
-    );
-    expect(AiModelReasoningConfigSchema.safeParse({ thinkingLevel4: 'medium' }).success).toBe(
+    expect(AiModelReasoningConfigSchema.safeParse({ reasoningEffort: 'ultra' }).success).toBe(
       false,
     );
   });

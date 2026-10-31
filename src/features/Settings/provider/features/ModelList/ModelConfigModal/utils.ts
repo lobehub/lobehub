@@ -1,5 +1,7 @@
 import type { FormValues } from '@lobehub/ui/form';
-import type { UpdateAiModelParams } from 'model-bank';
+import isEqual from 'fast-deep-equal';
+import type { AiModelReasoningEffortSettings, UpdateAiModelParams } from 'model-bank/aiModel';
+import { AiModelSourceEnum } from 'model-bank/aiModel';
 
 const EDITABLE_ABILITIES = [
   'functionCall',
@@ -20,11 +22,29 @@ const EDITABLE_ABILITIES = [
  */
 export const pickModelConfigFormValues = (
   values: FormValues,
-  { showDeployName }: { showDeployName?: boolean } = {},
+  {
+    cardReasoningEffort,
+    showDeployName,
+  }: {
+    /**
+     * The builtin card's own `settings.reasoningEffort`, without the user's row
+     * override. Compare against it, not the merged value the form opened with:
+     * an earlier saved override would otherwise read as unchanged and be wiped,
+     * since saving replaces the whole `settings` object.
+     */
+    cardReasoningEffort?: AiModelReasoningEffortSettings;
+    showDeployName?: boolean;
+  } = {},
 ): UpdateAiModelParams => {
   const abilities = (values.abilities ?? {}) as Record<string, unknown>;
   const settings = (values.settings ?? {}) as Record<string, unknown>;
   const config = (values.config ?? {}) as Record<string, unknown>;
+  const reasoningEffort = settings.reasoningEffort as AiModelReasoningEffortSettings | undefined;
+  // A builtin model's spec comes from its card. Persisting it when it equals the card
+  // would pin the row to today's card and hide later card updates (levels, researched
+  // defaults); a spec that differs is the user's override and must be kept.
+  const keepReasoningEffort =
+    values.source !== AiModelSourceEnum.Builtin || !isEqual(reasoningEffort, cardReasoningEffort);
 
   return {
     abilities: Object.fromEntries(
@@ -39,6 +59,7 @@ export const pickModelConfigFormValues = (
       extendParams: (settings.extendParams ?? undefined) as NonNullable<
         UpdateAiModelParams['settings']
       >['extendParams'],
+      reasoningEffort: keepReasoningEffort ? reasoningEffort : undefined,
     },
     type: values.type as UpdateAiModelParams['type'],
   };

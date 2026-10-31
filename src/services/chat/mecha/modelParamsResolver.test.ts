@@ -13,7 +13,10 @@ const reasoningCard = {
   displayName: 'GPT-4 (mine)',
   id: 'gpt-4',
   providerId: 'openai',
-  settings: { extendParams: ['reasoningEffort'] },
+  settings: {
+    extendParams: ['urlContext'],
+    reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+  },
   type: 'chat',
 };
 
@@ -35,8 +38,9 @@ describe('createBrowserModelParamsProviders', () => {
 
     expect(cards[0]).toMatchObject({
       displayName: 'GPT-4 (mine)',
-      extendParams: ['reasoningEffort'],
+      extendParams: ['urlContext'],
       id: 'gpt-4',
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     });
     expect(cards.find((c) => c.id === 'bank-only')).toMatchObject({ abilities: { vision: true } });
   });
@@ -202,7 +206,7 @@ describe('resolveBrowserModelParams', () => {
       provider: 'openai',
     });
     expect(resolved.resolvedExtendParams).toEqual({});
-    expect(resolved.modelHasReasoningExtendParams).toBe(false);
+    expect(resolved.modelHasReasoningControls).toBe(false);
   });
 
   it('never throws when the stores are empty', async () => {

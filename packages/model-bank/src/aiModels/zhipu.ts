@@ -34,7 +34,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-14',
     settings: {
-      extendParams: ['glm5_3ReasoningEffort'],
+      reasoningEffort: { controlsThinking: true, default: 'max', levels: ['low', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -69,7 +69,8 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-26',
     settings: {
-      extendParams: ['glm5_3ReasoningEffort', 'preserveThinking'],
+      extendParams: ['preserveThinking'],
+      reasoningEffort: { controlsThinking: true, default: 'max', levels: ['low', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -99,7 +100,8 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-17',
     settings: {
-      extendParams: ['enableReasoning', 'glm5_2ReasoningEffort'],
+      extendParams: ['enableReasoning'],
+      reasoningEffort: { default: 'max', levels: ['high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',

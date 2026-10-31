@@ -26,7 +26,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-11',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -52,7 +52,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-07',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -78,7 +78,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-01-27',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -104,7 +104,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-21',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -130,7 +130,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-22',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -156,7 +156,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-22',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -259,7 +259,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-05',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -285,7 +285,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-02',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -312,7 +312,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-02',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -339,7 +339,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-21',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -365,7 +365,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -391,7 +391,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
     },
     type: 'chat',
   },

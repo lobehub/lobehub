@@ -48,7 +48,7 @@ const volcengineCodingPlanChatModels: AIChatModelCard[] = [
     maxOutput: 128_000,
     releasedAt: '2026-02-15',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -73,7 +73,7 @@ const volcengineCodingPlanChatModels: AIChatModelCard[] = [
     maxOutput: 128_000,
     releasedAt: '2026-02-15',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -98,7 +98,7 @@ const volcengineCodingPlanChatModels: AIChatModelCard[] = [
     maxOutput: 128_000,
     releasedAt: '2026-02-15',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },

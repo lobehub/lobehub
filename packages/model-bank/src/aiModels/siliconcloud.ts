@@ -80,7 +80,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-17',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
+      extendParams: ['reasoningBudgetToken'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -135,7 +136,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
+      extendParams: ['reasoningBudgetToken'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -163,7 +165,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
+      extendParams: ['reasoningBudgetToken'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
     },
     type: 'chat',
   },

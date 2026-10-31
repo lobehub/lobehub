@@ -32,7 +32,7 @@ const moonshotChatModels: AIChatModelCard[] = [
       // K3 fixes sampling params server-side (temperature=1, top_p=0.95, penalties=0)
       // and the API docs advise against sending them
       disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
-      extendParams: ['kimiK3ReasoningEffort'],
+      reasoningEffort: { default: 'max', levels: ['low', 'high', 'max'] },
     },
     type: 'chat',
   },

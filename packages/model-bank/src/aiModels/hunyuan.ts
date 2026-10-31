@@ -42,7 +42,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-06',
     settings: {
-      extendParams: ['hy3ReasoningEffort'],
+      reasoningEffort: { default: 'low', levels: ['no_think', 'low', 'high'] },
     },
     type: 'chat',
   },
@@ -107,7 +107,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-23',
     settings: {
-      extendParams: ['hy3ReasoningEffort'],
+      reasoningEffort: { default: 'low', levels: ['no_think', 'low', 'high'] },
     },
     type: 'chat',
   },
@@ -605,7 +605,8 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+      extendParams: ['enableReasoning'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -633,7 +634,8 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['enableReasoning', 'deepseekV4ReasoningEffort'],
+      extendParams: ['enableReasoning'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
     },
     type: 'chat',
   },

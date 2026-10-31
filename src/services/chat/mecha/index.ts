@@ -22,7 +22,6 @@ export {
   createBrowserModelParamsProviders,
   resolveBrowserModelParams,
   resolveDefaultEnableAdaptiveThinkingForModel,
-  resolveDefaultThinkingLevelForModel,
 } from './modelParamsResolver';
 
 // Memory management

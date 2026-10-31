@@ -28,7 +28,7 @@ const stepfunChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -57,7 +57,7 @@ const stepfunChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -84,7 +84,7 @@ const stepfunChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['step3_5ReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',

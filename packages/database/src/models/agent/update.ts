@@ -4,6 +4,7 @@ import { applyWorkingDirByDevicePatch } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
+import { stripLegacyEffortKeys } from 'model-bank/aiModel';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -279,6 +280,13 @@ export const updateConfig = async (
     mergedApiConfig
   ) {
     delete mergedApiConfig.source;
+  }
+
+  // A new sub-agent effort pick replaces the legacy per-model effort keys
+  // (LOBE-14979) instead of merging next to them.
+  const subAgentChatConfig = toRecord(mergedValue.agencyConfig?.subagent?.chatConfig);
+  if (subAgentChatConfig && data.agencyConfig?.subagent?.chatConfig?.reasoningEffort) {
+    mergedValue.agencyConfig!.subagent!.chatConfig = stripLegacyEffortKeys(subAgentChatConfig);
   }
 
   mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;

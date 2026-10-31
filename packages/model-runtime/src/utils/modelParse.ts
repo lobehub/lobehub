@@ -453,6 +453,17 @@ const mergeSettings = (
     delete merged.extendParams;
   }
 
+  // The effort control used to be an extend param, so it follows the same rule:
+  // inherit the known model's control only where its extend params are inherited.
+  const reasoningEffort =
+    modelSettings?.reasoningEffort ??
+    ((options?.includeKnownExtendParams ?? true) ? knownSettings?.reasoningEffort : undefined);
+  if (reasoningEffort) {
+    merged.reasoningEffort = reasoningEffort;
+  } else {
+    delete merged.reasoningEffort;
+  }
+
   const includeSearchSettings = options?.includeSearchSettings ?? true;
 
   if (includeSearchSettings) {

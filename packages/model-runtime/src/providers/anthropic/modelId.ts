@@ -232,6 +232,33 @@ export const supportsClaudeEffortLevel = (
   );
 };
 
+const ANTHROPIC_EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+type AnthropicEffort = 'high' | 'low' | 'max' | 'medium' | 'xhigh';
+
+/**
+ * The `output_config.effort` to send for a request: an explicit `effort` wins, otherwise
+ * the unified `reasoning_effort`. Claude models only take levels they support. Other
+ * models served through an Anthropic-compatible endpoint (MiniMax behind the LobeHub
+ * router) forward any Anthropic level — their model card already bounds the value.
+ */
+export const resolveAnthropicEffort = (
+  model: string,
+  effort: string | undefined,
+  reasoningEffort: string | undefined,
+): AnthropicEffort | undefined => {
+  if (effort) return effort as AnthropicEffort;
+  if (!reasoningEffort) return;
+
+  if (parseClaudeModelId(model)) {
+    return supportsClaudeEffortLevel(model, reasoningEffort) ? reasoningEffort : undefined;
+  }
+
+  return ANTHROPIC_EFFORT_LEVELS.has(reasoningEffort)
+    ? (reasoningEffort as AnthropicEffort)
+    : undefined;
+};
+
 /**
  * Claude Fable 5.1 / Mythos 5.1 / Opus 5.5 / Sonnet 5.5 reject forced tool use. `tool_choice` of
  * type `any` or `tool` returns a 400; keep `auto` (or `none`) and use `strict: true` for schema

@@ -61,7 +61,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-03',
     settings: {
-      extendParams: ['gpt6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -131,7 +132,11 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-22',
     settings: {
-      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -198,7 +203,11 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-22',
     settings: {
-      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -257,7 +266,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-05',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -305,7 +315,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-05',
     settings: {
-      extendParams: ['gpt5_2ProReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -340,7 +351,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-18',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -375,7 +387,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-18',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -409,7 +422,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -442,7 +456,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',

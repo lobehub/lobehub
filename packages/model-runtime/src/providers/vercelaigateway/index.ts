@@ -1,4 +1,8 @@
 import { ModelProvider } from 'model-bank';
+import {
+  type AiModelReasoningEffortSettings,
+  createReasoningEffortSettings,
+} from 'model-bank/aiModel';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
@@ -123,20 +127,31 @@ export const params = {
         // Merge all applicable extendParams for settings
         ...(() => {
           const extendParams: string[] = [];
+          let reasoningEffort: AiModelReasoningEffortSettings | undefined;
           if (tags.includes('reasoning') && m.id.includes('gpt-5') && !m.id.includes('gpt-5.')) {
-            extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
+            reasoningEffort = createReasoningEffortSettings(['minimal', 'low', 'medium', 'high']);
+            extendParams.push('textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('gpt-5.1') && !m.id.includes('gpt-5.2')) {
-            extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');
+            reasoningEffort = createReasoningEffortSettings(['none', 'low', 'medium', 'high']);
+            extendParams.push('textVerbosity');
           }
           if (
             tags.includes('reasoning') &&
             (m.id.includes('gpt-5.2') || m.id.includes('gpt-5.4') || m.id.includes('gpt-5.5'))
           ) {
-            extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
+            reasoningEffort = createReasoningEffortSettings([
+              'none',
+              'low',
+              'medium',
+              'high',
+              'xhigh',
+            ]);
+            extendParams.push('textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('openai') && !m.id.includes('gpt-5')) {
-            extendParams.push('reasoningEffort', 'textVerbosity');
+            reasoningEffort = createReasoningEffortSettings(['low', 'medium', 'high']);
+            extendParams.push('textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('claude')) {
             extendParams.push('enableReasoning', 'reasoningBudgetToken');
@@ -147,7 +162,13 @@ export const params = {
           if (tags.includes('reasoning') && m.id.includes('gemini-2.5')) {
             extendParams.push('reasoningBudgetToken');
           }
-          return extendParams.length > 0 ? { settings: { extendParams } } : {};
+          if (extendParams.length === 0 && !reasoningEffort) return {};
+          return {
+            settings: {
+              ...(extendParams.length > 0 && { extendParams }),
+              ...(reasoningEffort && { reasoningEffort }),
+            },
+          };
         })(),
       } as any;
     });

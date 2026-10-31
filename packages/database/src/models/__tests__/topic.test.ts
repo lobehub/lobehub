@@ -1506,21 +1506,21 @@ describe('TopicModel', () => {
   describe('updateModelPin', () => {
     it('switches model and replaces the reasoning pin in one write', async () => {
       const topic = await topicModel.create({
-        metadata: { reasoningConfig: { glm5_2ReasoningEffort: 'max' }, workingDirectory: '/w' },
+        metadata: { reasoningConfig: { reasoningEffort: 'max' }, workingDirectory: '/w' },
         model: 'glm-5.2',
         provider: 'lobehub',
         title: 'pin',
       });
 
       const [updated] = await topicModel.updateModelPin(topic.id, {
-        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'low' } },
+        metadata: { reasoningConfig: { reasoningEffort: 'low' } },
         model: 'deepseek-v4-flash',
         provider: 'lobehub',
       });
 
       expect(updated.model).toBe('deepseek-v4-flash');
       expect(updated.metadata).toEqual({
-        reasoningConfig: { deepseekV4GAReasoningEffort: 'low' },
+        reasoningConfig: { reasoningEffort: 'low' },
         workingDirectory: '/w',
       });
     });

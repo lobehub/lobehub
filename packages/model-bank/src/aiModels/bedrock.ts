@@ -62,7 +62,8 @@ const bedrockChatModels: AIChatModelCard[] = [
     // Thinking can still be disabled on Haiku 5.5 (at effort `high` or below), so the toggle stays.
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
     },
     type: 'chat',
   },
@@ -95,7 +96,8 @@ const bedrockChatModels: AIChatModelCard[] = [
     // Thinking is always on for Opus 5.5, so `enableAdaptiveThinking` is omitted.
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['disableContextCaching'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
     },
     type: 'chat',
   },
@@ -127,7 +129,8 @@ const bedrockChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-16',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
     },
     type: 'chat',
   },
@@ -162,7 +165,8 @@ const bedrockChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-05',
     settings: {
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'effort'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -202,8 +206,8 @@ const bedrockChatModels: AIChatModelCard[] = [
         'enableAdaptiveThinking',
         'enableReasoning',
         'reasoningBudgetToken',
-        'effort',
       ],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
     },
     type: 'chat',
   },

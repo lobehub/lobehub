@@ -33,7 +33,7 @@ const akashChatModels: AIChatModelCard[] = [
     id: 'gpt-oss-120b',
     knowledgeCutoff: '2024-06',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },

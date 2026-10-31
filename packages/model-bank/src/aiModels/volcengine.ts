@@ -109,7 +109,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-23',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -150,7 +150,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-23',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -191,7 +191,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-23',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -229,7 +229,11 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-08-13',
     settings: {
-      extendParams: ['deepseekV4GAReasoningEffort'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'high',
+        levels: ['none', 'low', 'high', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -268,7 +272,11 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-07-31',
     settings: {
-      extendParams: ['deepseekV4GAReasoningEffort'],
+      reasoningEffort: {
+        controlsThinking: true,
+        default: 'high',
+        levels: ['none', 'low', 'high', 'max'],
+      },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -308,7 +316,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-17',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -341,7 +349,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -374,7 +382,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      extendParams: ['deepseekV4ReasoningEffort'],
+      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -438,7 +446,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-15',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -502,7 +510,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-15',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -566,7 +574,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-15',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -630,7 +638,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-15',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -695,7 +703,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-18',
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -990,7 +998,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      extendParams: ['gpt5ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',

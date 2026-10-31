@@ -21,7 +21,7 @@ vi.mock('@/store/aiInfra', () => ({
 }));
 vi.mock('@/store/aiInfra/slices/aiModel/selectors', () => ({
   aiModelSelectors: {
-    isModelHasReasoningExtendParams: () => (s: typeof aiInfra.state) => s.reasoningParams,
+    isModelHasReasoningControls: () => (s: typeof aiInfra.state) => s.reasoningParams,
     isModelReasoningConfigLoaded: () => (s: typeof aiInfra.state) => s.loaded,
     modelReasoningConfig: () => (s: typeof aiInfra.state) => s.reasoningConfig,
   },
@@ -178,11 +178,11 @@ describe('snapshotAgentReasoning', () => {
     const id = seedAgent('reasoning', { model: 'gpt-5.5', provider: 'openai' });
     aiInfra.state = {
       loaded: true,
-      reasoningConfig: { gpt5_2ReasoningEffort: 'high' },
+      reasoningConfig: { reasoningEffort: 'high' },
       reasoningParams: true,
     };
     expect(await snapshotAgentReasoning(id, modelSnapshot)).toEqual({
-      reasoningConfig: { gpt5_2ReasoningEffort: 'high' },
+      reasoningConfig: { reasoningEffort: 'high' },
     });
 
     aiInfra.state = { loaded: true, reasoningConfig: undefined, reasoningParams: true };

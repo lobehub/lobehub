@@ -60,7 +60,14 @@ const aihubmixChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-09-22',
-    settings: { extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'], searchImpl: 'params' },
+    settings: {
+      extendParams: ['textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -121,7 +128,14 @@ const aihubmixChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-09-22',
-    settings: { extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'], searchImpl: 'params' },
+    settings: {
+      extendParams: ['textVerbosity'],
+      reasoningEffort: {
+        default: 'medium',
+        levels: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      },
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -174,7 +188,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-23',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -229,7 +244,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-05',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -261,7 +277,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-17',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -292,7 +309,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-17',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -337,7 +355,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-05',
     settings: {
-      extendParams: ['gpt5_2ProReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -393,7 +411,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
-      extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -422,7 +441,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
-      extendParams: ['gpt5_2ProReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -477,7 +497,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -531,7 +552,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -562,7 +583,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -621,7 +642,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2024-09-15',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -652,7 +674,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-08-07',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -683,7 +706,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-08-07',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -712,7 +736,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-08-07',
     settings: {
-      extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
+      extendParams: ['textVerbosity'],
+      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -766,7 +791,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-17',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -796,7 +821,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-06-26',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -825,7 +850,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-06-10',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -855,7 +880,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-16',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -885,7 +910,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-06-26',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1037,7 +1062,10 @@ const aihubmixChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-09-21',
-    settings: { extendParams: ['grok4_7ReasoningEffort'], searchImpl: 'params' },
+    settings: {
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -1122,7 +1150,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-09',
     settings: {
-      extendParams: ['grok4_20ReasoningEffort'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1170,7 +1198,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-03',
     settings: {
-      extendParams: ['reasoningEffort'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -1235,7 +1263,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2026-10-07',
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1270,7 +1299,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     // Thinking is always on for Opus 5.5, so `enableAdaptiveThinking` is omitted.
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['disableContextCaching'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1303,7 +1333,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-16',
     settings: {
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1340,7 +1371,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-05',
     settings: {
-      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'effort'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1419,8 +1451,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
         'enableAdaptiveThinking',
         'enableReasoning',
         'reasoningBudgetToken',
-        'effort',
       ],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1711,7 +1743,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-26',
     settings: {
-      extendParams: ['imageAspectRatio2', 'imageResolution2', 'thinkingLevel4'],
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -1776,7 +1809,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-19',
     settings: {
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -1810,7 +1844,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-04',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -1873,7 +1908,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-18',
     settings: {
-      extendParams: ['thinkingLevel2', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['low', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -1913,7 +1949,8 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-17',
     settings: {
-      extendParams: ['thinkingLevel', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'high', levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
