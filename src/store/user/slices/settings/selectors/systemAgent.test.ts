@@ -8,7 +8,7 @@ describe('systemAgentSelectors', () => {
     it('resolves the deployment default and ignores the personal model choice', () => {
       const s = {
         defaultSettings: {
-          systemAgent: { inputCompletion: { model: 'glm-5.3-flash', provider: 'lobehub' } },
+          systemAgent: { inputCompletion: { model: 'gpt-5.6-luna', provider: 'lobehub' } },
         },
         settings: {
           systemAgent: {
@@ -22,7 +22,7 @@ describe('systemAgentSelectors', () => {
         provider: 'deepseek',
       });
       expect(systemAgentSelectors.defaultInputCompletion(s)).toMatchObject({
-        model: 'glm-5.3-flash',
+        model: 'gpt-5.6-luna',
         provider: 'lobehub',
       });
     });

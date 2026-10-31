@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => {
     chatInputState,
     defaultInputCompletionConfig: {
       enabled: false,
-      model: 'glm-5.3-flash',
+      model: 'gpt-5.6-luna',
       provider: 'lobehub',
     },
     generateJSON: vi.fn(),
@@ -451,7 +451,7 @@ describe('ChatInput InputEditor', () => {
       provider: 'deepseek',
     });
     expect(mocks.generateJSON.mock.calls[1][0]).toMatchObject({
-      model: 'glm-5.3-flash',
+      model: 'gpt-5.6-luna',
       provider: 'lobehub',
     });
 
@@ -466,7 +466,7 @@ describe('ChatInput InputEditor', () => {
 
     expect(mocks.generateJSON).toHaveBeenCalledTimes(3);
     expect(mocks.generateJSON.mock.calls[2][0]).toMatchObject({
-      model: 'glm-5.3-flash',
+      model: 'gpt-5.6-luna',
       provider: 'lobehub',
     });
   });
