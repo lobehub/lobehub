@@ -29,11 +29,15 @@ const STATIC_META: Record<Exclude<TopicRunStatus, 'running'>, ExecutionStatusVis
   transient_failed: { color: cssVar.colorWarning, icon: CircleAlert },
 };
 
+// Status glyphs sit beside ellipsized titles in flex rows; a long title must
+// truncate, not squeeze the glyph.
+const NO_SHRINK = { flexShrink: 0 } as const;
+
 const RunningIcon = memo<{ size: number }>(({ size }) => {
   const mainColor = cssVar.colorWarning;
   const ringColor = `color-mix(in srgb, ${cssVar.colorWarning} 35%, transparent)`;
   return (
-    <svg aria-hidden fill="none" height={size} viewBox="0 0 16 16" width={size}>
+    <svg aria-hidden fill="none" height={size} style={NO_SHRINK} viewBox="0 0 16 16" width={size}>
       <circle cx="8" cy="8" r="6.5" stroke={ringColor} strokeWidth="1.5" />
       <path
         d="M14.5 8 A 6.5 6.5 0 0 1 8 14.5"
@@ -65,7 +69,7 @@ const TopicStatusIcon = memo<TopicStatusIconProps>(({ size = 16, status }) => {
   if (status === 'running') return <RunningIcon size={size} />;
   const key = (status ?? 'pending') as keyof typeof STATIC_META;
   const meta = STATIC_META[key] ?? STATIC_META.pending;
-  return <Icon color={meta.color} icon={meta.icon} size={size} />;
+  return <Icon color={meta.color} icon={meta.icon} size={size} style={NO_SHRINK} />;
 });
 
 export default TopicStatusIcon;
