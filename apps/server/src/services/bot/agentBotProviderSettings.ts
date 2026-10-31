@@ -1,5 +1,10 @@
+import { eq } from 'drizzle-orm';
+
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
+import { agents } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import {
+  BOT_WAKE_SETTING_KEYS,
   flattenBotWakeSettings,
   hasPassiveListeningRule,
 } from '@/server/services/agentSignal/scenarios/botWake/config';
@@ -30,6 +35,32 @@ export function mergeBotSettingsForPersist(
   const definition = platformRegistry.getPlatform(platform);
   if (!definition) return settings;
   return mergeWithDefaults(definition.schema, settings);
+}
+
+/**
+ * The settings to persist for a bot being created: {@link mergeBotSettingsForPersist}, with bot
+ * wake switched off when the agent runs on a heterogeneous runtime (Claude Code, Codex) and the
+ * caller did not choose. Every other bot speaks up on its own by default; a heterogeneous agent
+ * runs on its owner's device and their CLI quota, so it joins conversations only once the owner
+ * turns it on.
+ */
+export async function mergeBotSettingsForCreate(
+  db: LobeChatDatabase,
+  agentId: string,
+  platform: string | undefined,
+  settings: Record<string, unknown> | undefined,
+): Promise<Record<string, unknown> | undefined> {
+  const merged = mergeBotSettingsForPersist(platform, settings);
+  const key = BOT_WAKE_SETTING_KEYS.disabled;
+  if (settings?.[key] !== undefined || !merged || !(key in merged)) return merged;
+
+  const agent = await db.query.agents.findFirst({
+    columns: { agencyConfig: true },
+    where: eq(agents.id, agentId),
+  });
+  if (!agent?.agencyConfig?.heterogeneousProvider) return merged;
+
+  return { ...merged, [key]: true };
 }
 
 /**
