@@ -5,7 +5,7 @@ import { memo, useState } from 'react';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 import TaskStatusTag from '@/features/AgentTasks/features/TaskStatusTag';
-import { openArtifactBoardModal } from '@/features/ArtifactBoard/loader';
+import { openArtifactBoard } from '@/features/ArtifactBoard/opener';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useResourceDeletedPrompt } from '@/features/Work/useResourceDeletedPrompt';
 import { useChatStore } from '@/store/chat';
@@ -95,7 +95,7 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
           : undefined;
       }
       case 'board': {
-        return () => void openArtifactBoardModal(openTarget.boardId);
+        return () => openArtifactBoard(openTarget.boardId);
       }
       case 'canvas': {
         return () => openCanvas(openTarget.canvasId, openTarget.version);

@@ -104,12 +104,17 @@ export const publishAcceptanceFrameBoard = (
   });
 
   const idByKey = new Map(frames.map((frame) => [frame.key, frame.id]));
+  // Two frames can be joined by several events, so a transition is the same
+  // one only if its trigger matches too; an id is never handed out twice.
+  const transitionKey = (fromFrameId: string, toFrameId: string, trigger: string) =>
+    `${fromFrameId}>${toFrameId}>${trigger}`;
   const previousTransitions = new Map(
     (current?.transitions ?? []).map((transition) => [
-      `${transition.fromFrameId}>${transition.toFrameId}`,
+      transitionKey(transition.fromFrameId, transition.toFrameId, transition.trigger),
       transition.id,
     ]),
   );
+  const usedTransitionIds = new Set<string>();
   const transitions = input.transitions.map((transition) => {
     const fromFrameId = idByKey.get(transition.from);
     const toFrameId = idByKey.get(transition.to);
@@ -118,9 +123,14 @@ export const publishAcceptanceFrameBoard = (
         'BAD_REQUEST',
         `Transition ${transition.from} → ${transition.to} names an unknown frame`,
       );
+    const kept = previousTransitions.get(
+      transitionKey(fromFrameId!, toFrameId!, transition.trigger),
+    );
+    const id = kept && !usedTransitionIds.has(kept) ? kept : frameItemId();
+    usedTransitionIds.add(id);
     return {
       fromFrameId: fromFrameId!,
-      id: previousTransitions.get(`${fromFrameId}>${toFrameId}`) ?? frameItemId(),
+      id,
       toFrameId: toFrameId!,
       trigger: transition.trigger,
     };

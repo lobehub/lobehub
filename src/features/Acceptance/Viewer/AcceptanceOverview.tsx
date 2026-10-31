@@ -1,7 +1,7 @@
 'use client';
 
 import { createStaticStyles, cssVar, Flexbox, useResponsive } from '@lobehub/ui';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 
 import { useAcceptanceScope } from './AcceptanceScope';
@@ -18,8 +18,8 @@ import AcceptanceResources from './Evidence/AcceptanceResources';
 import { AcceptanceFlow } from './Flow/AcceptanceFlow';
 import { getFlowNodeCount, resolveAcceptanceTab } from './Flow/flowNavigation';
 import AcceptanceEnterFocus from './Focus/AcceptanceEnterFocus';
-import { AcceptanceFrames } from './Frames/AcceptanceFrames';
 import { useFrameBoardData } from './Frames/useFrameBoard';
+import { getAcceptanceFramesView } from './Frames/view';
 import GateReview from './Gate/GateReview';
 import AcceptanceGoal from './Header/AcceptanceGoal';
 import AcceptanceGoalEdit from './Header/AcceptanceGoalEdit';
@@ -80,7 +80,11 @@ export const AcceptanceOverview = ({
   const linkedTab = ACCEPTANCE_TAB_KEYS.find((key) => key === searchParams.get('tab'));
   const rounds = data?.rounds ?? [];
   const flowCount = getFlowNodeCount(data?.flows);
-  const frameCount = useFrameBoardData(md ? acceptanceId : null).data?.frames.length ?? 0;
+  const FramesView = getAcceptanceFramesView();
+  const frameBoard = useFrameBoardData(md && FramesView ? acceptanceId : null);
+  const frameCount = frameBoard.data?.frames?.length ?? 0;
+  // A failed read is not an empty board: keep the tab so it can show the error and retry.
+  const showFrames = frameCount > 0 || (Boolean(frameBoard.error) && !frameBoard.data);
   const resolvedTab = resolveAcceptanceTab(
     requestedTab ??
       (!embedded && commentIdFromHash(hash) ? 'discussion' : undefined) ??
@@ -90,7 +94,7 @@ export const AcceptanceOverview = ({
     md,
   );
   // The board is a wide desktop surface, like the flow canvas.
-  const tab = resolvedTab === 'frames' && frameCount === 0 ? 'checks' : resolvedTab;
+  const tab = resolvedTab === 'frames' && !showFrames ? 'checks' : resolvedTab;
   const checks = data ? checksForTurn(data, turn) : [];
   // A Goal decision gate reviews its own frozen dossier, not a checklist.
   const gateDossier =
@@ -135,6 +139,7 @@ export const AcceptanceOverview = ({
               flowCount={md ? flowCount : 0}
               frameCount={frameCount}
               resourceCount={resourceCount}
+              showFrames={showFrames}
               discussionCount={countDiscussionMessages({
                 approvals: [],
                 checks: data?.checks,
@@ -165,7 +170,11 @@ export const AcceptanceOverview = ({
         {tab === 'discussion' ? (
           <AcceptanceDiscussion onOpenChecks={() => setTab('checks')} />
         ) : tab === 'frames' ? (
-          <AcceptanceFrames />
+          FramesView && (
+            <Suspense fallback={null}>
+              <FramesView />
+            </Suspense>
+          )
         ) : tab === 'flow' ? (
           <>
             <AcceptanceFlow />

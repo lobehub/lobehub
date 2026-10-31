@@ -67,21 +67,20 @@ export const artifactBoardRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const board = await readBoard(ctx.workModel, input.boardId);
-      if (!board) throw new TRPCError({ code: 'NOT_FOUND', message: 'Board not found' });
-      const round = board.manifest.rounds.find((item) => item.id === input.roundId);
-      if (!round?.options.some((option) => option.id === input.optionId))
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Option not found in this round' });
-
-      const choices = await ctx.workModel.chooseBoardOption({
+      const result = await ctx.workModel.chooseBoardOption({
         boardId: input.boardId,
         chosenBy: ctx.userId,
-        manifest: board.manifest,
         optionId: input.optionId,
         roundId: input.roundId,
       });
-      if (!choices) throw new TRPCError({ code: 'NOT_FOUND', message: 'Board not found' });
-      return { ...board, choices };
+      if (result.status === 'boardNotFound')
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Board not found' });
+      if (result.status === 'optionNotFound')
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Option not found in this round' });
+
+      const board = await readBoard(ctx.workModel, input.boardId);
+      if (!board) throw new TRPCError({ code: 'NOT_FOUND', message: 'Board not found' });
+      return board;
     }),
 
   get: boardProcedure

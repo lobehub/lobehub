@@ -44,5 +44,7 @@ export const useFrameBoard = (acceptanceId?: string | null) => {
     [acceptanceId, data, mutate, t],
   );
 
-  return { board: data ?? null, error: swr.error, isLoading: swr.isLoading, update };
+  const retry = useCallback(() => void mutate(), [mutate]);
+
+  return { board: data ?? null, error: swr.error, isLoading: swr.isLoading, retry, update };
 };

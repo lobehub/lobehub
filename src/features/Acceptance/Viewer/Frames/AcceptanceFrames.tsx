@@ -7,6 +7,8 @@ import { Info, MapPin } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceComments } from '../Comments/hooks';
 import { layoutFrameTransitions, summarizeFrameBoard } from './frameBoard';
@@ -45,7 +47,7 @@ const styles = stylex.create({
 export const AcceptanceFrames = () => {
   const { t } = useTranslation('verify');
   const { acceptanceId } = useAcceptanceScope();
-  const { board, isLoading, update } = useFrameBoard(acceptanceId);
+  const { board, error, isLoading, retry, update } = useFrameBoard(acceptanceId);
   const comments = useAcceptanceComments(acceptanceId);
   const [activeId, setActiveId] = useState<string>();
   const [previewIds, setPreviewIds] = useState<Record<string, string>>({});
@@ -56,7 +58,10 @@ export const AcceptanceFrames = () => {
     [comments.threads],
   );
 
-  if (!board) return isLoading ? null : <Empty description={t('frames.empty')} />;
+  if (!board) {
+    if (error) return <AsyncError error={error} variant={'inline'} onRetry={retry} />;
+    return isLoading ? null : <Empty description={t('frames.empty')} />;
+  }
 
   const summary = summarizeFrameBoard(board);
   const { between, others } = layoutFrameTransitions(board);

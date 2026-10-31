@@ -53,19 +53,20 @@ describe('WorkModel · board', () => {
     await model.chooseBoardOption({
       boardId,
       chosenBy: userId,
-      manifest,
       optionId: 'b',
       roundId: 'direction',
     });
-    const choices = await model.chooseBoardOption({
+    const result = await model.chooseBoardOption({
       boardId,
       chosenBy: userId,
-      manifest,
       optionId: 'b1',
       roundId: 'detail',
     });
 
-    expect(choices?.map((choice) => [choice.roundId, choice.chosenOptionId])).toEqual([
+    expect(
+      result.status === 'chosen' &&
+        result.choices.map((choice) => [choice.roundId, choice.chosenOptionId]),
+    ).toEqual([
       ['direction', 'b'],
       ['detail', 'b1'],
     ]);
@@ -82,14 +83,12 @@ describe('WorkModel · board', () => {
     await model.chooseBoardOption({
       boardId,
       chosenBy: userId,
-      manifest,
       optionId: 'b',
       roundId: 'direction',
     });
     await model.chooseBoardOption({
       boardId,
       chosenBy: userId,
-      manifest,
       optionId: 'b1',
       roundId: 'detail',
     });
@@ -101,6 +100,16 @@ describe('WorkModel · board', () => {
     const found = await model.findBoard(boardId);
     expect(found!.version.version).toBe(2);
     expect((await model.findBoard(boardId, 1))!.version.version).toBe(1);
+
+    // The pick is checked against the manifest current at write time.
+    expect(
+      await model.chooseBoardOption({
+        boardId,
+        chosenBy: userId,
+        optionId: 'b1',
+        roundId: 'detail',
+      }),
+    ).toEqual({ status: 'optionNotFound' });
   });
 
   it('is not visible to another user', async () => {
@@ -113,10 +122,9 @@ describe('WorkModel · board', () => {
       await other.chooseBoardOption({
         boardId,
         chosenBy: userId2,
-        manifest,
         optionId: 'a',
         roundId: 'direction',
       }),
-    ).toBeNull();
+    ).toEqual({ status: 'boardNotFound' });
   });
 });

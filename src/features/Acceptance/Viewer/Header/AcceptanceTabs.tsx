@@ -28,6 +28,8 @@ interface AcceptanceTabsProps {
   frameCount?: number;
   onChange: (key: AcceptanceTabKey) => void;
   resourceCount: number;
+  /** Whether the frames tab shows; defaults to having at least one frame. */
+  showFrames?: boolean;
 }
 
 /**
@@ -47,6 +49,7 @@ const AcceptanceTabs = ({
   frameCount = 0,
   onChange,
   resourceCount,
+  showFrames = frameCount > 0,
 }: AcceptanceTabsProps) => {
   const { t } = useTranslation('verify');
   const tabs = [
@@ -85,7 +88,7 @@ const AcceptanceTabs = ({
       variant={'square'}
       items={tabs
         .filter((tab) => tab.key !== 'flow' || flowCount > 0)
-        .filter((tab) => tab.key !== 'frames' || frameCount > 0)
+        .filter((tab) => tab.key !== 'frames' || showFrames)
         .map((tab) => ({
           icon: <Icon icon={tab.icon} size={16} />,
           key: tab.key,

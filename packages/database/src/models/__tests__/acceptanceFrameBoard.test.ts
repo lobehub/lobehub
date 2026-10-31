@@ -146,6 +146,24 @@ describe('publishAcceptanceFrameBoard', () => {
   });
 });
 
+describe('publishAcceptanceFrameBoard · transitions', () => {
+  it('keeps distinct ids for two events between the same frames across republishes', () => {
+    const parallel: AcceptanceFrameBoardInput = {
+      ...input,
+      transitions: [
+        { from: 'empty', to: 'sources', trigger: 'Click "Connect"' },
+        { from: 'empty', to: 'sources', trigger: 'Drop a file' },
+      ],
+    };
+    const first = publishAcceptanceFrameBoard(undefined, parallel, NOW);
+    const second = publishAcceptanceFrameBoard(first, parallel, NOW);
+
+    const ids = second.transitions.map((transition) => transition.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual(first.transitions.map((transition) => transition.id));
+  });
+});
+
 describe('applyAcceptanceFrameOperation', () => {
   it('refuses to lock without a chosen version or complete acceptance points', () => {
     const board = publishAcceptanceFrameBoard(undefined, input, NOW);

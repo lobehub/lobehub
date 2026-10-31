@@ -5,7 +5,11 @@ import type {
   WorkMetadata,
   WorkVersionItem,
 } from '@lobechat/types';
-import { summarizeArtifactBoardChoices } from '@lobechat/types';
+import {
+  artifactBoardManifestSchema,
+  resolveArtifactBoardChoices,
+  summarizeArtifactBoardChoices,
+} from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { works, workVersions } from '../../schemas/work';
@@ -72,14 +76,9 @@ export const registerBoardWork = async (
         .from(works)
         .where(boardResource(txCtx, params.boardId))
         .limit(1);
-      const choices = Object.values(
-        (current?.metadata as WorkMetadata | null)?.board?.choices ?? {},
-      ).filter((choice) =>
-        params.manifest.rounds.some(
-          (round) =>
-            round.id === choice.roundId &&
-            round.options.some((option) => option.id === choice.chosenOptionId),
-        ),
+      const choices = resolveArtifactBoardChoices(
+        params.manifest,
+        (current?.metadata as WorkMetadata | null)?.board?.choices,
       );
 
       return {
@@ -135,26 +134,32 @@ export const findBoardWork = async (
 
 /**
  * Record the option picked in one round. Written onto the Work (not a new
- * version) under a row lock, with the list status refreshed in the same update.
+ * version) under a row lock, with the list status refreshed in the same
+ * update. The round and option are checked against the manifest current
+ * under that lock, so a republish racing the pick can never leave a choice of
+ * an option the board no longer has.
  */
 export const chooseBoardOption = async (
   ctx: WorkContext,
-  params: {
-    boardId: string;
-    chosenBy: string | null;
-    manifest: ArtifactBoardManifest;
-    optionId: string;
-    roundId: string;
-  },
-): Promise<ArtifactBoardChoice[] | null> =>
+  params: { boardId: string; chosenBy: string | null; optionId: string; roundId: string },
+): Promise<
+  | { choices: ArtifactBoardChoice[]; manifest: ArtifactBoardManifest; status: 'chosen' }
+  | { status: 'boardNotFound' | 'optionNotFound' }
+> =>
   ctx.db.transaction(async (tx) => {
     const [row] = await tx
-      .select({ id: works.id, metadata: works.metadata })
+      .select({ content: workVersions.content, id: works.id, metadata: works.metadata })
       .from(works)
+      .innerJoin(workVersions, eq(workVersions.id, works.currentVersionId))
       .where(boardResource({ ...ctx, db: tx as WorkContext['db'] }, params.boardId))
-      .for('update')
+      .for('update', { of: works })
       .limit(1);
-    if (!row) return null;
+    if (!row) return { status: 'boardNotFound' };
+
+    const manifest = artifactBoardManifestSchema.parse(JSON.parse(row.content ?? ''));
+    const round = manifest.rounds.find((item) => item.id === params.roundId);
+    if (!round?.options.some((option) => option.id === params.optionId))
+      return { status: 'optionNotFound' };
 
     const stored = (row.metadata as WorkMetadata | null)?.board?.choices ?? {};
     const choices: Record<string, ArtifactBoardChoice> = {
@@ -166,20 +171,15 @@ export const chooseBoardOption = async (
         roundId: params.roundId,
       },
     };
-    const valid = params.manifest.rounds.flatMap((round) => {
-      const choice = choices[round.id];
-      return choice && round.options.some((option) => option.id === choice.chosenOptionId)
-        ? [choice]
-        : [];
-    });
+    const valid = resolveArtifactBoardChoices(manifest, choices);
 
     await tx
       .update(works)
       .set({
         metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || jsonb_build_object('board', ${JSON.stringify({ choices })}::jsonb)`,
-        status: choiceStatus(params.manifest, valid),
+        status: choiceStatus(manifest, valid),
       })
       .where(eq(works.id, row.id));
 
-    return valid;
+    return { choices: valid, manifest, status: 'chosen' };
   });

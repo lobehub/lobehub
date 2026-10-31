@@ -1,5 +1,9 @@
+import { lazy } from 'react';
 import { flushSync } from 'react-dom';
 
+import { registerAcceptanceFramesView } from '@/features/Acceptance/Viewer/Frames/view';
+import { openArtifactBoardModal } from '@/features/ArtifactBoard/loader';
+import { registerArtifactBoardOpener } from '@/features/ArtifactBoard/opener';
 import { startBootMetricsFinalize } from '@/libs/bootMetrics';
 import { bootTiming } from '@/libs/bootTiming';
 
@@ -21,6 +25,16 @@ const loadPostRenderInitialization = async () => {
 export const startAppInitialization = () => {
   if (started) return;
   started = true;
+
+  // Canvas-backed surfaces live outside the shared viewer modules; see each registry.
+  registerArtifactBoardOpener((boardId) => void openArtifactBoardModal(boardId));
+  registerAcceptanceFramesView(
+    lazy(() =>
+      import('@/features/Acceptance/Viewer/Frames/AcceptanceFrames').then((module) => ({
+        default: module.AcceptanceFrames,
+      })),
+    ),
+  );
 
   // must run synchronously before first React render
   bootTiming.spanSync('import-settings', startImportSettingsFromUrl);
