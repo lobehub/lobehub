@@ -103,7 +103,7 @@
     "diff": "^9.0.0",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
-    "electron": "44.5.1",
+    "electron": "44.9.1",
     "electron-builder": "26.16.1",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.8.9",

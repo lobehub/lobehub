@@ -32,7 +32,7 @@ importers:
         version: 5.4.4
       electron-sparkle-updater:
         specifier: 0.5.3
-        version: 0.5.3(electron@44.5.1(supports-color@9.4.0))
+        version: 0.5.3(electron@44.9.1(supports-color@9.4.0))
       font-list:
         specifier: ^2.1.0
         version: 2.1.0
@@ -57,13 +57,13 @@ importers:
         version: 4.0.0(eslint@10.11.0(jiti@2.7.0)(supports-color@9.4.0))(supports-color@9.4.0)(typescript@6.0.3)
       '@electron-toolkit/preload':
         specifier: ^3.0.2
-        version: 3.0.2(electron@44.5.1(supports-color@9.4.0))
+        version: 3.0.2(electron@44.9.1(supports-color@9.4.0))
       '@electron-toolkit/tsconfig':
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.19.1)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@44.5.1(supports-color@9.4.0))
+        version: 4.0.0(electron@44.9.1(supports-color@9.4.0))
       '@lobechat/chat-adapter-imessage':
         specifier: workspace:*
         version: link:../../packages/chat-adapter-imessage
@@ -167,8 +167,8 @@ importers:
         specifier: ^0.45.3
         version: 0.45.3(@opentelemetry/api@1.9.1)
       electron:
-        specifier: 44.5.1
-        version: 44.5.1(supports-color@9.4.0)
+        specifier: 44.9.1
+        version: 44.9.1(supports-color@9.4.0)
       electron-builder:
         specifier: 26.16.1
         version: 26.16.1(electron-builder-squirrel-windows@26.16.1)(supports-color@9.4.0)
@@ -420,8 +420,8 @@ importers:
         version: 2.2.0
     devDependencies:
       electron:
-        specifier: ^43.2.0
-        version: 43.7.7(supports-color@9.4.0)
+        specifier: ^43.8.6
+        version: 43.8.6(supports-color@9.4.0)
 
   ../../packages/electron-mac-notifications:
     dependencies:
@@ -2462,6 +2462,7 @@ packages:
   '@opentelemetry/sdk-trace-base@2.11.0':
     resolution: {integrity: sha512-H19x/TX/LZdqiYOjM7fqtSxwlplC5pgelavqbQdHbhdq0q/AI/TGkM2dfGuuynTXmJPeF2HoZVoPDu+TGoW78A==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
@@ -3769,6 +3770,11 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
+    peerDependencies:
+      ajv: ^8.0.0
+    peerDependenciesMeta:
+      ajv:
+        optional: true
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
@@ -4651,13 +4657,13 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@43.7.7:
-    resolution: {integrity: sha512-y0pg+KhWLAkW2Ts2njkFFNFl3KtB1FmbUp9Te9i+R2Og2v1fcI/I6MADJ7jvnzB5UKdt+U+0EUoCnVL79xMPMA==}
+  electron@43.8.6:
+    resolution: {integrity: sha512-2k3n5cjPHZqYTOn8iaJrm4fmb/QsvciomLD7PG9IECd0N/jr8Hxcu6Z/3mvMRrtXWCOp/i8qm5ZAcSnUzAa5Mw==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
-  electron@44.5.1:
-    resolution: {integrity: sha512-lx7AYoFIiyvEvgvpyWO9kOC60xtNPpiPZAth6Fmg9NutzpCAMLwpUlaBY2EXfZyIgUdzEmLMj9KvK0Vrokl1yQ==}
+  electron@44.9.1:
+    resolution: {integrity: sha512-x/tECFFDa2OFNjMObFH0EGKWrCnFZPOR1wP2iMIVt0STecGl8FmDXdaiaryY0kf8mtw9kSLP2yK8dfdaWkfDmw==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -8795,17 +8801,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron-toolkit/preload@3.0.2(electron@44.5.1(supports-color@9.4.0))':
+  '@electron-toolkit/preload@3.0.2(electron@44.9.1(supports-color@9.4.0))':
     dependencies:
-      electron: 44.5.1(supports-color@9.4.0)
+      electron: 44.9.1(supports-color@9.4.0)
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@24.19.1)':
     dependencies:
       '@types/node': 24.19.1
 
-  '@electron-toolkit/utils@4.0.0(electron@44.5.1(supports-color@9.4.0))':
+  '@electron-toolkit/utils@4.0.0(electron@44.9.1(supports-color@9.4.0))':
     dependencies:
-      electron: 44.5.1(supports-color@9.4.0)
+      electron: 44.9.1(supports-color@9.4.0)
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -11854,12 +11860,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron-sparkle-updater@0.5.3(electron@44.5.1(supports-color@9.4.0)):
+  electron-sparkle-updater@0.5.3(electron@44.9.1(supports-color@9.4.0)):
     dependencies:
       node-addon-api: 8.9.2
       node-gyp: 12.4.0
     optionalDependencies:
-      electron: 44.5.1(supports-color@9.4.0)
+      electron: 44.9.1(supports-color@9.4.0)
 
   electron-store@11.0.2:
     dependencies:
@@ -11898,7 +11904,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@43.7.7(supports-color@9.4.0):
+  electron@43.8.6(supports-color@9.4.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
       '@electron/get': 5.1.0(supports-color@9.4.0)
@@ -11906,7 +11912,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.5.1(supports-color@9.4.0):
+  electron@44.9.1(supports-color@9.4.0):
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
       '@electron/get': 5.1.0(supports-color@9.4.0)
