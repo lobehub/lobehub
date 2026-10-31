@@ -47,6 +47,7 @@
     "./internlm": "./src/aiModels/internlm.ts",
     "./jina": "./src/aiModels/jina.ts",
     "./kimiCodingPlan": "./src/aiModels/kimiCodingPlan.ts",
+    "./liquidinference": "./src/aiModels/liquidinference.ts",
     "./lmstudio": "./src/aiModels/lmstudio.ts",
     "./longcat": "./src/aiModels/longcat.ts",
     "./magpie": "./src/aiModels/magpie.ts",
