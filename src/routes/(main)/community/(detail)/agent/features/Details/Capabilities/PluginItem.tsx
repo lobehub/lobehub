@@ -7,19 +7,9 @@ import {
   OFFICIAL_SITE,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
-import {
-  Avatar,
-  Block,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Image,
-  Skeleton,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -46,40 +36,18 @@ const BuiltinToolIcon = memo<Pick<ComposioAppType | LobehubSkillProviderType, 'i
 
 BuiltinToolIcon.displayName = 'BuiltinToolIcon';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    clickable: css`
-      cursor: pointer;
-
-      &:hover {
-        .plugin-title {
-          color: ${cssVar.colorLink};
-        }
-      }
-    `,
-    desc: css`
-      flex: 1;
-      margin: 0 !important;
-      font-size: 14px !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    noLink: css`
-      cursor: default;
-    `,
-    tag: css`
-      flex-shrink: 0;
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 14px !important;
-      font-weight: 500 !important;
-    `,
-    titleRow: css`
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    `,
-  };
+const styles = stylex.create({
+  clickable: { cursor: 'pointer' },
+  desc: { flex: '1', margin: '0', fontSize: '14px', color: cssVar.colorTextSecondary },
+  noLink: { cursor: 'default' },
+  tag: { flexShrink: 0 },
+  title: {
+    margin: '0',
+    fontSize: '14px',
+    fontWeight: 500,
+    color: { default: null, [stylex.when.ancestor(':hover')]: cssVar.colorLink },
+  },
+  titleRow: { display: 'flex', gap: '8px', alignItems: 'center' },
 });
 
 interface PluginItemProps {
@@ -232,11 +200,15 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const content = (
     <Block
       horizontal
-      className={cx(sourceConfig.clickable ? styles.clickable : styles.noLink)}
       gap={12}
       key={identifier}
       padding={12}
       variant={'outlined'}
+      className={
+        stylex.props(
+          sourceConfig.clickable ? [styles.clickable, stylex.defaultMarker()] : styles.noLink,
+        ).className
+      }
     >
       {renderAvatar()}
       <Flexbox
@@ -246,19 +218,23 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
           overflow: 'hidden',
         }}
       >
-        <div className={styles.titleRow}>
-          <Text ellipsis as={'h2'} className={cx(styles.title, 'plugin-title')}>
+        <div {...stylex.props(styles.titleRow)}>
+          <Text ellipsis as={'h2'} className={stylex.props(styles.title).className}>
             {data.title}
           </Text>
           {sourceConfig.tagText && (
-            <Tag className={styles.tag} color={sourceConfig.tagColor} size={'small'}>
+            <Tag
+              className={stylex.props(styles.tag).className}
+              color={sourceConfig.tagColor}
+              size={'small'}
+            >
               {sourceConfig.tagText}
             </Tag>
           )}
         </div>
         <Text
           as={'p'}
-          className={styles.desc}
+          className={stylex.props(styles.desc).className}
           ellipsis={{
             rows: 2,
           }}
