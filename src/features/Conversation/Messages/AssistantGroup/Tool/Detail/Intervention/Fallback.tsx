@@ -5,7 +5,9 @@ import {
 } from '@lobechat/builtin-tool-activator';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
 import { safeParseJSON } from '@lobechat/utils';
-import { ActionIcon, Avatar, createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronRight, Edit3Icon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useRef, useState } from 'react';
@@ -22,39 +24,31 @@ import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import KeyValueEditor from './KeyValueEditor';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  collapseHeader: css`
-    cursor: pointer;
-    user-select: none;
-
-    padding-block: 6px;
-    padding-inline: 10px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  description: css`
-    padding-block: 8px;
-    padding-inline: 16px;
-
-    font-size: ${cssVar.fontSize};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  reason: css`
-    margin-block-start: -4px;
-    padding-block-end: 8px;
-    padding-inline: 16px;
-
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1.45;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  collapseHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+  },
+  description: {
+    paddingBlock: '8px',
+    paddingInline: '16px',
+    fontSize: cssVar.fontSize,
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  reason: {
+    marginBlockStart: '-4px',
+    paddingBlockEnd: '8px',
+    paddingInline: '16px',
+    fontSize: cssVar.fontSizeSM,
+    lineHeight: 1.45,
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 interface FallbackInterventionProps {
   actionsPortalTarget?: HTMLDivElement | null;
@@ -188,7 +182,12 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
 
     return (
       <Flexbox gap={4}>
-        <Flexbox horizontal align="center" className={styles.description} gap={6}>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.description).className}
+          gap={6}
+        >
           {pluginMeta?.avatar && (
             <Avatar
               avatar={pluginMeta.avatar}
@@ -204,14 +203,14 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
           </span>
         </Flexbox>
 
-        {activationReason && <div className={styles.reason}>{activationReason}</div>}
+        {activationReason && <div {...stylex.props(styles.reason)}>{activationReason}</div>}
 
         {argCount > 0 && (
           <>
             <Flexbox
               horizontal
               align="center"
-              className={styles.collapseHeader}
+              className={stylex.props(styles.collapseHeader).className}
               gap={4}
               onClick={() => setShowArgs(!showArgs)}
             >

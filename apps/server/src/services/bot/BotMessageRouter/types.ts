@@ -134,7 +134,7 @@ export interface BotHandlerContext {
   bridge: AgentBridgeService;
   /**
    * Whether the agent may step back from this conversation (`STAND_DOWN`): a group conversation
-   * of a bot whose wake rules enforce, once the rollout reaches it.
+   * of a bot whose wake rules enforce, while its wake switch is on.
    */
   canStandDown: (thread: { isDM?: boolean }) => Promise<boolean>;
   charLimit?: number;
@@ -157,11 +157,6 @@ export interface BotHandlerContext {
     thread: { id: string },
     threadSubscribed?: boolean,
   ) => Promise<BotWakeInitiation | undefined>;
-  /**
-   * The `bot_wake` rollout flag for this bot's owner. Until it is on, every wake is answered, as
-   * it was before the pipeline existed.
-   */
-  isBotWakeRolledOut: () => Promise<boolean>;
   isMessageMonitoringAllowed: (caller: string, threadId: string) => Promise<boolean>;
   /** Watch keywords the owner marked as the bot's names (`asName`); a subset of `watchKeywords`. */
   nameKeywords: ReadonlyArray<string>;

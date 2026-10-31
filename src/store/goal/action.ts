@@ -394,6 +394,16 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
   };
 
+  /** The goal leaves (or joins) other members' lists, and its Tasks move with it. */
+  setGoalVisibility = async (goalId: string, visibility: 'private' | 'public'): Promise<void> => {
+    await goalService.setVisibility(goalId, visibility);
+    await Promise.all([
+      this.refreshGoalGraph(goalId),
+      revalidateReplica(goalListResource),
+      revalidateReplica(homeGoalListResource),
+    ]);
+  };
+
   setGoalModel = async (
     goalId: string,
     modelConfig: { model: string; provider: string } | null,

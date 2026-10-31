@@ -1,21 +1,25 @@
 'use client';
 
-import { Block, createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
+import { Block, Flexbox, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+  },
+});
 
 const ConnectionsSkeleton = memo<{ withNestedContent?: boolean }>(
   ({ withNestedContent = false }) => (
     <Flexbox gap={12}>
       {Array.from({ length: 2 }).map((_, index) => (
-        <Block className={styles.card} key={index}>
+        <Block className={stylex.props(styles.card).className} key={index}>
           <Flexbox gap={12}>
             <Flexbox horizontal align="center" gap={12}>
               <Skeleton.Avatar shape={'square'} size={36} />
@@ -48,7 +52,7 @@ export const IntegrationDetailSkeleton = memo<{ withNestedContent?: boolean }>(
         <Skeleton height={28} width={96} />
       </Flexbox>
 
-      <Block className={styles.card}>
+      <Block className={stylex.props(styles.card).className}>
         <Flexbox horizontal align="center" gap={16}>
           <Skeleton.Avatar shape={'square'} size={48} />
           <Flexbox flex={1} gap={6}>

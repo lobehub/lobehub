@@ -1,7 +1,37 @@
 import type { AIChatModelCard } from '../types/aiModel';
 
-// https://api-docs.deepseek.com/zh-cn/quick_start/pricing
+// https://api-docs.deepseek.com/quick_start/pricing (peak-hour rates)
 const deepseekChatModels: AIChatModelCard[] = [
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'DeepSeek V4.1 Flash is the latest fast, cost-efficient member of the V4 family with a 1M context window, hybrid thinking, and native image understanding. It also serves the legacy deepseek-v4-flash names.',
+    displayName: 'DeepSeek V4.1 Flash',
+    enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
+    id: 'deepseek-flash',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'USD',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.006, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-10',
+    settings: {
+      extendParams: ['deepseekV4GAReasoningEffort'],
+    },
+    type: 'chat',
+  },
   {
     abilities: {
       functionCall: true,
@@ -18,11 +48,11 @@ const deepseekChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-flash',
     maxOutput: 393_216,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.006, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-07-31',
@@ -47,11 +77,11 @@ const deepseekChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-pro',
     maxOutput: 393_216,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 13.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.044, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.32, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.96, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-08-13',
@@ -77,11 +107,11 @@ const deepseekChatModels: AIChatModelCard[] = [
     id: 'deepseek-v4-flash-vision-exp',
     maxOutput: 393_216,
     pricing: {
-      currency: 'CNY',
+      currency: 'USD',
       units: [
-        { name: 'textInput_cacheRead', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.006, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-08-21',

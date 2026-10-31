@@ -55,6 +55,14 @@ class ChannelActionImpl {
     await this.#refreshAfterWrite(this.refreshList);
     return result.data.channel.id;
   };
+  /** Inviting into a direct conversation starts a new group; the conversation stays as it is. */
+  createGroupFromDirect = async (
+    input: Parameters<typeof channelService.createGroupFromDirect>[0],
+  ) => {
+    const result = await channelService.createGroupFromDirect(input);
+    await this.#refreshAfterWrite(this.refreshList);
+    return result.data.channel.id;
+  };
   remove = async (channelId: string) => {
     const scope = cacheScope.get();
     // Optimistically hide the row; failure restores it. Keep the open conversation
@@ -164,7 +172,9 @@ class ChannelActionImpl {
     await this.#refreshAfterWrite(() =>
       Promise.all([
         this.refreshDetail({ channelId: input.channelId, threadId: data.threadId }),
-        ...(input.rootMessageId ? [this.refreshDetail({ channelId: input.channelId })] : []),
+        ...(input.rootMessageId || (input.replyToId && data.threadId)
+          ? [this.refreshDetail({ channelId: input.channelId })]
+          : []),
         this.refreshList(),
       ]),
     );

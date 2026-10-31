@@ -25,7 +25,7 @@ const GoalAgentModelConfig = ({
   routeAgentId,
 }: GoalAgentModelConfigProps) => {
   const { t } = useTranslation('chat');
-  const { executor, planner, viewerIsOwner } = useGoalAgentModel({ goalId, routeAgentId });
+  const { executor, planner, privateAgentsAllowed } = useGoalAgentModel({ goalId, routeAgentId });
 
   return (
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }} wrap={'wrap'}>
@@ -33,7 +33,7 @@ const GoalAgentModelConfig = ({
         agentId={planner.agentId}
         disabled={disabled}
         disabledReason={disabledReason}
-        hidePrivateAgents={!viewerIsOwner}
+        hidePrivateAgents={!privateAgentsAllowed}
         label={t('goalDetail.mainAgentLabel')}
         placeholder={t('goalDetail.mainAgentUnassigned')}
         tooltip={t('goalDetail.mainAgent')}
@@ -59,7 +59,7 @@ const GoalAgentModelConfig = ({
           agentId={executor.agentId}
           disabled={disabled}
           disabledReason={disabledReason}
-          hidePrivateAgents={!viewerIsOwner}
+          hidePrivateAgents={!privateAgentsAllowed}
           label={t('goalDetail.taskAgentLabel')}
           placeholder={t('goalDetail.taskAgentFollowsMain')}
           tooltip={t('goalDetail.taskAgent')}

@@ -73,7 +73,7 @@ token count and latency. No raw provider errors are stored. Runtime hooks still 
 
 ## Responder context
 
-Responder dispatch sends the current request plus at most five recent public messages the
+Responder dispatch sends the current request, its explicit quote, and at most five recent public messages the
 responder's topic has not seen. Native agents receive the hidden `lobe-channel` builtin for anything
 older; external agents can call `lh channel history --json` and `lh channel message <id> --json`.
 Both use `ChannelHistoryService`, with operation identity supplied by the runtime, never model
@@ -87,8 +87,10 @@ sequence numbers or IDs. The shared Channel instructions apply to native and ext
 including when old replies already contain metadata. Explicit, authorized technical questions
 can still receive IDs, paths or code relevant to the request.
 
-The request prompt is tagged text, not JSON: `channel_message` blocks for the recent context and
-one `channel_request` block, attributed by display name and type. Each tag carries a random
+The request prompt is tagged text, not JSON: `channel_message` blocks for the recent context,
+an optional `channel_quote` block, and one `channel_request` block, attributed by display name and type.
+The quote retains up to 6000 characters and is omitted from the recent blocks to avoid duplication.
+Each tag carries a random
 per-run `boundary`, so a tag quoted inside message text cannot close a block or forge an author.
 It omits ids, except on a context excerpt that is truncated or has attachments, and sequencing and
 branch-control fields. Builtin tool `content` and CLI

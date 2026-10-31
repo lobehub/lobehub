@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, Flexbox, keyframes, Spin, Text } from '@lobehub/ui';
+import { Flexbox, Spin, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,47 +9,7 @@ import { shinyTextStyles } from '@/styles';
 
 import { formatElapsedTime } from './utils';
 
-const shimmer = keyframes`
-  0% {
-    transform: translateX(-100%);
-  }
-
-  100% {
-    transform: translateX(100%);
-  }
-`;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 12px;
-  `,
-  progress: css`
-    position: relative;
-
-    overflow: hidden;
-
-    height: 3px;
-    border-radius: 2px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressShimmer: css`
-    position: absolute;
-    inset-block-start: 0;
-    inset-inline-start: 0;
-
-    width: 100%;
-    height: 100%;
-
-    background: linear-gradient(90deg, transparent, ${cssVar.colorPrimaryBgHover}, transparent);
-
-    animation: ${shimmer} 2s infinite;
-
-    @media (prefers-reduced-motion: reduce) {
-      display: none;
-    }
-  `,
-}));
+const styles = stylex.create({ container: { paddingBlock: '12px' } });
 
 const InitializingState = memo(() => {
   const { t } = useTranslation('chat');
@@ -66,7 +27,7 @@ const InitializingState = memo(() => {
   }, []);
 
   return (
-    <Flexbox className={styles.container} gap={12}>
+    <Flexbox className={stylex.props(styles.container).className} gap={12}>
       <Flexbox horizontal align="center" gap={8}>
         <Spin size="small" variant="network" />
         <Text className={shinyTextStyles.shinyText} weight={500}>

@@ -1,4 +1,5 @@
 import {
+  assertOverrideReason,
   assertSha,
   deliveredBaseline,
   normalizeVersion,
@@ -8,7 +9,11 @@ import {
 const marker = /<!-- desktop-release-request ([\s\S]*?)-->/g;
 
 function validateIntent(value) {
-  if (!value || value.schemaVersion !== 1 || !['initialize', 'hotfix'].includes(value.mode))
+  if (
+    !value ||
+    value.schemaVersion !== 1 ||
+    !['initialize', 'hotfix', 'recovery'].includes(value.mode)
+  )
     throw new Error('Invalid desktop release intent metadata');
   const intent = { schemaVersion: 1, mode: value.mode };
   if (value.mode === 'hotfix') {
@@ -17,15 +22,14 @@ function validateIntent(value) {
     if (!/^[a-f0-9]{64}$/.test(value.baseSourcesHash || ''))
       throw new Error('Hotfix metadata requires the baseline source hash');
     intent.baseSourcesHash = value.baseSourcesHash;
-    if (value.overrideReason !== undefined) {
-      if (
-        typeof value.overrideReason !== 'string' ||
-        !value.overrideReason.trim() ||
-        value.overrideReason.length > 500
-      )
-        throw new Error('Invalid Cloud repair reason');
-      intent.overrideReason = value.overrideReason.trim();
-    }
+    if (value.overrideReason !== undefined)
+      intent.overrideReason = assertOverrideReason(value.overrideReason);
+  } else if (value.mode === 'recovery') {
+    if (value.baseVersion || value.baseSourcesHash)
+      throw new Error('Recovery metadata cannot claim a delivered baseline');
+    intent.cloudSha = assertSha(value.cloudSha, 'Recovery Cloud');
+    intent.recoveryBaseSha = assertSha(value.recoveryBaseSha, 'Recovery OSS base');
+    intent.overrideReason = assertOverrideReason(value.overrideReason);
   } else if (value.baseVersion || value.cloudSha) {
     throw new Error('Ordinary initialization cannot carry a hotfix baseline');
   }
@@ -38,7 +42,10 @@ function validateIntent(value) {
     if (!Number.isSafeInteger(value.prNumber) || value.prNumber < 1)
       throw new Error('Release intent requires its PR number');
     intent.prNumber = value.prNumber;
-    if (value.mode === 'hotfix') intent.prBaseSha = assertSha(value.prBaseSha, 'Release PR base');
+    if (value.mode === 'hotfix' || value.mode === 'recovery')
+      intent.prBaseSha = assertSha(value.prBaseSha, 'Release PR base');
+    if (value.mode === 'recovery' && intent.recoveryBaseSha !== intent.prBaseSha)
+      throw new Error('Recovery OSS base differs from the bound PR base');
   }
   return intent;
 }
@@ -82,9 +89,9 @@ export function requestFromPr(pr) {
   if (intent?.mergeSha)
     throw new Error('PR metadata must not preassign the release merge identity');
   if (ordinary) return intent || { schemaVersion: 1, mode: 'initialize' };
-  if (!intent || intent.mode !== 'hotfix')
+  if (!intent || !['hotfix', 'recovery'].includes(intent.mode))
     throw new Error(
-      'Targeted main patches need hotfix intent metadata with an explicitly delivered base; use hotfix:branch --base',
+      'Targeted main patches need hotfix intent metadata with a delivered base or explicit recovery metadata',
     );
   return intent;
 }
@@ -92,10 +99,18 @@ export function requestFromPr(pr) {
 export async function validatePrIntent(pr, store) {
   const intent = requestFromPr(pr);
   if (!intent || intent.mode === 'initialize') return intent;
+  const baseSha = await store.resolvePrBase(pr);
+  if (intent.mode === 'recovery') {
+    if (baseSha !== intent.recoveryBaseSha)
+      throw new Error(
+        'Recovery requires its explicitly selected main base SHA; reselect sources if main changed',
+      );
+    return intent;
+  }
   const baseline = await deliveredBaseline(store, intent.baseVersion, intent.baseSourcesHash);
   if (intent.cloudSha !== baseline.cloudSha && !intent.overrideReason)
     throw new Error('A different Cloud SHA needs a repair reason');
-  await store.assertHotfixBase(baseline, pr.base.sha);
+  await store.assertHotfixBase(baseline, baseSha);
   return { ...intent, baseSourcesHash: sourcesHash(baseline) };
 }
 
