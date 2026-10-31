@@ -5,7 +5,8 @@ export const styles = stylex.create({
   hover: {
     opacity: {
       'default': 0,
-      ':is([data-popup-open], .file-list-item-group:hover *)': 1,
+      ':is([data-popup-open])': 1,
+      ':is(.file-list-item-group:hover *)': 1,
     },
   },
   name: {
