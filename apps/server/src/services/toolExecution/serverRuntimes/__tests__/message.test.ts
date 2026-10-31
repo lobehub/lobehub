@@ -170,6 +170,9 @@ vi.mock('@/server/services/messenger/push', () => ({
 vi.mock('@/server/services/bot/agentBotProviderSettings', () => ({
   assertBotAccessSettings: vi.fn(),
   invalidateBotAfterUpdate: vi.fn().mockResolvedValue(undefined),
+  mergeBotSettingsForCreate: vi.fn(async function (_db, _agentId, _platform, settings) {
+    return settings;
+  }),
   mergeBotSettingsForPersist: vi.fn(function (_platform, settings) {
     return settings;
   }),

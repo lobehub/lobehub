@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
+  mergeBotSettingsForCreate,
   mergeBotSettingsPatch,
 } from '../agentBotProviderSettings';
 
@@ -280,5 +281,38 @@ describe('mergeBotSettingsPatch', () => {
       botWakeDuties: 'x',
       botWakeDisabled: false,
     });
+  });
+});
+
+describe('mergeBotSettingsForCreate', () => {
+  const dbWith = (agencyConfig: unknown) =>
+    ({
+      query: { agents: { findFirst: vi.fn(async () => ({ agencyConfig })) } },
+    }) as never;
+
+  it('leaves bot wake on for an ordinary agent', async () => {
+    const settings = await mergeBotSettingsForCreate(dbWith({}), 'agt', 'discord', {});
+
+    expect(settings?.botWakeDisabled).toBe(false);
+  });
+
+  it('switches bot wake off for a heterogeneous agent that did not choose', async () => {
+    const settings = await mergeBotSettingsForCreate(
+      dbWith({ heterogeneousProvider: { type: 'claude-code' } }),
+      'agt',
+      'discord',
+      { dmPolicy: 'open' },
+    );
+
+    expect(settings).toMatchObject({ botWakeDisabled: true, dmPolicy: 'open' });
+  });
+
+  it('keeps a heterogeneous agent opted in when the caller turned it on', async () => {
+    const db = dbWith({ heterogeneousProvider: { type: 'codex' } });
+    const settings = await mergeBotSettingsForCreate(db, 'agt', 'discord', {
+      botWakeDisabled: false,
+    });
+
+    expect(settings?.botWakeDisabled).toBe(false);
   });
 });
