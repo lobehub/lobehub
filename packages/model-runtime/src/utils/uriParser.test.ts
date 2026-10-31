@@ -86,6 +86,19 @@ describe('validateExternalUrl', () => {
     });
   });
 
+  it('probes with the strict SSRF policy without logging a block', async () => {
+    vi.mocked(ssrfSafeFetch).mockRejectedValueOnce(new Error('SSRF blocked: private IP'));
+
+    const result = await validateExternalUrl('https://lobe.example.com/f/1');
+
+    expect(result.isValid).toBe(false);
+    expect(ssrfSafeFetch).toHaveBeenCalledWith(
+      'https://lobe.example.com/f/1',
+      expect.objectContaining({ method: 'HEAD' }),
+      { allowIPAddressList: [], allowPrivateIPAddress: false, silent: true },
+    );
+  });
+
   it('should normalize image/jpg to image/jpeg', async () => {
     vi.mocked(ssrfSafeFetch).mockResolvedValueOnce(
       mockHeadResponse({ 'content-length': '1024', 'content-type': 'image/jpg' }),

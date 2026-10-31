@@ -159,6 +159,8 @@ export const validateExternalUrl = async (url: string): Promise<ExternalUrlValid
       {
         allowIPAddressList: [],
         allowPrivateIPAddress: false,
+        // a blocked URL is an expected "not usable as fileUri", the caller falls back to base64
+        silent: true,
       },
     );
 
