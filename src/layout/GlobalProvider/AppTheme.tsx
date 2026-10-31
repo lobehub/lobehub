@@ -26,9 +26,8 @@ import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
 import { resolveLang } from '@/utils/client/switchLang';
 
-import { resolveFontFamilyOverride } from './fontFamilyOverride';
-
 import moduleStyles from './AppTheme.module.css';
+import { resolveFontFamilyOverride } from './fontFamilyOverride';
 
 const styles = stylex.create({
   app: {
