@@ -5,6 +5,7 @@ import Ai21Provider from './ai21';
 import Ai302Provider from './ai302';
 import Ai360Provider from './ai360';
 import AiHubMixProvider from './aihubmix';
+import ApiRouteProvider from './api-route';
 import AkashChatProvider from './akashchat';
 import AntGroupProvider from './antgroup';
 import AnthropicProvider from './anthropic';
@@ -170,6 +171,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   MistralProvider,
   XiaomiMiMoProvider,
   AiHubMixProvider,
+  ApiRouteProvider,
   OpenRouterProvider,
   FalProvider,
   OllamaProvider,
@@ -309,6 +311,7 @@ export { default as Ai21ProviderCard } from './ai21';
 export { default as Ai302ProviderCard } from './ai302';
 export { default as Ai360ProviderCard } from './ai360';
 export { default as AiHubMixProviderCard } from './aihubmix';
+export { default as ApiRouteProviderCard } from './api-route';
 export { default as AkashChatProviderCard } from './akashchat';
 export { default as AntGroupProviderCard } from './antgroup';
 export { default as AnthropicProviderCard } from './anthropic';
