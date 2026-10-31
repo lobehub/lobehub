@@ -67,6 +67,11 @@ export interface ModelTokensUsage {
 
   inputCacheMissTokens?: number;
   /**
+   * Input text characters, billed through `millionCharacters` pricing units
+   * (e.g. character-billed text-to-speech models).
+   */
+  inputCharacters?: number;
+  /**
    * currently only pplx has citation_tokens
    */
   inputCitationTokens?: number;
@@ -125,6 +130,7 @@ export const ModelUsageSchema = z.object({
   inputVideoTokens: z.number().optional(),
   inputCitationTokens: z.number().optional(),
   inputToolTokens: z.number().optional(),
+  inputCharacters: z.number().optional(),
 
   // Output tokens breakdown
   outputTextTokens: z.number().optional(),

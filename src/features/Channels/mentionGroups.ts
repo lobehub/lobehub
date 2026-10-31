@@ -8,6 +8,7 @@ export function getMentionGroups(
   members: ChannelPublicMember[],
   query: string,
   fallbackName: string,
+  grouped = true,
 ) {
   const matches = query
     ? new Fuse(
@@ -17,6 +18,8 @@ export function getMentionGroups(
         .search(query)
         .map(({ item }) => item.member)
     : members;
+
+  if (!grouped) return matches.length ? [{ actorType: undefined, members: matches }] : [];
 
   return (['user', 'agent'] as const)
     .map((actorType) => ({

@@ -1,6 +1,9 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Flexbox, responsive } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
@@ -10,53 +13,44 @@ import SkeletonBar from './Bar';
 /** Platform cards drawn by the list skeleton — the built-in catalog fills three rows. */
 const PLATFORM_CARD_COUNT = 9;
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   // `content-box` so the 1px divider sits outside the measured row height,
   // matching `Form.Field divider` / `Form.Group` (64px rows, 45px group header).
-  advanced: css`
-    box-sizing: content-box;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  card: css`
-    min-height: 104px;
-  `,
-  field: css`
-    box-sizing: content-box;
-    min-height: 64px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    width: 100%;
-
-    ${responsive.md} {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    ${responsive.sm} {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  `,
-  root: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-
-    width: 100%;
-    min-height: 0;
-  `,
-  title: css`
-    height: 34px;
-    margin-block-end: 20px;
-  `,
-}));
+  advanced: {
+    boxSizing: 'content-box',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  card: { minHeight: '104px' },
+  field: { boxSizing: 'content-box', minHeight: '64px' },
+  // `& + &`: every field after the first draws a divider above it.
+  fieldDivider: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: {
+      default: 'repeat(3, minmax(0, 1fr))',
+      [media.md]: 'repeat(2, minmax(0, 1fr))',
+      [media.sm]: 'minmax(0, 1fr)',
+    },
+    gap: '12px',
+    width: '100%',
+  },
+  root: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: 0,
+  },
+  title: { height: '34px', marginBlockEnd: '20px' },
+});
 
 /**
  * Body of the agent channel list (`features/AgentChannel/PlatformGrid.tsx`):
@@ -66,17 +60,28 @@ const styles = createStaticStyles(({ css }) => ({
  * data-loading state, so route load and platform fetch share one shape.
  */
 export const AgentChannelListBodySkeleton = () => (
-  <div aria-busy className={styles.root}>
+  <div aria-busy {...stylex.props(styles.root)}>
     <Flexbox padding={24} width={'100%'}>
       <Flexbox style={{ alignSelf: 'center', maxWidth: 1024, width: '100%' }}>
-        <Flexbox horizontal align={'center'} className={styles.title} gap={8}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.title).className}
+          gap={8}
+        >
           <SkeletonBar height={24} width={220} />
           <SkeletonBar height={28} width={28} />
           <SkeletonBar height={24} width={96} />
         </Flexbox>
-        <div className={styles.grid}>
+        <div {...stylex.props(styles.grid)}>
           {Array.from({ length: PLATFORM_CARD_COUNT }).map((_, index) => (
-            <Block className={styles.card} gap={8} key={index} padding={12} variant={'outlined'}>
+            <Block
+              className={stylex.props(styles.card).className}
+              gap={8}
+              key={index}
+              padding={12}
+              variant={'outlined'}
+            >
               <Flexbox horizontal align={'center'} gap={8} height={24}>
                 <SkeletonBar height={24} width={24} />
                 <SkeletonBar height={14} width={56 + (index % 3) * 12} />
@@ -100,7 +105,7 @@ export const AgentChannelListBodySkeleton = () => (
  * group — followed by the right-aligned save button of the footer.
  */
 export const AgentChannelDetailBodySkeleton = () => (
-  <div aria-busy className={styles.root}>
+  <div aria-busy {...stylex.props(styles.root)}>
     <Flexbox
       align={'center'}
       paddingInline={24}
@@ -113,7 +118,7 @@ export const AgentChannelDetailBodySkeleton = () => (
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.field}
+              className={stylex.props(styles.field, index > 0 && styles.fieldDivider).className}
               gap={16}
               justify={'space-between'}
               key={index}
@@ -126,7 +131,7 @@ export const AgentChannelDetailBodySkeleton = () => (
             </Flexbox>
           ))}
           {/* Collapsed `Form.Group` header: a 28px title button at the top of a 45px row. */}
-          <Flexbox className={styles.advanced} height={45}>
+          <Flexbox className={stylex.props(styles.advanced).className} height={45}>
             <Flexbox justify={'center'} style={{ height: 28 }}>
               <SkeletonBar height={13} width={52} />
             </Flexbox>

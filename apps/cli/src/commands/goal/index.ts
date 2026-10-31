@@ -19,6 +19,7 @@ import { getTrpcClient } from '../../api/client';
 import { confirm, outputJson, printTable, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
 import { resolveAppUrlBuilder } from '../task/url';
+import { registerGoalAccessCommands } from './access';
 import { registerGoalGraphEditCommands } from './graphEdit';
 import {
   type GoalMetricState,
@@ -159,6 +160,9 @@ function printGraph(graph: GoalGraphSnapshot, metrics?: GoalMetricState) {
       goal.config?.pausedBy ? ` · paused by ${goal.config.pausedBy}` : ''
     }]`,
   );
+  // Older servers do not send it; personal goals are private whatever the column says.
+  if (goal.workspaceId && goal.visibility)
+    console.log(`${pc.dim('Visibility:')} ${goal.visibility}`);
   if (goal.subjectType)
     console.log(`${pc.dim('Subject:')} ${`${goal.subjectType} ${goal.subjectId ?? ''}`.trim()}`);
   if (goal.requirement) console.log(`${pc.dim('Requirement:')} ${goal.requirement}`);
@@ -588,6 +592,10 @@ export function registerGoalCommand(program: Command) {
       "Dedicated executor for the goal's tasks (defaults to the goal agent)",
     )
     .option('--project <id>', 'Project ID')
+    .option(
+      '--visibility <visibility>',
+      'Workspace visibility: private (only you) or public (every member). Defaults to private when the goal or task agent is private, else public',
+    )
     .option('--explore <instruction>', 'Explore alternatives using completed experiment results')
     .option('--max-experiments <n>', 'Maximum experiment nodes (requires --explore, default 10)')
     .option(
@@ -627,6 +635,9 @@ export function registerGoalCommand(program: Command) {
       }
       if (options.rollout && !['canary', 'full', 'off'].includes(options.rollout)) {
         throw new Error('--rollout must be one of: canary, full, off');
+      }
+      if (options.visibility && !['private', 'public'].includes(options.visibility)) {
+        throw new Error('--visibility must be one of: private, public');
       }
       const seedTasks = [
         ...((options.task as string[] | undefined) ?? []),
@@ -701,6 +712,7 @@ export function registerGoalCommand(program: Command) {
         requirement: options.requirement,
         title,
         tasks: seedTasks.length ? seedTasks : undefined,
+        visibility: options.visibility,
       };
       // A topic goal takes its agent and topic from the running
       // operation on the server; the CLI only names the run. Device and gateway
@@ -1159,35 +1171,7 @@ export function registerGoalCommand(program: Command) {
       },
     );
 
-  goal
-    .command('set-agent <id> <agent>')
-    .description(
-      'Hand the goal to a different supervising agent (its unfinished tasks follow unless the goal has a task agent)',
-    )
-    .option('--goal-only', 'Only change the goal-level agent; leave existing tasks as assigned')
-    .action(async (id: string, agentId: string, options: { goalOnly?: boolean }) => {
-      const result = await (
-        await getTrpcClient()
-      ).goal.setAgent.mutate({ agentId, goalOnly: options.goalOnly, id });
-      log.info(result.message);
-    });
-
-  goal
-    .command('set-task-agent <id> <agent>')
-    .description(
-      'Route the goal\'s tasks to a dedicated executor; "none" hands them back to the goal agent',
-    )
-    .option('--goal-only', 'Only change future tasks; leave existing tasks as assigned')
-    .action(async (id: string, agent: string, options: { goalOnly?: boolean }) => {
-      const result = await (
-        await getTrpcClient()
-      ).goal.setTaskAgent.mutate({
-        agentId: agent === 'none' ? null : agent,
-        goalOnly: options.goalOnly,
-        id,
-      });
-      log.info(result.message);
-    });
+  registerGoalAccessCommands(goal);
 
   goal
     .command('bind-topic <id>')

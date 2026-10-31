@@ -1,40 +1,32 @@
 import { type FlexboxProps } from '@lobehub/ui';
-import { Button, createStaticStyles, cx, Flexbox, ScrollShadow } from '@lobehub/ui';
+import { Button, Flexbox, ScrollShadow } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  button: css`
-    position: absolute;
-    z-index: 10;
-    inset-block-start: 50%;
-    transform: translateY(-50%);
-
-    color: ${cssVar.colorTextSecondary};
-
-    opacity: 0;
-
-    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder} !important;
-      box-shadow: ${cssVar.boxShadowTertiary} !important;
-    }
-  `,
-  container: css`
-    position: relative;
-
-    &:hover .scroll-button {
-      opacity: 1;
-    }
-  `,
-  leftButton: css`
-    inset-inline-start: 16px;
-  `,
-  rightButton: css`
-    inset-inline-end: 16px;
-  `,
-}));
+const styles = stylex.create({
+  button: {
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '50%',
+    transform: 'translateY(-50%)',
+    color: cssVar.colorTextSecondary,
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: `opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
+    borderColor: { 'default': null, ':hover': cssVar.colorBorder },
+    boxShadow: { 'default': null, ':hover': cssVar.boxShadowTertiary },
+  },
+  container: {
+    position: 'relative',
+  },
+  leftButton: {
+    insetInlineStart: '16px',
+  },
+  rightButton: {
+    insetInlineEnd: '16px',
+  },
+});
 
 const ScrollShadowWithButton = memo<FlexboxProps>(({ children, ...rest }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -76,10 +68,15 @@ const ScrollShadowWithButton = memo<FlexboxProps>(({ children, ...rest }) => {
   }, []);
 
   return (
-    <Flexbox horizontal className={styles.container} width={'100%'} {...rest}>
+    <Flexbox
+      horizontal
+      className={stylex.props(styles.container, stylex.defaultMarker()).className}
+      width={'100%'}
+      {...rest}
+    >
       {canScrollLeft && (
         <Button
-          className={cx(styles.button, styles.leftButton, 'scroll-button')}
+          className={stylex.props(styles.button, styles.leftButton).className}
           icon={ChevronLeft}
           shape={'circle'}
           type={'default'}
@@ -99,7 +96,7 @@ const ScrollShadowWithButton = memo<FlexboxProps>(({ children, ...rest }) => {
       </ScrollShadow>
       {canScrollRight && (
         <Button
-          className={cx(styles.button, styles.rightButton, 'scroll-button')}
+          className={stylex.props(styles.button, styles.rightButton).className}
           icon={ChevronRight}
           shape={'circle'}
           type={'default'}

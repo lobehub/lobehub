@@ -35,7 +35,6 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
     dmSettings,
     gateFollowup,
     initiate,
-    isBotWakeRolledOut,
     isMessageMonitoringAllowed,
     nameKeywords,
     observe,
@@ -227,12 +226,10 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
 
       // Only a wake nobody asked for (a keyword, or one the bot started itself) may end in silence
       // (`NO_REPLY`), holding back its reactions and typing until it decides to speak; and only
-      // once the bot-wake rollout reaches this bot's owner, exactly as in a subscribed thread. A DM
+      // while the bot's wake switch is on, exactly as in a subscribed thread. A DM
       // is always answered and never asks.
       const wakeKind =
-        wakeReason !== 'direct-message' && (await isBotWakeRolledOut())
-          ? botWakeKindFor(wakeReason)
-          : 'mention';
+        wakeReason !== 'direct-message' && botWakeEnabled ? botWakeKindFor(wakeReason) : 'mention';
       // Where the reply goes and what is said before the run (see `startReply`). Keyword and name
       // wakes in a channel used to get their own reply thread, since the chat-sdk Discord adapter
       // only auto-creates one on @-mention; that stays the behaviour when the bot does not decide.

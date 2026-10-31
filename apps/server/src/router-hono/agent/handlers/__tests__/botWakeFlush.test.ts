@@ -38,10 +38,8 @@ describe('botWakeFlush', () => {
   it('flushes and loads the bot settings through the provider model', async () => {
     mocks.find.mockResolvedValue({ settings: { botWake: { enabled: true } }, userId: 'owner' });
     mocks.handleWakeFlush.mockImplementation(async (_payload, load) => {
-      // The owner travels with the settings: the rollout flag is evaluated for them.
       expect(await load('discord', 'app')).toEqual({
         settings: { botWake: { enabled: true } },
-        userId: 'owner',
       });
     });
 

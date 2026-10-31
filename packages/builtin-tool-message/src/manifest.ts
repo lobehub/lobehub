@@ -207,7 +207,7 @@ const botSettingsSchema = {
     },
     botWakeDuties: {
       description:
-        'The bot\'s duties (职责边界): free text, one duty per line, saying what the bot is responsible for in its channels (e.g. "When someone describes a feature request, assess it; for easy ones create a task for dario"). When bot-wake is on (botWakeEnabled), a message from anyone that nobody addressed to the bot but that falls within these duties may wake it. Empty string turns this off. Overwrite-replace: to add or change one duty, read the current text with getBotDetail, edit it, and write the whole text back. Only change it when the bot\'s owner asks; up to 4000 characters.',
+        'The bot\'s duties (职责边界): free text, one duty per line, saying what the bot is responsible for in its channels (e.g. "When someone describes a feature request, assess it; for easy ones create a task for dario"). Unless the owner turned bot-wake off (botWakeDisabled), a message from anyone that nobody addressed to the bot but that falls within these duties may wake it. Empty string turns this off. Overwrite-replace: to add or change one duty, read the current text with getBotDetail, edit it, and write the whole text back. Only change it when the bot\'s owner asks; up to 4000 characters.',
       type: 'string',
     },
     botWakeDutiesThreshold: {

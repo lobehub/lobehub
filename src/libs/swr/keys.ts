@@ -489,6 +489,8 @@ export const userMemoryKeys = {
     taskId,
   ]),
   contexts: def('userMemory:contexts', (params: unknown) => ['userMemory:contexts', params]),
+  contextStories: def('userMemory:contextStories', () => ['userMemory:contextStories']),
+  contextStory: def('userMemory:contextStory', (id: string) => ['userMemory:contextStory', id]),
   experiences: def('userMemory:experiences', (params: unknown) => [
     'userMemory:experiences',
     params,

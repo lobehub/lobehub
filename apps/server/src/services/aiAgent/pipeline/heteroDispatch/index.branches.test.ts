@@ -1,4 +1,5 @@
 import { HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR } from '@lobechat/heterogeneous-agents';
+import { CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
 import { ChatErrorType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -206,7 +207,7 @@ beforeEach(() => {
 
 describe('Channel history context', () => {
   it.each([true, false])(
-    'passes history instructions only for a reserved Channel run (%s)',
+    'passes complete Channel instructions only for a reserved Channel run (%s)',
     async (channel) => {
       const { deps } = createDeps();
       const result = await dispatchHeteroAgent(
@@ -223,8 +224,7 @@ describe('Channel history context', () => {
       );
       expect(result.success).toBe(true);
       const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
-      expect((dispatched.systemContext ?? '').includes('channel history --json')).toBe(channel);
-      expect((dispatched.systemContext ?? '').includes('Only the current request')).toBe(channel);
+      expect((dispatched.systemContext ?? '').includes(CHANNEL_INSTRUCTIONS)).toBe(channel);
       const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
       expect(signed.capabilities.includes('channel:read')).toBe(channel);
     },

@@ -176,7 +176,12 @@ export const BOT_WAKE_SETTING_KEYS = {
   denyChannels: 'botWakeDenyChannels',
   duties: 'botWakeDuties',
   dutiesThreshold: 'botWakeDutiesThreshold',
-  enabled: 'botWakeEnabled',
+  /**
+   * The off switch. Absent means on: every bot speaks up on its own unless its owner turned it
+   * off. It replaced `botWakeEnabled`, which the form saved as `false` for every bot while the
+   * switch was still hidden, so that key is retired rather than read.
+   */
+  disabled: 'botWakeDisabled',
   maxSilentWakes: 'botWakeMaxSilentWakes',
   ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
   pace: 'botWakePace',
@@ -191,6 +196,7 @@ export const BOT_WAKE_SETTING_KEYS = {
  * The parser never reads them; the form projection drops them, so the next save clears them.
  */
 const RETIRED_BOT_WAKE_SETTING_KEYS = new Set([
+  'botWakeEnabled',
   'botWakeClassifierInitiateEnabled',
   'botWakeClassifierInitiateThreshold',
   'botWakeProactiveEnabled',
@@ -213,7 +219,6 @@ const chosen = (values: Record<string, unknown>) =>
  * `flattenBotWakeSettings` is what carries a hand-written config into the form.
  */
 const BOT_WAKE_NESTED_PATHS: Array<{ key: string; path: string[] }> = [
-  { key: BOT_WAKE_SETTING_KEYS.enabled, path: ['enabled'] },
   { key: BOT_WAKE_SETTING_KEYS.customInstructions, path: ['customInstructions'] },
   {
     key: BOT_WAKE_SETTING_KEYS.customInstructionsEnabled,
@@ -365,12 +370,16 @@ export const flattenBotWakeSettings = (
   if (!isRecord(settings?.botWake)) return withPace(withInstructionsSwitch(settings));
 
   const nested = settings.botWake;
-  const flat = Object.fromEntries(
-    BOT_WAKE_NESTED_PATHS.flatMap(({ key, path }) => {
-      const value = readPath(nested, path);
-      return isChosen(value) ? [[key, value]] : [];
-    }),
-  );
+  const flat = {
+    ...Object.fromEntries(
+      BOT_WAKE_NESTED_PATHS.flatMap(({ key, path }) => {
+        const value = readPath(nested, path);
+        return isChosen(value) ? [[key, value]] : [];
+      }),
+    ),
+    // A hand-written config is off unless it says `enabled: true`; the flat key is the off switch.
+    [BOT_WAKE_SETTING_KEYS.disabled]: readPath(nested, ['enabled']) !== true,
+  };
   // Every flat key goes: the nested object is authoritative at runtime, so a stale flat value it
   // does not mention would otherwise become live the moment the nested object is dropped.
   const flatKeys = new Set<string>(Object.values(BOT_WAKE_SETTING_KEYS));
@@ -410,9 +419,9 @@ const gatherBotWakeSettings = (settings: Record<string, unknown> | null | undefi
     ...chosen({
       customInstructions: flat(k.customInstructions),
       customInstructionsEnabled: flat(k.customInstructionsEnabled),
-      enabled: flat(k.enabled),
       pace: flat(k.pace),
     }),
+    enabled: flat(k.disabled) !== true,
     ...(overrides && 'mode' in overrides ? { mode: overrides.mode } : {}),
     classifier: {
       ...chosen({ threshold: flat(k.classifierThreshold) }),

@@ -51,6 +51,7 @@ export default {
   'table.columns.trigger.enums.topic_summary': 'Topic Summary',
   'table.columns.trigger.enums.topic_title': 'Topic Title',
   'table.columns.trigger.enums.translate': 'Translation',
+  'table.columns.trigger.enums.tts': 'Voice Synthesis',
   'table.columns.trigger.enums.verify': 'Acceptance Check',
   'table.columns.trigger.enums.video': 'Video Generation',
   'table.columns.trigger.title': 'Trigger',
@@ -58,6 +59,7 @@ export default {
   'table.columns.type.enums.embedding': 'Embedding',
   'table.columns.type.enums.imageGeneration': 'Image Generation',
   'table.columns.type.enums.speechRecognition': 'Voice Transcription',
+  'table.columns.type.enums.textToSpeech': 'Speech Synthesis',
   'table.columns.type.enums.videoGeneration': 'Video Generation',
   'table.columns.type.title': 'Type',
   'table.agentShareDesc':

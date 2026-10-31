@@ -562,7 +562,6 @@ export default {
   'heterogeneousStatus.device.installDesc':
     'Run one of these commands in a terminal on {{device}}:',
   'heterogeneousStatus.device.installTitle': 'Install on {{device}}',
-  'heterogeneousStatus.device.label': 'Device',
   'heterogeneousStatus.device.missing':
     'The bound device is no longer available. Choose another execution environment above.',
   'heterogeneousStatus.device.offline': '{{device}} is offline. Check again once it reconnects.',

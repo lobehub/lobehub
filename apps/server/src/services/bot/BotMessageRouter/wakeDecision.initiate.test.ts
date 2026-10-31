@@ -73,7 +73,6 @@ const make = (
     db: {} as never,
     operatorUserId: OWNER,
     platform: 'discord',
-    rollout: async () => true,
     settings,
     state,
     userId: 'u1',
@@ -135,19 +134,13 @@ describe('bot-wake recorder: initiating a wake nobody addressed', () => {
     await expect(recorder.initiate(observation())).resolves.toBeUndefined();
   });
 
-  it('does nothing while the rollout is off', async () => {
+  it('does nothing when the bot has bot-wake switched off', async () => {
     const state = fakeState(spokeRecently());
-    const recorder = make(ENFORCE, state, { rollout: async () => false });
+    const recorder = make({ botWake: { enabled: false, mode: 'enforce' } }, state);
 
     await expect(recorder.initiate(observation())).resolves.toBeUndefined();
     expect(state.readChannel).not.toHaveBeenCalled();
     expect(state.readRecentMessages).not.toHaveBeenCalled();
-  });
-
-  it('does nothing when the bot has bot-wake switched off', async () => {
-    const recorder = make({ botWake: { enabled: false, mode: 'enforce' } }, fakeState());
-
-    await expect(recorder.initiate(observation())).resolves.toBeUndefined();
   });
 
   it.each([
@@ -549,13 +542,10 @@ describe('bot-wake recorder: remembering what was said', () => {
     expect(state.rememberMessages).not.toHaveBeenCalled();
   });
 
-  it('keeps nothing while the rollout is off or bot-wake is off', async () => {
-    const off = fakeState();
-    await make(ENFORCE, off, { rollout: async () => false }).remember(observation());
+  it('keeps nothing while bot-wake is off', async () => {
     const disabled = fakeState();
     await make({ botWake: { enabled: false } }, disabled).remember(observation());
 
-    expect(off.rememberMessages).not.toHaveBeenCalled();
     expect(disabled.rememberMessages).not.toHaveBeenCalled();
   });
 

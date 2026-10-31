@@ -3,8 +3,6 @@
 import {
   Avatar,
   Block,
-  createStaticStyles,
-  cx,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -15,6 +13,8 @@ import {
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   AlertTriangle,
   ClockIcon,
@@ -57,56 +57,39 @@ const getStatusTagColor = (status?: GroupAgentStatus) => {
   }
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    desc: css`
-      flex: 1;
-      margin: 0 !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    footer: css`
-      margin-block-start: 16px;
-      border-block-start: 1px dashed ${cssVar.colorBorder};
-      background: ${cssVar.colorBgContainer};
-    `,
-    moreButton: css`
-      position: absolute;
-      z-index: 10;
-      inset-block-start: 12px;
-      inset-inline-end: 12px;
-
-      opacity: 0;
-
-      transition: opacity 0.2s;
-    `,
-    secondaryDesc: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
-    `,
-    statTag: css`
-      border-radius: 4px;
-
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 11px;
-      color: ${cssVar.colorTextSecondary};
-
-      background: ${cssVar.colorFillTertiary};
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 16px !important;
-      font-weight: 500 !important;
-
-      &:hover {
-        color: ${cssVar.colorLink};
-      }
-    `,
-    wrapper: css`
-      &:hover .more-button {
-        opacity: 1;
-      }
-    `,
-  };
+const styles = stylex.create({
+  desc: { flex: '1', margin: '0', color: cssVar.colorTextSecondary },
+  footer: {
+    marginBlockStart: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorder,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  moreButton: {
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '12px',
+    insetInlineEnd: '12px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: 'opacity 0.2s',
+  },
+  secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
+  statTag: {
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  title: {
+    margin: '0',
+    fontSize: '16px',
+    fontWeight: 500,
+    color: { 'default': null, ':hover': cssVar.colorLink },
+  },
 });
 
 type UserGroupCardProps = DiscoverGroupAgentItem;
@@ -179,7 +162,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
     return (
       <Block
         clickable
-        className={styles.wrapper}
+        className={stylex.props(stylex.defaultMarker()).className}
         height={'100%'}
         variant={'outlined'}
         width={'100%'}
@@ -193,7 +176,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
         {isOwner && !isUnderReview && (
           <div onClick={stopPropagation}>
             <DropdownMenu items={menuItems as any}>
-              <div className={cx('more-button', styles.moreButton)}>
+              <div {...stylex.props(styles.moreButton)}>
                 <Icon icon={MoreVerticalIcon} size={16} style={{ cursor: 'pointer' }} />
               </div>
             </DropdownMenu>
@@ -228,7 +211,12 @@ const UserGroupCard = memo<UserGroupCardProps>(
                   to={link}
                   onClick={stopPropagation}
                 >
-                  <Text ellipsis as={'h3'} className={styles.title} style={{ flex: 1 }}>
+                  <Text
+                    ellipsis
+                    as={'h3'}
+                    className={stylex.props(styles.title).className}
+                    style={{ flex: 1 }}
+                  >
                     {title}
                   </Text>
                 </WorkspaceLink>
@@ -251,7 +239,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
         <Flexbox flex={1} gap={12} paddingInline={16}>
           <Text
             as={'p'}
-            className={styles.desc}
+            className={stylex.props(styles.desc).className}
             ellipsis={{
               rows: 3,
             }}
@@ -266,7 +254,10 @@ const UserGroupCard = memo<UserGroupCardProps>(
                   styles={{ root: { pointerEvents: 'none' } }}
                   title={t('groupAgents.memberCount', { defaultValue: 'Members' })}
                 >
-                  <Tag className={styles.statTag} icon={<Icon icon={UsersIcon} />}>
+                  <Tag
+                    className={stylex.props(styles.statTag).className}
+                    icon={<Icon icon={UsersIcon} />}
+                  >
                     {formatIntergerNumber(memberCount)}
                   </Tag>
                 </Tooltip>
@@ -277,7 +268,10 @@ const UserGroupCard = memo<UserGroupCardProps>(
                   styles={{ root: { pointerEvents: 'none' } }}
                   title={t('fork.forksCount', { count: forkCount })}
                 >
-                  <Tag className={styles.statTag} icon={<Icon icon={GitForkIcon} />}>
+                  <Tag
+                    className={stylex.props(styles.statTag).className}
+                    icon={<Icon icon={GitForkIcon} />}
+                  >
                     {formatIntergerNumber(forkCount)}
                   </Tag>
                 </Tooltip>
@@ -288,7 +282,10 @@ const UserGroupCard = memo<UserGroupCardProps>(
                   styles={{ root: { pointerEvents: 'none' } }}
                   title={t('groupAgents.downloads', { defaultValue: 'Downloads' })}
                 >
-                  <Tag className={styles.statTag} icon={<Icon icon={DownloadIcon} />}>
+                  <Tag
+                    className={stylex.props(styles.statTag).className}
+                    icon={<Icon icon={DownloadIcon} />}
+                  >
                     {formatIntergerNumber(installCount)}
                   </Tag>
                 </Tooltip>
@@ -299,19 +296,22 @@ const UserGroupCard = memo<UserGroupCardProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.footer}
+          className={stylex.props(styles.footer).className}
           justify={'space-between'}
           padding={16}
         >
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.secondaryDesc}
+            className={stylex.props(styles.secondaryDesc).className}
             justify={'space-between'}
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
-              <PublishedTime className={styles.secondaryDesc} date={createdAt} />
+              <PublishedTime
+                className={stylex.props(styles.secondaryDesc).className}
+                date={createdAt}
+              />
             </Flexbox>
             {category && t(`category.groupAgent.${category}` as any, { defaultValue: category })}
           </Flexbox>

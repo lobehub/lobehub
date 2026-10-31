@@ -1,0 +1,28 @@
+.content {
+  font-size: 16px;
+  line-height: 1.56;
+  color: var(--lobe-color-text-secondary);
+}
+
+.content p {
+  margin-block: 0;
+}
+
+.content p + p {
+  margin-block-start: 0.72em;
+}
+
+.content a {
+  color: var(--lobe-color-link);
+}
+
+.content strong {
+  font-weight: 600;
+  color: var(--lobe-color-text);
+}
+
+@media (max-width: 575.98px) {
+  .content {
+    font-size: 15px;
+  }
+}

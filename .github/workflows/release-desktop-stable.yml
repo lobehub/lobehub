@@ -30,8 +30,34 @@ on:
         required: true
         type: string
       cloud_ref:
-        description: 'Cloud commit SHA (40 lowercase hex characters); empty uses latest HEAD'
+        description: 'Cloud SHA for import, or verify the SHA already bound in the hotfix/recovery Release'
         required: false
+        type: string
+        default: ''
+      release_mode:
+        description: 'Rebuild pinned sources, resume a PR-bound hotfix/recovery, or import historical sources only'
+        required: true
+        type: choice
+        options: [rebuild, hotfix, recovery, import]
+        default: rebuild
+      source_ref:
+        description: 'Product source ref; defaults to the target version tag and must resolve to its SHA'
+        type: string
+        default: ''
+      base_version:
+        description: 'Optional verification of the delivered baseline already bound in the hotfix Release'
+        type: string
+        default: ''
+      cloud_override_reason:
+        description: 'Optional verification of the Cloud repair reason already bound in the hotfix/recovery Release'
+        type: string
+        default: ''
+      evidence_run_id:
+        description: 'Original build run ID for historical import'
+        type: string
+        default: ''
+      evidence_run_attempt:
+        description: 'Original build attempt for historical import'
         type: string
         default: ''
       build_mac:
@@ -81,13 +107,28 @@ jobs:
   check-stable:
     name: Check Release Version
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      pull-requests: read
     outputs:
-      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
+      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_sha }}
+      oss_sha: ${{ steps.cloud-ref.outputs.oss_sha }}
+      sources_hash: ${{ steps.cloud-ref.outputs.sources_hash }}
+      build_required: ${{ steps.cloud-ref.outputs.build_required }}
       is_stable: ${{ steps.check.outputs.is_stable }}
       version: ${{ steps.check.outputs.version }}
       is_manual: ${{ steps.check.outputs.is_manual }}
       release_notes: ${{ steps.check.outputs.release_notes }}
     steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
       - name: Check release info
         id: check
         env:
@@ -98,34 +139,38 @@ jobs:
             # 手动触发: 使用输入的版本号
             version="${{ inputs.version }}"
             version="${version#v}"
-            echo "is_manual=true" >> $GITHUB_OUTPUT
-            echo "version=${version}" >> $GITHUB_OUTPUT
-            echo "release_notes=" >> $GITHUB_OUTPUT
+            {
+              echo "is_manual=true"
+              echo "version=${version}"
+              echo "release_notes="
+            } >> "$GITHUB_OUTPUT"
             echo "🔧 Manual trigger: version=${version}"
           else
             # Release 触发: 从 tag 提取版本号
             version="${{ github.event.release.tag_name }}"
             version="${version#v}"
-            echo "is_manual=false" >> $GITHUB_OUTPUT
-            echo "version=${version}" >> $GITHUB_OUTPUT
+            {
+              echo "is_manual=false"
+              echo "version=${version}"
+            } >> "$GITHUB_OUTPUT"
             release_body="${RELEASE_BODY:-}"
             {
               echo "release_notes<<EOF"
               printf '%s\n' "$release_body"
               echo "EOF"
-            } >> $GITHUB_OUTPUT
+            } >> "$GITHUB_OUTPUT"
           fi
 
           # 检查是否为 stable 版本 (不含任何 '-' 后缀)
           if [[ "$version" == *"-"* ]]; then
-            echo "is_stable=false" >> $GITHUB_OUTPUT
+            echo "is_stable=false" >> "$GITHUB_OUTPUT"
             echo "⏭️ Skipping: $version is not a stable release"
           else
-            echo "is_stable=true" >> $GITHUB_OUTPUT
+            echo "is_stable=true" >> "$GITHUB_OUTPUT"
             echo "✅ Stable release detected: $version"
           fi
 
-      # No checkout in this job, so the local overlay-token action is unavailable.
+      # Restrict the Cloud token to the configured overlay repository.
       - name: Resolve overlay repository
         id: overlay-repo
         if: steps.check.outputs.is_stable == 'true'
@@ -149,38 +194,40 @@ jobs:
         id: cloud-ref
         if: steps.check.outputs.is_stable == 'true'
         env:
-          REQUESTED_CLOUD_REF: ${{ inputs.cloud_ref || '' }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.check.outputs.version }}
+          RELEASE_MODE: ${{ github.event_name == 'release' && 'auto' || inputs.release_mode }}
+          SOURCE_REF: ${{ inputs.source_ref || '' }}
+          CLOUD_REF: ${{ inputs.cloud_ref || '' }}
+          BASE_VERSION: ${{ inputs.base_version || '' }}
+          CLOUD_OVERRIDE_REASON: ${{ inputs.cloud_override_reason || '' }}
+          EVIDENCE_RUN_ID: ${{ inputs.evidence_run_id || '' }}
+          EVIDENCE_RUN_ATTEMPT: ${{ inputs.evidence_run_attempt || '' }}
+          WRITE_SOURCES: ${{ github.event_name == 'release' || inputs.release_mode == 'import' || !inputs.skip_github_release || !inputs.skip_s3_upload }}
           CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
           CLOUD_TOKEN: ${{ steps.overlay-token.outputs.token }}
         run: |
-          set -euo pipefail
-          : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
-          if [ -n "$REQUESTED_CLOUD_REF" ]; then
-            if [[ ! "$REQUESTED_CLOUD_REF" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "::error::cloud_ref must be a full 40-character lowercase commit SHA"
-              exit 1
-            fi
-            cloud_ref="$REQUESTED_CLOUD_REF"
-          else
-            # checkout persist-credentials extraheader would send GITHUB_TOKEN and 404 the private cloud repo
-            cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
-          fi
-          if [[ ! "$cloud_ref" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Unable to resolve Cloud revision"
-            exit 1
-          fi
-          echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
+          node .github/scripts/desktopReleaseCli.mjs resolve
+
+      - name: Preserve source selection diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: desktop-sources-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/desktop-release-sources.json
+          if-no-files-found: ignore
 
   # ============================================
   # 配置构建矩阵 (检查自托管 Runner)
   # ============================================
   configure-build:
     needs: [check-stable]
-    if: needs.check-stable.outputs.is_stable == 'true'
+    if: needs.check-stable.outputs.build_required == 'true'
     name: Configure Build Matrix
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      complete_matrix: ${{ steps.set-matrix.outputs.complete_matrix }}
     steps:
       - name: Generate Matrix
         id: set-matrix
@@ -213,21 +260,56 @@ jobs:
           fi
 
           # 输出
-          echo "matrix={\"include\":$static_matrix}" >> $GITHUB_OUTPUT
+          count=$(jq 'length' <<< "$static_matrix")
+          [ "$count" -gt 0 ] || { echo '::error::Select at least one build platform'; exit 1; }
+          {
+            echo "matrix={\"include\":$static_matrix}"
+            echo "complete_matrix=$([ "$count" -eq 4 ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
 
   # ============================================
   # 多平台构建
   # ============================================
   build:
     needs: [check-stable, configure-build]
-    if: needs.check-stable.outputs.is_stable == 'true'
+    if: needs.check-stable.outputs.build_required == 'true'
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.configure-build.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v7
+      - name: Checkout release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+
+      - name: Preserve release tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/desktop-release-tooling"
+          cp -R .github "$RUNNER_TEMP/desktop-release-tooling/"
+          tooling_sha="$(git rev-parse HEAD)"
+          echo "DESKTOP_TOOLING_SHA=$tooling_sha" >> "$GITHUB_ENV"
+
+      - name: Checkout product sources
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.check-stable.outputs.oss_sha }}
+
+      - name: Verify product sources and restore tooling
+        shell: bash
+        env:
+          RELEASE_OSS_SHA: ${{ needs.check-stable.outputs.oss_sha }}
+          CLOUD_REF: ${{ needs.check-stable.outputs.cloud_ref }}
+          SOURCES_HASH: ${{ needs.check-stable.outputs.sources_hash }}
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$RELEASE_OSS_SHA" ] || { echo '::error::Product source SHA mismatch'; exit 1; }
+          mkdir -p .github
+          cp -R "$RUNNER_TEMP/desktop-release-tooling/.github/." .github/
+          node .github/scripts/desktopReleaseCli.mjs verify-checkout
 
       - name: Create overlay token
         id: overlay-token
@@ -245,6 +327,7 @@ jobs:
           cloud-repository: ${{ vars.OVERLAY_REPOSITORY }}
           cloud-token: ${{ steps.overlay-token.outputs.token }}
           node-version: ${{ env.NODE_VERSION }}
+          require-pinned-cloud: 'true'
 
       - name: Resolve core seq
         id: core_seq
@@ -367,6 +450,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -429,12 +514,12 @@ jobs:
         run: ls -R release
 
       - name: Upload to Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           # 手动触发时使用输入的版本号创建 tag
           tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', needs.check-stable.outputs.version) || github.event.release.tag_name }}
-          # 手动触发时创建为 draft
-          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          # Source resolution already requires an existing release; do not unpublish it on a rebuild.
+          draft: false
           files: |
             release/stable*
             release/latest*
@@ -456,6 +541,9 @@ jobs:
     needs: [merge-mac-files, check-stable]
     name: Publish to S3
     runs-on: ubuntu-latest
+    outputs:
+      core_published: ${{ steps.publish.outputs.core-published }}
+      installers_published: ${{ steps.publish.outputs.installers-published }}
     # 手动触发时可选择跳过
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_s3_upload) }}
     steps:
@@ -468,7 +556,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.workflow_sha }}
       - uses: ./.github/actions/desktop-publish-s3
+        id: publish
         with:
           channel: stable
           cloud-ref: ${{ needs.check-stable.outputs.cloud_ref }}
@@ -483,13 +573,18 @@ jobs:
     needs: [publish-s3, check-stable]
     name: Publish Sparkle Appcast
     runs-on: macos-15
+    outputs:
+      published: ${{ steps.publish.outputs.published }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
       - uses: ./.github/actions/desktop-publish-sparkle
+        id: publish
         with:
           channel: stable
           version: ${{ needs.check-stable.outputs.version }}
@@ -501,3 +596,31 @@ jobs:
           s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
           s3-region: ${{ secrets.UPDATE_S3_REGION }}
           s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  record-delivery:
+    name: Record successful desktop delivery
+    needs: [check-stable, configure-build, build, publish-github, publish-s3, publish-sparkle]
+    if: always() && needs.check-stable.outputs.build_required == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Record publication proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.check-stable.outputs.version }}
+          SOURCES_HASH: ${{ needs.check-stable.outputs.sources_hash }}
+          CORE_PUBLISHED: ${{ needs.publish-s3.outputs.core_published }}
+          INSTALLERS_PUBLISHED: ${{ needs.publish-s3.outputs.installers_published }}
+          SPARKLE_PUBLISHED: ${{ needs.publish-sparkle.outputs.published }}
+          RELEASE_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.skip_github_release || inputs.skip_s3_upload) }}
+          BUILT_PLATFORMS: ${{ needs.configure-build.outputs.complete_matrix == 'true' && '["darwin-arm64","darwin-x64","linux-x64","win32-x64"]' || '[]' }}
+          PUBLICATION_OUTCOMES: '{"build":"${{ needs.build.result }}","github":"${{ needs.publish-github.result }}","s3":"${{ needs.publish-s3.result }}","sparkle":"${{ needs.publish-sparkle.result }}"}'
+        run: node .github/scripts/desktopReleaseCli.mjs publish

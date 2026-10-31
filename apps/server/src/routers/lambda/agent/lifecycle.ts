@@ -9,6 +9,7 @@ import { ResourcePermissionModel } from '@/database/models/resourcePermission';
 import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
+import { createAgentDirectChannel } from '@/server/services/channel/defaultChannel';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 import { TrashService } from '@/server/services/trash';
 import { TransferErrorCode } from '@/types/transferError';
@@ -50,7 +51,8 @@ export const lifecycleRouter = router({
       return ctx.agentModel.countAgents(input);
     }),
   /**
-   * Create a standalone agent. Returns the created agent ID.
+   * Create a standalone agent, with the creator's direct Channel to it while Channels are on.
+   * Returns the created agent ID.
    */
   createAgent: agentProcedure
     .use(withScopedPermission('agent:create'))
@@ -58,11 +60,22 @@ export const lifecycleRouter = router({
       z.object({
         config: CreateAgentSchema.optional(),
         groupId: z.string().optional(),
+        /** The caller's own desktop, where a direct Channel to a local Agent runs. */
+        localDeviceId: z.string().min(1).optional(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.agentService.createAgent(input);
+      const { localDeviceId, ...params } = input;
+      const result = await ctx.agentService.createAgent(params);
+      await createAgentDirectChannel({
+        agentId: result.agentId,
+        db: ctx.serverDB,
+        localDeviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return result;
     }),
   /**
    * Create an agent without session.
