@@ -28,7 +28,7 @@
   "chooseDevice": "Bir cihaz seçin",
   "chooseDirectory": "Dizin seçin",
   "closeThread": "Konuyu kapat",
-  "composer": "Bir mesaj gönder · yanıtlayacak kişiyi seçmek için @ yazın",
+  "composer": "#{{name}} kanalına mesaj gönderin",
   "conversationEmpty": "Sohbete başlayın",
   "copyId": "ID'yi kopyala",
   "copyIdSuccess": "Kanal ID'si kopyalandı",
