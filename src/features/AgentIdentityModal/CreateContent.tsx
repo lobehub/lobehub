@@ -9,8 +9,8 @@ import EmojiPicker from '@/components/EmojiPicker';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
+import BlindBoxAvatar from './BlindBoxAvatar';
 import IdentityFields from './IdentityFields';
-import { useBlindBoxSeed } from './useBlindBoxSeed';
 import {
   useCreateAgentIdentityForm,
   type UseCreateAgentIdentityFormOptions,
@@ -36,7 +36,6 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
       },
       visibility,
     });
-    const blindBoxSeed = useBlindBoxSeed(!form.avatar);
 
     return (
       <Flexbox gap={20} padding={20}>
@@ -52,17 +51,20 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
             value={form.avatar}
             // Same avatar the agent wears everywhere else. Without an emoji or
             // image it is the generated character — which the agent's future id
-            // decides, so the preview rotates as a blind box rather than
+            // decides, so the preview cross-fades as a blind box rather than
             // promising one character.
-            customRender={() => (
-              <AgentAvatar
-                agentId={blindBoxSeed}
-                avatar={form.avatar}
-                className={'lobe-emoji-picker-avatar'}
-                name={form.name}
-                size={72}
-              />
-            )}
+            customRender={() =>
+              form.avatar ? (
+                <AgentAvatar
+                  avatar={form.avatar}
+                  className={'lobe-emoji-picker-avatar'}
+                  name={form.name}
+                  size={72}
+                />
+              ) : (
+                <BlindBoxAvatar className={'lobe-emoji-picker-avatar'} name={form.name} size={72} />
+              )
+            }
             onChange={(avatar) => form.setAvatar(avatar)}
             onDelete={() => form.setAvatar(undefined)}
             onUpload={async (file) => {
