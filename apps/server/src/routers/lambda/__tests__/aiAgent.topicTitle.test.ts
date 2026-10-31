@@ -181,7 +181,11 @@ describe('aiAgent router - topic title', () => {
   // field dropped (or misplaced) in between would leave the service-level
   // tests green while the route never honours it.
   it('forwards the title and a required device to the run', async () => {
-    const spy = vi.spyOn(AiAgentService.prototype, 'execAgent');
+    // Only the hand-off is under test: the device is not online here, and the
+    // service would (rightly) refuse to run without it.
+    const spy = vi
+      .spyOn(AiAgentService.prototype, 'execAgent')
+      .mockResolvedValue({ operationId: 'op-1', success: true, topicId: 'tpc-1' } as any);
 
     await caller().execAgent({
       agentId,
