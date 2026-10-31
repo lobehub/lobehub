@@ -204,7 +204,9 @@ const Body = memo(() => {
           // is load-bearing: Markdown's root is `overflow: hidden`, so as a flex
           // item its automatic minimum size collapses to 0 and a long handoff
           // would be squeezed (and clipped) to fit instead of scrolling the panel.
-          <Markdown style={{ flexShrink: 0 }}>{node.description}</Markdown>
+          <Markdown headerMultiple={0.25} style={{ flexShrink: 0 }}>
+            {node.description}
+          </Markdown>
         ) : (
           <Section
             title={

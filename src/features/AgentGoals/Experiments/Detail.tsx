@@ -64,7 +64,9 @@ export const ExperimentDetail = ({
             <Flexbox gap={6} key={finding.id}>
               <Text weight={500}>{finding.title}</Text>
               {finding.description && (
-                <Markdown style={{ flexShrink: 0 }}>{finding.description}</Markdown>
+                <Markdown headerMultiple={0.25} style={{ flexShrink: 0 }}>
+                  {finding.description}
+                </Markdown>
               )}
             </Flexbox>
           ))}
