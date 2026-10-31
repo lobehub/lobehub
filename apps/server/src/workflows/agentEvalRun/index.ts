@@ -53,6 +53,7 @@ export interface ResumeAgentTrajectoryPayload {
   caseId?: string;
   environment?: EvalCaseEnvironment;
   envPrompt?: string;
+  expectedExecutionId?: string;
   maxSteps?: number;
   parentMessageId: string;
   runId: string;
@@ -72,6 +73,7 @@ export interface OnTrajectoryCompletePayload {
   duration?: number;
   errorDetail?: unknown;
   errorMessage?: string;
+  executionId?: string;
   llmCalls?: number;
   operationId: string;
   reason: string;
@@ -80,11 +82,13 @@ export interface OnTrajectoryCompletePayload {
   steps?: number;
   testCaseId: string;
   toolCalls?: number;
+  topicId?: string;
   totalTokens?: number;
   userId: string;
 }
 
 export interface RunThreadTrajectoryPayload {
+  executionId?: string;
   runId: string;
   testCaseId: string;
   threadId: string;
@@ -97,6 +101,7 @@ export interface ResumeThreadTrajectoryPayload {
   caseId?: string;
   environment?: EvalCaseEnvironment;
   envPrompt?: string;
+  expectedExecutionId?: string;
   maxSteps?: number;
   parentMessageId: string;
   runId: string;
@@ -111,6 +116,7 @@ export interface OnThreadCompletePayload {
   cost?: number;
   duration?: number;
   errorMessage?: string;
+  executionId?: string;
   llmCalls?: number;
   operationId: string;
   reason: string;

@@ -119,7 +119,10 @@ export class BenchmarkActionImpl {
   };
 
   deleteBenchmark = async (id: string): Promise<void> => {
-    await agentEvalService.deleteBenchmark(id);
+    const result = await agentEvalService.deleteBenchmark(id);
+    // Built-in benchmarks are refused with `{ success: false }`; surface it instead of
+    // dropping the row and letting the refresh bring it back.
+    if (result?.success === false) throw new Error(result.error);
     // Drop the row from the list and the detail cache at once, then converge.
     this.#entity.remove(id);
     await this.refreshBenchmarks();

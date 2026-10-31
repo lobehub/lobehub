@@ -37,6 +37,7 @@ export const onThreadComplete = async (c: Context) => {
       cost,
       duration,
       errorMessage,
+      executionId,
       llmCalls,
       steps,
       toolCalls,
@@ -71,6 +72,7 @@ export const onThreadComplete = async (c: Context) => {
     const service = new AgentEvalRunService(db, userId, wsId);
 
     const { allThreadsDone, allRunDone } = await service.recordThreadCompletion({
+      executionId,
       runId,
       status,
       telemetry: {

@@ -146,6 +146,17 @@ describe('AgentEvalRunModel', () => {
     });
   });
 
+  it('does not finalize over Stop, while allowing an explicit resume', async () => {
+    const run = await runModel.create({ datasetId, status: 'running' });
+    await runModel.update(run.id, { status: 'aborted' });
+    expect(await runModel.finalize(run.id, { status: 'completed' })).toBeUndefined();
+    expect((await runModel.findById(run.id))?.status).toBe('aborted');
+    await runModel.update(run.id, { status: 'running' });
+    expect(await runModel.finalize(run.id, { status: 'completed' })).toMatchObject({
+      status: 'completed',
+    });
+  });
+
   describe('query', () => {
     beforeEach(async () => {
       // Create another dataset

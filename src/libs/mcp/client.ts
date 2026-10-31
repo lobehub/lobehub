@@ -362,7 +362,9 @@ export class MCPClient {
     return (
       this.getProtocolEra() !== 'modern' &&
       ((SdkHttpError.isInstance(e) && e.status === 404) ||
-        (e instanceof Error && e.message.includes('No valid session ID provided')))
+        (e instanceof Error &&
+          (e.message.includes('No valid session ID provided') ||
+            /session not found/i.test(e.message))))
     );
   }
 

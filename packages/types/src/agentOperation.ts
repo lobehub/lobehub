@@ -31,7 +31,10 @@ export type AgentOperationCompletionReason =
   | 'interrupted'
   | 'lease_expired'
   | 'max_steps'
-  /** The same tool call was requested over and over; a guard cut the run short. */
+  /**
+   * The same tool call was requested over and over, or one turn requested more
+   * tool calls than the burst limit; a guard cut the run short.
+   */
   | 'tool_call_repeat_limit'
   | 'waiting_for_async_tool'
   | 'waiting_for_client'

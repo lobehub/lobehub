@@ -2,10 +2,11 @@ import { parseDataset } from '@lobechat/eval-dataset-parser';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetAccess';
 import { router } from '@/libs/trpc/lambda';
 
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
-import { evalConfigSchema, rubricTypeSchema } from './schemas';
+import { evalConfigSchema, evalTestCaseContentSchema, rubricTypeSchema } from './schemas';
 
 export const datasetRouter = router({
   // ============================================
@@ -24,11 +25,24 @@ export const datasetRouter = router({
         evalConfig: evalConfigSchema.optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
         sourceExperimentId: z.string().optional(),
+        cases: z
+          .array(
+            z.object({
+              content: evalTestCaseContentSchema,
+              environmentId: z.string().nullish(),
+              evalMode: rubricTypeSchema.optional(),
+              evalConfig: evalConfigSchema.optional(),
+              metadata: z.record(z.string(), z.unknown()).optional(),
+              sortOrder: z.number().optional(),
+            }),
+          )
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        const result = await ctx.datasetModel.create(input);
+        const { cases, ...dataset } = input;
+        const result = await ctx.datasetModel.create(dataset, cases);
         if (!result) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -37,6 +51,9 @@ export const datasetRouter = router({
         }
         return result;
       } catch (error: any) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
         // PostgreSQL errors might be in error.cause
         const pgError = error?.cause || error;
 
@@ -75,6 +92,9 @@ export const datasetRouter = router({
     .input(
       z.object({
         id: z.string(),
+        // Moves the dataset into another benchmark the caller can see (its own, or a
+        // built-in one), e.g. an account dataset into a benchmark the account made.
+        benchmarkId: z.string().optional(),
         name: z.string().optional(),
         description: z.string().optional(),
         evalMode: rubricTypeSchema.nullish(),
@@ -84,7 +104,21 @@ export const datasetRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
-      const result = await ctx.datasetModel.update(id, data);
+      if (data.benchmarkId && !(await ctx.benchmarkModel.findById(data.benchmarkId))) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Benchmark with id "${data.benchmarkId}" not found`,
+        });
+      }
+      let result;
+      try {
+        result = await ctx.datasetModel.update(id, data);
+      } catch (error) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
+        throw error;
+      }
       if (!result) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -267,6 +301,11 @@ export const datasetRouter = router({
         imported = true;
 
         return { count: result.length, data: result };
+      } catch (error) {
+        if (error instanceof AgentEvalDatasetWriteError) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+        }
+        throw error;
       } finally {
         if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
         else if (imported) await ctx.fileService.deleteFile(input.pathname);

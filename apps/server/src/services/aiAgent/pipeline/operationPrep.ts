@@ -5,8 +5,12 @@ import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { LobeAgentAgencyConfig, WorkspaceInitResult } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import type {
+  EvalMemoryReference,
+  LobeAgentAgencyConfig,
+  WorkspaceInitResult,
+} from '@lobechat/types';
+import { getWorkingDirEffectivePath, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -17,11 +21,13 @@ import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { AgentEvalMemoryService } from '@/server/services/agentEvalMemory';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 import { redisService } from '@/server/services/redis';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
+import { applyEvalGateToToolSet } from '../evalGate';
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
 import { applyShareGateToToolSet } from '../shareGate';
@@ -183,6 +189,10 @@ export interface OperationPrepInput {
   disabledPluginIds: string[];
   discovery: ToolDiscoveryResult;
   ephemeralUserMessage?: string;
+  /** The only tools an eval attempt may see or call (case environment + infrastructure). */
+  evalAllowedTools?: string[];
+  /** Isolated Memory scope of an eval trial; persona is read from it, never the caller. */
+  evalMemory?: EvalMemoryReference;
   globalMemoryEnabled: boolean;
   hasMentionedAgents: boolean;
   loadHistoryMessages: () => Promise<any[]>;
@@ -444,11 +454,7 @@ export const prepareOperation = async (
     activeDeviceId,
     activeDeviceScope,
     agentPlugins,
-    builtinModels,
-    composioManifests,
-    connectorManifests,
     executionPlan,
-    lobehubSkillManifests,
     onlineDevices,
     toolsEngine,
     toolsResult,
@@ -524,10 +530,21 @@ export const prepareOperation = async (
   // 10. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 8)
   let userMemory: ServerUserMemoryConfig | undefined;
 
+  // An eval attempt reads its persona from its own Memory entries (the case
+  // fixture's), never the caller's. Checking the reference sits outside the
+  // best-effort persona fetch: a foreign reference must fail the attempt.
+  const evalPersona = input.evalMemory
+    ? await new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).getPersonaDocument(
+        input.evalMemory,
+        { threadId: appContext?.threadId, topicId },
+      )
+    : undefined;
+
   if (globalMemoryEnabled) {
     try {
-      const personaModel = new UserPersonaModel(deps.db, deps.userId);
-      const persona = await personaModel.getLatestPersonaDocument();
+      const persona = input.evalMemory
+        ? evalPersona
+        : await new UserPersonaModel(deps.db, deps.userId).getLatestPersonaDocument();
 
       if (persona?.persona) {
         userMemory = {
@@ -626,6 +643,24 @@ export const prepareOperation = async (
         tools,
       },
       shareGate,
+    );
+  }
+
+  // Eval attempts stay inside the case's environment the same way: whatever
+  // discovery merged in (always-on builtins, every plugin the account holds
+  // for other cases) is pruned to the attempt's allowlist here, so neither the
+  // first step nor a later `lobe-activator` call can reach past it.
+  if (input.evalAllowedTools) {
+    applyEvalGateToToolSet(
+      {
+        activatableToolIds,
+        enabledToolIds: toolsResult.enabledToolIds,
+        executorMap: discovery.toolExecutorMap,
+        manifestMap: discovery.toolManifestMap,
+        sourceMap: discovery.toolSourceMap,
+        tools,
+      },
+      input.evalAllowedTools,
     );
   }
 
@@ -799,11 +834,16 @@ export const prepareOperation = async (
   // ContextEngine owns the Lab-controlled injection decision via enableExpertise.
   const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
   let expertise;
-  try {
-    const expertiseModel = new ExpertiseModel(deps.db, deps.userId, deps.workspaceId);
-    expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
-  } catch (error) {
-    console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+  // Learned expertise is the caller's account state. An eval attempt sees only
+  // what its case declares, so it is left out (its write side, Agent Signal,
+  // is suppressed on eval turns as well).
+  if (ctx.trigger !== RequestTrigger.Eval) {
+    try {
+      const expertiseModel = new ExpertiseModel(deps.db, deps.userId, deps.workspaceId);
+      expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
+    } catch (error) {
+      console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+    }
   }
 
   return {

@@ -57,6 +57,8 @@ export const runAgentTrajectoryHandler = async (
       service.executeMultiThreadTrajectory({ k, run, runId, testCaseId }),
     );
 
+    if (!result) return { cancelled: true };
+
     log(
       'Multi-thread started: runId=%s testCaseId=%s k=%d threads=%d',
       runId,
@@ -79,10 +81,14 @@ export const runAgentTrajectoryHandler = async (
     service.executeTrajectory({ environment, envPrompt, run, runId, testCase, testCaseId }),
   );
 
+  if (!result || ('cancelled' in result && result.cancelled)) return { cancelled: true };
+
   // If execAgent failed, record completion and check if run should be finalized
   if ('error' in result) {
     await runStep(context, 'agent-eval-run:handle-exec-error', async () => {
       const { allDone } = await service.recordTrajectoryCompletion({
+        executionId: result.executionId,
+        topicId: result.topicId,
         runId,
         status: 'error',
         telemetry: { completionReason: 'error', errorMessage: result.error as string },
@@ -112,10 +118,13 @@ export const runAgentTrajectoryHandler = async (
   };
 };
 
+/** Trajectories (one per attempt, pass@k threads included) in flight at once; see executeTestCase. */
+const TRAJECTORY_PARALLELISM = Number(process.env.AGENT_EVAL_TRAJECTORY_PARALLELISM) || 500;
+
 export const runAgentTrajectoryWorkflowOptions = {
   flowControl: {
     key: 'agent-eval-run.run-agent-trajectory',
-    parallelism: 500,
+    parallelism: TRAJECTORY_PARALLELISM,
     ratePerSecond: 20,
   },
 };

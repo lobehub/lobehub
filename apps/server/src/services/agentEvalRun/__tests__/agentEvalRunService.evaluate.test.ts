@@ -396,6 +396,40 @@ describe('AgentEvalRunService', () => {
       expect(metrics.perCaseToolCalls).toBe(2); // 6 / 3
     });
 
+    it('estimates pass^j and pass@j for every j up to k from each case', async () => {
+      const service = new AgentEvalRunService(serverDB, userId);
+      const threads = (passed: number) =>
+        Array.from({ length: 5 }, (_, index) => ({
+          passed: index < passed,
+          score: index < passed ? 1 : 0,
+          status: index < passed ? ('passed' as const) : ('failed' as const),
+          threadId: `t${index}`,
+        }));
+      const topic = (passed: number, index: number) => ({
+        evalResult: { rubricScores: [], threads: threads(passed) },
+        passed: passed > 0,
+        runId: 'run-k5',
+        score: passed / 5,
+        status: passed > 0 ? 'passed' : 'failed',
+        topicId: `topic-${index}`,
+      });
+
+      const metrics = await service.evaluateAndFinalizeRun({
+        run: { config: { k: 5 }, id: 'run-k5' },
+        // 5 of 5, 3 of 5 and 0 of 5 attempts passed.
+        runTopics: [topic(5, 1), topic(3, 2), topic(0, 3)],
+      });
+
+      // All 3 of 3 attempts: C(5,3)/C(5,3) = 1, C(3,3)/C(5,3) = 0.1, 0.
+      expect(metrics.passAllAt?.['3']).toBeCloseTo(1.1 / 3);
+      // At least 1 of 3: 1, 1 − C(2,3)/C(5,3) = 1, 1 − C(5,3)/C(5,3) = 0.
+      expect(metrics.passAnyAt?.['3']).toBeCloseTo(2 / 3);
+      // One attempt: the share of attempts that passed.
+      expect(metrics.passAllAt?.['1']).toBeCloseTo((1 + 0.6) / 3);
+      // All 5 equals the run's own pass^k.
+      expect(metrics.passAllAt?.['5']).toBeCloseTo(metrics.passAllK!);
+    });
+
     it('should not include passAtK/passAllK in metrics when k = 1', async () => {
       const service = new AgentEvalRunService(serverDB, userId);
 

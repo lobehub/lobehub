@@ -1,8 +1,14 @@
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, inArray, ne, sql } from 'drizzle-orm';
 
-import { agentEvalDatasets, agentEvalRuns, type NewAgentEvalRun } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agentEvalRuns,
+  agentEvalRunTopics,
+  type NewAgentEvalRun,
+} from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { hasUnverifiedEvalAttempts } from './runEvidence';
 
 export class AgentEvalRunModel {
   private userId: string;
@@ -64,7 +70,10 @@ export class AgentEvalRunModel {
     }
 
     const query = this.db
-      .select()
+      .select({
+        ...getTableColumns(agentEvalRuns),
+        hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
+      })
       .from(agentEvalRuns)
       .where(and(...conditions))
       .orderBy(desc(agentEvalRuns.createdAt), desc(agentEvalRuns.id))
@@ -110,7 +119,10 @@ export class AgentEvalRunModel {
    */
   findById = async (id: string) => {
     const [result] = await this.db
-      .select()
+      .select({
+        ...getTableColumns(agentEvalRuns),
+        hasUnverifiedAttempts: hasUnverifiedEvalAttempts(),
+      })
       .from(agentEvalRuns)
       .where(and(eq(agentEvalRuns.id, id), this.ownership()))
       .limit(1);
@@ -120,11 +132,47 @@ export class AgentEvalRunModel {
   /**
    * Update run
    */
-  update = async (id: string, value: Partial<NewAgentEvalRun>) => {
+  update = async (
+    id: string,
+    value: Partial<NewAgentEvalRun>,
+    options?: { startedAt: Date | string | null | undefined },
+  ) => {
     const [result] = await this.db
       .update(agentEvalRuns)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(agentEvalRuns.id, id), this.ownership()))
+      .where(
+        and(
+          eq(agentEvalRuns.id, id),
+          this.ownership(),
+          options
+            ? sql`${agentEvalRuns.startedAt} IS NOT DISTINCT FROM ${options.startedAt ? new Date(options.startedAt).toISOString() : null}::timestamptz`
+            : undefined,
+        ),
+      )
+      .returning();
+    return result;
+  };
+
+  /** Finalization may race with Stop; only an explicit resume can reopen an aborted run. */
+  finalize = async (
+    id: string,
+    value: Pick<NewAgentEvalRun, 'metrics' | 'status'>,
+    options?: { startedAt: Date | string | null | undefined },
+  ) => {
+    const [result] = await this.db
+      .update(agentEvalRuns)
+      .set({ ...value, updatedAt: new Date() })
+      .where(
+        and(
+          eq(agentEvalRuns.id, id),
+          ne(agentEvalRuns.status, 'aborted'),
+          this.ownership(),
+          options
+            ? sql`${agentEvalRuns.startedAt} IS NOT DISTINCT FROM ${options.startedAt ? new Date(options.startedAt).toISOString() : null}::timestamptz`
+            : undefined,
+          sql`NOT EXISTS (SELECT 1 FROM ${agentEvalRunTopics} WHERE ${agentEvalRunTopics.runId} = ${agentEvalRuns.id} AND ${agentEvalRunTopics.status} IN ('pending', 'running'))`,
+        ),
+      )
       .returning();
     return result;
   };
@@ -150,7 +198,11 @@ export class AgentEvalRunModel {
   claim = async (id: string) => {
     const [result] = await this.db
       .update(agentEvalRuns)
-      .set({ startedAt: new Date(), status: 'running', updatedAt: new Date() })
+      .set({
+        startedAt: sql`GREATEST(${new Date().toISOString()}::timestamptz, ${agentEvalRuns.startedAt} + interval '1 millisecond')`,
+        status: 'running',
+        updatedAt: new Date(),
+      })
       .where(and(eq(agentEvalRuns.id, id), eq(agentEvalRuns.status, 'pending'), this.ownership()))
       .returning();
     return result;

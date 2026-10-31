@@ -115,6 +115,7 @@ if (process.env.VERCEL) {
 }
 
 export { createEvalToolForwardingHook } from './evalToolForwardingHook';
+export { createEvalToolGateHook, EVAL_TOOL_BLOCKED_ERROR } from './evalToolGateHook';
 export type { AgentRuntimeDelegate, AgentRuntimeServiceOptions } from './types';
 
 /**

@@ -27,6 +27,7 @@ vi.mock('@/server/workflows/agentEvalRun', async (importOriginal) => {
     ...actual,
     AgentEvalRunWorkflow: {
       ...actual.AgentEvalRunWorkflow,
+      triggerFinalizeRun: vi.fn().mockResolvedValue({}),
       triggerResumeAgentTrajectory: vi.fn().mockResolvedValue({}),
       triggerResumeThreadTrajectory: vi.fn().mockResolvedValue({}),
     },
@@ -514,7 +515,7 @@ describe('AgentEvalRunService', () => {
       expect(result).toEqual({ status: 'started', topicId: topic.id });
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({
-          appContext: { topicId: topic.id },
+          appContext: { suppressSignal: true, topicId: topic.id },
           parentMessageId: 'parent-message-id',
           prompt: '',
           resume: true,
@@ -531,8 +532,8 @@ describe('AgentEvalRunService', () => {
       ).findByRunAndTestCase(run.id, testCase.id);
       expect(refreshedRunTopic?.status).toBe('running');
       expect(refreshedRunTopic?.evalResult).toEqual({
+        executionId: expect.any(String),
         operationId: 'op-resume-1',
-        rubricScores: [],
       });
     });
 
@@ -676,7 +677,7 @@ describe('AgentEvalRunService', () => {
       expect(result).toEqual({ status: 'started', threadId: thread!.id, topicId: topic.id });
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({
-          appContext: { threadId: thread!.id, topicId: topic.id },
+          appContext: { suppressSignal: true, threadId: thread!.id, topicId: topic.id },
           initialLlmCalls: 3,
           initialStepCount: 7,
           parentMessageId: 'parent-message-id',
@@ -687,6 +688,9 @@ describe('AgentEvalRunService', () => {
 
       const updatedThread = await threadModel.findById(thread!.id);
       expect(updatedThread?.metadata).toEqual({
+        executionId: expect.any(String),
+        startedAt: expect.any(String),
+        status: 'running',
         operationId: 'op-thread-resume-1',
         testCaseId: testCase.id,
       });
@@ -705,8 +709,13 @@ describe('AgentEvalRunService', () => {
       ).findByRunAndTestCase(run.id, testCase.id);
       expect(refreshedRunTopic?.status).toBe('running');
       expect(refreshedRunTopic?.evalResult).toEqual({
+        executionId: updatedThread?.metadata?.executionId,
         threads: [
-          { status: 'running', threadId: thread!.id },
+          {
+            executionId: updatedThread?.metadata?.executionId,
+            status: 'running',
+            threadId: thread!.id,
+          },
           { passed: true, status: 'passed', threadId: otherThread!.id },
         ],
       });

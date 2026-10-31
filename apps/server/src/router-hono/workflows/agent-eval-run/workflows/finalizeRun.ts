@@ -76,10 +76,12 @@ export const finalizeRunHandler = async (context: WorkflowContext<FinalizeRunPay
   const runStatus =
     externalCount > 0 ? 'external' : nonSuccessCases >= metrics.totalCases ? 'failed' : 'completed';
 
-  await runStep(context, 'agent-eval-run:update-run', async () => {
+  const finalized = await runStep(context, 'agent-eval-run:update-run', async () => {
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    return runModel.update(runId, { metrics, status: runStatus });
+    return runModel.finalize(runId, { metrics, status: runStatus }, { startedAt: run.startedAt });
   });
+
+  if (!finalized) return { cancelled: true };
 
   console.info(
     `[finalize-run] Run ${runId} ${runStatus}: score=${metrics.averageScore.toFixed(2)} pass=${metrics.passedCases}/${metrics.totalCases} error=${metrics.errorCases || 0}`,

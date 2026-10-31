@@ -31,6 +31,13 @@ export interface CustomPluginParams {
   };
   description?: string;
   enableSettings?: boolean;
+  /**
+   * Set on the mock connectors Lobe Bench installs for an account from a
+   * benchmark's mock service: the discovery URL the manifest was read from.
+   * A run refreshes the plugin when its cases point at another URL and never
+   * touches plugins without this marker.
+   */
+  lobeBench?: { url: string };
   manifestMode?: 'local' | 'url';
   manifestUrl?: string;
   /**

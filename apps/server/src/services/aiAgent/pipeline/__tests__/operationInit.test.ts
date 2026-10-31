@@ -31,6 +31,8 @@ const fullInput = (): Parameters<typeof buildOperationInitRequest>[0] => ({
   disableSelfFeedbackIntentTool: false,
   disableTools: false,
   ephemeralUserMessage: 'ephemeral',
+  evalAllowedTools: ['lobe-memory____search'],
+  evalMemory: { fixtureHash: 'fixture-hash', runId: 'eval-run', topicId: 'eval-topic' },
   exclusivePluginIds: undefined,
   files: [
     { content: new ArrayBuffer(8), mimeType: 'image/png', name: 'a.png' },
@@ -43,6 +45,7 @@ const fullInput = (): Parameters<typeof buildOperationInitRequest>[0] => ({
   localDeviceId: 'device-1',
   mentionedAgents: [{ id: 'agt_2', name: 'Fox' }],
   parentMessageId: 'msg-parent',
+  prompt: 'Hello',
   requestTrigger: 'chat' as any,
   requestedDeviceId: 'device-2',
   resumeApproval: undefined,
@@ -101,6 +104,16 @@ describe('buildOperationInitRequest', () => {
 });
 
 describe('persisted init request', () => {
+  it('keeps the evaluation tool gate and isolated memory across deferred initialization', async () => {
+    const request = buildOperationInitRequest(fullInput());
+    // Exercise the Redis JSON wire format, not an in-process structured clone.
+    // eslint-disable-next-line unicorn/prefer-structured-clone
+    const persisted = JSON.parse(JSON.stringify(toPersistedInitRequest(request)));
+    const restored = await rehydrateDetachedFileContent(persisted, vi.fn());
+    expect(restored.evalAllowedTools).toEqual(request.evalAllowedTools);
+    expect(restored.evalMemory).toEqual(request.evalMemory);
+  });
+
   const withDocuments = (): OperationInitRequest =>
     buildOperationInitRequest({
       ...fullInput(),

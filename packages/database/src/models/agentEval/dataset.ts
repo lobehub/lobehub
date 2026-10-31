@@ -1,14 +1,32 @@
-import { and, asc, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm';
+import isEqual from 'fast-deep-equal';
 
-import { agentEvalDatasets, agentEvalTestCases, type NewAgentEvalDataset } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agentEvalTestCases,
+  type NewAgentEvalDataset,
+  type NewAgentEvalTestCase,
+} from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
-import { buildWorkspaceWhere } from '../../utils/workspace';
+import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
+import {
+  AgentEvalDatasetWriteError,
+  assertReadableEvalEnvironments,
+  isFixedLobeBenchDataset,
+} from './datasetAccess';
+import { activeEvalTestCases } from './testCase';
 
 interface QueryDatasetsFilters {
   benchmarkId?: string;
   benchmarkIds?: string[];
   sourceExperimentId?: string;
 }
+
+const fixedDatasetMetadata = (metadata?: Record<string, unknown> | null) => ({
+  ...metadata,
+  custom: true,
+  kind: 'lobe-bench',
+});
 
 export class AgentEvalDatasetModel {
   private userId: string;
@@ -18,7 +36,7 @@ export class AgentEvalDatasetModel {
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.workspaceId = workspaceId;
+    this.workspaceId = normalizeWorkspaceId(workspaceId) ?? undefined;
   }
 
   /** Includes system datasets (`userId IS NULL`) on read. */
@@ -33,18 +51,50 @@ export class AgentEvalDatasetModel {
 
   /** Mutate-only predicate excluding system rows. */
   private mutableOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentEvalDatasets);
+    and(
+      buildWorkspaceWhere(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        agentEvalDatasets,
+      ),
+      isNotNull(agentEvalDatasets.userId),
+    );
 
   /**
    * Create a new dataset
    */
-  create = async (params: NewAgentEvalDataset) => {
-    const [result] = await this.db
-      .insert(agentEvalDatasets)
-      .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })
-      .returning();
-    return result;
-  };
+  create = async (
+    params: NewAgentEvalDataset,
+    cases?: Omit<NewAgentEvalTestCase, 'datasetId' | 'userId' | 'workspaceId'>[],
+  ) =>
+    this.db.transaction(async (tx) => {
+      const fixed = await isFixedLobeBenchDataset(tx, params);
+      await assertReadableEvalEnvironments(
+        tx,
+        { userId: this.userId, workspaceId: this.workspaceId },
+        cases?.map((testCase) => testCase.environmentId) ?? [],
+      );
+      const [result] = await tx
+        .insert(agentEvalDatasets)
+        .values({
+          ...params,
+          ...(fixed && { metadata: fixedDatasetMetadata(params.metadata) }),
+          userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
+        })
+        .returning();
+      if (cases?.length) {
+        await tx.insert(agentEvalTestCases).values(
+          cases.map((testCase, index) => ({
+            ...testCase,
+            datasetId: result.id,
+            sortOrder: testCase.sortOrder ?? index + 1,
+            userId: this.userId,
+            workspaceId: this.workspaceId ?? null,
+          })),
+        );
+      }
+      return result;
+    });
 
   /**
    * Delete a dataset by id
@@ -94,7 +144,10 @@ export class AgentEvalDatasetModel {
         userId: agentEvalDatasets.userId,
       })
       .from(agentEvalDatasets)
-      .leftJoin(agentEvalTestCases, eq(agentEvalDatasets.id, agentEvalTestCases.datasetId))
+      .leftJoin(
+        agentEvalTestCases,
+        and(eq(agentEvalDatasets.id, agentEvalTestCases.datasetId), activeEvalTestCases()),
+      )
       .where(and(...conditions))
       .groupBy(agentEvalDatasets.id)
       .orderBy(desc(agentEvalDatasets.createdAt));
@@ -161,7 +214,7 @@ export class AgentEvalDatasetModel {
     const testCases = await this.db
       .select()
       .from(agentEvalTestCases)
-      .where(eq(agentEvalTestCases.datasetId, id))
+      .where(and(eq(agentEvalTestCases.datasetId, id), activeEvalTestCases()))
       .orderBy(asc(agentEvalTestCases.sortOrder));
 
     return { ...dataset, testCases };
@@ -171,11 +224,40 @@ export class AgentEvalDatasetModel {
    * Update dataset
    */
   update = async (id: string, value: Partial<NewAgentEvalDataset>) => {
-    const [result] = await this.db
-      .update(agentEvalDatasets)
-      .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()))
-      .returning();
-    return result;
+    return this.db.transaction(async (tx) => {
+      const [dataset] = await tx
+        .select()
+        .from(agentEvalDatasets)
+        .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()))
+        .for('update');
+      if (!dataset) return undefined;
+      const fixed = await isFixedLobeBenchDataset(tx, dataset);
+      if (fixed) {
+        for (const [key, next] of Object.entries(value)) {
+          if (next === undefined || ['benchmarkId', 'description', 'name'].includes(key)) continue;
+          const previous = dataset[key as keyof typeof dataset];
+          const unchanged =
+            key === 'metadata' ? isEqual(next ?? {}, previous ?? {}) : isEqual(next, previous);
+          if (!unchanged) {
+            throw new AgentEvalDatasetWriteError(
+              'Lobe Bench dataset configuration is fixed; create a new dataset instead',
+            );
+          }
+        }
+      }
+      // Persist the classification on entry, and retain it when moved out, so
+      // changing benchmark or omitting client metadata cannot unfreeze cases.
+      const staysFixed = fixed || (await isFixedLobeBenchDataset(tx, { ...dataset, ...value }));
+      const [result] = await tx
+        .update(agentEvalDatasets)
+        .set({
+          ...value,
+          ...(staysFixed && { metadata: fixedDatasetMetadata(value.metadata ?? dataset.metadata) }),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(agentEvalDatasets.id, id), this.mutableOwnership()))
+        .returning();
+      return result;
+    });
   };
 }

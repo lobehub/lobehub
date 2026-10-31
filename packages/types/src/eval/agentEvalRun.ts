@@ -24,6 +24,8 @@ export interface AgentEvalRun {
   config?: EvalRunConfig | null;
   createdAt: Date;
   datasetId: string;
+  /** Derived from saved attempts, including legacy runs with incomplete metrics. */
+  hasUnverifiedAttempts?: boolean;
   id: string;
   metrics?: EvalRunMetrics | null;
   name?: string | null;
@@ -49,6 +51,8 @@ export interface AgentEvalRunListItem {
   experimentId?: string | null;
   experimentName?: string;
   failCount?: number;
+  /** True when saved attempt evidence is incomplete or contains execution/Judge errors. */
+  hasUnverifiedAttempts?: boolean;
   id: string;
   metrics?: EvalRunMetrics | null;
   name?: string | null;

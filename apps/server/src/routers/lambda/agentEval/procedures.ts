@@ -3,6 +3,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import {
   AgentEvalBenchmarkModel,
   AgentEvalDatasetModel,
+  AgentEvalEnvironmentModel,
   AgentEvalExperimentModel,
   AgentEvalRunModel,
   AgentEvalRunTopicModel,
@@ -21,6 +22,7 @@ export const agentEvalProcedure = wsCompatProcedure.use(serverDatabase).use(asyn
     ctx: {
       benchmarkModel: new AgentEvalBenchmarkModel(ctx.serverDB, ctx.userId, wsId),
       datasetModel: new AgentEvalDatasetModel(ctx.serverDB, ctx.userId, wsId),
+      environmentModel: new AgentEvalEnvironmentModel(ctx.serverDB, ctx.userId, wsId),
       experimentModel: new AgentEvalExperimentModel(ctx.serverDB, ctx.userId, wsId),
       runModel: new AgentEvalRunModel(ctx.serverDB, ctx.userId, wsId),
       runService: new AgentEvalRunService(ctx.serverDB, ctx.userId, wsId),

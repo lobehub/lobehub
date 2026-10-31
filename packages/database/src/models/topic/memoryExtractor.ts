@@ -1,6 +1,7 @@
 import { and, count, eq, gt, gte, lte, ne, or, sql } from 'drizzle-orm';
 
 import { topics } from '../../schemas';
+import { notEvalTopic } from '../../utils/evalTopic';
 import { notChannelTopic } from '../../utils/topicVisibility';
 import type { TopicModelContext } from './context';
 import type { ListTopicsForMemoryExtractorCursor } from './types';
@@ -41,6 +42,8 @@ export const listTopicsForMemoryExtractor = async (
       // other members' Channel content, which stays inside the Channel.
       ctx.notShareVisitor(),
       notChannelTopic(),
+      // Eval dialogue is a test script, not the user's own speech.
+      notEvalTopic(),
       options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
       options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
       options.ignoreExtracted
@@ -70,6 +73,7 @@ export const countTopicsForMemoryExtractor = async (
         ctx.ownership(),
         ctx.notShareVisitor(),
         notChannelTopic(),
+        notEvalTopic(),
         options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
         options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
         options.ignoreExtracted

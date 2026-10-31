@@ -2,7 +2,10 @@ import type { EvalCaseEnvironment, EvalRunConfig, EvalTestCaseMetadata } from '@
 import { RequestTrigger } from '@lobechat/types';
 
 import { AiAgentService } from '@/server/services/aiAgent';
+import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
+import { contenderChatConfigOf, resolveTopicAgentId } from './caseAgent';
+import { withResolvedEnvironment } from './caseEnvironment';
 import { recordTrajectoryCompletion } from './completion';
 import {
   EVAL_AGENT_RUNTIME_QSTASH_RETRIES,
@@ -10,22 +13,63 @@ import {
 } from './constants';
 import { createRunTopics } from './createRun';
 import { createEvalRunDeps } from './deps';
+import { interruptEvalOperations } from './runLifecycle';
+import { prepareTrialMemory } from './trialMemory';
 import type { EvalRunDeps } from './types';
-import { getCaseId, getEvalContextParams } from './utils';
+import {
+  getCaseId,
+  getEvalAttemptId,
+  getEvalContextParams,
+  getEvalMockConfig,
+  withResolvedToolForwarding,
+} from './utils';
+
+/**
+ * The environment an attempt actually runs with: the case's own environment
+ * plus the tool forwarding derived from the benchmark's mock service for the
+ * connectors the case declares.
+ */
+async function resolveCaseEnvironment(
+  deps: EvalRunDeps,
+  dataset:
+    | {
+        benchmarkId?: string | null;
+        id: string;
+        identifier?: string | null;
+        metadata?: unknown;
+      }
+    | null
+    | undefined,
+  environment: EvalCaseEnvironment | undefined,
+) {
+  if (!dataset) return environment;
+  const benchmark = dataset.benchmarkId
+    ? await deps.benchmarkModel.findById(dataset.benchmarkId)
+    : null;
+  return withResolvedToolForwarding(
+    environment,
+    getEvalMockConfig(
+      benchmark as { metadata?: Record<string, unknown> | null } | null,
+      dataset as { metadata?: Record<string, unknown> | null },
+    ),
+    dataset.identifier ?? dataset.id,
+  );
+}
 
 export async function loadTrajectoryData(deps: EvalRunDeps, runId: string, testCaseId: string) {
   const run = await deps.runModel.findById(runId);
   if (!run) return { error: 'Run not found' as const };
 
-  const testCase = await deps.testCaseModel.findById(testCaseId);
-  if (!testCase) return { error: 'Test case not found' as const };
+  const rawTestCase = await deps.testCaseModel.findById(testCaseId);
+  if (!rawTestCase) return { error: 'Test case not found' as const };
+  const testCase = await withResolvedEnvironment(deps, rawTestCase);
 
   let envPrompt: string | undefined;
   let environment: EvalCaseEnvironment | undefined;
   if (run.datasetId) {
     const dataset = await deps.datasetModel.findById(run.datasetId);
     envPrompt = dataset?.evalConfig?.envPrompt;
-    environment = testCase.content.environment;
+    environment = await resolveCaseEnvironment(deps, dataset, testCase.content.environment);
   }
 
   return { envPrompt, environment, run, testCase };
@@ -90,8 +134,25 @@ async function executeTrajectoryCore(
   const { envPrompt, environment, run, runId, testCaseId, topicId } = params;
   const caseId = getCaseId(params.testCase.metadata);
 
-  // Update status from 'pending' to 'running'
-  await deps.runTopicModel.updateByRunAndTopic(runId, topicId, { status: 'running' });
+  const current = await deps.runTopicModel.findByRunAndTestCase(runId, testCaseId);
+  const executionId = crypto.randomUUID();
+  const claimed = await deps.runTopicModel.claimExecution({
+    executionId,
+    expectedExecutionId: current?.evalResult?.executionId,
+    runId,
+    testCaseId,
+    topicId,
+  });
+  if (!claimed) return { cancelled: true, topicId };
+  const bindOperation = async (operationId: string) => {
+    const saved = await deps.runTopicModel.mergeExecutionResult(runId, topicId, executionId, {
+      operationId,
+    });
+    if (!saved) {
+      await interruptEvalOperations(deps, [operationId]);
+      throw new Error('Execution is no longer current');
+    }
+  };
 
   const aiAgentService = new AiAgentService(deps.db, deps.userId, {
     workspaceId: deps.workspaceId,
@@ -101,43 +162,61 @@ async function executeTrajectoryCore(
   const db = deps.db;
 
   try {
+    const memory = await prepareTrialMemory(deps, { environment, runId, testCaseId, topicId });
     const execResult = await aiAgentService.execAgent({
-      agentId: run.targetAgentId ?? undefined,
-      appContext: { topicId },
+      agentId: await resolveTopicAgentId(deps, topicId, run.targetAgentId),
+      // Eval dialogue must not feed Agent Signal (feedback, self-iteration, Memory writes).
+      appContext: { suppressSignal: true, topicId },
       autoStart: true,
+      chatConfigOverride: contenderChatConfigOf(run),
       ...(params.deviceId && { deviceId: params.deviceId }),
       trigger: RequestTrigger.Eval,
       hooks: [
         {
           handler: async (event) => {
             // Local mode: directly record completion
-            await recordTrajectoryCompletion(createEvalRunDeps(db, userId, deps.workspaceId), {
-              runId,
-              status: event.status || event.reason || 'done',
-              telemetry: {
-                completionReason: event.reason,
-                cost: event.cost,
-                duration: event.duration,
-                errorDetail: event.errorDetail,
-                errorMessage: event.errorMessage,
-                llmCalls: event.llmCalls,
-                steps: event.steps,
-                toolCalls: event.toolCalls,
-                totalTokens: event.totalTokens,
+            const { allDone } = await recordTrajectoryCompletion(
+              createEvalRunDeps(db, userId, deps.workspaceId),
+              {
+                executionId,
+                topicId,
+                runId,
+                status: event.status || event.reason || 'done',
+                telemetry: {
+                  completionReason: event.reason,
+                  cost: event.cost,
+                  duration: event.duration,
+                  errorDetail: event.errorDetail,
+                  errorMessage: event.errorMessage,
+                  llmCalls: event.llmCalls,
+                  steps: event.steps,
+                  toolCalls: event.toolCalls,
+                  totalTokens: event.totalTokens,
+                },
+                testCaseId,
               },
-              testCaseId,
-            });
+            );
+            // Queue mode finalizes from the completion webhook; in-process runs
+            // have only this handler, so the run must be finalized here.
+            if (allDone) await AgentEvalRunWorkflow.triggerFinalizeRun({ runId, userId });
           },
           id: 'eval-trajectory-complete',
           type: 'onComplete' as const,
           webhook: {
-            body: { runId, testCaseId, userId },
+            body: { executionId, runId, testCaseId, topicId, userId },
             delivery: 'qstash' as const,
             url: webhookUrl,
           },
         },
       ],
-      ...getEvalContextParams(envPrompt, environment, caseId),
+      ...getEvalContextParams(
+        envPrompt,
+        environment,
+        caseId,
+        memory,
+        getEvalAttemptId({ runId, topicId }),
+      ),
+      onOperationCreated: bindOperation,
       maxSteps: run.config?.maxSteps,
       prompt: params.testCase.content.input || '',
       queueRetries: EVAL_AGENT_RUNTIME_QSTASH_RETRIES,
@@ -146,9 +225,7 @@ async function executeTrajectoryCore(
     });
 
     if (execResult?.operationId) {
-      await deps.runTopicModel.updateByRunAndTopic(runId, topicId, {
-        evalResult: { operationId: execResult.operationId, rubricScores: [] },
-      });
+      await bindOperation(execResult.operationId);
     }
 
     return { operationId: execResult?.operationId, topicId };
@@ -159,14 +236,24 @@ async function executeTrajectoryCore(
       error,
     );
 
-    await deps.runTopicModel.updateByRunAndTopic(runId, topicId, {
-      evalResult: { completionReason: 'error', error: errorMessage, rubricScores: [] },
-      passed: false,
-      score: 0,
-      status: 'error',
-    });
+    await deps.runTopicModel.updateByRunAndTopic(
+      runId,
+      topicId,
+      {
+        evalResult: {
+          executionId,
+          completionReason: 'error',
+          error: errorMessage,
+          rubricScores: [],
+        },
+        passed: false,
+        score: 0,
+        status: 'error',
+      },
+      { executionId },
+    );
 
-    return { error: errorMessage, topicId };
+    return { error: errorMessage, executionId, topicId };
   }
 }
 
@@ -241,11 +328,12 @@ export async function executeTrajectoryOnDemand(
     if (byId && byId.datasetId === run.datasetId) testCase = byId;
   }
   if (!testCase) throw new Error(`Test case not found for caseId=${caseId}`);
+  testCase = await withResolvedEnvironment(deps, testCase);
 
   const testCaseId = testCase.id;
   const dataset = await deps.datasetModel.findById(run.datasetId);
   const envPrompt = dataset?.evalConfig?.envPrompt;
-  const environment = testCase.content.environment;
+  const environment = await resolveCaseEnvironment(deps, dataset, testCase.content.environment);
 
   // Idempotent re-run of a terminal case: drop only the old RunTopic
   // association (the old Topic is preserved) and link a fresh one.
@@ -258,8 +346,13 @@ export async function executeTrajectoryOnDemand(
   }
 
   const topicId = (
-    await createRunTopics(deps, runId, run.targetAgentId, [
-      { content: testCase.content, id: testCaseId, sortOrder: testCase.sortOrder },
+    await createRunTopics(deps, run, [
+      {
+        content: testCase.content,
+        environmentId: testCase.environmentId,
+        id: testCaseId,
+        sortOrder: testCase.sortOrder,
+      },
     ])
   )[0]!;
 

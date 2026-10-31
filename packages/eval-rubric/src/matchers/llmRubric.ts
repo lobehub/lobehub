@@ -1,5 +1,6 @@
 import type { EvalBenchmarkRubric, RubricConfigLLM } from '@lobechat/types';
 
+import { judgeErrorResult } from './judgeError';
 import type { MatchContext, MatchResult } from './types';
 
 const DEFAULT_SYSTEM_ROLE = [
@@ -28,6 +29,7 @@ function buildJudgeUserPrompt(
   actual: string,
   expected: string | undefined,
   input: string | undefined,
+  evidence: string | undefined,
 ): string {
   const parts = [`[Criteria]\n${criteria}`];
   // Surface the task input (e.g. the prompt/draft/context the output responds
@@ -37,6 +39,13 @@ function buildJudgeUserPrompt(
     parts.push(`[Input]\n${input}`);
   }
   parts.push(`[Output]\n${actual}`);
+  // The output is only the final reply. Criteria about what the agent did (call
+  // a tool, save something) can only be judged from the actions themselves.
+  if (evidence) {
+    parts.push(
+      `[Evidence]\nWhat the AI did while producing the output. Use it for criteria about actions or resulting state.\n${evidence}`,
+    );
+  }
   if (expected) {
     parts.push(`[Expected]\n${expected}`);
   }
@@ -59,20 +68,26 @@ export const matchLLMRubric = async ({
   rubric,
 }: MatchLLMRubricParams): Promise<MatchResult> => {
   if (!context?.generateObject) {
-    return { passed: false, reason: 'LLM judge not available', score: 0 };
+    return judgeErrorResult('LLM judge not available');
   }
 
-  const cfg = rubric.config as RubricConfigLLM;
+  const cfg = (rubric.config ?? {}) as RubricConfigLLM;
+  if (cfg.criteria !== undefined && typeof cfg.criteria !== 'string') {
+    return judgeErrorResult('Invalid judge criteria');
+  }
   const criteria = cfg.criteria || 'Evaluate whether the output is correct and helpful.';
   const model = cfg.model || context.judgeModel;
 
-  if (!model) {
-    return { passed: false, reason: 'No judge model configured', score: 0 };
+  if (typeof model !== 'string' || !model.trim()) {
+    return judgeErrorResult('No judge model configured');
   }
 
   const messages = [
     { content: cfg.systemRole || DEFAULT_SYSTEM_ROLE, role: 'system' as const },
-    { content: buildJudgeUserPrompt(criteria, actual, expected, input), role: 'user' as const },
+    {
+      content: buildJudgeUserPrompt(criteria, actual, expected, input, context.judgeEvidence),
+      role: 'user' as const,
+    },
   ];
   const threshold = rubric.threshold ?? 0.6;
   const maxAttempts = Math.max(1, context.judgeMaxAttempts ?? 3);
@@ -80,11 +95,7 @@ export const matchLLMRubric = async ({
   // Retry transient judge flakes — a thrown error or a malformed response with no
   // usable score. The judge occasionally returns no parseable score under load;
   // a single bad sample shouldn't auto-fail an otherwise-good output.
-  let lastResult: MatchResult = {
-    passed: false,
-    reason: 'LLM judge did not return a score',
-    score: 0,
-  };
+  let lastResult = judgeErrorResult('LLM judge did not return a score');
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const result = await context.generateObject({
@@ -96,18 +107,23 @@ export const matchLLMRubric = async ({
 
       // Note: a valid score can be 0 (output fully fails the criteria), so check
       // the type rather than truthiness — `!result.score` would drop real zeros.
-      if (typeof result?.score === 'number' && Number.isFinite(result.score)) {
-        const score = Math.max(0, Math.min(1, result.score));
-        return { passed: score >= threshold, reason: result.reason, score };
+      if (typeof result?.score !== 'number' || !Number.isFinite(result.score)) {
+        lastResult = judgeErrorResult('LLM judge did not return a score');
+        continue;
       }
-
-      lastResult = { passed: false, reason: 'LLM judge did not return a score', score: 0 };
+      if (result.score < 0 || result.score > 1) {
+        lastResult = judgeErrorResult('LLM judge returned an out-of-range score');
+        continue;
+      }
+      if (typeof result.reason !== 'string') {
+        lastResult = judgeErrorResult('LLM judge did not return a reason');
+        continue;
+      }
+      return { passed: result.score >= threshold, reason: result.reason, score: result.score };
     } catch (error) {
-      lastResult = {
-        passed: false,
-        reason: `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
-        score: 0,
-      };
+      lastResult = judgeErrorResult(
+        `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 

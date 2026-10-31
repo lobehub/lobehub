@@ -1,8 +1,11 @@
 import type { EvalRunConfig, EvalRunMetrics, EvalRunTopicResult } from '@lobechat/types';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
 
 import { evaluateAndFinalizeRun } from './aggregate';
+import { deleteCaseAgents } from './caseAgent';
+import { assertRunCaseCompatibility } from './caseCompatibility';
 import { createRunTopics } from './createRun';
 import type { EvalRunDeps } from './types';
 
@@ -19,33 +22,50 @@ export async function deleteRun(deps: EvalRunDeps, id: string) {
     await deps.topicModel.batchDelete(topicIds);
   }
 
+  // 4. Delete the hidden case Agents the run created (with any topics kept
+  //    from retries, which cascade with their Agent)
+  await deleteCaseAgents(deps, id);
+
   return result;
 }
 
-export async function abortRun(deps: EvalRunDeps, runId: string) {
-  // 1. Find all running RunTopics and interrupt their agent operations
-  const runTopics = await deps.runTopicModel.findByRunId(runId);
-  const runningTopics = runTopics.filter((t) => t.status === 'running');
-
-  if (runningTopics.length > 0) {
-    const agentRuntimeService = new AgentRuntimeService(deps.db, deps.userId);
-    for (const rt of runningTopics) {
-      const opId = (rt.evalResult as EvalRunTopicResult)?.operationId;
-      if (opId) {
-        try {
-          await agentRuntimeService.interruptOperation(opId);
-        } catch {
-          // best effort
-        }
-      }
+/** Interrupt every still-open operation under an attempt, preserving finished children. */
+export async function interruptEvalOperations(deps: EvalRunDeps, operationIds: string[]) {
+  const runtime = new AgentRuntimeService(deps.db, deps.userId);
+  const operations = new AgentOperationModel(deps.db, deps.userId, deps.workspaceId);
+  const open = new Set([
+    'pending',
+    'running',
+    'waiting_for_async_tool',
+    'waiting_for_client',
+    'waiting_for_human',
+  ]);
+  const interrupted = new Set<string>();
+  for (const operationId of new Set(operationIds)) {
+    const tree = await operations.listOperationTree(operationId).catch(() => []);
+    const ids = [operationId, ...tree.filter((op) => open.has(op.status ?? '')).map((op) => op.id)];
+    for (const id of ids) {
+      if (interrupted.has(id)) continue;
+      interrupted.add(id);
+      await runtime.interruptOperation(id).catch(() => undefined);
     }
   }
+}
 
-  // 2. Mark all pending/running RunTopics as aborted (error + 'Aborted')
-  await deps.runTopicModel.batchMarkAborted(runId);
+export async function abortRun(deps: EvalRunDeps, runId: string) {
+  // Close the write gate before interrupting: interruption itself can deliver
+  // completion callbacks. Keep partial results and operation ids for audit.
+  const stoppedTopics = await deps.runTopicModel.batchMarkAborted(runId);
 
-  // 3. Update run status to aborted
-  await deps.runModel.update(runId, { status: 'aborted' });
+  const operationIds: string[] = [];
+  for (const rt of stoppedTopics) {
+    const result = rt.evalResult as EvalRunTopicResult | null;
+    if (result?.operationId) operationIds.push(result.operationId);
+    for (const attempt of result?.threads ?? []) {
+      if (attempt.operationId) operationIds.push(attempt.operationId);
+    }
+  }
+  await interruptEvalOperations(deps, operationIds);
 }
 
 export async function retryErrorCases(
@@ -57,12 +77,14 @@ export async function retryErrorCases(
 
   const allTopics = await deps.runTopicModel.findByRunId(runId);
   const errorTopics = allTopics.filter((t) => t.status === 'error' || t.status === 'timeout');
+  await assertRunCaseCompatibility(deps, run, errorTopics);
 
   if (errorTopics.length === 0) return { retryCount: 0 };
 
   // Collect test case IDs and info for recreation
   const errorTestCases = errorTopics.map((t) => ({
     content: t.testCase?.content ?? { input: '' },
+    environmentId: t.testCase?.environmentId ?? null,
     id: t.testCaseId,
     sortOrder: t.testCase?.sortOrder ?? null,
   }));
@@ -74,10 +96,13 @@ export async function retryErrorCases(
   // 2. Preserve old Topics (old conversations are kept for audit/history);
   // only the RunTopic association is replaced.
   // 3. Create fresh Topics, histories, and pending RunTopics together.
-  await createRunTopics(deps, runId, run.targetAgentId, errorTestCases);
+  await createRunTopics(deps, run, errorTestCases);
 
   // 4. Set run status to pending
-  await deps.runModel.update(runId, { status: 'pending' });
+  await deps.runModel.update(runId, {
+    startedAt: new Date(Math.max(Date.now(), (run.startedAt?.getTime() ?? 0) + 1)),
+    status: 'pending',
+  });
 
   return { retryCount: errorTopics.length };
 }
@@ -93,22 +118,32 @@ export async function retrySingleCase(deps: EvalRunDeps, runId: string, testCase
   if (runTopic.status === 'running' || runTopic.status === 'pending') {
     throw new Error(`Cannot retry: case is ${runTopic.status}`);
   }
+  // The attempt ran; only its grading failed. Re-judge it instead of paying
+  // for the candidate again.
+  if (runTopic.status === 'judge_error') {
+    throw new Error('Cannot retry: the attempt ran but was not judged; re-judge it instead');
+  }
+  await assertRunCaseCompatibility(deps, run, [runTopic]);
 
   // 1. Delete old RunTopic association
   await deps.runTopicModel.deleteByRunAndTestCase(runId, testCaseId);
 
   // 2. Preserve the old Topic (conversation history); only re-link.
   // 3. Create a fresh Topic, its history, and its RunTopic together.
-  await createRunTopics(deps, runId, run.targetAgentId, [
+  await createRunTopics(deps, run, [
     {
       content: runTopic.testCase?.content ?? { input: '' },
+      environmentId: runTopic.testCase?.environmentId ?? null,
       id: testCaseId,
       sortOrder: runTopic.testCase?.sortOrder ?? null,
     },
   ]);
 
   // 5. Set run status to running
-  await deps.runModel.update(runId, { status: 'running' });
+  await deps.runModel.update(runId, {
+    startedAt: new Date(Math.max(Date.now(), (run.startedAt?.getTime() ?? 0) + 1)),
+    status: 'running',
+  });
 }
 
 export async function getRunDetails(deps: EvalRunDeps, id: string) {
@@ -201,32 +236,32 @@ export async function checkAndHandleRunTimeout(
   const timedOutRows = await deps.runTopicModel.batchMarkTimeout(run.id, perCaseTimeout);
   if (timedOutRows.length === 0) return false;
 
-  // Interrupt running agents before writing timeout state (best-effort)
-  const agentRuntimeService = new AgentRuntimeService(deps.db, deps.userId);
-  for (const row of timedOutRows) {
-    const opId = (row.evalResult as EvalRunTopicResult)?.operationId;
-    if (opId) {
-      try {
-        await agentRuntimeService.interruptOperation(opId);
-      } catch {
-        // best effort — don't block timeout handling
-      }
-    }
-  }
+  const operations = timedOutRows
+    .flatMap((row) => [
+      row.evalResult?.operationId,
+      ...(row.evalResult?.threads ?? []).map((thread) => thread.operationId),
+    ])
+    .filter((id): id is string => !!id);
+  await interruptEvalOperations(deps, operations);
 
   // Write evalResult with duration for each timed-out topic
   for (const row of timedOutRows) {
     const duration = row.createdAt ? now - new Date(row.createdAt).getTime() : undefined;
-    await deps.runTopicModel.updateByRunAndTopic(row.runId, row.topicId, {
-      evalResult: {
-        ...(row.evalResult as EvalRunTopicResult),
-        completionReason: 'timeout',
-        duration,
-        rubricScores: (row.evalResult as EvalRunTopicResult)?.rubricScores ?? [],
+    await deps.runTopicModel.updateByRunAndTopic(
+      row.runId,
+      row.topicId,
+      {
+        evalResult: {
+          ...(row.evalResult as EvalRunTopicResult),
+          completionReason: 'timeout',
+          duration,
+          rubricScores: (row.evalResult as EvalRunTopicResult)?.rubricScores ?? [],
+        },
+        passed: false,
+        score: 0,
       },
-      passed: false,
-      score: 0,
-    });
+      { executionId: row.evalResult?.executionId, status: 'timeout' },
+    );
   }
 
   // Re-aggregate metrics from all RunTopics (including newly timed-out ones)
@@ -251,7 +286,11 @@ export async function checkAndHandleRunTimeout(
           ? 'failed'
           : 'completed';
 
-    await deps.runModel.update(run.id, { metrics, status: runStatus });
+    await deps.runModel.finalize(
+      run.id,
+      { metrics, status: runStatus },
+      { startedAt: run.startedAt },
+    );
   } else {
     // Some topics still running → update real-time metrics so progress reflects timeouts
     const completedCount = allTopics.filter(
@@ -261,17 +300,23 @@ export async function checkAndHandleRunTimeout(
     const failedCases = allTopics.filter((t) => t.status === 'failed').length;
     const errorCases = allTopics.filter((t) => t.status === 'error').length;
     const timeoutCases = allTopics.filter((t) => t.status === 'timeout').length;
+    const judgeErrorCases = allTopics.filter((t) => t.status === 'judge_error').length;
 
-    await deps.runModel.update(run.id, {
-      metrics: {
-        ...(run.metrics as EvalRunMetrics),
-        completedCases: completedCount,
-        errorCases,
-        failedCases,
-        passedCases,
-        timeoutCases,
+    await deps.runModel.update(
+      run.id,
+      {
+        metrics: {
+          ...(run.metrics as EvalRunMetrics),
+          completedCases: completedCount,
+          errorCases,
+          failedCases,
+          judgeErrorCases: judgeErrorCases || undefined,
+          passedCases,
+          timeoutCases,
+        },
       },
-    });
+      { startedAt: run.startedAt },
+    );
   }
 
   return true;

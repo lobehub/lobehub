@@ -606,6 +606,8 @@ export const execAgentTurn = async (
     disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
     disableTools: params.disableTools,
     ephemeralUserMessage,
+    evalAllowedTools: evalRuntime?.allowedTools,
+    evalMemory: evalRuntime?.memory,
     exclusivePluginIds,
     existingMessageIds,
     files,

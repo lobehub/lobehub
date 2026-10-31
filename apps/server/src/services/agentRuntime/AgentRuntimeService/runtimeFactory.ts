@@ -16,8 +16,9 @@ import { createWidgetDryRunAudit } from '@/server/services/widget/dryRunAudit';
 import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 
 import { hookDispatcher } from '../hooks';
-import { EVAL_TOOL_FORWARDING_HOOK_ID } from './constants';
+import { EVAL_TOOL_FORWARDING_HOOK_ID, EVAL_TOOL_GATE_HOOK_ID } from './constants';
 import { createEvalToolForwardingHook } from './evalToolForwardingHook';
+import { createEvalToolGateHook } from './evalToolGateHook';
 import type { AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -184,13 +185,22 @@ export async function createAgentRuntime(
     userId: origin?.userId,
   };
 
+  // The gate registers first so a refused call never reaches the forwarder.
+  if (
+    origin?.trigger === RequestTrigger.Eval &&
+    plan?.eval?.allowedTools &&
+    !hookDispatcher.hasHook(operationId, EVAL_TOOL_GATE_HOOK_ID)
+  ) {
+    hookDispatcher.register(operationId, [createEvalToolGateHook(plan.eval.allowedTools)]);
+  }
+
   if (
     origin?.trigger === RequestTrigger.Eval &&
     plan?.eval?.toolForwarding &&
     !hookDispatcher.hasHook(operationId, EVAL_TOOL_FORWARDING_HOOK_ID)
   ) {
     hookDispatcher.register(operationId, [
-      createEvalToolForwardingHook(plan.eval.toolForwarding, plan.eval.caseId),
+      createEvalToolForwardingHook(plan.eval.toolForwarding, plan.eval.caseId, plan.eval.attemptId),
     ]);
   }
 

@@ -8,6 +8,7 @@ import {
   agentEvalRuns,
   agentEvalRunTopics,
   agentEvalTestCases,
+  threads,
   topics,
   users,
 } from '../../../schemas';
@@ -674,6 +675,52 @@ describe('AgentEvalRunTopicModel', () => {
       expect(aborted?.evalResult).toMatchObject({ error: 'Aborted' });
     });
 
+    it('preserves evidence and blocks stale writes until explicit resume', async () => {
+      const evidence = {
+        cost: 1,
+        error: 'original provider error',
+        operationId: 'root',
+        threads: [{ passed: true, status: 'passed' as const, threadId: 'one' }],
+      };
+      await runTopicModel.batchCreate([
+        {
+          runId,
+          topicId: topicId1,
+          testCaseId: testCaseId1,
+          status: 'running',
+          evalResult: evidence,
+        },
+      ]);
+      await runTopicModel.batchMarkAborted(runId);
+      expect(
+        await runTopicModel.updateByRunAndTopic(runId, topicId1, {
+          status: 'passed',
+          evalResult: { passAllK: true },
+        }),
+      ).toBeUndefined();
+      const stopped = await runTopicModel.findByRunAndTestCase(runId, testCaseId1);
+      expect(stopped?.evalResult).toEqual({
+        ...evidence,
+        completionReason: 'aborted',
+        executionId: expect.any(String),
+      });
+      expect(stopped).toMatchObject({ passed: null, score: null, status: 'error' });
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { status: 'running', evalResult: null },
+          { allowAborted: true },
+        ),
+      ).toMatchObject({ status: 'running' });
+      expect(
+        await runTopicModel.updateByRunAndTopic(runId, topicId1, {
+          status: 'passed',
+          passed: true,
+        }),
+      ).toMatchObject({ status: 'passed' });
+    });
+
     it('should return empty array when no pending/running topics exist', async () => {
       await serverDB.insert(agentEvalRunTopics).values([
         { userId, runId, topicId: topicId1, testCaseId: testCaseId1, status: 'passed' },
@@ -714,6 +761,34 @@ describe('AgentEvalRunTopicModel', () => {
         where: eq(agentEvalRunTopics.topicId, otherTopic.id),
       });
       expect(otherRow.status).toBe('pending'); // unchanged
+    });
+  });
+
+  describe('updateThreadMetadata', () => {
+    it('merges attempt metadata and removes the keys it sets to undefined', async () => {
+      await runTopicModel.batchCreate([
+        { runId, topicId: topicId1, testCaseId: testCaseId1, status: 'running' },
+      ]);
+      const [thread] = await serverDB
+        .insert(threads)
+        .values({
+          metadata: { cost: 0.02, judgeError: 'rate limited', status: 'judge_error' } as any,
+          topicId: topicId1,
+          type: 'eval',
+          userId,
+        })
+        .returning();
+
+      expect(
+        await runTopicModel.updateThreadMetadata(runId, topicId1, thread.id, {
+          judgeError: undefined,
+          passed: true,
+          status: 'passed',
+        }),
+      ).toEqual({ id: thread.id });
+
+      const [saved] = await serverDB.select().from(threads).where(eq(threads.id, thread.id));
+      expect(saved.metadata).toEqual({ cost: 0.02, passed: true, status: 'passed' });
     });
   });
 

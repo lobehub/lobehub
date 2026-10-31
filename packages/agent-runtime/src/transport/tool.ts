@@ -43,6 +43,13 @@ export interface ToolRunResult {
 export interface ToolForwardingRequest {
   data: Pick<ChatToolPayload, 'apiName' | 'identifier'> & { args: Record<string, unknown> };
   metadata: {
+    /**
+     * The eval attempt this call belongs to. One attempt is one case run (or
+     * one pass@k thread of it) including every sub-agent it forks, so a mock
+     * keys its session on this, not on `operationId`, which changes per
+     * sub-agent.
+     */
+    attemptId?: string;
     caseId?: string;
     callIndex: number;
     operationId: string;

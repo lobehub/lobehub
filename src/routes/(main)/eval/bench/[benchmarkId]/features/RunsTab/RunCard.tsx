@@ -173,12 +173,14 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface RunCardProps {
   benchmarkId: string;
+  /** A note shown beside the status, e.g. how many of the set's cases the run picked. */
+  note?: string;
   onEdit?: (run: AgentEvalRunListItem) => void;
   onRefresh?: () => Promise<void>;
   run: AgentEvalRunListItem;
 }
 
-const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => {
+const RunCard = memo<RunCardProps>(({ benchmarkId, run, note, onRefresh, onEdit }) => {
   const { t } = useTranslation('eval');
 
   const deleteRun = useEvalStore((s) => s.deleteRun);
@@ -324,6 +326,7 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
             <Flexbox horizontal align="center" gap={8}>
               <span className={styles.name}>{run.name}</span>
               <StatusBadge status={run.status} />
+              {note && <span className={styles.metaHighlight}>{note}</span>}
             </Flexbox>
             {metaParts.length > 0 && (
               <Flexbox horizontal align="center" className={styles.meta} gap={4} wrap="wrap">

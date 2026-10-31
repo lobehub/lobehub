@@ -13,6 +13,8 @@ const log = debug('context-engine:provider:SystemDateProvider');
 
 export interface SystemDateProviderConfig {
   enabled?: boolean;
+  /** The clock to render; the wall clock when absent (eval attempts pin it). */
+  now?: Date;
   timezone?: string | null;
 }
 
@@ -33,7 +35,7 @@ export class SystemDateProvider extends BaseSystemRoleProvider {
     }
 
     const tz = this.config.timezone || 'UTC';
-    const today = new Date();
+    const today = this.config.now ?? new Date();
 
     const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
     const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });

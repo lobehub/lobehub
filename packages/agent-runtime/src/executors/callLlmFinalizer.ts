@@ -6,8 +6,6 @@ import type {
   ModelReasoning,
   ModelUsage,
 } from '@lobechat/types';
-import { serializePartsForStorage } from '../utils/multimodalContent';
-import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 
 import { UsageCounter } from '../core/UsageCounter';
 import type { AgentRuntimeHost, LLMAttemptOutput } from '../transport';
@@ -17,8 +15,12 @@ import type {
   GeneralAgentCallLLMResultPayload,
   InstructionExecutionResult,
 } from '../types';
+import { serializePartsForStorage } from '../utils/multimodalContent';
+import { sanitizeToolCallArguments } from '../utils/sanitizeToolCallArguments';
 import {
   hasRepeatedToolCall,
+  hasToolCallBurst,
+  TOOL_CALL_BURST_LIMIT,
   TOOL_CALL_REPEAT_LIMIT,
   updateToolCallRepeatGuard,
 } from '../utils/toolCallRepeatGuard';
@@ -298,7 +300,12 @@ export const finalizeCallLlmTurn = async ({
 }: FinalizeCallLlmTurnInput): Promise<InstructionExecutionResult> => {
   const { operation, transports } = host;
   const repeatCounts = updateToolCallRepeatGuard(state.toolCallRepeatGuard, output.toolsCalling);
-  const stoppedByRepeatLimit = output.finishReason !== 'abort' && hasRepeatedToolCall(repeatCounts);
+  const repeated = hasRepeatedToolCall(repeatCounts);
+  // Same stop for a turn that asks for more calls than the burst limit: the
+  // calls differ, but nothing legitimate fans out that wide, and dispatching
+  // them would hit a real service once per call.
+  const stoppedByRepeatLimit =
+    output.finishReason !== 'abort' && (repeated || hasToolCallBurst(output.toolsCalling));
   // Carried on the state so the terminal reason can name this stop. Sticky once
   // set: later turns emit no tool calls, and `updateToolCallRepeatGuard` resets
   // its counts on those, which would otherwise erase the only trace of why the
@@ -312,7 +319,9 @@ export const finalizeCallLlmTurn = async ({
   const finalizedOutput = stoppedByRepeatLimit
     ? {
         ...output,
-        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        content: repeated
+          ? `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`
+          : `Stopped after ${output.toolsCalling.length} tool calls were requested in one turn (limit ${TOOL_CALL_BURST_LIMIT}).`,
         finishReason: 'tool_call_repeat_limit',
         toolCalls: [],
         toolsCalling: [],

@@ -5,9 +5,13 @@ import pMap from 'p-map';
 import type { ThreadModel } from '@/database/models/thread';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
+import { resolveTopicAgentId } from './caseAgent';
+import { assertRunCaseCompatibility, EvalCaseCompatibilityError } from './caseCompatibility';
 import { loadTrajectoryData } from './trajectory';
 import type { EvalRunDeps } from './types';
 import { getCaseId, log } from './utils';
+
+export class EvalResumeConflictError extends Error {}
 
 const RESUMABLE_THREAD_STATUSES = new Set(['error', 'timeout']);
 /** Caps concurrent per-case resume checks (each issues several DB reads). */
@@ -44,6 +48,13 @@ export async function canResumeTrajectory(
 
   const runTopic = await deps.runTopicModel.findByRunAndTestCase(params.runId, params.testCaseId);
   if (!runTopic) return { canResume: false, reason: invalidResumeTargetReason };
+  try {
+    await assertRunCaseCompatibility(deps, run, [runTopic]);
+  } catch (error) {
+    if (error instanceof EvalCaseCompatibilityError)
+      return { canResume: false, reason: error.message };
+    throw error;
+  }
 
   log('canResumeTrajectory: runTopic.status=%s topicId=%s', runTopic.status, runTopic.topicId);
 
@@ -152,11 +163,12 @@ export async function resumeTrajectory(
   const resumeCheck = await canResumeTrajectory(deps, params);
   if (!resumeCheck.canResume) {
     log('resumeTrajectory: canResume=false reason=%s', resumeCheck.reason);
-    throw new Error(resumeCheck.reason);
+    throw new EvalResumeConflictError(resumeCheck.reason);
   }
 
   const target = await resolveTrajectoryResumeTarget(deps, params);
-  const { caseId, envPrompt, environment, parentMessageId, run, thread, topicId } = target;
+  const { caseId, envPrompt, environment, parentMessageId, run, runTopic, thread, topicId } =
+    target;
   log(
     'resumeTrajectory: resolved target — topicId=%s parentMessageId=%s threadId=%s',
     topicId,
@@ -164,16 +176,20 @@ export async function resumeTrajectory(
     thread?.id,
   );
 
+  // Resume on the Agent the topic belongs to (a hidden case Agent or the target Agent).
+  const targetAgentId = await resolveTopicAgentId(deps, topicId, run.targetAgentId);
+
   if (thread) {
     log('resumeTrajectory: triggering resume-thread-trajectory');
     await AgentEvalRunWorkflow.triggerResumeThreadTrajectory({
+      expectedExecutionId: runTopic.evalResult?.executionId,
       appContext: { threadId: thread.id, topicId },
       caseId,
       envPrompt,
       maxSteps: run.config?.maxSteps,
       parentMessageId,
       runId: run.id,
-      targetAgentId: run.targetAgentId ?? undefined,
+      targetAgentId,
       testCaseId: params.testCaseId,
       threadId: thread.id,
       topicId,
@@ -183,13 +199,14 @@ export async function resumeTrajectory(
   } else {
     log('resumeTrajectory: triggering resume-agent-trajectory');
     await AgentEvalRunWorkflow.triggerResumeAgentTrajectory({
+      expectedExecutionId: runTopic.evalResult?.executionId,
       appContext: { topicId },
       caseId,
       envPrompt,
       maxSteps: run.config?.maxSteps,
       parentMessageId,
       runId: run.id,
-      targetAgentId: run.targetAgentId ?? undefined,
+      targetAgentId,
       testCaseId: params.testCaseId,
       topicId,
       environment,
