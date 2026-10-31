@@ -86,6 +86,25 @@ describe('toFindings', () => {
       'packages/heterogeneous-agents/src/alint/fixtures.ts',
     ]);
   });
+  /**
+   * Regression: the backend rule set keeps its fixtures one level deeper, in
+   * `packages/alint/server/fixtures`, which the pattern did not reach.
+   */
+  it('drops the fixtures of a rule set nested inside packages/alint', () => {
+    const findings = toFindings(
+      {
+        diagnostics: [
+          diagnostic({
+            filePath:
+              '/repo/packages/alint/server/fixtures/resource-guard-in-middleware/bad-two-handlers.ts',
+          }),
+          diagnostic({ filePath: '/repo/packages/alint/server/report.ts' }),
+        ],
+      },
+      '/repo',
+    );
+    expect(findings.map((finding) => finding.file)).toEqual(['packages/alint/server/report.ts']);
+  });
 });
 
 describe('verdict', () => {

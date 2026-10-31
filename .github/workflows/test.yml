@@ -377,7 +377,7 @@ jobs:
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
         continue-on-error: true
         run: |
-          if git status --porcelain -- alint.config.toml packages/alint ':(glob)packages/*/alint/**' | grep -q .; then
+          if git status --porcelain -- alint.config.toml ':(glob)apps/*/alint.config.toml' packages/alint ':(glob)packages/*/alint/**' | grep -q .; then
             cd packages/alint && bunx vitest run fixtures.test.ts
           else
             echo "rules and fixtures unchanged; skipping calibration"

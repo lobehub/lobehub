@@ -23,6 +23,7 @@ const rootDir = path.resolve(alintDir, '../..');
 const FIXTURE_ROOTS = [
   { dir: 'packages/alint/fixtures', prefix: 'lobehub' },
   { dir: 'packages/heterogeneous-agents/alint/fixtures', prefix: 'hetero' },
+  { dir: 'packages/alint/server/fixtures', prefix: 'server' },
 ];
 
 const hasSetup = await readFile(path.join(rootDir, '.alint/config.toml'), 'utf8')

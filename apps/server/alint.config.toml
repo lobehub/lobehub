@@ -1,0 +1,16 @@
+# alint rules that only apply to the backend. Discovered as a nested config by
+# the root `alint` run, so every pattern below resolves against apps/server.
+# The rule set itself lives in packages/alint/server/rules (prefix `server/`);
+# its fixture group is in the root alint.config.toml, outside this directory.
+# See packages/alint/README.md.
+
+# tRPC router layer.
+[[config.group]]
+files = [ "src/routers/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**" ]
+
+[config.group.plugins]
+server = "../../packages/alint/server/rules"
+
+[config.group.rules]
+"server/resource-guard-in-middleware" = "error"

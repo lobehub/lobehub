@@ -41,6 +41,14 @@ Package-level rules, kept next to the package they describe:
 | `hetero/agent-layering`            | error    | the browser-reachable layer of `heterogeneous-agents` and its spawn pipeline | `packages/heterogeneous-agents/alint/rules` |
 | `hetero/host-capability-placement` | warn     | files owned by the browser entries of `heterogeneous-agents` (not barrels)   | `packages/heterogeneous-agents/alint/rules` |
 
+Backend-only rules, a rule set of their own for `apps/server`:
+
+| Rule                                  | Severity | Scope                        | Lives in                      |
+| ------------------------------------- | -------- | ---------------------------- | ----------------------------- |
+| `server/resource-guard-in-middleware` | error    | `apps/server/src/routers/**` | `packages/alint/server/rules` |
+
+The rules live in `packages/alint/server/rules` (fixtures in `packages/alint/server/fixtures`) and are scoped by the nested `apps/server/alint.config.toml`, which the root `alint` run discovers on its own; patterns in it resolve against `apps/server`. Its fixture group stays in the root config because a nested config cannot reach outside its directory. `resource-guard-in-middleware` encodes the backend owner's review: "resolveAcceptanceForWrite 这个感觉就应该是放在 Middleware 里直接做掉往下提供 ctx" — two or more handlers opening with the same resolve/authorize helper on the same input field ("2 个其实也没问题，3 个是一定可以的") should share a middleware-backed procedure that hands the resource down through `ctx`. It started at `error` at the owner's request after calibration on 2026-10-18: three cold `deepseek-flash` runs over the 242 router files gave 116 findings, 2 false (a guard under `if (agentId)`, and one helper on `input.groupId` vs `input.id` — both carve-outs the model missed once in three runs) and 5 true findings anchored on a non-qualifying call. That is sample precision, measured on the files the carve-outs came from, not on real PRs.
+
 `hetero/host-capability-placement` encodes two review rejections: code that only one Node host uses (the quota sampler, `lh hetero exec`, the desktop main process) moves behind a Node-only entry even when it is pure, and it is never made browser-portable to stay where it is. It reads one file, so it cannot see who imports a symbol; it reports only a host the file names itself, and misses host-only code whose docs do not say so.
 
 `error` is reserved for rules measured at zero false positives on real PRs; an error turns the ALint check red. A rule starts at `warn` and is promoted only after its findings have been read on real PRs. A rule whose findings are mostly true but not worth acting on per PR does not belong here: `test-the-exit-not-the-entry` was removed after five days because it produced 92% of all findings and drowned out the rest.
@@ -51,14 +59,15 @@ Scopes are declared as `[[config.group]]` entries in the root `alint.config.toml
 
 ## Where a rule lives
 
-Rules come in two layers, and each layer is registered as its own plugin in `alint.config.toml`:
+Rules come in three layers, and each layer is registered as its own plugin in `alint.config.toml`:
 
 - **Repo-wide rules** live in `packages/alint/rules` under the `lobehub/` prefix. They state something true of a kind of code wherever it is, for example "browser code imports nothing Node-only" (`no-node-in-browser`).
 - **Package-level rules** live next to the package they describe, in `packages/<pkg>/alint/rules` with their fixtures in `packages/<pkg>/alint/fixtures`, under a prefix of their own (`hetero/` for `heterogeneous-agents`). They encode that package's architecture, for example which of its layers the web app reaches (`agent-layering`), and are only ever scoped to that package.
+- **App-only rules** live in `packages/alint/<app>/rules` (fixtures in `packages/alint/<app>/fixtures`) under a prefix of their own (`server/` for `apps/server`), for a boundary that only exists inside one app. They are scoped by a nested `alint.config.toml` in that app (`apps/server/alint.config.toml`), which the root `alint` run discovers on its own: patterns in it resolve against the app directory, and its fixture group stays in the root config because a nested config cannot reach outside its own directory.
 
 A per-file rule cannot see an import graph. When a package's boundary matters, pair its package-level rule with a deterministic test of the graph: `heterogeneous-agents` lists its browser entries in `browser-entries.json`; `src/runtimeBoundary.test.ts` walks everything those entries reach and fails on Node built-ins, Node globals such as `Buffer`, or files owned by a Node-only entry, and the root ESLint config reads the same list to reject value imports of any other entry from `src/`.
 
-To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI runs calibration when `packages/*/alint/**` changes.
+To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. An app-only rule follows the same steps, except its scope lives in the app's nested `alint.config.toml` rather than the root one. CI runs calibration when `packages/*/alint/**` changes.
 
 ## Security rules
 

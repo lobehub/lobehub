@@ -348,6 +348,13 @@ hetero = "./packages/heterogeneous-agents/alint/rules"
 "hetero/host-capability-placement" = "warn"
 
 [[config.group]]
+files = [ "packages/alint/server/fixtures/resource-guard-in-middleware/**" ]
+[config.group.plugins]
+server = "./packages/alint/server/rules"
+[config.group.rules]
+"server/resource-guard-in-middleware" = "warn"
+
+[[config.group]]
 files = [ "packages/alint/fixtures/ui-button-hierarchy/**" ]
 [config.group.plugins]
 lobehub = "./packages/alint/rules"
