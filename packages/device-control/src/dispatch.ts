@@ -1,4 +1,8 @@
 import {
+  getAgentCliUpdate,
+  startAgentCliUpdate,
+} from '@lobechat/heterogeneous-agents/agentCliUpdate';
+import {
   copyLocalFiles,
   createLocalDirectory,
   createLocalFile,
@@ -83,6 +87,9 @@ export const DEVICE_RPC_METHODS = [
   'unenrollWorkspace',
   'initWorkspace',
   'listHeterogeneousAgentModels',
+  // Remote agent CLI update: start in the background, then poll the job.
+  'startHeterogeneousAgentCliUpdate',
+  'getHeterogeneousAgentCliUpdate',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
@@ -225,6 +232,16 @@ export const executeDeviceRpc = async (
         throw new Error('This device client does not support heterogeneous agent model discovery');
       }
       return deps.listHeterogeneousAgentModels(params as ListHeterogeneousAgentModelsParams);
+    }
+
+    // Both hosts run the shared updater; the scan's `updatable` flag is what
+    // tells the server a client knows these methods.
+    case 'startHeterogeneousAgentCliUpdate': {
+      return startAgentCliUpdate((params as { type: string }).type);
+    }
+
+    case 'getHeterogeneousAgentCliUpdate': {
+      return getAgentCliUpdate((params as { type: string }).type);
     }
 
     case 'getClaudeCodeQuota': {

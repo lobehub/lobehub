@@ -5,6 +5,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./agentCliUpdate": "./src/scan/agentCliUpdate.ts",
     "./askUser": "./src/askUser/index.ts",
     "./builtinMcp": "./src/builtinMcp/index.ts",
     "./errors": "./src/errors/index.ts",

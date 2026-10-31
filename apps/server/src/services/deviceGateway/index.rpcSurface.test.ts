@@ -651,6 +651,62 @@ describe('DeviceGateway RPC surface', () => {
     });
   });
 
+  describe('agent CLI update', () => {
+    const params = { ...base, type: 'claude-code' };
+    const job = { agentType: 'claude-code', startedAt: 1, status: 'running' };
+
+    it.each([
+      ['startAgentCliUpdate', 'startHeterogeneousAgentCliUpdate'],
+      ['getAgentCliUpdate', 'getHeterogeneousAgentCliUpdate'],
+    ] as const)('%s relays %s with the agent type', async (name, method) => {
+      configureGateway();
+      mockClient.invokeRpc.mockResolvedValue({ data: job, success: true });
+
+      await expect(new DeviceGateway()[name](params)).resolves.toEqual({ job, status: 'ok' });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(address(15_000), {
+        method,
+        params: { type: 'claude-code' },
+      });
+    });
+
+    it('reports a device that has not updated yet as no job', async () => {
+      configureGateway();
+      mockClient.invokeRpc.mockResolvedValue({ data: null, success: true });
+
+      await expect(new DeviceGateway().getAgentCliUpdate(params)).resolves.toEqual({
+        job: null,
+        status: 'ok',
+      });
+    });
+
+    it.each([
+      ['an outdated client', 'Unknown device RPC method: x', 'unsupported'],
+      ['a device error', 'boom', 'unavailable'],
+    ])('reports %s', async (_label, error, status) => {
+      configureGateway();
+      mockClient.invokeRpc.mockResolvedValue({ error, success: false });
+
+      await expect(new DeviceGateway().startAgentCliUpdate(params)).resolves.toEqual({
+        message: error,
+        status,
+      });
+    });
+
+    it('reports an unconfigured gateway or a transport failure as unavailable', async () => {
+      await expect(new DeviceGateway().startAgentCliUpdate(params)).resolves.toEqual({
+        message: 'Device Gateway is not configured',
+        status: 'unavailable',
+      });
+
+      configureGateway();
+      mockClient.invokeRpc.mockRejectedValue(new Error(NET_DOWN));
+      await expect(new DeviceGateway().getAgentCliUpdate(params)).resolves.toEqual({
+        message: NET_DOWN,
+        status: 'unavailable',
+      });
+    });
+  });
+
   describe('dispatchAgentRun', () => {
     const params = {
       agentType: 'codex' as const,

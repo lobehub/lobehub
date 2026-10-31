@@ -35,6 +35,7 @@ describe('heterogeneous agent config', () => {
     expect(getHeterogeneousAgentUpdate('claude-code')).toEqual({
       commands: ['claude update', 'brew upgrade --cask claude-code'],
       npmPackage: '@anthropic-ai/claude-code',
+      selfUpdateArgs: ['update'],
     });
     expect(getHeterogeneousAgentUpdate('codex')).toBeUndefined();
     expect(getHeterogeneousAgentUpdate('unknown')).toBeUndefined();

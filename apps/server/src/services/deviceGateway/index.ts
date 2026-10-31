@@ -319,6 +319,18 @@ export class DeviceGateway {
     return agents.listHeterogeneousAgentModels(this.clientGetter, ...args);
   }
 
+  startAgentCliUpdate(params: Parameters<typeof agents.invokeAgentCliUpdate>[2]) {
+    return agents.invokeAgentCliUpdate(
+      this.clientGetter,
+      'startHeterogeneousAgentCliUpdate',
+      params,
+    );
+  }
+
+  getAgentCliUpdate(params: Parameters<typeof agents.invokeAgentCliUpdate>[2]) {
+    return agents.invokeAgentCliUpdate(this.clientGetter, 'getHeterogeneousAgentCliUpdate', params);
+  }
+
   listGitBranches(...args: DeviceRpcArgs<typeof gitRead.listGitBranches>) {
     return gitRead.listGitBranches(this.clientGetter, ...args);
   }

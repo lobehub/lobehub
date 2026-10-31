@@ -578,9 +578,15 @@ export default {
   'heterogeneousStatus.target.fixed': 'This environment is fixed. Members can’t change it.',
   'heterogeneousStatus.target.overridden':
     'Applies only to you. Other members keep the Agent default.',
+  'heterogeneousStatus.update.action': 'Update to {{version}}',
   'heterogeneousStatus.update.available': 'Update to {{version}}',
+  'heterogeneousStatus.update.busy': 'Topics are running on {{device}}. Update once they finish.',
   'heterogeneousStatus.update.desc':
     'Run one of these commands in a terminal on {{device}} to update:',
+  'heterogeneousStatus.update.failed': 'Update failed',
+  'heterogeneousStatus.update.running': 'Updating {{name}} CLI…',
+  'heterogeneousStatus.update.upToDate':
+    '{{name}} CLI is already on the newest version this device can get',
 
   // Connected agent profile config panel (openclaw / hermes)
   'platformAgentConfig.title': 'Connection',

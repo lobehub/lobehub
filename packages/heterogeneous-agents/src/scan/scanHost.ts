@@ -10,6 +10,7 @@ import {
   detectHeterogeneousCliCommand,
   detectValidatedCommandCandidates,
 } from '../spawn/resolveCliCommand';
+import { canSelfUpdateAgentCli } from './agentCliUpdate';
 import type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './types';
 
 /**
@@ -191,6 +192,7 @@ export const scanHeterogeneousAgentsOnHost = async (): Promise<HeterogeneousAgen
         config.type,
         {
           available: status.available,
+          updatable: await canSelfUpdateAgentCli(config.type, status),
           version: status.version,
         } satisfies HeterogeneousAgentScanStatus,
       ] as const;

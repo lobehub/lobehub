@@ -83,6 +83,16 @@ class DeviceService {
     return lambdaClient.device.getAgentCliLatestVersion.query({ agentType });
   }
 
+  /** Start updating an agent CLI on a device; the device returns the running job. */
+  startAgentCliUpdate(input: Parameters<DeviceClient['startAgentCliUpdate']['mutate']>[0]) {
+    return lambdaClient.device.startAgentCliUpdate.mutate(input);
+  }
+
+  /** The latest agent CLI update on a device, for polling a running one. */
+  getAgentCliUpdate(input: Parameters<DeviceClient['getAgentCliUpdate']['query']>[0]) {
+    return lambdaClient.device.getAgentCliUpdate.query(input);
+  }
+
   /** Scan a device for every known heterogeneous agent type in one pass. */
   scanAgents(input: Parameters<DeviceClient['scanAgents']['query']>[0]) {
     return lambdaClient.device.scanAgents.query(input);

@@ -3,12 +3,14 @@ import {
   type HeterogeneousAgentScanMap,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from '@lobechat/heterogeneous-agents';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
 import { agentCliRelease } from '@/server/services/agentCliRelease';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { assertDeviceOperable } from './guards';
 import { deviceProcedure } from './procedures';
 
 // Derive the zod enum from the canonical config so new platforms are
@@ -83,6 +85,41 @@ export const agentsRouter = router({
       return {
         latestVersion: update ? await agentCliRelease.getLatestVersion(update.npmPackage) : null,
       };
+    }),
+  /**
+   * Update an agent CLI on a device with the CLI's own updater. The device runs
+   * it in the background and returns the job; poll `getAgentCliUpdate` until it
+   * ends. Only offered when the device's scan marks the CLI `updatable`, which
+   * clients that predate these RPCs never do.
+   */
+  startAgentCliUpdate: deviceProcedure
+    .input(z.object({ agentType: z.string(), deviceId: z.string() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'update an agent CLI');
+      if (!getHeterogeneousAgentUpdate(input.agentType)?.selfUpdateArgs) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `${input.agentType} cannot be updated remotely.`,
+        });
+      }
+      return deviceGateway.startAgentCliUpdate({
+        deviceId: input.deviceId,
+        type: input.agentType,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+  /** The latest agent CLI update on a device; `job` is `null` before the first one. */
+  getAgentCliUpdate: deviceProcedure
+    .input(z.object({ agentType: z.string(), deviceId: z.string() }).strict())
+    .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'update an agent CLI');
+      return deviceGateway.getAgentCliUpdate({
+        deviceId: input.deviceId,
+        type: input.agentType,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
     }),
   /**
    * Scan the given device for every known heterogeneous agent type in one
