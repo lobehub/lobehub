@@ -101,7 +101,9 @@ starts a new topic instead of inheriting later context. Failed/unknown execution
 environments and unavailable topics also start afresh. An adapter's explicit “new conversation”
 feature is outside this foundation.
 
-Every dispatch receives only the triggering request, its author and attachment references. Public
+Every dispatch receives the triggering request, its author and attachment references, preceded by
+at most five public messages its topic has not seen (`recentContext`): those after the last request
+the topic accepted, minus the reply it published; a new topic gets the latest five. Older public
 history is read on demand through `lobe-channel.readMessages` / `readMessage` in Native runs, or
 `lh channel history` / `lh channel message` in external runtimes. A Thread can read the main prefix
 through its root plus its own messages; the frozen request cutoff excludes later arrivals. Reads
