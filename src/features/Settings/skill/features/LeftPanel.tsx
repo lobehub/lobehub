@@ -1,10 +1,9 @@
 'use client';
 
 import { Button, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
-import { GithubIcon } from '@lobehub/ui/icons';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +20,43 @@ import { type ToolDetailType } from './SkillDetail';
 import SkillList, { type SkillViewMode } from './SkillList';
 import { SkillListVariantProvider } from './SkillListRow';
 
-const styles = stylex.create({ body: { overflowY: "auto", flex: "1", paddingBlock: "4px", paddingInline: "8px" }, pageBody: { paddingBlockStart: "0", paddingBlockEnd: "24px", paddingInline: "0" }, pageHeader: { display: "flex", flexShrink: 0, gap: "16px", alignItems: "flex-start", justifyContent: "space-between", paddingBlockStart: "24px", paddingBlockEnd: "16px", paddingInline: "12px" }, header: { display: "flex", flexShrink: 0, gap: "8px", alignItems: "center", justifyContent: "space-between", height: "42px", paddingInline: "16px", borderBlockEndWidth: "1px", borderBlockEndStyle: "solid", borderBlockEndColor: cssVar.colorBorderSecondary }, root: { overflowY: "auto", display: "flex", flexDirection: "column", width: "300px", minWidth: "260px", borderInlineEndWidth: "1px", borderInlineEndStyle: "solid", borderInlineEndColor: cssVar.colorBorderSecondary }, tooltipAnchor: { display: "inline-flex" } });
+const styles = stylex.create({
+  body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
+  pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
+  pageHeader: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '16px',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBlockStart: '24px',
+    paddingBlockEnd: '16px',
+    paddingInline: '12px',
+  },
+  header: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: '42px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  root: {
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '300px',
+    minWidth: '260px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+  },
+  tooltipAnchor: { display: 'inline-flex' },
+});
 
 interface LeftPanelProps {
   /** Fill the page instead of sitting as a 300px column beside the detail (mobile). */

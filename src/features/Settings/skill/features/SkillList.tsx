@@ -8,11 +8,10 @@ import {
   resolveConnectorCatalogItem,
 } from '@lobechat/const';
 import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
-import { Center, cx, Empty } from '@lobehub/ui';
+import { Center, Empty } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
-import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import type React from 'react';
@@ -44,7 +43,31 @@ import McpSkillItem from './McpSkillItem';
 import type { ToolDetailType } from './SkillDetail';
 import { useSkillListVariant } from './SkillListRow';
 
-const styles = stylex.create({ container: { display: "flex", flexDirection: "column", gap: "2px" }, description: { marginBlockEnd: "8px", color: cssVar.colorTextSecondary }, empty: { padding: "24px", color: cssVar.colorTextTertiary, textAlign: "center" }, sectionHeader: { cursor: "pointer", userSelect: "none", display: "flex", gap: "4px", alignItems: "center", paddingBlockStart: "12px", paddingBlockEnd: "4px", paddingInline: "4px", fontSize: "12px", fontWeight: 500, color: { default: cssVar.colorTextSecondary, ":hover": cssVar.colorText } }, sectionHeaderPage: { gap: "8px", paddingBlockStart: "24px", paddingBlockEnd: "8px", paddingInline: "12px", fontSize: "13px", fontWeight: 600 }, sectionCount: { fontWeight: 400, color: cssVar.colorTextDescription } });
+const styles = stylex.create({
+  container: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  sectionHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlockStart: '12px',
+    paddingBlockEnd: '4px',
+    paddingInline: '4px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  sectionHeaderPage: {
+    gap: '8px',
+    paddingBlockStart: '24px',
+    paddingBlockEnd: '8px',
+    paddingInline: '12px',
+    fontSize: '13px',
+    fontWeight: 600,
+  },
+  sectionCount: { fontWeight: 400, color: cssVar.colorTextDescription },
+});
 
 export type SkillViewMode = 'connector' | 'skill';
 

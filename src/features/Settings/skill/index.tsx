@@ -2,7 +2,6 @@
 
 import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-
 import isEqual from 'fast-deep-equal';
 import { ArrowLeft, ChevronLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -29,7 +28,12 @@ export interface SelectedTool {
   type: ToolDetailType;
 }
 
-const styles = stylex.create({ detail: { overflowY: "auto", flex: "1" }, page: { overflowY: "auto", display: "flex", flex: "1", justifyContent: "center", height: "100%" }, pageBody: { display: "flex", flexDirection: "column", width: "100%", maxWidth: "960px" }, root: { overflow: "hidden", display: "flex", flex: "1", height: "100%" } });
+const styles = stylex.create({
+  detail: { overflowY: 'auto', flex: '1' },
+  page: { overflowY: 'auto', display: 'flex', flex: '1', justifyContent: 'center', height: '100%' },
+  pageBody: { display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '960px' },
+  root: { overflow: 'hidden', display: 'flex', flex: '1', height: '100%' },
+});
 
 interface ToolSettingsProps {
   /**
