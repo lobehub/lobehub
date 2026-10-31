@@ -138,19 +138,21 @@ Submits the wrap-up report from the Goal's wrap-up run.
 
 ## Lifecycle, budget and routing
 
-| Command                               | Effect                                                               |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| `lh goal create <title>`              | Create a goal and seed its graph (`--topic`: a draft)                |
-| `lh goal start <id>`                  | Start a draft (`--rollout` folds its seed tasks into a batch)        |
-| `lh goal pause <id>` / `resume <id>`  | Stop / restart coordination (`--confirm-exit` settles a paused turn) |
-| `lh goal restart <id>`                | Reset every unfinished task to backlog                               |
-| `lh goal delete <id>`                 | Delete the goal and its graph (`--yes`)                              |
-| `lh goal tick <id>`                   | Advance exactly one coordinator step                                 |
-| `lh goal run <id>`                    | Tick until a stop condition                                          |
-| `lh goal set-budget <id>`             | Rounds / cost / experiments / turns / concurrency / attempts         |
-| `lh goal set-agent <id> <agent>`      | Hand supervision to another agent                                    |
-| `lh goal set-task-agent <id> <agent>` | Route tasks to a dedicated executor (`none` hands them back)         |
-| `lh goal bind-topic <id>`             | Supervise from the current topic run                                 |
+| Command                               | Effect                                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `lh goal create <title>`              | Create a goal and seed its graph (`--topic`: a draft; `--task-model` + `--task-provider` pick the task model) |
+| `lh goal start <id>`                  | Start a draft (`--rollout` folds its seed tasks into a batch)                                                 |
+| `lh goal pause <id>` / `resume <id>`  | Stop / restart coordination (`--confirm-exit` settles a paused turn)                                          |
+| `lh goal restart <id>`                | Reset every unfinished task to backlog                                                                        |
+| `lh goal delete <id>`                 | Delete the goal and its graph (`--yes`)                                                                       |
+| `lh goal tick <id>`                   | Advance exactly one coordinator step                                                                          |
+| `lh goal run <id>`                    | Tick until a stop condition                                                                                   |
+| `lh goal set-budget <id>`             | Rounds / cost / experiments / turns / concurrency / attempts                                                  |
+| `lh goal set-agent <id> <agent>`      | Hand supervision to another agent                                                                             |
+| `lh goal set-task-agent <id> <agent>` | Route tasks to a dedicated executor (`none` hands them back)                                                  |
+| `lh goal set-model <id>`              | Planning model: `--model <id> --provider <id>`, `--model none` clears                                         |
+| `lh goal set-task-model <id>`         | Model of every task (unfinished ones switch); `--model none` clears                                           |
+| `lh goal bind-topic <id>`             | Supervise from the current topic run                                                                          |
 
 `create --topic` links a Goal to the conversation it was created from and
 returns a `turnToken` for the first plan; without it the Goal is standalone and

@@ -27,7 +27,12 @@ import type { CreateGoalGraphInput, GoalServiceContext } from './types';
 export const createFromConversation = async (
   ctx: GoalServiceContext,
   operationId: string,
-  input: Omit<CreateGoalGraphInput, 'agentId' | 'createdByAgentId' | 'topicId'>,
+  {
+    taskModelConfig,
+    ...input
+  }: Omit<CreateGoalGraphInput, 'agentId' | 'createdByAgentId' | 'topicId'> & {
+    taskModelConfig?: { model: string; provider: string };
+  },
   /**
    * A local desktop run keeps its operation client-side, so no server row
    * exists for `operationId`. Its conversation env names the topic and agent
@@ -54,6 +59,9 @@ export const createFromConversation = async (
     topicId,
   });
   try {
+    // Before the turn is adopted: its snapshot covers the goal config, so a
+    // later write would make the run's first plan stale.
+    if (taskModelConfig) await ctx.setTaskModel(created.goal.id, taskModelConfig);
     const state = await new GoalManagerService(
       ctx.db,
       ctx.userId,

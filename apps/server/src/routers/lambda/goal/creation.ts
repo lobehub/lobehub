@@ -1,4 +1,5 @@
 import { ROLLOUT_MAX_CANARY_SIZE } from '@lobechat/const/goal';
+import type { GoalItem } from '@lobechat/types';
 import { MAX_GOAL_METRIC_CRITERIA } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -15,6 +16,33 @@ import {
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import { goalWriteProcedure, idInput, mapGoalError } from '../goalProcedures';
+
+/**
+ * The model the goal's Tasks run on, picked at creation. Applied before the
+ * first coordinator step is scheduled, through the same checks as
+ * `setTaskModel`, so no Task can start on the executor's default first.
+ */
+const taskModelConfigInput = z.object({ model: z.string().min(1), provider: z.string().min(1) });
+
+/**
+ * Apply a creation-time task model, or remove the goal it was refused for: the
+ * caller asked for a goal on that model, and the coordinator has not been
+ * scheduled yet, so nothing of it has run.
+ */
+const applyCreatedTaskModel = async <T extends { goal: GoalItem }>(
+  service: GoalService,
+  graph: T,
+  modelConfig: z.infer<typeof taskModelConfigInput> | undefined,
+): Promise<T> => {
+  if (!modelConfig) return graph;
+  try {
+    // The returned goal carries the model, so the caller can confirm it applied.
+    return { ...graph, goal: await service.setTaskModel(graph.goal.id, modelConfig) };
+  } catch (error) {
+    await service.delete(graph.goal.id).catch(() => {});
+    throw error;
+  }
+};
 
 /** Everything a goal is created from except who owns it. */
 const conversationGoalInput = z.object({
@@ -108,6 +136,7 @@ const conversationGoalInput = z.object({
   projectId: z.string().optional(),
   requirement: z.string().optional(),
   title: z.string().min(1),
+  taskModelConfig: taskModelConfigInput.optional(),
   /** Seed task nodes; `dependsOn` names other seeds by title. */
   tasks: z
     .array(
@@ -317,13 +346,16 @@ export const creationRouter = router({
       }),
     )
     .mutation(
-      async ({ ctx, input: { conversationOperationId, conversationTopicId, ...input } }) => {
+      async ({
+        ctx,
+        input: { conversationOperationId, conversationTopicId, taskModelConfig, ...input },
+      }) => {
         try {
           if (conversationOperationId) {
             const { agentId, createdByAgentId: _createdBy, ...goalInput } = input;
             const { graph, turnToken } = await ctx.goalService.createFromConversation(
               conversationOperationId,
-              goalInput,
+              { ...goalInput, taskModelConfig },
               conversationTopicId && agentId
                 ? { agentId, topicId: conversationTopicId }
                 : undefined,
@@ -337,7 +369,11 @@ export const creationRouter = router({
             return { data: graph, message: 'Goal created', success: true, turnToken };
           }
           const { draft: _draft, ...standaloneInput } = input;
-          const data = await ctx.goalService.create(standaloneInput);
+          const data = await applyCreatedTaskModel(
+            ctx.goalService,
+            await ctx.goalService.create(standaloneInput),
+            taskModelConfig,
+          );
           // A goal is not a document — creating one means starting it. The
           // coordinator takes it from here without a client holding a loop open.
           await scheduleGoalAdvance({
