@@ -27,7 +27,7 @@ export type AgentAccount = {
     hasCredential: boolean;
     id: string;
     identifier: string;
-    kind: 'mail' | 'wallet' | 'service';
+    kind: 'mail' | 'wallet' | 'service' | 'phone';
     metadata?: {
         [key: string]: unknown;
     } | null;
