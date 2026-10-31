@@ -977,6 +977,8 @@
   "heterogeneousStatus.target.fixed": "This environment is fixed. Members can’t change it.",
   "heterogeneousStatus.target.overridden": "Applies only to you. Other members keep the Agent default.",
   "heterogeneousStatus.unavailable": "{{name}} CLI not found. Please install or configure it.",
+  "heterogeneousStatus.update.available": "Update to {{version}}",
+  "heterogeneousStatus.update.desc": "Run one of these commands in a terminal on {{device}} to update:",
   "hotkey.clearBinding": "Clear binding",
   "hotkey.conflicts": "Conflicts with existing hotkeys",
   "hotkey.errors.CONFLICT": "Hotkey conflict: This hotkey is already assigned to another function",

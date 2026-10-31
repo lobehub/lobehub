@@ -414,6 +414,10 @@ export const ragEvalKeys = {
 
 // ---- device -------------------------------------------------------------
 export const deviceKeys = {
+  agentCliLatestVersion: def('device:agentCliLatestVersion', (agentType: string) => [
+    'device:agentCliLatestVersion',
+    agentType,
+  ]),
   cliUpdateState: def('device:cliUpdateState', (workspaceId: string | null, deviceId: string) => [
     'device:cliUpdateState',
     workspaceId,

@@ -977,6 +977,8 @@
   "heterogeneousStatus.target.fixed": "执行环境已固定，成员不能切换。",
   "heterogeneousStatus.target.overridden": "仅对你生效，其他成员仍使用 Agent 的默认设置。",
   "heterogeneousStatus.unavailable": "未检测到 {{name}} CLI，请先安装或配置",
+  "heterogeneousStatus.update.available": "可更新到 {{version}}",
+  "heterogeneousStatus.update.desc": "在 {{device}} 的终端中运行以下任一命令完成更新：",
   "hotkey.clearBinding": "清除绑定",
   "hotkey.conflicts": "与现有快捷键冲突",
   "hotkey.errors.CONFLICT": "快捷键冲突：该快捷键已被其他功能占用",

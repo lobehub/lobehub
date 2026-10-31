@@ -16,6 +16,17 @@ export interface HeterogeneousAgentInstallDescriptor {
 }
 
 /**
+ * How an installed CLI moves to its newest release. Agents without one show
+ * their version but never offer an update.
+ */
+export interface HeterogeneousAgentUpdateDescriptor {
+  /** Terminal commands that update an existing install, one per install method. */
+  commands: readonly string[];
+  /** npm package whose `latest` dist-tag names the newest release. */
+  npmPackage: string;
+}
+
+/**
  * Static, serializable source of truth for a local heterogeneous CLI agent.
  * Runtime adapters and drivers remain provider-specific; identity and host
  * metadata must be added here exactly once.
@@ -38,6 +49,7 @@ export interface LocalHeterogeneousAgentDescriptor {
   resume: { supported: boolean };
   title: string;
   type: string;
+  update?: HeterogeneousAgentUpdateDescriptor;
 }
 
 const COMMON_AUTH_REQUIRED_PATTERNS = [
@@ -105,6 +117,10 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     resume: { supported: true },
     title: 'Claude Code',
     type: 'claude-code',
+    update: {
+      commands: ['claude update', 'brew upgrade --cask claude-code'],
+      npmPackage: '@anthropic-ai/claude-code',
+    },
   },
   {
     auth: {

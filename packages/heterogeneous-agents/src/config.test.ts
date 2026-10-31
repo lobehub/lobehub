@@ -4,6 +4,7 @@ import {
   buildHeterogeneousAgentAuthRequiredError,
   buildHeterogeneousAgentCliNotFoundError,
   getHeterogeneousAgentConfig,
+  getHeterogeneousAgentUpdate,
   HETEROGENEOUS_AGENT_CONFIGS,
   isHeterogeneousAgentAuthRequired,
   isRemoteHeterogeneousType,
@@ -28,6 +29,15 @@ describe('heterogeneous agent config', () => {
       'qoder',
       'trae',
     ]);
+  });
+
+  it('resolves how an agent CLI updates, only for agents that offer it', () => {
+    expect(getHeterogeneousAgentUpdate('claude-code')).toEqual({
+      commands: ['claude update', 'brew upgrade --cask claude-code'],
+      npmPackage: '@anthropic-ai/claude-code',
+    });
+    expect(getHeterogeneousAgentUpdate('codex')).toBeUndefined();
+    expect(getHeterogeneousAgentUpdate('unknown')).toBeUndefined();
   });
 
   it('resolves descriptor metadata by type', () => {
