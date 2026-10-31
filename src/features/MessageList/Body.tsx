@@ -89,25 +89,30 @@ const Body = memo(() => {
     [items, recents, inboxUpdatedAt, inboxTitle, query],
   );
 
-  if (!isInit && items.length === 0) return <SkeletonList paddingBlock={8} />;
+  // Only the agent rows wait on the agent list: Lobe AI and Channels load on
+  // their own, so a slow or failed agent-list request must not hide them.
+  const agentsLoading = !isInit && items.length === 0;
 
   return (
     <Flexbox gap={1} paddingBlock={'0 12px'} paddingInline={6}>
-      {entries.length === 0 ? (
-        <div {...stylex.props(styles.empty)}>
-          {query ? t('navPanel.searchResultEmpty') : t('messageList.empty')}
-        </div>
+      {entries.map((entry) =>
+        entry.type === 'inbox' ? (
+          <InboxConversation activeRouteId={activeRouteId} key={'inbox'} />
+        ) : (
+          <ConversationItem
+            activeRouteId={activeRouteId}
+            conversation={entry}
+            key={entry.item.id}
+          />
+        ),
+      )}
+      {agentsLoading ? (
+        <SkeletonList paddingBlock={8} />
       ) : (
-        entries.map((entry) =>
-          entry.type === 'inbox' ? (
-            <InboxConversation activeRouteId={activeRouteId} key={'inbox'} />
-          ) : (
-            <ConversationItem
-              activeRouteId={activeRouteId}
-              conversation={entry}
-              key={entry.item.id}
-            />
-          ),
+        entries.length === 0 && (
+          <div {...stylex.props(styles.empty)}>
+            {query ? t('navPanel.searchResultEmpty') : t('messageList.empty')}
+          </div>
         )
       )}
       {/* Non-project Channels (and their create entry) have no other home in the rail layout. */}

@@ -2,7 +2,7 @@
 
 import { ContextMenuTrigger, Flexbox, Spin } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { type ComponentProps, memo, type ReactNode } from 'react';
+import { type ComponentProps, memo, type ReactNode, type Ref } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -19,6 +19,8 @@ export interface ConversationRowProps {
   /** Pinned rows keep a tinted background, like WeChat's 置顶. */
   pinned?: boolean;
   preview?: string;
+  /** The row element, e.g. the anchor for an inline rename popover. */
+  ref?: Ref<HTMLElement>;
   running?: boolean;
   title: string;
   unread?: number;
@@ -34,6 +36,7 @@ const ConversationRow = memo<ConversationRowProps>(
     onMouseEnter,
     pinned,
     preview,
+    ref,
     running,
     title,
     unread,
@@ -45,6 +48,7 @@ const ConversationRow = memo<ConversationRowProps>(
       <WorkspaceLink
         aria-current={active ? 'page' : undefined}
         aria-label={title}
+        ref={ref}
         {...stylex.props(styles.row, pinned && styles.rowPinned, active && styles.rowActive)}
         to={url}
         onMouseEnter={onMouseEnter}

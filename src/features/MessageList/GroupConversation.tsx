@@ -1,7 +1,7 @@
 'use client';
 
 import { GROUP_CHAT_URL } from '@lobechat/const';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
@@ -23,9 +23,11 @@ const GroupConversation = memo<GroupConversationProps>(({ active, conversation }
   const title = item.title || t('untitledAgent');
   const customAvatar = typeof avatar === 'string' ? avatar : undefined;
   const memberAvatars = Array.isArray(avatar) ? avatar : [];
+  // Rename opens an inline popover anchored on the row.
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   const contextMenuItems = useGroupDropdownMenu({
-    anchor: null,
+    anchor,
     avatar: customAvatar,
     backgroundColor: backgroundColor || undefined,
     description,
@@ -43,6 +45,7 @@ const GroupConversation = memo<GroupConversationProps>(({ active, conversation }
       contextMenuItems={contextMenuItems}
       pinned={!!pinned}
       preview={preview}
+      ref={setAnchor}
       title={title}
       unread={item.unreadCount}
       url={GROUP_CHAT_URL(id)}
