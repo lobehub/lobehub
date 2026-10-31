@@ -1,106 +1,75 @@
 'use client';
 
 import { type DropdownItem, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
-import { Avatar, createStaticStyles, cx } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Plus } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar: cv }) => ({
-  addButton: css`
-    cursor: pointer;
-
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-
-    color: ${cv.colorTextTertiary};
-
-    background: transparent;
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cv.colorTextSecondary};
-      background: ${cv.colorFillTertiary};
-    }
-  `,
-  addButtonDisabled: css`
-    cursor: not-allowed;
-    color: ${cv.colorTextQuaternary};
-
-    &:hover {
-      color: ${cv.colorTextQuaternary};
-      background: transparent;
-    }
-  `,
-  container: css`
-    display: flex;
-    gap: 2px;
-    align-items: center;
-  `,
-  externalTag: css`
-    flex-shrink: 0;
-
-    padding-block: 1px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 10px;
-    line-height: 1.2;
-
-    background: ${cv.colorFillSecondary};
-  `,
-  tab: css`
-    cursor: pointer;
-
-    display: flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    height: 32px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-radius: 8px;
-
-    color: ${cv.colorTextTertiary};
-
-    background: transparent;
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cv.colorTextSecondary};
-      background: ${cv.colorFillTertiary};
-    }
-  `,
-  tabActive: css`
-    color: ${cv.colorText};
-    background: ${cv.colorFillTertiary};
-
-    &:hover {
-      color: ${cv.colorText};
-      background: ${cv.colorFillTertiary};
-    }
-  `,
-  tabTitle: css`
-    overflow: hidden;
-
-    max-width: 120px;
-
-    font-size: 13px;
-    line-height: 1.2;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  addButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: '6px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'all 0.2s',
+  },
+  addButtonDisabled: {
+    cursor: 'not-allowed',
+    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorTextQuaternary },
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  container: { display: 'flex', gap: '2px', alignItems: 'center' },
+  externalTag: {
+    flexShrink: 0,
+    paddingBlock: '1px',
+    paddingInline: '4px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    lineHeight: 1.2,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  tab: {
+    cursor: 'pointer',
+    display: 'flex',
+    flexShrink: 0,
+    gap: '6px',
+    alignItems: 'center',
+    height: '32px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderRadius: '8px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'all 0.2s',
+  },
+  tabActive: {
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  tabTitle: {
+    overflow: 'hidden',
+    maxWidth: '120px',
+    fontSize: '13px',
+    lineHeight: 1.2,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 export interface ChromeTabItem {
   avatar?: string;
@@ -146,13 +115,13 @@ const ChromeTabs = memo<ChromeTabsProps>(
     }, [activeId]);
 
     return (
-      <div className={styles.container} ref={containerRef}>
+      <div {...stylex.props(styles.container)} ref={containerRef}>
         {items.map((item) => {
           const isActive = item.id === activeId;
 
           return (
             <div
-              className={cx(styles.tab, isActive && styles.tabActive)}
+              {...stylex.props(styles.tab, isActive && styles.tabActive)}
               data-tab-id={item.id}
               key={item.id}
               onClick={() => onChange(item.id)}
@@ -163,9 +132,9 @@ const ChromeTabs = memo<ChromeTabsProps>(
                 ) : item.avatar ? (
                   <Avatar avatar={item.avatar} size={18} />
                 ) : null}
-                <span className={styles.tabTitle}>{item.title}</span>
+                <span {...stylex.props(styles.tabTitle)}>{item.title}</span>
                 {item.isExternal && (
-                  <span className={styles.externalTag}>{t('group.profile.external')}</span>
+                  <span {...stylex.props(styles.externalTag)}>{t('group.profile.external')}</span>
                 )}
               </Flexbox>
             </div>
@@ -181,7 +150,7 @@ const ChromeTabs = memo<ChromeTabsProps>(
               trigger={['click']}
             >
               <div
-                className={cx(styles.addButton, addDisabled && styles.addButtonDisabled)}
+                {...stylex.props(styles.addButton, addDisabled && styles.addButtonDisabled)}
                 title={addDisabled ? addDisabledReason : undefined}
               >
                 <Plus size={16} />
@@ -190,7 +159,7 @@ const ChromeTabs = memo<ChromeTabsProps>(
           ) : (
             <Tooltip title={addDisabled ? addDisabledReason : undefined}>
               <div
-                className={cx(styles.addButton, addDisabled && styles.addButtonDisabled)}
+                {...stylex.props(styles.addButton, addDisabled && styles.addButtonDisabled)}
                 onClick={() => {
                   if (addDisabled) return;
                   onAdd?.();

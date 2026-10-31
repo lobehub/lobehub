@@ -1,19 +1,15 @@
 'use client';
 
-import { createStaticStyles, SortableList, Tag } from '@lobehub/ui';
+import { SortableList, Tag } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
 
-const styles = createStaticStyles(({ css }) => ({
-  title: css`
-    overflow: hidden;
-    flex: 1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  title: { overflow: 'hidden', flex: '1', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+});
 
 interface MemberItemProps {
   agentId?: string;
@@ -40,7 +36,7 @@ const MemberItem = memo<MemberItemProps>(
           size={24}
           style={{ flex: 'none' }}
         />
-        <span className={styles.title}>{title}</span>
+        <span className={stylex.props(styles.title).className}>{title}</span>
         {isExternal && (
           <Tag size={'small'} style={{ flexShrink: 0 }}>
             {t('group.profile.external')}

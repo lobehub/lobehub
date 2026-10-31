@@ -1,6 +1,8 @@
 'use client';
 
-import { Center, createStaticStyles, cssVar, cx, toast } from '@lobehub/ui';
+import { Center, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Image as ImageIcon, X } from 'lucide-react';
 import { type FC } from 'react';
 import React, { memo, useEffect, useRef, useState } from 'react';
@@ -13,6 +15,8 @@ import { configPanelStyles } from '@/routes/(main)/(create)/image/features/Confi
 import { type ImageConstraints } from '@/routes/(main)/(create)/image/features/ConfigPanel/utils/imageValidation';
 import { useFileStore } from '@/store/file';
 import { type FileUploadStatus } from '@/types/files/upload';
+
+import { imageUploadMarker } from '../markers.stylex';
 
 // ======== Business Types ======== //
 
@@ -46,159 +50,108 @@ interface UploadState {
 
 // ======== Styles ======== //
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    changeButton: css`
-      cursor: pointer;
-
-      padding-block: 8px;
-      padding-inline: 16px;
-      border: 1px solid ${cssVar.colorBorder};
-      border-radius: ${cssVar.borderRadius};
-
-      font-size: 12px;
-      font-weight: 500;
-      color: ${cssVar.colorText};
-
-      background: ${cssVar.colorBgContainer};
-      box-shadow: ${cssVar.boxShadowSecondary};
-
-      &:hover {
-        border-color: ${cssVar.colorPrimary};
-        color: ${cssVar.colorPrimary};
-        background: ${cssVar.colorBgElevated};
-      }
-    `,
-    changeOverlay: css`
-      position: absolute;
-      z-index: 5;
-      inset: 0;
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      opacity: 0;
-      background: ${cssVar.colorBgMask};
-
-      transition: opacity ${cssVar.motionDurationMid} ease;
-    `,
-    container: css`
-      width: 100%;
-    `,
-    deleteIcon: css`
-      cursor: pointer;
-
-      position: absolute;
-      z-index: 10;
-      inset-block-start: 8px;
-      inset-inline-end: 8px;
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      width: 24px;
-      height: 24px;
-      border-radius: 50%;
-
-      color: ${cssVar.colorTextLightSolid};
-
-      opacity: 0;
-      background: ${cssVar.colorBgMask};
-
-      transition: opacity ${cssVar.motionDurationMid} ease;
-
-      &:hover {
-        color: ${cssVar.colorError};
-        background: ${cssVar.colorErrorBg};
-      }
-    `,
-    placeholder: css`
-      cursor: pointer;
-
-      width: 100%;
-      height: 160px;
-      border: 1px solid ${cssVar.colorBorder};
-      border-radius: ${cssVar.borderRadiusLG};
-
-      background: ${cssVar.colorFillTertiary};
-
-      transition: all ${cssVar.motionDurationMid} ease;
-
-      &:hover {
-        background: ${cssVar.colorFillSecondary};
-      }
-
-      &.drag-over {
-        transform: scale(1.02);
-        border-color: ${cssVar.colorPrimary};
-        background: ${cssVar.colorPrimaryBg};
-      }
-    `,
-    placeholderIcon: css`
-      color: ${cssVar.colorTextTertiary};
-    `,
-    placeholderText: css`
-      font-size: 12px;
-      line-height: 1.4;
-      color: ${cssVar.colorTextSecondary};
-      text-align: center;
-    `,
-    successDisplay: css`
-      cursor: pointer;
-
-      position: relative;
-
-      overflow: hidden;
-
-      width: 100%;
-      height: 160px;
-      border: 2px solid transparent;
-      border-radius: ${cssVar.borderRadiusLG};
-
-      background: ${cssVar.colorBgContainer};
-
-      transition: all ${cssVar.motionDurationMid} ease;
-
-      &:hover .change-overlay {
-        opacity: 1;
-      }
-
-      &:hover .delete-icon {
-        opacity: 1;
-      }
-
-      &.drag-over {
-        transform: scale(1.02);
-        border-color: ${cssVar.colorPrimary};
-        background: ${cssVar.colorPrimaryBg};
-      }
-    `,
-    uploadingDisplay: css`
-      position: relative;
-
-      overflow: hidden;
-
-      width: 100%;
-      height: 160px;
-      border: 2px solid ${cssVar.colorPrimary};
-      border-radius: ${cssVar.borderRadiusLG};
-
-      background: ${cssVar.colorFillSecondary};
-    `,
-    uploadingOverlay: css`
-      position: absolute;
-      z-index: 5;
-      inset: 0;
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      background: ${cssVar.colorBgMask};
-    `,
-  };
+const styles = stylex.create({
+  changeButton: {
+    cursor: 'pointer',
+    paddingBlock: '8px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorPrimary },
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    fontWeight: 500,
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorPrimary },
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorBgElevated },
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  // Revealed while the success display (`imageUploadMarker`) is hovered.
+  changeOverlay: {
+    position: 'absolute',
+    zIndex: 5,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: { default: 0, [stylex.when.ancestor(':hover', imageUploadMarker)]: 1 },
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+    transition: `opacity ${cssVar.motionDurationMid} ease`,
+  },
+  deleteIcon: {
+    cursor: 'pointer',
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '8px',
+    insetInlineEnd: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    color: { 'default': cssVar.colorTextLightSolid, ':hover': cssVar.colorError },
+    opacity: { default: 0, [stylex.when.ancestor(':hover', imageUploadMarker)]: 1 },
+    backgroundColor: { 'default': cssVar.colorBgMask, ':hover': cssVar.colorErrorBg },
+    backgroundImage: 'none',
+    transition: `opacity ${cssVar.motionDurationMid} ease`,
+  },
+  placeholder: {
+    cursor: 'pointer',
+    width: '100%',
+    height: '160px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+    transition: `all ${cssVar.motionDurationMid} ease`,
+  },
+  placeholderIcon: { color: cssVar.colorTextTertiary },
+  placeholderText: {
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  successDisplay: {
+    cursor: 'pointer',
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
+    height: '160px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: `all ${cssVar.motionDurationMid} ease`,
+  },
+  uploadingDisplay: {
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
+    height: '160px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorPrimary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    zIndex: 5,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+  },
 });
 
 // ======== Utils ======== //
@@ -315,18 +268,18 @@ const Placeholder: FC<PlaceholderProps> = memo(({ isDragOver, onClick, height })
 
   return (
     <Center
+      className={stylex.props(styles.placeholder, isDragOver && configStyles.dragOver).className}
       gap={16}
       horizontal={false}
       style={height ? { height } : undefined}
-      className={cx(
-        styles.placeholder,
-        configStyles.dragTransition,
-        isDragOver && configStyles.dragOver,
-      )}
       onClick={onClick}
     >
-      <ImageIcon className={styles.placeholderIcon} size={48} strokeWidth={1.5} />
-      <div className={styles.placeholderText}>
+      <ImageIcon
+        className={stylex.props(styles.placeholderIcon).className}
+        size={48}
+        strokeWidth={1.5}
+      />
+      <div {...stylex.props(styles.placeholderText)}>
         {t('ImageUpload.placeholder.primary')}
         <br />
         {t('ImageUpload.placeholder.secondary')}
@@ -347,7 +300,7 @@ interface UploadingDisplayProps {
 
 const UploadingDisplay: FC<UploadingDisplayProps> = memo(({ previewUrl, progress }) => {
   return (
-    <div className={styles.uploadingDisplay}>
+    <div {...stylex.props(styles.uploadingDisplay)}>
       <Image
         fill
         unoptimized
@@ -355,7 +308,7 @@ const UploadingDisplay: FC<UploadingDisplayProps> = memo(({ previewUrl, progress
         src={previewUrl}
         style={{ objectFit: 'cover' }}
       />
-      <div className={styles.uploadingOverlay}>
+      <div {...stylex.props(styles.uploadingOverlay)}>
         <CircularProgress value={progress} />
       </div>
     </div>
@@ -391,12 +344,12 @@ const SuccessDisplay: FC<SuccessDisplayProps> = memo(
 
     return (
       <div
-        className={cx(
+        onClick={onChangeImage}
+        {...stylex.props(
+          imageUploadMarker,
           styles.successDisplay,
-          configStyles.dragTransition,
           isDragOver && configStyles.dragOver,
         )}
-        onClick={onChangeImage}
       >
         <Image
           fill
@@ -407,13 +360,13 @@ const SuccessDisplay: FC<SuccessDisplayProps> = memo(
         />
 
         {/* Delete button */}
-        <div className={cx(styles.deleteIcon, 'delete-icon')} onClick={handleDelete}>
+        <div {...stylex.props(styles.deleteIcon)} onClick={handleDelete}>
           <X size={14} />
         </div>
 
         {/* Change image overlay */}
-        <div className={cx(styles.changeOverlay, 'change-overlay')} onClick={handleChangeImage}>
-          <button className={styles.changeButton} type="button">
+        <div {...stylex.props(styles.changeOverlay)} onClick={handleChangeImage}>
+          <button {...stylex.props(styles.changeButton)} type="button">
             {t('ImageUpload.actions.changeImage')}
           </button>
         </div>

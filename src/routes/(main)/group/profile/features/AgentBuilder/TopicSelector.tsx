@@ -1,5 +1,6 @@
 import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { ActionIcon, createStaticStyles, DropdownMenu, Tag } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Tag } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,19 +12,10 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
-const styles = createStaticStyles(({ css }) => ({
-  // The tag is a flex item of the header's left slot: without these it keeps its
-  // full text width and overlaps the action icons on the right.
-  tag: css`
-    overflow: hidden;
-    min-width: 0;
-  `,
-  title: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  tag: { overflow: 'hidden', minWidth: '0' },
+  title: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+});
 
 interface TopicSelectorProps {
   agentId: string;
@@ -81,8 +73,8 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
       styles={{ right: { flex: 'none' } }}
       left={
         activeTopic?.title ? (
-          <Tag className={styles.tag}>
-            <span className={styles.title} title={activeTopic.title}>
+          <Tag className={stylex.props(styles.tag).className}>
+            <span {...stylex.props(styles.title)} title={activeTopic.title}>
               {activeTopic.title}
             </span>
           </Tag>

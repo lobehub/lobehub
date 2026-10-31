@@ -1,68 +1,48 @@
-import { createStaticStyles, cx, keyframes } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-const shimmer = keyframes`
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-`;
+import { generationItemMarker } from '../markers.stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Common styles for image action buttons
-  generationActionButton: cx(
-    'generation-actions',
-    css`
-      position: absolute;
-      z-index: 10;
-      inset-block-start: 8px;
-      inset-inline-end: 8px;
+const shimmer = stylex.keyframes({
+  '0%': { opacity: 1 },
+  '50%': { opacity: 0 },
+  '100%': { opacity: 1 },
+});
 
-      opacity: 0;
+const rules = stylex.create({
+  // Common styles for image action buttons; revealed while the item is hovered.
+  generationActionButton: {
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '8px',
+    insetInlineEnd: '8px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover', generationItemMarker)]: 1 },
+    transition: `opacity 0.1s ${cssVar.motionEaseInOut}`,
+  },
+  imageContainer: { position: 'relative', overflow: 'hidden', width: '100%' },
+  placeholderContainer: { position: 'relative', overflow: 'hidden', width: '100%' },
+  placeholderContainerLoading: {
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      zIndex: 1,
+      inset: 0,
+      backgroundColor: cssVar.colorFillSecondary,
+      backgroundImage: 'none',
+      animationName: shimmer,
+      animationDuration: '2s',
+      animationTimingFunction: 'linear',
+      animationIterationCount: 'infinite',
+    },
+  },
+  spinIcon: { color: cssVar.colorPrimary },
+});
 
-      transition: opacity 0.1s ${cssVar.motionEaseInOut};
-    `,
-  ),
-
-  imageContainer: css`
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-
-    &:hover .generation-actions {
-      opacity: 1;
-    }
-  `,
-
-  placeholderContainer: css`
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-
-    &:hover .generation-actions {
-      opacity: 1;
-    }
-  `,
-
-  placeholderContainerLoading: css`
-    &::before {
-      content: '';
-
-      position: absolute;
-      z-index: 1;
-      inset: 0;
-
-      background: ${cssVar.colorFillSecondary};
-
-      animation: ${shimmer} 2s linear infinite;
-    }
-  `,
-
-  spinIcon: css`
-    color: ${cssVar.colorPrimary};
-  `,
-}));
+/** Class names, so the Block / ActionIconGroup call sites keep passing `className`. */
+export const styles = {
+  generationActionButton: stylex.props(rules.generationActionButton).className!,
+  imageContainer: stylex.props(generationItemMarker, rules.imageContainer).className!,
+  placeholderContainer: stylex.props(generationItemMarker, rules.placeholderContainer).className!,
+  placeholderContainerLoading: stylex.props(rules.placeholderContainerLoading).className!,
+  spinIcon: stylex.props(rules.spinIcon).className!,
+};

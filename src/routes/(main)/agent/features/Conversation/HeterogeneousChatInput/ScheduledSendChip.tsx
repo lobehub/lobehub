@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { CalendarClockIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -8,23 +10,18 @@ import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation';
 
-const styles = createStaticStyles(({ css }) => ({
-  chip: css`
-    flex: none;
-
-    height: 28px;
-    padding-inline: 8px 4px;
-    border-radius: 14px;
-
-    background: ${cssVar.colorInfoBg};
-  `,
-  label: css`
-    font-size: 12px;
-    line-height: 1;
-    color: ${cssVar.colorInfoText};
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    flex: 'none',
+    height: '28px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '4px',
+    borderRadius: '14px',
+    backgroundColor: cssVar.colorInfoBg,
+    backgroundImage: 'none',
+  },
+  label: { fontSize: '12px', lineHeight: 1, color: cssVar.colorInfoText, whiteSpace: 'nowrap' },
+});
 
 /**
  * The armed-schedule chip, sitting right next to the `+` menu that armed it.
@@ -43,9 +40,11 @@ const ScheduledSendChip = memo(() => {
   if (!scheduledSendAt) return null;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.chip} gap={4}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.chip).className} gap={4}>
       <Icon icon={CalendarClockIcon} size={12} style={{ color: cssVar.colorInfoText }} />
-      <Text className={styles.label}>{dayjs(scheduledSendAt).format('MM-DD HH:mm')}</Text>
+      <Text className={stylex.props(styles.label).className}>
+        {dayjs(scheduledSendAt).format('MM-DD HH:mm')}
+      </Text>
       <ActionIcon
         icon={XIcon}
         size={'small'}

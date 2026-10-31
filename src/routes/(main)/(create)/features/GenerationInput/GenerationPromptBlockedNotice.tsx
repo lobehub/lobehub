@@ -1,15 +1,11 @@
 'use client';
 
-import { Alert, createStaticStyles } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    padding-block-start: 8px;
-    padding-inline: 8px;
-  `,
-}));
+const styles = stylex.create({ container: { paddingBlockStart: '8px', paddingInline: '8px' } });
 
 interface GenerationPromptBlockedNoticeProps {
   onClose: () => void;
@@ -23,7 +19,7 @@ const GenerationPromptBlockedNotice = memo<GenerationPromptBlockedNoticeProps>((
   const { t } = useTranslation('common');
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       <Alert
         closable={{ onClose }}
         title={t('generation.promptModeration.blocked')}

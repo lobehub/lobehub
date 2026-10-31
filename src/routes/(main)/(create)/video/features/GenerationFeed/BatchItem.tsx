@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  ActionIconGroup,
-  Block,
-  Button,
-  createStaticStyles,
-  Flexbox,
-  Markdown,
-  Tag,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { ActionIconGroup, Block, Button, Flexbox, Markdown, Tag, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { CopyIcon, RotateCcwSquareIcon, SquarePenIcon, Trash2, XIcon } from 'lucide-react';
 import { type RuntimeVideoGenParams } from 'model-bank';
@@ -29,6 +21,7 @@ import { AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import type { GenerationBatch, VideoGenerationAsset } from '@/types/generation';
 import { downloadFile } from '@/utils/client/downloadFile';
 
+import { batchMarker } from '../../../image/features/GenerationFeed/markers.stylex';
 import EditSourceLink from './EditSourceLink';
 import VideoErrorItem from './VideoErrorItem';
 import VideoLoadingItem from './VideoLoadingItem';
@@ -36,22 +29,12 @@ import VideoReferenceFrames from './VideoReferenceFrames';
 import VideoSuccessItem from './VideoSuccessItem';
 import { type VideoVersionNode } from './videoVersion';
 
-const styles = createStaticStyles(({ css, cssVar, cx }) => ({
-  batchActions: cx(
-    'batch-actions',
-    css`
-      opacity: 0;
-      transition: opacity 0.1s ${cssVar.motionEaseInOut};
-    `,
-  ),
-  container: css`
-    &:hover {
-      .batch-actions {
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  batchActions: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover', batchMarker)]: 1 },
+    transition: `opacity 0.1s ${cssVar.motionEaseInOut}`,
+  },
+});
 
 interface VideoGenerationBatchItemProps {
   batch: GenerationBatch;
@@ -285,7 +268,7 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
 
     return (
       <Block
-        className={styles.container}
+        className={stylex.props(batchMarker).className}
         data-video-generation-id={generation.id}
         gap={8}
         variant={'borderless'}
@@ -351,7 +334,11 @@ export const VideoGenerationBatchItem = memo<VideoGenerationBatchItemProps>(
             </Text>
           </Flexbox>
         </Flexbox>
-        <Flexbox horizontal align={'center'} className={styles.batchActions}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.batchActions).className}
+        >
           <ActionIconGroup
             items={[
               {

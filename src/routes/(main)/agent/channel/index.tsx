@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
@@ -19,18 +20,17 @@ import { usePermission } from '@/hooks/usePermission';
 
 import Header from './Header';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow-y: auto;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-
-    width: 100%;
-    height: 100%;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    overflowY: 'auto',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
+});
 
 const ChannelContent = memo(() => {
   const { aid, platform } = useParams<{ aid?: string; platform?: string }>();
@@ -89,7 +89,7 @@ const ChannelContent = memo(() => {
           onRetry={retry}
         >
           {!platform ? (
-            <div className={styles.container}>
+            <div {...stylex.props(styles.container)}>
               <PlatformGrid
                 agentId={aid}
                 platforms={allPlatforms}
@@ -98,7 +98,7 @@ const ChannelContent = memo(() => {
               />
             </div>
           ) : activePlatformDef ? (
-            <div className={styles.container}>
+            <div {...stylex.props(styles.container)}>
               {activePlatformDef.comingSoon ? (
                 <ComingSoonDetail platformDef={activePlatformDef} />
               ) : (

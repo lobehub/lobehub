@@ -1,19 +1,22 @@
 'use client';
 
-import { css, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type PropsWithChildren } from 'react';
 
-const body = css`
-  :has(.portal-artifact) {
-    overflow: hidden;
-    padding-block-end: 12px;
-  }
-`;
+import { sx } from '@/styles/sx';
+
+const styles = stylex.create({
+  body: {
+    overflow: { 'default': null, ':has(.portal-artifact)': 'hidden' },
+    paddingBlockEnd: { 'default': null, ':has(.portal-artifact)': '12px' },
+  },
+});
 
 const Body = ({ children }: PropsWithChildren) => {
   return (
     <Flexbox
-      className={cx(body, 'portal-body')}
+      {...sx([styles.body], 'portal-body')}
       height={'100%'}
       style={{ flex: 1, height: 0, position: 'relative' }}
       width={'100%'}

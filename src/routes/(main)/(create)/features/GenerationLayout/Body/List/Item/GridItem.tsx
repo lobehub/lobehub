@@ -1,7 +1,9 @@
 'use client';
 
 import { ContextMenuTrigger, type DropdownItem, Flexbox, Tooltip } from '@lobehub/ui';
-import { Avatar, createStaticStyles, cx } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, MouseEvent } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,32 +13,27 @@ import { type ImageGenerationTopic } from '@/types/generation';
 
 import { useGenerationTopicContext } from '../StoreContext';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  gridItem: css`
-    cursor: pointer;
-
-    position: relative;
-
-    aspect-ratio: 1;
-    width: 100% !important;
-    height: auto !important;
-    border-radius: 4px;
-
-    object-fit: cover;
-    background: ${cssVar.colorFillSecondary};
-
-    transition: border 0.15s ${cssVar.motionEaseInOut};
-
-    img {
-      aspect-ratio: 1;
-      width: 100% !important;
-    }
-  `,
-  gridItemActive: css`
-    border: 2px solid ${cssVar.colorBgLayout} !important;
-    box-shadow: 0 0 0 2px ${cssVar.colorPrimary};
-  `,
-}));
+const styles = stylex.create({
+  gridItem: {
+    cursor: 'pointer',
+    position: 'relative',
+    aspectRatio: 1,
+    width: '100%',
+    height: 'auto',
+    borderRadius: '4px',
+    objectFit: 'cover',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+    transition: `border 0.15s ${cssVar.motionEaseInOut}`,
+  },
+  gridItemActive: {
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgLayout,
+    boxShadow: `0 0 0 2px ${cssVar.colorPrimary}`,
+  },
+  gridItemImg: { aspectRatio: 1, width: '100%' },
+});
 
 interface TopicItemProps {
   contextMenuItems?: DropdownItem[] | (() => DropdownItem[]);
@@ -76,7 +73,8 @@ const GridItem = memo<TopicItemProps>(
           <Avatar
             alt={title}
             avatar={topic.coverUrl ?? title}
-            className={cx(styles.gridItem, isActive && styles.gridItemActive)}
+            className={stylex.props(styles.gridItem, isActive && styles.gridItemActive).className}
+            classNames={{ img: stylex.props(styles.gridItemImg).className }}
             loading={isLoading || isUpdating}
             style={style}
             onClick={onClick}

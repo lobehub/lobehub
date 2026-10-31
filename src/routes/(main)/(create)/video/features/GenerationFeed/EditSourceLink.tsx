@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Image, Text } from '@lobehub/ui';
+import { Flexbox, Image, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CornerDownRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,38 +11,30 @@ import type { VideoGenerationAsset } from '@/types/generation';
 
 import { revealVideoGeneration, type VideoVersionNode } from './videoVersion';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  link: css`
-    cursor: pointer;
-
-    width: fit-content;
-    max-width: 100%;
-    padding-block: 2px;
-    padding-inline: 6px 10px;
-    border-radius: 999px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-
-    transition: background 0.15s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  thumb: css`
-    overflow: hidden;
-    flex: none;
-
-    width: 32px;
-    height: 20px;
-    border-radius: 4px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  link: {
+    cursor: 'pointer',
+    width: 'fit-content',
+    maxWidth: '100%',
+    paddingBlock: '2px',
+    paddingInlineStart: '6px',
+    paddingInlineEnd: '10px',
+    borderRadius: '999px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: `background 0.15s ${cssVar.motionEaseInOut}`,
+  },
+  thumb: {
+    overflow: 'hidden',
+    flex: 'none',
+    width: '32px',
+    height: '20px',
+    borderRadius: '4px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 interface EditSourceLinkProps {
   source?: VideoVersionNode;
@@ -72,7 +66,7 @@ const EditSourceLink = memo<EditSourceLinkProps>(({ source, sourceVersion }) => 
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.link}
+      className={stylex.props(styles.link).className}
       gap={6}
       role={'button'}
       // `role="button"` alone leaves it unreachable: it has to take focus and
@@ -88,7 +82,7 @@ const EditSourceLink = memo<EditSourceLinkProps>(({ source, sourceVersion }) => 
     >
       <CornerDownRightIcon size={14} style={{ flex: 'none' }} />
       {cover && (
-        <div className={styles.thumb}>
+        <div {...stylex.props(styles.thumb)}>
           <Image
             alt=""
             preview={false}

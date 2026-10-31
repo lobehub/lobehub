@@ -1,6 +1,8 @@
 'use client';
 
-import { Alert, createStaticStyles, cx } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,24 +10,21 @@ import { useProviderName } from '@/hooks/useProviderName';
 
 import { type GenerationModelNotice as GenerationModelNoticeType } from './useGenerationModelNotice';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  alert: css`
-    flex: 0 1 auto;
-
-    /* Keep the icon centered against the single-line title. */
-    align-items: center !important;
-
-    min-width: 0;
-    max-width: min(560px, 52vw);
-    padding-block: 4px !important;
-    padding-inline: 8px 10px !important;
-    border-radius: ${cssVar.borderRadius};
-
-    @media (width <= 768px) {
-      max-width: 100%;
-    }
-  `,
-}));
+const styles = stylex.create({
+  alert: {
+    // Keep the icon centered against the single-line title.
+    alignItems: 'center',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
+    maxWidth: { 'default': 'min(560px, 52vw)', '@media (max-width: 768px)': '100%' },
+    paddingBlock: '4px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '10px',
+    borderRadius: cssVar.borderRadius,
+  },
+});
 
 interface GenerationModelNoticeProps {
   notice: GenerationModelNoticeType | undefined;
@@ -42,7 +41,7 @@ const GenerationModelNotice = memo<GenerationModelNoticeProps>(({ notice, ns }) 
 
   return (
     <Alert
-      classNames={{ alert: cx(styles.alert) }}
+      classNames={{ alert: stylex.props(styles.alert).className }}
       style={{ fontSize: 12 }}
       title={t(notice.key, { name: providerName })}
       type={notice.type}

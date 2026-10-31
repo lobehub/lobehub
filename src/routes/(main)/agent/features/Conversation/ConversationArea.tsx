@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -42,20 +44,11 @@ import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
 
-const styles = createStaticStyles(({ css }) => ({
-  // When the chat column is wide enough for the header to float above the
-  // full-bleed list (see Conversation/Header), this in-list spacer keeps the
-  // first message clear of it while still letting content scroll underneath.
-  // A list row is used instead of scroller padding, which breaks virtua's
-  // offset math. Height matches the 44px NavHeader.
-  floatingHeaderSpacer: css`
-    height: 0;
-
-    @container agent-chat-layout (min-width: 1200px) {
-      height: 44px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  floatingHeaderSpacer: {
+    height: { 'default': '0', '@container agent-chat-layout (min-width: 1200px)': '44px' },
+  },
+});
 
 /**
  * ConversationArea
@@ -161,7 +154,6 @@ const Conversation = memo(() => {
           ) : (
             <ChatList
               printable
-              headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
               messageDeepLink={messageDeepLink}
               welcome={<AgentHome />}
               footerSlot={
@@ -184,6 +176,9 @@ const Conversation = memo(() => {
                     </span>
                   </Flexbox>
                 ) : undefined
+              }
+              headerSlot={
+                <div aria-hidden className={stylex.props(styles.floatingHeaderSpacer).className} />
               }
             />
           )}

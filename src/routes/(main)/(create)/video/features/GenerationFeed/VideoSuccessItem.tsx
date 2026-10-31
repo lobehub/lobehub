@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, cx } from '@lobehub/ui';
+import { Block, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { SquarePenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,33 +11,27 @@ import { ActionButtons } from '@/routes/(main)/(create)/image/features/Generatio
 import { styles } from '@/routes/(main)/(create)/image/features/GenerationFeed/GenerationItem/styles';
 import type { Generation, VideoGenerationAsset } from '@/types/generation';
 
-const editingStyles = createStaticStyles(({ css, cssVar }) => ({
-  badge: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 10;
-    inset-block-start: 8px;
-    inset-inline-start: 8px;
-
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorBgContainer};
-
-    background: ${cssVar.colorText};
-  `,
-  editing: css`
-    box-shadow: 0 0 0 2px ${cssVar.colorPrimary};
-  `,
-}));
+const editingStyles = stylex.create({
+  badge: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '8px',
+    insetInlineStart: '8px',
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorText,
+    backgroundImage: 'none',
+  },
+  editing: { boxShadow: `0 0 0 2px ${cssVar.colorPrimary}` },
+});
 
 interface VideoSuccessItemProps {
   generation: Generation;
@@ -52,9 +48,12 @@ const VideoSuccessItem = memo<VideoSuccessItemProps>(
 
     return (
       <Block
-        className={cx(styles.imageContainer, isEditing && editingStyles.editing)}
         style={{ width: 'fit-content' }}
         variant={'filled'}
+        className={cx(
+          stylex.props(isEditing && editingStyles.editing).className,
+          styles.imageContainer,
+        )}
       >
         <video
           controls
@@ -65,7 +64,7 @@ const VideoSuccessItem = memo<VideoSuccessItemProps>(
           style={{ display: 'block', maxHeight: '50vh', maxWidth: '100%' }}
         />
         {isEditing && (
-          <div className={editingStyles.badge}>
+          <div {...stylex.props(editingStyles.badge)}>
             <SquarePenIcon size={12} />
             {t('generation.editing.badge')}
           </div>

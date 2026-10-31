@@ -1,7 +1,8 @@
 'use client';
 
 import { type DropdownItem, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Crown, Sparkles, Users, UsersRound } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,33 +23,27 @@ import AgentBuilderToggle from './AgentBuilderToggle';
 import { type ChromeTabItem } from './ChromeTabs';
 import ChromeTabs from './ChromeTabs';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  header: css`
-    overflow: hidden;
-    flex: none;
-
-    width: 100%;
-    height: 44px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  tabsWrapper: css`
-    scrollbar-width: none;
-
-    overflow-x: auto;
-
-    /* A swipe past the tabs' edge must not fire the browser back gesture. */
-    overscroll-behavior-x: none;
-    flex: 1;
-
-    min-width: 0;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  header: {
+    overflow: 'hidden',
+    flex: 'none',
+    width: '100%',
+    height: '44px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  tabsWrapper: {
+    'scrollbarWidth': 'none',
+    'overflowX': 'auto',
+    'overscrollBehaviorX': 'none',
+    'flex': '1',
+    'minWidth': '0',
+    '::-webkit-scrollbar': { display: 'none' },
+  },
+});
 
 const Header = memo(() => {
   const { t } = useTranslation('chat');
@@ -130,9 +125,15 @@ const Header = memo(() => {
 
   return (
     <>
-      <Flexbox horizontal align="center" className={styles.header} gap={4} justify="space-between">
+      <Flexbox
+        horizontal
+        align="center"
+        className={stylex.props(styles.header).className}
+        gap={4}
+        justify="space-between"
+      >
         {isMobileSurface() ? <MobileHeaderNav /> : !showLeftPanel && <ToggleLeftPanelButton />}
-        <div className={styles.tabsWrapper}>
+        <div className={stylex.props(styles.tabsWrapper).className}>
           <ChromeTabs
             activeId={selectedTabId}
             addDisabled={!canEdit}

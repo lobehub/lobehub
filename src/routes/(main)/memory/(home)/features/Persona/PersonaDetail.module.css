@@ -1,0 +1,37 @@
+/* Styles the rendered markdown's own tags, which StyleX cannot select. */
+.markdown h2 {
+  margin-block: 24px 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.markdown h3 {
+  margin-block: 16px 8px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.markdown p {
+  margin-block-end: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--lobe-color-text-secondary);
+}
+
+.markdown ul {
+  margin-block: 8px;
+  margin-inline: 0;
+  padding-inline-start: 20px;
+}
+
+.markdown ul li {
+  margin-block-end: 4px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--lobe-color-text-secondary);
+}
+
+.markdown strong {
+  font-weight: 500;
+  color: var(--lobe-color-text);
+}

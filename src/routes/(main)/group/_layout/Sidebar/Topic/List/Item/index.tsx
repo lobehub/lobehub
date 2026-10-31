@@ -1,16 +1,8 @@
 import { GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
-import {
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Skeleton,
-  Tag,
-  Text,
-  Tooltip,
-  useTheme,
-} from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Tag, Text, Tooltip, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -40,41 +32,35 @@ import Actions from './Actions';
 import Editing from './Editing';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
-const styles = createStaticStyles(({ css }) => ({
-  neonDotWrapper: css`
-    position: absolute;
-    inset: 0;
-
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-  `,
-  dotContainer: css`
-    will-change: width;
-
-    position: relative;
-
-    width: 18px;
-    height: 18px;
-    margin-inline-start: -6px;
-
-    transition: width 0.2s ${cssVar.motionEaseOut};
-  `,
-  neonDot: css`
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorInfo};
-    box-shadow:
-      0 0 3px ${cssVar.colorInfo},
-      0 0 6px ${cssVar.colorInfo};
-  `,
-}));
+const styles = stylex.create({
+  neonDotWrapper: {
+    position: 'absolute',
+    inset: '0',
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+  },
+  dotContainer: {
+    willChange: 'width',
+    position: 'relative',
+    width: '18px',
+    height: '18px',
+    marginInlineStart: '-6px',
+    transition: `width 0.2s ${cssVar.motionEaseOut}`,
+  },
+  neonDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorInfo,
+    backgroundImage: 'none',
+    boxShadow: `0 0 3px ${cssVar.colorInfo},
+      0 0 6px ${cssVar.colorInfo}`,
+  },
+});
 
 // Module-scoped so a click on any topic cancels a pending click on another.
 // Per-item refs can't do that, which lets rapid clicks across items all
@@ -201,11 +187,14 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   const hasUnread = id && isUnreadCompleted;
   const infoColor = cssVar.colorInfo;
   const unreadNode = (
-    <span className={styles.dotContainer} style={{ width: hasUnread ? 18 : 0 }}>
+    <span
+      className={stylex.props(styles.dotContainer).className}
+      style={{ width: hasUnread ? 18 : 0 }}
+    >
       <AnimatePresence mode="popLayout">
         {hasUnread && (
           <m.div
-            className={styles.neonDotWrapper}
+            {...stylex.props(styles.neonDotWrapper)}
             initial={{ scale: 0, opacity: 0 }}
             animate={{
               scale: 1,
@@ -217,7 +206,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
             }}
           >
             <m.span
-              className={styles.neonDot}
+              {...stylex.props(styles.neonDot)}
               initial={false}
               animate={{
                 scale: [1, 1.3, 1],

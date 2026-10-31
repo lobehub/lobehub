@@ -1,23 +1,27 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { PropsWithChildren } from 'react';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    margin-block-end: 8px;
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    marginBlockEnd: '8px',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const ImagePreviewHeader = memo<PropsWithChildren>(({ children }) => {
   if (!children) return null;
 
   return (
-    <Flexbox className={styles.container} gap={8}>
+    <Flexbox className={stylex.props(styles.container).className} gap={8}>
       {children}
     </Flexbox>
   );

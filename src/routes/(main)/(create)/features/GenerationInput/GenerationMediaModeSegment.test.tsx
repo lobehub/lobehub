@@ -40,15 +40,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       },
       Select: () => <div data-testid="mode-select" />,
     }),
-    async (importOriginal) => ({
-      ...((await importOriginal()) as Record<string, unknown>),
-      createStaticStyles: () => ({
-        heroSelect: 'hero-select',
-        heroText: 'hero-text',
-        toolbarItem: 'toolbar-item',
-        toolbarLabel: 'toolbar-label',
-      }),
-    }),
   ];
   const merged: Record<string, unknown> = { ...actual };
   for (const factory of factories) {
@@ -95,9 +86,13 @@ describe('GenerationMediaModeSegment', () => {
       'tab.video',
     ]);
     expect(componentMocks.segmented?.classNames).toEqual({
-      item: 'toolbar-item',
-      itemLabel: 'toolbar-label',
+      item: expect.any(String),
+      itemLabel: expect.any(String),
     });
+    expect(componentMocks.segmented?.classNames?.item).toBeTruthy();
+    expect(componentMocks.segmented?.classNames?.item).not.toBe(
+      componentMocks.segmented?.classNames?.itemLabel,
+    );
 
     act(() => componentMocks.segmented?.onChange?.('video'));
     expect(componentMocks.navigate).toHaveBeenCalledWith('/video');

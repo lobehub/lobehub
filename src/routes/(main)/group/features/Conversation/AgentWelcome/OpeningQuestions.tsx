@@ -1,6 +1,9 @@
 'use client';
 
-import { Block, createStaticStyles, cx, Flexbox, responsive, Tooltip } from '@lobehub/ui';
+import { Block, Flexbox, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,32 +12,16 @@ import { useResourceAccess } from '@/features/ResourcePermission/useResourceAcce
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding-block: 8px;
-    padding-inline: 16px;
-    border-radius: 48px;
-
-    ${responsive.sm} {
-      padding-block: 8px;
-      padding-inline: 16px;
-    }
-  `,
-
-  cardDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.55;
-  `,
-
-  container: css`
-    padding-block: 0;
-    padding-inline: 0;
-  `,
-
-  title: css`
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: { default: '8px', [media.sm]: '8px' },
+    paddingInline: { default: '16px', [media.sm]: '16px' },
+    borderRadius: '48px',
+  },
+  cardDisabled: { cursor: 'not-allowed', opacity: 0.55 },
+  container: { paddingBlock: '0', paddingInline: '0' },
+  title: { color: cssVar.colorTextDescription },
+});
 
 interface OpeningQuestionsProps {
   mobile?: boolean;
@@ -55,18 +42,20 @@ const OpeningQuestions = memo<OpeningQuestionsProps>(({ mobile, questions }) => 
   const { canUseResource } = useResourceAccess('agentGroup', gatedResourceId);
 
   return (
-    <div className={styles.container}>
-      <p className={styles.title}>{t('guide.questions.title')}</p>
+    <div {...stylex.props(styles.container)}>
+      <p {...stylex.props(styles.title)}>{t('guide.questions.title')}</p>
       <Flexbox horizontal gap={8} wrap={'wrap'}>
         {questions.slice(0, mobile ? 2 : 5).map((question) => {
           const card = (
             <Block
-              className={cx(styles.card, !canUseResource && styles.cardDisabled)}
               clickable={canUseResource}
               key={question}
               paddingBlock={8}
               paddingInline={12}
               variant={'filled'}
+              className={
+                stylex.props(styles.card, !canUseResource && styles.cardDisabled).className
+              }
               onClick={
                 canUseResource
                   ? () => {

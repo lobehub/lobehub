@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 
 import UploadCard, { UPLOAD_CARD_SIZE, type UploadData } from './UploadCard';
@@ -8,25 +9,15 @@ import UploadCard, { UPLOAD_CARD_SIZE, type UploadData } from './UploadCard';
 const STACK_OFFSET = -(UPLOAD_CARD_SIZE - 8);
 const EXPAND_OFFSET = 4;
 
-const styles = createStaticStyles(({ css }) => ({
-  addCirclePos: css`
-    position: absolute;
-    z-index: 100;
-    inset-block-end: -2px;
-    inset-inline-end: -2px;
-  `,
-  stack: css`
-    position: relative;
-    padding-block: 4px;
-    padding-inline: 0;
-
-    &:hover {
-      .inline-ref-close {
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  addCirclePos: {
+    position: 'absolute',
+    zIndex: 100,
+    insetBlockEnd: '-2px',
+    insetInlineEnd: '-2px',
+  },
+  stack: { position: 'relative', paddingBlock: '4px', paddingInline: '0' },
+});
 
 interface InlineImageReferenceProps {
   imageConstraints?: any;
@@ -65,13 +56,12 @@ const InlineImageReference = memo<InlineImageReferenceProps>(
       <Flexbox
         horizontal
         align={'end'}
-        className={styles.stack}
+        className={stylex.props(styles.stack).className}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
         {images.map((url, index) => (
           <UploadCard
-            closeClassName="inline-ref-close"
             imageUrl={url}
             key={url}
             maxFileSize={maxFileSize}
@@ -102,7 +92,7 @@ const InlineImageReference = memo<InlineImageReferenceProps>(
         {canAddMore &&
           (shouldCollapse ? (
             <UploadCard
-              className={styles.addCirclePos}
+              className={stylex.props(styles.addCirclePos).className}
               maxFileSize={maxFileSize}
               multiple={!!onUploadFiles}
               variant="circle"

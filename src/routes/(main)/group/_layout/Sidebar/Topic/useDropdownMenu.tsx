@@ -1,5 +1,6 @@
 import { type DropdownItem } from '@lobehub/ui';
-import { confirmModal, css, cx, Icon, toast, Upload } from '@lobehub/ui';
+import { confirmModal, Icon, toast, Upload } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Archive, Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,14 +16,16 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-const hotArea = css`
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-color: transparent;
-  }
-`;
+const styles = stylex.create({
+  hotArea: {
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      inset: 0,
+      backgroundColor: 'transparent',
+    },
+  },
+});
 
 interface UseTopicActionsDropdownMenuOptions {
   onUploadClose?: () => void;
@@ -157,7 +160,7 @@ export const useTopicActionsDropdownMenu = (
             disabled={!canCreateTopic}
             onFiles={([file]) => handleImport(file)}
           >
-            <div className={cx(hotArea)}>{t('actions.import')}</div>
+            <div {...stylex.props(styles.hotArea)}>{t('actions.import')}</div>
           </Upload>
         ),
         ...(onUploadClose ? { closeOnClick: false } : null),

@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,18 +12,10 @@ import { type AgentItemData } from './AgentItem';
 import AgentItem from './AgentItem';
 import { useAgentSelectionStore } from './store';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow-y: auto;
-    flex: 1;
-    padding: ${cssVar.paddingSM}px;
-  `,
-  title: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  container: { overflowY: 'auto', flex: '1', padding: `${cssVar.paddingSM}px` },
+  title: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextSecondary },
+});
 
 interface SelectedAgentListProps {
   agents: AgentItemData[];
@@ -43,15 +37,15 @@ const SelectedAgentList = memo<SelectedAgentListProps>(({ agents }) => {
 
   if (selectedAgents.length === 0) {
     return (
-      <Flexbox className={styles.container} flex={1}>
+      <Flexbox className={stylex.props(styles.container).className} flex={1}>
         <AgentSelectionEmpty variant="noSelected" />
       </Flexbox>
     );
   }
 
   return (
-    <Flexbox className={styles.container} gap={4}>
-      <div className={styles.title}>
+    <Flexbox className={stylex.props(styles.container).className} gap={4}>
+      <div {...stylex.props(styles.title)}>
         {t('memberSelection.selectedAgents', { count: selectedAgents.length })}
       </div>
       <Flexbox>

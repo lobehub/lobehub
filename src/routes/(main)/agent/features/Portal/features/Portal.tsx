@@ -1,7 +1,9 @@
 'use client';
 
 import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui';
-import { createStaticStyles, useResponsive } from '@lobehub/ui';
+import { useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type PropsWithChildren } from 'react';
 import { Activity, memo, useState } from 'react';
 
@@ -11,26 +13,25 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, portalThreadSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  content: css`
-    position: relative;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    height: 100%;
-    min-height: 100%;
-    max-height: 100%;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  drawer: css`
-    z-index: 10;
-    height: 100%;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  content: {
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: '100%',
+    maxHeight: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  drawer: {
+    zIndex: 10,
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const PortalPanel = memo(({ children }: PropsWithChildren) => {
   const [showPortal, showThread] = useChatStore((s) => [
@@ -60,7 +61,7 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
 
   return (
     <DraggablePanel
-      className={styles.drawer}
+      className={stylex.props(styles.drawer).className}
       defaultSize={{ width: tmpWidth }}
       expand={showPortal}
       expandable={false}
@@ -72,7 +73,7 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
       showHandleWideArea={false}
       size={{ height: '100%', width: portalWidth }}
       classNames={{
-        content: styles.content,
+        content: stylex.props(styles.content).className,
       }}
       onSizeChange={handleSizeChange}
     >

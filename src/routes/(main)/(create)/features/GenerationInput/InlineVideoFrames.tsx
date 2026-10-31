@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeftRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,32 +12,17 @@ import UploadCard, { UPLOAD_CARD_SIZE, type UploadData } from './UploadCard';
 const STACK_OFFSET = -(UPLOAD_CARD_SIZE - 8);
 const EXPAND_OFFSET = 4;
 
-const styles = createStaticStyles(({ css }) => ({
-  addCirclePos: css`
-    position: absolute;
-    z-index: 100;
-    inset-block-end: -2px;
-    inset-inline-end: -2px;
-  `,
-  refGroup: css`
-    position: relative;
-  `,
-  stack: css`
-    position: relative;
-    padding-block: 4px;
-    padding-inline: 0;
-
-    &:hover {
-      .inline-ref-close {
-        opacity: 1;
-      }
-    }
-  `,
-  swapIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  addCirclePos: {
+    position: 'absolute',
+    zIndex: 100,
+    insetBlockEnd: '-2px',
+    insetInlineEnd: '-2px',
+  },
+  refGroup: { position: 'relative' },
+  stack: { position: 'relative', paddingBlock: '4px', paddingInline: '0' },
+  swapIcon: { flexShrink: 0, color: cssVar.colorTextQuaternary },
+});
 
 interface InlineVideoFramesProps {
   /** Label of the empty add card; defaults to the reference image label. */
@@ -99,11 +86,11 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
     const showEndFrame = isSupportEndImage && hasRefFrames;
 
     return (
-      <Flexbox horizontal align={'end'} className={styles.stack} gap={6}>
+      <Flexbox horizontal align={'end'} className={stylex.props(styles.stack).className} gap={6}>
         <Flexbox
           horizontal
           align={'end'}
-          className={styles.refGroup}
+          className={stylex.props(styles.refGroup).className}
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
@@ -117,7 +104,6 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
 
             return (
               <UploadCard
-                closeClassName="inline-ref-close"
                 imageUrl={url}
                 key={url}
                 label={label}
@@ -173,7 +159,7 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
           {canAddMore &&
             (shouldCollapse ? (
               <UploadCard
-                className={styles.addCirclePos}
+                className={stylex.props(styles.addCirclePos).className}
                 maxFileSize={maxFileSize}
                 multiple={!!onUploadFiles}
                 variant="circle"
@@ -223,7 +209,7 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
           <>
             <Flexbox
               align={'center'}
-              className={styles.swapIcon}
+              className={stylex.props(styles.swapIcon).className}
               justify={'center'}
               style={{ height: UPLOAD_CARD_SIZE }}
             >

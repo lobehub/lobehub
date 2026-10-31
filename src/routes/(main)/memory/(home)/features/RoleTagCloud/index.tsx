@@ -1,4 +1,5 @@
-import { ActionIcon, Block, createStaticStyles, cx } from '@lobehub/ui';
+import { ActionIcon, Block } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MaximizeIcon, MinimizeIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 
@@ -7,47 +8,32 @@ import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { type QueryTagsResult } from '@/database/models/userMemory';
 import dynamic from '@/libs/next/dynamic';
 
+import { roleTagCloudMarker } from './markers.stylex';
+
 const TagCloudCanvas = dynamic(() => import('./TagCloudCanvas'), {
   loading: () => <SkeletonBar height={400} radius={12} />,
   ssr: false,
 });
 
-const styles = createStaticStyles(({ css }) => ({
-  fullscreen: css`
-    position: absolute;
-    z-index: 10;
-    inset: 0;
-
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
-  `,
-  fullscreenAnimation: css`
-    opacity: 0;
-  `,
-  icon: css`
-    position: absolute;
-    z-index: 10;
-    inset-block-start: 6px;
-    inset-inline-end: 6px;
-  `,
-  root: css`
-    position: relative;
-    overflow: hidden;
-    width: 100%;
-    height: 400px;
-
-    .fullscreen-icon {
-      opacity: 0;
-    }
-
-    &:hover {
-      .fullscreen-icon {
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  fullscreen: {
+    position: 'absolute',
+    zIndex: 10,
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 0,
+  },
+  fullscreenAnimation: { opacity: 0 },
+  icon: {
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '6px',
+    insetInlineEnd: '6px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover', roleTagCloudMarker)]: 1 },
+  },
+  root: { position: 'relative', overflow: 'hidden', width: '100%', height: '400px' },
+});
 
 interface RoleTagCloudProps {
   tags: QueryTagsResult[];
@@ -68,14 +54,17 @@ const RoleTagCloud = memo<RoleTagCloudProps>(({ tags }) => {
   return (
     <Block
       variant={fullscreen ? 'borderless' : 'outlined'}
-      className={cx(
-        styles.root,
-        fullscreen && styles.fullscreen,
-        fullscreenAnimation && styles.fullscreenAnimation,
-      )}
+      className={
+        stylex.props(
+          roleTagCloudMarker,
+          styles.root,
+          fullscreen && styles.fullscreen,
+          fullscreenAnimation && styles.fullscreenAnimation,
+        ).className
+      }
     >
       <ActionIcon
-        className={cx('fullscreen-icon', styles.icon)}
+        className={stylex.props(styles.icon).className}
         icon={fullscreen ? MinimizeIcon : MaximizeIcon}
         size={DESKTOP_HEADER_ICON_SIZE}
         onClick={() => {

@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
@@ -12,25 +13,19 @@ import LoadMoreFooter from '../LoadMoreFooter';
 import { autoLoadMoreProps, resolveLoadMoreFooter } from '../loadMoreFooterState';
 import { useScrollParent } from './useScrollParent';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  timelineContainer: css`
-    position: relative;
-    height: 100%;
-  `,
-  timelineLine: css`
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 8px;
-
-    width: 1px;
-    height: 100%;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  timelineLine_dark: css`
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  timelineContainer: { position: 'relative', height: '100%' },
+  timelineLine: {
+    position: 'absolute',
+    insetBlock: '0',
+    insetInlineStart: '8px',
+    width: '1px',
+    height: '100%',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  timelineLine_dark: { backgroundColor: cssVar.colorFillQuaternary, backgroundImage: 'none' },
+});
 
 export type GroupBy = 'day' | 'month';
 
@@ -146,8 +141,8 @@ function TimelineViewInner<
   }
 
   return (
-    <div className={styles.timelineContainer}>
-      <div className={cx(styles.timelineLine, isDarkMode && styles.timelineLine_dark)} />
+    <div {...stylex.props(styles.timelineContainer)}>
+      <div {...stylex.props(styles.timelineLine, isDarkMode && styles.timelineLine_dark)} />
       <GroupedVirtuoso
         customScrollParent={scrollParent}
         {...autoLoadMoreProps({ hasMore, items: groupedItems, loadMoreError, onLoadMore })}

@@ -1,7 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Segmented, type SegmentedOptions, Select, type SelectProps } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ImageIcon, Video } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,26 +15,12 @@ export interface GenerationMediaModeSegmentProps {
   mode: 'image' | 'video';
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  heroSelect: css`
-    width: auto;
-    font-size: inherit;
-    line-height: 1.2;
-  `,
-  heroText: css`
-    font-size: 24px;
-    font-weight: 600;
-    line-height: 1.2;
-  `,
-  toolbarItem: css`
-    width: 30px;
-    height: 30px;
-    padding-inline: 0;
-  `,
-  toolbarLabel: css`
-    display: none;
-  `,
-}));
+const styles = stylex.create({
+  heroSelect: { width: 'auto', fontSize: 'inherit', lineHeight: 1.2 },
+  heroText: { fontSize: '24px', fontWeight: 600, lineHeight: 1.2 },
+  toolbarItem: { width: '30px', height: '30px', paddingInline: '0' },
+  toolbarLabel: { display: 'none' },
+});
 
 const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
   ({ mode, layout = 'toolbar' }) => {
@@ -46,7 +33,7 @@ const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
         {
           label: (
             <Flexbox horizontal align="center" gap={8}>
-              <span className={styles.heroText}>{t('tab.image')}</span>
+              <span {...stylex.props(styles.heroText)}>{t('tab.image')}</span>
             </Flexbox>
           ),
           value: 'image',
@@ -54,7 +41,7 @@ const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
         {
           label: (
             <Flexbox horizontal align="center" gap={8}>
-              <span className={styles.heroText}>{t('tab.video')}</span>
+              <span {...stylex.props(styles.heroText)}>{t('tab.video')}</span>
             </Flexbox>
           ),
           value: 'video',
@@ -111,17 +98,20 @@ const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
     if (!isHero)
       return (
         <Segmented<'image' | 'video'>
-          classNames={{ item: styles.toolbarItem, itemLabel: styles.toolbarLabel }}
           options={toolbarOptions}
           size={'small'}
           value={mode}
+          classNames={{
+            item: stylex.props(styles.toolbarItem).className,
+            itemLabel: stylex.props(styles.toolbarLabel).className,
+          }}
           onChange={handleChange}
         />
       );
 
     return (
       <Select
-        className={styles.heroSelect}
+        className={stylex.props(styles.heroSelect).className}
         labelRender={labelRender}
         options={heroOptions}
         popupMatchSelectWidth={false}

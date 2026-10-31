@@ -251,6 +251,7 @@ const WorkspaceAgentDevicePolicy = memo<WorkspaceAgentDevicePolicyProps>(
             placeholder={t('settingAgent.devicePolicy.selectTarget')}
             popupMatchSelectWidth={true}
             value={selectedValue}
+
             labelRender={(option) => {
               if (typeof option.value !== 'string') return option.label;
               const selection = parseExecutionTargetValue(option.value);

@@ -1,30 +1,21 @@
-import { Block, createStaticStyles, cssVar, cx, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 import CateTag from '../CateTag';
 import HashTags from '../HashTags';
+import { memoryCardMarker } from '../markers.stylex';
 import Time from '../Time';
 
-const ACTION_CLASSNAME = 'memory-actions';
-
-const styles = createStaticStyles(({ css }) => ({
-  actions: css`
-    transition: opacity 0.15s ease;
-  `,
-  timelineCard: css`
-    position: relative;
-    .${ACTION_CLASSNAME} {
-      opacity: 0;
-    }
-
-    &:hover {
-      .${ACTION_CLASSNAME} {
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover', memoryCardMarker)]: 1 },
+    transition: 'opacity 0.15s ease',
+  },
+  timelineCard: { position: 'relative' },
+});
 
 interface TimeLineCardProps {
   actions?: ReactNode;
@@ -42,7 +33,7 @@ const TimeLineCard = memo<TimeLineCardProps>(
     return (
       <Block
         clickable
-        className={styles.timelineCard}
+        className={stylex.props(memoryCardMarker, styles.timelineCard).className}
         gap={12}
         padding={16}
         variant={'borderless'}
@@ -85,7 +76,7 @@ const TimeLineCard = memo<TimeLineCardProps>(
           <Flexbox
             horizontal
             align={'center'}
-            className={cx(ACTION_CLASSNAME, styles.actions)}
+            className={stylex.props(styles.actions).className}
             gap={4}
             onClick={(e) => {
               e.stopPropagation();
