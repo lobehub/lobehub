@@ -1,0 +1,229 @@
+{
+  "data": [
+    {
+      "type": "model",
+      "id": "claude-fable-5-1",
+      "display_name": "claude-fable-5-1",
+      "created_at": "2026-08-28T00:00:00Z",
+      "name": "claude-fable-5-1",
+      "context_length": 1000000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000012833336",
+        "completion": "0.000064166668",
+        "input_cache_read": "0.000000320837",
+        "input_cache_write": "0.000016041669",
+        "input_cache_write_1h": "0.000025666668",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "type": "model",
+      "id": "claude-haiku-5-5",
+      "display_name": "claude-haiku-5-5",
+      "created_at": "2026-10-07T18:00:00Z",
+      "name": "claude-haiku-5-5",
+      "context_length": 1000000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000000128336",
+        "completion": "0.00000064167",
+        "input_cache_read": "0.000000012837",
+        "input_cache_write": "0.00000016042",
+        "input_cache_write_1h": "0.000000256669",
+        "request": "0"
+      },
+      "pricing_tiers": [
+        {
+          "above_input_tokens": 100000,
+          "prompt": "0.00000064167",
+          "completion": "0.000003208337",
+          "input_cache_read": "0.000000064168",
+          "input_cache_write": "0.000000802086",
+          "input_cache_write_1h": "0.000001283335"
+        }
+      ],
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "type": "model",
+      "id": "claude-opus-5-5",
+      "display_name": "claude-opus-5-5",
+      "created_at": "2026-09-21T16:24:00Z",
+      "name": "claude-opus-5-5",
+      "context_length": 1000000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000005133334",
+        "completion": "0.000025666668",
+        "input_cache_read": "0.000000256669",
+        "input_cache_write": "0.00000641667",
+        "input_cache_write_1h": "0.000010266669",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "type": "model",
+      "id": "claude-sonnet-5-5",
+      "display_name": "claude-sonnet-5-5",
+      "created_at": "2026-09-28T00:00:00Z",
+      "name": "claude-sonnet-5-5",
+      "context_length": 1000000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000002566667",
+        "completion": "0.000012833336",
+        "input_cache_read": "0.000000128336",
+        "input_cache_write": "0.000003208337",
+        "input_cache_write_1h": "0.000005133334",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "tool_choice",
+        "tools"
+      ]
+    },
+    {
+      "type": "model",
+      "id": "deepseek-flash",
+      "display_name": "deepseek-flash",
+      "created_at": "2026-10-15T11:03:41Z",
+      "name": "deepseek-flash",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 393216,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000000385001",
+        "completion": "0.00000154",
+        "input_cache_read": "0.000000007701",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "max_tokens"
+      ]
+    },
+    {
+      "type": "model",
+      "id": "deepseek-v4-pro",
+      "display_name": "deepseek-v4-pro",
+      "created_at": "2026-10-15T11:03:41Z",
+      "name": "deepseek-v4-pro",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ]
+      },
+      "top_provider": {
+        "context_length": 1048576,
+        "max_completion_tokens": 393216,
+        "is_moderated": false
+      },
+      "pricing": {
+        "prompt": "0.000001694002",
+        "completion": "0.000005082003",
+        "input_cache_read": "0.000000056467",
+        "request": "0"
+      },
+      "supported_parameters": [
+        "max_tokens"
+      ]
+    }
+  ],
+  "has_more": false,
+  "first_id": "claude-fable-5-1",
+  "last_id": "deepseek-v4-pro",
+  "catalog_version": "sha256:p3vXqdVoEaXMJepixI695n1LvHy7S8NuqxwchwUIbMo",
+  "pricing_version": "public-v286"
+}
