@@ -52,8 +52,9 @@ const DossierBlock = memo<{ dossier: MemoryContextStoryDossier }>(({ dossier }) 
   const format = useStoryFormat();
   const { t } = format;
   const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? dossier.evidence : dossier.evidence.slice(0, PREVIEW);
-  const hidden = dossier.evidence.length - shown.length;
+  const evidence = dossier.evidence ?? [];
+  const shown = expanded ? evidence : evidence.slice(0, PREVIEW);
+  const hidden = evidence.length - shown.length;
   const span = format.span(
     dossier.firstSeenAt,
     dossier.lastEvidenceAt,
@@ -77,7 +78,7 @@ const DossierBlock = memo<{ dossier: MemoryContextStoryDossier }>(({ dossier }) 
           {shown.map((evidence) => (
             <EvidenceRow evidence={evidence} key={evidence.id} />
           ))}
-          {(hidden > 0 || expanded) && dossier.evidence.length > PREVIEW && (
+          {(hidden > 0 || expanded) && evidence.length > PREVIEW && (
             <Button
               size={'small'}
               type={'text'}

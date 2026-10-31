@@ -7,7 +7,7 @@ import {
 export const STORY_STATUSES: UserMemoryDossierStatus[] = ['active', 'dormant', 'closed'];
 
 const haystackOf = (story: MemoryContextStorySummary) =>
-  [story.title, story.now, ...story.nextSteps, ...story.openQuestions]
+  [story.title, story.now, ...(story.nextSteps ?? []), ...(story.openQuestions ?? [])]
     .filter(Boolean)
     .join('\n')
     .toLowerCase();

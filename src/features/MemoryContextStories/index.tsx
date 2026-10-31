@@ -47,7 +47,7 @@ StoryPane.displayName = 'StoryPane';
 
 /** With nothing picked, open the story that moved most recently, ongoing ones first. */
 const defaultStoryId = (list: MemoryContextStoryList) =>
-  groupStories(list.stories).find((g) => g.stories.length > 0)?.stories[0]?.id;
+  groupStories(list.stories ?? []).find((g) => g.stories.length > 0)?.stories[0]?.id;
 
 /**
  * Memory → 情境. Users whose memory was organized see their contexts as stories (context →
@@ -64,7 +64,7 @@ const MemoryContextStories = memo(() => {
   if (!list && isLoading) content = <LoadingState />;
   else if (!list && error) content = <ErrorState onRetry={() => mutate()} />;
   // Never organized: the per-topic pages are all there is.
-  else if (!list || list.stories.length === 0) content = <MemoryEntities />;
+  else if (!list?.stories?.length) content = <MemoryEntities />;
   else if (view.legacy) content = <LegacyView onBack={view.closeLegacy} />;
   // A deep link to a per-topic context: the legacy page shows it if it is not a story after all.
   else if (view.contextId && !list.stories.some((s) => s.id === view.contextId))

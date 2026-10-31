@@ -66,11 +66,16 @@ interface StoryPageProps {
 const StoryPage = memo<StoryPageProps>(({ story }) => {
   const format = useStoryFormat();
   const { t } = format;
-  const { dossiers, scattered } = useMemo(() => splitDossiers(story.dossiers), [story.dossiers]);
+  const nextSteps = story.nextSteps ?? [];
+  const openQuestions = story.openQuestions ?? [];
+  const { dossiers, scattered } = useMemo(
+    () => splitDossiers(story.dossiers ?? []),
+    [story.dossiers],
+  );
   const scatteredEvidence = useMemo(
     () =>
       scattered
-        .flatMap((d) => d.evidence)
+        .flatMap((d) => d.evidence ?? [])
         .sort((a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime()),
     [scattered],
   );
@@ -102,21 +107,21 @@ const StoryPage = memo<StoryPageProps>(({ story }) => {
           </p>
         </Section>
 
-        {(story.nextSteps.length > 0 || story.openQuestions.length > 0) && (
+        {(nextSteps.length > 0 || openQuestions.length > 0) && (
           <div {...stylex.props(styles.pair)}>
-            {story.nextSteps.length > 0 && (
+            {nextSteps.length > 0 && (
               <Section title={t('story.next')}>
                 <ul {...stylex.props(styles.list)}>
-                  {story.nextSteps.map((step) => (
+                  {nextSteps.map((step) => (
                     <li key={step}>{step}</li>
                   ))}
                 </ul>
               </Section>
             )}
-            {story.openQuestions.length > 0 && (
+            {openQuestions.length > 0 && (
               <Section title={t('story.openQuestions')}>
                 <ul {...stylex.props(styles.list)}>
-                  {story.openQuestions.map((question) => (
+                  {openQuestions.map((question) => (
                     <li key={question}>{question}</li>
                   ))}
                 </ul>

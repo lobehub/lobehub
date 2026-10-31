@@ -88,7 +88,8 @@ const StoryList = memo<StoryListProps>(({ data, onOpenLegacy, onSelect, selected
   const [keyword, setKeyword] = useState('');
   const [showClosed, setShowClosed] = useState(false);
   const needle = keyword.trim();
-  const groups = useMemo(() => groupStories(data.stories, needle), [data.stories, needle]);
+  const stories = useMemo(() => data.stories ?? [], [data.stories]);
+  const groups = useMemo(() => groupStories(stories, needle), [stories, needle]);
   const matched = groups.reduce((sum, g) => sum + g.stories.length, 0);
   // The open story stays visible even when its group is folded.
   const selectedClosed = groups.some(
@@ -101,7 +102,7 @@ const StoryList = memo<StoryListProps>(({ data, onOpenLegacy, onSelect, selected
         <div {...stylex.props(styles.heading)}>
           <h1 {...stylex.props(styles.title)}>{t('story.title')}</h1>
           <span {...stylex.props(styles.count)}>
-            {needle ? `${matched} / ${data.stories.length}` : data.stories.length}
+            {needle ? `${matched} / ${stories.length}` : stories.length}
           </span>
         </div>
         <SearchBar
