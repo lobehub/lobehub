@@ -1,12 +1,13 @@
-import { css, cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-export const draggable = cx(css`
-  -webkit-app-region: drag;
-`);
+const styles = stylex.create({
+  draggable: { WebkitAppRegion: 'drag' },
+  nodrag: { WebkitAppRegion: 'no-drag' },
+});
 
-export const nodrag = cx(css`
-  -webkit-app-region: no-drag;
-`);
+export const draggable = stylex.props(styles.draggable).className ?? '';
+
+export const nodrag = stylex.props(styles.nodrag).className ?? '';
 
 export const electronStylish = {
   draggable,

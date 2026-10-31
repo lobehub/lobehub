@@ -1,0 +1,58 @@
+/* Hold at the tail, scroll to the head, hold, scroll back. The 20% / 40% / 60% /
+   80% stops are HOLD_RATIO (utils.ts) = 0.2 as percentages: HOLD, 50 - HOLD / 2,
+   50 + HOLD / 2, 100 - HOLD. Keep them in step. */
+@keyframes scroll-to-head {
+  0%,
+  20% {
+    transform: translateX(0);
+  }
+
+  40%,
+  60% {
+    transform: translateX(var(--tail-marquee-offset));
+  }
+
+  80%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.overflowing {
+  mask-image: linear-gradient(to right, transparent, #000 16px);
+}
+
+/* Keyboard focus on the enclosing control (e.g. an accordion trigger)
+   loops; a tap on a touch screen plays one loop. */
+*:focus-visible > .overflowing,
+*:focus-visible > * > .overflowing,
+.overflowing[data-revealing] {
+  mask-image: none;
+}
+
+*:focus-visible > .overflowing > span,
+*:focus-visible > * > .overflowing > span {
+  animation: scroll-to-head var(--tail-marquee-duration) ease-in-out infinite;
+}
+
+.overflowing[data-revealing] > span {
+  animation: scroll-to-head var(--tail-marquee-duration) ease-in-out 1;
+}
+
+/* Only real hover loops: touch browsers keep a sticky :hover after a tap,
+   which would otherwise turn the one-loop tap reveal into an endless one. */
+@media (hover: hover) {
+  .overflowing:hover {
+    mask-image: none;
+  }
+
+  .overflowing:hover > span {
+    animation: scroll-to-head var(--tail-marquee-duration) ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overflowing > span {
+    animation: none !important;
+  }
+}

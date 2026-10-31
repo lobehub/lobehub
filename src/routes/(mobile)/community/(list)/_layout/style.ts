@@ -1,9 +1,10 @@
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css }) => ({
+export const styles = stylex.create({
   // Main container
-  mainContainer: css`
-    padding-block: 8px 48px;
-    padding-inline: 16px;
-  `,
-}));
+  mainContainer: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '48px',
+    paddingInline: '16px',
+  },
+});

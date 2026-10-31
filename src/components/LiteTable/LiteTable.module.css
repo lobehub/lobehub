@@ -1,0 +1,217 @@
+/* Base table rules precede the fixed/wide variants. Emotion composed these
+   variants after table; declaration-key order was not its insertion order. */
+.body {
+  overflow-x: auto;
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:focus-visible {
+  outline: 2px solid var(--lobe-color-primary);
+  outline-offset: -2px;
+}
+
+.container {
+  container-type: inline-size;
+}
+
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: max-content;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding-block: 8px;
+  padding-inline: 8px;
+  text-align: start;
+  vertical-align: middle;
+}
+
+.table thead th {
+  font-weight: 500;
+  color: var(--lobe-color-text-secondary);
+  white-space: nowrap;
+  background: var(--lobe-color-fill-quaternary);
+}
+
+.table tr th:first-child,
+.table tr td:first-child {
+  padding-inline-start: 24px;
+}
+
+.table tr th:last-child,
+.table tr td:last-child {
+  padding-inline-end: 24px;
+}
+
+.table tbody tr:hover {
+  background: var(--lobe-color-fill-quaternary);
+}
+
+.fixedTable {
+  table-layout: fixed;
+  min-width: 0;
+}
+
+@container (max-width: 800px) {
+  .wideList {
+    display: block;
+    min-width: 0;
+  }
+
+  .wideList thead {
+    display: none;
+  }
+
+  .wideList tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-inline: 16px;
+  }
+
+  .wideList tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+
+    padding-block: 4px 8px;
+    padding-inline: 16px;
+    border: 1px solid var(--lobe-color-border-secondary);
+    border-radius: var(--lobe-border-radius-lg);
+  }
+
+  .wideList tbody tr:hover {
+    background: transparent;
+  }
+
+  .wideList td {
+    display: flex;
+    grid-column: 1 / -1;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block: 6px;
+    padding-inline: 0 !important;
+  }
+
+  .wideList td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    color: var(--lobe-color-text-secondary);
+  }
+
+  .wideList td:not([data-label], [data-list-slot]) {
+    justify-content: flex-end;
+  }
+
+  .wideList td[data-list-slot='title'] {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: flex-start;
+
+    padding-block: 8px;
+    border-block-end: 1px solid var(--lobe-color-border-secondary);
+
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .wideList td[data-list-slot='extra'] {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+
+    padding-block: 8px;
+    border-block-end: 1px solid var(--lobe-color-border-secondary);
+  }
+
+  .wideList td[data-list-slot='actions'] {
+    justify-content: flex-end;
+  }
+}
+
+@container (max-width: 600px) {
+  .table {
+    display: block;
+    min-width: 0;
+  }
+
+  .table thead {
+    display: none;
+  }
+
+  .table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-inline: 16px;
+  }
+
+  .table tbody tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+
+    padding-block: 4px 8px;
+    padding-inline: 16px;
+    border: 1px solid var(--lobe-color-border-secondary);
+    border-radius: var(--lobe-border-radius-lg);
+  }
+
+  .table tbody tr:hover {
+    background: transparent;
+  }
+
+  .table td {
+    display: flex;
+    grid-column: 1 / -1;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block: 6px;
+    padding-inline: 0 !important;
+  }
+
+  .table td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    color: var(--lobe-color-text-secondary);
+  }
+
+  .table td:not([data-label], [data-list-slot]) {
+    justify-content: flex-end;
+  }
+
+  .table td[data-list-slot='title'] {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: flex-start;
+
+    padding-block: 8px;
+    border-block-end: 1px solid var(--lobe-color-border-secondary);
+
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .table td[data-list-slot='extra'] {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+
+    padding-block: 8px;
+    border-block-end: 1px solid var(--lobe-color-border-secondary);
+  }
+
+  .table td[data-list-slot='actions'] {
+    justify-content: flex-end;
+  }
+}

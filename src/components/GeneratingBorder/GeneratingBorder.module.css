@@ -1,0 +1,21 @@
+/* The sweep animates a registered custom property (see property.css), which
+   StyleX keyframes cannot express, so the animation lives here. */
+.generating::after {
+  animation: flow 1.8s linear infinite;
+}
+
+@keyframes flow {
+  from {
+    --lobe-generating-border-angle: 0deg;
+  }
+
+  to {
+    --lobe-generating-border-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generating::after {
+    animation: none;
+  }
+}

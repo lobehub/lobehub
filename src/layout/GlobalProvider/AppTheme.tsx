@@ -3,9 +3,11 @@
 import '@lobehub/ui/theme.css';
 import '@lobehub/ui/global.css';
 import '@lobehub/ui/style.css';
+import '@/styles/global.css';
 
 import { type NeutralColors, type PrimaryColors } from '@lobehub/ui';
-import { ConfigProvider, createStaticStyles, cx, FontLoader, setLobeTheme } from '@lobehub/ui';
+import { ConfigProvider, FontLoader, setLobeTheme } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import * as m from 'motion/react-m';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -21,63 +23,23 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { GlobalStyle } from '@/styles';
+import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  app: css`
-    position: relative;
+import moduleStyles from './AppTheme.module.css';
 
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-
-    height: 100%;
-    min-height: 100dvh;
-    max-height: 100dvh;
-
-    @media (device-width >= 576px) {
-      overflow: hidden;
-    }
-  `,
-  // scrollbar-width and scrollbar-color are supported from Chrome 121
-  // https://developer.mozilla.org/en-US/docs/Web/CSS/scrollbar-color
-  scrollbar: css`
-    scrollbar-color: ${cssVar.colorFill} transparent;
-    scrollbar-width: thin;
-
-    #lobe-mobile-scroll-container {
-      scrollbar-width: none;
-
-      ::-webkit-scrollbar {
-        width: 0;
-        height: 0;
-      }
-    }
-  `,
-
-  // so this is a polyfill for older browsers
-  scrollbarPolyfill: css`
-    ::-webkit-scrollbar {
-      width: 0.75em;
-      height: 0.75em;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      border-radius: 10px;
-    }
-
-    :hover::-webkit-scrollbar-thumb {
-      border: 3px solid transparent;
-      background-color: ${cssVar.colorText};
-      background-clip: content-box;
-    }
-
-    ::-webkit-scrollbar-track {
-      background-color: transparent;
-    }
-  `,
-}));
+const styles = stylex.create({
+  app: {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    height: '100%',
+    minHeight: '100dvh',
+    maxHeight: '100dvh',
+    overflow: { 'default': null, '@media (min-device-width: 576px)': 'hidden' },
+  },
+});
 
 export interface AppThemeProps {
   children?: ReactNode;
@@ -183,9 +145,8 @@ const AppTheme = memo<AppThemeProps>(
           proxy: globalCDN ? 'unpkg' : undefined,
         }}
       >
-        <div className={cx(styles.app, styles.scrollbar, styles.scrollbarPolyfill)}>
+        <div {...sx([styles.app], moduleStyles.scrollbar)}>
           {!!customFontURL && <FontLoader url={customFontURL} />}
-          <GlobalStyle />
           {children}
         </div>
       </ConfigProvider>

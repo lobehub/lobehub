@@ -1,0 +1,20 @@
+/* Dialogs live inside the theme's isolated stacking context, so lowering the
+   shell's z-index alone cannot reveal them. Yield without releasing the boot gate. */
+body:has([role='dialog'][data-open]) .yield {
+  visibility: hidden;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.hint[data-enter] {
+  animation: fadeIn 0.3s var(--lobe-motion-ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint[data-enter] {
+    animation: none;
+  }
+}
