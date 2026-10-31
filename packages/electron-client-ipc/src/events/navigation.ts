@@ -55,6 +55,12 @@ export interface NavigationBroadcastEvents {
   /** Ask the renderer to open the all-agents surface. */
   openAllAgents: () => void;
 
+  /**
+   * Ask renderer to open its current workspace (or personal home) in a new window.
+   * Triggered from the main process File menu.
+   */
+  openNewWindow: () => void;
+
   /** Ask the renderer to open the Recently Viewed surface. */
   openRecentlyViewed: () => void;
 }

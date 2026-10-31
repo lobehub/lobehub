@@ -52,6 +52,17 @@ describe('group useThreadItemDropdownMenu', () => {
     expect(getMenuItem(items, 'delete')).toMatchObject({ disabled: true });
   });
 
+  it('offers no delete for a subagent thread', () => {
+    const { result } = renderHook(() =>
+      useThreadItemDropdownMenu({ deletable: false, id: 'thread-1', title: 'Thread' }),
+    );
+    const items = result.current();
+
+    expect(getMenuItem(items, 'delete')).toBeUndefined();
+    expect(getMenuItem(items, 'rename')).toBeDefined();
+    expect(items.at(-1)).not.toMatchObject({ type: 'divider' });
+  });
+
   it('renames through a modal, not an inline popover', async () => {
     const { result } = renderHook(() =>
       useThreadItemDropdownMenu({ id: 'thread-1', title: 'Old title' }),

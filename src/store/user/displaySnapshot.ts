@@ -2,7 +2,7 @@ import { UserPreferenceSchema } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { PartialDeep } from 'type-fest';
 
-import { LocalStorageQueryProjectionStorage } from '@/libs/queryProjectionStorage';
+import { AppLocalStorage } from '@/libs/replica/storage';
 import type { LobeUser, UserPreference } from '@/types/user';
 import type { UserSettings } from '@/types/user/settings';
 
@@ -25,7 +25,7 @@ export interface UserDisplaySnapshot {
  * allowlist of sections: `keyVaults` and `market` hold credentials, and the
  * server passes unknown sections through.
  */
-const storage = new LocalStorageQueryProjectionStorage<UserDisplaySnapshot>({
+const storage = new AppLocalStorage<UserDisplaySnapshot>({
   namespace: 'lobehub:user-display-snapshot:v1',
 });
 const snapshotKey = (userId: string) => ({ queryKey: 'display', scope: userId });

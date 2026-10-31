@@ -1,5 +1,5 @@
 import { ROLLOUT_MAX_CANARY_SIZE } from '@lobechat/const/goal';
-import { MAX_GOAL_METRIC_CRITERIA } from '@lobechat/types';
+import { GOAL_VISIBILITIES, MAX_GOAL_METRIC_CRITERIA } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -121,6 +121,8 @@ const conversationGoalInput = z.object({
       ]),
     )
     .optional(),
+  /** Workspace visibility; omitted, a private goal or task agent makes it private. */
+  visibility: z.enum(GOAL_VISIBILITIES).optional(),
 });
 
 const createGoalInput = conversationGoalInput.extend({

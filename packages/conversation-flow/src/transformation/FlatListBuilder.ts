@@ -1,12 +1,12 @@
 import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
 
-import { toTime } from '../utils/timestamp';
-
 import { isInThreadScope } from '../indexing';
 import type { Message, MessageGroupMetadata, ThreadScope } from '../types';
+import { toTime } from '../utils/timestamp';
 import type { BranchResolver } from './BranchResolver';
 import type { MessageCollector } from './MessageCollector';
 import type { MessageTransformer } from './MessageTransformer';
+import { toTaskCompletionBlocks } from './taskCompletionBlocks';
 
 /**
  * Whether a message was authored by the group's supervisor agent.
@@ -723,18 +723,14 @@ export class FlatListBuilder {
     const tail = assistantChain.at(-1);
     if (!tail) return;
 
-    for (const assistant of assistantChain.slice(0, -1)) {
+    for (const [index, assistant] of assistantChain.slice(0, -1).entries()) {
       const childIds = this.childrenMap.get(assistant.id) ?? [];
-      const interruptions = childIds.filter((id) => {
-        const message = this.messageMap.get(id);
-        return (
-          message?.role === 'user' &&
-          !message.threadId &&
-          !processedIds.has(id) &&
-          toTime(message.createdAt) >= toTime(assistant.createdAt) &&
-          toTime(message.createdAt) <= toTime(tail.createdAt)
-        );
-      });
+      const interruptions = this.messageCollector.collectGroupInterruptions(
+        assistant,
+        assistantChain[index + 1],
+        tail,
+        processedIds,
+      );
       if (interruptions.length === 0) continue;
 
       const activeId = this.branchResolver.getActiveBranchIdFromMetadata(
@@ -1386,25 +1382,8 @@ export class FlatListBuilder {
       }));
     }
 
-    // Snapshot post-task-summary turns as content blocks ().
-    // They render after `<SignalCallbacks>` inside the same group, via
-    // a second `<Group>` that pulls live content from the store using
-    // the block id (no need to denormalize text here — keeps streaming
-    // updates working without an extra refresh).
     if (taskCompletionMessages && taskCompletionMessages.length > 0) {
-      result.taskCompletions = taskCompletionMessages.map((m) => {
-        const block: AssistantContentBlock = {
-          content: m.content ?? '',
-          id: m.id,
-        };
-        if (m.error) block.error = m.error;
-        if (m.fileList && m.fileList.length > 0) block.fileList = m.fileList;
-        if (m.imageList && m.imageList.length > 0) block.imageList = m.imageList;
-        if (m.performance) block.performance = m.performance;
-        if (m.reasoning) block.reasoning = m.reasoning;
-        if (m.usage) block.usage = m.usage;
-        return block;
-      });
+      result.taskCompletions = toTaskCompletionBlocks(taskCompletionMessages);
     }
 
     return result;

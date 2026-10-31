@@ -1,5 +1,20 @@
-import { GOAL_ACCEPTANCE_TASK_TITLE, type GoalStatus } from '@lobechat/const/goal';
-import type { GoalGraphSnapshot, GoalMetricCriterion, GoalTickResult } from '@lobechat/types';
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import {
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_TITLE_MAX_LENGTH,
+  type GoalStatus,
+} from '@lobechat/const/goal';
+import {
+  chainSummaryTitle,
+  TOPIC_TITLE_JSON_SCHEMA,
+  TOPIC_TITLE_PROMPT_VERSION,
+} from '@lobechat/prompts';
+import {
+  type GoalGraphSnapshot,
+  type GoalMetricCriterion,
+  type GoalTickResult,
+  RequestTrigger,
+} from '@lobechat/types';
 
 import {
   createReplicaSlice,
@@ -9,12 +24,16 @@ import {
 } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { goalKeys } from '@/libs/swr/keys';
+import { aiChatService } from '@/services/aiChat';
 import { type GoalListItem, goalService } from '@/services/goal';
 import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
 import type { StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { goalStatusesForFilter } from './goalListFilter';
+import { buildGoalTitleMessages } from './goalTitle';
 import { useGoalStore } from './index';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
 import {
@@ -28,6 +47,7 @@ import {
   type GoalListValue,
   goalMetricSeriesResource,
   homeGoalListResource,
+  topicGoalListResource,
 } from './projection';
 
 /**
@@ -152,13 +172,21 @@ const useGoalCoordinatorAdvancing = (goalId?: string | null): boolean =>
 /** A conversation rarely plans more than one goal; this only bounds a runaway topic. */
 const TOPIC_GOAL_FETCH_LIMIT = 20;
 
-const topicGoalsRefreshInterval = (
-  result: { goals: { goal: { status: GoalStatus } }[] } | undefined,
-  generating?: boolean,
-) =>
-  generating || result?.goals.some(({ goal }) => goalStatusPolled(goal.status))
-    ? GOAL_GRAPH_POLL_INTERVAL
-    : 0;
+/**
+ * The composer tray and the working sidebar both read a topic's goals on
+ * mount; this window collapses them into one request. It stays under the poll
+ * interval because SWR's poll ticks dedupe too.
+ */
+const TOPIC_GOALS_DEDUPING_INTERVAL = 4000;
+
+const useTopicGoalsAdvancing = (topicId?: string | null): boolean =>
+  useGoalStore((state) =>
+    topicId
+      ? (state.topicGoalsByTopicId[topicId]?.goals.some(({ goal }) =>
+          goalStatusPolled(goal.status),
+        ) ?? false)
+      : false,
+  );
 
 export type GoalStore = GoalState & GoalAction;
 type Setter = StoreSetter<GoalStore>;
@@ -172,6 +200,7 @@ export class GoalActionImpl {
   readonly #goalMetricSeries;
   readonly #homeGoalList;
   readonly #set: Setter;
+  readonly #topicGoalList;
 
   constructor(set: Setter, get: () => GoalStore, _api?: unknown) {
     void _api;
@@ -205,9 +234,24 @@ export class GoalActionImpl {
       view: recordLens<GoalStore, GoalListValue>('homeGoalsByScope'),
     });
 
-    // One goal row is rendered by a scope's tabs and by the home rail; a change
-    // to it has to reach every list holding it, loaded or only persisted.
-    this.#goalListRows = linkReplicaEntity<GoalListItem>([this.#goalList, this.#homeGoalList]);
+    this.#topicGoalList = createReplicaSlice(topicGoalListResource, {
+      actionPrefix: 'topicGoalList',
+      entity: goalListEntity,
+      fetcher: (topicId) => goalService.list({ limit: TOPIC_GOAL_FETCH_LIMIT, topicId }),
+      get,
+      set,
+      stateKey: 'topicGoalsReplica',
+      view: recordLens<GoalStore, GoalListValue>('topicGoalsByTopicId'),
+    });
+
+    // One goal row is rendered by a scope's tabs, the home rail and the
+    // conversation that created it; a change to it has to reach every list
+    // holding it, loaded or only persisted.
+    this.#goalListRows = linkReplicaEntity<GoalListItem>([
+      this.#goalList,
+      this.#homeGoalList,
+      this.#topicGoalList,
+    ]);
 
     this.#goalGraph = createReplicaSlice(goalGraphResource, {
       actionPrefix: 'goalGraph',
@@ -350,6 +394,16 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
   };
 
+  /** The goal leaves (or joins) other members' lists, and its Tasks move with it. */
+  setGoalVisibility = async (goalId: string, visibility: 'private' | 'public'): Promise<void> => {
+    await goalService.setVisibility(goalId, visibility);
+    await Promise.all([
+      this.refreshGoalGraph(goalId),
+      revalidateReplica(goalListResource),
+      revalidateReplica(homeGoalListResource),
+    ]);
+  };
+
   setGoalModel = async (
     goalId: string,
     modelConfig: { model: string; provider: string } | null,
@@ -370,6 +424,134 @@ export class GoalActionImpl {
   updateGoalRequirement = async (goalId: string, requirement: string): Promise<void> => {
     await goalService.updateRequirement(goalId, requirement);
     await this.refreshGoalGraph(goalId);
+  };
+
+  /** Each goal's latest title write, so writes reach the server in the order they were made. */
+  #titleWrites = new Map<string, Promise<unknown>>();
+
+  /**
+   * Rename a goal everywhere it is shown — the page header, every list tab,
+   * the home rail and the conversation that created it — before the server
+   * answers. A rejected rename re-reads them all from the server and rethrows,
+   * so the caller can say why. Writes run one at a time per goal, so the latest
+   * edit is the one the server keeps, whichever request would have finished first.
+   */
+  updateGoalTitle = async (goalId: string, title: string): Promise<void> => {
+    const next = title.trim().slice(0, GOAL_TITLE_MAX_LENGTH);
+    if (!next) return;
+
+    this.#goalGraph.update(
+      goalId,
+      (graph) =>
+        graph && {
+          ...graph,
+          goal: { ...graph.goal, title: next },
+          // The server moves the root question along while it still has the old title.
+          nodes: graph.nodes.map((node) =>
+            node.kind === 'problem' && node.title === graph.goal.title
+              ? { ...node, title: next }
+              : node,
+          ),
+        },
+    );
+    this.#goalListRows.update(goalId, (item) => ({ ...item, goal: { ...item.goal, title: next } }));
+
+    const write = (this.#titleWrites.get(goalId) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => goalService.updateTitle(goalId, next));
+    this.#titleWrites.set(goalId, write);
+
+    try {
+      await write;
+      // The goal's management topic was renamed with it.
+      const topicId = this.#get().goalGraphById[goalId]?.goal.config?.managerState?.topicId;
+      // Loaded on demand: a static import puts the whole chat store on the first screen.
+      if (topicId)
+        void import('@/store/chat')
+          .then(({ useChatStore }) => useChatStore.getState().refreshTopicDetail(topicId, true))
+          .catch(() => {});
+    } catch (error) {
+      // A newer edit is still on its way: re-reading now would show this one's old title over it.
+      if (this.#titleWrites.get(goalId) === write) {
+        await Promise.allSettled([
+          this.refreshGoalGraph(goalId),
+          revalidateReplica(goalListResource),
+          revalidateReplica(homeGoalListResource),
+          revalidateReplica(topicGoalListResource),
+        ]);
+      }
+      throw error;
+    } finally {
+      if (this.#titleWrites.get(goalId) === write) this.#titleWrites.delete(goalId);
+    }
+  };
+
+  /**
+   * Name the goal from what it asks and what it has produced so far, with the
+   * chain and model topics are named with (`summaryTopicTitle`). An empty answer
+   * leaves the title alone. Failures reach the caller: the menu reports them,
+   * the background rename after creation ignores them.
+   */
+  autoRenameGoalTitle = async (goalId: string): Promise<void> => {
+    if (this.#get().goalTitleRenamingIds.includes(goalId)) return;
+    this.#setGoalTitleRenaming(goalId, true);
+
+    try {
+      const graph = this.#get().goalGraphById[goalId] ?? (await goalService.getGraph(goalId));
+      // A title saved by hand while the model was working is the newer choice.
+      const titleWhenAsked = this.#titleShown(goalId) ?? graph.goal.title;
+      const { model, provider } = systemAgentSelectors.topic(useUserStore.getState());
+      const { data } = await aiChatService.generateJSON(
+        {
+          ...chainSummaryTitle(
+            buildGoalTitleMessages(graph),
+            userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
+          ),
+          metadata: { trigger: RequestTrigger.Goal },
+          model,
+          provider,
+          schema: TOPIC_TITLE_JSON_SCHEMA,
+          tracing: {
+            promptVersion: TOPIC_TITLE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TopicTitle,
+            schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+          },
+        },
+        new AbortController(),
+      );
+
+      const title = (data as { title?: string } | undefined)?.title?.trim();
+      if (!title) throw new Error('No goal title was generated.');
+
+      if ((this.#titleShown(goalId) ?? titleWhenAsked) !== titleWhenAsked) return;
+
+      await this.updateGoalTitle(goalId, title);
+    } finally {
+      this.#setGoalTitleRenaming(goalId, false);
+    }
+  };
+
+  /** What the page or a list row shows now; a list row may be all that is loaded. */
+  #titleShown = (goalId: string): string | undefined => {
+    const state = this.#get();
+    const inList = (lists: Record<string, { goals: GoalListItem[] } | undefined>) =>
+      Object.values(lists)
+        .flatMap((list) => list?.goals ?? [])
+        .find((item) => item.goal.id === goalId)?.goal.title;
+    return (
+      state.goalGraphById[goalId]?.goal.title ??
+      inList(state.goalListByAgentId) ??
+      inList(state.homeGoalsByScope)
+    );
+  };
+
+  #setGoalTitleRenaming = (goalId: string, renaming: boolean) => {
+    const ids = this.#get().goalTitleRenamingIds.filter((id) => id !== goalId);
+    this.#set(
+      { goalTitleRenamingIds: renaming ? [...ids, goalId] : ids },
+      false,
+      'setGoalTitleRenaming',
+    );
   };
 
   /**
@@ -452,16 +634,19 @@ export class GoalActionImpl {
    * while a `/goal` request is generating (`generating`, decided by the caller)
    * — that run is the one that creates the goal, so nothing on screen would
    * otherwise ask for it.
+   *
+   * Read the rows through `goalSelectors.topicGoals`; the persisted copy paints
+   * first, and `goalSelectors.topicGoalsConfirmed` says when its statuses are
+   * the server's current ones.
    */
-  useFetchTopicGoals = (topicId?: string | null, generating?: boolean) =>
-    useClientDataSWR(
-      topicId ? goalKeys.topicGoals(topicId) : null,
-      () => goalService.list({ limit: TOPIC_GOAL_FETCH_LIMIT, topicId: topicId! }),
-      {
-        refreshInterval: (result) => topicGoalsRefreshInterval(result, generating),
-        revalidateOnFocus: true,
-      },
-    );
+  useFetchTopicGoals = (topicId?: string | null, generating?: boolean) => {
+    const advancing = useTopicGoalsAdvancing(topicId);
+    return this.#topicGoalList.useSync(topicId || null, {
+      dedupingInterval: TOPIC_GOALS_DEDUPING_INTERVAL,
+      refreshInterval: generating || advancing ? GOAL_GRAPH_POLL_INTERVAL : 0,
+      revalidateOnFocus: true,
+    });
+  };
 
   /**
    * North-star data of the goal detail header, read through

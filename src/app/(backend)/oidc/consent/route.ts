@@ -1,4 +1,3 @@
-import { acceptanceIdFromReviewResource } from '@lobechat/const';
 import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
@@ -6,18 +5,13 @@ import { NextResponse } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { isAcceptanceReviewClient } from '@/libs/oidc-provider/acceptanceReview';
-import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
+import { describeReviewTarget } from '@/server/services/acceptanceReview/reviewTarget';
 import { OIDCService } from '@/server/services/oidc';
 
 const log = debug('lobe-oidc:consent');
 
-const canReview = async (userId: string | null | undefined, resource: unknown) => {
-  const acceptanceId = acceptanceIdFromReviewResource(
-    Array.isArray(resource) ? resource[0] : resource,
-  );
-  if (!userId || !acceptanceId) return false;
-  return Boolean(await resolveReviewAccess(await getServerDB(), userId, acceptanceId));
-};
+const canReview = async (userId: string | null | undefined, resource: unknown) =>
+  (await describeReviewTarget(await getServerDB(), userId, resource)).allowed;
 
 export async function POST(request: NextRequest) {
   log('Received POST request for /oidc/consent, URL: %s', request.url);

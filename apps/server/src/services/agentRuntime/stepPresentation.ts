@@ -1,3 +1,5 @@
+import { getLlmCallCount } from '@lobechat/agent-runtime';
+
 import type { StepPresentationData } from './types';
 
 interface StepResultLike {
@@ -136,7 +138,7 @@ export function buildStepPresentation(
     totalCost: cost?.total ?? 0,
     totalInputTokens: tokens?.input ?? 0,
     totalOutputTokens: tokens?.output ?? 0,
-    totalSteps: stepResult.newState.stepCount ?? 0,
+    totalSteps: getLlmCallCount(stepResult.newState),
     totalTokens: tokens?.total ?? 0,
   };
 

@@ -44,6 +44,7 @@ import {
   resolveSandboxSessionConfig,
   type SandboxSessionSpecification,
 } from '@/server/services/sandbox';
+import type { SandboxInitialization } from '@/server/services/sandbox/environmentInit';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 import {
@@ -57,6 +58,7 @@ import {
   UserSkillService,
 } from '@/server/services/userSkill';
 
+import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
 import { type ServerRuntimeRegistration } from './types';
@@ -159,6 +161,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private userId: string;
   private workspaceId?: string;
   private sandboxCwd?: string;
+  private sandboxInitialization?: SandboxInitialization;
   private sandboxWorkingDir?: string;
   private sandboxInstanceId?: string;
   private sandboxMode?: SandboxMode;
@@ -167,6 +170,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private disabledSkillIds: Set<string>;
   private isSkillGranted?: (identifier: string) => boolean;
   private shareVisitorBlocked: boolean;
+  private wrapSandbox?: SandboxWrapper;
 
   constructor(options: {
     agentId?: string;
@@ -197,6 +201,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      * CLIs, injected credentials and anything outside the workspace with it.
      */
     sandboxCwd?: string;
+    sandboxInitialization?: SandboxInitialization;
     sandboxInstanceId?: string;
     sandboxMode?: SandboxMode;
     sandboxSpecification?: SandboxSessionSpecification;
@@ -208,6 +213,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     topicId?: string;
     userId: string;
     workspaceId?: string;
+    wrapSandbox?: SandboxWrapper;
   }) {
     this.agentId = options.agentId;
     this.skillModel = options.skillModel;
@@ -221,6 +227,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
     this.sandboxCwd = options.sandboxCwd;
+    this.sandboxInitialization = options.sandboxInitialization;
     this.sandboxWorkingDir = options.sandboxWorkingDir;
     this.sandboxInstanceId = options.sandboxInstanceId;
     this.sandboxMode = options.sandboxMode;
@@ -229,6 +236,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
     this.isSkillGranted = options.isSkillGranted;
     this.shareVisitorBlocked = options.shareVisitorBlocked ?? false;
+    this.wrapSandbox = options.wrapSandbox;
   }
 
   /**
@@ -360,6 +368,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -368,7 +377,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         topicId: this.topicId,
         userId: this.userId,
       });
-      const response = await sandboxService.callTool('runCommand', { command: lhResult.command });
+      const response = await (this.wrapSandbox?.(sandboxService) ?? sandboxService).callTool(
+        'runCommand',
+        { command: lhResult.command },
+      );
 
       log('runCommand response: %O', response);
 
@@ -718,6 +730,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -726,7 +739,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         topicId: this.topicId,
         userId: this.userId,
       });
-      const response = await sandboxService.callTool('execScript', enhancedParams);
+      const response = await (this.wrapSandbox?.(sandboxService) ?? sandboxService).callTool(
+        'execScript',
+        enhancedParams,
+      );
 
       log('execScript response: %O', response);
 
@@ -781,6 +797,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -944,6 +961,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       : undefined;
 
     const service = new SkillServerRuntimeService({
+      wrapSandbox: pageSandboxWrapper(context, workspaceId),
       agentId: context.agentId,
       device,
       disabledSkillIds,
@@ -957,6 +975,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       operationId: context.operationId,
       resourceService,
       sandboxCwd: sandbox.cwd,
+      sandboxInitialization: sandbox.initialization,
       sandboxInstanceId: sandbox.environment,
       sandboxMode: sandbox.mode,
       sandboxSpecification: sandbox.specification,

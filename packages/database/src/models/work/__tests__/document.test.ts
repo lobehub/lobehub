@@ -541,7 +541,7 @@ describe('WorkModel · workspace document visibility', () => {
       const ownerWorks = new WorkModel(serverDB, userId, workspaceId);
       await registerWorkspaceDocument('public');
 
-      await expect(ownerWorks.deleteWork({ id: 'work_missing' })).resolves.toBeUndefined();
+      await expect(ownerWorks.deleteWork({ id: 'work_missing' })).resolves.toEqual([]);
       expect(await ownerWorks.listByConversation({ topicId })).toHaveLength(1);
     });
   });

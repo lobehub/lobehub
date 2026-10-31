@@ -3,7 +3,6 @@
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import {
   ActionIcon,
-  Button,
   Center,
   createStaticStyles,
   DropdownMenu,
@@ -16,8 +15,6 @@ import {
 } from '@lobehub/ui';
 import type { GitStatusEntry } from '@pierre/trees';
 import {
-  CheckIcon,
-  ChevronDownIcon,
   EllipsisIcon,
   FileIcon,
   FilePlusIcon,
@@ -387,27 +384,6 @@ const Files = memo<FilesProps>(
       setExpandedIds([]);
     }, []);
 
-    const viewItems = useMemo(
-      () => [
-        {
-          extra: viewMode === 'project' ? <CheckIcon size={14} /> : undefined,
-          icon: <FolderTreeIcon size={14} />,
-          key: 'project',
-          label: t('workingPanel.files.views.project'),
-          onClick: () => setViewMode('project'),
-        },
-        {
-          disabled: data?.source !== 'git',
-          extra: viewMode === 'changes' ? <CheckIcon size={14} /> : undefined,
-          icon: <GitCompareArrowsIcon size={14} />,
-          key: 'changes',
-          label: t('workingPanel.files.views.changes'),
-          onClick: () => setViewMode('changes'),
-        },
-      ],
-      [data?.source, t, viewMode],
-    );
-
     useEffect(() => {
       if (!isFiltering) return;
       treeRef.current?.setExpanded(defaultExpandedIds);
@@ -531,22 +507,23 @@ const Files = memo<FilesProps>(
             </div>
           ) : (
             <>
-              <DropdownMenu items={viewItems} placement={'bottomLeft'}>
-                <Button
-                  icon={viewMode === 'project' ? FolderTreeIcon : GitCompareArrowsIcon}
-                  size={'small'}
-                  style={{ maxWidth: 'calc(100% - 84px)' }}
-                  title={t('workingPanel.files.views.title')}
-                  type={'text'}
-                >
-                  {t(
-                    viewMode === 'project'
-                      ? 'workingPanel.files.views.project'
-                      : 'workingPanel.files.views.changes',
-                  )}
-                  <ChevronDownIcon size={12} />
-                </Button>
-              </DropdownMenu>
+              <ActionIcon
+                active={viewMode === 'project'}
+                aria-pressed={viewMode === 'project'}
+                icon={FolderTreeIcon}
+                size={'small'}
+                title={t('workingPanel.files.views.project')}
+                onClick={() => setViewMode('project')}
+              />
+              <ActionIcon
+                active={viewMode === 'changes'}
+                aria-pressed={viewMode === 'changes'}
+                disabled={data?.source !== 'git'}
+                icon={GitCompareArrowsIcon}
+                size={'small'}
+                title={t('workingPanel.files.views.changes')}
+                onClick={() => setViewMode('changes')}
+              />
               <div style={{ flex: 1 }} />
             </>
           )}

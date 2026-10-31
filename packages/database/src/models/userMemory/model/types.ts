@@ -5,22 +5,19 @@ import type {
   Optional,
   RelationshipEnum,
   TypesEnum,
+  UserMemoryActivity,
+  UserMemoryActivityWithoutVectors,
+  UserMemoryContext,
   UserMemoryContextObjectType,
   UserMemoryContextSubjectType,
   UserMemoryContextWithoutVectors,
+  UserMemoryExperience,
   UserMemoryExperienceWithoutVectors,
+  UserMemoryIdentity,
   UserMemoryItemSimple,
+  UserMemoryPreference,
   UserMemoryPreferenceWithoutVectors,
 } from '@lobechat/types';
-
-import type {
-  UserMemoryActivitiesWithoutVectors,
-  UserMemoryActivity,
-  UserMemoryContext,
-  UserMemoryExperience,
-  UserMemoryIdentity,
-  UserMemoryPreference,
-} from '../../../schemas';
 
 export interface BaseCreateUserMemoryParams {
   capturedAt?: Date;
@@ -39,9 +36,15 @@ export interface CreateUserMemoryContextParams extends BaseCreateUserMemoryParam
   context: Optional<
     Omit<
       UserMemoryContext,
-      'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryIds'
+      'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryIds' | 'userMemoryId'
     >,
-    'capturedAt'
+    | 'capturedAt'
+    | 'firstSeenAt'
+    | 'lastEvidenceAt'
+    | 'nextSteps'
+    | 'now'
+    | 'openQuestions'
+    | 'synthesizedAt'
   >;
 }
 
@@ -51,7 +54,7 @@ export interface CreateUserMemoryActivityParams extends BaseCreateUserMemoryPara
       UserMemoryActivity,
       'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryId'
     >,
-    'capturedAt'
+    'capturedAt' | 'dossierId' | 'injectable'
   >;
 }
 
@@ -71,7 +74,7 @@ export interface CreateUserMemoryIdentityParams extends BaseCreateUserMemoryPara
       UserMemoryIdentity,
       'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryId'
     >,
-    'capturedAt'
+    'capturedAt' | 'entityId'
   >;
 }
 
@@ -81,7 +84,13 @@ export interface CreateUserMemoryPreferenceParams extends BaseCreateUserMemoryPa
       UserMemoryPreference,
       'id' | 'userId' | 'createdAt' | 'updatedAt' | 'accessedAt' | 'userMemoryId'
     >,
-    'capturedAt'
+    | 'appliesToEntityId'
+    | 'capturedAt'
+    | 'evidenceCount'
+    | 'evidenceSource'
+    | 'holderEntityId'
+    | 'lastEvidenceAt'
+    | 'scope'
   >;
 }
 
@@ -109,7 +118,7 @@ export interface SearchUserMemoryWithEmbeddingParams {
 }
 
 export interface UserMemorySearchAggregatedResult {
-  activities: UserMemoryActivitiesWithoutVectors[];
+  activities: UserMemoryActivityWithoutVectors[];
   contexts: UserMemoryContextWithoutVectors[];
   experiences: UserMemoryExperienceWithoutVectors[];
   preferences: UserMemoryPreferenceWithoutVectors[];

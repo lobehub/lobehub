@@ -1,4 +1,5 @@
-import { imageUrlToBase64, videoUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { videoUrlToBase64 } from '../../utils/videoToBase64';
 import { Buffer } from 'buffer.js';
 import type OpenAI from 'openai';
 import { toFile } from 'openai';
@@ -120,6 +121,30 @@ const isInternalThinkingContentPart = (
   content: OpenAICompatibleContentPart,
 ): content is Extract<UserMessageContentPart, { type: 'thinking' }> => content.type === 'thinking';
 
+const isEmptyTextContentPart = (content: OpenAICompatibleContentPart) =>
+  content.type === 'text' && !(content as { text?: string }).text;
+
+/**
+ * Drops content parts an OpenAI-compatible upstream must not receive.
+ *
+ * Signed reasoning turns arrive as `[thinking, text]` even when the reply was
+ * tool calls only, which leaves `{ type: 'text', text: '' }` once thinking is
+ * removed. Moonshot (official API and aggregators such as Novita) rejects that
+ * with 400 "text content is empty" and every retry of the topic fails, while
+ * `content: null` is accepted. When nothing remains, use `null` for tool-call
+ * turns and `''` otherwise.
+ */
+const filterOutgoingContentParts = (msg: any, parts: OpenAICompatibleContentPart[]) => {
+  const filtered = parts.filter(
+    (c) =>
+      !isInternalThinkingContentPart(c) && (msg.role !== 'assistant' || !isEmptyTextContentPart(c)),
+  );
+
+  if (filtered.length > 0 || msg.role !== 'assistant') return filtered;
+
+  return msg.tool_calls?.length ? null : '';
+};
+
 export const convertMessageContent = async (
   content: ConvertibleMessageContentPart,
   options?: ConvertMessageContentOptions,
@@ -232,15 +257,20 @@ export const convertOpenAIMessages = async (
 
       // Explicitly map only valid ChatCompletionMessageParam fields
       // Exclude reasoning and reasoning_content fields as they should not be sent in requests
+      const parts =
+        typeof message.content === 'string'
+          ? message.content
+          : filterOutgoingContentParts(
+              msg,
+              (message.content || []) as OpenAICompatibleContentPart[],
+            );
+
       const result: any = {
-        content:
-          typeof message.content === 'string'
-            ? message.content
-            : await Promise.all(
-                (message.content || [])
-                  .filter((c) => !isInternalThinkingContentPart(c as OpenAICompatibleContentPart))
-                  .map((c) => convertMessageContent(c as ConvertibleMessageContentPart, options)),
-              ),
+        content: Array.isArray(parts)
+          ? await Promise.all(
+              parts.map((c) => convertMessageContent(c as ConvertibleMessageContentPart, options)),
+            )
+          : parts,
         role: msg.role,
       };
 

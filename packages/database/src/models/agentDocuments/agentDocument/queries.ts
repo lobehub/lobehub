@@ -10,7 +10,7 @@ import {
   type AgentDocumentListSourceType,
   type AgentDocumentPolicy,
   type AgentDocumentWithRules,
-  DocumentLoadFormat,
+  type DocumentLoadFormat,
   PolicyLoad,
 } from '../types';
 import { agentDocOwnership, type AgentDocumentContext, documentOwnership } from './context';
@@ -210,10 +210,7 @@ export async function findContextByAgent(
       parentId: doc.parentId ?? null,
       policy,
       policyLoad: settings.policyLoad as PolicyLoad,
-      policyLoadFormat:
-        (settings.policyLoadFormat as DocumentLoadFormat | null) ??
-        policy?.context?.policyLoadFormat ??
-        DocumentLoadFormat.RAW,
+      policyLoadFormat: settings.policyLoadFormat as DocumentLoadFormat,
       policyLoadPosition: settings.policyLoadPosition,
       policyLoadRule: settings.policyLoadRule,
       sourceType: doc.sourceType,

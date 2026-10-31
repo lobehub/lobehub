@@ -144,17 +144,19 @@ describe('OIDC protocol endpoints', () => {
     return { getSession: vi.mocked(auth.api.getSession), response };
   };
 
-  it.each(['/oidc/.well-known/openid-configuration', '/oidc/jwks', '/oidc/me'])(
-    'serves %s without sending an unauthenticated client to sign-in',
-    async (path) => {
-      const { getSession, response } = await callMiddleware(path);
+  it.each([
+    '/oidc/.well-known/openid-configuration',
+    '/oidc/jwks',
+    '/oidc/me',
+    '/oidc/review/callback?error=invalid_target&state=s',
+  ])('serves %s without sending an unauthenticated client to sign-in', async (path) => {
+    const { getSession, response } = await callMiddleware(path);
 
-      expect(getSession).not.toHaveBeenCalled();
-      expect(response?.headers.get('x-middleware-next')).toBe('1');
-      expect(response?.headers.get('location')).toBeNull();
-      expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
-    },
-  );
+    expect(getSession).not.toHaveBeenCalled();
+    expect(response?.headers.get('x-middleware-next')).toBe('1');
+    expect(response?.headers.get('location')).toBeNull();
+    expect(response?.headers.get('x-middleware-rewrite')).toBeNull();
+  });
 
   it('still gates the authorization endpoint on a session', async () => {
     const { getSession } = await callMiddleware('/oidc/auth?client_id=lca_1&response_type=code');
@@ -172,6 +174,17 @@ describe('project deep links', () => {
       ).toBe(true);
       const rewrite = await run(`http://localhost:3010${path}`);
       expect(new URL(rewrite!).pathname).toMatch(new RegExp(`/spa/[^/]+${path}$`));
+    },
+  );
+});
+
+describe('channel deep links', () => {
+  it.each(['/channels', '/channels/chn_123'])(
+    'keeps %s reachable after a full page reload',
+    async (path) => {
+      const request = new NextRequest(`http://localhost:3010${path}`);
+      expect(createRouteMatcher(proxyConfig.matcher)(request)).toBe(true);
+      expect(new URL((await run(request.url))!).pathname).toMatch(new RegExp(`/spa/[^/]+${path}$`));
     },
   );
 });

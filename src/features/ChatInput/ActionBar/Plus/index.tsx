@@ -478,7 +478,7 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       : uploadItems;
 
     // Goal creation has one canonical entry: drop the goal chip at the head of
-    // the composer. The agent then plans and calls lobe-goal.createGoal,
+    // the composer. The agent then plans and calls builtin-goal.createGoal,
     // regardless of whether this conversation already has a topic.
     const acceptanceItems: ActionDropdownMenuItems = enableGoals
       ? [

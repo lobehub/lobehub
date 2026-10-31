@@ -7,6 +7,17 @@ export const LOBE_CHAT_CLOUD = 'LobeHub Cloud';
 export const BRANDING_NAME = 'LobeHub';
 export const BRANDING_LOGO_URL = '';
 
+/**
+ * Display name of the built-in default assistant (the inbox agent).
+ *
+ * Kept separate from `BRANDING_NAME` because it reads as a persona, not a
+ * product: white-label deployments usually want something like
+ * `'<Brand> AI'` rather than the bare product name. Drives
+ * `DEFAULT_INBOX_TITLE` and the i18n brand post-processor, so overriding this
+ * one constant renames the assistant everywhere.
+ */
+export const BRANDING_INBOX_TITLE = 'Lobe AI';
+
 export const ORG_NAME = 'LobeHub';
 
 export const BRANDING_URL = {

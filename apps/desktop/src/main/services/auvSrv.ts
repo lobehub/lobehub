@@ -1,6 +1,5 @@
 import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
-import { access, chmod, mkdtemp, rmdir } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -56,6 +55,8 @@ export type { AuvRunCommandParams, AuvRunCommandResult };
 export interface AuvCliExecutionOptions {
   argv: string[];
   binaryPath: string;
+  /** Launcher token of the app-owned daemon; written to the CLI's stdin, never argv or env. */
+  credential: string;
   endpoint: string;
   storeRoot: string;
 }
@@ -69,32 +70,11 @@ export interface AuvConnectionSnapshot {
 }
 
 export interface AuvRuntimeDependencies {
-  createIpcListener: () => Promise<PrivateIpcListener>;
   hostname: () => string;
   loadSdk: () => Promise<AuvSdkRuntime>;
   resolveBinaryPath: () => Promise<string>;
   runCli: (options: AuvCliExecutionOptions) => Promise<{ stderr: string; stdout: string }>;
 }
-
-export interface PrivateIpcListener {
-  cleanup?: () => Promise<void>;
-  listener: string;
-}
-
-const createPrivateIpcListener = async (): Promise<PrivateIpcListener> => {
-  if (process.platform === 'win32') {
-    return { listener: `npipe://./pipe/lobehub-auv-${randomUUID()}` };
-  }
-
-  // Darwin's sockaddr_un.sun_path is only 104 bytes. A short mkdtemp path also
-  // gives each app-owned child an unguessable, owner-only directory.
-  const ipcDirectory = await mkdtemp('/tmp/lobehub-auv-');
-  await chmod(ipcDirectory, 0o700);
-  return {
-    cleanup: () => rmdir(ipcDirectory),
-    listener: `unix://${path.join(ipcDirectory, 'auv.sock')}`,
-  };
-};
 
 const resolveAuvBinaryPath = async (): Promise<string> => {
   const executable = process.platform === 'win32' ? 'auv.exe' : 'auv';
@@ -120,22 +100,29 @@ const execFileAsync = promisify(execFile);
 const runAuvCli = async ({
   argv,
   binaryPath,
+  credential,
   endpoint,
   storeRoot,
 }: AuvCliExecutionOptions): Promise<{ stderr: string; stdout: string }> => {
-  const { stderr, stdout } = await execFileAsync(binaryPath, [...argv, '--store-root', storeRoot], {
-    encoding: 'utf8',
-    env: { ...process.env, AUV_ENDPOINT: endpoint },
-    maxBuffer: 4 * 1024 * 1024,
-    timeout: 120_000,
-    windowsHide: true,
-  });
+  // `--credential-stdin` is a root flag, so it must precede the subcommand.
+  const pending = execFileAsync(
+    binaryPath,
+    ['--credential-stdin', ...argv, '--store-root', storeRoot],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, AUV_ENDPOINT: endpoint },
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 120_000,
+      windowsHide: true,
+    },
+  );
+  pending.child.stdin?.end(`${credential}\n`);
+  const { stderr, stdout } = await pending;
 
   return { stderr, stdout };
 };
 
 const defaultDependencies: AuvRuntimeDependencies = {
-  createIpcListener: createPrivateIpcListener,
   hostname: os.hostname,
   loadSdk: () => import('@auv-js/sdk/node'),
   resolveBinaryPath: resolveAuvBinaryPath,
@@ -157,8 +144,6 @@ export default class AuvService extends ServiceModule {
   private connection: AuvConnection | null = null;
   private daemon: AuvDaemon | null = null;
   private binaryPath: string | null = null;
-  private ipcCleanup: (() => Promise<void>) | null = null;
-  private ipcEndpoint: string | null = null;
   private snapshot: AuvConnectionSnapshot = {
     devices: [],
     runnerClasses: [],
@@ -200,13 +185,10 @@ export default class AuvService extends ServiceModule {
 
     const connection = this.connection;
     const daemon = this.daemon;
-    const ipcCleanup = this.ipcCleanup;
     this.client = null;
     this.connection = null;
     this.daemon = null;
     this.binaryPath = null;
-    this.ipcCleanup = null;
-    this.ipcEndpoint = null;
 
     const errors: unknown[] = [];
     try {
@@ -217,12 +199,6 @@ export default class AuvService extends ServiceModule {
 
     try {
       await daemon?.stop();
-    } catch (error) {
-      errors.push(error);
-    }
-
-    try {
-      await ipcCleanup?.();
     } catch (error) {
       errors.push(error);
     }
@@ -254,13 +230,16 @@ export default class AuvService extends ServiceModule {
     const argv = normalizeAuvArgv(params);
     await this.getClient();
     const binaryPath = this.binaryPath;
-    const endpoint = this.ipcEndpoint;
-    if (!binaryPath || !endpoint) throw new Error('AUV is not connected');
+    const credential = this.daemon?.connectionOptions.credential;
+    // The CLI needs the listener URI; `connectionOptions.endpoint` drops the `unix://` scheme.
+    const endpoint = this.daemon?.endpoints[0];
+    if (!binaryPath || !credential || !endpoint) throw new Error('AUV is not connected');
 
     return runAuvCommand(params, argv, (cliArgv) =>
       this.dependencies.runCli({
         argv: cliArgv,
         binaryPath,
+        credential,
         endpoint,
         storeRoot: path.join(this.app.appStoragePath, 'auv', 'runs'),
       }),
@@ -274,25 +253,26 @@ export default class AuvService extends ServiceModule {
   private async open(): Promise<AuvConnectionSnapshot> {
     let connection: AuvConnection | null = null;
     let daemon: AuvDaemon | null = null;
-    let privateIpc: PrivateIpcListener | null = null;
 
     try {
       const sdk = await this.dependencies.loadSdk();
       const binaryPath =
         process.env.AUV_BINARY_PATH || (await this.dependencies.resolveBinaryPath());
       const auvRoot = path.join(this.app.appStoragePath, 'auv');
-      privateIpc = await this.dependencies.createIpcListener();
+      // Without `local.listen` the SDK binds an owner-only Unix socket or named
+      // pipe, and the default `launcher-token` auth admits only callers holding
+      // this launch's token: this process and the CLI children it hands it to.
       daemon = await sdk.startAuv({
         binaryPath,
-        listeners: [privateIpc.listener],
         noRegister: true,
         storeRoot: path.join(auvRoot, 'store'),
       });
 
-      const { local, transport } = daemon.connectionOptions;
+      const { credential, local, transport } = daemon.connectionOptions;
       if (!local || (transport !== 'unix' && transport !== 'npipe')) {
         throw new Error(`AUV refused non-private transport: ${transport}`);
       }
+      if (!credential) throw new Error('AUV daemon did not issue a launcher token');
 
       connection = await daemon.connect();
       const client = sdk.createAuv(connection);
@@ -301,8 +281,6 @@ export default class AuvService extends ServiceModule {
       this.connection = connection;
       this.daemon = daemon;
       this.binaryPath = binaryPath;
-      this.ipcCleanup = privateIpc.cleanup ?? null;
-      this.ipcEndpoint = privateIpc.listener;
       this.client = client;
       this.snapshot = { devices: [], runnerClasses: [], status: 'connected', transport };
 
@@ -314,12 +292,9 @@ export default class AuvService extends ServiceModule {
     } catch (error) {
       await connection?.close().catch(() => undefined);
       await daemon?.stop().catch(() => undefined);
-      await privateIpc?.cleanup?.().catch(() => undefined);
       this.connection = null;
       this.daemon = null;
       this.binaryPath = null;
-      this.ipcCleanup = null;
-      this.ipcEndpoint = null;
       this.client = null;
       this.snapshot = {
         devices: [],

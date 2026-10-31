@@ -427,6 +427,19 @@ const resourceSchemas: Record<string, SchemaObject> = {
         required: ['since', 'until'],
         type: 'object',
       },
+      quota: {
+        additionalProperties: false,
+        properties: {
+          limit: nullableNumber,
+          remaining: nullableNumber,
+          resetsAt: { ...dateTime, type: ['string', 'null'] },
+          source: { enum: ['personal', 'workspace_pool', 'member_budget'], type: 'string' },
+          used: { type: 'number' },
+          usedRatio: nullableNumber,
+        },
+        required: ['limit', 'remaining', 'resetsAt', 'source', 'used', 'usedRatio'],
+        type: ['object', 'null'],
+      },
       remainingBalance: nullableNumber,
       scope: { enum: ['personal', 'workspace'], type: 'string' },
       spent: { type: 'number' },
@@ -449,6 +462,7 @@ const resourceSchemas: Record<string, SchemaObject> = {
       'currency',
       'daily',
       'period',
+      'quota',
       'remainingBalance',
       'scope',
       'spent',
@@ -486,6 +500,21 @@ const imMessageSchema: SchemaObject = {
     content: { type: 'string' },
     createdAt: dateTime,
     error: { type: 'boolean' },
+    files: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          fileType: { type: 'string' },
+          size: { type: 'number' },
+          url: { type: 'string' },
+        },
+        required: ['id', 'name', 'fileType', 'size', 'url'],
+      },
+    },
     id: { type: 'string' },
     role: { enum: ['assistant', 'user'], type: 'string' },
   },
@@ -574,6 +603,7 @@ const ACCEPTED_OPERATIONS = new Set([
   'POST eval/runs',
   'POST signals/source-events',
   'POST signals/trigger',
+  'POST tasks/{id}/runs',
 ]);
 
 const successStatusFor = (group: string, rest: string, method: string): number => {

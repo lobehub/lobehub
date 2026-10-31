@@ -11,6 +11,7 @@ packages:
   - '../../packages/electron-client-ipc'
   - '../../packages/electron-mac-notifications'
   - '../../packages/electron-mac-permission-guide'
+  - '../../packages/electron-mac-sidebar-glass'
   - '../../packages/napi-loader'
   - '../../packages/file-loaders'
   - '../../packages/html-artifact'
@@ -65,14 +66,14 @@ overrides:
   vitest: 5.0.3
   'zod@^4': 4.6.5
 minimumReleaseAgeExclude:
-  - '@auv-js/api-client@0.0.33'
-  - '@auv-js/cli-darwin-arm64@0.0.33'
-  - '@auv-js/cli-darwin-x64@0.0.33'
-  - '@auv-js/cli-linux-arm64-gnu@0.0.33'
-  - '@auv-js/cli-linux-x64-gnu@0.0.33'
-  - '@auv-js/cli-win32-arm64-msvc@0.0.33'
-  - '@auv-js/cli-win32-x64-msvc@0.0.33'
-  - '@auv-js/cli@0.0.33'
-  - '@auv-js/sdk@0.0.33'
+  - '@auv-js/api-client@0.0.38'
+  - '@auv-js/cli-darwin-arm64@0.0.38'
+  - '@auv-js/cli-darwin-x64@0.0.38'
+  - '@auv-js/cli-linux-arm64-gnu@0.0.38'
+  - '@auv-js/cli-linux-x64-gnu@0.0.38'
+  - '@auv-js/cli-win32-arm64-msvc@0.0.38'
+  - '@auv-js/cli-win32-x64-msvc@0.0.38'
+  - '@auv-js/cli@0.0.38'
+  - '@auv-js/sdk@0.0.38'
   - electron-sparkle-updater@0.5.3
   - '@lobehub/*'

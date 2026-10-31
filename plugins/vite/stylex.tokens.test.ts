@@ -172,3 +172,32 @@ export const overlay = stylex.defineConsts({ ring: '3px solid rgb(1, 2, 3)' });
     expect(stylexAliases([path.join(root, 'src')])['@/*']).toEqual([path.join(root, 'src/*')]);
   });
 });
+
+describe('StyleX dev CSS collection', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+  it('resolves token constants before the browser loads their modules', async () => {
+    vi.stubEnv('VITEST', 'false');
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.resetModules();
+    const { stylexPlugin } = await import('./stylex');
+    const plugins = (stylexPlugin() as unknown[]).flat(Infinity) as Array<{
+      __stylexCollectCss?: () => string;
+      buildStart?: () => Promise<void> | void;
+      transform?: (code: string, id: string) => Promise<unknown>;
+    }>;
+    const compiler = plugins.find((plugin) => plugin.__stylexCollectCss);
+    if (!compiler?.buildStart || !compiler.transform || !compiler.__stylexCollectCss)
+      throw new Error('StyleX compiler hooks are missing');
+
+    await compiler.buildStart();
+    await compiler.transform(consumerSource, path.join(root, 'src/stylex-token-consumer.js'));
+
+    const css = compiler.__stylexCollectCss();
+    expect(css).toContain('color: var(--lobe-color-text)');
+    expect(css).toMatch(/@media[^{]+575\.98px/);
+    expect(css).not.toMatch(/var\(--(?!lobe-)[^)]+\)/);
+  });
+});

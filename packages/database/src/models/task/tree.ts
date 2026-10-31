@@ -1,5 +1,5 @@
 import type { TaskItem } from '@lobechat/types';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm';
 
 import {
   taskActivities,
@@ -189,6 +189,23 @@ export const setSubtreeVisibility = async (
   const stamp = new Date();
 
   return ctx.db.transaction(async (tx) => {
+    // A private task is creator-only, so a member assignee would keep a task
+    // they can no longer open. Unassign them before the root is read back
+    // below; the creator's own assignment and the agent assignee stay.
+    if (visibility === 'private') {
+      await tx
+        .update(tasks)
+        .set({ assigneeUserId: null })
+        .where(
+          and(
+            inArray(tasks.id, taskIds),
+            taskOwnership(ctx),
+            isNotNull(tasks.assigneeUserId),
+            ne(tasks.assigneeUserId, tasks.createdByUserId),
+          ),
+        );
+    }
+
     // Update the root with RETURNING so we read the post-update row in the
     // same statement. A second SELECT filtered by `ownership()` would self-
     // cancel when a workspace owner demotes another member's task to private:
@@ -242,6 +259,55 @@ export const setSubtreeVisibility = async (
 
     return updated ?? null;
   });
+};
+
+/**
+ * Row-lock every task of a subtree for the enclosing transaction, whatever its
+ * visibility, and return their statuses. A takeover authorizes the root it can
+ * see, then must act on the whole subtree: private subtasks the caller cannot
+ * see and runs starting concurrently both have to be caught under the lock.
+ */
+export const lockWholeSubtree = async (
+  ctx: TaskModelContext,
+  rootId: string,
+): Promise<{ id: string; status: string }[]> => {
+  if (!ctx.workspaceId) return [];
+  const result = await ctx.db.execute(sql`
+    WITH RECURSIVE task_tree AS (
+      SELECT id FROM tasks WHERE id = ${rootId} AND workspace_id = ${ctx.workspaceId}
+      UNION ALL
+      SELECT t.id FROM tasks t JOIN task_tree tt ON t.parent_task_id = tt.id
+    )
+    SELECT id, status FROM tasks
+    WHERE id IN (SELECT id FROM task_tree) AND is_deleted IS NOT TRUE
+    FOR UPDATE
+  `);
+  return result.rows as { id: string; status: string }[];
+};
+
+/**
+ * Make the caller the creator of a task subtree, for a member taking another
+ * member's public task private as their own. Only the `tasks` rows change: the
+ * child rows keep their authors and stay readable through the creator branch
+ * of `childOwnership`.
+ *
+ * Automation stops: runs are attributed to the creator, so the previous
+ * creator's queued schedule/heartbeat ticks no longer match the row, and an
+ * armed `scheduled` task would otherwise look live with nothing driving it.
+ * It returns to `backlog` (`paused` reads as "awaiting review" in the UI); the
+ * new creator re-arms it if they want it.
+ */
+export const takeOverSubtree = async (ctx: TaskModelContext, taskIds: string[]): Promise<void> => {
+  if (taskIds.length === 0) return;
+  await ctx.db
+    .update(tasks)
+    .set({
+      automationMode: null,
+      createdByUserId: ctx.userId,
+      status: sql`CASE WHEN ${tasks.status} = 'scheduled' THEN 'backlog' ELSE ${tasks.status} END`,
+      updatedAt: new Date(),
+    })
+    .where(and(inArray(tasks.id, taskIds), taskOwnership(ctx)));
 };
 
 /**

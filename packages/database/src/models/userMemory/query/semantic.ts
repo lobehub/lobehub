@@ -1,14 +1,14 @@
-import type { SearchMemoryParams } from '@lobechat/types';
+import type {
+  SearchMemoryParams,
+  UserMemoryActivityWithoutVectors,
+  UserMemoryContextWithoutVectors,
+  UserMemoryExperienceWithoutVectors,
+  UserMemoryIdentityWithoutVectors,
+  UserMemoryPreferenceWithoutVectors,
+} from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, cosineDistance, desc, eq, inArray, sql } from 'drizzle-orm';
 
-import type {
-  UserMemoryActivitiesWithoutVectors,
-  UserMemoryContextsWithoutVectors,
-  UserMemoryExperiencesWithoutVectors,
-  UserMemoryIdentitiesWithoutVectors,
-  UserMemoryPreferencesWithoutVectors,
-} from '../../../schemas';
 import {
   userMemories,
   userMemoriesActivities,
@@ -46,6 +46,8 @@ export async function searchActivitiesSemantic(
 
   const rowsQuery = ctx.db
     .select({
+      dossierId: userMemoriesActivities.dossierId,
+      injectable: userMemoriesActivities.injectable,
       accessedAt: userMemoriesActivities.accessedAt,
       associatedLocations: userMemoriesActivities.associatedLocations,
       associatedObjects: userMemoriesActivities.associatedObjects,
@@ -73,7 +75,7 @@ export async function searchActivitiesSemantic(
     .orderBy(desc(sql`1 - (${cosineDistance(userMemoriesActivities.narrativeVector, embedding)})`))
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryActivitiesWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryActivityWithoutVectors[]>;
 }
 
 export async function searchContextsSemantic(
@@ -102,6 +104,13 @@ export async function searchContextsSemantic(
   const contextCandidates = ctx.db.$with('semantic_context_candidates').as(
     ctx.db
       .select({
+        firstSeenAt: userMemoriesContexts.firstSeenAt,
+        lastEvidenceAt: userMemoriesContexts.lastEvidenceAt,
+        nextSteps: userMemoriesContexts.nextSteps,
+        now: userMemoriesContexts.now,
+        openQuestions: userMemoriesContexts.openQuestions,
+        synthesizedAt: userMemoriesContexts.synthesizedAt,
+        userMemoryId: userMemoriesContexts.userMemoryId,
         accessedAt: userMemoriesContexts.accessedAt,
         associatedObjects: userMemoriesContexts.associatedObjects,
         associatedSubjects: userMemoriesContexts.associatedSubjects,
@@ -163,6 +172,13 @@ export async function searchContextsSemantic(
       type: contextCandidates.type,
       updatedAt: contextCandidates.updatedAt,
       userId: contextCandidates.userId,
+      firstSeenAt: contextCandidates.firstSeenAt,
+      lastEvidenceAt: contextCandidates.lastEvidenceAt,
+      nextSteps: contextCandidates.nextSteps,
+      now: contextCandidates.now,
+      openQuestions: contextCandidates.openQuestions,
+      synthesizedAt: contextCandidates.synthesizedAt,
+      userMemoryId: contextCandidates.userMemoryId,
       userMemoryIds: contextCandidates.userMemoryIds,
     })
     .from(contextCandidates)
@@ -170,7 +186,7 @@ export async function searchContextsSemantic(
     .orderBy(desc(contextCandidates.similarity), desc(contextCandidates.createdAt))
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryContextsWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryContextWithoutVectors[]>;
 }
 
 export async function searchExperiencesSemantic(
@@ -220,7 +236,7 @@ export async function searchExperiencesSemantic(
     .orderBy(desc(sql`1 - (${cosineDistance(userMemoriesExperiences.situationVector, embedding)})`))
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryExperiencesWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryExperienceWithoutVectors[]>;
 }
 
 export async function searchPreferencesSemantic(
@@ -247,6 +263,12 @@ export async function searchPreferencesSemantic(
 
   const rowsQuery = ctx.db
     .select({
+      appliesToEntityId: userMemoriesPreferences.appliesToEntityId,
+      evidenceCount: userMemoriesPreferences.evidenceCount,
+      evidenceSource: userMemoriesPreferences.evidenceSource,
+      holderEntityId: userMemoriesPreferences.holderEntityId,
+      lastEvidenceAt: userMemoriesPreferences.lastEvidenceAt,
+      scope: userMemoriesPreferences.scope,
       accessedAt: userMemoriesPreferences.accessedAt,
       capturedAt: userMemoriesPreferences.capturedAt,
       conclusionDirectives: userMemoriesPreferences.conclusionDirectives,
@@ -271,7 +293,7 @@ export async function searchPreferencesSemantic(
     )
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryPreferencesWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryPreferenceWithoutVectors[]>;
 }
 
 export async function searchIdentitiesSemantic(
@@ -279,7 +301,7 @@ export async function searchIdentitiesSemantic(
   embedding: number[],
   limit: number,
   params: SearchMemoryParams,
-): Promise<UserMemoryIdentitiesWithoutVectors[]> {
+): Promise<UserMemoryIdentityWithoutVectors[]> {
   const conditions = [
     ctx.memoryWhere(userMemoriesIdentities),
     ctx.memoryWhere(userMemories),
@@ -302,6 +324,7 @@ export async function searchIdentitiesSemantic(
 
   const rowsQuery = ctx.db
     .select({
+      entityId: userMemoriesIdentities.entityId,
       accessedAt: userMemoriesIdentities.accessedAt,
       capturedAt: userMemoriesIdentities.capturedAt,
       createdAt: userMemoriesIdentities.createdAt,
@@ -325,5 +348,5 @@ export async function searchIdentitiesSemantic(
     )
     .limit(limit);
 
-  return rowsQuery as Promise<UserMemoryIdentitiesWithoutVectors[]>;
+  return rowsQuery as Promise<UserMemoryIdentityWithoutVectors[]>;
 }

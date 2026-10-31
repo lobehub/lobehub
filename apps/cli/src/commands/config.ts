@@ -2,7 +2,9 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { getOpenApi } from '../api/openapi';
 import { resolveWorkspaceScope } from '../api/workspace';
+import { resolveWorkspaceRef } from '../api/workspaceRef';
 import { CLI_PRODUCT_NAME } from '../constants/identity';
 import {
   type BoxTableRow,
@@ -58,7 +60,7 @@ export function registerConfigCommand(program: Command) {
 
   // ── usage ─────────────────────────────────────────────
 
-  program
+  const usage = program
     .command('usage')
     .description('View usage statistics')
     .option('--month <YYYY-MM>', 'Month to query (default: current)')
@@ -228,4 +230,70 @@ export function registerConfigCommand(program: Command) {
         });
       },
     );
+
+  // ── usage quota ───────────────────────────────────────
+
+  usage
+    .command('quota')
+    .description("Show how much of this cycle's credit allowance is used and left")
+    .option(
+      '--workspace <id|slug>',
+      'Read the allowance in this workspace (defaults to the active scope)',
+    )
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(async (_options: unknown, command: Command) => {
+      // `usage` declares `--json` too, and Commander hands it a `--json`
+      // written after `quota`; merging the ancestors' options recovers it.
+      const options = command.optsWithGlobals<{ json?: string | boolean; workspace?: string }>();
+      const summary = await getOpenApi<UsageSummary>(
+        '/usage',
+        await resolveWorkspaceRef(options.workspace),
+      );
+
+      if (options.json !== undefined) {
+        outputJson(
+          { quota: summary.quota, scope: summary.scope },
+          typeof options.json === 'string' ? options.json : undefined,
+        );
+        return;
+      }
+
+      const { quota } = summary;
+      if (!quota) {
+        console.log('No credit allowance on this server.');
+        return;
+      }
+
+      console.log(pc.bold('Credit Allowance'));
+      console.log(`  Source:    ${QUOTA_SOURCE_LABELS[quota.source]}`);
+      if (quota.limit === null) {
+        console.log(`  Used:      ${formatCost(quota.used)} ${pc.dim('(no cap)')}`);
+      } else {
+        const percent = Math.round((quota.usedRatio ?? 0) * 100);
+        console.log(
+          `  Used:      ${percent}% (${formatCost(quota.used)} of ${formatCost(quota.limit)})`,
+        );
+      }
+      if (quota.remaining !== null) console.log(`  Remaining: ${formatCost(quota.remaining)}`);
+      if (quota.resetsAt) console.log(`  Resets:    ${quota.resetsAt.slice(0, 10)}`);
+    });
 }
+
+/** The fields of `GET /api/v1/usage` that `lh usage quota` reads. */
+interface UsageSummary {
+  quota: {
+    limit: number | null;
+    remaining: number | null;
+    resetsAt: string | null;
+    source: 'member_budget' | 'personal' | 'workspace_pool';
+    used: number;
+    usedRatio: number | null;
+  } | null;
+  scope: 'personal' | 'workspace';
+}
+
+const QUOTA_SOURCE_LABELS: Record<NonNullable<UsageSummary['quota']>['source'], string> = {
+  member_budget: 'your member limit in this workspace',
+  personal: 'personal credits',
+  workspace_pool: 'workspace credit pool',
+};

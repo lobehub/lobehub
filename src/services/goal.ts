@@ -4,6 +4,8 @@ import type {
   GoalGraphSnapshot,
   GoalMetricCriterion,
   GoalNodeKind,
+  GoalSubscriptionFreshnessPolicy,
+  GoalSubscriptionWakeCondition,
   GoalTickResult,
 } from '@lobechat/types';
 
@@ -32,6 +34,37 @@ export interface GoalListParams {
 
 /** Every graph method takes the `goals` row id. */
 class GoalService {
+  enableSubscription = async (id: string, bindingRevision: number) =>
+    (await lambdaClient.goal.enableSubscription.mutate({ id, bindingRevision })).data;
+  disableSubscription = async (id: string, bindingRevision: number) =>
+    (await lambdaClient.goal.disableSubscription.mutate({ id, bindingRevision })).data;
+
+  listSubscriptions = async (goalId: string) =>
+    (await lambdaClient.goal.listSubscriptions.query({ goalId })).data;
+
+  bindSubscription = async (input: {
+    goalId: string;
+    widgetId: string;
+    metricId: string | null;
+    criterionKey?: string;
+    confirmedVersionId: string;
+    confirmedContentHash: string;
+    freshnessPolicy: GoalSubscriptionFreshnessPolicy;
+    wakeCondition: GoalSubscriptionWakeCondition;
+  }) => (await lambdaClient.goal.bindSubscription.mutate(input)).data;
+
+  rebindSubscription = async (
+    input: Parameters<GoalService['bindSubscription']>[0] & { id: string; bindingRevision: number },
+  ) => (await lambdaClient.goal.rebindSubscription.mutate(input)).data;
+
+  updateSubscription = async (input: {
+    id: string;
+    bindingRevision: number;
+    enabled: boolean;
+    freshnessPolicy: GoalSubscriptionFreshnessPolicy;
+    wakeCondition: GoalSubscriptionWakeCondition;
+  }) => (await lambdaClient.goal.updateSubscription.mutate(input)).data;
+
   /**
    * List goals. Each item is the execution-carrier task with the goal row
    * attached plus subtree run statistics — see `GoalModel.list` on the server.
@@ -77,6 +110,13 @@ class GoalService {
     id: string,
     observation: { key: string; observedAt?: Date; title?: string; unit?: string; value: number },
   ) => lambdaClient.goal.recordObservation.mutate({ id, ...observation });
+
+  /**
+   * Copy the goal's definition into personal (`null`) or a workspace as a new
+   * draft; its graph progress and Tasks stay behind.
+   */
+  copyGoalToWorkspace = async (id: string, targetWorkspaceId: string | null) =>
+    lambdaClient.goal.copyGoalToWorkspace.mutate({ id, targetWorkspaceId });
 
   /** Delete a goal and its graph. The dispatched Work Tasks are left in place. */
   delete = async (id: string) => lambdaClient.goal.delete.mutate({ id });
@@ -163,6 +203,10 @@ class GoalService {
   setTaskAgent = async (id: string, agentId: string | null) =>
     lambdaClient.goal.setTaskAgent.mutate({ agentId, id });
 
+  /** Make a workspace goal private or public; its own Tasks follow. */
+  setVisibility = async (id: string, visibility: 'private' | 'public') =>
+    lambdaClient.goal.setVisibility.mutate({ id, visibility });
+
   /** The model the goal agent plans with; `null` falls back to the agent's own. */
   setModel = async (id: string, modelConfig: { model: string; provider: string } | null) =>
     lambdaClient.goal.setModel.mutate({ id, modelConfig });
@@ -192,6 +236,9 @@ class GoalService {
 
   updateRequirement = async (id: string, requirement: string) =>
     lambdaClient.goal.updateRequirement.mutate({ id, requirement });
+
+  updateTitle = async (id: string, title: string) =>
+    lambdaClient.goal.updateTitle.mutate({ id, title });
 }
 
 export const goalService = new GoalService();

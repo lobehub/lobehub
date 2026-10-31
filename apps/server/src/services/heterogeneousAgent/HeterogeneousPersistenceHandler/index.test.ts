@@ -34,7 +34,10 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       expect(h.topicModel.findById).toHaveBeenCalledWith('topic-1');
       // Text chunks accumulate; flushed to DB at end of each batch (multi-replica fix)
-      expect(h.messageModel.update).toHaveBeenCalledWith('asst-seeded', { content: 'hello world' });
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-seeded', {
+        content: 'hello world',
+        metadata: { operationId: 'op-1' },
+      });
     });
 
     it('throws when the topic has no matching runningOperation', async () => {
@@ -111,7 +114,10 @@ describe('HeterogeneousPersistenceHandler', () => {
       });
 
       expect(isOperationLiveOnTopic).toHaveBeenCalledWith('op-1', 'topic-1');
-      expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', { content: 'kept' });
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', {
+        content: 'kept',
+        metadata: { operationId: 'op-1' },
+      });
     });
 
     it('recovers the assistant pointer from heteroCurrentMsgId when the marker is gone', async () => {
@@ -136,7 +142,10 @@ describe('HeterogeneousPersistenceHandler', () => {
         topicId: 'topic-1',
       });
 
-      expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', { content: 'kept' });
+      expect(h.messageModel.update).toHaveBeenCalledWith('asst-1', {
+        content: 'kept',
+        metadata: { operationId: 'op-1' },
+      });
     });
 
     it('still refuses a marker-less batch once the operation row is terminal', async () => {
@@ -460,6 +469,7 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       const asst = h.messages.get('asst-1')!;
       expect(asst.metadata).toEqual({
+        operationId: 'op-1',
         usage: { totalInputTokens: 1, totalOutputTokens: 0, totalTokens: 1 },
       });
     });

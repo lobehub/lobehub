@@ -16,6 +16,7 @@ const PROVIDERS = new Set<AgentInterventionProvider>([
   'cursor',
   'devin',
   'droid',
+  'opencode',
   'qoder',
 ]);
 

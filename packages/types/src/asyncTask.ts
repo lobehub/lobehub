@@ -4,6 +4,8 @@ export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
+  /** One-way Linear issue → task sync run in the background (`linear_issue_sync`). */
+  LinearIssueSync = 'linear_issue_sync',
   UserMemoryExtractionHourly = 'user_memory_extraction:hourly',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
   VideoGeneration = 'video_generation',

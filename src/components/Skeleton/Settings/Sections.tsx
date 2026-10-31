@@ -1,14 +1,18 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ComponentType, ReactNode } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
+import { sx } from '@/styles/sx';
 
 import SkeletonBar from '../Bar';
+import moduleStyles from './Sections.module.css';
 
 /** Shared head options of every section rendered as a filled `Form.Group`. */
 interface GroupHeadOptions {
@@ -100,36 +104,36 @@ export interface SettingsSectionsShape {
  */
 export type SettingsSectionsFrame = 'container' | 'header' | 'none';
 
-const styles = createStaticStyles(({ css }) => ({
-  banner: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  card: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  divider: css`
-    width: 100%;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  flush: css`
-    overflow: hidden;
-
-    [data-form-group-body] {
-      padding: 0;
-    }
-  `,
-  grid: css`
-    display: grid;
-  `,
-  tile: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  banner: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  card: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  divider: {
+    width: '100%',
+    height: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  grid: { display: 'grid' },
+  tile: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const widthAt = (index: number, widths: number[]) => widths[index % widths.length];
 
@@ -155,7 +159,7 @@ const Group = ({
   titleWidth,
 }: GroupHeadOptions & { children: ReactNode; flush?: boolean }) => (
   <Form.Group
-    className={flush ? styles.flush : undefined}
+    className={flush ? moduleStyles.flush : undefined}
     collapsible={false}
     desc={desc ? <GroupDesc /> : undefined}
     extra={extra ? <SkeletonBar height={32} width={120} /> : undefined}
@@ -170,7 +174,7 @@ const FormRows = ({ rows }: { rows: number }) => (
   <Flexbox>
     {Array.from({ length: rows }).map((_, index) => (
       <Flexbox key={index}>
-        {index > 0 && <div className={styles.divider} />}
+        {index > 0 && <div {...stylex.props(styles.divider)} />}
         <Flexbox
           horizontal
           align={'center'}
@@ -231,7 +235,7 @@ const TableBody = ({
     </Flexbox>
     {Array.from({ length: rows }).map((_, row) => (
       <Flexbox key={row}>
-        <div className={styles.divider} />
+        <div {...stylex.props(styles.divider)} />
         <Flexbox horizontal align={'center'} gap={24} height={52} paddingInline={16}>
           {TABLE_COLUMNS.map((flex, index) => (
             <Flexbox flex={flex} key={index}>
@@ -263,14 +267,13 @@ const Tiles = ({
   tiles: number;
 }) => (
   <div
-    className={styles.grid}
-    style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    {...sx([styles.grid], undefined, { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` })}
   >
     {Array.from({ length: tiles }).map((_, index) => (
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.tile}
+        className={stylex.props(styles.tile).className}
         gap={12}
         height={tileHeight}
         justify={'space-between'}
@@ -300,7 +303,7 @@ const Summary = ({
       <SkeletonBar height={28} width={48} />
       <SkeletonBar height={16} width={72} />
       <SkeletonBar height={20} width={'56%'} />
-      <div className={styles.divider} />
+      <div {...stylex.props(styles.divider)} />
       <SkeletonBar height={20} width={200} />
     </Flexbox>
   ) : (
@@ -340,14 +343,14 @@ const Detail = ({ lines }: { lines: number }) => (
         <SkeletonBar height={12} width={200} />
       </Flexbox>
     </Flexbox>
-    <div className={styles.divider} />
+    <div {...stylex.props(styles.divider)} />
     <Checklist lines={lines} />
   </Flexbox>
 );
 
 const Card = ({ size }: { size: 'large' | 'small' }) =>
   size === 'large' ? (
-    <Flexbox className={styles.card} gap={16} height={720} padding={16}>
+    <Flexbox className={stylex.props(styles.card).className} gap={16} height={720} padding={16}>
       <SkeletonBar height={36} radius={cssVar.borderRadiusLG} width={36} />
       <Flexbox gap={10}>
         <SkeletonBar height={18} width={72} />
@@ -361,7 +364,13 @@ const Card = ({ size }: { size: 'large' | 'small' }) =>
       <Checklist lines={12} />
     </Flexbox>
   ) : (
-    <Flexbox className={styles.card} gap={8} height={65} justify={'center'} paddingInline={12}>
+    <Flexbox
+      className={stylex.props(styles.card).className}
+      gap={8}
+      height={65}
+      justify={'center'}
+      paddingInline={12}
+    >
       <SkeletonBar height={18} width={48} />
       <SkeletonBar height={12} width={64} />
     </Flexbox>
@@ -378,7 +387,7 @@ const CardsFooter = () => (
       ))}
     </Flexbox>
     <SkeletonBar height={56} radius={cssVar.borderRadiusLG} />
-    <div className={styles.divider} />
+    <div {...stylex.props(styles.divider)} />
     <Flexbox horizontal align={'center'} justify={'space-between'}>
       <SkeletonBar height={28} width={120} />
       <SkeletonBar height={38} width={128} />
@@ -398,8 +407,10 @@ const CardGrid = ({
   size: 'large' | 'small';
 }) => (
   <div
-    className={styles.grid}
-    style={{ gap, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    {...sx([styles.grid], undefined, {
+      gap,
+      gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+    })}
   >
     {Array.from({ length: cards }).map((_, index) => (
       <Card key={index} size={size} />
@@ -411,7 +422,13 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
   switch (section.variant) {
     case 'banner': {
       return (
-        <Flexbox horizontal align={'center'} className={styles.banner} gap={16} padding={18}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.banner).className}
+          gap={16}
+          padding={18}
+        >
           <SkeletonBar height={48} radius={'50%'} width={48} />
           <Flexbox gap={10}>
             <SkeletonBar height={18} width={240} />
@@ -503,7 +520,7 @@ const PageTitle = () => (
     <Flexbox height={38} justify={'center'}>
       <SkeletonBar height={28} width={96} />
     </Flexbox>
-    <div className={styles.divider} />
+    <div {...stylex.props(styles.divider)} />
   </Flexbox>
 );
 

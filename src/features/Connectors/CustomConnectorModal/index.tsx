@@ -7,9 +7,9 @@ import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
+import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
-import { executeOAuthCreate } from './oauthCreate';
 
 interface CustomConnectorModalProps {
   connectorId?: string;

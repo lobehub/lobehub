@@ -68,12 +68,15 @@ vi.mock('@/store/chat/selectors', () => ({
   chatPortalSelectors: { currentViewType: () => undefined, showPortal: () => mocks.showPortal },
 }));
 
-vi.mock('@/store/global', () => ({
-  useGlobalStore: Object.assign(
-    (selector: (s: any) => unknown) => selector({ toggleLeftPanel: vi.fn() }),
-    { getState: () => ({ toggleLeftPanel: vi.fn() }) },
-  ),
-}));
+vi.mock('@/store/global', () => {
+  // The assignee picker reads persisted UI status (folded groups, recents).
+  const state = { status: {}, toggleLeftPanel: vi.fn(), updateSystemStatus: vi.fn() };
+  return {
+    useGlobalStore: Object.assign((selector: (s: any) => unknown) => selector(state), {
+      getState: () => state,
+    }),
+  };
+});
 
 vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: { showLeftPanel: () => false },
@@ -111,6 +114,11 @@ vi.mock('./GoalSupervisorToggle', () => ({
 vi.mock('@/features/Portal/router', () => ({
   PortalContent: () => <div data-testid="goal-portal-content" />,
 }));
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
+  useCurrentFavoritePath: () => '/favorite-path',
+  useFavoriteMenuItem: () => null,
+}));
 vi.mock('@/features/NavHeader', () => ({
   default: ({ left, right }: { left: ReactNode; right: ReactNode }) => (
     <div>
@@ -131,28 +139,21 @@ vi.mock('./GoalChat', () => ({
     agentId,
     initialMessage,
     initialTopicId,
-    onSelectTopic,
   }: {
     agentId: string;
     initialMessage?: string;
     initialTopicId?: string;
-    onSelectTopic?: (topicId: string) => void;
   }) => (
     <div
       data-agent-id={agentId}
       data-initial-message={initialMessage}
       data-initial-topic-id={initialTopicId}
       data-testid="goal-chat"
-    >
-      {onSelectTopic && (
-        <button data-testid="goal-chat-pick-record" onClick={() => onSelectTopic('tpc_manager')}>
-          pick record
-        </button>
-      )}
-    </div>
+    />
   ),
 }));
 vi.mock('./GoalDetailActions', () => ({ default: () => null }));
+vi.mock('./GoalDetailTitle', () => ({ default: () => null }));
 vi.mock('./GoalHeaderMetrics', () => ({ default: () => null }));
 vi.mock('./GoalRequirement', () => ({ default: () => <div data-testid="goal-requirement" /> }));
 vi.mock('./NorthStarMetrics', () => ({ default: () => <div data-testid="goal-north-star" /> }));
@@ -285,36 +286,17 @@ describe('GoalDetailPage', () => {
     expect(screen.queryByTestId('goal-follow-up')).not.toBeInTheDocument();
   });
 
-  // The side chat stays one menu item away, for a question that should not land
-  // in the manager's own record.
-  it('hands a managed goal back to its editable conversation from the record', () => {
+  // A goal bound to its supervision record keeps the panel on that topic: the
+  // record offers no way out to a new or another conversation.
+  it('keeps a bound goal’s panel on its supervision record', () => {
     render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
 
     fireEvent.click(screen.getByTestId('goal-supervisor-toggle'));
-    expect(screen.getByTestId('goal-supervision')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('goal-supervision-open-chat'));
-
-    expect(screen.queryByTestId('goal-supervision')).not.toBeInTheDocument();
-    expect(screen.getByTestId('goal-chat')).toHaveAttribute('data-agent-id', 'agt_manager');
-    expect(screen.getByTestId('goal-right-panel')).toHaveAttribute('data-expand', 'true');
-  });
-
-  // Both panels share one header with a history list: another topic picked from
-  // the record opens as the editable side conversation on that topic, and the
-  // record picked from the side conversation opens as the record again.
-  it('routes a topic picked from history to the panel that owns it', () => {
-    render(<GoalDetailPage agentId={'agt_manager'} goalId={'goal_1'} />);
-
-    fireEvent.click(screen.getByTestId('goal-supervisor-toggle'));
-    fireEvent.click(screen.getByTestId('goal-supervision-pick-topic'));
-
-    expect(screen.queryByTestId('goal-supervision')).not.toBeInTheDocument();
-    expect(screen.getByTestId('goal-chat')).toHaveAttribute('data-initial-topic-id', 'tpc_other');
-
-    fireEvent.click(screen.getByTestId('goal-chat-pick-record'));
 
     expect(screen.getByTestId('goal-supervision')).toHaveTextContent('tpc_manager');
+    expect(screen.queryByTestId('goal-supervision-open-chat')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('goal-supervision-pick-topic')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('goal-chat')).not.toBeInTheDocument();
   });
 
   it('leaves drill-downs to the workspace portal host on the agent-less route', () => {

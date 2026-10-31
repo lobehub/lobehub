@@ -69,6 +69,8 @@ export interface ToolDiscoveryInput {
   localDeviceId?: string;
   requestedDeviceId?: string;
   requestTrigger?: RequestTrigger;
+  /** See `AgentRunInitRequest.requireDevice`. */
+  requireDevice?: boolean;
   selectedToolIds?: string[];
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   topicBoundDeviceId?: string | null;

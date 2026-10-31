@@ -162,6 +162,9 @@ export class ChatForwardActionImpl {
         value: { metadata: cancellation.metadata, status: 'failed' },
       });
     let accepted = false;
+    // Topics persisted before their send failed. The target already holds the
+    // handoff, so its failure must point there rather than invite a retry.
+    const createdTopicIds = new Map<string, string>();
     const settled = await Promise.allSettled(
       prepared.map(async (item) => {
         if (item.status === 'rejected') throw item.reason;
@@ -172,6 +175,7 @@ export class ChatForwardActionImpl {
           messages: [],
           onTopicCreated: async (createdTopicId) => {
             accepted = true;
+            createdTopicIds.set(target.id, createdTopicId);
             await onTopicCreated?.(target, createdTopicId);
           },
         });
@@ -188,7 +192,14 @@ export class ChatForwardActionImpl {
     return settled.reduce<ForwardResult>(
       (result, item, index) => {
         if (item.status === 'fulfilled') result.succeeded.push(item.value);
-        else result.failed.push({ agentId: targets[index].id, error: item.reason });
+        else {
+          const topicId = createdTopicIds.get(targets[index].id);
+          result.failed.push({
+            agentId: targets[index].id,
+            error: item.reason,
+            ...(topicId ? { topicId } : {}),
+          });
+        }
         return result;
       },
       { failed: [], succeeded: [], sourceSchedulePaused: !!cancellation && !accepted },
