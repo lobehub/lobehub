@@ -12,9 +12,36 @@ import { useTranslation } from 'react-i18next';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
 import LinearIcon from '@/features/Work/icons/LinearIcon';
 
-import coverStyles from './WorkPreview.module.css';
+const DARK = ':is([data-theme="dark"] *)';
 
 const styles = stylex.create({
+  cover: {
+    position: 'relative',
+    overflow: 'hidden',
+    height: 'clamp(160px, 15vw, 220px)',
+    margin: '7px',
+    borderRadius: '11px',
+    backgroundColor: { default: cssVar.colorFillTertiary, [DARK]: cssVar.colorFillQuaternary },
+    backgroundImage: {
+      default:
+        'radial-gradient(140% 110% at 50% 0%, color-mix(in srgb, #fff 85%, transparent) 0%, color-mix(in srgb, #fff 30%, transparent) 45%, transparent 75%), none',
+      [DARK]:
+        'radial-gradient(140% 110% at 50% 0%, color-mix(in srgb, #fff 10%, transparent) 0%, transparent 65%), none',
+    },
+    backgroundPosition: '0% 0%, 0% 0%',
+    backgroundSize: 'auto, auto',
+    backgroundRepeat: 'repeat, repeat',
+    // eslint-disable-next-line @stylexjs/valid-styles -- Preserve both background layers; the 0.19 keyword validator omits comma lists.
+    backgroundOrigin: 'padding-box, padding-box',
+    // eslint-disable-next-line @stylexjs/valid-styles -- Valid list-valued CSS, accepted by the compiler.
+    backgroundClip: 'border-box, border-box',
+    // eslint-disable-next-line @stylexjs/valid-styles -- Valid list-valued CSS, accepted by the compiler.
+    backgroundAttachment: 'scroll, scroll',
+    boxShadow: {
+      default: 'inset 0 1px 0 #fff',
+      [DARK]: 'inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent)',
+    },
+  },
   coverBadge: {
     position: 'absolute',
     zIndex: 2,
@@ -143,7 +170,7 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
   const status = item.status || taskStatus;
 
   return (
-    <div className={coverStyles.cover}>
+    <div {...stylex.props(styles.cover)}>
       <div {...stylex.props(styles.grid)} />
       <div {...stylex.props(styles.mockWindow)}>
         {isLinear ? (

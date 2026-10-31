@@ -8,7 +8,6 @@ import { memo, Suspense, useState } from 'react';
 import { isDesktop } from '@/const/version';
 import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
 
-import moduleStyles from './index.module.css';
 import PanelContent from './PanelContent';
 import PanelContentSkeleton from './PanelContentSkeleton';
 import UpgradeBadge from './UpgradeBadge';
@@ -16,9 +15,21 @@ import { useNewVersion } from './useNewVersion';
 
 const styles = stylex.create({
   popoverContent: { padding: 0 },
+  popoverDesktop: {
+    insetBlockStart: '32px !important',
+    insetInlineStart: '8px !important',
+    borderRadius: '10px',
+  },
+  popoverWeb: {
+    insetBlockStart: '8px !important',
+    insetInlineStart: '8px !important',
+    borderRadius: '10px',
+  },
 });
 
-const popoverClassName = isDesktop ? moduleStyles.popoverDesktop : moduleStyles.popoverWeb;
+const popoverClassName = stylex.props(
+  isDesktop ? styles.popoverDesktop : styles.popoverWeb,
+).className;
 
 const UserPanel = memo<PropsWithChildren>(({ children }) => {
   const hasNewVersion = useNewVersion();

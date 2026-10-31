@@ -1,24 +1,57 @@
 'use client';
 
 import { type BlockProps, type DropdownItem, type IconProps } from '@lobehub/ui';
-import {
-  Block,
-  Center,
-  ContextMenuTrigger,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Spin,
-  Text,
-} from '@lobehub/ui';
+import { Block, Center, ContextMenuTrigger, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import type { StyleXStyles } from '@stylexjs/stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type FocusEvent, type PointerEvent, type ReactNode } from 'react';
 import { memo } from 'react';
 
+import { sx } from '@/styles/sx';
 import { isModifierClick } from '@/utils/navigation';
 
-import styles from './NavItem.module.css';
 import { type LazyActions, useLazyActions } from './useLazyActions';
+
+const HOVER = ':is([data-nav-item]:hover *)';
+const ACTION_FOCUS = ':is([data-nav-item]:has([data-nav-item-actions] :focus-visible) *)';
+const POPUP_OPEN = ':is([data-nav-item]:has([data-popup-open]) *)';
+
+const styles = stylex.create({
+  container: {
+    '--nav-item-actions-inset': {
+      'default': '28px',
+      ':has([data-nav-item-actions] > :nth-child(2 of :not([data-base-ui-focus-guard], [aria-owns])))':
+        '54px',
+    },
+    'userSelect': 'none',
+    'overflow': 'hidden',
+    'minWidth': '32px',
+  },
+  actions: {
+    pointerEvents: {
+      default: 'none',
+      [HOVER]: 'auto',
+      [ACTION_FOCUS]: 'auto',
+      [POPUP_OPEN]: 'auto',
+    },
+    opacity: { default: 0, [HOVER]: 1, [ACTION_FOCUS]: 1, [POPUP_OPEN]: 1 },
+    position: 'absolute',
+    insetBlock: 0,
+    insetInlineEnd: 0,
+    paddingInlineEnd: '6px',
+  },
+  content: {
+    maskImage: {
+      default: null,
+      [HOVER]:
+        'linear-gradient(to right, #000 calc(100% - var(--nav-item-actions-inset) - 28px), transparent calc(100% - var(--nav-item-actions-inset)))',
+      [ACTION_FOCUS]:
+        'linear-gradient(to right, #000 calc(100% - var(--nav-item-actions-inset) - 28px), transparent calc(100% - var(--nav-item-actions-inset)))',
+      [POPUP_OPEN]:
+        'linear-gradient(to right, #000 calc(100% - var(--nav-item-actions-inset) - 28px), transparent calc(100% - var(--nav-item-actions-inset)))',
+    },
+  },
+});
 
 export interface NavItemSlots {
   iconPostfix?: ReactNode;
@@ -60,6 +93,7 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
    * fully emphasized regardless of active state (e.g. topic titles).
    */
   titleColor?: string;
+  xstyle?: StyleXStyles;
 }
 
 const NavItem = memo<NavItemProps>(
@@ -73,6 +107,7 @@ const NavItem = memo<NavItemProps>(
     iconSize = 18,
     title,
     titleColor,
+    xstyle,
     description,
     onClick,
     disabled,
@@ -125,15 +160,15 @@ const NavItem = memo<NavItemProps>(
 
     const Content = (
       <Block
+        data-nav-item
         horizontal
         align={'center'}
-        className={cx(styles.container, className)}
+        {...sx([styles.container, xstyle], className, mergedStyle)}
         clickable={!disabled}
         gap={8}
         height={description ? undefined : 36}
         paddingBlock={description ? 8 : undefined}
         paddingInline={4}
-        style={mergedStyle}
         variant={variant}
         onClick={(e) => {
           // Always prevent default <a> navigation for normal clicks to avoid full page reload.
@@ -171,10 +206,9 @@ const NavItem = memo<NavItemProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.content}
+          {...sx([styles.content], undefined, { overflow: 'hidden' })}
           flex={1}
           gap={8}
-          style={{ overflow: 'hidden' }}
         >
           {titlePrefix}
           {description ? (
@@ -212,9 +246,10 @@ const NavItem = memo<NavItemProps>(
         </Flexbox>
         {actions && (
           <Flexbox
+            data-nav-item-actions
             horizontal
             align={'center'}
-            className={styles.actions}
+            {...stylex.props(styles.actions)}
             gap={2}
             justify={'flex-end'}
             onClick={(e) => {
