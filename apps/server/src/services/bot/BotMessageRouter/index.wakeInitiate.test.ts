@@ -59,7 +59,6 @@ vi.mock('../wake/identity', () => ({
     ownerNames: ['Arvin Zhang'],
   }),
 }));
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -478,8 +477,8 @@ describe('BotMessageRouter: a message that only names the bot', () => {
     ]);
   });
 
-  it('keeps nothing and changes nothing for a bot without bot-wake', async () => {
-    await boot(undefined);
+  it('keeps nothing and changes nothing for a bot with bot-wake switched off', async () => {
+    await boot(undefined, { botWakeDisabled: true });
 
     await catchAll()(thread(), message());
     await flush();

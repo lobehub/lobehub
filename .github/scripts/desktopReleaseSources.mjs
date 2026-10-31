@@ -19,6 +19,12 @@ export function assertSha(value, name = 'commit') {
   return value;
 }
 
+export function assertOverrideReason(value) {
+  if (typeof value !== 'string' || !value.trim() || value.length > 500)
+    throw new Error('A Cloud override requires a concise reason');
+  return value.trim();
+}
+
 const assertHash = (value) => {
   if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value))
     throw new Error('Invalid source record hash');
@@ -40,7 +46,7 @@ const validateEvidence = (value) => {
 export function validateSources(value) {
   if (!value || value.schemaVersion !== 1 || value.channel !== 'stable')
     throw new Error('Unsupported stable source record schema/channel');
-  if (!['latest', 'inherit', 'historical-import'].includes(value.selection))
+  if (!['latest', 'inherit', 'historical-import', 'recovery'].includes(value.selection))
     throw new Error('Invalid source selection');
   const record = {
     schemaVersion: 1,
@@ -56,17 +62,16 @@ export function validateSources(value) {
     if (!record.baseVersion || record.baseVersion === record.version)
       throw new Error('A hotfix must reference a different base version');
     record.baseSourcesHash = assertHash(value.baseSourcesHash);
-    if (value.overrideReason !== undefined) {
-      if (
-        typeof value.overrideReason !== 'string' ||
-        !value.overrideReason.trim() ||
-        value.overrideReason.length > 500
-      )
-        throw new Error('A Cloud override requires a concise reason');
-      record.overrideReason = value.overrideReason.trim();
-    }
+    if (value.overrideReason !== undefined)
+      record.overrideReason = assertOverrideReason(value.overrideReason);
   } else if (record.baseVersion !== null) {
     throw new Error('Only a hotfix may have a base version');
+  }
+  if (record.selection === 'recovery') {
+    record.recoveryBaseSha = assertSha(value.recoveryBaseSha, 'Recovery OSS base');
+    if (record.recoveryBaseSha === record.ossSha)
+      throw new Error('Recovery requires a new merged OSS commit');
+    record.overrideReason = assertOverrideReason(value.overrideReason);
   }
   return record;
 }
@@ -86,6 +91,14 @@ const assertIdentity = (record, input) => {
     throw new Error('Hotfix base version conflicts with the source record');
   if (input.baseSourcesHash && record.baseSourcesHash !== input.baseSourcesHash)
     throw new Error('Hotfix baseline hash conflicts with the source record');
+  if (input.recoveryBaseSha && record.recoveryBaseSha !== input.recoveryBaseSha)
+    throw new Error('Recovery base SHA conflicts with the source record');
+  if (
+    record.selection === 'recovery' &&
+    input.overrideReason &&
+    record.overrideReason !== input.overrideReason.trim()
+  )
+    throw new Error('Cloud repair reason conflicts with the source record');
 };
 
 export function validatePublication(value, sources) {
@@ -127,7 +140,7 @@ export async function resolveSources(input, dependencies) {
   const version = normalizeVersion(input.version);
   const ossSha = assertSha(input.ossSha, 'OSS');
   if (input.cloudSha) assertSha(input.cloudSha, 'Cloud');
-  if (!['initialize', 'rebuild', 'hotfix', 'import'].includes(input.mode))
+  if (!['initialize', 'rebuild', 'hotfix', 'import', 'recovery'].includes(input.mode))
     throw new Error('An explicit release mode is required');
   const stored = await dependencies.store.readSources(version);
   if (stored !== null) {
@@ -148,6 +161,7 @@ export async function resolveSources(input, dependencies) {
   let baseVersion = null;
   let baseSourcesHash;
   let overrideReason;
+  let recoveryBaseSha;
   if (input.mode === 'initialize') {
     if (input.firstRelease !== true || evidence.runAttempt !== 1)
       throw new Error('Missing record: only the initial release attempt may initialize sources');
@@ -173,6 +187,13 @@ export async function resolveSources(input, dependencies) {
       overrideReason = input.overrideReason;
     }
     selection = 'inherit';
+  } else if (input.mode === 'recovery') {
+    if (input.baseVersion || input.baseSourcesHash)
+      throw new Error('Explicit recovery does not claim a delivered version baseline');
+    recoveryBaseSha = assertSha(input.recoveryBaseSha, 'Recovery OSS base');
+    cloudSha = assertSha(input.cloudSha, 'Recovery Cloud');
+    overrideReason = assertOverrideReason(input.overrideReason);
+    selection = 'recovery';
   } else {
     cloudSha = assertSha(input.cloudSha, 'Cloud');
     await dependencies.assertImportEvidence({ ...input, version, ossSha, evidence });
@@ -191,13 +212,21 @@ export async function resolveSources(input, dependencies) {
     evidence,
     ...(baseSourcesHash && { baseSourcesHash }),
     ...(overrideReason && { overrideReason }),
+    ...(recoveryBaseSha && { recoveryBaseSha }),
   });
   if (!input.write) return { sources: candidate, hash: sourcesHash(candidate), persisted: false };
   await dependencies.store.createSources(version, candidate);
   const winner = await dependencies.store.readSources(version);
   if (!winner) throw new Error('Source record was not persisted');
   const sources = validateSources(winner);
-  assertIdentity(sources, { version, ossSha, cloudSha, baseVersion, baseSourcesHash });
+  assertIdentity(sources, {
+    version,
+    ossSha,
+    cloudSha,
+    baseVersion,
+    baseSourcesHash,
+    recoveryBaseSha,
+  });
   if (sources.selection !== selection || sources.overrideReason !== candidate.overrideReason)
     throw new Error('Concurrent source initialization conflict');
   return { sources, hash: sourcesHash(sources), persisted: true };
