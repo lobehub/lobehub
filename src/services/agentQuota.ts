@@ -9,6 +9,7 @@ import type {
   QuotaAccountIdentity,
   QuotaLimitReading,
 } from '@lobechat/heterogeneous-agents/quota';
+import type { QuotaDeviceAccount } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -104,7 +105,7 @@ class AgentQuotaService {
     lambdaClient.agentQuota.updateAccount.mutate({ id, value });
 
   /** The account an agent uses on one device (gateway id); `null` = Auto there. */
-  getDeviceAccount = async (agentId: string, deviceId: string) =>
+  getDeviceAccount = async (agentId: string, deviceId: string): Promise<QuotaDeviceAccount> =>
     lambdaClient.agentQuota.getDeviceAccount.query({ agentId, deviceId });
 
   /** Pin an account for an agent on one device, or return it to Auto (`null`). */

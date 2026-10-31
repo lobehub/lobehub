@@ -87,6 +87,18 @@ export class ElectronGatewayActionImpl {
     }
   };
 
+  /**
+   * Resolve this machine's stable device id once for a mounted view that must
+   * not act before it is known (`resolveGatewayDeviceId` also corrects a cached
+   * fallback id in `gatewayDeviceInfo`).
+   */
+  useFetchGatewayStableDeviceId = (enabled = true): SWRResponse<string | undefined> =>
+    useSWR(
+      enabled ? electronKeys.gatewayStableDeviceId() : null,
+      () => this.resolveGatewayDeviceId(),
+      { revalidateOnFocus: false },
+    );
+
   useFetchGatewayDeviceInfo = (): SWRResponse<GatewayDeviceInfo> => {
     return useSWR<GatewayDeviceInfo>(
       // Desktop-only IPC: on web there is no electronAPI, so never fetch off-desktop.

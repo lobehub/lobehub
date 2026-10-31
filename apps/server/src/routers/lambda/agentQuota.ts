@@ -1,3 +1,4 @@
+import type { QuotaDeviceAccount } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -295,7 +296,7 @@ export const agentQuotaRouter = router({
   /** The account an agent uses on one device; `accountId: null` = Auto there. */
   getDeviceAccount: quotaProcedure
     .input(z.object({ agentId: z.string(), deviceId: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<QuotaDeviceAccount> => {
       const deviceRowId = await deviceRowIdOf(ctx, input.deviceId);
       return {
         accountId: deviceRowId

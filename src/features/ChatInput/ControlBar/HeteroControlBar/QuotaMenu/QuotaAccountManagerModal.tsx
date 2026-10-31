@@ -24,7 +24,7 @@ import {
   XIcon,
   ZapIcon,
 } from 'lucide-react';
-import { memo, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type MouseEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { cacheScope } from '@/libs/replica';
@@ -163,26 +163,17 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   // Only the desktop runs Claude Code locally, so only it has logins to show —
   // and only when this agent runs here: in-process, or through the gateway on
   // this desktop's own device row, which spawns on the same logins.
-  const [currentDeviceId, resolveGatewayDeviceId] = useElectronStore((s) => [
+  const [currentDeviceId, useFetchGatewayStableDeviceId] = useElectronStore((s) => [
     s.gatewayDeviceInfo?.deviceId,
-    s.resolveGatewayDeviceId,
+    s.useFetchGatewayStableDeviceId,
   ]);
   // The cached id may still be the install's fallback before the gateway
   // connects; resolving corrects it, so the pick lands on this machine's row.
   // Until it settles a write could not tell this device from "no device" and
   // would fall back to the agent-wide pin, so the controls wait for it.
   const needsLocalDevice = isDesktop && !deviceId;
-  const [localDeviceSettled, setLocalDeviceSettled] = useState(!needsLocalDevice);
-  useEffect(() => {
-    if (!needsLocalDevice) return;
-    let active = true;
-    void resolveGatewayDeviceId().finally(() => {
-      if (active) setLocalDeviceSettled(true);
-    });
-    return () => {
-      active = false;
-    };
-  }, [needsLocalDevice, resolveGatewayDeviceId]);
+  const { isLoading: localDeviceLoading } = useFetchGatewayStableDeviceId(needsLocalDevice);
+  const localDeviceSettled = !needsLocalDevice || !localDeviceLoading;
   const managesLocalLogins = isDesktop && (!deviceId || deviceId === currentDeviceId);
   // A login lives on one machine, so the Manual pick belongs to one device.
   // The web without a bound device has none and keeps the agent-wide pin.

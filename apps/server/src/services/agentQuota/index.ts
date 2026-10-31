@@ -19,6 +19,7 @@ import {
   windowSecondsForKind,
   windowsToCalibrationIntervals,
 } from '@lobechat/heterogeneous-agents/quota';
+import pMap from 'p-map';
 
 import type { AccountIdentityInput, SafeAccount } from '@/database/models/agentQuota';
 import {
@@ -581,7 +582,9 @@ export class AgentQuotaService {
         .map((a) => a.id),
     );
 
-    await Promise.all([...signedInIds].map((accountId) => this.logins.record(accountId, deviceId)));
+    await pMap([...signedInIds], (accountId) => this.logins.record(accountId, deviceId), {
+      concurrency: 8,
+    });
 
     const providerIds = new Set(accounts.map((a) => a.id));
     const recorded = await this.logins.listByDevice(deviceId);
@@ -697,10 +700,10 @@ export class AgentQuotaService {
     // first choice may commit concurrently, and the handed-down pin must not
     // replace it.
     const logins = await this.logins.listByAccount(pinned.accountId);
-    await Promise.all(
-      logins.map((login) =>
-        this.deviceBindings.setIfAbsent(agentId, login.deviceId, pinned.accountId),
-      ),
+    await pMap(
+      logins,
+      (login) => this.deviceBindings.setIfAbsent(agentId, login.deviceId, pinned.accountId),
+      { concurrency: 8 },
     );
     await this.bindings.upsert({
       accountId: pinned.accountId,
