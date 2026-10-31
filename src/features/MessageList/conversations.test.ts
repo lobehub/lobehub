@@ -112,4 +112,19 @@ describe('buildConversationEntries', () => {
       'inbox',
     ]);
   });
+
+  it('matches the personal name shown on the row, not only the role title', () => {
+    const named = {
+      pinned: [],
+      recent: [
+        {
+          activeAt: new Date('2026-01-01'),
+          item: agent('n', '2026-01-01', { name: 'Alice', title: 'Health Assistant' }),
+        },
+      ],
+    };
+
+    expect(ids(buildConversationEntries(named, undefined, 'alice'))).toEqual(['n']);
+    expect(ids(buildConversationEntries(named, undefined, 'health'))).toEqual(['n']);
+  });
 });

@@ -46,6 +46,8 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
     name: item.name,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
+    // The Messages list ignores the sidebar visibility preference.
+    sidebarVisibilityEnabled: false,
     slug,
     title,
     userId,

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
+import ChannelList from '@/features/Channels/ChannelList';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -109,6 +110,8 @@ const Body = memo(() => {
           ),
         )
       )}
+      {/* Non-project Channels (and their create entry) have no other home in the rail layout. */}
+      <ChannelList />
     </Flexbox>
   );
 });

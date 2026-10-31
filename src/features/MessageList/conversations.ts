@@ -74,7 +74,7 @@ export type ConversationEntry =
 /**
  * One IM list like WeChat's: pinned rows first, then everything else by latest
  * activity. Lobe AI is an ordinary row placed by its own activity, not pinned
- * to the top; a title filter narrows the whole list.
+ * to the top; a name / title filter narrows the whole list.
  */
 export const buildConversationEntries = (
   { pinned, recent }: ConversationSections,
@@ -82,12 +82,14 @@ export const buildConversationEntries = (
   query = '',
 ): ConversationEntry[] => {
   const keyword = query.trim().toLowerCase();
-  const matches = (title: string | null | undefined) =>
-    !keyword || (title ?? '').toLowerCase().includes(keyword);
+  const matches = (...names: (string | null | undefined)[]) =>
+    !keyword || names.some((name) => (name ?? '').toLowerCase().includes(keyword));
 
+  // Rows show the personal name when set (`agentDisplayName`), so match it as
+  // well as the role title.
   const items = (list: Conversation[]): ConversationEntry[] =>
     list
-      .filter((c) => matches(c.item.title ?? c.item.name))
+      .filter((c) => matches(c.item.name, c.item.title))
       .map((c) => ({ ...c, type: 'item' as const }));
 
   const rest = items(recent);
