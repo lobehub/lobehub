@@ -148,28 +148,28 @@ export const ChannelMessage = ({
         )}
         message={
           <Flexbox gap={8}>
-              {!isRoot &&
-                showsReplyQuote(message) &&
-                (message.replyTo ? (
-                  <Button
-                    aria-label={t('reply.viewOriginal')}
-                    icon={Reply}
-                    size="small"
-                    style={{ alignSelf: 'flex-start', maxWidth: '100%', minWidth: 0 }}
-                    type="text"
-                    onClick={() => onJumpToMessage?.(message.replyTo!)}
-                  >
-                    <Text ellipsis as="span" fontSize={12} type="secondary">
-                      {message.replyTo.author.name || t('deletedMember')}
-                      {': '}
-                      {message.replyTo.content || t('reply.attachment')}
-                    </Text>
-                  </Button>
-                ) : (
-                  <Text fontSize={12} type="secondary">
-                    {t('reply.unavailable')}
+            {!isRoot &&
+              showsReplyQuote(message) &&
+              (message.replyTo ? (
+                <Button
+                  aria-label={t('reply.viewOriginal')}
+                  icon={Reply}
+                  size="small"
+                  style={{ alignSelf: 'flex-start', maxWidth: '100%', minWidth: 0 }}
+                  type="text"
+                  onClick={() => onJumpToMessage?.(message.replyTo!)}
+                >
+                  <Text ellipsis as="span" fontSize={12} type="secondary">
+                    {message.replyTo.author.name || t('deletedMember')}
+                    {': '}
+                    {message.replyTo.content || t('reply.attachment')}
                   </Text>
-                ))}
+                </Button>
+              ) : (
+                <Text fontSize={12} type="secondary">
+                  {t('reply.unavailable')}
+                </Text>
+              ))}
             {message.fileIds.length > 0 && (
               <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
             )}

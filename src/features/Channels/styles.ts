@@ -69,9 +69,9 @@ export const styles = stylex.create({
     insetBlockStart: 8,
     insetInlineStart: 0,
   },
-  // A continuation has no header for its toolbar; reserve a small action lane.
+  // A continuation has no header for its toolbar; reserve room for both actions.
   continuationWithAction: {
-    paddingInlineEnd: 52,
+    paddingInlineEnd: 84,
   },
   messageTime: {
     flexShrink: 0,
