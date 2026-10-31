@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 
-import { inventoryScope } from '../analysis/scopeInventory';
+import { findCssModuleResidue, inventoryScope } from '../analysis/scopeInventory';
 import type { DependencyOptions } from '../dependencies/dependencySnapshot';
 import { restoreDependencies } from '../dependencies/dependencySnapshot';
 import {
@@ -38,9 +38,15 @@ export const runPreflight = async (options: PreflightOptions) => {
   const session = await createRevisionSession(options.repository, options.base, options.head);
   try {
     const scope = await inventoryScope(session);
+    const migrationResidue = findCssModuleResidue(scope.units);
     const fixtures = discoverFixtureCandidates(scope);
     await writeJson(options.output, 'identity.json', session.identity);
     await writeJson(options.output, 'scope.json', scope);
+    await writeJson(options.output, 'migration-residue.json', {
+      cssModules: migrationResidue,
+      scope: 'changed-files-only',
+      completeMigrationProven: false,
+    });
     await writeJson(options.output, 'fixtures.json', fixtures);
     const routing = !options.planOnly && scope.changedFiles.length === 0;
     const gateInput = {
@@ -169,6 +175,7 @@ export const runPreflight = async (options: PreflightOptions) => {
       gateEligible: false as const,
       identity: session.identity,
       mode: 'preflight' as const,
+      migrationResidueRef: 'migration-residue.json',
       pullRequest: options.pullRequest,
       reasonCodes,
       schemaVersion: 1 as const,
@@ -183,6 +190,7 @@ export const runPreflight = async (options: PreflightOptions) => {
     await writeArtifactManifest(options.output, [
       'identity.json',
       'scope.json',
+      'migration-residue.json',
       'fixtures.json',
       'coverage.json',
       'preflight.json',

@@ -18,7 +18,6 @@ import { styles as containerStyles } from '@/features/DesktopLayoutContainer/sty
 import { electronStylish } from '@/styles/electron';
 import { sx } from '@/styles/sx';
 
-import moduleStyles from './AppShellSkeleton.module.css';
 import { readBootShellGeometry } from './geometry';
 import { useLoadingHint } from './useLoadingHint';
 
@@ -29,6 +28,11 @@ import { useLoadingHint } from './useLoadingHint';
 const CSS_VAR_CLASS = 'lobe-vars';
 
 export const APP_SHELL_FALLBACK_ID = 'app-shell-fallback';
+
+const fadeIn = stylex.keyframes({
+  from: { opacity: 0 },
+  to: { opacity: 1 },
+});
 
 const styles = stylex.create({
   contentBrand: {
@@ -50,6 +54,15 @@ const styles = stylex.create({
     fontSize: '13px',
     whiteSpace: 'nowrap',
   },
+  hintEnter: {
+    animationName: { 'default': fadeIn, '@media (prefers-reduced-motion: reduce)': 'none' },
+    animationDuration: { 'default': '0.3s', '@media (prefers-reduced-motion: reduce)': '0s' },
+    animationTimingFunction: {
+      'default': cssVar.motionEaseOut,
+      '@media (prefers-reduced-motion: reduce)': 'ease',
+    },
+    animationFillMode: { 'default': 'both', '@media (prefers-reduced-motion: reduce)': 'none' },
+  },
   brand: {
     position: 'relative',
     display: 'flex',
@@ -62,6 +75,10 @@ const styles = stylex.create({
     width: '100%',
   },
   root: {
+    // The dialog and boot shell are siblings, not a marker/descendant pair.
+    // A self condition preserves the existing body :has() rule without moving
+    // the shell or introducing a component-scoped stylesheet.
+    visibility: { 'default': null, ':is(body:has([role="dialog"][data-open]) *)': 'hidden' },
     pointerEvents: 'none',
     position: 'fixed',
     zIndex: 99_999,
@@ -81,7 +98,7 @@ const LoadingHint = memo<{ enter: boolean }>(({ enter }) => {
   const { t } = useTranslation('common');
 
   return (
-    <div {...sx(styles.hint, moduleStyles.hint)} data-enter={enter || undefined}>
+    <div {...stylex.props(styles.hint, enter && styles.hintEnter)} data-enter={enter || undefined}>
       {t('bootLoadingHint')}
     </div>
   );
@@ -100,7 +117,7 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   useLayoutEffect(retainSkeleton, []);
 
   return (
-    <div aria-hidden id={id} {...sx([styles.root], `${CSS_VAR_CLASS} ${moduleStyles.yield}`)}>
+    <div aria-hidden id={id} {...sx(styles.root, CSS_VAR_CLASS)}>
       {isDesktop && (
         <div
           {...sx([styles.dragRegion], electronStylish.draggable, { height: TITLE_BAR_HEIGHT })}

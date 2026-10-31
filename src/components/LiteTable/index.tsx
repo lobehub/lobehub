@@ -168,7 +168,7 @@ const styles = stylex.create({
     borderWidth: { 'default': null, '@container (max-width: 600px)': '1px' },
     borderStyle: { 'default': null, '@container (max-width: 600px)': 'solid' },
     borderColor: { 'default': null, '@container (max-width: 600px)': cssVar.colorBorderSecondary },
-    borderRadius: { 'default': null, '@container (max-width: 600px)': cssVar.borderRadiusLg },
+    borderRadius: { 'default': null, '@container (max-width: 600px)': cssVar.borderRadiusLG },
   },
   wideTable: {
     borderCollapse: 'collapse',
@@ -322,7 +322,7 @@ const styles = stylex.create({
     borderWidth: { 'default': null, '@container (max-width: 800px)': '1px' },
     borderStyle: { 'default': null, '@container (max-width: 800px)': 'solid' },
     borderColor: { 'default': null, '@container (max-width: 800px)': cssVar.colorBorderSecondary },
-    borderRadius: { 'default': null, '@container (max-width: 800px)': cssVar.borderRadiusLg },
+    borderRadius: { 'default': null, '@container (max-width: 800px)': cssVar.borderRadiusLG },
   },
   head: { display: { 'default': null, '@container (max-width: 600px)': 'none' } },
   wideHead: { display: { 'default': null, '@container (max-width: 800px)': 'none' } },

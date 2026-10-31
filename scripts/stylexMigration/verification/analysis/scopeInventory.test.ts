@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { inventorySource } from './scopeInventory';
+import { findCssModuleResidue, inventorySource } from './scopeInventory';
 
 const slots = (source: string) =>
   inventorySource(source, 'component.tsx', 'base', 'blob').filter(
@@ -42,5 +42,31 @@ describe('source style inventory', () => {
     expect(inventorySource(source, 'x.ts', 'base', 'blob')[0].id).not.toBe(
       inventorySource(source, 'x.ts', 'candidate', 'blob')[0].id,
     );
+  });
+
+  it('identifies CSS Modules as migration residue without matching comments or prose', () => {
+    expect(
+      slots(`
+        import styles from './styles.module.css';
+        import './legacy.module.scss?inline';
+        // import ignored from './ignored.module.css';
+        const prose = "import ignored from './prose.module.css'";
+      `).map((unit) => unit.label),
+    ).toEqual(['css-module:./styles.module.css', 'css-module:./legacy.module.scss?inline']);
+  });
+
+  it('reports candidate imports and stylesheets, not a deleted base stylesheet', () => {
+    const base = inventorySource('.root {}', 'old.module.css', 'base', 'before');
+    const candidate = inventorySource('.root {}', 'new.module.scss', 'candidate', 'after');
+    const imports = inventorySource(
+      "import s from './nested.module.css'; export type { S } from './type.module.css';",
+      'component.tsx',
+      'candidate',
+      'source',
+    );
+    expect(findCssModuleResidue([...base, ...candidate, ...imports])).toEqual([
+      { file: 'new.module.scss', label: 'new.module.scss', start: 0 },
+      { file: 'component.tsx', label: 'css-module:./nested.module.css', start: 0 },
+    ]);
   });
 });

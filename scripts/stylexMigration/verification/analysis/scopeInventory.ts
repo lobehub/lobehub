@@ -23,6 +23,20 @@ const stylePackages = new Set([
   '@emotion/css',
 ]);
 
+const cssModulePath = /\.module\.(?:css|less|sass|scss|styl)(?:[?#].*)?$/i;
+
+/** Changed files only; absence here is not proof of a complete migration. */
+export const findCssModuleResidue = (units: ScopeUnit[]) =>
+  units
+    .filter(
+      (unit) =>
+        unit.side === 'candidate' &&
+        (unit.kind === 'source' || unit.kind === 'stylesheet' || unit.kind === 'opaque'
+          ? cssModulePath.test(unit.file)
+          : unit.label.startsWith('css-module:')),
+    )
+    .map(({ file, label, start }) => ({ file, label, start }));
+
 /** An inventory, not an equivalence proof: source/binding units stay unresolved. */
 export const inventorySource = (
   source: string,
@@ -55,6 +69,20 @@ export const inventorySource = (
   const importedFunctions = new Set<string>();
   const namespaces = new Set<string>();
   for (const statement of ast.statements) {
+    if (
+      (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      cssModulePath.test(statement.moduleSpecifier.text) &&
+      !(ts.isImportDeclaration(statement) && statement.importClause?.isTypeOnly) &&
+      !(ts.isExportDeclaration(statement) && statement.isTypeOnly)
+    )
+      unit(
+        'style-slot',
+        `css-module:${statement.moduleSpecifier.text}`,
+        statement.getStart(ast),
+        statement.end,
+      );
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
@@ -173,6 +201,7 @@ export const inventoryScope = async (session: RevisionSession): Promise<ScopeInv
         'PURE_STYLE_MIGRATION_UNPROVEN',
       ]
     : [];
+  if (findCssModuleResidue(units).length) limitations.push('CSS_MODULE_MIGRATION_REMAINS');
   const hash = createHash('sha256')
     .update(JSON.stringify({ changedFiles, limitations, units }))
     .digest('hex');
