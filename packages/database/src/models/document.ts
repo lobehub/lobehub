@@ -18,7 +18,6 @@ import {
   notExists,
   notInArray,
   or,
-  sum,
 } from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
@@ -39,6 +38,7 @@ import {
 import type { LobeChatDatabase } from '../type';
 import { documentMatchesAccessScope } from '../utils/documentVisibility';
 import { notFileBackedPlaceholder } from '../utils/fileBackedPlaceholder';
+import { sumStoredFileSize } from '../utils/fileStorageUsage';
 import {
   fileReferenceMatchesAccessScope,
   notAgentShareFileReference,
@@ -624,17 +624,13 @@ export class DocumentModel {
     if (subtree.length === 0) return 0;
 
     const ids = subtree.map((d) => d.id);
-    const result = await runner
-      .select({ totalSize: sum(files.size) })
-      .from(files)
-      .where(
-        and(
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
-          inArray(files.parentId, ids),
-        ),
-      );
-
-    return parseInt(result[0]?.totalSize ?? '0') || 0;
+    return sumStoredFileSize(
+      runner,
+      and(
+        buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+        inArray(files.parentId, ids),
+      ),
+    );
   };
 
   /**
