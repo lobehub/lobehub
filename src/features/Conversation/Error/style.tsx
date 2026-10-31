@@ -1,33 +1,33 @@
 import { type CenterProps } from '@lobehub/ui';
-import { Avatar, Center, createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Avatar, Center, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    border: 1px solid ${cssVar.colorSplit};
-    border-radius: 8px;
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorBgContainer};
-  `,
-  desc: css`
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  form: css`
-    width: 100%;
-    max-width: 360px;
+import { sx } from '@/styles/sx';
 
-    @media (width <= 768px) {
-      max-width: 90%;
-    }
-  `,
-}));
+export const styles = stylex.create({
+  container: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorSplit,
+    borderRadius: '8px',
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  desc: { color: cssVar.colorTextTertiary, textAlign: 'center' },
+  form: {
+    width: '100%',
+    maxWidth: { 'default': '360px', '@media (width <= 768px)': '90%' },
+  },
+});
 
 export const ErrorActionContainer = memo<CenterProps>(
-  ({ children, className, gap = 24, padding = 24, ...rest }) => {
+  ({ children, className, gap = 24, padding = 24, style, ...rest }) => {
     return (
-      <Center className={cx(styles.container, className)} gap={gap} padding={padding} {...rest}>
+      <Center {...sx([styles.container], className, style)} gap={gap} padding={padding} {...rest}>
         {children}
       </Center>
     );
@@ -52,10 +52,11 @@ export const FormAction = memo<
     animation,
     className,
     gap = 16,
+    style,
     ...rest
   }) => {
     return (
-      <Center className={cx(styles.form, className)} gap={gap} {...rest}>
+      <Center {...sx([styles.form], className, style)} gap={gap} {...rest}>
         <Avatar
           animation={animation}
           avatar={avatar}
@@ -67,7 +68,7 @@ export const FormAction = memo<
           <Flexbox style={{ fontSize: 18, fontWeight: 'bold', textAlign: 'center' }}>
             {title}
           </Flexbox>
-          <Flexbox className={styles.desc}>{description}</Flexbox>
+          <Flexbox {...stylex.props(styles.desc)}>{description}</Flexbox>
         </Flexbox>
         {children}
       </Center>

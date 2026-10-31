@@ -4,7 +4,6 @@ import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import {
   ActionIcon,
   Center,
-  createStaticStyles,
   DropdownMenu,
   Empty,
   Flexbox,
@@ -13,7 +12,9 @@ import {
   Spin,
   stopPropagation,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import type { GitStatusEntry } from '@pierre/trees';
+import * as stylex from '@stylexjs/stylex';
 import {
   EllipsisIcon,
   FileIcon,
@@ -68,47 +69,43 @@ interface FilesProps {
   workingDirectory: string;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  tree: css`
-    --trees-bg-override: transparent;
-    --trees-border-color-override: transparent;
-    --trees-selected-bg-override: ${cssVar.colorFillSecondary};
-    --trees-selected-fg-override: ${cssVar.colorText};
-    --trees-bg-muted-override: ${cssVar.colorFillTertiary};
-    --trees-fg-override: ${cssVar.colorTextSecondary};
-    --trees-fg-muted-override: ${cssVar.colorTextSecondary};
-    --trees-accent-override: ${cssVar.colorPrimary};
-    --trees-padding-inline-override: 0px;
-    --trees-font-size-override: 12px;
-    --trees-border-radius-override: 6px;
-
-    flex: 1;
-    min-height: 0;
-  `,
-  subheader: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 6px 8px;
-    padding-inline: 12px;
-  `,
-  search: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  truncated: css`
-    flex-shrink: 0;
-
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  tree: {
+    '--trees-bg-override': 'transparent',
+    '--trees-border-color-override': 'transparent',
+    '--trees-selected-bg-override': cssVar.colorFillSecondary,
+    '--trees-selected-fg-override': cssVar.colorText,
+    '--trees-bg-muted-override': cssVar.colorFillTertiary,
+    '--trees-fg-override': cssVar.colorTextSecondary,
+    '--trees-fg-muted-override': cssVar.colorTextSecondary,
+    '--trees-accent-override': cssVar.colorPrimary,
+    '--trees-padding-inline-override': '0px',
+    '--trees-font-size-override': '12px',
+    '--trees-border-radius-override': '6px',
+    'flex': '1',
+    'minHeight': '0',
+  },
+  subheader: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '8px',
+    paddingInline: '12px',
+  },
+  search: { flex: '1', minWidth: '0' },
+  truncated: {
+    flexShrink: 0,
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const FILE_SEARCH_DEBOUNCE_MS = 180;
 const PROJECT_FILE_TREE_SEARCH_LIMIT = 200;
@@ -497,9 +494,9 @@ const Files = memo<FilesProps>(
 
     return (
       <Flexbox height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
-        <div className={styles.subheader}>
+        <div {...stylex.props(styles.subheader)}>
           {searchExpanded ? (
-            <div className={styles.search}>
+            <div {...stylex.props(styles.search)}>
               <FilesSearchBar
                 onClose={() => setSearchExpanded(false)}
                 onDebouncedChange={setDebouncedQuery}
@@ -575,7 +572,7 @@ const Files = memo<FilesProps>(
             />
           </Center>
         ) : (
-          <div className={styles.tree} style={treeStyleVars}>
+          <div className={stylex.props(styles.tree).className} style={treeStyleVars}>
             <ExplorerTree<ProjectFileIndexEntry>
               iconsColored
               canDrag={actions.canDrag}
@@ -602,12 +599,14 @@ const Files = memo<FilesProps>(
           </div>
         )}
         {showsRefreshFailure ? (
-          <div className={styles.truncated}>{t('workingPanel.files.refreshFailed')}</div>
+          <div {...stylex.props(styles.truncated)}>{t('workingPanel.files.refreshFailed')}</div>
         ) : showsPartialIndex ? (
-          <div className={styles.truncated}>{t('workingPanel.files.partialIndexNotice')}</div>
+          <div {...stylex.props(styles.truncated)}>
+            {t('workingPanel.files.partialIndexNotice')}
+          </div>
         ) : (
           truncatedCount > 0 && (
-            <div className={styles.truncated}>{t('workingPanel.files.truncatedNotice')}</div>
+            <div {...stylex.props(styles.truncated)}>{t('workingPanel.files.truncatedNotice')}</div>
           )
         )}
       </Flexbox>

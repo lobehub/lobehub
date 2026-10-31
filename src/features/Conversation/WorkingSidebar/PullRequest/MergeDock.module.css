@@ -1,0 +1,26 @@
+/* The collapsible failed-checks summary. `summary` and its chevron are native
+   elements keyed off `details[open]`, so this stays plain CSS. */
+.checks {
+  margin-inline-start: 22px;
+}
+
+.checks > summary {
+  cursor: pointer;
+
+  display: flex;
+  gap: 4px;
+  align-items: center;
+
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--lobe-color-text-tertiary);
+  list-style: none;
+}
+
+.checks > summary::-webkit-details-marker {
+  display: none;
+}
+
+.checks[open] > summary svg {
+  transform: rotate(90deg);
+}

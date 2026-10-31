@@ -1,4 +1,5 @@
 import { Button, Tabs, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,15 +35,15 @@ const InterventionTabBar = memo<InterventionTabBarProps>(
     );
 
     return (
-      <div className={styles.tabBar}>
+      <div className={stylex.props(styles.tabBar).className}>
         <Tabs
           activeKey={String(activeIndex)}
           items={labels.map((label, index) => ({ key: String(index), label }))}
           size={'small'}
           onChange={(key) => onTabChange(Number(key))}
         />
-        <div className={styles.tabTrailing}>
-          <span className={styles.tabCounter}>
+        <div className={stylex.props(styles.tabTrailing).className}>
+          <span className={stylex.props(styles.tabCounter).className}>
             {activeIndex + 1} / {interventions.length}
           </span>
           {/* Only shown for a real batch: with one pending call in the active

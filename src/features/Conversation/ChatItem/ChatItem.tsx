@@ -11,7 +11,7 @@ import Avatar from './components/Avatar';
 import ErrorContent from './components/ErrorContent';
 import MessageContent from './components/MessageContent';
 import Title from './components/Title';
-import { styles } from './style';
+import styles from './style.module.css';
 import type { ChatItemProps } from './type';
 
 const ChatItem = memo<ChatItemProps>(

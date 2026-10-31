@@ -1,0 +1,20 @@
+/* Thumbnail wrapper handed to the lobe-ui Image: it fixes the size over the
+   Image's own inline sizing (hence !important) and reaches the inner <img>,
+   which StyleX cannot target. */
+.imageThumb {
+  flex-shrink: 0;
+
+  width: 28px !important;
+  height: 28px !important;
+  margin-block: 0 !important;
+  border: 1px solid var(--lobe-color-fill-tertiary);
+  border-radius: 6px;
+
+  box-shadow: none;
+}
+
+.imageThumb img {
+  width: 28px !important;
+  height: 28px !important;
+  object-fit: cover;
+}

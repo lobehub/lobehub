@@ -3,16 +3,9 @@ import type {
   DeviceGitPullRequestActivity,
   DeviceGitPullRequestDetail,
 } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Markdown,
-  Skeleton,
-} from '@lobehub/ui';
+import { Button, cx, Flexbox, Icon, Markdown, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -25,47 +18,25 @@ import { useTranslation } from 'react-i18next';
 import type { GitReplicaReadResult } from '@/store/device';
 
 import { ChevronRight, OverviewRow, rowStyles } from '../Overview/OverviewRow';
-import { sectionStyles } from '../Overview/sectionStyles';
+import { sectionProps, sectionStyles } from '../Overview/sectionStyles';
 import ActivityTimeline from './ActivityTimeline';
 import ChecksList from './ChecksList';
+import bodyStyles from './MarkdownBody.module.css';
 import { timeAgo } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    overflow: hidden;
-
-    min-width: 0;
-    padding-block: 2px 6px;
-    padding-inline: 8px;
-
-    overflow-wrap: anywhere;
-
-    table {
-      overflow-x: auto;
-      display: block;
-      max-width: 100%;
-    }
-
-    img,
-    video {
-      max-width: 100%;
-    }
-
-    pre {
-      overflow-x: auto;
-      max-width: 100%;
-    }
-  `,
-  header: css`
-    cursor: pointer;
-    user-select: none;
-    gap: 6px;
-  `,
-  sha: css`
-    font-family: ${cssVar.fontFamilyCode};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflow: 'hidden',
+    minWidth: 0,
+    paddingBlockStart: '2px',
+    paddingBlockEnd: '6px',
+    paddingInline: '8px',
+    overflowWrap: 'anywhere',
+  },
+  header: { cursor: 'pointer', userSelect: 'none', gap: '6px' },
+  sha: { fontFamily: cssVar.fontFamilyCode },
+});
 
 interface SectionProps {
   children: ReactNode;
@@ -76,12 +47,12 @@ interface SectionProps {
 }
 
 const Section = memo<SectionProps>(({ children, count, onToggle, open = true, title }) => (
-  <Flexbox className={sectionStyles.section}>
+  <Flexbox {...sectionProps()}>
     <Flexbox
       horizontal
       align={'center'}
       role={onToggle ? 'button' : undefined}
-      className={cx(
+      {...stylex.props(
         sectionStyles.sectionHeader,
         sectionStyles.sectionTitle,
         onToggle && styles.header,
@@ -90,7 +61,7 @@ const Section = memo<SectionProps>(({ children, count, onToggle, open = true, ti
     >
       {onToggle && <Icon icon={open ? ChevronDownIcon : ChevronRightIcon} size={12} />}
       {title}
-      {count !== undefined && <span className={sectionStyles.count}>{count}</span>}
+      {count !== undefined && <span {...stylex.props(sectionStyles.count)}>{count}</span>}
     </Flexbox>
     {open && children}
   </Flexbox>
@@ -160,7 +131,11 @@ const Sections = memo<SectionsProps>(
             title={t('workingPanel.pr.section.description')}
             onToggle={toggle('description')}
           >
-            <Markdown className={styles.body} fontSize={13} variant={'chat'}>
+            <Markdown
+              className={cx(stylex.props(styles.body).className, bodyStyles.body)}
+              fontSize={13}
+              variant={'chat'}
+            >
               {detail.body}
             </Markdown>
           </Section>
@@ -171,8 +146,8 @@ const Sections = memo<SectionsProps>(
             value={t('workingPanel.pr.files.openReview')}
             trailing={
               <>
-                <span className={rowStyles.changeAdditions}>+{detail.additions}</span>
-                <span className={rowStyles.changeDeletions}>−{detail.deletions}</span>
+                <span {...stylex.props(rowStyles.changeAdditions)}>+{detail.additions}</span>
+                <span {...stylex.props(rowStyles.changeDeletions)}>−{detail.deletions}</span>
                 <ChevronRight />
               </>
             }
@@ -206,7 +181,7 @@ const Sections = memo<SectionsProps>(
                   value={commit.message.split('\n')[0]}
                   trailing={
                     <>
-                      <span className={styles.sha}>{commit.sha.slice(0, 7)}</span>
+                      <span {...stylex.props(styles.sha)}>{commit.sha.slice(0, 7)}</span>
                       {timeAgo(commit.committedAt)}
                     </>
                   }

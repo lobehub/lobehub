@@ -1,0 +1,25 @@
+/* Tints SplitButton's inner button / anchor, which StyleX cannot reach, and
+   keys the hover colour off the :has() of the pressable child. */
+.toneError {
+  --tone-base: var(--lobe-color-error);
+  --tone-hover: var(--lobe-color-error-hover);
+}
+
+.toneSuccess {
+  --tone-base: var(--lobe-color-success);
+  --tone-hover: var(--lobe-color-success-hover);
+}
+
+.toneError.toneError > :where(button, a),
+.toneSuccess.toneSuccess > :where(button, a) {
+  border-color: var(--tone-base);
+  background: var(--tone-base);
+}
+
+.toneError.toneError:has(> :where(button, a):hover:not(:disabled, [aria-disabled='true']))
+  > :where(button, a),
+.toneSuccess.toneSuccess:has(> :where(button, a):hover:not(:disabled, [aria-disabled='true']))
+  > :where(button, a) {
+  border-color: var(--tone-hover);
+  background: var(--tone-hover);
+}

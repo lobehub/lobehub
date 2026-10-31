@@ -1,36 +1,37 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowDownToLine } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { messageStateSelectors, useConversationStore } from '../store';
 
-const styles = createStaticStyles(({ css }) => ({
-  button: css`
-    pointer-events: auto;
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  line: css`
-    flex: 1;
-    block-size: 0;
-    border-block-start: 1px dashed ${cssVar.colorBorder};
-  `,
-  // The "here" marker: a dashed rule across the chat area at ~25% from the
-  // bottom edge, with the trigger centered on it. Purely a visual guide except
-  // for the button, so it never blocks scrolling or message clicks.
-  wrap: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 20;
-    inset-block-start: 75%;
-    inset-inline: 0;
-    transform: translateY(-50%);
-  `,
-}));
+const styles = stylex.create({
+  button: {
+    pointerEvents: 'auto',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  line: {
+    flex: '1',
+    blockSize: '0',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorder,
+  },
+  wrap: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 20,
+    insetBlockStart: '75%',
+    insetInline: '0',
+    transform: 'translateY(-50%)',
+  },
+});
 
 /**
  * "Select to here" marker shown while multi-selecting: a dashed line across the
@@ -68,14 +69,14 @@ const SelectToHereButton = memo(() => {
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.wrap}
+      className={stylex.props(styles.wrap).className}
       gap={12}
       paddingInline={16}
       ref={wrapRef}
     >
-      <div className={styles.line} />
+      <div {...stylex.props(styles.line)} />
       <Button
-        className={styles.button}
+        className={stylex.props(styles.button).className}
         icon={<Icon icon={ArrowDownToLine} />}
         shape={'round'}
         size={'small'}
@@ -83,7 +84,7 @@ const SelectToHereButton = memo(() => {
       >
         {t('messageForward.bar.selectToHere')}
       </Button>
-      <div className={styles.line} />
+      <div {...stylex.props(styles.line)} />
     </Flexbox>
   );
 });

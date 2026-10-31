@@ -1,4 +1,6 @@
-import { Accordion, createStaticStyles, ScrollArea } from '@lobehub/ui';
+import { Accordion, cx, ScrollArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { memo, useEffect, useState } from 'react';
 
@@ -6,24 +8,22 @@ import MarkdownMessage from '@/features/Conversation/Markdown';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { type ChatCitationItem } from '@/types/index';
 
+import contentStyles from './index.module.css';
 import Title from './Title';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  contentScroll: css`
-    max-height: min(40vh, 320px);
-    padding-block-end: 8px;
-    padding-inline: 8px;
-    color: ${cssVar.colorTextDescription};
-
-    article * {
-      color: ${cssVar.colorTextDescription};
-    }
-  `,
-  scrollRoot: css`
-    border-radius: 0;
-    background: transparent;
-  `,
-}));
+const styles = stylex.create({
+  contentScroll: {
+    maxHeight: 'min(40vh, 320px)',
+    paddingBlockEnd: '8px',
+    paddingInline: '8px',
+    color: cssVar.colorTextDescription,
+  },
+  scrollRoot: {
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+});
 
 interface ThinkingProps {
   citations?: ChatCitationItem[];
@@ -60,9 +60,12 @@ const Thinking = memo<ThinkingProps>((props) => {
             <ScrollArea
               disableContentFit
               scrollFade
-              className={styles.scrollRoot}
+              className={stylex.props(styles.scrollRoot).className}
               viewportProps={{
-                className: styles.contentScroll,
+                className: cx(
+                  stylex.props(styles.contentScroll).className,
+                  contentStyles.contentScroll,
+                ),
                 ref: ref as RefObject<HTMLDivElement>,
                 onScroll: handleScroll,
               }}

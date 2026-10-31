@@ -1,4 +1,6 @@
-import { Center, createStaticStyles, cx, Flexbox, Spin } from '@lobehub/ui';
+import { Center, cx, Flexbox, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,42 +13,36 @@ import { type MarkdownElementProps } from '../../type';
 import ArtifactIcon from './Icon';
 import { useArtifactCodeLength } from './useArtifactCodeLength';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  avatar: css`
-    border-inline-end: 1px solid ${cssVar.colorSplit};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  container: css`
-    cursor: pointer;
-
-    margin-block-start: 12px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 8px;
-
-    color: ${cssVar.colorText};
-
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  container_dark: css`
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  desc: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    text-overflow: ellipsis;
-  `,
-}));
+const styles = stylex.create({
+  avatar: {
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorSplit,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  container: {
+    cursor: 'pointer',
+    marginBlockStart: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '8px',
+    color: cssVar.colorText,
+    boxShadow: cssVar.boxShadowTertiary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  container_dark: { boxShadow: cssVar.boxShadowSecondary },
+  desc: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+    textOverflow: 'ellipsis',
+  },
+});
 
 interface ArtifactProps extends MarkdownElementProps {
   identifier: string;
@@ -84,7 +80,7 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
 
   return (
     <Flexbox
-      className={cx(styles.container, isDarkMode && styles.container_dark)}
+      className={stylex.props(styles.container, isDarkMode && styles.container_dark).className}
       gap={16}
       width={'100%'}
       onClick={() => {
@@ -99,7 +95,7 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
       }}
     >
       <Flexbox horizontal align={'center'} flex={1}>
-        <Center horizontal className={styles.avatar} height={64} width={64}>
+        <Center horizontal className={stylex.props(styles.avatar).className} height={64} width={64}>
           <ArtifactIcon type={type} />
         </Center>
         <Flexbox gap={4} paddingBlock={8} paddingInline={12}>
@@ -108,10 +104,12 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
               {t('artifact.generating')}
             </Flexbox>
           ) : (
-            <Flexbox className={cx(styles.title)}>{title || t('artifact.unknownTitle')}</Flexbox>
+            <Flexbox className={stylex.props(styles.title).className}>
+              {title || t('artifact.unknownTitle')}
+            </Flexbox>
           )}
           {hasChildren && (
-            <Flexbox horizontal align={'center'} className={styles.desc}>
+            <Flexbox horizontal align={'center'} className={stylex.props(styles.desc).className}>
               {identifier} ·&nbsp;
               <Flexbox horizontal align={'center'} gap={4}>
                 {!isArtifactTagClosed && <Spin size="small" />}

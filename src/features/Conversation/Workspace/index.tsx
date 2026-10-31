@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import { type ReactNode, useRef } from 'react';
 
@@ -10,16 +11,13 @@ import OverviewSlot from '@/features/Conversation/WorkingSidebar/OverviewSlot';
 import HeaderSlot from '@/routes/(main)/agent/(chat)/_layout/HeaderSlot';
 import Portal from '@/routes/(main)/agent/features/Portal';
 
-const styles = createStaticStyles(({ css }) => ({
-  // Named container queried by ChatHeader and the list top spacer: when this
-  // column is wide enough, the header floats above the full-bleed message
-  // stream instead of sitting in flow as a solid bar.
-  conversationColumn: css`
-    position: relative;
-    container-name: agent-chat-layout;
-    container-type: inline-size;
-  `,
-}));
+const styles = stylex.create({
+  conversationColumn: {
+    position: 'relative',
+    containerName: 'agent-chat-layout',
+    containerType: 'inline-size',
+  },
+});
 
 const ConversationWorkspace = ({
   children,
@@ -50,7 +48,7 @@ const ConversationWorkspace = ({
             width={'100%'}
           >
             <Flexbox
-              className={styles.conversationColumn}
+              className={stylex.props(styles.conversationColumn).className}
               flex={1}
               style={{ minHeight: 0, minWidth: 0 }}
             >

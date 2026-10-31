@@ -1,4 +1,6 @@
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessageSquareText } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,73 +8,66 @@ import { useTranslation } from 'react-i18next';
 import { type MarkdownElementProps } from '../type';
 import { type ParsedUserFeedbackComment, parseUserFeedback } from './parseUserFeedback';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    padding-block-start: 12px;
-    padding-inline-start: 44px;
-  `,
-  comment: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-    word-break: break-word;
-    white-space: pre-wrap;
-  `,
-  countBadge: css`
-    flex: none;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  headerIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    inline-size: 32px;
-    block-size: 32px;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-  root: css`
-    /* Override @lobehub/ui Markdown's default <details> card chrome (bg + padding + box-shadow).
-       Need !important because the lib targets via .parent details (higher specificity).
-       padding-bottom puts a 12px gap above the divider; margin-bottom puts a 12px gap below it,
-       matching the symmetric 12px the task card uses around its own internal divider. */
-    margin-block: 0 12px !important;
-    padding-block: 0 12px !important;
-    padding-inline: 0 !important;
-    border-block-end: 1px solid ${cssVar.colorSplit} !important;
-    border-radius: 0 !important;
-
-    background: transparent !important;
-    box-shadow: none !important;
-  `,
-  summary: css`
-    cursor: pointer;
-    list-style: none;
-
-    &::-webkit-details-marker {
-      display: none;
-    }
-  `,
-  time: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  body: { paddingBlockStart: '12px', paddingInlineStart: '44px' },
+  comment: {
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorText,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+  },
+  countBadge: {
+    flex: 'none',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  headerIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    inlineSize: '32px',
+    blockSize: '32px',
+    color: cssVar.colorTextSecondary,
+  },
+  // Override @lobehub/ui Markdown's default <details> card chrome (bg + padding +
+  // box-shadow). The lib targets it via `.parent details`, but its rules sit in
+  // the layered lobe-ui sheet, so these unlayered rules win without !important.
+  // paddingBlockEnd puts a 12px gap above the divider; marginBlockEnd puts a 12px
+  // gap below it, matching the symmetric 12px the task card uses around its own
+  // internal divider.
+  root: {
+    marginBlockStart: 0,
+    marginBlockEnd: '12px',
+    paddingBlockStart: 0,
+    paddingBlockEnd: '12px',
+    paddingInline: 0,
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    boxShadow: 'none',
+  },
+  summary: {
+    cursor: 'pointer',
+    display: { 'default': null, '::-webkit-details-marker': 'none' },
+    listStyle: 'none',
+  },
+  time: { fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 const Comment = memo<{ comment: ParsedUserFeedbackComment }>(({ comment }) => (
   <Flexbox gap={2}>
-    {comment.time && <span className={styles.time}>{comment.time}</span>}
-    <div className={styles.comment}>{comment.content}</div>
+    {comment.time && <span {...stylex.props(styles.time)}>{comment.time}</span>}
+    <div {...stylex.props(styles.comment)}>{comment.content}</div>
   </Flexbox>
 ));
 
@@ -88,21 +83,21 @@ const Render = memo<MarkdownElementProps>(({ children }) => {
   const countLabel = t('userFeedbackCard.count', { count: comments.length });
 
   return (
-    <details className={styles.root}>
-      <summary className={styles.summary}>
+    <details {...stylex.props(styles.root)}>
+      <summary {...stylex.props(styles.summary)}>
         <Flexbox horizontal align={'center'} gap={12}>
-          <span className={styles.headerIcon}>
+          <span {...stylex.props(styles.headerIcon)}>
             <MessageSquareText size={16} />
           </span>
           <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
             <Text ellipsis weight={500}>
               {t('userFeedbackCard.title')}
             </Text>
-            <span className={styles.countBadge}>{countLabel}</span>
+            <span {...stylex.props(styles.countBadge)}>{countLabel}</span>
           </Flexbox>
         </Flexbox>
       </summary>
-      <Flexbox className={styles.body} gap={12}>
+      <Flexbox {...stylex.props(styles.body)} gap={12}>
         {comments.map((comment, idx) => (
           <Comment comment={comment} key={comment.id ?? idx} />
         ))}

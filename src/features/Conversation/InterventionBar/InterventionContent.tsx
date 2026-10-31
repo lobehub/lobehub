@@ -1,3 +1,4 @@
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import Intervention from '../Messages/AssistantGroup/Tool/Detail/Intervention';
@@ -21,7 +22,7 @@ const InterventionContent = memo<InterventionContentProps>(
     ].join('|');
 
     return (
-      <div className={styles.content}>
+      <div {...stylex.props(styles.content)}>
         <UserInterventionErrorBoundary
           actionsPortalTarget={actionsPortalTarget}
           apiName={intervention.apiName}

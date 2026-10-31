@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, CircleAlert, CircleDashed } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,33 +19,33 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../.
 import { isGoalRequestGenerating, linkedGoalConfirmState, selectLinkedGoals } from './linkedGoals';
 import { useMarkSidebarTopicGoal } from './useMarkSidebarTopicGoal';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    border: 1px solid ${cssVar.colorFillSecondary};
-    border-block-end: none;
-    border-start-start-radius: 12px;
-    border-start-end-radius: 12px;
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  containerTopAttached: css`
-    border-start-start-radius: 0;
-    border-start-end-radius: 0;
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 6px;
-    padding-inline: 12px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorFillTertiary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillSecondary,
+    borderBlockEndWidth: 0,
+    borderStartStartRadius: '12px',
+    borderStartEndRadius: '12px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  containerTopAttached: { borderStartStartRadius: 0, borderStartEndRadius: 0 },
+  // Rows carry the default marker so each one can see the row before it.
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorFillTertiary,
+    },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 /**
  * `confirmed` is false while the row is still the persisted copy: its status,
@@ -70,7 +72,7 @@ const LinkedGoalRow = memo<{
       horizontal
       align={'center'}
       aria-label={t(failed ? 'goalProcess.linked.retry' : 'goalProcess.linked.open')}
-      className={styles.row}
+      {...stylex.props(styles.row, stylex.defaultMarker())}
       gap={8}
       role={'button'}
       tabIndex={0}
@@ -170,7 +172,7 @@ const LinkedGoalTray = memo<LinkedGoalTrayProps>(({ topAttached }) => {
   if (!enabled || !topicId || goals.length === 0) return null;
 
   return (
-    <Flexbox className={cx(styles.container, topAttached && styles.containerTopAttached)}>
+    <Flexbox {...stylex.props(styles.container, topAttached && styles.containerTopAttached)}>
       {goals.map((item) => (
         <LinkedGoalRow
           confirmed={confirmed}

@@ -1,0 +1,4 @@
+/* The markdown renders its own <article> tree, which StyleX cannot reach. */
+.contentScroll article * {
+  color: var(--lobe-color-text-description);
+}

@@ -1,0 +1,10 @@
+/* Descendant rules for the share preview. They reach into children this file
+   does not render, which StyleX cannot target, so they stay plain CSS. */
+.preview * {
+  pointer-events: none;
+}
+
+.preview *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}

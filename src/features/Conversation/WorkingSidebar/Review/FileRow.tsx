@@ -1,61 +1,57 @@
 'use client';
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { type KeyboardEvent, memo, useCallback } from 'react';
 
+import { sx } from '@/styles/sx';
+
 import type { ComposerTarget } from '../../types';
 import FileItemBody, { FileItemHeader } from './FileItem';
 import type { ReviewMode } from './useReviewPatches';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    /* Skip layout/paint of off-screen rows. Preserved from the previous
-       implementation. */
-    content-visibility: auto;
-    contain-intrinsic-size: auto 32px;
-    flex: none;
-
-    /* Every row carries its own top border — separates file-from-file AND
-       file-from-header without doubling up when a group is collapsed. */
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  row: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    width: 100%;
-    padding-block: 5px;
-    padding-inline: 10px;
-
-    transition: background 0.12s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-  chevron: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 0.2s;
-
-    &[data-expanded='true'] {
-      transform: rotate(90deg);
-    }
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    // Skip layout/paint of off-screen rows. Preserved from the previous
+    // implementation.
+    contentVisibility: 'auto',
+    containIntrinsicSize: 'auto 32px',
+    flex: 'none',
+    // Every row carries its own top border — separates file-from-file AND
+    // file-from-header without doubling up when a group is collapsed. The first
+    // child of the list drops it: the list's own top border is the separator.
+    borderBlockStartWidth: { 'default': '1px', ':first-child': 0 },
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  row: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    width: '100%',
+    paddingBlock: '5px',
+    paddingInline: '10px',
+    transition: 'background 0.12s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  chevron: {
+    flex: 'none',
+    color: cssVar.colorTextTertiary,
+    transition: 'transform 0.2s',
+    transform: { 'default': null, "[data-expanded='true']": 'rotate(90deg)' },
+  },
+});
 
 interface FileRowProps {
   composerTarget: ComposerTarget;
@@ -116,19 +112,22 @@ const FileRow = memo<FileRowProps>(
       [onToggle],
     );
     return (
-      <div className={styles.item} data-file-key={dataFileKey}>
+      <div {...stylex.props(styles.item)} data-file-key={dataFileKey}>
         <div
           data-review-row
           aria-expanded={expanded}
-          className={styles.row}
           role={'button'}
-          style={indent ? { paddingInlineStart: 10 + indent } : undefined}
+          {...sx(
+            [styles.row, stylex.defaultMarker()],
+            undefined,
+            indent ? { paddingInlineStart: 10 + indent } : undefined,
+          )}
           tabIndex={0}
           onClick={onToggle}
           onKeyDown={onKeyDown}
         >
           <ChevronRightIcon
-            className={styles.chevron}
+            {...stylex.props(styles.chevron)}
             data-expanded={expanded ? 'true' : 'false'}
             size={14}
           />

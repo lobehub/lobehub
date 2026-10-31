@@ -1,100 +1,86 @@
 'use client';
 
-import { Center, createStaticStyles, cx, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileText } from 'lucide-react';
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionable: css`
-    cursor: pointer;
+import { sx } from '@/styles/sx';
 
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
+const FOCUS_RING = {
+  outlineWidth: { 'default': null, ':focus-visible': '2px' },
+  outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+  outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+  outlineOffset: { 'default': null, ':focus-visible': '2px' },
+} as const;
 
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-  `,
-  avatar: css`
-    flex: none;
-    align-self: stretch;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  openLabel: css`
-    display: flex;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 6px;
-
-    font-size: 13px;
-    line-height: 1;
-    color: ${cssVar.colorText};
-    white-space: nowrap;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  actionButton: css`
-    cursor: pointer;
-
-    height: 28px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 6px;
-
-    font-size: 13px;
-    line-height: 1;
-    color: ${cssVar.colorText};
-    white-space: nowrap;
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-  `,
-  container: css`
-    overflow: hidden;
-
-    width: 100%;
-    height: 64px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  content: css`
-    overflow: hidden;
-    min-width: 0;
-  `,
-  desc: css`
-    font-size: 12px;
-    line-height: 1.3;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  title: css`
-    font-weight: 500;
-    line-height: 1.35;
-  `,
-  trigger: css`
-    overflow: hidden;
-    min-width: 0;
-    height: 100%;
-  `,
-}));
+const styles = stylex.create({
+  actionable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    ...FOCUS_RING,
+  },
+  avatar: {
+    flex: 'none',
+    alignSelf: 'stretch',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  openLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    height: '28px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '6px',
+    fontSize: '13px',
+    lineHeight: 1,
+    color: cssVar.colorText,
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  actionButton: {
+    cursor: 'pointer',
+    height: '28px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '6px',
+    fontSize: '13px',
+    lineHeight: 1,
+    color: cssVar.colorText,
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    ...FOCUS_RING,
+  },
+  container: {
+    overflow: 'hidden',
+    width: '100%',
+    height: '64px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  content: { overflow: 'hidden', minWidth: 0 },
+  desc: { fontSize: '12px', lineHeight: 1.3, color: cssVar.colorTextTertiary },
+  title: { fontWeight: 500, lineHeight: 1.35 },
+  trigger: { overflow: 'hidden', minWidth: 0, height: '100%' },
+});
 
 export interface PortalResourceCardProps {
   className?: string;
@@ -136,33 +122,33 @@ const PortalResourceCard = memo<PortalResourceCardProps>(
 
     // Mirrors the inline artifact card shell, while keeping portal-open behavior owned by callers.
     const card = (
-      <Flexbox horizontal align={'center'} className={cx(styles.container, className)}>
+      <Flexbox horizontal align={'center'} {...sx([styles.container], className)}>
         <Flexbox
           horizontal
           align={'center'}
-          className={cx(styles.trigger, onOpen && styles.actionable)}
+          {...stylex.props(styles.trigger, onOpen && styles.actionable)}
           flex={1}
           role={onOpen ? 'button' : undefined}
           tabIndex={onOpen ? 0 : undefined}
           onClick={onOpen}
           onKeyDown={onOpen ? handleKeyDown : undefined}
         >
-          <Center horizontal className={styles.avatar} width={64}>
+          <Center horizontal {...stylex.props(styles.avatar)} width={64}>
             {icon ?? <Icon icon={FileText} size={28} />}
           </Center>
-          <Flexbox className={styles.content} flex={1} gap={4} paddingInline={12}>
-            <Text ellipsis className={styles.title}>
+          <Flexbox {...stylex.props(styles.content)} flex={1} gap={4} paddingInline={12}>
+            <Text ellipsis {...stylex.props(styles.title)}>
               {title}
             </Text>
             {description && (
-              <Text ellipsis className={styles.desc}>
+              <Text ellipsis {...stylex.props(styles.desc)}>
                 {description}
               </Text>
             )}
           </Flexbox>
           {onOpen && openLabel && (
             <Flexbox flex={'none'} style={{ paddingInlineEnd: 10 }}>
-              <div aria-hidden className={styles.openLabel}>
+              <div aria-hidden {...stylex.props(styles.openLabel)}>
                 {openLabel}
               </div>
             </Flexbox>
@@ -174,14 +160,14 @@ const PortalResourceCard = memo<PortalResourceCardProps>(
               <>
                 {onSecondaryAction ? (
                   <button
-                    className={styles.actionButton}
+                    {...stylex.props(styles.actionButton)}
                     type={'button'}
                     onClick={handleSecondaryActionClick}
                   >
                     {secondaryActionLabel}
                   </button>
                 ) : (
-                  <div aria-hidden className={styles.openLabel}>
+                  <div aria-hidden {...stylex.props(styles.openLabel)}>
                     {secondaryActionLabel}
                   </div>
                 )}

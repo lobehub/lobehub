@@ -1,19 +1,10 @@
 'use client';
 
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Empty,
-  Flexbox,
-  Icon,
-  Skeleton,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, Empty, Flexbox, Icon, Skeleton, toast, Tooltip } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -55,6 +46,7 @@ import {
 } from '@/store/device';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
 import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
@@ -68,17 +60,12 @@ import {
 import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
-import { sectionStyles } from './sectionStyles';
+import { sectionProps, sectionStyles } from './sectionStyles';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-  `,
-  emptyWorkspace: css`
-    padding-block: 28px 30px;
-    padding-inline: 20px;
-  `,
-}));
+const styles = stylex.create({
+  body: { overflowY: 'auto' },
+  emptyWorkspace: { paddingBlockStart: '28px', paddingBlockEnd: '30px', paddingInline: '20px' },
+});
 
 interface OverviewProps {
   active: boolean;
@@ -268,7 +255,7 @@ const Overview = memo<OverviewProps>(
         value={
           detached ? (
             <>
-              <span className={rowStyles.num}>{branch}</span>
+              <span {...stylex.props(rowStyles.num)}>{branch}</span>
               {t('workingPanel.overview.branch.detached')}
             </>
           ) : (
@@ -313,7 +300,9 @@ const Overview = memo<OverviewProps>(
               pulling ? (
                 <RingLoadingIcon size={12} />
               ) : (
-                <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.pull')}</span>
+                <span {...stylex.props(rowStyles.rowAction)}>
+                  {t('workingPanel.overview.sync.pull')}
+                </span>
               )
             }
             onClick={actionsBlocked ? undefined : handlePull}
@@ -329,7 +318,9 @@ const Overview = memo<OverviewProps>(
               pushing ? (
                 <RingLoadingIcon size={12} />
               ) : (
-                <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.push')}</span>
+                <span {...stylex.props(rowStyles.rowAction)}>
+                  {t('workingPanel.overview.sync.push')}
+                </span>
               )
             }
             onClick={actionsBlocked ? undefined : handlePush}
@@ -369,8 +360,8 @@ const Overview = memo<OverviewProps>(
               <RingLoadingIcon size={12} />
             ) : changeStats.files > 0 ? (
               <>
-                <span className={rowStyles.changeAdditions}>+{changeStats.additions}</span>
-                <span className={rowStyles.changeDeletions}>−{changeStats.deletions}</span>
+                <span {...stylex.props(rowStyles.changeAdditions)}>+{changeStats.additions}</span>
+                <span {...stylex.props(rowStyles.changeDeletions)}>−{changeStats.deletions}</span>
               </>
             ) : (
               t('workingPanel.overview.changes.none')
@@ -392,8 +383,10 @@ const Overview = memo<OverviewProps>(
                 iconColor={prVisual.color}
                 trailing={
                   <span
-                    className={sectionStyles.pill}
-                    style={{ background: `color-mix(in srgb,  12%, transparent)`, color: ci.color }}
+                    {...sx([sectionStyles.pill], undefined, {
+                      background: `color-mix(in srgb,  12%, transparent)`,
+                      color: ci.color,
+                    })}
                   >
                     <Icon icon={ci.icon} size={12} />
                     {shouldShowCiLabel(ciStatus)
@@ -405,7 +398,7 @@ const Overview = memo<OverviewProps>(
                 }
                 value={
                   <>
-                    <span className={rowStyles.num}>#{pullRequest.number}</span>
+                    <span {...stylex.props(rowStyles.num)}>#{pullRequest.number}</span>
                     {pullRequest.title}
                   </>
                 }
@@ -419,7 +412,7 @@ const Overview = memo<OverviewProps>(
 
     const workspaceSection = repoType ? (
       isGitLoading ? (
-        <div className={sectionStyles.skeleton}>
+        <div {...stylex.props(sectionStyles.skeleton)}>
           <Skeleton.Text rows={3} />
         </div>
       ) : gitError ? (
@@ -444,7 +437,7 @@ const Overview = memo<OverviewProps>(
     ) : null;
 
     return (
-      <Flexbox className={styles.body}>
+      <Flexbox className={stylex.props(styles.body).className}>
         {hasWorkspace && (
           <>
             <OverviewHeader
@@ -455,7 +448,7 @@ const Overview = memo<OverviewProps>(
               repoType={repoType}
               onClick={() => onOpenTab('files')}
             />
-            <Flexbox className={sectionStyles.section}>
+            <Flexbox {...sectionProps()}>
               {workspaceSection}
               {/* Outside the git rows: a dev server runs in plain folders too. */}
               {tunnelsEnabled && deviceId && (
@@ -475,25 +468,27 @@ const Overview = memo<OverviewProps>(
         <TopicBackgroundActivity topicId={topicId} />
         {environmentAvailable && !workingDirectory && (
           <Empty
-            className={cx(sectionStyles.section, styles.emptyWorkspace)}
             description={t('workingPanel.overview.workspace.emptyDesc')}
             icon={LaptopIcon}
             title={t('workingPanel.overview.workspace.empty')}
+            className={
+              sx([sectionStyles.section, styles.emptyWorkspace, stylex.defaultMarker()]).className
+            }
           />
         )}
 
-        <GoalSection className={sectionStyles.section} />
-        <ProgressSection className={sectionStyles.section} />
+        <GoalSection className={sectionProps().className} />
+        <ProgressSection className={sectionProps().className} />
 
         {visibleWorks.length > 0 && (
-          <Flexbox className={sectionStyles.section}>
+          <Flexbox {...sectionProps()}>
             <Flexbox
               horizontal
               align={'center'}
-              className={sectionStyles.sectionHeader}
+              {...stylex.props(sectionStyles.sectionHeader)}
               justify={'space-between'}
             >
-              <span className={sectionStyles.sectionTitle}>
+              <span {...stylex.props(sectionStyles.sectionTitle)}>
                 {t('workingPanel.overview.outputs')}
               </span>
               <Button
@@ -513,7 +508,7 @@ const Overview = memo<OverviewProps>(
 
         {!environmentAvailable && !topicId && visibleWorks.length === 0 && (
           <Empty
-            className={sectionStyles.section}
+            className={sectionProps().className}
             description={t('workingPanel.overview.empty')}
             icon={BoxesIcon}
             title={t('workingPanel.overview.emptyTitle')}
@@ -524,7 +519,7 @@ const Overview = memo<OverviewProps>(
             sits in its own section so the resource rows below aren't grouped under it. */}
         {topicId && <ThreadListSection topicId={topicId} />}
 
-        <Flexbox className={sectionStyles.section}>
+        <Flexbox {...sectionProps()}>
           {hasWorkspace && (
             <OverviewRow
               weak

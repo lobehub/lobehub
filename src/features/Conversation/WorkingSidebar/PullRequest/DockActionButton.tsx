@@ -4,35 +4,14 @@ import type {
   DeviceGitPullRequestMergeMethod,
 } from '@lobechat/types';
 import { Button, type DropdownItem, SplitButton } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import styles from './DockActionButton.module.css';
 import { type DockAction, PR_KEYS } from './mergeDockData';
 import { MERGE_METHODS } from './mergeMethodStorage';
 import type { TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
-
-const tone = (base: string, hover: string) => `
-  && > :where(button, a) {
-    border-color: ${base};
-    background: ${base};
-  }
-
-  &&:has(> :where(button, a):hover:not(:disabled, [aria-disabled='true'])) > :where(button, a) {
-    border-color: ${hover};
-    background: ${hover};
-  }
-`;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  toneError: css`
-    ${tone(cssVar.colorError, cssVar.colorErrorHover)}
-  `,
-  toneSuccess: css`
-    ${tone(cssVar.colorSuccess, cssVar.colorSuccessHover)}
-  `,
-}));
 
 const TONE_CLASS = {
   error: styles.toneError,

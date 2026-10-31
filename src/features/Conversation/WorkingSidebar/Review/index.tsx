@@ -2,7 +2,9 @@
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
 import { Center, type DropdownItem, DropdownMenu, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, createStaticStyles, Spin } from '@lobehub/ui';
+import { ActionIcon, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -25,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useFetchGitBranch } from '@/store/device';
+import { sx } from '@/styles/sx';
 
 import type { ComposerTarget } from '../../types';
 import FileRow from './FileRow';
@@ -69,157 +72,137 @@ interface ReviewProps {
   workingDirectory: string;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  caret: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  totalAdditions: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  totalDeletions: css`
-    color: ${cssVar.colorError};
-  `,
-  totalStats: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-  `,
+const styles = stylex.create({
+  caret: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  totalAdditions: { color: cssVar.colorSuccess },
+  totalDeletions: { color: cssVar.colorError },
+  totalStats: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    gap: '6px',
+    alignItems: 'center',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+  },
   // Two-pane body: diff list (left, flexes) + tree-nav rail (right, fixed).
-  body: css`
-    overflow: hidden;
-    min-height: 0;
-  `,
-  list: css`
-    position: relative;
-    min-width: 0;
-    border-block: 1px solid ${cssVar.colorBorderSecondary};
-
-    /* Strip the first visible row's own top border — the list's
-       border-block-start already provides the separator under the subheader,
-       so without this we'd render a doubled-up 2px line at the top. */
-    & > :first-child {
-      border-block-start: none;
-    }
-  `,
-  treeRail: css`
-    flex: none;
-
-    width: 240px;
-    min-height: 0;
-    padding-block: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  arrow: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  basePicker: css`
-    cursor: pointer;
-    user-select: none;
-
-    overflow: hidden;
-    display: inline-flex;
-    flex: 0 1 auto;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  compareChip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex: 0 1 auto;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  headRefText: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    min-width: 0;
-    padding-inline-end: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  refName: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  scopeChip: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  subheader: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 4px 8px;
-    padding-inline: 8px;
-  `,
+  body: { overflow: 'hidden', minHeight: 0 },
+  // The first row drops its own top border (see FileRow): the list's
+  // border-block-start already separates it from the subheader.
+  list: {
+    position: 'relative',
+    minWidth: 0,
+    borderBlockWidth: '1px',
+    borderBlockStyle: 'solid',
+    borderBlockColor: cssVar.colorBorderSecondary,
+  },
+  treeRail: {
+    flex: 'none',
+    width: '240px',
+    minHeight: 0,
+    paddingBlock: '4px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+  },
+  arrow: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  basePicker: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    gap: '4px',
+    alignItems: 'center',
+    minWidth: 0,
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    transition: 'background 0.15s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  compareChip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  headRefText: {
+    overflow: 'hidden',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
+    paddingInlineEnd: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  refName: {
+    overflow: 'hidden',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  scopeChip: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    flexShrink: 0,
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    transition: 'background 0.15s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  subheader: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '8px',
+    paddingInline: '8px',
+  },
   // Empty submodule group — pointer-only bump where the submodule's own
   // working tree is clean. We still surface the group so the user knows the
   // submodule pointer moved, just with a softer "no changes" line instead of
   // a list of files.
-  groupEmpty: css`
-    padding-block: 6px 10px;
-    padding-inline: 10px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+  groupEmpty: {
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '10px',
+    paddingInline: '10px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const Review = memo<ReviewProps>(
   ({ active, composerTarget, deviceId, onToggleTree, showTree, workingDirectory }) => {
@@ -511,7 +494,7 @@ const Review = memo<ReviewProps>(
 
     return (
       <Flexbox style={{ overflow: 'hidden' }} width={'100%'}>
-        <div className={styles.subheader}>
+        <div {...stylex.props(styles.subheader)}>
           <Flexbox
             horizontal
             align={'center'}
@@ -519,42 +502,42 @@ const Review = memo<ReviewProps>(
             style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden' }}
           >
             <DropdownMenu items={modeMenuItems} placement={'bottomLeft'}>
-              <span className={styles.scopeChip} role={'button'} tabIndex={0}>
+              <span {...stylex.props(styles.scopeChip)} role={'button'} tabIndex={0}>
                 {mode === 'branch'
                   ? t('workingPanel.review.mode.branch')
                   : t('workingPanel.review.mode.unstaged')}
-                <ChevronDownIcon className={styles.caret} size={12} />
+                <ChevronDownIcon {...stylex.props(styles.caret)} size={12} />
               </span>
             </DropdownMenu>
             {mode === 'branch' && (baseRef || headRef) && (
-              <span className={styles.compareChip}>
+              <span {...stylex.props(styles.compareChip)}>
                 <DropdownMenu
                   items={baseRefMenuItems}
                   placement={'bottomLeft'}
                   onOpenChange={setBasePickerOpen}
                 >
-                  <span className={styles.basePicker} role={'button'} tabIndex={0}>
-                    <span className={styles.refName}>
+                  <span {...stylex.props(styles.basePicker)} role={'button'} tabIndex={0}>
+                    <span {...stylex.props(styles.refName)}>
                       {baseRef ?? t('workingPanel.review.baseRef.unresolved')}
                     </span>
-                    <ChevronDownIcon className={styles.caret} size={12} />
+                    <ChevronDownIcon {...stylex.props(styles.caret)} size={12} />
                   </span>
                 </DropdownMenu>
                 {headRef && (
                   <>
-                    <ArrowLeftIcon className={styles.arrow} size={12} />
-                    <span className={styles.headRefText}>{headRef}</span>
+                    <ArrowLeftIcon {...stylex.props(styles.arrow)} size={12} />
+                    <span {...stylex.props(styles.headRefText)}>{headRef}</span>
                   </>
                 )}
               </span>
             )}
             {(totals.additions > 0 || totals.deletions > 0) && (
-              <span className={styles.totalStats}>
+              <span {...stylex.props(styles.totalStats)}>
                 {totals.additions > 0 && (
-                  <span className={styles.totalAdditions}>+{totals.additions}</span>
+                  <span {...stylex.props(styles.totalAdditions)}>+{totals.additions}</span>
                 )}
                 {totals.deletions > 0 && (
-                  <span className={styles.totalDeletions}>-{totals.deletions}</span>
+                  <span {...stylex.props(styles.totalDeletions)}>-{totals.deletions}</span>
                 )}
               </span>
             )}
@@ -598,8 +581,8 @@ const Review = memo<ReviewProps>(
             <Empty description={emptyText} icon={GitCompareIcon} />
           </Center>
         ) : (
-          <Flexbox horizontal className={styles.body} flex={1} width={'100%'}>
-            <Flexbox className={styles.list} flex={1} ref={listRef} style={{ overflow: 'auto' }}>
+          <Flexbox horizontal {...stylex.props(styles.body)} flex={1} width={'100%'}>
+            <Flexbox flex={1} ref={listRef} {...sx([styles.list], undefined, { overflow: 'auto' })}>
               {groups.map((group) => {
                 const groupTotals = group.patches.reduce(
                   (acc, p) => {
@@ -644,7 +627,7 @@ const Review = memo<ReviewProps>(
                       !groupCollapsed &&
                       !group.isParent &&
                       group.patches.length === 0 && (
-                        <div className={styles.groupEmpty}>
+                        <div {...stylex.props(styles.groupEmpty)}>
                           {t('workingPanel.review.group.submoduleClean')}
                         </div>
                       )}
@@ -678,7 +661,7 @@ const Review = memo<ReviewProps>(
               })}
             </Flexbox>
             {showTree && (
-              <Flexbox className={styles.treeRail}>
+              <Flexbox {...stylex.props(styles.treeRail)}>
                 <FileTreeNav
                   activeFileKey={activeFileKey}
                   groups={groups}

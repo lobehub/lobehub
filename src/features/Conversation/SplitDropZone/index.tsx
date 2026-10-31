@@ -1,36 +1,32 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PanelRight } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationPanelDrop } from './useConversationPanelDrop';
 
-const styles = createStaticStyles(({ css }) => ({
-  overlay: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 20;
-
-    /* The chat input below overlaps this zone's last 12px, so the bottom
-       inset clears it to keep the highlight off the input. */
-    inset-block: 8px 16px;
-    inset-inline: 8px;
-
-    border: 2px dashed ${cssVar.colorInfoBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    opacity: 0.9;
-    background: ${cssVar.colorInfoBg};
-  `,
-  root: css`
-    position: relative;
-    flex: 1;
-    min-height: 0;
-  `,
-}));
+const styles = stylex.create({
+  overlay: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 20,
+    insetBlockStart: '8px',
+    insetBlockEnd: '16px',
+    insetInline: '8px',
+    borderWidth: '2px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorInfoBorder,
+    borderRadius: cssVar.borderRadiusLG,
+    opacity: 0.9,
+    backgroundColor: cssVar.colorInfoBg,
+    backgroundImage: 'none',
+  },
+  root: { position: 'relative', flex: '1', minHeight: '0' },
+});
 
 /**
  * Wraps the main conversation body so a topic/thread dragged from the sidebar
@@ -44,7 +40,7 @@ const SplitDropZone = memo<{ children: ReactNode }>(({ children }) => {
 
   return (
     <Flexbox
-      className={styles.root}
+      className={stylex.props(styles.root).className}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
@@ -53,7 +49,11 @@ const SplitDropZone = memo<{ children: ReactNode }>(({ children }) => {
     >
       {children}
       {dragKind && (
-        <Flexbox align={'center'} className={styles.overlay} justify={'center'}>
+        <Flexbox
+          align={'center'}
+          className={stylex.props(styles.overlay).className}
+          justify={'center'}
+        >
           <Flexbox align={'center'} gap={8} style={{ color: cssVar.colorInfo }}>
             <Icon icon={PanelRight} size={28} />
             <Text style={{ color: 'inherit', fontSize: 14, fontWeight: 500 }}>

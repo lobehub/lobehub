@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -17,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
 import { useChatStore } from '@/store/chat';
+import { sx } from '@/styles/sx';
 
 import {
   buildGoalStepSegments,
@@ -27,176 +30,133 @@ import {
 } from './goalWorkflowView';
 import { type GoalWorkflowView, useGoalWorkflow } from './useGoalSection';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  collapsed: css`
-    display: none;
-  `,
-  count: css`
-    flex-shrink: 0;
+const stepPulse = stylex.keyframes({
+  '0%, 100%': { opacity: 1 },
+  '50%': { opacity: 0.45 },
+});
 
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  decisionRow: css`
-    cursor: pointer;
-
-    margin-block: 2px 6px;
-    padding-block: 5px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorWarningBorder};
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorWarning};
-
-    background: ${cssVar.colorWarningBg};
-
-    &:hover {
-      background: ${cssVar.colorWarningBorder};
-    }
-  `,
-  footer: css`
-    padding-block: 6px 2px;
-  `,
-  headerRow: css`
-    cursor: pointer;
-    user-select: none;
-
-    padding-block: 4px 6px;
-    padding-inline: 10px;
-    border-radius: 6px;
-
-    transition: background-color 0.12s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 2px;
-    }
-  `,
-  lessRow: css`
-    cursor: pointer;
-
-    justify-content: center;
-
-    padding-block: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  moreRow: css`
-    cursor: pointer;
-
-    justify-content: center;
-
-    margin-block-start: 2px;
-    padding-block: 5px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  progress: css`
-    overflow: hidden;
-    flex: 1;
-
-    height: 4px;
-    border-radius: 2px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressFill: css`
-    height: 100%;
-    border-radius: inherit;
-    background: ${cssVar.colorSuccess};
-    transition: width 0.25s ${cssVar.motionEaseOut};
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 5px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: -2px;
-    }
-  `,
-  loading: css`
-    padding-block: 4px 8px;
-    padding-inline: 10px;
-  `,
-  segActive: css`
-    background: ${cssVar.colorInfo};
-    animation: sidebar-goal-step-pulse 1.6s ${cssVar.motionEaseInOut} infinite;
-  `,
-  segDone: css`
-    background: ${cssVar.colorSuccess};
-  `,
-  segPending: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  segment: css`
-    flex: 1;
-    height: 4px;
-    border-radius: 2px;
-  `,
-  stepTrack: css`
-    display: flex;
-    gap: 3px;
-
-    height: 4px;
-    margin-block: 2px 8px;
-    margin-inline: 10px;
-
-    @keyframes sidebar-goal-step-pulse {
-      0%,
-      100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.45;
-      }
-    }
-  `,
-  sectionTitle: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  count: {
+    flexShrink: 0,
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  decisionRow: {
+    cursor: 'pointer',
+    marginBlockStart: '2px',
+    marginBlockEnd: '6px',
+    paddingBlock: '5px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorWarningBorder,
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: cssVar.colorWarning,
+    backgroundColor: { 'default': cssVar.colorWarningBg, ':hover': cssVar.colorWarningBorder },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  footer: { paddingBlockStart: '6px', paddingBlockEnd: '2px', paddingInline: '10px' },
+  headerRow: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '6px',
+    paddingInline: '10px',
+    borderRadius: '6px',
+    transition: 'background-color 0.12s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  lessRow: {
+    cursor: 'pointer',
+    justifyContent: 'center',
+    paddingBlock: '4px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+  },
+  moreRow: {
+    cursor: 'pointer',
+    justifyContent: 'center',
+    marginBlockStart: '2px',
+    paddingBlock: '5px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  progress: {
+    overflow: 'hidden',
+    flex: '1',
+    height: '4px',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+    transition: `width 0.25s ${cssVar.motionEaseOut}`,
+  },
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '5px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  loading: { paddingBlockStart: '4px', paddingBlockEnd: '8px', paddingInline: '10px' },
+  segActive: {
+    backgroundColor: cssVar.colorInfo,
+    backgroundImage: 'none',
+    animationName: stepPulse,
+    animationDuration: '1.6s',
+    animationTimingFunction: cssVar.motionEaseInOut,
+    animationIterationCount: 'infinite',
+  },
+  segDone: { backgroundColor: cssVar.colorSuccess, backgroundImage: 'none' },
+  segPending: { backgroundColor: cssVar.colorFillSecondary, backgroundImage: 'none' },
+  segment: { flex: '1', height: '4px', borderRadius: '2px' },
+  stepTrack: {
+    display: 'flex',
+    gap: '3px',
+    height: '4px',
+    marginBlockStart: '2px',
+    marginBlockEnd: '8px',
+    marginInline: '10px',
+  },
+  sectionTitle: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const STATE_VISUALS = {
   done: { color: cssVar.colorSuccess, icon: CheckCircle2 },
@@ -219,7 +179,7 @@ const WorkflowRow = memo<{ onOpen: () => void; row: GoalWorkflowRow }>(({ row, o
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.row}
+      {...stylex.props(styles.row)}
       gap={8}
       role={'button'}
       tabIndex={0}
@@ -267,9 +227,9 @@ const StepTrack = memo<{ rows: GoalWorkflowRow[] }>(({ rows }) => {
   if (segments.length === 0) return null;
 
   return (
-    <div aria-hidden className={styles.stepTrack} data-testid={'goal-workflow-step-track'}>
+    <div aria-hidden {...stylex.props(styles.stepTrack)} data-testid={'goal-workflow-step-track'}>
       {segments.map((state, index) => (
-        <div className={cx(styles.segment, SEGMENT_CLASS[state])} key={index} />
+        <div {...stylex.props(styles.segment, SEGMENT_CLASS[state])} key={index} />
       ))}
     </div>
   );
@@ -320,7 +280,7 @@ const GoalWorkflowCard = memo<{
         align={'center'}
         aria-controls={bodyId}
         aria-expanded={!collapsed}
-        className={styles.headerRow}
+        {...stylex.props(styles.headerRow)}
         gap={8}
         justify="space-between"
         role={'button'}
@@ -330,14 +290,14 @@ const GoalWorkflowCard = memo<{
       >
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 1, minWidth: 0 }}>
           <Icon icon={Workflow} size={14} style={{ color: cssVar.colorTextSecondary }} />
-          <span className={styles.sectionTitle} title={title}>
+          <span {...stylex.props(styles.sectionTitle)} title={title}>
             {title}
           </span>
           {hasSnapshot && goal.phase !== 'running' && (
-            <span className={styles.count}>{t(`goalTask.status.${goal.phase}`)}</span>
+            <span {...stylex.props(styles.count)}>{t(`goalTask.status.${goal.phase}`)}</span>
           )}
           {hasSnapshot && (
-            <span className={styles.count}>
+            <span {...stylex.props(styles.count)}>
               {goal.summary.done}/{goal.summary.total}
             </span>
           )}
@@ -349,13 +309,13 @@ const GoalWorkflowCard = memo<{
         />
       </Flexbox>
 
-      <div className={cx(collapsed && styles.collapsed)} id={bodyId}>
+      <div hidden={collapsed} id={bodyId}>
         {goal.error ? (
-          <div className={styles.loading}>
+          <div {...stylex.props(styles.loading)}>
             <AsyncError error={goal.error} variant={'inline'} onRetry={goal.retry} />
           </div>
         ) : goal.loading ? (
-          <Flexbox className={styles.loading} data-testid={'goal-workflow-loading'} gap={8}>
+          <Flexbox {...stylex.props(styles.loading)} data-testid={'goal-workflow-loading'} gap={8}>
             <Skeleton height={12} radius={4} />
             <Skeleton height={28} radius={6} />
             <Skeleton height={28} radius={6} />
@@ -368,7 +328,7 @@ const GoalWorkflowCard = memo<{
               <Flexbox
                 horizontal
                 align={'center'}
-                className={styles.decisionRow}
+                {...stylex.props(styles.decisionRow)}
                 gap={6}
                 justify={'space-between'}
                 role={'button'}
@@ -393,7 +353,7 @@ const GoalWorkflowCard = memo<{
                 <Flexbox
                   horizontal
                   align={'center'}
-                  className={styles.moreRow}
+                  {...stylex.props(styles.moreRow)}
                   gap={4}
                   role={'button'}
                   tabIndex={0}
@@ -413,7 +373,7 @@ const GoalWorkflowCard = memo<{
                   <Flexbox
                     horizontal
                     align={'center'}
-                    className={styles.lessRow}
+                    {...stylex.props(styles.lessRow)}
                     role={'button'}
                     tabIndex={0}
                     onClick={() => setRowsExpanded(false)}
@@ -432,12 +392,11 @@ const GoalWorkflowCard = memo<{
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.footer}
+              className={stylex.props(styles.footer).className}
               gap={8}
-              style={{ paddingInline: 10 }}
             >
-              <div className={styles.progress}>
-                <div className={styles.progressFill} style={{ width: `${percent}%` }} />
+              <div {...stylex.props(styles.progress)}>
+                <div {...sx([styles.progressFill], undefined, { width: `${percent}%` })} />
               </div>
               <Button outdent={'end'} size={'small'} type={'text'} onClick={open}>
                 {t('workingPanel.goal.viewDetails')}

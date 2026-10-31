@@ -1,0 +1,57 @@
+@keyframes locate-highlight {
+  0%,
+  100% {
+    background: transparent;
+  }
+
+  15%,
+  55% {
+    background: var(--lobe-color-primary-bg);
+  }
+}
+
+/* The hover-revealed time / menubar live in Title and Actions, which StyleX
+   cannot reach from the row, so the row is plain CSS. */
+.container {
+  position: relative;
+  max-width: 100%;
+}
+
+.container[data-message-locate-highlight] {
+  border-radius: var(--lobe-border-radius-lg);
+  animation: locate-highlight 1400ms var(--lobe-motion-ease-out);
+}
+
+.container time,
+.container div[role='menubar'] {
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms var(--lobe-motion-ease-out);
+}
+
+.container time {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.container div[role='menubar'] {
+  display: flex;
+}
+
+.container:has([data-popup-open]) div[role='menubar'] {
+  pointer-events: unset;
+  opacity: 1;
+}
+
+.container:hover time,
+.container:hover div[role='menubar'] {
+  pointer-events: unset;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .container[data-message-locate-highlight] {
+    background: var(--lobe-color-primary-bg);
+    animation: none;
+  }
+}

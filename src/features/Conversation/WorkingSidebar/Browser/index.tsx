@@ -1,17 +1,8 @@
 import { isDesktop } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
-import {
-  ActionIcon,
-  Button,
-  Center,
-  createStaticStyles,
-  Empty,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Center, Empty, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Camera,
   ChevronLeft,
@@ -45,118 +36,88 @@ import {
   normalizeBrowserUrl,
 } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  loadingBar: css`
-    pointer-events: none;
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
+const NARROW_BANNER = '@container (max-width: 480px)';
 
-    position: absolute;
-    z-index: 3;
+const loadingProgress = stylex.keyframes({
+  from: { transform: 'translateX(-110%)' },
+  to: { transform: 'translateX(310%)' },
+});
 
-    /* Anchored to the toolbar's bottom border. */
-    inset-block-end: -1px;
-    inset-inline: 0;
-
-    overflow: hidden;
-
-    height: 2px;
-
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset-block: 0;
-      inset-inline-start: 0;
-
-      width: 36%;
-
-      background: ${cssVar.colorInfo};
-
-      animation: browser-loading-progress 1.15s ease-in-out infinite;
-    }
-
-    @keyframes browser-loading-progress {
-      from {
-        transform: translateX(-110%);
-      }
-
-      to {
-        transform: translateX(310%);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &::after {
-        width: 100%;
-        animation: none;
-      }
-    }
-  `,
-  container: css`
-    position: relative;
-
-    overflow: hidden;
-    flex: 1;
-
-    width: 100%;
-    min-height: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  toolbar: css`
-    position: relative;
-
-    flex-shrink: 0;
-
-    min-height: 56px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  address: css`
-    flex: 1;
-    min-width: 0;
-    max-width: 720px;
-
-    /* The filled variant keeps its tinted fill while focused; lift it to the
-       container surface so the focus ring reads as an editable field. Doubling
-       the class outranks antd's own :focus rule. */
-    &&:focus {
-      background: ${cssVar.colorBgContainer};
-    }
-  `,
-  importBanner: css`
-    container-type: inline-size;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-
-    min-height: 72px;
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  importCopy: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  importActions: css`
-    margin-inline-start: auto;
-
-    @container (max-width: 480px) {
-      flex-basis: 100%;
-      justify-content: flex-end;
-      margin-inline-start: 44px;
-    }
-  `,
-  toolbarActions: css`
-    margin-inline-start: auto;
-  `,
-  /* The retained Electron webview is imperatively attached inside this host. */
-  viewport: css`
-    position: absolute;
-    inset: 0;
-  `,
-}));
+const styles = stylex.create({
+  loadingBar: {
+    'pointerEvents': 'none',
+    'position': 'absolute',
+    'zIndex': 3,
+    // Anchored to the toolbar's bottom border.
+    'insetBlockEnd': '-1px',
+    'insetInline': 0,
+    'overflow': 'hidden',
+    'height': '2px',
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      insetBlock: 0,
+      insetInlineStart: 0,
+      width: { default: '36%', [REDUCED_MOTION]: '100%' },
+      backgroundColor: cssVar.colorInfo,
+      backgroundImage: 'none',
+      animationName: { default: loadingProgress, [REDUCED_MOTION]: 'none' },
+      animationDuration: '1.15s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite',
+    },
+  },
+  container: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: '1',
+    width: '100%',
+    minHeight: 0,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  toolbar: {
+    position: 'relative',
+    flexShrink: 0,
+    minHeight: '56px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  address: {
+    flex: '1',
+    minWidth: 0,
+    maxWidth: '720px',
+    // The filled variant keeps its tinted fill while focused; lift it to the
+    // container surface so the focus ring reads as an editable field.
+    backgroundColor: { 'default': null, ':focus': cssVar.colorBgContainer },
+    backgroundImage: { 'default': null, ':focus': 'none' },
+  },
+  importBanner: {
+    containerType: 'inline-size',
+    flexShrink: 0,
+    flexWrap: 'wrap',
+    minHeight: '72px',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  importCopy: { flex: '1', minWidth: 0 },
+  importActions: {
+    flexBasis: { default: null, [NARROW_BANNER]: '100%' },
+    justifyContent: { default: null, [NARROW_BANNER]: 'flex-end' },
+    marginInlineStart: { default: 'auto', [NARROW_BANNER]: '44px' },
+  },
+  toolbarActions: { marginInlineStart: 'auto' },
+  // The retained Electron webview is imperatively attached inside this host.
+  viewport: { position: 'absolute', insetBlock: 0, insetInline: 0 },
+});
 
 interface BrowserPaneProps {
   /** The conversation the chat input belongs to — screenshots are attached there. */
@@ -355,7 +316,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
-      <Flexbox horizontal align={'center'} className={styles.toolbar} gap={4}>
+      <Flexbox horizontal align={'center'} {...stylex.props(styles.toolbar)} gap={4}>
         <Flexbox horizontal align={'center'} gap={4}>
           <ActionIcon
             disabled={!state.canGoBack}
@@ -390,7 +351,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
           />
         </Flexbox>
         <Input
-          className={styles.address}
+          {...stylex.props(styles.address)}
           placeholder={t('workingPanel.browser.addressPlaceholder')}
           value={address}
           variant={'filled'}
@@ -405,7 +366,7 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
             openUrl(address);
           }}
         />
-        <Flexbox horizontal align={'center'} className={styles.toolbarActions} gap={4}>
+        <Flexbox horizontal align={'center'} {...stylex.props(styles.toolbarActions)} gap={4}>
           {isPicking ? (
             <ActionIcon
               active
@@ -448,21 +409,21 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
           <div
             aria-label={t('workingPanel.browser.loading')}
             aria-valuetext={t('workingPanel.browser.loading')}
-            className={styles.loadingBar}
+            {...stylex.props(styles.loadingBar)}
             role="progressbar"
           />
         )}
       </Flexbox>
       {!isImportBannerDismissed && (
-        <Flexbox horizontal align={'center'} className={styles.importBanner} gap={12}>
+        <Flexbox horizontal align={'center'} {...stylex.props(styles.importBanner)} gap={12}>
           <BrowserIcon browser={'Chrome'} size={32} />
-          <Flexbox className={styles.importCopy} gap={0}>
+          <Flexbox {...stylex.props(styles.importCopy)} gap={0}>
             <Text strong>{t('workingPanel.browser.import.title')}</Text>
             <Text ellipsis type={'secondary'}>
               {t('workingPanel.browser.import.desc')}
             </Text>
           </Flexbox>
-          <Flexbox horizontal align={'center'} className={styles.importActions} gap={4}>
+          <Flexbox horizontal align={'center'} {...stylex.props(styles.importActions)} gap={4}>
             <Button
               icon={<Icon icon={Import} />}
               loading={isImporting}
@@ -479,8 +440,8 @@ const BrowserPane = memo<BrowserPaneProps>((props) => {
           </Flexbox>
         </Flexbox>
       )}
-      <Flexbox className={styles.container}>
-        <div className={styles.viewport} ref={viewportRef} />
+      <Flexbox {...stylex.props(styles.container)}>
+        <div {...stylex.props(styles.viewport)} ref={viewportRef} />
       </Flexbox>
     </Flexbox>
   );

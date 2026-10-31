@@ -1,71 +1,48 @@
-import { createStaticStyles, keyframes } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-const slideUp = keyframes`
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-`;
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: flex-start;
+const slideUp = stylex.keyframes({
+  from: { opacity: 0, transform: 'translateY(8px)' },
+  to: { opacity: 1, transform: 'translateY(0)' },
+});
 
-    max-inline-size: 460px;
-    margin-block-start: 8px;
-  `,
-  chip: css`
-    cursor: pointer;
-
-    transform: translateY(8px);
-
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 7px;
-    padding-inline: 10px 14px;
-    border: none;
-    border-radius: 8px;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-
-    opacity: 0;
-    background: ${cssVar.colorFillTertiary};
-
-    transition:
-      background 0.15s,
-      color 0.15s;
-    animation: ${slideUp} 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:hover .followup-icon {
-      color: ${cssVar.colorPrimary};
-      opacity: 1;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transform: none;
-      opacity: 1;
-      animation: none;
-    }
-  `,
-  chipIcon: css`
-    flex: none;
-    opacity: 0.55;
-    transition:
-      opacity 0.15s,
-      color 0.15s;
-  `,
-}));
+export const styles = stylex.create({
+  chip: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '7px',
+    paddingInlineStart: '10px',
+    paddingInlineEnd: '14px',
+    borderStyle: 'none',
+    borderRadius: '8px',
+    fontSize: '13px',
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transform: { default: 'translateY(8px)', [REDUCED_MOTION]: 'none' },
+    opacity: { default: 0, [REDUCED_MOTION]: 1 },
+    transition: 'background 0.15s, color 0.15s',
+    animationName: { default: slideUp, [REDUCED_MOTION]: 'none' },
+    animationDuration: '320ms',
+    animationTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+    animationFillMode: 'forwards',
+  },
+  chipIcon: {
+    flex: 'none',
+    color: { default: null, [stylex.when.ancestor(':hover')]: cssVar.colorPrimary },
+    opacity: { default: 0.55, [stylex.when.ancestor(':hover')]: 1 },
+    transition: 'opacity 0.15s, color 0.15s',
+  },
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    alignItems: 'flex-start',
+    maxInlineSize: '460px',
+    marginBlockStart: '8px',
+  },
+});

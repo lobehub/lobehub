@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  SearchBar,
-  Text,
-  TextArea,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, Flexbox, SearchBar, Text, TextArea, useModalContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,44 +15,36 @@ import SelectCircle from '../SelectCircle';
 import { useForwardTargets } from '../useForwardTargets';
 import { useForwardTopic } from '../useForwardTopic';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    block-size: 460px;
-  `,
-  context: css`
-    flex: 1;
-
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  divider: css`
-    align-self: stretch;
-    inline-size: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  list: css`
-    overflow-y: auto;
-    flex: 1;
-  `,
-  row: css`
-    cursor: pointer;
-
-    min-block-size: 44px;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  selected: css`
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  body: { blockSize: '460px' },
+  context: {
+    flex: '1',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  divider: {
+    alignSelf: 'stretch',
+    inlineSize: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  list: { overflowY: 'auto', flex: '1' },
+  row: {
+    cursor: 'pointer',
+    minBlockSize: '44px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  selected: { backgroundColor: cssVar.colorFillQuaternary, backgroundImage: 'none' },
+});
 
 export interface TopicForwardContentProps {
   cancelSourceContinuation?: boolean;
@@ -99,7 +83,7 @@ export const TopicForwardContent = ({
   };
 
   return (
-    <Flexbox horizontal className={styles.body} gap={16}>
+    <Flexbox horizontal className={stylex.props(styles.body).className} gap={16}>
       <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
         <SearchBar
           allowClear
@@ -107,7 +91,7 @@ export const TopicForwardContent = ({
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
         />
-        <Flexbox className={styles.list} gap={4}>
+        <Flexbox className={stylex.props(styles.list).className} gap={4}>
           {candidates.length === 0 ? (
             <Flexbox align={'center'} justify={'center'} padding={24}>
               <Text type={'secondary'}>{t('messageForward.modal.empty')}</Text>
@@ -119,7 +103,7 @@ export const TopicForwardContent = ({
                 <Flexbox
                   horizontal
                   align={'center'}
-                  className={cx(styles.row, selected && styles.selected)}
+                  className={stylex.props(styles.row, selected && styles.selected).className}
                   gap={8}
                   key={agent.id}
                   onClick={() => toggle(agent.id)}
@@ -142,11 +126,11 @@ export const TopicForwardContent = ({
         </Flexbox>
       </Flexbox>
 
-      <div className={styles.divider} />
+      <div {...stylex.props(styles.divider)} />
 
       <Flexbox flex={1} gap={12} style={{ minWidth: 0 }}>
         <Text type={'secondary'}>{t('messageForward.topic.context')}</Text>
-        <Flexbox className={styles.context} gap={8}>
+        <Flexbox className={stylex.props(styles.context).className} gap={8}>
           <Text ellipsis strong>
             {topicTitle}
           </Text>

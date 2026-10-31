@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Popover, Text } from '@lobehub/ui';
+import { Flexbox, Popover, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,32 +13,27 @@ import { sessionSelectors } from '@/store/session/selectors';
 
 import { type MarkdownElementProps } from '../type';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  mention: css`
-    cursor: pointer;
-
-    position: relative;
-
-    display: inline;
-
-    margin-inline: 0.25em;
-    padding-block: 0.2em;
-    padding-inline: 0.4em;
-    border-radius: 0.25em;
-
-    font-size: 0.875em;
-    line-height: 1;
-    color: ${cssVar.colorInfo};
-    word-break: break-word;
-    white-space: break-spaces;
-
-    background: ${cssVar.colorInfoBg};
-
-    &:hover {
-      background: color-mix(in srgb, ${cssVar.colorInfo} 15%, ${cssVar.colorBgContainer});
-    }
-  `,
-}));
+const styles = stylex.create({
+  mention: {
+    cursor: 'pointer',
+    position: 'relative',
+    display: 'inline',
+    marginInline: '0.25em',
+    paddingBlock: '0.2em',
+    paddingInline: '0.4em',
+    borderRadius: '0.25em',
+    fontSize: '0.875em',
+    lineHeight: 1,
+    color: cssVar.colorInfo,
+    wordBreak: 'break-word',
+    whiteSpace: 'break-spaces',
+    backgroundColor: {
+      'default': cssVar.colorInfoBg,
+      ':hover': `color-mix(in srgb, ${cssVar.colorInfo} 15%, ${cssVar.colorBgContainer})`,
+    },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+});
 
 interface MentionProps {
   id: string;
@@ -51,7 +48,7 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
   // Handle "ALL_MEMBERS" special case
   if (mentionId === 'ALL_MEMBERS') {
     return (
-      <span className={styles.mention}>
+      <span {...stylex.props(styles.mention)}>
         {'@'}
         {t('memberSelection.allMembers')}
       </span>
@@ -64,7 +61,7 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
   if (!member) {
     // Fallback for unknown member
     return (
-      <span className={styles.mention}>
+      <span {...stylex.props(styles.mention)}>
         {'@'}
         {name || children || 'unknown'}
       </span>
@@ -94,7 +91,7 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
         </Flexbox>
       }
     >
-      <span className={styles.mention}>
+      <span {...stylex.props(styles.mention)}>
         {'@'}
         {member.title || name || children}
       </span>

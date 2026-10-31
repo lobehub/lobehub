@@ -1,11 +1,13 @@
 'use client';
 
-import { ActionIcon, createStaticStyles } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, FoldVerticalIcon, UnfoldVerticalIcon } from 'lucide-react';
 import { type KeyboardEvent, memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = stylex.create({
   // Sticky group header — appears once per repo (parent + each dirty submodule)
   // when the working tree spans multiple repositories. Mirrors WebStorm's
   // per-repo grouping: collapse chevron + name + file count + totals + branch
@@ -14,126 +16,107 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   // collapse/expand the group's rows. Top-only border (no bottom border) so
   // collapsing a group can't produce a doubled-up line against the next
   // header's top border.
-  header: css`
-    cursor: pointer;
-    user-select: none;
-
-    position: sticky;
-    z-index: 1;
-    inset-block-start: 0;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    /* Fixed height accommodates the ActionIcon (size='small' is ~24px tall)
-       so the header stays the same size whether or not the fold button is
-       rendered. Without this, expanding/collapsing a group would jitter the
-       sticky header height because the button toggles between rendered and
-       not. flex:none keeps the column flex list from compressing the sticky
-       header during expand/collapse. padding-inline keeps the left-edge
-       alignment with file rows. */
-    block-size: 32px;
-    padding-inline: 10px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-
-    transition: background 0.12s;
-
-    /* Separate non-first groups from the preceding group's last row.
-       The first header sits against the list's own top border. */
-    &:not(:first-child) {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-  chevron: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 0.2s;
-
-    &[data-expanded='true'] {
-      transform: rotate(90deg);
-    }
-  `,
-  meta: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex: 1 1 auto;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  name: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    min-width: 0;
-
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  fileCount: css`
-    flex-shrink: 0;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  stats: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 6px;
-    align-items: center;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-  `,
-  additions: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  deletions: css`
-    color: ${cssVar.colorError};
-  `,
-  branch: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
+  header: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    position: 'sticky',
+    zIndex: 1,
+    insetBlockStart: 0,
+    display: 'flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    // Fixed height accommodates the ActionIcon (size='small' is ~24px tall)
+    // so the header stays the same size whether or not the fold button is
+    // rendered. Without this, expanding/collapsing a group would jitter the
+    // sticky header height because the button toggles between rendered and
+    // not. flex:none keeps the column flex list from compressing the sticky
+    // header during expand/collapse. padding-inline keeps the left-edge
+    // alignment with file rows.
+    blockSize: '32px',
+    paddingInline: '10px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    transition: 'background 0.12s',
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    // Separate non-first groups from the preceding group's last row.
+    // The first header sits against the list's own top border.
+    borderBlockStartWidth: { 'default': null, ':not(:first-child)': '1px' },
+    borderBlockStartStyle: { 'default': null, ':not(:first-child)': 'solid' },
+    borderBlockStartColor: { 'default': null, ':not(:first-child)': cssVar.colorBorderSecondary },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  chevron: {
+    flex: 'none',
+    color: cssVar.colorTextTertiary,
+    transition: 'transform 0.2s',
+    transform: { 'default': null, "[data-expanded='true']": 'rotate(90deg)' },
+  },
+  meta: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  name: {
+    overflow: 'hidden',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
+    fontWeight: 600,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  fileCount: {
+    flexShrink: 0,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+  stats: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    gap: '6px',
+    alignItems: 'center',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  additions: { color: cssVar.colorSuccess },
+  deletions: { color: cssVar.colorError },
+  branch: {
+    overflow: 'hidden',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   // Hover-revealed fold-all-diffs button. Uses the standard ActionIcon, so
   // hover/focus visuals match the rest of the panel — we just gate visibility
   // via opacity bound to the parent header's hover/focus-within state.
-  foldButton: css`
-    margin-inline-start: auto;
-    opacity: 0;
-    transition: opacity 0.15s;
-
-    [data-review-group-header]:hover &,
-    [data-review-group-header]:focus-within & {
-      opacity: 1;
-    }
-  `,
-}));
+  foldButton: {
+    marginInlineStart: 'auto',
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':focus-within')]: 1,
+    },
+    transition: 'opacity 0.15s',
+  },
+});
 
 export interface GroupHeaderProps {
   branch?: string;
@@ -187,31 +170,35 @@ const GroupHeader = memo<GroupHeaderProps>(
     return (
       <div
         aria-expanded={!collapsed}
-        className={styles.header}
+        {...stylex.props(styles.header, stylex.defaultMarker())}
         data-review-group-header={''}
         role={'button'}
         tabIndex={0}
         onClick={onToggleCollapsed}
         onKeyDown={handleKeyDown}
       >
-        <div className={styles.meta}>
+        <div {...stylex.props(styles.meta)}>
           <ChevronRightIcon
-            className={styles.chevron}
+            {...stylex.props(styles.chevron)}
             data-expanded={collapsed ? 'false' : 'true'}
             size={14}
           />
-          <span className={styles.name}>{name}</span>
-          <span className={styles.fileCount}>
+          <span {...stylex.props(styles.name)}>{name}</span>
+          <span {...stylex.props(styles.fileCount)}>
             {t('workingPanel.review.group.fileCount', { count: patchCount })}
           </span>
           {(totalAdditions > 0 || totalDeletions > 0) && (
-            <span className={styles.stats}>
-              {totalAdditions > 0 && <span className={styles.additions}>+{totalAdditions}</span>}
-              {totalDeletions > 0 && <span className={styles.deletions}>-{totalDeletions}</span>}
+            <span {...stylex.props(styles.stats)}>
+              {totalAdditions > 0 && (
+                <span {...stylex.props(styles.additions)}>+{totalAdditions}</span>
+              )}
+              {totalDeletions > 0 && (
+                <span {...stylex.props(styles.deletions)}>-{totalDeletions}</span>
+              )}
             </span>
           )}
           {branch && (
-            <span className={styles.branch} title={branch}>
+            <span {...stylex.props(styles.branch)} title={branch}>
               {branch}
             </span>
           )}
@@ -220,7 +207,7 @@ const GroupHeader = memo<GroupHeaderProps>(
           <ActionIcon
             aria-label={foldLabel}
             aria-pressed={diffsAllExpanded}
-            className={styles.foldButton}
+            {...stylex.props(styles.foldButton)}
             icon={diffsAllExpanded ? FoldVerticalIcon : UnfoldVerticalIcon}
             size={'small'}
             title={foldLabel}

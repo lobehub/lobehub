@@ -1,6 +1,8 @@
 import { BRANDING_URL } from '@lobechat/business-const';
 import { ChatErrorType, Plans } from '@lobechat/types';
-import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,32 +31,19 @@ const PLAN_TITLE_KEYS = {
   [Plans.Ultimate]: 'plans.plan.ultimate.title',
 } as const satisfies Record<Plans, string>;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  budgetFact: css`
-    display: flex;
-    justify-content: space-between;
-
-    width: 100%;
-
-    font-size: 13px;
-    line-height: 1.4;
-  `,
-  budgetFactLabel: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  budgetFactValue: css`
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    white-space: nowrap;
-  `,
-  budgetFactWarningValue: css`
-    font-weight: 700;
-    color: ${cssVar.colorError};
-  `,
-  budgetFacts: css`
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({
+  budgetFact: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    width: '100%',
+    fontSize: '13px',
+    lineHeight: 1.4,
+  },
+  budgetFactLabel: { color: cssVar.colorTextTertiary },
+  budgetFactValue: { fontWeight: 600, color: cssVar.colorText, whiteSpace: 'nowrap' },
+  budgetFactWarningValue: { fontWeight: 700, color: cssVar.colorError },
+  budgetFacts: { width: '100%' },
+});
 
 const getBudgetDescriptionKey = (pricingBasis?: PlanLimitPricingBasis) => {
   switch (pricingBasis) {
@@ -131,15 +120,16 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
     <ErrorActionContainer>
       <FormAction animation avatar={'💰'} description={description} title={title}>
         {facts.length > 0 && (
-          <Flexbox className={styles.budgetFacts} gap={8}>
+          <Flexbox className={stylex.props(styles.budgetFacts).className} gap={8}>
             {facts.map((fact) => (
-              <div className={styles.budgetFact} key={fact.label}>
-                <span className={styles.budgetFactLabel}>{fact.label}</span>
+              <div {...stylex.props(styles.budgetFact)} key={fact.label}>
+                <span {...stylex.props(styles.budgetFactLabel)}>{fact.label}</span>
                 <span
                   className={
                     fact.warning
-                      ? `${styles.budgetFactValue} ${styles.budgetFactWarningValue}`
-                      : styles.budgetFactValue
+                      ? stylex.props(styles.budgetFactValue, styles.budgetFactWarningValue)
+                          .className
+                      : stylex.props(styles.budgetFactValue).className
                   }
                 >
                   {formatCreditAmount(fact.value!)}

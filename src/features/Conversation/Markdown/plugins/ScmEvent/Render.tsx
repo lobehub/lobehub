@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronRightIcon,
   CircleCheckIcon,
@@ -11,6 +13,8 @@ import {
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import { type MarkdownElementProps } from '../type';
 import {
   type ParsedScmEvent,
@@ -19,141 +23,115 @@ import {
   type ScmEventCheck,
   type ScmEventReview,
 } from './parseScmEvent';
+import logToggleStyles from './Render.module.css';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    padding-block: 2px;
-    padding-inline: 0;
-  `,
-  check: css`
-    padding-block: 8px;
+const NOT_LAST = ':not(:last-child)';
 
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  checkFailed: css`
-    color: ${cssVar.colorError};
-  `,
-  checkPassed: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  instruction: css`
-    padding-block: 8px 2px;
-    padding-inline: 0;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+const styles = stylex.create({
+  body: { paddingBlock: '2px', paddingInline: 0 },
+  check: {
+    paddingBlock: '8px',
+    borderBlockEndWidth: { default: null, [NOT_LAST]: '1px' },
+    borderBlockEndStyle: { default: null, [NOT_LAST]: 'solid' },
+    borderBlockEndColor: { default: null, [NOT_LAST]: cssVar.colorBorderSecondary },
+  },
+  checkFailed: { color: cssVar.colorError },
+  checkPassed: { color: cssVar.colorSuccess },
+  instruction: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '2px',
+    paddingInline: 0,
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextTertiary,
+  },
+  // The Markdown host paints anchors in the link colour; inside the card
+  // a link reads as text and the trailing icon says it can be clicked.
+  link: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    color: { 'default': 'inherit', ':hover': cssVar.colorTextSecondary },
+    textDecoration: 'none',
+  },
+  log: {
+    overflow: 'auto',
+    maxBlockSize: '320px',
+    marginBlockStart: '6px',
+    marginBlockEnd: 0,
+    marginInline: 0,
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadiusSM,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'pre',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  logToggle: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '2px',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px' },
+  pill: {
+    flex: 'none',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontWeight: 500,
+    lineHeight: '18px',
+  },
+  pillDanger: {
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  pillNeutral: {
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  pillWarning: {
+    color: cssVar.colorWarning,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+  review: {
+    paddingBlock: '8px',
+    borderBlockEndWidth: { default: null, [NOT_LAST]: '1px' },
+    borderBlockEndStyle: { default: null, [NOT_LAST]: 'solid' },
+    borderBlockEndColor: { default: null, [NOT_LAST]: cssVar.colorBorderSecondary },
+  },
+  reviewBody: {
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorText,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+  },
+  root: {
+    overflow: 'hidden',
+    inlineSize: '100%',
+    minInlineSize: '320px',
+    fontSize: '13px',
+    textAlign: 'start',
+  },
+});
 
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  link: css`
-    /* The Markdown host paints anchors in the link colour; inside the card
-       a link reads as text and the trailing icon says it can be clicked. */
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    color: inherit !important;
-    text-decoration: none;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary} !important;
-      text-decoration: none;
-    }
-  `,
-  log: css`
-    overflow: auto;
-
-    max-block-size: 320px;
-    margin-block: 6px 0;
-    margin-inline: 0;
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-    white-space: pre;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  logToggle: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    flex: none;
-    gap: 2px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  logToggleOpen: css`
-    svg {
-      transform: rotate(90deg);
-    }
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-  pill: css`
-    flex: none;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 18px;
-  `,
-  pillDanger: css`
-    color: ${cssVar.colorError};
-    background: ${cssVar.colorErrorBg};
-  `,
-  pillNeutral: css`
-    color: ${cssVar.colorTextSecondary};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  pillWarning: css`
-    color: ${cssVar.colorWarning};
-    background: ${cssVar.colorWarningBg};
-  `,
-  review: css`
-    padding-block: 8px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  reviewBody: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-    word-break: break-word;
-    white-space: pre-wrap;
-  `,
-  root: css`
-    overflow: hidden;
-
-    inline-size: 100%;
-    min-inline-size: 320px;
-
-    font-size: 13px;
-    text-align: start;
-  `,
-}));
-
-const PILL_STYLE: Record<string, string> = {
+const PILL_STYLE: Record<string, (typeof styles)['pillDanger']> = {
   ci_failed: styles.pillDanger,
   review_changes_requested: styles.pillWarning,
   review_commented: styles.pillNeutral,
@@ -174,11 +152,11 @@ const CheckRow = memo<{ check: ScmEventCheck; leading?: ReactNode }>(({ check, l
   const failed = isFailed(check);
 
   return (
-    <Flexbox className={styles.check} gap={4}>
+    <Flexbox {...stylex.props(styles.check)} gap={4}>
       <Flexbox horizontal align="center" gap={8}>
         {leading ?? (
           <Icon
-            className={failed ? styles.checkFailed : styles.checkPassed}
+            {...stylex.props(failed ? styles.checkFailed : styles.checkPassed)}
             icon={failed ? CircleXIcon : CircleCheckIcon}
             size="small"
           />
@@ -193,7 +171,7 @@ const CheckRow = memo<{ check: ScmEventCheck; leading?: ReactNode }>(({ check, l
         ) : null}
         <span style={{ flex: 1 }} />
         {check.url ? (
-          <a className={styles.link} href={check.url} rel="noreferrer" target="_blank">
+          <a {...stylex.props(styles.link)} href={check.url} rel="noreferrer" target="_blank">
             <Text style={{ fontSize: 12 }} type="secondary">
               {t('scmEvent.details')}
             </Text>
@@ -202,7 +180,7 @@ const CheckRow = memo<{ check: ScmEventCheck; leading?: ReactNode }>(({ check, l
         ) : null}
         {check.log ? (
           <span
-            className={cx(styles.logToggle, open && styles.logToggleOpen)}
+            {...sx([styles.logToggle], open ? logToggleStyles.logToggleOpen : undefined)}
             onClick={() => setOpen((v) => !v)}
           >
             {open ? t('scmEvent.hideLog') : t('scmEvent.showLog')}
@@ -210,7 +188,7 @@ const CheckRow = memo<{ check: ScmEventCheck; leading?: ReactNode }>(({ check, l
           </span>
         ) : null}
       </Flexbox>
-      {check.log && open ? <pre className={styles.log}>{check.log}</pre> : null}
+      {check.log && open ? <pre {...stylex.props(styles.log)}>{check.log}</pre> : null}
     </Flexbox>
   );
 });
@@ -223,7 +201,7 @@ const ReviewRow = memo<{ review: ScmEventReview }>(({ review }) => {
     : undefined;
   const meta = [review.state?.replaceAll('_', ' '), location].filter(Boolean).join(' · ');
   const author = review.url ? (
-    <a className={styles.link} href={review.url} rel="noreferrer" target="_blank">
+    <a {...stylex.props(styles.link)} href={review.url} rel="noreferrer" target="_blank">
       @{review.author}
       <Icon icon={ExternalLinkIcon} size={12} />
     </a>
@@ -232,19 +210,17 @@ const ReviewRow = memo<{ review: ScmEventReview }>(({ review }) => {
   );
 
   return (
-    <Flexbox className={styles.review} gap={4}>
+    <Flexbox {...stylex.props(styles.review)} gap={4}>
       <Flexbox horizontal align="center" gap={8}>
         <Icon icon={MessageSquareTextIcon} size="small" style={{ opacity: 0.6 }} />
         <Text weight={500}>{author}</Text>
         {meta ? (
-          <Text className={styles.mono} type="secondary">
+          <Text {...stylex.props(styles.mono)} type="secondary">
             {meta}
           </Text>
         ) : null}
       </Flexbox>
-      <div className={styles.reviewBody} style={{ paddingInlineStart: 24 }}>
-        {review.body}
-      </div>
+      <div {...sx([styles.reviewBody], undefined, { paddingInlineStart: 24 })}>{review.body}</div>
     </Flexbox>
   );
 });
@@ -267,7 +243,7 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
 
   const kindLabel = t(`scmEvent.kind.${attrs.kind}` as any, { defaultValue: attrs.kind });
   const pill = (
-    <span className={cx(styles.pill, PILL_STYLE[attrs.kind] ?? styles.pillNeutral)}>
+    <span {...stylex.props(styles.pill, PILL_STYLE[attrs.kind] ?? styles.pillNeutral)}>
       {kindLabel}
     </span>
   );
@@ -277,12 +253,12 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
   const reviewers = [...new Set(parsed.reviews.map((review) => `@${review.author}`))];
 
   return (
-    <div className={styles.root}>
-      <div className={styles.body}>
+    <div {...stylex.props(styles.root)}>
+      <div {...stylex.props(styles.body)}>
         {single ? <CheckRow check={single} leading={pill} /> : null}
         {many ? (
           <>
-            <Flexbox horizontal align="center" className={styles.check} gap={8}>
+            <Flexbox horizontal align="center" {...stylex.props(styles.check)} gap={8}>
               {pill}
               <Text type="secondary">
                 {t('scmEvent.failedChecks', {
@@ -296,7 +272,7 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
           </>
         ) : null}
         {!single && !many ? (
-          <Flexbox horizontal align="center" className={styles.check} gap={8}>
+          <Flexbox horizontal align="center" {...stylex.props(styles.check)} gap={8}>
             {pill}
             {reviewers.length > 0 ? <Text type="secondary">{reviewers.join(' · ')}</Text> : null}
           </Flexbox>
@@ -306,7 +282,9 @@ const Render = memo<MarkdownElementProps<ScmEventAttributes>>(({ children, node 
         ))}
       </div>
 
-      {parsed.instruction ? <div className={styles.instruction}>{parsed.instruction}</div> : null}
+      {parsed.instruction ? (
+        <div {...stylex.props(styles.instruction)}>{parsed.instruction}</div>
+      ) : null}
     </div>
   );
 });

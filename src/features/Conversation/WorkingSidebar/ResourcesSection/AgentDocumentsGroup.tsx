@@ -4,19 +4,10 @@ import {
   buildAgentSkillIdentifier,
   EMPTY_ARRAY,
 } from '@lobechat/const';
-import {
-  ActionIcon,
-  Center,
-  confirmModal,
-  createStaticStyles,
-  cx,
-  Empty,
-  Flexbox,
-  Spin,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, Center, confirmModal, Empty, Flexbox, Spin, Text, toast } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import type { LucideIcon } from 'lucide-react';
@@ -65,65 +56,39 @@ dayjs.extend(relativeTime);
 export type ResourceFilter = 'skills' | 'documents' | 'web';
 type DocumentOpenMode = 'portal' | 'route';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    cursor: pointer;
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  containerActive: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  pillActive: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  pillTab: css`
-    cursor: pointer;
-    user-select: none;
-
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition:
-      background ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut},
-      color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  title: css`
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    cursor: 'pointer',
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  containerActive: { backgroundColor: cssVar.colorFillSecondary, backgroundImage: 'none' },
+  description: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
+  meta: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  pillActive: {
+    fontWeight: 500,
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  pillTab: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: `background ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut},
+      color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut}`,
+  },
+  title: { fontWeight: 500 },
+});
 
 const FILTER_OPTIONS = [
   { labelKey: 'workingPanel.resources.filter.skills', value: 'skills' },
@@ -217,14 +182,14 @@ const DocumentItem = memo<DocumentItemProps>(
       <Flexbox
         horizontal
         align={'flex-start'}
-        className={`${styles.container} ${isActive ? styles.containerActive : ''}`}
+        className={stylex.props(styles.container, isActive && styles.containerActive).className}
         gap={8}
         onClick={handleOpen}
       >
         <IconComponent size={16} style={{ flexShrink: 0, marginTop: 2 }} />
         <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
           <Flexbox horizontal align={'center'} distribution={'space-between'}>
-            <Text ellipsis className={styles.title}>
+            <Text ellipsis className={stylex.props(styles.title).className}>
               {title}
             </Text>
             {!hideDelete && (
@@ -238,11 +203,13 @@ const DocumentItem = memo<DocumentItemProps>(
             )}
           </Flexbox>
           {description && (
-            <Text className={styles.description} ellipsis={{ rows: 2 }}>
+            <Text className={stylex.props(styles.description).className} ellipsis={{ rows: 2 }}>
               {description}
             </Text>
           )}
-          {updatedAtLabel && <Text className={styles.meta}>{updatedAtLabel}</Text>}
+          {updatedAtLabel && (
+            <Text className={stylex.props(styles.meta).className}>{updatedAtLabel}</Text>
+          )}
         </Flexbox>
       </Flexbox>
     );
@@ -727,7 +694,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
               return (
                 <div
                   aria-selected={active}
-                  className={cx(styles.pillTab, active && styles.pillActive)}
+                  {...stylex.props(styles.pillTab, active && styles.pillActive)}
                   key={option.value}
                   role={'tab'}
                   onClick={() => setFilter(option.value)}

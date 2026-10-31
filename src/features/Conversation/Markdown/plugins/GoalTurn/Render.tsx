@@ -1,7 +1,9 @@
 'use client';
 
-import { createStaticStyles, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Accordion, type AccordionItemType, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { TargetIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -15,119 +17,104 @@ import {
   parseGoalTurn,
 } from './parseGoalTurn';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  /* The chat bubble folds tall messages, so a long comment is clamped and the
-     new feedback stays in the first view. */
-  clamp3: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-  `,
-  feedback: css`
-    padding-block: 6px;
-  `,
-  folded: css`
-    padding-block: 6px 2px;
-
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-word;
-    white-space: pre-wrap;
-  `,
-  header: css`
-    padding-block: 4px 10px;
-    padding-inline: 0;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  label: css`
-    font-size: 12px;
-  `,
-  mark: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    inline-size: 28px;
-    block-size: 28px;
-    border-radius: 6px;
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  pill: css`
-    flex: none;
-    align-self: flex-start;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 18px;
-  `,
-  pillNeutral: css`
-    color: ${cssVar.colorTextSecondary};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  pillWarning: css`
-    color: ${cssVar.colorWarning};
-    background: ${cssVar.colorWarningBg};
-  `,
-  quote: css`
-    margin-block-start: 4px;
-    padding-inline-start: 10px;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-    word-break: break-word;
-    white-space: pre-wrap;
-  `,
-  root: css`
-    overflow: hidden;
-
-    inline-size: 100%;
-
-    /* The goal supervision panel is narrower than 320px of bubble content;
-       a fixed minimum pushed the trigger pill past the bubble's edge. */
-    min-inline-size: min(320px, 100%);
-
-    font-size: 13px;
-    text-align: start;
-  `,
-  section: css`
-    padding-block: 8px 2px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  toggle: css`
-    cursor: pointer;
-
-    margin: 0;
-    padding-block: 0;
-    padding-inline: 12px 0;
-    border: none;
-
-    font: inherit;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-}));
+const styles = stylex.create({
+  clamp3: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '3',
+  },
+  feedback: { paddingBlock: '6px' },
+  folded: {
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '2px',
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+  },
+  header: {
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '10px',
+    paddingInline: '0',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  label: { fontSize: '12px' },
+  mark: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    inlineSize: '28px',
+    blockSize: '28px',
+    borderRadius: '6px',
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  pill: {
+    flex: 'none',
+    alignSelf: 'flex-start',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontWeight: 500,
+    lineHeight: '18px',
+  },
+  pillNeutral: {
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  pillWarning: {
+    color: cssVar.colorWarning,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+  quote: {
+    marginBlockStart: '4px',
+    paddingInlineStart: '10px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorder,
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorText,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+  },
+  root: {
+    overflow: 'hidden',
+    inlineSize: '100%',
+    minInlineSize: 'min(320px, 100%)',
+    fontSize: '13px',
+    textAlign: 'start',
+  },
+  section: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '2px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  toggle: {
+    cursor: 'pointer',
+    margin: '0',
+    paddingBlock: '0',
+    paddingInlineStart: '12px',
+    paddingInlineEnd: '0',
+    borderStyle: 'none',
+    font: 'inherit',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+});
 
 /** Rough line count past which a body is clamped and gets its own toggle. */
 const isLong = (text: string) => text.length > 120 || text.split('\n').length > 3;
@@ -147,25 +134,29 @@ const FeedbackRow = ({ feedback }: { feedback: GoalTurnFeedback }) => {
   const task = feedback.taskTitle || feedback.taskId;
 
   return (
-    <div className={styles.feedback}>
+    <div {...stylex.props(styles.feedback)}>
       <Flexbox horizontal align="baseline" gap={8}>
         {task ? (
           <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
             {task}
           </Text>
         ) : null}
-        <Text className={styles.label} style={{ flex: 'none' }} type="secondary">
+        <Text
+          className={stylex.props(styles.label).className}
+          style={{ flex: 'none' }}
+          type="secondary"
+        >
           {meta}
         </Text>
       </Flexbox>
-      <div className={cx(styles.quote, long && !expanded && styles.clamp3)}>
+      <div {...stylex.props(styles.quote, long && !expanded && styles.clamp3)}>
         {feedback.body}
         {expanded && feedback.truncated ? '…' : null}
       </div>
       {long ? (
         <button
           aria-expanded={expanded}
-          className={styles.toggle}
+          {...stylex.props(styles.toggle)}
           type="button"
           onClick={() => setExpanded((v) => !v)}
         >
@@ -207,7 +198,7 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
                   <FeedbackRow feedback={feedback} key={`${feedback.taskId}-${index}`} />
                 ))}
                 {parsed.omitted.earlier > 0 ? (
-                  <Text className={styles.label} type="secondary">
+                  <Text className={stylex.props(styles.label).className} type="secondary">
                     {t('goalTurn.omitted', { count: parsed.omitted.earlier })}
                   </Text>
                 ) : null}
@@ -215,7 +206,7 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
             ),
             key: 'earlier',
             title: (
-              <Text className={styles.label} type="secondary">
+              <Text className={stylex.props(styles.label).className} type="secondary">
                 {t('goalTurn.earlierFeedback', { count: earlier.length + parsed.omitted.earlier })}
               </Text>
             ),
@@ -226,14 +217,14 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
       ? [
           {
             children: (
-              <div className={styles.folded}>
+              <div {...stylex.props(styles.folded)}>
                 {parsed.requirement}
                 {parsed.ownerInstruction ? `\n\n${parsed.ownerInstruction}` : ''}
               </div>
             ),
             key: 'requirement',
             title: (
-              <Text className={styles.label} type="secondary">
+              <Text className={stylex.props(styles.label).className} type="secondary">
                 {t('goalTurn.requirement')}
               </Text>
             ),
@@ -243,10 +234,10 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
     ...(parsed.instruction
       ? [
           {
-            children: <div className={styles.folded}>{parsed.instruction}</div>,
+            children: <div {...stylex.props(styles.folded)}>{parsed.instruction}</div>,
             key: 'instruction',
             title: (
-              <Text className={styles.label} type="secondary">
+              <Text className={stylex.props(styles.label).className} type="secondary">
                 {t('goalTurn.instruction')}
               </Text>
             ),
@@ -256,9 +247,9 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
   ];
 
   return (
-    <div className={styles.root}>
-      <Flexbox horizontal align="center" className={styles.header} gap={10}>
-        <span className={styles.mark}>
+    <div {...stylex.props(styles.root)}>
+      <Flexbox horizontal align="center" className={stylex.props(styles.header).className} gap={10}>
+        <span {...stylex.props(styles.mark)}>
           <Icon icon={TargetIcon} size={16} />
         </span>
         <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
@@ -267,7 +258,7 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
           </Text>
           {/* The reason itself is the previous reply, right above this card. */}
           {previous ? (
-            <Text ellipsis className={styles.label} type="secondary">
+            <Text ellipsis className={stylex.props(styles.label).className} type="secondary">
               {t(`goalTurn.outcome.${previous.outcome}` as any, {
                 action: previous.action,
                 defaultValue: previous.outcome,
@@ -276,7 +267,7 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
           ) : null}
         </Flexbox>
         <span
-          className={cx(
+          {...stylex.props(
             styles.pill,
             trigger === 'takeover' ? styles.pillWarning : styles.pillNeutral,
           )}
@@ -286,24 +277,24 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
       </Flexbox>
 
       {reason ? (
-        <Flexbox className={styles.section} gap={4}>
-          <Text className={styles.label} type="secondary">
+        <Flexbox className={stylex.props(styles.section).className} gap={4}>
+          <Text className={stylex.props(styles.label).className} type="secondary">
             {t(parsed.problem ? 'goalTurn.problem' : 'goalTurn.continuation')}
           </Text>
-          <div className={styles.quote}>{reason}</div>
+          <div {...stylex.props(styles.quote)}>{reason}</div>
         </Flexbox>
       ) : null}
 
       {fresh.length > 0 || parsed.omitted.new > 0 ? (
-        <div className={styles.section}>
-          <Text className={styles.label} type="secondary">
+        <div {...stylex.props(styles.section)}>
+          <Text className={stylex.props(styles.label).className} type="secondary">
             {t('goalTurn.newFeedback', { count: fresh.length + parsed.omitted.new })}
           </Text>
           {fresh.map((feedback, index) => (
             <FeedbackRow feedback={feedback} key={`${feedback.taskId}-${index}`} />
           ))}
           {parsed.omitted.new > 0 ? (
-            <Text className={styles.label} type="secondary">
+            <Text className={stylex.props(styles.label).className} type="secondary">
               {t('goalTurn.omitted', { count: parsed.omitted.new })}
             </Text>
           ) : null}

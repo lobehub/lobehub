@@ -3,7 +3,9 @@ import type {
   DeviceGitPullRequestDetail,
   DeviceGitPullRequestReview,
 } from '@lobechat/types';
-import { Avatar, Button, createStaticStyles, Flexbox, Icon, Markdown, TextArea } from '@lobehub/ui';
+import { Avatar, Button, cx, Flexbox, Icon, Markdown, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { CheckIcon, CircleSlashIcon, EyeIcon, GitCommitHorizontalIcon, XIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -11,91 +13,47 @@ import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
 
+import bodyStyles from './MarkdownBody.module.css';
 import type { Tone } from './mergeDockData';
 import { timeAgo, TONE_COLOR, type TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  comment: css`
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: 8px;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  commentBodyWrap: css`
-    overflow: hidden;
-    min-width: 0;
-    padding-inline-start: 26px;
-  `,
-  commentBody: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 13px;
-    line-height: 20px;
-    overflow-wrap: anywhere;
-
-    table {
-      overflow-x: auto;
-      display: block;
-      max-width: 100%;
-    }
-
-    img,
-    video {
-      max-width: 100%;
-    }
-
-    pre {
-      overflow-x: auto;
-      max-width: 100%;
-    }
-  `,
-  commentHead: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    strong {
-      font-weight: 500;
-      color: ${cssVar.colorText};
-    }
-  `,
-  composer: css`
-    padding-block: 4px 0;
-    padding-inline: 8px;
-  `,
-  event: css`
-    min-height: 28px;
-    padding-block: 2px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    strong {
-      font-weight: 500;
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    code {
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 11px;
-    }
-  `,
-  sha: css`
-    cursor: pointer;
-    text-decoration: underline dotted;
-    text-underline-offset: 2px;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-}));
+const styles = stylex.create({
+  comment: {
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: '8px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  commentBody: {
+    overflow: 'hidden',
+    minWidth: 0,
+    fontSize: '13px',
+    lineHeight: '20px',
+    overflowWrap: 'anywhere',
+  },
+  commentBodyWrap: { overflow: 'hidden', minWidth: 0, paddingInlineStart: '26px' },
+  commentHead: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  commentHeadAuthor: { fontWeight: 500, color: cssVar.colorText },
+  composer: { paddingBlockStart: '4px', paddingBlockEnd: 0, paddingInline: '8px' },
+  event: {
+    minHeight: '28px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  eventAuthor: { fontWeight: 500, color: cssVar.colorTextSecondary },
+  eventCode: { fontFamily: cssVar.fontFamilyCode, fontSize: '11px' },
+  sha: {
+    cursor: 'pointer',
+    textDecorationLine: 'underline',
+    textDecorationStyle: 'dotted',
+    textUnderlineOffset: '2px',
+    color: { 'default': null, ':hover': cssVar.colorText },
+  },
+});
 
 const githubAvatar = (login: string) => `https://github.com/${login}.png?size=36`;
 
@@ -171,14 +129,18 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
         {timeline.map((entry) => {
           if (entry.kind === 'comment')
             return (
-              <div className={styles.comment} key={entry.id}>
-                <Flexbox horizontal align={'center'} className={styles.commentHead} gap={8}>
+              <div {...stylex.props(styles.comment)} key={entry.id}>
+                <Flexbox horizontal align={'center'} {...stylex.props(styles.commentHead)} gap={8}>
                   <Avatar avatar={githubAvatar(entry.author)} size={18} />
-                  <strong>{entry.author}</strong>
+                  <strong {...stylex.props(styles.commentHeadAuthor)}>{entry.author}</strong>
                   <span>{timeAgo(entry.at)}</span>
                 </Flexbox>
-                <div className={styles.commentBodyWrap}>
-                  <Markdown className={styles.commentBody} fontSize={13} variant={'chat'}>
+                <div {...stylex.props(styles.commentBodyWrap)}>
+                  <Markdown
+                    className={cx(stylex.props(styles.commentBody).className, bodyStyles.body)}
+                    fontSize={13}
+                    variant={'chat'}
+                  >
                     {entry.body}
                   </Markdown>
                 </div>
@@ -196,7 +158,7 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.event}
+              {...stylex.props(styles.event)}
               gap={8}
               key={entry.kind === 'commit' ? entry.sha : `review:${entry.author}:${entry.at}`}
             >
@@ -206,10 +168,11 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
                 style={visual.tone === 'neutral' ? undefined : { color: TONE_COLOR[visual.tone] }}
               />
               <span>
-                <strong>{entry.author}</strong> {tr(visual.labelKey)}{' '}
+                <strong {...stylex.props(styles.eventAuthor)}>{entry.author}</strong>{' '}
+                {tr(visual.labelKey)}{' '}
                 {entry.kind === 'commit' && (
                   <code
-                    className={styles.sha}
+                    {...stylex.props(styles.eventCode, styles.sha)}
                     onClick={() =>
                       void electronSystemService.openExternalLink(
                         `https://github.com/${detail.repo.owner}/${detail.repo.name}/pull/${detail.number}/commits/${entry.sha}`,
@@ -224,7 +187,7 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
             </Flexbox>
           );
         })}
-        <Flexbox className={styles.composer} gap={6}>
+        <Flexbox {...stylex.props(styles.composer)} gap={6}>
           <TextArea
             autoSize={{ minRows: 1 }}
             placeholder={t('workingPanel.pr.composer.placeholder')}

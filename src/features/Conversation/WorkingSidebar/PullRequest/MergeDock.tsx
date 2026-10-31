@@ -1,11 +1,16 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
-import { Button, createStaticStyles, cx, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
+import { Button, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import ChecksList from './ChecksList';
 import DockActionButton from './DockActionButton';
+import checksStyles from './MergeDock.module.css';
 import { type DockAction, type MergeDockInput, resolveMergeDock } from './mergeDockData';
 import { readMergeMethod, writeMergeMethod } from './mergeMethodStorage';
 import { DOCK_ICON, TONE_COLOR, type TranslateKey } from './prVisual';
@@ -20,90 +25,52 @@ const BUSY_MAP: Partial<Record<PullRequestBusy, NonNullable<MergeDockInput['ui']
 
 const UPDATE_BRANCH: DockAction = { kind: 'updateBranch', tone: 'success' };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionBar: css`
-    flex-wrap: wrap;
-    padding-block-start: 10px;
-  `,
-  checks: css`
-    margin-inline-start: 22px;
-
-    > summary {
-      cursor: pointer;
-
-      display: flex;
-      gap: 4px;
-      align-items: center;
-
-      font-size: 12px;
-      line-height: 18px;
-      color: ${cssVar.colorTextTertiary};
-      list-style: none;
-
-      &::-webkit-details-marker {
-        display: none;
-      }
-    }
-
-    &[open] > summary svg {
-      transform: rotate(90deg);
-    }
-  `,
-  checksList: css`
-    max-height: min(240px, 35vh);
-  `,
-  dock: css`
-    flex-shrink: 0;
-
-    padding-block: 10px 12px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  local: css`
-    flex-shrink: 0;
-
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  headline: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 20px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  headlineWrap: css`
-    overflow-wrap: anywhere;
-    white-space: normal;
-  `,
-  icon: css`
-    flex-shrink: 0;
-  `,
-  sub: css`
-    padding-inline-start: 22px;
-
-    font-size: 12px;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
-    overflow-wrap: anywhere;
-  `,
-  trailing: css`
-    flex-shrink: 0;
-    margin-inline-end: -6px;
-  `,
-}));
+const styles = stylex.create({
+  actionBar: { flexWrap: 'wrap', paddingBlockStart: '10px' },
+  checksList: { maxHeight: 'min(240px, 35vh)' },
+  dock: {
+    flexShrink: 0,
+    paddingBlockStart: '10px',
+    paddingBlockEnd: '12px',
+    paddingInline: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  headline: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    fontSize: '13px',
+    fontWeight: 600,
+    lineHeight: '20px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  headlineWrap: { overflowWrap: 'anywhere', whiteSpace: 'normal' },
+  icon: { flexShrink: 0 },
+  local: {
+    flexShrink: 0,
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  sub: {
+    paddingInlineStart: '22px',
+    fontSize: '12px',
+    lineHeight: '18px',
+    color: cssVar.colorTextTertiary,
+    overflowWrap: 'anywhere',
+  },
+  trailing: { flexShrink: 0, marginInlineEnd: '-6px' },
+});
 
 interface MergeDockProps {
   busy?: PullRequestBusy;
@@ -145,7 +112,7 @@ const MergeDock = memo<MergeDockProps>(
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.local}
+            {...stylex.props(styles.local)}
             gap={8}
             justify={'space-between'}
           >
@@ -162,24 +129,26 @@ const MergeDock = memo<MergeDockProps>(
             </Button>
           </Flexbox>
         )}
-        <div className={styles.dock}>
+        <div {...stylex.props(styles.dock)}>
           <Flexbox horizontal align={'flex-start'} gap={8}>
             <Icon
-              className={styles.icon}
               color={TONE_COLOR[status.tone]}
               icon={DOCK_ICON[status.icon]}
               size={14}
               spin={status.icon === 'spinner'}
-              style={{ marginBlockStart: 3 }}
+              {...sx([styles.icon], undefined, { marginBlockStart: 3 })}
             />
             <span
-              className={cx(styles.headline, isError && styles.headlineWrap)}
-              style={isError ? { color: TONE_COLOR.error } : undefined}
+              {...sx(
+                [styles.headline, isError && styles.headlineWrap],
+                undefined,
+                isError ? { color: TONE_COLOR.error } : undefined,
+              )}
             >
               {tr(status.labelKey, status.labelParams)}
             </span>
             {isError && (
-              <Flexbox horizontal className={styles.trailing} gap={2}>
+              <Flexbox horizontal className={stylex.props(styles.trailing).className} gap={2}>
                 <Button size={'small'} type={'text'} onClick={onDismissError}>
                   {t('workingPanel.pr.dismiss')}
                 </Button>
@@ -190,7 +159,7 @@ const MergeDock = memo<MergeDockProps>(
             )}
             {status.key === 'autoMerge' && (
               <Button
-                className={styles.trailing}
+                className={stylex.props(styles.trailing).className}
                 disabled={contextLoading}
                 loading={busy === 'disableAutoMerge'}
                 size={'small'}
@@ -203,7 +172,7 @@ const MergeDock = memo<MergeDockProps>(
           </Flexbox>
           {model.reasons.length > 0 &&
             (hasFailedChecks ? (
-              <details className={styles.checks}>
+              <details className={checksStyles.checks}>
                 <summary>
                   <Icon icon={ChevronRightIcon} size={12} />
                   {reasons}
@@ -214,7 +183,7 @@ const MergeDock = memo<MergeDockProps>(
                   style={{ marginBlockStart: 6 }}
                   viewportProps={{
                     'aria-label': t('workingPanel.pr.section.checks'),
-                    'className': styles.checksList,
+                    'className': stylex.props(styles.checksList).className,
                     'role': 'region',
                     'tabIndex': 0,
                   }}
@@ -223,11 +192,13 @@ const MergeDock = memo<MergeDockProps>(
                 </ScrollArea>
               </details>
             ) : (
-              <div className={styles.sub}>{reasons}</div>
+              <div {...stylex.props(styles.sub)}>{reasons}</div>
             ))}
-          {model.hintKey && <div className={styles.sub}>{tr(model.hintKey, model.hintParams)}</div>}
+          {model.hintKey && (
+            <div {...stylex.props(styles.sub)}>{tr(model.hintKey, model.hintParams)}</div>
+          )}
           {model.action && (
-            <Flexbox horizontal align={'center'} className={styles.actionBar} gap={8}>
+            <Flexbox horizontal align={'center'} {...stylex.props(styles.actionBar)} gap={8}>
               {model.showUpdateBranch && (
                 <DockActionButton
                   secondary

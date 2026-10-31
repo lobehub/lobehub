@@ -1,8 +1,12 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { sectionStyles } from '@/features/Conversation/WorkingSidebar/Overview/sectionStyles';
+import {
+  sectionProps,
+  sectionStyles,
+} from '@/features/Conversation/WorkingSidebar/Overview/sectionStyles';
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
 
@@ -23,9 +27,11 @@ const ThreadListSection = memo(({ topicId }: { topicId: string }) => {
   if (!threads || threads.length === 0) return;
 
   return (
-    <Flexbox className={sectionStyles.section}>
-      <Flexbox className={sectionStyles.sectionHeader}>
-        <span className={sectionStyles.sectionTitle}>{t(getThreadListHeadingKey(threads))}</span>
+    <Flexbox {...sectionProps()}>
+      <Flexbox {...stylex.props(sectionStyles.sectionHeader)}>
+        <span {...stylex.props(sectionStyles.sectionTitle)}>
+          {t(getThreadListHeadingKey(threads))}
+        </span>
       </Flexbox>
       <ThreadList topicId={topicId} />
     </Flexbox>

@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { A, copyToClipboard, createStaticStyles, Icon, toast } from '@lobehub/ui';
+import { A, copyToClipboard, Icon, toast } from '@lobehub/ui';
 import { CopyIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
@@ -24,6 +24,7 @@ import {
   isShareVisitorContext,
   resolveAppOrigin,
 } from './parse';
+import styles from './Render.module.css';
 
 interface FileLinkProperties {
   fileId?: string;
@@ -45,82 +46,6 @@ const getAppOrigin = () =>
     remoteServerUrl: () => electronSyncSelectors.remoteServerUrl(useElectronStore.getState()),
     windowOrigin: () => window.location.origin,
   });
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  copy: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-    margin-inline-start: 2px;
-    padding: 0;
-    border: none;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextQuaternary};
-    vertical-align: -0.2em;
-
-    background: transparent;
-
-    transition:
-      color 0.15s,
-      background 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  icon: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-  `,
-  label: css`
-    /* The same treatment as an internal entity link: body text with an
-       underline, not link blue — the file icon already says what it is. */
-    text-decoration-color: ${cssVar.colorTextTertiary};
-    text-decoration-line: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-
-    transition: text-decoration-color 0.15s;
-  `,
-  link: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    color: ${cssVar.colorText} !important;
-    text-decoration: none;
-    vertical-align: -0.16em;
-
-    &:hover {
-      color: ${cssVar.colorText} !important;
-    }
-
-    &:hover > span:last-child {
-      text-decoration-color: ${cssVar.colorTextSecondary};
-    }
-
-    &:focus-visible {
-      border-radius: 2px;
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 2px;
-    }
-  `,
-}));
 
 const FileLabel = ({ label }: { label: string }) => (
   <>
