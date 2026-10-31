@@ -1,5 +1,7 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,54 +32,54 @@ const BARE_PADDING_INLINE = 8;
 /** Past this the rail card stops being a card and starts being a page. */
 const RAIL_COLLAPSED_COUNT = 6;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = stylex.create({
   // Line the content up under the headline, past the leading priority glyph and avatar.
-  bareBody: css`
-    padding-block-end: 8px;
-    padding-inline: ${BARE_PADDING_INLINE + HEADLINE_INSET}px ${BARE_PADDING_INLINE}px;
-  `,
+  bareBody: {
+    paddingBlockEnd: '8px',
+    paddingInlineStart: `${BARE_PADDING_INLINE + HEADLINE_INSET}px`,
+    paddingInlineEnd: `${BARE_PADDING_INLINE}px`,
+  },
   // Inside a rail card the shell is already drawn; only the hover bleed remains.
-  bareList: css`
-    margin-inline: -${BARE_PADDING_INLINE}px;
-  `,
-  bareRow: css`
-    padding-block: 7px;
-    padding-inline: ${BARE_PADDING_INLINE}px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  body: css`
-    padding-block-end: 12px;
-    padding-inline: ${ROW_PADDING_INLINE + HEADLINE_INSET}px ${ROW_PADDING_INLINE}px;
-  `,
-  list: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  row: css`
-    justify-content: flex-start;
-
-    width: 100%;
-    height: auto;
-    padding-block: 11px;
-    padding-inline: ${ROW_PADDING_INLINE}px;
-    border: 0;
-
-    text-align: start;
-
-    transition: background ${cssVar.motionDurationFast};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  section: css`
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-}));
+  bareList: {
+    marginInline: `-${BARE_PADDING_INLINE}px`,
+  },
+  bareRow: {
+    paddingBlock: '7px',
+    paddingInline: `${BARE_PADDING_INLINE}px`,
+    borderRadius: cssVar.borderRadius,
+  },
+  body: {
+    paddingBlockEnd: '12px',
+    paddingInlineStart: `${ROW_PADDING_INLINE + HEADLINE_INSET}px`,
+    paddingInlineEnd: `${ROW_PADDING_INLINE}px`,
+  },
+  list: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  row: {
+    justifyContent: 'flex-start',
+    width: '100%',
+    height: 'auto',
+    paddingBlock: '11px',
+    paddingInline: `${ROW_PADDING_INLINE}px`,
+    borderWidth: 0,
+    textAlign: 'start',
+    transition: `background ${cssVar.motionDurationFast}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  section: {
+    borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 interface NewsItemProps {
   bare?: boolean;
@@ -121,8 +123,12 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
   const hasTopicChat = Boolean(agentId && topicId);
 
   return (
-    <Flexbox className={bare ? undefined : styles.section}>
-      <Button className={cx(styles.row, bare && styles.bareRow)} type={'text'} onClick={toggle}>
+    <Flexbox className={bare ? undefined : stylex.props(styles.section).className}>
+      <Button
+        className={stylex.props(styles.row, bare && styles.bareRow).className}
+        type={'text'}
+        onClick={toggle}
+      >
         <Flexbox horizontal align={'center'} gap={ROW_GAP} style={{ width: '100%' }}>
           {/* Priority leads the row, so a scan down the list reads levels first. */}
           <BriefPriorityIcon muted={read} priority={brief.priority} />
@@ -142,7 +148,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
           )}
           <Text
             ellipsis
-            className={homeType.itemTitle}
+            className={stylex.props(homeType.itemTitle).className}
             style={{
               color: read ? cssVar.colorTextTertiary : undefined,
               flex: 1,
@@ -162,7 +168,7 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
       </Button>
 
       {expanded && (brief.summary || brief.artifacts || hasTopicChat) && (
-        <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
+        <Flexbox className={stylex.props(bare ? styles.bareBody : styles.body).className} gap={8}>
           {selfReview ? (
             <SelfReviewBriefDetails content={selfReview.content} details={selfReview.details} />
           ) : (
@@ -214,13 +220,13 @@ const NewsList = memo<NewsListProps>(({ bare, news, showTime }) => {
   const shown = collapsed ? news.slice(0, RAIL_COLLAPSED_COUNT) : news;
 
   return (
-    <Flexbox className={bare ? styles.bareList : styles.list}>
+    <Flexbox className={stylex.props(bare ? styles.bareList : styles.list).className}>
       {shown.map((brief) => (
         <NewsItem bare={bare} brief={brief} key={brief.id} showTime={showTime} />
       ))}
       {collapsed && (
         <Button
-          className={cx(styles.row, styles.bareRow, homeType.supporting)}
+          className={stylex.props(styles.row, styles.bareRow, homeType.supporting).className}
           type={'text'}
           onClick={() => setExpanded(true)}
         >

@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,22 +13,21 @@ import {
 } from '@/features/ResourceManager/store/selectors';
 import { ResourceSourceFilter } from '@/types/files';
 
-const styles = createStaticStyles(({ css }) => ({
-  option: css`
-    flex: none;
-
-    height: 24px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  optionActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  option: {
+    flex: 'none',
+    height: '24px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorTextDescription,
+  },
+  optionActive: {
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 const OPTIONS: Array<{ key: ResourceSourceFilter; labelKey: string }> = [
   { key: ResourceSourceFilter.All, labelKey: 'FileManager.source.all' },
@@ -61,7 +62,7 @@ const SourceFilter = memo(() => {
         return (
           <Button
             aria-pressed={isActive}
-            className={cx(styles.option, isActive && styles.optionActive)}
+            className={stylex.props(styles.option, isActive && styles.optionActive).className}
             key={option.key}
             size={'small'}
             type={'text'}

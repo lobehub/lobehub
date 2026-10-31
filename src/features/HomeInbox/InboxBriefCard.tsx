@@ -1,6 +1,8 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Block, Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Target } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,20 +25,20 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 
 import StatusGlyph from './StatusGlyph';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  meta: css`
-    cursor: pointer;
-  `,
-  taskName: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  taskRef: css`
-    flex: none;
-    font-family: ${cssVar.fontFamilyCode};
-  `,
-}));
+const styles = stylex.create({
+  meta: {
+    cursor: 'pointer',
+  },
+  taskName: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  taskRef: {
+    flex: 'none',
+    fontFamily: cssVar.fontFamilyCode,
+  },
+});
 
 interface InboxBriefCardProps {
   /** Rendered inside a rail card, which already draws the shell. */
@@ -97,9 +99,15 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
           left the meta row as an empty band with a lone timestamp. Drop the row
           entirely in that case and let the title line carry the time. */}
       {!hasTaskMeta && goal && (
-        <Flexbox horizontal align={'center'} className={styles.meta} gap={7} onClick={openGoal}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.meta).className}
+          gap={7}
+          onClick={openGoal}
+        >
           <Icon color={cssVar.colorTextTertiary} icon={Target} size={14} />
-          <span className={cx(homeType.meta, styles.taskName)}>{goal.goalTitle}</span>
+          <span {...stylex.props(homeType.meta, styles.taskName)}>{goal.goalTitle}</span>
           <Flexbox flex={1} />
           <Time date={brief.createdAt} />
         </Flexbox>
@@ -108,7 +116,7 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
         <Flexbox
           horizontal
           align={'center'}
-          className={canNavigate ? styles.meta : undefined}
+          className={canNavigate ? stylex.props(styles.meta).className : undefined}
           gap={7}
           onClick={canNavigate ? openTask : undefined}
         >
@@ -123,10 +131,10 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
             brief.taskStatus && <StatusGlyph status={brief.taskStatus} variant={'task'} />
           )}
           {brief.taskIdentifier && (
-            <span className={cx(homeType.meta, styles.taskRef)}>{brief.taskIdentifier}</span>
+            <span {...stylex.props(homeType.meta, styles.taskRef)}>{brief.taskIdentifier}</span>
           )}
           {brief.taskName && (
-            <span className={cx(homeType.meta, styles.taskName)}>{brief.taskName}</span>
+            <span {...stylex.props(homeType.meta, styles.taskName)}>{brief.taskName}</span>
           )}
           <Flexbox flex={1} />
           <Time date={brief.createdAt} />
@@ -150,7 +158,11 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
             {/* Priority sits in one place on every card — right before the title — so
                 a scan down the queue reads levels in a single column. */}
             <BriefPriorityIcon priority={brief.priority} />
-            <Text ellipsis className={homeType.itemTitle} style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              ellipsis
+              className={stylex.props(homeType.itemTitle).className}
+              style={{ flex: 1, minWidth: 0 }}
+            >
               {selfReview?.title ?? brief.title}
             </Text>
             {!hasTaskMeta && !goal && <Time date={brief.createdAt} />}

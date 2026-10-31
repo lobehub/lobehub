@@ -1,0 +1,4 @@
+/* Every descendant of a card being dragged over takes the inverted text colour. */
+.dragOver * {
+  color: var(--lobe-color-bg-elevated) !important;
+}

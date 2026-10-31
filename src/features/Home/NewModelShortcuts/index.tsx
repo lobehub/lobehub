@@ -1,13 +1,6 @@
-import {
-  Avatar,
-  Button,
-  createStaticStyles,
-  cx,
-  Flexbox,
-  Skeleton,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Skeleton, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,40 +19,37 @@ import { useStarterModelDefaults } from './useStarterModelDefaults';
 
 export const HOME_NEW_MODELS_BANNER_ID = 'home-new-models-v1';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  active: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  button: css`
-    height: 24px;
-    padding-inline: 8px;
-    border: 0;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-    box-shadow: none !important;
-
-    &:hover {
-      color: ${cssVar.colorText} !important;
-      background: ${cssVar.colorFillTertiary} !important;
-    }
-  `,
-  container: css`
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-    height: 24px;
-  `,
-  label: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  // Restates the hover pair: replacing `color` / `backgroundColor` drops the base
+  // rule's hover states, and hover still wins over the current-model highlight.
+  active: {
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  button: {
+    height: '24px',
+    paddingInline: '8px',
+    borderWidth: 0,
+    borderRadius: cssVar.borderRadius,
+    fontSize: '13px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    boxShadow: 'none',
+  },
+  container: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: 0,
+    height: '24px',
+  },
+  label: {
+    flex: 'none',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 const getShortcutKey = (item: HomeNewModelItem) => `${item.type}:${item.model}`;
 const getShortcutProvider = (item: HomeNewModelItem, fallbackProvider: string) =>
@@ -125,8 +115,13 @@ export const NewModelShortcuts = () => {
       dismissTitle={t('homePromoBanner.dismiss')}
       testId={'home-new-model-banner'}
     >
-      <Flexbox horizontal align={'center'} className={styles.container} gap={4}>
-        <Text className={styles.label}>{t('starter.newLabel')}</Text>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.container).className}
+        gap={4}
+      >
+        <Text className={stylex.props(styles.label).className}>{t('starter.newLabel')}</Text>
         {isLoading
           ? defaultHomeNewModels.map((item, index) => (
               <Skeleton
@@ -146,7 +141,7 @@ export const NewModelShortcuts = () => {
               const button = (
                 <Button
                   aria-pressed={item.type === 'chat' ? isCurrent : undefined}
-                  className={cx(styles.button, isCurrent && styles.active)}
+                  className={stylex.props(styles.button, isCurrent && styles.active).className}
                   // Chat shortcuts wait for the Agent's model selection to load.
                   disabled={(!!switchingKey && !isSwitching) || (item.type === 'chat' && !isReady)}
                   key={key}

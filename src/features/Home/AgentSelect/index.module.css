@@ -1,0 +1,29 @@
+.chevron {
+  color: var(--lobe-color-text-description);
+  opacity: 0;
+  transition: opacity 0.2s var(--lobe-motion-ease-out);
+}
+
+.trigger {
+  justify-content: flex-start;
+
+  width: fit-content;
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  margin-inline-start: -2px;
+  padding: 2px;
+  border: 0;
+
+  background: transparent;
+  gap: 8px;
+}
+
+.trigger:hover .chevron,
+.trigger[data-popup-open] .chevron {
+  opacity: 1;
+}
+
+.trigger[data-popup-open] {
+  background: var(--lobe-color-fill-tertiary);
+}

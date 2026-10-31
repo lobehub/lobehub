@@ -1,30 +1,23 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cx, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo, useCallback } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  folderHeader: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background-color: ${cssVar.colorFillTertiary};
-    }
-  `,
-  folderHeaderActive: css`
-    color: ${cssVar.colorText};
-    background-color: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  folderHeader: {
+    cursor: 'pointer',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    color: cssVar.colorTextSecondary,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+  },
+  folderHeaderActive: { color: cssVar.colorText, backgroundColor: cssVar.colorFillSecondary },
+});
 
 export interface FolderTreeItem {
   children?: FolderTreeItem[];
@@ -83,8 +76,10 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={cx(styles.folderHeader, isActive && styles.folderHeaderActive)}
           style={{ paddingInlineStart: level * 16 + 8 }}
+          className={
+            stylex.props(styles.folderHeader, isActive && styles.folderHeaderActive).className
+          }
           onClick={handleClick}
         >
           <m.div

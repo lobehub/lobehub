@@ -1,0 +1,266 @@
+/*
+ * Layout numbers come from `index.tsx` as custom properties on the grid root
+ * (`homeLayoutVars` in `layoutVars.ts`), so they stay derived from `portraitFraming.ts`. Only the
+ * container-query threshold below must be a literal; `layoutVars.test.ts` keeps
+ * it in step with the constants.
+ */
+
+/*
+ * Both rows size to their content and the page scrolls around the whole grid
+ * (see the route). Giving each column its own scroll viewport made the page
+ * scroll in pieces: the topic list moved under a pinned greeting while the
+ * rail sat still, and no gesture moved the dashboard as a whole.
+ */
+.grid {
+  /* The nav panel takes 240-400px out of the viewport, so viewport breakpoints
+     say nothing about the room this dashboard actually has. */
+  container: home / inline-size;
+  display: grid;
+  grid-template-rows: auto auto;
+  grid-template-columns: minmax(0, 1fr) var(--home-rail-track);
+  gap: var(--home-card-gap) var(--home-column-gap);
+
+  width: 100%;
+}
+
+@media (width <= 1100px) {
+  .grid {
+    grid-template-rows: auto auto auto;
+    grid-template-columns: 1fr;
+  }
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-area: 1 / 1 / 2 / -1;
+  gap: 16px;
+  align-items: end;
+
+  width: 100%;
+  min-width: 0;
+
+  transition: transform var(--home-rail-transition) ease-out;
+}
+
+@media (width > 1100px) {
+  .hero {
+    width: calc(100% - var(--home-collapsed-offset) * 2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero {
+    transition: none;
+  }
+}
+
+@container home (width >= 1086px) {
+  .heroWithSpeech {
+    /* Size both text columns in a stable frame; only artwork placement
+       moves when the rail toggles. Short speech leaves room for the name. */
+    grid-template-columns: minmax(0, 1fr) max-content;
+    column-gap: var(--home-speech-gap);
+  }
+}
+
+/*
+ * Collapsed, the content takes part of the vacated rail track and re-centers
+ * on what is left, so the page reads wider without going full-bleed.
+ */
+@media (width > 1100px) {
+  .heroCollapsed[data-rail-collapsed='true'] {
+    transform: translateX(var(--home-collapsed-offset));
+  }
+
+  .heroCollapsed[data-rail-collapsed='true']:dir(rtl) {
+    transform: translateX(calc(-1 * var(--home-collapsed-offset)));
+  }
+}
+
+.header {
+  min-width: 0;
+}
+
+.speech {
+  --home-portrait-width: var(--home-compact-portrait-width);
+  --home-portrait-height: var(--home-compact-portrait-height);
+  --home-portrait-overlap: var(--home-compact-portrait-overlap);
+
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  justify-self: end;
+
+  width: max-content;
+  max-width: 100%;
+  min-height: var(--home-compact-portrait-visible);
+
+  transition: transform var(--home-rail-transition) ease-out;
+}
+
+@media (width > 1100px) {
+  .speech {
+    transform: translateX(calc(var(--home-collapsed-offset) * 2));
+  }
+
+  .speech:dir(rtl) {
+    transform: translateX(calc(var(--home-collapsed-offset) * -2));
+  }
+
+  .speech[data-collapsed='true'] {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speech {
+    transition: none;
+  }
+}
+
+@container home (width >= 1086px) {
+  .speech {
+    --home-portrait-width: var(--home-full-portrait-width);
+    --home-portrait-height: var(--home-full-portrait-height);
+    --home-portrait-overlap: var(--home-full-portrait-overlap);
+
+    grid-area: 1 / 2;
+    align-self: stretch;
+
+    /* Use all room left by the greeting in the tighter rail state. */
+    max-width: calc(100cqw - var(--home-speech-reserved));
+    min-height: 0;
+  }
+}
+
+.bubbleSlot {
+  width: max-content;
+  min-width: 0;
+  max-width: 100%;
+  margin-block-end: 4px;
+}
+
+.portrait {
+  pointer-events: none;
+  flex: none;
+  align-self: stretch;
+  width: calc(var(--home-portrait-width) + var(--home-portrait-inset));
+}
+
+.inputArea {
+  position: relative;
+  min-width: 0;
+}
+
+.main {
+  position: relative;
+  grid-area: 2 / 1;
+  min-width: 0;
+}
+
+.content {
+  /* An explicit width is what makes the collapse animate: the stretched
+     default computes to "auto", which cannot interpolate against a length,
+     so the width would snap while the transform slid. */
+  width: 100%;
+  transition:
+    transform var(--home-rail-transition) ease-out,
+    width var(--home-rail-transition) ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content {
+    transition: none;
+  }
+}
+
+@media (width > 1100px) {
+  .contentCollapsed[data-rail-collapsed='true'] {
+    transform: translateX(var(--home-collapsed-offset));
+    width: calc(100% + var(--home-collapsed-gain));
+  }
+
+  .contentCollapsed[data-rail-collapsed='true']:dir(rtl) {
+    transform: translateX(calc(-1 * var(--home-collapsed-offset)));
+  }
+}
+
+/*
+ * Nothing stacks under the composer any more, so the page stops being a
+ * dashboard: greeting and composer read as one block, on a measure of their
+ * own rather than the dashboard's full span.
+ *
+ * The route centers this block with auto margins, which would put the pair's
+ * midpoint on the center and leave the composer - the thing you actually look
+ * at - sitting low. The trailing pad is counted into the centered box, so it
+ * lifts everything by half its height and hands the composer the center.
+ */
+.minimal {
+  width: 100%;
+  max-inline-size: 760px;
+  margin-inline: auto;
+  padding-block-end: var(--home-minimal-lift);
+}
+
+.railSurface {
+  transform: translateX(0);
+  visibility: visible;
+  opacity: 1;
+  transition:
+    opacity var(--home-rail-transition) ease-out,
+    transform var(--home-rail-transition) ease-out,
+    visibility 0s linear;
+}
+
+.railSurface[data-collapsed='true'] {
+  pointer-events: none;
+
+  transform: translateX(var(--home-rail-exit));
+
+  visibility: hidden;
+  opacity: 0;
+
+  transition-delay: 0s, 0s, var(--home-rail-transition);
+}
+
+.railSurface[data-collapsed='true']:dir(rtl) {
+  transform: translateX(calc(-1 * var(--home-rail-exit)));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .railSurface {
+    transition: none;
+  }
+}
+
+@media (width <= 1100px) {
+  .railSurface[data-collapsed='true'] {
+    display: none;
+  }
+}
+
+/*
+ * Above the portrait so the agent stands behind the glass, not on top of it.
+ * The trailing gutter keeps the cards short of the column edge, so they stop
+ * where the main column's rows stop instead of running to the page margin.
+ */
+.rail {
+  position: relative;
+  z-index: 1;
+
+  display: flex;
+  flex-direction: column;
+  grid-area: 2 / 2;
+
+  min-width: 0;
+  padding-inline-end: var(--home-rail-gutter);
+}
+
+@media (width <= 1100px) {
+  .rail {
+    grid-area: 3 / 1;
+    justify-self: end;
+    width: min(100%, var(--home-rail-track));
+  }
+}

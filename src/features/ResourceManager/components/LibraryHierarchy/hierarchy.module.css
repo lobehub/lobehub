@@ -1,0 +1,15 @@
+.treeItem {
+  cursor: pointer;
+}
+
+.treeItem :global(.hierarchy-node-actions) {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+/* Hover, keyboard focus on the action itself, or an open menu keep it visible. */
+.treeItem:hover :global(.hierarchy-node-actions),
+.treeItem :global(.hierarchy-node-actions):focus-within,
+.treeItem :global(.hierarchy-node-actions[data-open='true']) {
+  opacity: 1;
+}

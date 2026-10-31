@@ -1,4 +1,5 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 /**
  * The home surface's type scale. Every text role on the page resolves to exactly
@@ -10,49 +11,49 @@ import { createStaticStyles } from '@lobehub/ui';
  * content-first, so a group heading identifies its pile without competing with
  * the items in it.
  */
-export const homeType = createStaticStyles(({ css, cssVar }) => ({
+export const homeType = stylex.create({
   /** Counts riding next to a section label. */
-  badge: css`
-    font-size: 12px;
-    font-weight: 500;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-  `,
+  badge: {
+    fontSize: '12px',
+    fontWeight: 500,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    color: cssVar.colorTextTertiary,
+  },
   /** The name of a thing you can open: a task, a brief, a topic. */
-  itemTitle: css`
-    font-size: 15px;
-    font-weight: 500;
-    line-height: 22px;
-    color: ${cssVar.colorText};
-  `,
+  itemTitle: {
+    fontSize: '15px',
+    fontWeight: 500,
+    lineHeight: '22px',
+    color: cssVar.colorText,
+  },
   /** An item whose title is a sentence rather than a name (suggestions). */
-  itemTitleProse: css`
-    font-size: 15px;
-    font-weight: 400;
-    line-height: 22px;
-    color: ${cssVar.colorText};
-  `,
+  itemTitleProse: {
+    fontSize: '15px',
+    fontWeight: 400,
+    lineHeight: '22px',
+    color: cssVar.colorText,
+  },
   /** Timestamps, identifiers, refs — glanced at, never read. */
-  meta: css`
-    font-size: 12px;
-    font-weight: 400;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
-  `,
+  meta: {
+    fontSize: '12px',
+    fontWeight: 400,
+    lineHeight: '18px',
+    color: cssVar.colorTextTertiary,
+  },
   /** Group / card headings. */
-  sectionLabel: css`
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 18px;
-    color: ${cssVar.colorTextSecondary};
-    letter-spacing: 0.04em;
-  `,
+  sectionLabel: {
+    fontSize: '12px',
+    fontWeight: 600,
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+    letterSpacing: '0.04em',
+  },
   /** The second line of a row — meant to be read, not just scanned. */
-  supporting: css`
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 20px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+  supporting: {
+    fontSize: '13px',
+    fontWeight: 400,
+    lineHeight: '20px',
+    color: cssVar.colorTextTertiary,
+  },
+});

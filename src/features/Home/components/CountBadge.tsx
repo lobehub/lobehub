@@ -1,25 +1,25 @@
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { homeType } from './homeType';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  badge: css`
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    min-width: 20px;
-    height: 18px;
-    padding-inline: 5px;
-    border-radius: 5px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '20px',
+    height: '18px',
+    paddingInline: '5px',
+    borderRadius: '5px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 const CountBadge = memo<{ count: number }>(({ count }) => (
-  <span className={cx(styles.badge, homeType.badge)}>{count}</span>
+  <span {...stylex.props(styles.badge, homeType.badge)}>{count}</span>
 ));
 
 export default CountBadge;

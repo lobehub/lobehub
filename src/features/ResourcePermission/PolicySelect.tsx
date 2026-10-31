@@ -1,58 +1,38 @@
 'use client';
 
 import type { SelectOptions } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Flexbox, Icon, Select } from '@lobehub/ui';
+import { Flexbox, Icon, Select } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  option: css`
-    display: flex;
-    flex: 1;
-    gap: 8px;
-    align-items: flex-start;
-
-    min-width: 0;
-  `,
-  optionDesc: css`
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextDescription};
-    text-wrap: pretty;
-  `,
-  optionIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    height: 20px;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-  optionLabel: css`
-    font-size: 14px;
-    line-height: 20px;
-    color: ${cssVar.colorText};
-  `,
-  popup: css`
-    max-width: calc(100vw - 24px);
-  `,
-  trigger: css`
-    display: flex;
-    flex: 1;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  triggerLabel: css`
-    overflow: hidden;
-    text-align: start;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  option: { display: 'flex', flex: '1', gap: '8px', alignItems: 'flex-start', minWidth: '0' },
+  optionDesc: {
+    fontSize: '12px',
+    lineHeight: '16px',
+    color: cssVar.colorTextDescription,
+    textWrap: 'pretty',
+  },
+  optionIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '20px',
+    color: cssVar.colorTextSecondary,
+  },
+  optionLabel: { fontSize: '14px', lineHeight: '20px', color: cssVar.colorText },
+  popup: { maxWidth: 'calc(100vw - 24px)' },
+  trigger: { display: 'flex', flex: '1', gap: '8px', alignItems: 'center', minWidth: '0' },
+  triggerLabel: {
+    overflow: 'hidden',
+    textAlign: 'start',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 export interface PolicyOption<Value extends string> {
   /** Shown under the label inside the popup — also carries the "why is this disabled" reason. */
@@ -89,13 +69,13 @@ const PolicySelectInner = <Value extends string>({
       options.map((option) => ({
         disabled: option.disabled,
         label: (
-          <span className={styles.option}>
-            <span aria-hidden className={styles.optionIcon}>
+          <span {...stylex.props(styles.option)}>
+            <span aria-hidden {...stylex.props(styles.optionIcon)}>
               <Icon icon={option.icon} size={16} />
             </span>
             <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-              <span className={styles.optionLabel}>{option.label}</span>
-              {option.desc ? <span className={styles.optionDesc}>{option.desc}</span> : null}
+              <span {...stylex.props(styles.optionLabel)}>{option.label}</span>
+              {option.desc ? <span {...stylex.props(styles.optionDesc)}>{option.desc}</span> : null}
             </Flexbox>
           </span>
         ),
@@ -111,11 +91,11 @@ const PolicySelectInner = <Value extends string>({
       if (!option) return null;
 
       return (
-        <span className={styles.trigger}>
-          <span aria-hidden className={styles.optionIcon}>
+        <span {...stylex.props(styles.trigger)}>
+          <span aria-hidden {...stylex.props(styles.optionIcon)}>
             <Icon icon={option.icon} size={16} />
           </span>
-          <span className={styles.triggerLabel}>{option.label}</span>
+          <span {...stylex.props(styles.triggerLabel)}>{option.label}</span>
         </span>
       );
     },
@@ -124,7 +104,7 @@ const PolicySelectInner = <Value extends string>({
 
   return (
     <Select
-      classNames={{ popup: styles.popup }}
+      classNames={{ popup: stylex.props(styles.popup).className }}
       disabled={disabled}
       labelRender={labelRender}
       loading={loading}

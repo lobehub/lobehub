@@ -1,0 +1,39 @@
+.handle {
+  cursor: col-resize;
+  user-select: none;
+
+  position: absolute;
+  z-index: 1;
+  inset-block: 0;
+  inset-inline-end: 0;
+  transform: translateX(-4px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 16px;
+}
+
+.handle::after {
+  content: '';
+
+  width: 1.5px;
+  height: calc(100% - 16px);
+  border-radius: 1px;
+
+  background-color: var(--lobe-color-border);
+
+  transition: all 0.2s;
+}
+
+.handle:hover::after {
+  width: 3px;
+  background-color: var(--lobe-color-primary);
+}
+
+/* Held after the hover rule at equal-or-higher specificity so a drag keeps the active look. */
+.handle.handleDragging::after {
+  width: 3px;
+  background-color: var(--lobe-color-primary);
+}

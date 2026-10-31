@@ -1,25 +1,24 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
+export const styles = stylex.create({
   // Absolutely positioned container, fills parent
-  absoluteContainer: css`
-    position: absolute;
-    inset: 0;
-  `,
+  absoluteContainer: {
+    position: 'absolute',
+    inset: 0,
+  },
 
   // Content area - dark mode
-  contentDark: css`
-    overflow: hidden;
-    background: linear-gradient(
-      to bottom,
-      ${cssVar.colorBgContainer},
-      var(--content-bg-secondary, ${cssVar.colorBgContainer})
-    );
-  `,
+  contentDark: {
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    backgroundImage: `linear-gradient(to bottom, ${cssVar.colorBgContainer}, var(--content-bg-secondary, ${cssVar.colorBgContainer}))`,
+  },
 
   // Content area - light mode
-  contentLight: css`
-    overflow: hidden;
-    background: var(--content-bg-secondary, ${cssVar.colorBgContainer});
-  `,
-}));
+  contentLight: {
+    overflow: 'hidden',
+    backgroundColor: `var(--content-bg-secondary, ${cssVar.colorBgContainer})`,
+    backgroundImage: 'none',
+  },
+});

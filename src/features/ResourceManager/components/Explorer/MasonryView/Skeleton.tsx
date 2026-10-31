@@ -1,30 +1,31 @@
-import { createStaticStyles, keyframes } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const pulse = keyframes`
-  0%,
-  100% {
-    opacity: 1;
-  }
+import { sx } from '@/styles/sx';
 
-  50% {
-    opacity: 0.6;
-  }
-`;
+const pulse = stylex.keyframes({
+  '0%, 100%': { opacity: 1 },
+  '50%': { opacity: 0.6 },
+});
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-    animation: ${pulse} 1.5s ease-in-out infinite;
-  `,
-  grid: css`
-    display: grid;
-    gap: 16px;
-    padding-block: 12px;
-    padding-inline: 24px;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    animationName: pulse,
+    animationDuration: '1.5s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
+  },
+  grid: {
+    display: 'grid',
+    gap: '16px',
+    paddingBlock: '12px',
+    paddingInline: '24px',
+  },
+});
 
 interface MasonrySkeletonProps {
   columnCount: number;
@@ -42,19 +43,17 @@ const MasonryViewSkeleton = memo<MasonrySkeletonProps>(({ columnCount }) => {
 
   return (
     <div
-      className={styles.grid}
-      style={{
+      {...sx([styles.grid], undefined, {
         gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
-      }}
+      })}
     >
       {Array.from({ length: itemCount }).map((_, index) => (
         <div
-          className={styles.card}
           key={index}
-          style={{
+          {...sx([styles.card], undefined, {
             height: heights[index % heights.length],
             opacity: getOpacity(index),
-          }}
+          })}
         />
       ))}
     </div>

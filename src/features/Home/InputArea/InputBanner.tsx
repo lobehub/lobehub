@@ -1,4 +1,6 @@
-import { ActionIcon, createStaticStyles } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { X } from 'lucide-react';
 import type { MouseEvent, MouseEventHandler, ReactNode } from 'react';
 import { useCallback } from 'react';
@@ -6,37 +8,34 @@ import { useCallback } from 'react';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  banner: css`
-    position: relative;
-    z-index: 0;
+import moduleStyles from './InputBanner.module.css';
 
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-width: 0;
-    margin-block: -44px -6px;
-    padding-block: 42px 10px;
-    padding-inline: 16px 12px;
-    border: 1px solid ${cssVar.colorFillSecondary};
-    border-radius: 20px;
-
-    background: color-mix(in srgb, ${cssVar.colorFillQuaternary} 50%, ${cssVar.colorBgContainer});
-
-    &[data-clickable='true'] {
-      cursor: pointer;
-    }
-  `,
-  queue: css`
-    display: contents;
-
-    & > [data-home-input-banner] ~ [data-home-input-banner] {
-      display: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  banner: {
+    position: 'relative',
+    zIndex: 0,
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: 0,
+    marginBlockStart: '-44px',
+    marginBlockEnd: '-6px',
+    paddingBlockStart: '42px',
+    paddingBlockEnd: '10px',
+    paddingInlineStart: '16px',
+    paddingInlineEnd: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillSecondary,
+    borderRadius: '20px',
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorFillQuaternary} 50%, ${cssVar.colorBgContainer})`,
+    backgroundImage: 'none',
+  },
+  clickable: {
+    cursor: 'pointer',
+  },
+});
 
 interface InputBannerProps {
   children: ReactNode;
@@ -68,7 +67,7 @@ export const InputBanner = ({
   return (
     <div
       data-home-input-banner
-      className={styles.banner}
+      {...stylex.props(styles.banner, onClick && styles.clickable)}
       data-clickable={Boolean(onClick)}
       data-testid={testId}
       onClick={onClick}
@@ -90,5 +89,5 @@ export const InputBannerSegment = ({ children, dismissId }: InputBannerSegmentPr
 };
 
 export const InputBannerQueue = ({ children }: { children: ReactNode }) => (
-  <div className={styles.queue}>{children}</div>
+  <div className={moduleStyles.queue}>{children}</div>
 );

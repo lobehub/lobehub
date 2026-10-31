@@ -1,35 +1,37 @@
-import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
 import { useFileStore } from '@/store/file';
 import { type FileChunk } from '@/types/chunk';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 12px;
-    padding-inline: 8px;
-    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: 4px;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  text: css`
-    font-size: 14px;
-    line-height: 24px;
-  `,
-  title: css`
-    font-size: 18px;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    paddingBlock: '12px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'dashed',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderRadius: '4px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  text: {
+    fontSize: '14px',
+    lineHeight: '24px',
+  },
+  title: {
+    fontSize: '18px',
+  },
+});
 
 type ChunkItemProps = FileChunk;
 
 const ChunkItem = memo<ChunkItemProps>(({ text, type, id }) => {
   const highlightChunks = useFileStore((s) => s.highlightChunks);
 
-  const typeClassName = useMemo(() => {
+  const typeStyle = useMemo(() => {
     switch (type) {
       default: {
         return styles.text;
@@ -42,7 +44,7 @@ const ChunkItem = memo<ChunkItemProps>(({ text, type, id }) => {
 
   return (
     <Flexbox
-      className={cx(styles.container, typeClassName)}
+      className={stylex.props(styles.container, typeStyle).className}
       onMouseEnter={() => {
         highlightChunks([id]);
       }}

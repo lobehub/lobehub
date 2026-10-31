@@ -1,0 +1,16 @@
+.container .actions {
+  width: 0;
+  margin-inline-end: 2px;
+  opacity: 0;
+  transition: opacity 0.2s var(--lobe-motion-ease-out);
+}
+
+.container .actions:has([data-popup-open]) {
+  width: unset;
+  opacity: 1;
+}
+
+.container:hover .actions {
+  width: unset;
+  opacity: 1;
+}

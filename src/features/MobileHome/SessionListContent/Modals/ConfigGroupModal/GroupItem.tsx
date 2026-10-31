@@ -1,11 +1,5 @@
-import {
-  ActionIcon,
-  confirmModal,
-  createStaticStyles,
-  EditableText,
-  SortableList,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, confirmModal, EditableText, SortableList, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { PencilLine, Trash } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,19 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { useHomeStore } from '@/store/home';
 import { type SessionGroupItemBase } from '@/types/session';
 
-const styles = createStaticStyles(({ css }) => ({
-  content: css`
-    position: relative;
-    overflow: hidden;
-    flex: 1;
-  `,
-  title: css`
-    flex: 1;
-    height: 28px;
-    line-height: 28px;
-    text-align: start;
-  `,
-}));
+const styles = stylex.create({
+  title: { flex: '1', height: '28px', lineHeight: '28px', textAlign: 'start' },
+});
 
 interface GroupItemProps extends SessionGroupItemBase {
   disabled?: boolean;
@@ -45,7 +29,7 @@ const GroupItem = memo<GroupItemProps>(({ id, name, disabled = false }) => {
       {!disabled && <SortableList.DragHandle />}
       {!editing ? (
         <>
-          <span className={styles.title}>{name}</span>
+          <span {...stylex.props(styles.title)}>{name}</span>
           <ActionIcon
             disabled={disabled}
             icon={PencilLine}

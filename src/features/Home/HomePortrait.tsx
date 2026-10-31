@@ -1,38 +1,35 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { resolveChiefAgentArtwork } from '@/features/ChiefAgent/artwork';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { sx } from '@/styles/sx';
 
 import { useResolvedHomeAgentId } from './AgentSelect/useResolvedHomeAgentId';
 import { HOME_PORTRAIT_INSET } from './portraitFraming';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   /**
    * The speech layout owns image dimensions and overlap. Both sizes reveal
    * the same fraction used by the artwork studio preview, with the lower
    * body passing behind the supporting card.
    */
-  image: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-end: var(--home-portrait-overlap);
-    inset-inline-end: ${HOME_PORTRAIT_INSET}px;
-
-    width: var(--home-portrait-width);
-    height: var(--home-portrait-height);
-
-    object-fit: contain;
-    object-position: bottom;
-  `,
-  root: css`
-    position: relative;
-    height: 100%;
-  `,
-}));
+  image: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockEnd: 'var(--home-portrait-overlap)',
+    width: 'var(--home-portrait-width)',
+    height: 'var(--home-portrait-height)',
+    objectFit: 'contain',
+    objectPosition: 'bottom',
+  },
+  root: {
+    position: 'relative',
+    height: '100%',
+  },
+});
 
 const HomePortrait = memo(() => {
   // The portrait depicts whoever home is addressing, so it follows the same
@@ -51,8 +48,14 @@ const HomePortrait = memo(() => {
   const hero = fullBodyArtwork || artwork.hero;
 
   return (
-    <div className={styles.root}>
-      <img aria-hidden alt="" className={styles.image} key={hero} src={hero} />
+    <div {...stylex.props(styles.root)}>
+      <img
+        aria-hidden
+        alt=""
+        key={hero}
+        src={hero}
+        {...sx([styles.image], undefined, { insetInlineEnd: HOME_PORTRAIT_INSET })}
+      />
     </div>
   );
 });

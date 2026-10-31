@@ -1,16 +1,9 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ConversationContext } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  stopPropagation,
-  Text,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, stopPropagation, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronRightIcon, MessageSquarePlus } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -43,58 +36,64 @@ const preloadRunReplyEditor = () => {
 };
 
 const BARE_PADDING_INLINE = 8;
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  bareBody: css`
-    padding-block-end: 8px;
-    padding-inline: ${BARE_PADDING_INLINE + DOT_WIDTH + ROW_GAP}px ${BARE_PADDING_INLINE}px;
-  `,
+const styles = stylex.create({
+  bareBody: {
+    paddingBlockEnd: '8px',
+    paddingInlineStart: `${BARE_PADDING_INLINE + DOT_WIDTH + ROW_GAP}px`,
+    paddingInlineEnd: `${BARE_PADDING_INLINE}px`,
+  },
   // Inside a rail card the shell is already drawn; only the hover bleed remains.
-  bareList: css`
-    margin-inline: -${BARE_PADDING_INLINE}px;
-  `,
-  bareRow: css`
-    padding-block: 7px;
-    padding-inline: ${BARE_PADDING_INLINE}px;
-    border-radius: ${cssVar.borderRadius};
-  `,
+  bareList: {
+    marginInline: `-${BARE_PADDING_INLINE}px`,
+  },
+  bareRow: {
+    paddingBlock: '7px',
+    paddingInline: `${BARE_PADDING_INLINE}px`,
+    borderRadius: cssVar.borderRadius,
+  },
   // Line the reply up under the agent that wrote it, not under the unread dot.
-  body: css`
-    padding-block-end: 12px;
-    padding-inline: ${ROW_PADDING_INLINE + DOT_WIDTH + ROW_GAP}px ${ROW_PADDING_INLINE}px;
-  `,
+  body: {
+    paddingBlockEnd: '12px',
+    paddingInlineStart: `${ROW_PADDING_INLINE + DOT_WIDTH + ROW_GAP}px`,
+    paddingInlineEnd: `${ROW_PADDING_INLINE}px`,
+  },
   // Keeps the title from shifting left once the dot is gone.
-  dotPlaceholder: css`
-    flex: none;
-    width: ${DOT_WIDTH}px;
-  `,
-  list: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 11px;
-    padding-inline: ${ROW_PADDING_INLINE}px;
-    transition: background ${cssVar.motionDurationFast};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  section: css`
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  replyEditorFallback: css`
-    min-height: 88px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+  dotPlaceholder: {
+    flex: 'none',
+    width: `${DOT_WIDTH}px`,
+  },
+  list: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '11px',
+    paddingInline: `${ROW_PADDING_INLINE}px`,
+    transition: `background ${cssVar.motionDurationFast}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  section: {
+    borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  replyEditorFallback: {
+    minHeight: '88px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface UnreadTopicItemProps {
   bare?: boolean;
@@ -180,15 +179,15 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
     );
 
     return (
-      <Flexbox className={bare ? undefined : styles.section}>
+      <Flexbox className={bare ? undefined : stylex.props(styles.section).className}>
         <Flexbox
           horizontal
           align={'center'}
-          className={cx(styles.row, bare && styles.bareRow)}
+          className={stylex.props(styles.row, bare && styles.bareRow).className}
           gap={ROW_GAP}
           onClick={toggle}
         >
-          {read ? <span className={styles.dotPlaceholder} /> : <UnreadDot />}
+          {read ? <span {...stylex.props(styles.dotPlaceholder)} /> : <UnreadDot />}
           {agent && (
             <AgentAvatar
               agentId={topic.agentId}
@@ -202,7 +201,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
           )}
           <Text
             ellipsis
-            className={homeType.itemTitle}
+            className={stylex.props(homeType.itemTitle).className}
             style={{ flex: 1, fontWeight: read ? 400 : undefined, minWidth: 0 }}
           >
             {topic.title}
@@ -217,7 +216,7 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
         </Flexbox>
 
         {expanded && (
-          <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
+          <Flexbox className={stylex.props(bare ? styles.bareBody : styles.body).className} gap={8}>
             {assistantPreview && (
               <Suspense fallback={null}>
                 <MarkdownMessage {...markdownProps} style={{ overflow: 'unset' }}>
@@ -228,7 +227,9 @@ const UnreadTopicItem = memo<UnreadTopicItemProps>(
 
             {replying ? (
               <Flexbox onClick={stopPropagation}>
-                <Suspense fallback={<div aria-hidden className={styles.replyEditorFallback} />}>
+                <Suspense
+                  fallback={<div aria-hidden {...stylex.props(styles.replyEditorFallback)} />}
+                >
                   <RunReplyEditor
                     placeholder={t('inbox.unread.followUpPlaceholder')}
                     onCancel={() => setReplying(false)}
@@ -276,7 +277,7 @@ interface UnreadTopicListProps {
  */
 const UnreadTopicList = memo<UnreadTopicListProps>(
   ({ bare, topics, onFollowUpSent, showAuthor }) => (
-    <Flexbox className={bare ? styles.bareList : styles.list}>
+    <Flexbox className={stylex.props(bare ? styles.bareList : styles.list).className}>
       {topics.map((topic) => (
         <UnreadTopicItem
           bare={bare}

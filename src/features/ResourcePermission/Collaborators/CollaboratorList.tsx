@@ -3,14 +3,14 @@
 import {
   ActionIcon,
   confirmModal,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   SkeletonAvatar,
   SkeletonText,
   Tag,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,16 +22,10 @@ import type { PermissionResourceType, ResourceCollaborator } from '@/services/re
 import { useAccessLevelOptions } from '../useAccessLevelOptions';
 import { useResourceCollaborators } from '../useResourceCollaborators';
 
-const styles = createStaticStyles(({ css }) => ({
-  empty: css`
-    padding-block: 12px;
-    font-size: 14px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  row: css`
-    padding-block: 8px;
-  `,
-}));
+const styles = stylex.create({
+  empty: { paddingBlock: '12px', fontSize: '14px', color: cssVar.colorTextDescription },
+  row: { paddingBlock: '8px' },
+});
 
 const displayName = (collaborator: ResourceCollaborator) =>
   collaborator.user?.fullName ||
@@ -62,7 +56,13 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
     return (
       <Flexbox gap={4}>
         {[0, 1].map((key) => (
-          <Flexbox horizontal align={'center'} className={styles.row} gap={12} key={key}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.row).className}
+            gap={12}
+            key={key}
+          >
             <SkeletonAvatar size={32} />
             <SkeletonText style={{ marginBottom: 0, width: 160 }} />
           </Flexbox>
@@ -71,7 +71,7 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
     );
 
   if (!collaborators || collaborators.length === 0)
-    return <div className={styles.empty}>{t('permission.collaborators.empty')}</div>;
+    return <div {...stylex.props(styles.empty)}>{t('permission.collaborators.empty')}</div>;
 
   return (
     <Flexbox>
@@ -86,7 +86,7 @@ const CollaboratorList = memo<CollaboratorListProps>(({ resourceId, resourceType
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.row}
+            className={stylex.props(styles.row).className}
             gap={12}
             key={collaborator.userId}
           >

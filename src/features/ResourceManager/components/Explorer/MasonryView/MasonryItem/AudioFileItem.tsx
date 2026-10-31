@@ -1,54 +1,53 @@
-import { createStaticStyles, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AudioLinesIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { formatSize } from '@/utils/format';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  cover: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
+const CONTROLS = '::-webkit-media-controls-panel';
 
-    width: 100%;
-    padding-block: 28px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    /* subtle top highlight keeps the fill from reading flat */
-    background:
-      radial-gradient(
-        140% 100% at 50% 0%,
-        color-mix(in srgb, #fff 8%, transparent) 0%,
-        transparent 60%
-      ),
-      ${cssVar.colorFillQuaternary};
-  `,
-  info: css`
-    padding: 12px;
-  `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  name: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: ${cssVar.fontWeightStrong};
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  player: css`
-    width: 100%;
-    height: 32px;
-
-    &::-webkit-media-controls-panel {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  cover: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingBlock: '28px',
+    color: cssVar.colorTextSecondary,
+    // subtle top highlight keeps the fill from reading flat
+    backgroundImage: `radial-gradient(140% 100% at 50% 0%, color-mix(in srgb, #fff 8%, transparent) 0%, transparent 60%)`,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  info: {
+    padding: '12px',
+  },
+  meta: {
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+  },
+  name: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: cssVar.fontWeightStrong,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  player: {
+    width: '100%',
+    height: '32px',
+    backgroundColor: { default: null, [CONTROLS]: cssVar.colorFillQuaternary },
+    backgroundImage: { default: null, [CONTROLS]: 'none' },
+    backgroundPosition: { default: null, [CONTROLS]: '0% 0%' },
+    backgroundSize: { default: null, [CONTROLS]: 'auto' },
+    backgroundRepeat: { default: null, [CONTROLS]: 'repeat' },
+    backgroundOrigin: { default: null, [CONTROLS]: 'padding-box' },
+    backgroundClip: { default: null, [CONTROLS]: 'border-box' },
+    backgroundAttachment: { default: null, [CONTROLS]: 'scroll' },
+  },
+});
 
 interface AudioFileItemProps {
   isInView: boolean;
@@ -60,17 +59,17 @@ interface AudioFileItemProps {
 /** Masonry card for audio files: type cover plus an inline playable control. */
 const AudioFileItem = memo<AudioFileItemProps>(({ isInView, name, size, url }) => (
   <>
-    <div className={styles.cover}>
+    <div {...stylex.props(styles.cover)}>
       <Icon icon={AudioLinesIcon} size={40} />
     </div>
-    <Flexbox className={styles.info} gap={8}>
-      <span className={styles.name}>{name}</span>
-      <span className={styles.meta}>{formatSize(size)}</span>
+    <Flexbox className={stylex.props(styles.info).className} gap={8}>
+      <span {...stylex.props(styles.name)}>{name}</span>
+      <span {...stylex.props(styles.meta)}>{formatSize(size)}</span>
       {isInView && url && (
         // controls stay interactive without triggering the card's open action
         <audio
           controls
-          className={styles.player}
+          {...stylex.props(styles.player)}
           preload={'metadata'}
           src={url}
           onClick={stopPropagation}

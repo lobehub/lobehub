@@ -5,13 +5,13 @@ import {
   ActionIcon,
   Block,
   Center,
-  createStaticStyles,
-  cx,
   DropdownMenu,
   Skeleton,
   stopPropagation,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -25,22 +25,15 @@ import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 
+import moduleStyles from './LibraryHead.module.css';
 import type { LibraryMenuEntry } from './libraryMenuItems';
 import { buildLibraryMenuItems } from './libraryMenuItems';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  dropZoneActive: css`
-    color: ${cssVar.colorBgElevated} !important;
-    background-color: ${cssVar.colorText} !important;
-
-    * {
-      color: ${cssVar.colorBgElevated} !important;
-    }
-  `,
-  menuIcon: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  menuIcon: {
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 /**
  * Quickly switch between libraries
@@ -103,7 +96,11 @@ const Head = memo<{ id: string }>(({ id }) => {
     const entries = libraries.map((library): LibraryMenuEntry => ({
       item: {
         icon: (
-          <Center className={styles.menuIcon} style={{ minWidth: 16 }} width={16}>
+          <Center
+            className={stylex.props(styles.menuIcon).className}
+            style={{ minWidth: 16 }}
+            width={16}
+          >
             <LibraryStatusIcon
               size={14}
               visibility={library.visibility}
@@ -132,7 +129,7 @@ const Head = memo<{ id: string }>(({ id }) => {
       clickable
       horizontal
       align={'center'}
-      className={cx(isDropZoneActive && styles.dropZoneActive)}
+      className={isDropZoneActive ? moduleStyles.dropZoneActive : undefined}
       data-drop-target-id="root"
       data-is-folder="true"
       data-root-drop="true"

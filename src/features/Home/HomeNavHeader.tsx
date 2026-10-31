@@ -1,4 +1,5 @@
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
@@ -14,14 +15,9 @@ import { canHostRail } from './railVisibility';
 
 // Floats over the dashboard instead of pushing it down: the controls live in
 // the page's top corners, where the content never reaches.
-const styles = createStaticStyles(({ css }) => ({
-  header: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 0;
-    inset-inline: 0;
-  `,
-}));
+const styles = stylex.create({
+  header: { position: 'absolute', zIndex: 1, insetBlockStart: '0', insetInline: '0' },
+});
 
 const HomeNavHeader = memo(() => {
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -35,7 +31,7 @@ const HomeNavHeader = memo(() => {
 
   return (
     <NavHeader
-      className={styles.header}
+      className={stylex.props(styles.header).className}
       right={
         isLogin && isStatusInit ? (
           <Flexbox horizontal align={'center'} gap={4}>

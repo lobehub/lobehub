@@ -1,15 +1,9 @@
-import { ActionIcon, createStaticStyles } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
 import { PanelRightCloseIcon, PanelRightOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    &:dir(rtl) svg {
-      transform: scaleX(-1);
-    }
-  `,
-}));
+import styles from './RailToggle.module.css';
 
 interface RailToggleProps {
   onToggle: () => void;

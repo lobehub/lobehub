@@ -1,4 +1,6 @@
-import { ActionIcon, createStaticStyles, cx, Flexbox, Segmented } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Segmented } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -43,17 +45,16 @@ import { arrangeDayNews, splitBriefs } from './splitBriefs';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  onlyMe: css`
-    margin-inline-start: 8px;
-    padding-inline: 5px;
-    border-radius: 3px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  subtitle: css`
-    margin-inline-start: 8px;
-  `,
-}));
+const styles = stylex.create({
+  onlyMe: {
+    marginInlineStart: '8px',
+    paddingInline: '5px',
+    borderRadius: '3px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  subtitle: { marginInlineStart: '8px' },
+});
 
 /**
  * Mounted only while the rail has settled with nothing to show, so the page
@@ -511,14 +512,14 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       // Team view: News is still only mine (briefs are per-user), so say so
       // rather than let a team-scoped page imply it spans the team.
       badge: teamView && (
-        <span className={cx(homeType.meta, styles.onlyMe)}>{t('inbox.scope.onlyMe')}</span>
+        <span {...stylex.props(styles.onlyMe, homeType.meta)}>{t('inbox.scope.onlyMe')}</span>
       ),
       count: news.length || undefined,
       key: 'news',
       label: newsLabel,
       node:
         news.length === 0 ? (
-          <span className={homeType.supporting}>
+          <span {...stylex.props(homeType.supporting)}>
             {t(shownNewsOffset === 0 ? 'inbox.news.emptyToday' : 'inbox.news.emptyDay')}
           </span>
         ) : (
@@ -641,7 +642,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
                 <>
                   {label}
                   {subtitle && (
-                    <span className={cx(homeType.meta, styles.subtitle)}>· {subtitle}</span>
+                    <span {...stylex.props(styles.subtitle, homeType.meta)}>· {subtitle}</span>
                   )}
                   {badge}
                 </>

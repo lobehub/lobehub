@@ -1,49 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  handle: css`
-    cursor: col-resize;
-    user-select: none;
-
-    position: absolute;
-    z-index: 1;
-    inset-block: 0;
-    inset-inline-end: 0;
-    transform: translateX(-4px);
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 16px;
-
-    &::after {
-      content: '';
-
-      width: 1.5px;
-      height: calc(100% - 16px);
-      border-radius: 1px;
-
-      background-color: ${cssVar.colorBorder};
-
-      transition: all 0.2s;
-    }
-
-    &:hover::after {
-      width: 3px;
-      background-color: ${cssVar.colorPrimary};
-    }
-  `,
-  handleDragging: css`
-    &::after {
-      width: 3px !important;
-      background-color: ${cssVar.colorPrimary} !important;
-    }
-  `,
-}));
+import styles from './ColumnResizeHandle.module.css';
 
 interface ColumnResizeHandleProps {
   column: 'name' | 'date' | 'size' | 'uploader';
@@ -107,7 +66,7 @@ const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
 
     return (
       <div
-        className={`${styles.handle} ${isDragging ? styles.handleDragging : ''}`}
+        className={isDragging ? `${styles.handle} ${styles.handleDragging}` : styles.handle}
         onMouseDown={handleMouseDown}
       />
     );

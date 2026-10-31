@@ -3,15 +3,9 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
 } from '@lobechat/const';
-import {
-  Checkbox,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Icon,
-  stopPropagation,
-  Tooltip,
-} from '@lobehub/ui';
+import { Checkbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LockIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +18,7 @@ import {
 } from '@/features/ResourceManager/DndContextWrapper';
 import { showContextMenu } from '@/libs/contextMenu';
 import { getChunkTargetId, useFileStore } from '@/store/file';
+import { sx } from '@/styles/sx';
 import { type FileListItem } from '@/types/files';
 
 import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
@@ -33,6 +28,7 @@ import LibraryTags from '../../LibraryTags';
 import AudioFileItem from './AudioFileItem';
 import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
+import moduleStyles from './index.module.css';
 import MarkdownFileItem from './MarkdownFileItem';
 import NoteFileItem from './NoteFileItem';
 import VideoFileItem from './VideoFileItem';
@@ -79,124 +75,92 @@ const isCustomPage = (fileType?: string, name?: string) => {
   return !isPDF && !isOfficeFile && fileType === CUSTOM_NOTE_TYPE;
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  actions: css`
-    opacity: 0;
-    transition: opacity ${cssVar.motionDurationMid};
-  `,
-  card: css`
-    cursor: pointer;
-
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: all ${cssVar.motionDurationMid};
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-      box-shadow: ${cssVar.boxShadowTertiary};
-
-      .actions {
-        opacity: 1;
-      }
-
-      .checkbox {
-        opacity: 1;
-      }
-
-      .dropdown {
-        opacity: 1;
-      }
-
-      .floatingChunkBadge {
-        opacity: 1;
-      }
-    }
-  `,
-  checkbox: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 8px;
-    inset-inline-start: 8px;
-
-    opacity: 0;
-
-    transition: opacity ${cssVar.motionDurationMid};
-  `,
-  content: css`
-    position: relative;
-  `,
+// Hover reveals below use `stylex.when.ancestor(':hover')` against the card's
+// `stylex.defaultMarker()`; the file-type items (which carry their own floating
+// chunk badge) key off the same marker.
+const styles = stylex.create({
+  card: {
+    cursor: 'pointer',
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorPrimary },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: { 'default': null, ':hover': cssVar.boxShadowTertiary },
+    transition: `all ${cssVar.motionDurationMid}`,
+  },
+  checkbox: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: '8px',
+    insetInlineStart: '8px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  checkboxSelected: {
+    opacity: 1,
+  },
+  content: {
+    position: 'relative',
+  },
   /**
    * Always visible, unlike the hover-only checkbox and dropdown above it: the
    * point of the badge is that a private card is recognisable at a glance while
    * scanning a library that mixes both scopes.
    */
-  libraryBadge: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-end: 8px;
-    inset-inline-end: 8px;
-
-    max-width: calc(100% - 56px);
-  `,
-  privateBadge: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-end: 8px;
-    inset-inline-start: 8px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    padding: 4px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgMask};
-  `,
-  contentWithPadding: css`
-    padding: 12px;
-  `,
-  dragOver: css`
-    border-color: ${cssVar.colorText} !important;
-    color: ${cssVar.colorBgElevated} !important;
-    background-color: ${cssVar.colorText} !important;
-
-    * {
-      color: ${cssVar.colorBgElevated} !important;
-    }
-  `,
-  dragging: css`
-    will-change: transform;
-    opacity: 0.5;
-  `,
-  dropdown: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
-
-    opacity: 0;
-
-    transition: opacity ${cssVar.motionDurationMid};
-  `,
-  selected: css`
-    border-color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
-
-    .checkbox {
-      opacity: 1;
-    }
-  `,
-}));
+  libraryBadge: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockEnd: '8px',
+    insetInlineEnd: '8px',
+    maxWidth: 'calc(100% - 56px)',
+  },
+  privateBadge: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockEnd: '8px',
+    insetInlineStart: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '4px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+  },
+  contentWithPadding: {
+    padding: '12px',
+  },
+  // `!important` is gone: it only outranked the card's own hover rules, and the
+  // restated hover pairs below do that now.
+  dragOver: {
+    borderColor: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
+    color: cssVar.colorBgElevated,
+    backgroundColor: cssVar.colorText,
+    backgroundImage: 'none',
+  },
+  dragging: {
+    willChange: 'transform',
+    opacity: 0.5,
+  },
+  dropdown: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: '8px',
+    insetInlineEnd: '8px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  selected: {
+    borderColor: { 'default': cssVar.colorPrimary, ':hover': cssVar.colorPrimary },
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+});
 
 interface MasonryFileItemProps extends FileListItem {
   knowledgeBaseId?: string;
@@ -381,11 +345,15 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         data-is-folder={isFolder}
         draggable={!!knowledgeBaseId}
         ref={cardRef}
-        className={cx(
-          styles.card,
-          selected && styles.selected,
-          isDragging && styles.dragging,
-          isOver && styles.dragOver,
+        {...sx(
+          [
+            styles.card,
+            stylex.defaultMarker(),
+            selected && styles.selected,
+            isDragging && styles.dragging,
+            isOver && styles.dragOver,
+          ],
+          isOver ? moduleStyles.dragOver : undefined,
         )}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
@@ -397,8 +365,9 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         }}
       >
         <div
-          className={cx('checkbox', styles.checkbox)}
-          style={{ cursor: selectable ? 'pointer' : 'not-allowed' }}
+          {...sx([styles.checkbox, selected && styles.checkboxSelected], undefined, {
+            cursor: selectable ? 'pointer' : 'not-allowed',
+          })}
           title={selectable ? undefined : t('FileManager.selection.onlyOwn')}
           onPointerDown={stopPropagation}
           onClick={(e) => {
@@ -411,7 +380,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         </div>
 
         <div
-          className={cx('dropdown', styles.dropdown)}
+          {...stylex.props(styles.dropdown)}
           onClick={stopPropagation}
           onPointerDown={stopPropagation}
         >
@@ -419,21 +388,21 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
         </div>
 
         {!knowledgeBaseId && !!knowledgeBaseIds?.length && (
-          <div className={styles.libraryBadge}>
+          <div {...stylex.props(styles.libraryBadge)}>
             <LibraryTags knowledgeBaseIds={knowledgeBaseIds} />
           </div>
         )}
 
         {isPrivate && (
           <Tooltip title={t('resources.visibility.privateTooltip', { ns: 'chat' })}>
-            <div className={styles.privateBadge}>
+            <div {...stylex.props(styles.privateBadge)}>
               <Icon icon={LockIcon} size={14} />
             </div>
           </Tooltip>
         )}
 
         <div
-          className={cx(
+          {...stylex.props(
             styles.content,
             !isImage &&
               !isMarkdown &&

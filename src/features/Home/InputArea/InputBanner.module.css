@@ -1,0 +1,11 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules :global() */
+
+/* Only the first banner in the queue shows; the rest wait until it is dismissed.
+   `!important`: the banner's own StyleX `display: flex` outranks a plain class rule. */
+.queue {
+  display: contents;
+}
+
+.queue > :global([data-home-input-banner]) ~ :global([data-home-input-banner]) {
+  display: none !important;
+}

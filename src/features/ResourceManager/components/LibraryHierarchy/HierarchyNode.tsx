@@ -2,6 +2,7 @@
 
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { Block, cx, Flexbox, Icon, Input, stopPropagation, toast, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +25,7 @@ import { isExpandable, useTreeStore } from '@/store/tree';
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import FolderAddButton from './FolderAddButton';
+import moduleStyles from './hierarchy.module.css';
 import HierarchyNodeMenuButton from './HierarchyNodeMenuButton';
 import HierarchyNodeToggle from './HierarchyNodeToggle';
 import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
@@ -292,9 +294,9 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             paddingInline={4}
             variant={isActive ? 'filled' : 'borderless'}
             className={cx(
-              styles.treeItem,
-              isOver && styles.fileItemDragOver,
-              isDragging && styles.dragging,
+              moduleStyles.treeItem,
+              stylex.props(isOver && styles.fileItemDragOver, isDragging && styles.dragging)
+                .className,
             )}
             style={{
               paddingInlineStart: level * 12 + 4,
@@ -378,7 +380,6 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           clickable
           horizontal
           align={'center'}
-          className={cx(styles.treeItem, isDragging && styles.dragging)}
           data-drop-target-id={item.id}
           data-is-folder={false}
           draggable={!flat}
@@ -386,6 +387,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           height={36}
           paddingInline={4}
           variant={isActive ? 'filled' : 'borderless'}
+          className={cx(
+            moduleStyles.treeItem,
+            stylex.props(isDragging && styles.dragging).className,
+          )}
           style={{
             paddingInlineStart: level * 12 + 4,
           }}

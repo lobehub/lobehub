@@ -5,6 +5,7 @@ import {
   type SelfReviewProposalContentItem,
 } from '@lobechat/agent-signal/brief';
 import { Button, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -75,12 +76,12 @@ const SelfReviewBriefDetails = ({ agentName, content, details }: SelfReviewBrief
   return (
     <Flexbox gap={6}>
       {agentName && (
-        <span className={homeType.meta}>
+        <span {...stylex.props(homeType.meta)}>
           {t('brief.agentSignal.selfReview.details.forAgent', { agent: agentName })}
         </span>
       )}
       {lead && (
-        <Text className={homeType.supporting} ellipsis={{ rows: 2 }}>
+        <Text className={stylex.props(homeType.supporting).className} ellipsis={{ rows: 2 }}>
           {lead}
         </Text>
       )}
@@ -103,7 +104,11 @@ const SelfReviewBriefDetails = ({ agentName, content, details }: SelfReviewBrief
                 <span className={styles.kind}>
                   {formatSelfReviewKindLabel(item.kind, translate)}
                 </span>
-                <Text ellipsis className={homeType.supporting} style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  ellipsis
+                  className={stylex.props(homeType.supporting).className}
+                  style={{ flex: 1, minWidth: 0 }}
+                >
                   {target && <span className={styles.rowTarget}>{target}</span>}
                   {target && description && ' — '}
                   {description && <span className={styles.rowDescription}>{description}</span>}

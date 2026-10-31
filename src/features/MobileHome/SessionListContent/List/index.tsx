@@ -1,6 +1,6 @@
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { type SidebarAgentItem } from '@lobechat/types';
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import LazyLoad from 'react-lazy-load';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -12,11 +12,11 @@ import { useListNavigation } from '../useListNavigation';
 import AddButton from './AddButton';
 import AgentItem from './Item';
 
-const styles = createStaticStyles(
-  ({ css }) => css`
-    min-height: 70px;
-  `,
-);
+const styles = stylex.create({
+  lazy: {
+    minHeight: '70px',
+  },
+});
 
 interface AgentListProps {
   dataSource: SidebarAgentItem[];
@@ -32,7 +32,7 @@ const AgentList = ({ dataSource, groupId, visibility, showAddButton = true }: Ag
     ? dataSource.map((item) => {
         const categoryId = groupId === undefined ? (item.groupId ?? null) : groupId;
         return (
-          <LazyLoad className={styles} key={item.id}>
+          <LazyLoad className={stylex.props(styles.lazy).className} key={item.id}>
             <WorkspaceLink
               aria-label={item.id}
               key={item.id}

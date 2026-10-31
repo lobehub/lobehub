@@ -1,9 +1,12 @@
 'use client';
 
-import { cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { Loader2, MessageSquare } from 'lucide-react';
 import { memo } from 'react';
+
+import { sx } from '@/styles/sx';
 
 import { styles } from './style';
 import type { ListItemProps } from './type';
@@ -45,17 +48,19 @@ const BaseListItem = memo<ListItemProps>(
     const loadingNode = <Icon spin icon={Loader2} />;
 
     const pinNode = pin && (
-      <div className={cx(styles.pin, classNames?.pin)} style={customStyles?.pin}>
-        <div className={styles.triangle} />
+      <div {...sx([styles.pin], classNames?.pin, customStyles?.pin)}>
+        <div {...stylex.props(styles.triangle)} />
       </div>
     );
 
     const actionsNode = actions && (
       <Flexbox
         horizontal
-        className={cx(styles.actions, classNames?.actions)}
         gap={4}
-        style={{ display: showAction ? undefined : 'none', ...customStyles?.actions }}
+        {...sx([styles.actions], classNames?.actions, {
+          display: showAction ? undefined : 'none',
+          ...customStyles?.actions,
+        })}
         onClick={preventDefaultAndStopPropagation}
       >
         {actions}
@@ -64,8 +69,10 @@ const BaseListItem = memo<ListItemProps>(
 
     const timeNode = date && (
       <div
-        className={cx(styles.date, classNames?.date)}
-        style={{ opacity: showAction ? 0 : undefined, ...customStyles?.date }}
+        {...sx([styles.date], classNames?.date, {
+          opacity: showAction ? 0 : undefined,
+          ...customStyles?.date,
+        })}
       >
         {getChatItemTime(date)}
       </div>
@@ -75,12 +82,11 @@ const BaseListItem = memo<ListItemProps>(
       <Flexbox
         horizontal
         align={'flex-start'}
-        className={cx(styles.root, active && styles.active, className)}
         distribution={'space-between'}
         gap={8}
         padding={12}
         ref={ref}
-        style={style}
+        {...sx([styles.root, active && styles.active], className, style)}
         onMouseEnter={() => {
           onHoverChange?.(true);
         }}
@@ -99,25 +105,16 @@ const BaseListItem = memo<ListItemProps>(
           style={{ overflow: 'hidden', ...customStyles?.container }}
         >
           {avatar ?? <Icon icon={MessageSquare} style={{ marginTop: 4 }} />}
-          <Flexbox
-            className={cx(styles.content, classNames?.content)}
-            gap={4}
-            style={customStyles?.content}
-          >
+          <Flexbox gap={4} {...sx([styles.content], classNames?.content, customStyles?.content)}>
             <Text
               ellipsis
               as={'h3'}
-              className={cx(styles.title, classNames?.title)}
-              style={customStyles?.title}
+              {...sx([styles.title], classNames?.title, customStyles?.title)}
             >
               {title}
             </Text>
             {description && (
-              <Text
-                ellipsis
-                className={cx(styles.desc, classNames?.desc)}
-                style={customStyles?.desc}
-              >
+              <Text ellipsis {...sx([styles.desc], classNames?.desc, customStyles?.desc)}>
                 {description}
               </Text>
             )}

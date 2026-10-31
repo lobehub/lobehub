@@ -1,6 +1,7 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MinusIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,12 +15,7 @@ export interface CountStepperProps {
   value: number;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  value: css`
-    width: 20px;
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({ value: { width: '20px', textAlign: 'center' } });
 
 const CountStepper = memo<CountStepperProps>(({ disabled, label, value, min, max, onChange }) => {
   const { t } = useTranslation('home');
@@ -36,7 +32,7 @@ const CountStepper = memo<CountStepperProps>(({ disabled, label, value, min, max
       <Text
         aria-label={label}
         aria-live={'polite'}
-        className={styles.value}
+        className={stylex.props(styles.value).className}
         type={disabled ? 'secondary' : undefined}
         weight={500}
       >

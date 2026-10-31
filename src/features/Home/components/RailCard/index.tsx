@@ -1,40 +1,38 @@
-import { createStaticStyles, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
 import CountBadge from '../CountBadge';
 import { homeType } from '../homeType';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = stylex.create({
   // Frosted, not opaque: the agent standing behind the first card reads through
   // the pane as a soft silhouette instead of being clipped away.
-  card: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
-    backdrop-filter: saturate(150%) blur(12px);
-  `,
+  card: {
+    paddingBlock: '14px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent)`,
+    backgroundImage: 'none',
+    backdropFilter: 'saturate(150%) blur(12px)',
+  },
   // The whole heading is the hit target, not just the chevron — a 14px glyph is
   // a poor thing to ask someone to aim at, and the label is already there.
-  heading: css`
-    cursor: pointer;
-
-    min-width: 0;
-    padding: 0;
-    border: 0;
-
-    text-align: start;
-
-    background: none;
-
-    &:hover .home-rail-card-chevron {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-}));
+  heading: {
+    cursor: 'pointer',
+    minWidth: 0,
+    padding: 0,
+    borderWidth: 0,
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+});
 
 interface RailCardProps {
   action?: ReactNode;
@@ -58,7 +56,7 @@ const RailCard = memo<RailCardProps>(
   ({ action, children, collapsed = false, count, loading, onCollapsedChange, title }) => {
     const heading = (
       <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-        <Text ellipsis className={homeType.sectionLabel}>
+        <Text ellipsis className={stylex.props(homeType.sectionLabel).className}>
           {title}
         </Text>
         {count !== undefined && <CountBadge count={count} />}
@@ -75,13 +73,17 @@ const RailCard = memo<RailCardProps>(
     );
 
     return (
-      <Flexbox className={styles.card} data-testid={'home-rail-card'} gap={12}>
+      <Flexbox
+        className={stylex.props(styles.card).className}
+        data-testid={'home-rail-card'}
+        gap={12}
+      >
         {title && (
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             {onCollapsedChange ? (
               <button
                 aria-expanded={!collapsed}
-                className={styles.heading}
+                {...stylex.props(styles.heading)}
                 data-testid={'home-rail-card-toggle'}
                 type={'button'}
                 onClick={() => onCollapsedChange(!collapsed)}

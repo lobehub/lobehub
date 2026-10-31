@@ -1,4 +1,5 @@
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,29 +9,20 @@ import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/se
 import AgentSelect from './AgentSelect';
 import { getGreetingKey } from './greeting';
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    /* Unbroken names must stay inside the start-aligned header's text lane. */
-    max-width: 100%;
-  `,
-  greeting: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    margin: 0;
-
-    font-size: 22px;
-    line-height: 1.4;
-    letter-spacing: -0.01em;
-  `,
-  toolbar: css`
-    width: 100%;
-    min-width: 0;
-    min-height: 48px;
-  `,
-}));
+const styles = stylex.create({
+  root: { maxWidth: '100%' },
+  greeting: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    margin: '0',
+    fontSize: '22px',
+    lineHeight: 1.4,
+    letterSpacing: '-0.01em',
+  },
+  toolbar: { width: '100%', minWidth: '0', minHeight: '48px' },
+});
 
 interface HomeHeaderProps {
   centered?: boolean;
@@ -51,15 +43,19 @@ const HomeHeader = memo<HomeHeaderProps>(({ centered }) => {
     // who speaks, the greeting answers below — but drops the toolbar chrome and
     // its 48px lane, so the pair reads as one compact block flush with the
     // composer. The layout's lift math (MINIMAL_LIFT) counts on these heights.
-    <Flexbox className={styles.root} gap={centered ? 8 : 16} justify={'center'}>
+    <Flexbox
+      className={stylex.props(styles.root).className}
+      gap={centered ? 8 : 16}
+      justify={'center'}
+    >
       {centered ? (
         <AgentSelect />
       ) : (
-        <Flexbox horizontal align={'center'} className={styles.toolbar}>
+        <Flexbox horizontal align={'center'} className={stylex.props(styles.toolbar).className}>
           <AgentSelect />
         </Flexbox>
       )}
-      <Text as={'h1'} className={styles.greeting} weight={600}>
+      <Text as={'h1'} className={stylex.props(styles.greeting).className} weight={600}>
         {greeting}
       </Text>
     </Flexbox>

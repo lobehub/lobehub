@@ -2,66 +2,68 @@
 
 import type { SkillResourceTreeNode } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
-import { ContextMenuTrigger, createStaticStyles, Icon, Input } from '@lobehub/ui';
+import { ContextMenuTrigger, Icon, Input } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronRight, File, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  item: css`
-    cursor: pointer;
+import { sx } from '@/styles/sx';
 
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline-end: 8px;
-    border-radius: 6px;
-
-    font-size: 13px;
-    line-height: 1.4;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  itemSelected: css`
-    color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  label: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
+// The inline-rename input is a lobe-ui Input, whose CSS sits in a lower layer than
+// these rules, so none of the neutralising declarations needs `!important`.
+const styles = stylex.create({
+  item: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInlineEnd: '8px',
+    borderRadius: '6px',
+    fontSize: '13px',
+    lineHeight: 1.4,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  itemSelected: {
+    color: cssVar.colorPrimary,
+    // Hover still wins over the selected fill, as it did before.
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  label: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   // Inline rename should look like plain filename text.
   // Ant Input adds default spacing/border/font styles (and `size="small"` adds extra scaling),
   // so we fully neutralize visual chrome to avoid layout jump when entering edit mode.
-  editingInput: css`
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-
-    font-size: 13px !important;
-    line-height: 1.4 !important;
-
-    background: transparent !important;
-    outline: none !important;
-    box-shadow: none !important;
-  `,
+  editingInput: {
+    margin: 0,
+    padding: 0,
+    borderStyle: 'none',
+    fontSize: '13px',
+    lineHeight: 1.4,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outlineStyle: 'none',
+    boxShadow: 'none',
+  },
   // Reset wrapper-level styles too; the input root carries its own height/padding/radius.
   // If only `input` is reset, the row can still shift by a few pixels.
-  editingInputRoot: css`
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    border-radius: 0 !important;
-
-    background: transparent !important;
-    box-shadow: none !important;
-  `,
-}));
+  editingInputRoot: {
+    height: 'auto',
+    margin: 0,
+    padding: 0,
+    borderStyle: 'none',
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    boxShadow: 'none',
+  },
+});
 
 interface FileTreeProps {
   editableFilePath?: string | null;
@@ -173,8 +175,9 @@ const TreeNode = memo<{
 
     const nodeContent = (
       <div
-        className={`${styles.item} ${isSelected ? styles.itemSelected : ''}`}
-        style={{ paddingInlineStart: 8 + depth * 16 }}
+        {...sx([styles.item, isSelected && styles.itemSelected], undefined, {
+          paddingInlineStart: 8 + depth * 16,
+        })}
         title={node.path}
         onClick={handleClick}
       >
@@ -183,8 +186,8 @@ const TreeNode = memo<{
         <Icon icon={isDir ? (isExpanded ? FolderOpenIcon : FolderIcon) : File} size={16} />
         {isEditing ? (
           <Input
-            className={styles.editingInputRoot}
-            classNames={{ input: styles.editingInput }}
+            className={stylex.props(styles.editingInputRoot).className}
+            classNames={{ input: stylex.props(styles.editingInput).className }}
             ref={inputRef}
             value={editingName}
             variant={'borderless'}
@@ -205,7 +208,7 @@ const TreeNode = memo<{
             }}
           />
         ) : (
-          <span className={styles.label}>{node.name}</span>
+          <span {...stylex.props(styles.label)}>{node.name}</span>
         )}
       </div>
     );
@@ -296,13 +299,14 @@ const FileTree = memo<FileTreeProps>(
 
     const rootFileContent = rootFilePath && rootFileLabel && (
       <div
-        className={`${styles.item} ${isRootFileSelected ? styles.itemSelected : ''}`}
-        style={{ paddingInlineStart: 8 }}
+        {...sx([styles.item, isRootFileSelected && styles.itemSelected], undefined, {
+          paddingInlineStart: 8,
+        })}
         onClick={() => onSelectFile(rootFilePath)}
       >
         <span style={{ flexShrink: 0, width: 14 }} />
         <Icon icon={File} size={16} />
-        <span className={styles.label}>{rootFileLabel}</span>
+        <span {...stylex.props(styles.label)}>{rootFileLabel}</span>
       </div>
     );
 

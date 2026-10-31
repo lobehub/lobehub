@@ -1,3 +1,4 @@
+import * as stylex from '@stylexjs/stylex';
 import { type PropsWithChildren } from 'react';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
@@ -9,7 +10,7 @@ import SessionSearchBar from './SessionSearchBar';
 const MobileLayout = ({ children }: PropsWithChildren) => {
   return (
     <MobileContentLayout withNav header={<SessionHeader />}>
-      <div className={styles.searchBarContainer}>
+      <div {...stylex.props(styles.searchBarContainer)}>
         <SessionSearchBar mobile />
       </div>
       {children}

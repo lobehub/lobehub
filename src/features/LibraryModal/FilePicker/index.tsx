@@ -1,15 +1,7 @@
 'use client';
 
-import {
-  Button,
-  Center,
-  createModal,
-  createStaticStyles,
-  Empty,
-  Flexbox,
-  Icon,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, Center, createModal, Empty, Flexbox, Icon, useModalContext } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { FileSearch, ServerCrash } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -32,16 +24,15 @@ import ViewSwitcher from '../AssignKnowledgeBase/ViewSwitcher';
 
 const PAGE_SIZE = 50;
 
-const styles = createStaticStyles(({ css }) => ({
-  grid: css`
-    overflow-y: auto;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-
-    padding-block: 4px;
-  `,
-}));
+const styles = stylex.create({
+  grid: {
+    overflowY: 'auto',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '8px',
+    paddingBlock: '4px',
+  },
+});
 
 interface ResourcePage {
   hasMore: boolean;
@@ -177,7 +168,7 @@ const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
           style={{ flex: 1, marginInline: -16 }}
         />
       ) : (
-        <div className={styles.grid}>
+        <div {...stylex.props(styles.grid)}>
           {files.map((file) => (
             <MasonryItem
               action={renderAction(file)}

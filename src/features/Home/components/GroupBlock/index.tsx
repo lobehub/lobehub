@@ -1,11 +1,16 @@
 import { type FlexboxProps, type IconProps } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useState } from 'react';
 
+import { sx } from '@/styles/sx';
+
 import CountBadge from '../CountBadge';
 import { homeType } from '../homeType';
+import moduleStyles from './index.module.css';
 
 interface GroupBlockProps extends Omit<FlexboxProps, 'title'> {
   action?: ReactNode;
@@ -26,24 +31,20 @@ interface GroupBlockProps extends Omit<FlexboxProps, 'title'> {
   title?: ReactNode;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  action: css`
-    opacity: 0;
-    transition: opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut};
-
-    button {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  actionVisible: css`
-    opacity: 1;
-  `,
+const styles = stylex.create({
+  action: {
+    opacity: 0,
+    transition: `opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
+  },
+  actionVisible: {
+    opacity: 1,
+  },
   // The whole heading is the hit target, not just the chevron — a 14px glyph is
   // a poor thing to ask someone to aim at, and the label is already there.
-  heading: css`
-    cursor: pointer;
-  `,
-}));
+  heading: {
+    cursor: 'pointer',
+  },
+});
 
 const GroupBlock = memo<GroupBlockProps>(
   ({
@@ -72,7 +73,7 @@ const GroupBlock = memo<GroupBlockProps>(
             horizontal
             align={'center'}
             aria-expanded={onCollapsedChange ? !collapsed : undefined}
-            className={cx(onCollapsedChange && styles.heading)}
+            className={stylex.props(onCollapsedChange && styles.heading).className}
             flex={1}
             gap={6}
             justify={'flex-start'}
@@ -82,7 +83,7 @@ const GroupBlock = memo<GroupBlockProps>(
             onClick={onCollapsedChange ? () => onCollapsedChange(!collapsed) : undefined}
           >
             {icon && <Icon color={cssVar.colorTextDescription} icon={icon} size={16} />}
-            <Text ellipsis className={homeType.sectionLabel}>
+            <Text ellipsis className={stylex.props(homeType.sectionLabel).className}>
               {title}
             </Text>
             {count !== undefined && <CountBadge count={count} />}
@@ -101,9 +102,9 @@ const GroupBlock = memo<GroupBlockProps>(
             flex={'none'}
             gap={2}
             justify={'flex-end'}
-            className={cx(
-              styles.action,
-              (isHovered || actionAlwaysVisible) && styles.actionVisible,
+            {...sx(
+              [styles.action, (isHovered || actionAlwaysVisible) && styles.actionVisible],
+              moduleStyles.action,
             )}
           >
             {action}

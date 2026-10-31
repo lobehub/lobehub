@@ -4,8 +4,6 @@ import {
   ActionIcon,
   Block,
   Center,
-  createStaticStyles,
-  cssVar,
   cx,
   DropdownMenu,
   Flexbox,
@@ -13,6 +11,7 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,31 +20,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { SessionDefaultGroup } from '@/types/session';
 
 import { useCreateMenuItems } from '../../hooks';
-
-const ACTION_CLASS_NAME = 'create-agent-actions';
-
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    .${ACTION_CLASS_NAME} {
-      width: 0;
-      margin-inline-end: 2px;
-      opacity: 0;
-      transition: opacity 0.2s ${cssVar.motionEaseOut};
-
-      &:has([data-popup-open]) {
-        width: unset;
-        opacity: 1;
-      }
-    }
-
-    &:hover {
-      .${ACTION_CLASS_NAME} {
-        width: unset;
-        opacity: 1;
-      }
-    }
-  `,
-}));
+import styles from './CreateAgentButton.module.css';
 
 interface CreateAgentButtonProps {
   className?: string;
@@ -134,7 +109,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
         <Flexbox
           horizontal
           align={'center'}
-          className={ACTION_CLASS_NAME}
+          className={styles.actions}
           flex={'none'}
           justify={'flex-end'}
           onClick={(e) => {

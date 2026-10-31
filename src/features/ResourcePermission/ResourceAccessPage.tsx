@@ -1,7 +1,8 @@
 'use client';
 
-import { Alert, Breadcrumb, createStaticStyles, Flexbox, Icon, Text, toast } from '@lobehub/ui';
+import { Alert, Breadcrumb, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, InfoIcon, UsersIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,28 +21,23 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { AddCollaboratorButton, CollaboratorList } from './Collaborators';
 import PolicySelect from './PolicySelect';
+import moduleStyles from './ResourceAccessPage.module.css';
 import { useAccessLevelOptions } from './useAccessLevelOptions';
 import { useResourcePermission } from './useResourcePermission';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    position: relative;
-    overflow-y: auto;
-    display: flex;
-  `,
-  breadcrumb: css`
-    a {
-      display: flex;
-      align-items: center;
-    }
-  `,
-  rowIcon: css`
-    display: flex;
-    align-items: center;
-    align-self: flex-start;
-    height: 1em;
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    position: 'relative',
+    overflowY: 'auto',
+    display: 'flex',
+  },
+  rowIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    height: '1em',
+  },
+});
 
 interface ResourceAccessPageProps {
   /**
@@ -118,7 +114,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
       children: [
         {
           avatar: (
-            <span className={styles.rowIcon}>
+            <span {...stylex.props(styles.rowIcon)}>
               <Icon icon={UsersIcon} size={16} />
             </span>
           ),
@@ -153,7 +149,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
           styles={{ left: { paddingInlineStart: 24 } }}
           left={
             <Breadcrumb
-              className={styles.breadcrumb}
+              className={moduleStyles.breadcrumb}
               separator={<Icon icon={ChevronRight} size={14} />}
               items={[
                 ...(resourceName
@@ -186,7 +182,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
             />
           }
         />
-        <Flexbox className={styles.body} flex={1} width={'100%'}>
+        <Flexbox className={stylex.props(styles.body).className} flex={1} width={'100%'}>
           <WideScreenContainer>
             <Flexbox gap={16} paddingBlock={16}>
               {error && !isDenied ? (

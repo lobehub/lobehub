@@ -3,7 +3,6 @@
 import { agentDisplayName } from '@lobechat/types';
 import {
   Button,
-  createStaticStyles,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -11,6 +10,7 @@ import {
   DropdownMenuTrigger,
   Text,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,50 +26,22 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentList from './AgentList';
+import moduleStyles from './index.module.css';
 import { useResolvedHomeAgentId } from './useResolvedHomeAgentId';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chevron: css`
-    color: ${cssVar.colorTextDescription};
-    opacity: 0;
-    transition: opacity 0.2s ${cssVar.motionEaseOut};
-  `,
-  name: css`
-    font-size: 14px;
-    line-height: 20px;
-  `,
-  popup: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: 360px;
-    max-width: calc(100vw - 16px);
-  `,
-  trigger: css`
-    gap: 8px;
-    justify-content: flex-start;
-
-    width: fit-content;
-    min-width: 0;
-    max-width: 100%;
-    height: auto;
-    margin-inline-start: -2px;
-    padding: 2px;
-    border: 0;
-
-    background: transparent;
-
-    &:hover .agent-select-chevron,
-    &[data-popup-open] .agent-select-chevron {
-      opacity: 1;
-    }
-
-    &[data-popup-open] {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  popup: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '360px',
+    maxWidth: 'calc(100vw - 16px)',
+  },
+  name: {
+    fontSize: '14px',
+    lineHeight: '20px',
+  },
+});
 
 const AgentSelect = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
@@ -120,7 +92,7 @@ const AgentSelect = memo(() => {
         <Button
           aria-expanded={open}
           aria-haspopup={'menu'}
-          className={styles.trigger}
+          className={moduleStyles.trigger}
           type={'text'}
         >
           <AgentAvatar
@@ -131,15 +103,20 @@ const AgentSelect = memo(() => {
             shape={'square'}
             size={24}
           />
-          <Text ellipsis className={styles.name} style={{ minWidth: 0 }} weight={600}>
+          <Text
+            ellipsis
+            className={stylex.props(styles.name).className}
+            style={{ minWidth: 0 }}
+            weight={600}
+          >
             {displayTitle}
           </Text>
-          <ChevronsUpDownIcon className={`${styles.chevron} agent-select-chevron`} size={12} />
+          <ChevronsUpDownIcon className={moduleStyles.chevron} size={12} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuPortal>
         <DropdownMenuPositioner placement={'bottomLeft'} sideOffset={8}>
-          <DropdownMenuPopup className={styles.popup}>
+          <DropdownMenuPopup className={stylex.props(styles.popup).className}>
             <AgentList
               activeAgentId={displayAgentId}
               error={error}

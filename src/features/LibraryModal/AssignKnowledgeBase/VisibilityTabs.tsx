@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cx, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LockIcon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,44 +14,38 @@ interface VisibilityTabsProps {
   value: PickerVisibility;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  button: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 6px;
-    padding-inline: 12px;
-    border: none;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  buttonActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorBgElevated};
-    box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
-  `,
-  group: css`
-    display: inline-flex;
-    padding: 3px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  button: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'background 0.15s',
+  },
+  buttonActive: {
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: '0 1px 2px rgb(0 0 0 / 6%)',
+  },
+  group: {
+    display: 'inline-flex',
+    padding: '3px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 // Mirrors ResourceModeToggle's visual language so the picker feels like the
 // same primitive as the sidebar toggle — same iconography, same label copy.
@@ -62,14 +58,14 @@ const VisibilityTabs = memo<VisibilityTabsProps>(({ value, onChange }) => {
   const { t } = useTranslation('chat');
 
   return (
-    <div className={styles.group} role={'tablist'}>
+    <div {...stylex.props(styles.group)} role={'tablist'}>
       {OPTIONS.map((option) => {
         const isActive = value === option.key;
         const OptionIcon = option.icon;
         return (
           <button
             aria-selected={isActive}
-            className={cx(styles.button, isActive && styles.buttonActive)}
+            {...stylex.props(styles.button, isActive && styles.buttonActive)}
             key={option.key}
             role={'tab'}
             type={'button'}

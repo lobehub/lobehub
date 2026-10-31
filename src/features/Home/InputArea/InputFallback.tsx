@@ -1,7 +1,11 @@
-import { ActionIcon, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { type ChangeEventHandler, type CompositionEventHandler, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import type { HomeMode } from '../types';
 import {
@@ -11,62 +15,55 @@ import {
 } from './constants';
 import ModeSelect from './ModeSelect';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionBar: css`
-    flex: none;
-
-    box-sizing: border-box;
-    width: 100%;
-    height: ${HOME_INPUT_ACTION_BAR_HEIGHT}px;
-    padding-block: 4px;
-    padding-inline: 8px;
-  `,
-  frame: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    box-sizing: border-box;
-    width: 100%;
-    height: ${HOME_INPUT_FRAME_HEIGHT}px;
-    border: 1px solid ${cssVar.colorFill};
-    border-radius: 20px;
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: 0 12px 32px rgb(0 0 0 / 4%);
-  `,
-  root: css`
-    box-sizing: border-box;
-    width: 100%;
-    height: ${HOME_INPUT_FRAME_HEIGHT + HOME_INPUT_BOTTOM_PADDING}px;
-    padding-block-end: ${HOME_INPUT_BOTTOM_PADDING}px;
-  `,
-  textarea: css`
-    resize: none;
-
-    display: block;
-    flex: 1;
-
-    box-sizing: border-box;
-    width: 100%;
-    min-height: 0;
-    padding-block: 8px 0;
-    padding-inline: 12px;
-    border: 0;
-
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-
-    background: transparent;
-    outline: 0;
-
-    &::placeholder {
-      color: ${cssVar.colorTextPlaceholder};
-    }
-  `,
-}));
+const styles = stylex.create({
+  actionBar: {
+    flex: 'none',
+    boxSizing: 'border-box',
+    width: '100%',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+  },
+  frame: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    boxSizing: 'border-box',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFill,
+    borderRadius: '20px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: '0 12px 32px rgb(0 0 0 / 4%)',
+  },
+  root: {
+    boxSizing: 'border-box',
+    width: '100%',
+  },
+  textarea: {
+    'resize': 'none',
+    'display': 'block',
+    'flex': '1',
+    'boxSizing': 'border-box',
+    'width': '100%',
+    'minHeight': 0,
+    'paddingBlockStart': '8px',
+    'paddingBlockEnd': 0,
+    'paddingInline': '12px',
+    'borderWidth': 0,
+    'fontFamily': 'inherit',
+    'fontSize': '14px',
+    'lineHeight': 1.4,
+    'color': cssVar.colorText,
+    'backgroundColor': 'transparent',
+    'backgroundImage': 'none',
+    'outlineWidth': 0,
+    '::placeholder': {
+      color: cssVar.colorTextPlaceholder,
+    },
+  },
+});
 
 interface InputFallbackProps {
   isAgentConfigLoading: boolean;
@@ -98,12 +95,19 @@ const InputFallback = memo<InputFallbackProps>(
     };
 
     return (
-      <div aria-busy className={styles.root} data-testid="home-input-fallback">
-        <div className={styles.frame}>
+      <div
+        aria-busy
+        data-testid="home-input-fallback"
+        {...sx([styles.root], undefined, {
+          height: HOME_INPUT_FRAME_HEIGHT + HOME_INPUT_BOTTOM_PADDING,
+          paddingBlockEnd: HOME_INPUT_BOTTOM_PADDING,
+        })}
+      >
+        <div {...sx([styles.frame], undefined, { height: HOME_INPUT_FRAME_HEIGHT })}>
           <textarea
             autoFocus
             aria-label={placeholder}
-            className={styles.textarea}
+            {...stylex.props(styles.textarea)}
             placeholder={placeholder}
             value={value}
             onChange={handleChange}
@@ -114,8 +118,8 @@ const InputFallback = memo<InputFallbackProps>(
             aria-hidden
             horizontal
             align="center"
-            className={styles.actionBar}
             justify="space-between"
+            {...sx([styles.actionBar], undefined, { height: HOME_INPUT_ACTION_BAR_HEIGHT })}
           >
             <Flexbox horizontal align="center" gap={6}>
               <ModeSelect value={mode} onChange={onModeChange} />

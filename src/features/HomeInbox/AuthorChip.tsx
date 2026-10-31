@@ -1,5 +1,7 @@
 import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
-import { Avatar, createStaticStyles, cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AlarmClockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,16 +10,10 @@ import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspace
 
 const AVATAR_SIZE = 16;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    flex: none;
-  `,
-  label: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  chip: { flex: 'none' },
+  label: { fontSize: '11px', color: cssVar.colorTextTertiary, whiteSpace: 'nowrap' },
+});
 
 interface AuthorChipProps {
   /** `topic.trigger` — a `cron` run has no human triggerer, only an owning schedule. */
@@ -40,9 +36,9 @@ const AuthorChip = memo<AuthorChipProps>(({ userId, trigger }) => {
 
   if (trigger === 'cron')
     return (
-      <Flexbox horizontal align={'center'} className={styles.chip} gap={4}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.chip).className} gap={4}>
         <Icon color={cssVar.colorTextQuaternary} icon={AlarmClockIcon} size={12} />
-        <span className={styles.label}>{t('inbox.author.scheduled')}</span>
+        <span {...stylex.props(styles.label)}>{t('inbox.author.scheduled')}</span>
       </Flexbox>
     );
 
@@ -52,7 +48,7 @@ const AuthorChip = memo<AuthorChipProps>(({ userId, trigger }) => {
   const name = profile.fullName || profile.username || '';
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.chip} gap={4}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.chip).className} gap={4}>
       <Tooltip title={name}>
         <Avatar
           avatar={profile.avatar || DEFAULT_USER_AVATAR_URL}
@@ -60,7 +56,7 @@ const AuthorChip = memo<AuthorChipProps>(({ userId, trigger }) => {
           size={AVATAR_SIZE}
         />
       </Tooltip>
-      <Text ellipsis className={styles.label} style={{ maxWidth: 72 }}>
+      <Text ellipsis className={stylex.props(styles.label).className} style={{ maxWidth: 72 }}>
         {name}
       </Text>
     </Flexbox>

@@ -1,19 +1,20 @@
-import { createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  grid: css`
-    display: grid;
-    gap: 16px;
-    padding-block: 12px;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  grid: { display: 'grid', gap: '16px', paddingBlock: '12px' },
+});
 
 interface MasonrySkeletonProps {
   columnCount: number;
@@ -28,13 +29,13 @@ const MasonrySkeleton = memo<MasonrySkeletonProps>(({ columnCount }) => {
 
   return (
     <div
-      className={styles.grid}
+      className={stylex.props(styles.grid).className}
       style={{
         gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
       }}
     >
       {Array.from({ length: itemCount }).map((_, index) => (
-        <div className={styles.card} key={index}>
+        <div {...stylex.props(styles.card)} key={index}>
           <Flexbox horizontal align={'flex-start'} gap={16} width={'100%'}>
             <Skeleton.Avatar size={48} />
             <Flexbox gap={16} style={{ height: heights[index % heights.length] }} width={'100%'}>

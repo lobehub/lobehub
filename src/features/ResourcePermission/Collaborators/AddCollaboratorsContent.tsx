@@ -3,9 +3,6 @@
 import { MAX_RESOURCE_COLLABORATORS_PER_ADD } from '@lobechat/const';
 import {
   Button,
-  createStaticStyles,
-  cssVar,
-  cx,
   Empty,
   Flexbox,
   Icon,
@@ -16,6 +13,8 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useHover } from 'ahooks';
 import { CheckIcon, SearchXIcon, UsersIcon } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
@@ -29,55 +28,43 @@ import type { PermissionResourceType, ResourceAccessLevel } from '@/services/res
 import { useResourceCollaborators } from '../useResourceCollaborators';
 import { useResourcePermission } from '../useResourcePermission';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    padding-block: 12px;
-    padding-inline: 20px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  header: css`
-    padding-block: 4px 12px;
-    padding-inline: 20px;
-  `,
-  list: css`
-    user-select: none;
-
-    overflow-y: auto;
-
-    /* Fill toward 360px, but yield on short viewports so the footer never
-       leaves the screen; 240px keeps ~4 rows visible as the floor. */
-    height: clamp(240px, calc(100dvh - 320px), 360px);
-    padding-block: 0 8px;
-    padding-inline: 12px;
-  `,
-  row: css`
-    cursor: pointer;
-
-    margin-block: 2px;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background 0.2s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowIndicator: css`
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    margin-inline-start: auto;
-    padding-inline-start: 8px;
-
-    color: ${cssVar.colorPrimary};
-  `,
-  rowSelected: css`
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    paddingBlock: '12px',
+    paddingInline: '20px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  header: { paddingBlockStart: '4px', paddingBlockEnd: '12px', paddingInline: '20px' },
+  list: {
+    userSelect: 'none',
+    overflowY: 'auto',
+    height: 'clamp(240px, calc(100dvh - 320px), 360px)',
+    paddingBlockStart: '0',
+    paddingBlockEnd: '8px',
+    paddingInline: '12px',
+  },
+  row: {
+    cursor: 'pointer',
+    marginBlock: '2px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.2s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowIndicator: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginInlineStart: 'auto',
+    paddingInlineStart: '8px',
+    color: cssVar.colorPrimary,
+  },
+  rowSelected: { backgroundColor: cssVar.colorFillQuaternary, backgroundImage: 'none' },
+});
 
 /**
  * Structural shape shared by the OSS stub's membership rows and the cloud
@@ -121,7 +108,7 @@ const MemberRow = memo<{
       horizontal
       align={'center'}
       aria-selected={selected}
-      className={cx(styles.row, selected && styles.rowSelected)}
+      className={stylex.props(styles.row, selected && styles.rowSelected).className}
       gap={12}
       ref={ref}
       role={'option'}
@@ -150,7 +137,7 @@ const MemberRow = memo<{
       {/* Select-option style: the selected state reads as a primary check on
           the trailing edge, mirroring base-ui Select's ItemIndicator. */}
       {selected ? (
-        <span className={styles.rowIndicator}>
+        <span {...stylex.props(styles.rowIndicator)}>
           <Icon icon={CheckIcon} size={'small'} />
         </span>
       ) : null}
@@ -239,7 +226,7 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
 
     return (
       <Flexbox>
-        <Flexbox className={styles.header}>
+        <Flexbox className={stylex.props(styles.header).className}>
           <SearchBar
             autoFocus
             placeholder={t('permission.collaborators.addModal.search')}
@@ -251,12 +238,18 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
         <Flexbox
           aria-multiselectable
           aria-label={t('permission.collaborators.addModal.title')}
-          className={styles.list}
+          className={stylex.props(styles.list).className}
           role={'listbox'}
         >
           {isInitialLoading ? (
             [0, 1, 2].map((key) => (
-              <Flexbox horizontal align={'center'} className={styles.row} gap={12} key={key}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.row).className}
+                gap={12}
+                key={key}
+              >
                 <SkeletonAvatar size={40} />
                 <SkeletonText style={{ marginBottom: 0, width: 180 }} />
               </Flexbox>
@@ -282,7 +275,12 @@ const AddCollaboratorsContent = memo<AddCollaboratorsContentProps>(
             ))
           )}
         </Flexbox>
-        <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.footer).className}
+          gap={8}
+        >
           <Flexbox flex={1}>
             {selected.length > 0 ? (
               <Text fontSize={13} type={'secondary'}>

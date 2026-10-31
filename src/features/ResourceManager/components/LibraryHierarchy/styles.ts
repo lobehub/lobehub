@@ -1,32 +1,18 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  dragging: css`
-    will-change: transform;
-    opacity: 0.5;
-  `,
-  fileItemDragOver: css`
-    outline: 1px dashed ${cssVar.colorPrimaryBorder};
-    outline-offset: -2px;
-
-    &,
-    &:hover {
-      background: ${cssVar.colorPrimaryBg};
-    }
-  `,
-  treeItem: css`
-    cursor: pointer;
-
-    .hierarchy-node-actions {
-      opacity: 0;
-      transition: opacity 0.15s;
-    }
-
-    /* Hover, keyboard focus on the action itself, or an open menu keep it visible. */
-    &:hover .hierarchy-node-actions,
-    .hierarchy-node-actions:focus-within,
-    .hierarchy-node-actions[data-open='true'] {
-      opacity: 1;
-    }
-  `,
-}));
+// `treeItem` (the action-reveal descendant rules) lives in `hierarchy.module.css`.
+export const styles = stylex.create({
+  dragging: {
+    willChange: 'transform',
+    opacity: 0.5,
+  },
+  fileItemDragOver: {
+    outlineWidth: '1px',
+    outlineStyle: 'dashed',
+    outlineColor: cssVar.colorPrimaryBorder,
+    outlineOffset: '-2px',
+    backgroundColor: { 'default': cssVar.colorPrimaryBg, ':hover': cssVar.colorPrimaryBg },
+    backgroundImage: 'none',
+  },
+});

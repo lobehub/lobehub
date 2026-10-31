@@ -1,4 +1,5 @@
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useHover } from 'ahooks';
 import { memo, useMemo, useRef } from 'react';
 
@@ -9,23 +10,16 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import Item from './BaseListItem';
 import type { ListItemProps } from './type';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    container: css`
-      position: relative;
-      margin-block: 2px;
-      padding-inline: 12px 16px;
-      border-radius: ${cssVar.borderRadius};
-    `,
-    mobile: css`
-      margin-block: 0;
-      padding-inline-start: 12px;
-      border-radius: 0;
-    `,
-    title: css`
-      line-height: 1.2;
-    `,
-  };
+const styles = stylex.create({
+  container: {
+    position: 'relative',
+    marginBlock: '2px',
+    paddingInlineStart: '12px',
+    paddingInlineEnd: '16px',
+    borderRadius: cssVar.borderRadius,
+  },
+  mobile: { marginBlock: '0', paddingInlineStart: '12px', borderRadius: '0' },
+  title: { lineHeight: 1.2 },
 });
 
 const ListItem = memo<
@@ -67,10 +61,10 @@ const ListItem = memo<
       actions={actions}
       active={mobile ? false : active}
       avatar={avatarRender}
-      className={cx(styles.container, mobile && styles.mobile)}
+      className={stylex.props(styles.container, mobile && styles.mobile).className}
       ref={ref}
       showAction={actions && (isHovering || showAction || mobile)}
-      title={<span className={styles.title}>{title}</span>}
+      title={<span {...stylex.props(styles.title)}>{title}</span>}
       {...(props as any)}
     />
   );

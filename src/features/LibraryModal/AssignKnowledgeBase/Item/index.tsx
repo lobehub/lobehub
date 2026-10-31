@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LockIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
@@ -7,23 +9,19 @@ import { type KnowledgeItem } from '@/types/knowledgeBase';
 
 import Actions from './Action';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  desc: css`
-    margin: 0 !important;
-    font-size: 12px;
-    line-height: 1;
-    color: ${cssVar.colorTextDescription};
-  `,
-  link: css`
-    overflow: hidden;
-    color: ${cssVar.colorText};
-  `,
-  title: css`
-    margin: 0 !important;
-    font-size: 14px;
-    line-height: 1;
-  `,
-}));
+const styles = stylex.create({
+  desc: {
+    margin: 0,
+    fontSize: '12px',
+    lineHeight: 1,
+    color: cssVar.colorTextDescription,
+  },
+  title: {
+    margin: 0,
+    fontSize: '14px',
+    lineHeight: 1,
+  },
+});
 
 interface PluginItemProps extends KnowledgeItem {
   action?: ReactNode;
@@ -60,12 +58,12 @@ const PluginItem = memo<PluginItemProps>(
               {visibility === 'private' && (
                 <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={12} />
               )}
-              <Text ellipsis className={styles.title}>
+              <Text ellipsis className={stylex.props(styles.title).className}>
                 {name}
               </Text>
             </Flexbox>
             {description && (
-              <Text ellipsis className={styles.desc}>
+              <Text ellipsis className={stylex.props(styles.desc).className}>
                 {description}
               </Text>
             )}

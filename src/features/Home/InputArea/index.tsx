@@ -1,4 +1,5 @@
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +10,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { sx } from '@/styles/sx';
 
 import { HOME_NEW_MODELS_BANNER_ID, NewModelShortcuts } from '../NewModelShortcuts';
 import type { HomeMode } from '../types';
@@ -20,12 +22,11 @@ import InputDragUpload from './InputDragUpload';
 import MessengerBanner, { MESSENGER_BANNER_ID } from './MessengerBanner';
 import { useSend } from './useSend';
 
-const styles = createStaticStyles(({ css }) => ({
-  inputSlot: css`
-    width: 100%;
-    min-height: ${HOME_INPUT_RESERVED_HEIGHT}px;
-  `,
-}));
+const styles = stylex.create({
+  inputSlot: {
+    width: '100%',
+  },
+});
 
 interface InputAreaProps {
   inputValue: string;
@@ -81,7 +82,7 @@ const InputArea = ({
       : t(`dashboard.placeholder.${mode}`);
 
   const editorSlot = (
-    <div className={styles.inputSlot}>
+    <div {...sx([styles.inputSlot], undefined, { minHeight: HOME_INPUT_RESERVED_HEIGHT })}>
       <EditorSlot
         agentId={agentId}
         contextSelectionKey={contextSelectionKey}

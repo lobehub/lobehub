@@ -2,16 +2,9 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
-import {
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Segmented,
-  Skeleton,
-  Text,
-} from '@lobehub/ui';
+import { Flexbox, Icon, Segmented, Skeleton, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -59,58 +52,27 @@ import EmptySuggestions from './EmptySuggestions';
 import { resolveHomeChatContentState } from './homeChatContentState';
 import type { HomeMode } from './types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  description: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  empty: css`
-    padding-block: 16px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  blockAction: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-decoration: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  identifier: css`
-    flex: none;
-  `,
-  row: css`
-    border-radius: ${cssVar.borderRadiusLG};
-    color: inherit;
-    text-decoration: none;
-    transition: background ${cssVar.motionDurationFast};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  /**
-   * Box metrics shared by a real row and its skeleton, so the placeholder
-   * occupies exactly the space its content will. Kept apart from `row` because
-   * the skeleton must not pick up the hover affordance — nothing to click yet.
-   */
-  rowBox: css`
-    min-width: 0;
-    margin-inline: -10px;
-    padding-block: 9px;
-    padding-inline: 10px;
-  `,
-  rowText: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  topicAvatar: css`
-    flex: none;
-    margin-block-start: 1px;
-  `,
-}));
+const styles = stylex.create({
+  description: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  empty: { paddingBlock: '16px', color: cssVar.colorTextTertiary },
+  blockAction: {
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    textDecoration: 'none',
+  },
+  identifier: { flex: 'none' },
+  row: {
+    borderRadius: cssVar.borderRadiusLG,
+    color: 'inherit',
+    textDecoration: 'none',
+    transition: `background ${cssVar.motionDurationFast}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowBox: { minWidth: '0', marginInline: '-10px', paddingBlock: '9px', paddingInline: '10px' },
+  rowText: { flex: '1', minWidth: '0' },
+  topicAvatar: { flex: 'none', marginBlockStart: '1px' },
+});
 
 interface HomeModeContentProps {
   /**
@@ -185,22 +147,24 @@ const normalizeTaskStatus = (status: string): TaskStatus =>
 const TIME_COLUMN_WIDTH = 56;
 
 const Row = memo<RowProps>(({ description, href, icon, title, titleExtra, trailing }) => (
-  <WorkspaceLink className={cx(styles.rowBox, styles.row)} to={href}>
+  <WorkspaceLink className={stylex.props(styles.rowBox, styles.row).className} to={href}>
     <Flexbox horizontal align={'flex-start'} gap={12}>
       <Flexbox flex={'none'} paddingBlock={3}>
         {icon}
       </Flexbox>
-      <Flexbox className={styles.rowText} gap={3}>
+      <Flexbox className={stylex.props(styles.rowText).className} gap={3}>
         {/* The name takes the space and truncates; anything after it keeps its
             full width, so an identifier stays readable however long the name is. */}
         <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
-          <Text ellipsis className={homeType.itemTitle}>
+          <Text ellipsis className={stylex.props(homeType.itemTitle).className}>
             {title}
           </Text>
           {titleExtra}
         </Flexbox>
         {description && (
-          <Text className={cx(homeType.supporting, styles.description)}>{description}</Text>
+          <Text className={stylex.props(styles.description, homeType.supporting).className}>
+            {description}
+          </Text>
         )}
       </Flexbox>
       {trailing}
@@ -230,7 +194,7 @@ const RecentTopicRow = memo<{ showAuthor?: boolean; topic: RecentItem }>(
               agentId={topic.agentId}
               avatar={agent.avatar}
               background={agent.backgroundColor}
-              className={styles.topicAvatar}
+              className={stylex.props(styles.topicAvatar).className}
               shape={'circle'}
               size={22}
               title={agentDisplayName(agent)}
@@ -289,11 +253,21 @@ const LoadingRows = memo<{ avatarSize?: number; withTime?: boolean }>(
   ({ avatarSize = 22, withTime }) => (
     <Flexbox aria-hidden gap={4}>
       {SKELETON_ROWS.map(({ description, title }, index) => (
-        <Flexbox horizontal align={'flex-start'} className={styles.rowBox} gap={12} key={index}>
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          className={stylex.props(styles.rowBox).className}
+          gap={12}
+          key={index}
+        >
           <Flexbox flex={'none'} paddingBlock={3}>
-            <Skeleton.Avatar className={styles.topicAvatar} shape={'circle'} size={avatarSize} />
+            <Skeleton.Avatar
+              className={stylex.props(styles.topicAvatar).className}
+              shape={'circle'}
+              size={avatarSize}
+            />
           </Flexbox>
-          <Flexbox className={styles.rowText} gap={3}>
+          <Flexbox className={stylex.props(styles.rowText).className} gap={3}>
             <SkeletonLine bar={14} line={22} width={title} />
             <SkeletonLine bar={12} line={20} width={description} />
           </Flexbox>
@@ -337,7 +311,9 @@ const TaskRow = memo<{ showTrigger?: boolean; task: TaskListItem }>(
         // belongs beside the name rather than in the sentence slot below it.
         titleExtra={
           title === task.identifier ? undefined : (
-            <Text className={cx(homeType.meta, styles.identifier)}>{task.identifier}</Text>
+            <Text className={stylex.props(styles.identifier, homeType.meta).className}>
+              {task.identifier}
+            </Text>
           )
         }
         trailing={
@@ -392,7 +368,7 @@ const TaskContent = memo(() => {
       // to the full list, instead of a badge claiming a total you cannot reach.
       action={
         tasksTotal > shown.length ? (
-          <WorkspaceLink className={styles.blockAction} to={'/tasks'}>
+          <WorkspaceLink className={stylex.props(styles.blockAction).className} to={'/tasks'}>
             {t('dashboard.task.viewAll')}
           </WorkspaceLink>
         ) : undefined
@@ -403,7 +379,7 @@ const TaskContent = memo(() => {
       ) : !tasksInit ? (
         <LoadingRows withTime avatarSize={16} />
       ) : tasks.length === 0 ? (
-        <Text className={styles.empty}>{t('dashboard.task.empty')}</Text>
+        <Text className={stylex.props(styles.empty).className}>{t('dashboard.task.empty')}</Text>
       ) : (
         <Flexbox gap={4}>
           {shown.map((task) => (
@@ -451,7 +427,10 @@ const ScheduledTaskContent = memo(() => {
       title={t('dashboard.scheduledTask.title')}
       action={
         !failedFirstLoad && scheduledTotal > shown.length ? (
-          <WorkspaceLink className={styles.blockAction} to={'/tasks?collection=scheduled'}>
+          <WorkspaceLink
+            className={stylex.props(styles.blockAction).className}
+            to={'/tasks?collection=scheduled'}
+          >
             {t('dashboard.task.viewAll')}
           </WorkspaceLink>
         ) : undefined

@@ -1,13 +1,6 @@
-import {
-  Button,
-  createStaticStyles,
-  cx,
-  Icon,
-  Image,
-  keyframes,
-  stopPropagation,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, Icon, Image, stopPropagation, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -15,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
+import { sx } from '@/styles/sx';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
 
@@ -22,83 +16,65 @@ import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 import { FALLBACK_ASPECT_RATIO, readAspectRatio } from './imageAspectRatio';
 import { readPlaceholderIcon } from './placeholderIcon';
 
-const pulse = keyframes`
-  0%,
-  100% {
-    opacity: 1;
-  }
+const pulse = stylex.keyframes({
+  '0%, 100%': { opacity: 1 },
+  '50%': { opacity: 0.5 },
+});
 
-  50% {
-    opacity: 0.5;
-  }
-`;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  floatingChunkBadge: css`
-    position: absolute;
-    z-index: 3;
-    inset-block-end: 8px;
-    inset-inline-end: 8px;
-
-    border-radius: ${cssVar.borderRadius};
-
-    opacity: 0;
-    background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadow};
-
-    transition: opacity ${cssVar.motionDurationMid};
-  `,
-  hoverOverlay: css`
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-
-    padding: 16px;
-
-    opacity: 0;
-    background: ${cssVar.colorBgMask};
-
-    transition: opacity ${cssVar.motionDurationMid};
-
-    &:hover {
-      opacity: 1;
-    }
-  `,
-  imageWrapper: css`
-    position: relative;
-
-    container-type: size;
-    overflow: hidden;
-
-    width: 100%;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  overlaySize: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextLightSolid};
-    opacity: 0.9;
-  `,
-  overlayTitle: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-
-    max-width: 100%;
-    margin-block-end: 8px;
-
-    font-size: 14px;
-    font-weight: ${cssVar.fontWeightStrong};
-    color: ${cssVar.colorTextLightSolid};
-    text-align: center;
-    word-break: break-word;
-  `,
+const styles = stylex.create({
+  floatingChunkBadge: {
+    position: 'absolute',
+    zIndex: 3,
+    insetBlockEnd: '8px',
+    insetInlineEnd: '8px',
+    borderRadius: cssVar.borderRadius,
+    // Revealed by the card's hover (the card carries `stylex.defaultMarker()`).
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadow,
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  hoverOverlay: {
+    position: 'absolute',
+    zIndex: 1,
+    inset: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '16px',
+    opacity: { 'default': 0, ':hover': 1 },
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  imageWrapper: {
+    position: 'relative',
+    containerType: 'size',
+    overflow: 'hidden',
+    width: '100%',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  overlaySize: {
+    fontSize: '12px',
+    color: cssVar.colorTextLightSolid,
+    opacity: 0.9,
+  },
+  overlayTitle: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '3',
+    maxWidth: '100%',
+    marginBlockEnd: '8px',
+    fontSize: '14px',
+    fontWeight: cssVar.fontWeightStrong,
+    color: cssVar.colorTextLightSolid,
+    textAlign: 'center',
+    wordBreak: 'break-word',
+  },
   /**
    * Quiet stand-in for the bitmap: a tinted box with a muted glyph, not a
    * file-type badge — a thumbnail that hasn't arrived should read as "picture
@@ -106,60 +82,53 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
    * crossed-out glyph alone leaves the viewer guessing what it is accusing the
    * file of.
    */
-  placeholder: css`
-    position: absolute;
-    inset: 0;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: center;
-    justify-content: center;
-
-    padding-inline: 16px;
-
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  placeholderLoading: css`
-    animation: ${pulse} 1.5s ease-in-out infinite;
-  `,
+  placeholder: {
+    position: 'absolute',
+    inset: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingInline: '16px',
+    color: cssVar.colorTextQuaternary,
+  },
+  placeholderLoading: {
+    animationName: pulse,
+    animationDuration: '1.5s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
+  },
   /**
    * One line only: the box is sized by the image's aspect ratio, so a wide, short
    * card has no room for a wrapping name — a second line gets clipped mid-glyph,
    * which looks more broken than the failure it is explaining.
    */
-  placeholderName: css`
-    overflow: hidden;
-
-    max-width: 100%;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    @container (max-height: 92px) {
-      display: none;
-    }
-  `,
+  placeholderName: {
+    overflow: 'hidden',
+    maxWidth: '100%',
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'center',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: { 'default': null, '@container (max-height: 92px)': 'none' },
+  },
   /**
    * The card's height is dictated by the image's aspect ratio, so a wide, short
    * box cannot hold the whole stack. Drop the decoration before the words: the
    * glyph goes first, the explanation is the last thing to leave.
    */
-  placeholderIcon: css`
-    @container (max-height: 56px) {
-      display: none;
-    }
-  `,
-  placeholderReason: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-}));
+  placeholderIcon: {
+    display: { 'default': null, '@container (max-height: 56px)': 'none' },
+  },
+  placeholderReason: {
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+});
 
 interface ImageFileItemProps {
   chunkCount?: number | null;
@@ -208,22 +177,25 @@ const ImageFileItem = memo<ImageFileItemProps>(
 
     return (
       <>
-        <div className={styles.imageWrapper} style={{ aspectRatio }}>
+        <div {...sx([styles.imageWrapper], undefined, { aspectRatio })}>
           {!imageLoaded && (
             <div
-              className={cx(styles.placeholder, status === 'loading' && styles.placeholderLoading)}
+              {...stylex.props(
+                styles.placeholder,
+                status === 'loading' && styles.placeholderLoading,
+              )}
             >
               <Icon
-                className={styles.placeholderIcon}
+                className={stylex.props(styles.placeholderIcon).className}
                 icon={readPlaceholderIcon(status)}
                 size={28}
               />
               {status === 'error' && (
                 <>
-                  <div className={styles.placeholderReason}>
+                  <div {...stylex.props(styles.placeholderReason)}>
                     {t('FileManager.image.loadFailed')}
                   </div>
-                  <div className={styles.placeholderName}>{name}</div>
+                  <div {...stylex.props(styles.placeholderName)}>{name}</div>
                 </>
               )}
             </div>
@@ -263,16 +235,16 @@ const ImageFileItem = memo<ImageFileItemProps>(
           )}
           {/* Hover overlay - only show when image is loaded */}
           {imageLoaded && (
-            <div className={styles.hoverOverlay}>
-              <div className={styles.overlayTitle}>{name}</div>
-              <div className={styles.overlaySize}>{formatSize(size)}</div>
+            <div {...stylex.props(styles.hoverOverlay)}>
+              <div {...stylex.props(styles.overlayTitle)}>{name}</div>
+              <div {...stylex.props(styles.overlaySize)}>{formatSize(size)}</div>
             </div>
           )}
         </div>
         {/* Floating chunk badge or action button */}
         {!isNull(chunkingStatus) && chunkingStatus ? (
           <div
-            className={cx('floatingChunkBadge', styles.floatingChunkBadge)}
+            className={stylex.props(styles.floatingChunkBadge).className}
             onClick={stopPropagation}
           >
             <ChunksBadge
@@ -289,7 +261,7 @@ const ImageFileItem = memo<ImageFileItemProps>(
           isSupportedForChunking && (
             <Tooltip title={t('FileManager.actions.chunkingTooltip')}>
               <div
-                className={cx('floatingChunkBadge', styles.floatingChunkBadge)}
+                className={stylex.props(styles.floatingChunkBadge).className}
                 style={{ cursor: 'pointer' }}
                 onClick={(e) => {
                   e.stopPropagation();

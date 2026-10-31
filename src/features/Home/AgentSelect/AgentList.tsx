@@ -2,9 +2,7 @@
 
 import {
   ActionIcon,
-  createStaticStyles,
-  cssVar,
-  cx,
+  cssVar as cssVarValue,
   DropdownMenuHeader,
   DropdownMenuItem,
   DropdownMenuScrollViewport,
@@ -12,6 +10,8 @@ import {
   Input,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PinIcon, SearchIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,54 +29,46 @@ const ROW_HEIGHT = 36;
 const SECTION_HEIGHT = 28;
 const MAX_LIST_HEIGHT = 360;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  active: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  empty: css`
-    padding-block: 24px;
-    padding-inline: 12px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  header: css`
-    padding: 0;
-  `,
-  item: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    height: ${ROW_HEIGHT}px;
-    padding-block: 0;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  searchBar: css`
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-  `,
-  // Same spec as the agent-detail SwitchPanel's section header.
-  section: css`
-    height: ${SECTION_HEIGHT}px;
-    padding-block: 4px 2px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 20px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  active: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+  empty: {
+    paddingBlock: '24px',
+    paddingInline: '12px',
+    fontSize: '13px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  header: { padding: 0 },
+  item: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    height: `${ROW_HEIGHT}px`,
+    paddingBlock: 0,
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  searchBar: {
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+  },
+  section: {
+    height: `${SECTION_HEIGHT}px`,
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '2px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    fontWeight: 500,
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 interface AgentListProps {
   activeAgentId: string;
@@ -144,8 +136,8 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
       loading={<SkeletonList rows={6} style={{ padding: 8 }} />}
       onRetry={onRetry}
     >
-      <DropdownMenuHeader className={styles.header}>
-        <div className={styles.searchBar}>
+      <DropdownMenuHeader className={stylex.props(styles.header).className}>
+        <div className={stylex.props(styles.searchBar).className}>
           <Input
             autoFocus
             placeholder={t('navPanel.searchAgent')}
@@ -165,7 +157,9 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
         </div>
       </DropdownMenuHeader>
       {rows.length === 0 ? (
-        <div className={styles.empty}>{t('navPanel.searchResultEmpty')}</div>
+        <div className={stylex.props(styles.empty).className}>
+          {t('navPanel.searchResultEmpty')}
+        </div>
       ) : (
         <DropdownMenuScrollViewport
           // virtua sizes itself on mount; remount when the filtered count changes
@@ -183,12 +177,15 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
             item.kind === 'section' ? (
               // `aria-disabled` keeps typeahead / Home-End from landing on a
               // header row: the virtual list skips disabled entries.
-              <div aria-disabled className={styles.section} key={item.key}>
+              <div aria-disabled className={stylex.props(styles.section).className} key={item.key}>
                 {item.label}
               </div>
             ) : (
               <DropdownMenuItem
-                className={cx(styles.item, item.row.id === activeAgentId && styles.active)}
+                className={
+                  stylex.props(styles.item, item.row.id === activeAgentId && styles.active)
+                    .className
+                }
                 key={item.key}
                 onClick={() => onSelect(item.row.id)}
               >
@@ -205,7 +202,9 @@ const AgentList = memo<AgentListProps>(({ activeAgentId, error, onRetry, onSelec
                   style={{ flex: 1 }}
                   weight={item.row.id === activeAgentId ? 600 : 500}
                   color={
-                    item.row.id === activeAgentId ? cssVar.colorText : cssVar.colorTextSecondary
+                    item.row.id === activeAgentId
+                      ? cssVarValue.colorText
+                      : cssVarValue.colorTextSecondary
                   }
                 >
                   {item.row.title}

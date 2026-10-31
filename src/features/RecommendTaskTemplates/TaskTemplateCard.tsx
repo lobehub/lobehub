@@ -11,6 +11,7 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Clock, X } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -94,7 +95,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
                 <TemplateBriefIcon spec={iconSpec} tileSize={RECOMMENDATION_ICON_SIZE.compact} />
               </Flexbox>
               <Text
-                className={cx(homeType.itemTitleProse, styles.compactTitle)}
+                className={cx(stylex.props(homeType.itemTitleProse).className, styles.compactTitle)}
                 style={{ flex: 1 }}
               >
                 {title}

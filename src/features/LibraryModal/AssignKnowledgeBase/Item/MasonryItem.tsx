@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LockIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
@@ -7,40 +9,34 @@ import { type KnowledgeItem } from '@/types/knowledgeBase';
 
 import Actions from './Action';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    cursor: pointer;
-
-    position: relative;
-
-    overflow: hidden;
-
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: all ${cssVar.motionDurationMid};
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-      box-shadow: ${cssVar.boxShadowTertiary};
-    }
-  `,
-  desc: css`
-    margin: 0 !important;
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextDescription};
-  `,
-  title: css`
-    margin: 0 !important;
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.4;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    cursor: 'pointer',
+    position: 'relative',
+    overflow: 'hidden',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorPrimary },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: { 'default': null, ':hover': cssVar.boxShadowTertiary },
+    transition: `all ${cssVar.motionDurationMid}`,
+  },
+  desc: {
+    margin: 0,
+    fontSize: '12px',
+    lineHeight: 1.4,
+    color: cssVar.colorTextDescription,
+  },
+  title: {
+    margin: 0,
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: 1.4,
+  },
+});
 
 interface MasonryItemProps extends KnowledgeItem {
   action?: ReactNode;
@@ -49,7 +45,7 @@ interface MasonryItemProps extends KnowledgeItem {
 const MasonryItem = memo<MasonryItemProps>(
   ({ action, id, fileType, name, type, description, enabled, memberRestricted, visibility }) => {
     return (
-      <div className={styles.card}>
+      <div {...stylex.props(styles.card)}>
         <Flexbox gap={12} style={{ position: 'relative' }}>
           <Flexbox horizontal align={'center'} gap={12}>
             <KnowledgeIcon
@@ -64,14 +60,14 @@ const MasonryItem = memo<MasonryItemProps>(
                 {visibility === 'private' && (
                   <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={12} />
                 )}
-                <Text className={styles.title} ellipsis={{ rows: 2 }}>
+                <Text className={stylex.props(styles.title).className} ellipsis={{ rows: 2 }}>
                   {name}
                 </Text>
               </Flexbox>
             </Flexbox>
           </Flexbox>
           {description && (
-            <Text className={styles.desc} ellipsis={{ rows: 3 }}>
+            <Text className={stylex.props(styles.desc).className} ellipsis={{ rows: 3 }}>
               {description}
             </Text>
           )}

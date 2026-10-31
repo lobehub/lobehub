@@ -1,4 +1,6 @@
-import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, FlagIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,57 +18,56 @@ const ROW_GAP = 10;
 const ROW_PADDING_INLINE = 14;
 const BARE_PADDING_INLINE = 8;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  bareGroupLabel: css`
-    padding-inline: ${BARE_PADDING_INLINE}px;
-  `,
-  bareList: css`
-    margin-inline: -${BARE_PADDING_INLINE}px;
-  `,
-  bareRow: css`
-    padding-block: 7px;
-    padding-inline: ${BARE_PADDING_INLINE}px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  glyph: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-  `,
+const styles = stylex.create({
+  bareGroupLabel: {
+    paddingInline: `${BARE_PADDING_INLINE}px`,
+  },
+  bareList: {
+    marginInline: `-${BARE_PADDING_INLINE}px`,
+  },
+  bareRow: {
+    paddingBlock: '7px',
+    paddingInline: `${BARE_PADDING_INLINE}px`,
+    borderRadius: cssVar.borderRadius,
+  },
+  glyph: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+  },
   // The bucket a row belongs to is the one thing a goal glance must not make the
   // reader infer, so each pile is named — even when it holds a single row.
-  groupLabel: css`
-    padding-block: 8px 2px;
-    padding-inline: ${ROW_PADDING_INLINE}px;
-  `,
-  list: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  rounds: css`
-    flex: none;
-    font-variant-numeric: tabular-nums;
-  `,
-  row: css`
-    justify-content: flex-start;
-
-    width: 100%;
-    height: auto;
-    padding-block: 9px;
-    padding-inline: ${ROW_PADDING_INLINE}px;
-    border: 0;
-
-    text-align: start;
-
-    transition: background ${cssVar.motionDurationFast};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+  groupLabel: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '2px',
+    paddingInline: `${ROW_PADDING_INLINE}px`,
+  },
+  list: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  rounds: {
+    flex: 'none',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  row: {
+    justifyContent: 'flex-start',
+    width: '100%',
+    height: 'auto',
+    paddingBlock: '9px',
+    paddingInline: `${ROW_PADDING_INLINE}px`,
+    borderWidth: 0,
+    textAlign: 'start',
+    transition: `background ${cssVar.motionDurationFast}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 /** The agent behind the goal — the face is what makes a long-running goal recognisable. */
 const GoalAgentAvatar = memo<{ agentId: string | null }>(({ agentId }) => {
@@ -98,7 +99,7 @@ const GoalRow = memo<GoalRowProps>(({ bare, entry }) => {
 
   return (
     <Button
-      className={cx(styles.row, bare && styles.bareRow)}
+      className={stylex.props(styles.row, bare && styles.bareRow).className}
       disabled={!href}
       type={'text'}
       onClick={() => href && navigate(href)}
@@ -107,20 +108,24 @@ const GoalRow = memo<GoalRowProps>(({ bare, entry }) => {
         {/* The pile heading says which of the two states this is; the glyph
             carries the exact one (verifying, planning, waiting) on hover, where
             it costs the row nothing. */}
-        <span className={styles.glyph} title={t(entry.statusKey, { ns: 'chat' })}>
+        <span {...stylex.props(styles.glyph)} title={t(entry.statusKey, { ns: 'chat' })}>
           {entry.bucket === 'running' ? (
             <RunningGlyph />
           ) : (
             <Icon color={cssVar.colorInfo} icon={FlagIcon} size={16} />
           )}
         </span>
-        <Text ellipsis className={homeType.itemTitle} style={{ flex: 1, minWidth: 0 }}>
+        <Text
+          ellipsis
+          className={stylex.props(homeType.itemTitle).className}
+          style={{ flex: 1, minWidth: 0 }}
+        >
           {entry.title}
         </Text>
         <GoalAgentAvatar agentId={entry.agentId} />
         {/* A goal is measured in the tasks it has closed, not in time — how far
             through its own decomposition it is says more at a glance. */}
-        <span className={cx(homeType.meta, styles.rounds)}>
+        <span {...stylex.props(homeType.meta, styles.rounds)}>
           {entry.pendingDecisions > 0
             ? t('goalList.needsYou', { count: entry.pendingDecisions, ns: 'chat' })
             : t('goalList.taskProgress', {
@@ -157,19 +162,19 @@ const GoalsRailCard = memo<GoalsRailCardProps>(({ bare, entries }) => {
   const { buckets, collapsed } = resolveHomeGoalView(entries, expanded);
 
   return (
-    <Flexbox className={bare ? styles.bareList : styles.list}>
+    <Flexbox className={stylex.props(bare ? styles.bareList : styles.list).className}>
       {buckets.map(({ bucket, entries: rows, total }) => (
         <Flexbox key={bucket}>
           <Flexbox
             horizontal
             align={'center'}
-            className={cx(styles.groupLabel, bare && styles.bareGroupLabel)}
+            className={stylex.props(styles.groupLabel, bare && styles.bareGroupLabel).className}
             gap={6}
           >
-            <span className={homeType.sectionLabel}>
+            <span {...stylex.props(homeType.sectionLabel)}>
               {t(bucket === 'review' ? 'inbox.goals.review' : 'inbox.goals.running')}
             </span>
-            <span className={homeType.badge}>{total}</span>
+            <span {...stylex.props(homeType.badge)}>{total}</span>
           </Flexbox>
           {rows.map((entry) => (
             <GoalRow bare={bare} entry={entry} key={entry.id} />
@@ -178,8 +183,10 @@ const GoalsRailCard = memo<GoalsRailCardProps>(({ bare, entries }) => {
       ))}
       {collapsed && (
         <Button
-          className={cx(styles.row, bare && styles.bareRow, homeType.supporting)}
           type={'text'}
+          className={
+            stylex.props(styles.row, bare && styles.bareRow, homeType.supporting).className
+          }
           onClick={() => setExpanded(true)}
         >
           {t('inbox.goals.showAll', { count: entries.length })}
