@@ -1,0 +1,32 @@
+name: Desktop Release Sources
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-request-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate desktop release baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Only trusted base scripts execute; PR text is data read from the event file.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: .github/scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.11.1'
+      - name: Validate release intent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/desktopReleaseCli.mjs check-pr
