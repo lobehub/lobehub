@@ -2445,6 +2445,7 @@ export default {
   'goalDetail.visibility.changeFailed': 'Failed to change goal visibility',
   'goalDetail.visibility.creatorOnly': "Only the goal's creator can change its visibility",
   'goalDetail.visibility.privateAgentLocked': 'Private agents can only run private goals.',
+  'goalDetail.visibility.privateProjectLocked': 'Goals in a private project stay private.',
   'goalDetail.acceptanceProgress': 'Acceptance progress',
   'goalDetail.agentRun': 'Agent run',
   'goalDetail.definition': 'Goal definition',

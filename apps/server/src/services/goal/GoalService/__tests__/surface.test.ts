@@ -83,6 +83,7 @@ const METHODS = [
   'pendingForIsland',
   'planDecomposition',
   'planMachineRecoveryFor',
+  'privatizeProjectGoals',
   'readRunDevicePresence',
   'reassignUnfinishedTasks',
   'recordObservation',

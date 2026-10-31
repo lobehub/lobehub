@@ -51,4 +51,16 @@ describe('goalVisibilityLockKey', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('keeps a goal in a private project private', () => {
+    expect(
+      goalVisibilityLockKey({
+        agentPrivate: false,
+        ownerId: 'u1',
+        projectPrivate: true,
+        viewerId: 'u1',
+        visibility: 'private',
+      }),
+    ).toBe('goalDetail.visibility.privateProjectLocked');
+  });
 });

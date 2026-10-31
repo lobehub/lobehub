@@ -2,7 +2,7 @@ import type { GoalVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 
-import { agents, goalNodes, tasks } from '@/database/schemas';
+import { agents, goalNodes, projects, tasks } from '@/database/schemas';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
 
 /**
@@ -26,21 +26,55 @@ const hasPrivateAgent = async (
 const PUBLIC_WITH_PRIVATE_AGENT =
   'A public goal cannot be run by a private agent; make the goal private or pick a public agent';
 
+const PUBLIC_IN_PRIVATE_PROJECT =
+  'A goal in a private project must be private; members cannot see the project';
+
+/** Whether the goal's project is a private workspace project. */
+const isPrivateProject = async (
+  db: LobeChatDatabase | Transaction,
+  projectId: string | null | undefined,
+) => {
+  if (!projectId) return false;
+  const [row] = await db
+    .select({ visibility: projects.visibility, workspaceId: projects.workspaceId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  return !!row?.workspaceId && row.visibility === 'private';
+};
+
 /**
  * The visibility a goal is created with. Mirrors `TaskService.createTask`:
- * an explicit value wins, a private agent makes the goal private, else the
- * column default ('public'). A public goal on a private agent is refused —
- * members would see a goal whose agent, tasks and runs they cannot open.
+ * an explicit value wins, a private agent or project makes the goal private,
+ * else the column default ('public'). A public goal on a private agent or in
+ * a private project is refused — members would see a goal whose agent, tasks,
+ * runs or project they cannot open.
  */
 export const resolveGoalVisibility = async (
   db: LobeChatDatabase | Transaction,
   requested: GoalVisibility | undefined,
   agentIds: (string | null | undefined)[],
+  projectId?: string | null,
 ): Promise<GoalVisibility> => {
-  const privateAgent = await hasPrivateAgent(db, agentIds);
+  const [privateAgent, privateProject] = await Promise.all([
+    hasPrivateAgent(db, agentIds),
+    isPrivateProject(db, projectId),
+  ]);
   if (requested === 'public' && privateAgent)
     throw new TRPCError({ code: 'BAD_REQUEST', message: PUBLIC_WITH_PRIVATE_AGENT });
-  return requested ?? (privateAgent ? 'private' : 'public');
+  if (requested === 'public' && privateProject)
+    throw new TRPCError({ code: 'BAD_REQUEST', message: PUBLIC_IN_PRIVATE_PROJECT });
+  return requested ?? (privateAgent || privateProject ? 'private' : 'public');
+};
+
+/** Refuse publishing a goal that sits in a private project. */
+export const assertGoalProjectVisibilityCompat = async (
+  db: LobeChatDatabase | Transaction,
+  goal: { projectId: string | null; visibility: GoalVisibility; workspaceId: string | null },
+) => {
+  if (!goal.workspaceId || goal.visibility !== 'public') return;
+  if (await isPrivateProject(db, goal.projectId))
+    throw new TRPCError({ code: 'BAD_REQUEST', message: PUBLIC_IN_PRIVATE_PROJECT });
 };
 
 /** Refuse handing a public goal to a private agent (set-agent / set-task-agent / bind-topic). */

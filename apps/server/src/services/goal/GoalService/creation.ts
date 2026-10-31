@@ -285,10 +285,12 @@ export const create = async (
     config = { ...config, exploration: { maxExperiments, instruction } };
   }
   // Resolved before any write: a refused visibility must not leave criteria behind.
-  const visibility = await resolveGoalVisibility(ctx.db, input.visibility, [
-    goalAgentId,
-    config?.taskAgentId,
-  ]);
+  const visibility = await resolveGoalVisibility(
+    ctx.db,
+    input.visibility,
+    [goalAgentId, config?.taskAgentId],
+    input.projectId,
+  );
 
   if (input.criteria?.length) {
     const criteriaIds = await new VerifyPlanGeneratorService(

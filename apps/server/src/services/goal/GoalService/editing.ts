@@ -1,5 +1,6 @@
 import type { GoalEdgeKind, GoalItem, GoalVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
@@ -7,6 +8,7 @@ import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { TaskSubtreeRepository } from '@/database/repositories/taskSubtree';
+import { goals } from '@/database/schemas';
 
 import { TaskService } from '../../task';
 import { GoalAssignmentService } from '../assignment';
@@ -17,7 +19,11 @@ import {
 } from '../decideNextMove';
 import { managerTurnsSpent } from '../recoveryPolicy';
 import { isGoalReportNode } from '../report';
-import { assertGoalAgentVisibilityCompat, goalTasksToCascade } from '../visibility';
+import {
+  assertGoalAgentVisibilityCompat,
+  assertGoalProjectVisibilityCompat,
+  goalTasksToCascade,
+} from '../visibility';
 import type { CreateGoalNodeInput, GoalServiceContext } from './types';
 
 /**
@@ -152,6 +158,7 @@ export const setVisibility = async (
     goal.agentId,
     goal.config?.taskAgentId,
   ]);
+  await assertGoalProjectVisibilityCompat(ctx.db, { ...goal, visibility });
 
   // The goal first: on the way to private, a failure partway through the
   // Tasks leaves the goal already hidden rather than a public goal over
@@ -162,6 +169,47 @@ export const setVisibility = async (
   const taskIds = await goalTasksToCascade(ctx.db, goal, visibility);
   for (const taskId of taskIds) await subtree.updateVisibility(taskId, visibility);
   return { goal: updated, taskIds };
+};
+
+/**
+ * A project went private, so its public goals follow: members could otherwise
+ * still open goals of a project they can no longer see. The caller's own goals
+ * move with their Tasks (`setVisibility`). Another member's goal is only
+ * hidden: the project's creator cannot act on that member's Tasks, just as a
+ * project's own Tasks do not cascade when it goes private.
+ */
+export const privatizeProjectGoals = async (
+  ctx: GoalServiceContext,
+  projectId: string,
+): Promise<string[]> => {
+  if (!ctx.workspaceId) return [];
+  const rows = await ctx.db
+    .select({ id: goals.id, isDeleted: goals.isDeleted, userId: goals.userId })
+    .from(goals)
+    .where(
+      and(
+        eq(goals.projectId, projectId),
+        eq(goals.workspaceId, ctx.workspaceId),
+        eq(goals.visibility, 'public'),
+      ),
+    );
+  if (rows.length === 0) return [];
+  for (const row of rows)
+    if (row.userId === ctx.userId && !row.isDeleted) await setVisibility(ctx, row.id, 'private');
+  // Everything left — other members' goals, and trashed ones `findById` cannot reach.
+  await ctx.db
+    .update(goals)
+    .set({ updatedAt: new Date(), visibility: 'private' })
+    .where(
+      and(
+        inArray(
+          goals.id,
+          rows.map((row) => row.id),
+        ),
+        eq(goals.visibility, 'public'),
+      ),
+    );
+  return rows.map((row) => row.id);
 };
 
 /** The model planning turns run on; see `GoalAssignmentService.setModel`. */

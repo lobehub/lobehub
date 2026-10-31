@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto';
 
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
@@ -16,6 +17,7 @@ import {
   goalNodes,
   goals,
   messages,
+  projects,
   tasks,
   taskTopics,
   topics,
@@ -113,6 +115,7 @@ afterEach(async () => {
     taskTopics,
     topics,
     tasks,
+    projects,
     agents,
     workspaceMembers,
     workspaces,
@@ -262,5 +265,65 @@ describe('agent handoff', () => {
     });
 
     await expect(ownerGoals().setAgent(graph.goal.id, privateAgentId)).resolves.toBeTruthy();
+  });
+});
+
+describe('project visibility', () => {
+  const projectFor = async (visibility: 'private' | 'public') => {
+    const id = `gvp-${randomUUID().slice(0, 8)}`;
+    await db.insert(projects).values({
+      id,
+      identifier: 'PRJ',
+      name: 'Project',
+      userId: ownerId,
+      visibility,
+      workspaceId,
+    });
+    return id;
+  };
+
+  it('makes a goal in a private project private, and refuses a public one', async () => {
+    const projectId = await projectFor('private');
+
+    const graph = await ownerGoals().create({ agentId: publicAgentId, projectId, title: 'In it' });
+    expect(graph.goal.visibility).toBe('private');
+    await expect(
+      ownerGoals().create({
+        agentId: publicAgentId,
+        projectId,
+        title: 'Leak',
+        visibility: 'public',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(ownerGoals().setVisibility(graph.goal.id, 'public')).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it("privatizes a project's public goals when it goes private", async () => {
+    const projectId = await projectFor('public');
+    const own = await ownerGoals().create({
+      agentId: publicAgentId,
+      projectId,
+      tasks: ['Only task'],
+      title: 'Own',
+    });
+    const { taskId } = await ownerGoals().tick(own.goal.id);
+    // A member's goal in the same project.
+    const theirs = await memberGoals().create({
+      agentId: publicAgentId,
+      projectId,
+      title: 'Theirs',
+    });
+
+    await db.update(projects).set({ visibility: 'private' }).where(eq(projects.id, projectId));
+    const moved = await ownerGoals().privatizeProjectGoals(projectId);
+
+    expect(moved.sort()).toEqual([own.goal.id, theirs.goal.id].sort());
+    expect(await taskVisibility(taskId!)).toBe('private');
+    expect(await memberSees(own.goal.id)).toBe(false);
+    // The member still has their own goal, now private to them.
+    const kept = await new GoalModel(db, memberId, workspaceId).findById(theirs.goal.id);
+    expect(kept?.visibility).toBe('private');
   });
 });

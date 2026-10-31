@@ -40,6 +40,7 @@ import {
   followGoalAgent,
   goalOwnerTaskScope,
   graphAs,
+  privatizeProjectGoals,
   reassignUnfinishedTasks,
   resolveTaskAssignee,
   retireNodes,
@@ -403,6 +404,8 @@ export class GoalService {
   setTaskModel = (...args: MethodArgs<typeof setTaskModel>) => setTaskModel(this.context, ...args);
   setVisibility = (...args: MethodArgs<typeof setVisibility>) =>
     setVisibility(this.context, ...args);
+  privatizeProjectGoals = (...args: MethodArgs<typeof privatizeProjectGoals>) =>
+    privatizeProjectGoals(this.context, ...args);
 
   private resolveTaskAssignee = (...args: MethodArgs<typeof resolveTaskAssignee>) =>
     resolveTaskAssignee(this.context, ...args);
