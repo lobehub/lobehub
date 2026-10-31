@@ -1,6 +1,7 @@
 import type { IAsyncTaskError } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
 import { Button, Flexbox, stopPropagation } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import { useMemo } from 'react';
@@ -11,7 +12,7 @@ import { getChunkTargetId } from '@/store/file';
 
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import ChunksBadge from './ChunkTag';
-import styles from './styles.module.css';
+import { styles } from './styles';
 
 interface FileListItemActionsProps {
   chunkCount?: number | null;
@@ -104,7 +105,7 @@ const FileListItemActions = ({
           canEditResources &&
           isSupportedForChunking && (
             <div
-              className={isCreatingFileParseTask ? undefined : styles.hover}
+              className={stylex.props(!isCreatingFileParseTask && styles.hover).className}
               title={t('FileManager.actions.chunkingTooltip')}
             >
               <Button
@@ -137,7 +138,7 @@ const FileListItemActions = ({
             />
           </div>
         ))}
-      <DropdownMenu className={styles.hover} items={mergedMenuItems} />
+      <DropdownMenu className={stylex.props(styles.hover).className} items={mergedMenuItems} />
     </Flexbox>
   );
 };

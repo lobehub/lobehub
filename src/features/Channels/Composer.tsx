@@ -1,4 +1,5 @@
 import type { ChannelPublicMember } from '@lobechat/types';
+import type { ISlashOption } from '@lobehub/editor';
 import {
   INSERT_MENTION_COMMAND,
   ReactCodePlugin,
@@ -15,6 +16,7 @@ import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useLocalDragUpload } from '@/components/DragUploadZone/useLocalDragUpload';
 import { usePasteFile } from '@/components/DragUploadZone/usePasteFile';
 import DraftFile from '@/features/ChatInput/Mobile/FilePreview/FileItem/File';
@@ -51,7 +53,7 @@ export function Composer({
   /** Where unsent input is kept; see {@link useComposerDraft}. */
   draftKey: string;
   members: ChannelPublicMember[];
-  placeholder?: string;
+  placeholder: string;
   onSend: (
     content: string,
     mentions: string[],
@@ -60,6 +62,7 @@ export function Composer({
   ) => Promise<void>;
 }) {
   const { t } = useTranslation('channel');
+  const workspaceId = useActiveWorkspaceId();
   const editor = useEditor();
   const draft = useComposerDraft(editor, draftKey);
   const shouldSendOnEnter = useEnterToSend();
@@ -160,6 +163,7 @@ export function Composer({
                   aria-label={t('attachments.upload')}
                   disabled={busy || !canUpload}
                   icon={Paperclip}
+                  size={{ blockSize: 28, size: 16 }}
                   title={reason || t('attachments.upload')}
                 />
               </Upload>
@@ -167,11 +171,11 @@ export function Composer({
             <div {...stylex.props(styles.composerEditor)}>
               <Editor
                 autoFocus
-                aria-label={placeholder || t('composer')}
+                aria-label={placeholder}
                 content=""
                 editable={!busy}
                 editor={editor}
-                placeholder={placeholder || t('composer')}
+                placeholder={placeholder}
                 plugins={plugins}
                 slashPlacement="top"
                 type="text"
@@ -182,17 +186,25 @@ export function Composer({
                       mentionable,
                       search?.matchingString || '',
                       t('deletedMember'),
-                    ).map((group) => ({
-                      type: 'section',
-                      key: group.actorType,
-                      label: t(group.actorType === 'user' ? 'membersTitle' : 'agents'),
-                      items: group.members.map((member) => ({
+                      !!workspaceId,
+                    ).flatMap<ISlashOption>((group) => {
+                      const items = group.members.map((member) => ({
                         icon: <MemberAvatar member={member} size={24} />,
                         key: member.id,
                         label: memberName(member, t('deletedMember')),
                         metadata: { type: 'channel-member', id: member.id },
-                      })),
-                    })),
+                      }));
+                      return group.actorType
+                        ? [
+                            {
+                              type: 'section' as const,
+                              key: group.actorType,
+                              label: t(group.actorType === 'user' ? 'membersTitle' : 'agents'),
+                              items,
+                            },
+                          ]
+                        : items;
+                    }),
                   markdownWriter: (node) => `@${node.label}`,
                   onSelect: (instance, option) => {
                     instance.dispatchCommand(INSERT_MENTION_COMMAND, {
@@ -230,10 +242,13 @@ export function Composer({
               />
             </div>
             {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
+            {/* An empty composer keeps Send as a quiet icon, like an IM; it fills once there is a draft. */}
             <SendButton
               aria-label={t('send')}
               disabled={busy || !hasDraft || attachments.blocked}
               loading={busy}
+              size={28}
+              type={hasDraft ? 'primary' : 'text'}
               onSend={() => void send()}
             />
           </div>

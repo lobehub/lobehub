@@ -1,18 +1,12 @@
 import type { NodeRenderer } from '@lobehub/editor/renderer';
-import { createStaticStyles, Image } from '@lobehub/ui';
+import { Image } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  blockImage: css`
-    position: relative;
-    display: block;
-    text-align: center;
-  `,
-  image: css`
-    position: relative;
-    display: inline-block;
-  `,
-}));
+const styles = stylex.create({
+  blockImage: { position: 'relative', display: 'block', textAlign: 'center' },
+  image: { position: 'relative', display: 'inline-block' },
+});
 
 /**
  * The stored size the author picked with the resize handles. Mirrors the
@@ -48,7 +42,7 @@ const renderPreviewableImage = (
   node: Record<string, any>,
   key: string,
   Wrapper: 'figure' | 'span',
-  className: string,
+  className?: string,
 ) => (
   <Wrapper className={className} key={key}>
     <Image
@@ -68,6 +62,8 @@ const renderPreviewableImage = (
  * in a `PreviewGroup` so several images in one message become a gallery.
  */
 export const richTextImageRenderers: Record<string, NodeRenderer> = {
-  'block-image': (node, key) => renderPreviewableImage(node, key, 'figure', styles.blockImage),
-  'image': (node, key) => renderPreviewableImage(node, key, 'span', styles.image),
+  'block-image': (node, key) =>
+    renderPreviewableImage(node, key, 'figure', stylex.props(styles.blockImage).className),
+  'image': (node, key) =>
+    renderPreviewableImage(node, key, 'span', stylex.props(styles.image).className),
 };

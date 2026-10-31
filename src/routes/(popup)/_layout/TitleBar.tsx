@@ -1,13 +1,16 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useWatchThemeUpdate } from '@/features/Electron/system/useWatchThemeUpdate';
 import { WINDOWS_NATIVE_CONTROL_WIDTH } from '@/features/Electron/titlebar/layout';
 import WinControl from '@/features/Electron/titlebar/WinControl';
 import { electronStylish } from '@/styles/electron';
+import { sx } from '@/styles/sx';
 import { getPlatform, isMacOS } from '@/utils/platform';
 
 import PinOnTopButton from './PinOnTopButton';
@@ -15,22 +18,24 @@ import PinOnTopButton from './PinOnTopButton';
 // Reserve space for macOS traffic lights when titleBarStyle is hidden.
 const MAC_TRAFFIC_LIGHT_WIDTH = 80;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    user-select: none;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorBgLayout};
-  `,
-  title: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    userSelect: 'none',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  title: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface PopupTitleBarProps {
   title?: string;
@@ -51,7 +56,7 @@ const PopupTitleBar = memo<PopupTitleBarProps>(({ title }) => {
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.container, electronStylish.draggable)}
+      className={sx([styles.container], electronStylish.draggable).className}
       flex={'none'}
       gap={4}
       height={TITLE_BAR_HEIGHT}
@@ -60,7 +65,7 @@ const PopupTitleBar = memo<PopupTitleBarProps>(({ title }) => {
     >
       <div style={{ flex: `0 0 ${leftSpacer}px` }} />
       <Flexbox flex={1} style={{ minWidth: 0 }}>
-        {title && <div className={styles.title}>{title}</div>}
+        {title && <div {...stylex.props(styles.title)}>{title}</div>}
       </Flexbox>
       <PinOnTopButton />
       {showWinControl ? <WinControl /> : <div style={{ flex: `0 0 ${rightSpacer}px` }} />}

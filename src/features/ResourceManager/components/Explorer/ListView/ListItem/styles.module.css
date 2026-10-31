@@ -1,8 +1,0 @@
-.hover {
-  opacity: 0;
-}
-
-.hover[data-popup-open],
-:global(.file-list-item-group):hover .hover {
-  opacity: 1;
-}

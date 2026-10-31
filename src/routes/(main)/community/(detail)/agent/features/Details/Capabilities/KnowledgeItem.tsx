@@ -1,24 +1,16 @@
-import { Avatar, Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    desc: css`
-      flex: 1;
-      margin: 0 !important;
-      font-size: 14px !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 14px !important;
-      font-weight: 500 !important;
-
-      &:hover {
-        color: ${cssVar.colorLink};
-      }
-    `,
-  };
+const styles = stylex.create({
+  desc: { flex: '1', margin: '0', fontSize: '14px', color: cssVar.colorTextSecondary },
+  title: {
+    margin: '0',
+    fontSize: '14px',
+    fontWeight: 500,
+    color: { 'default': null, ':hover': cssVar.colorLink },
+  },
 });
 
 const KnowledgeItem = memo<{ avatar?: string; description?: string; title: string }>(
@@ -33,12 +25,12 @@ const KnowledgeItem = memo<{ avatar?: string; description?: string; title: strin
             overflow: 'hidden',
           }}
         >
-          <Text ellipsis as={'h2'} className={styles.title}>
+          <Text ellipsis as={'h2'} className={stylex.props(styles.title).className}>
             {title}
           </Text>
           <Text
             as={'p'}
-            className={styles.desc}
+            className={stylex.props(styles.desc).className}
             ellipsis={{
               rows: 2,
             }}

@@ -1,4 +1,4 @@
-import type { UserMemoryActivity } from './layers';
+import type { UserMemoryActivity } from './rows';
 import type { BaseListItem, BaseListParams, BaseListResult } from './shared';
 
 export type ActivityListSort = 'capturedAt' | 'startsAt';

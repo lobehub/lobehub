@@ -3,7 +3,7 @@
 import { Button, confirmModal, Flexbox, Text } from '@lobehub/ui';
 import { Form, type FormInstance } from '@lobehub/ui/form';
 import { RotateCcw } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useCallback, useMemo } from 'react';
+import { Fragment, memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type {
@@ -20,6 +20,7 @@ import {
 } from '../platform/registry';
 import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
+import { WakeRecords } from '../WakeRecords';
 import { AccessSection } from './AccessSection';
 import styles from './Body.module.css';
 import type { ChannelTab } from './channelTabs';
@@ -80,6 +81,8 @@ interface BodyProps {
   currentConfig?: {
     applicationId: string;
     credentials: Record<string, string>;
+    /** The saved bot's id; the wake records tab reads its history by it. */
+    id?: string;
     settings?: Record<string, unknown> | null;
   };
   disabled?: boolean;
@@ -122,6 +125,11 @@ const Body = memo<BodyProps>(
   }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
+
+    // The records tab is a history read, not settings: it mounts the first time it is opened and
+    // then stays, so switching tabs keeps its filters and loaded pages.
+    const [recordsOpened, setRecordsOpened] = useState(false);
+    if (activeTab === 'records' && !recordsOpened) setRecordsOpened(true);
 
     const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
     const CredentialExtras = platformCredentialExtrasMap[platformDef.id];
@@ -485,6 +493,15 @@ const Body = memo<BodyProps>(
               )}
             </Panel>
           ))}
+        {recordsOpened && currentConfig?.id && (
+          <Panel active={activeTab === 'records'} tab="records">
+            <WakeRecords
+              active={activeTab === 'records'}
+              botId={currentConfig.id}
+              disabled={disabled}
+            />
+          </Panel>
+        )}
       </Form>
     );
   },

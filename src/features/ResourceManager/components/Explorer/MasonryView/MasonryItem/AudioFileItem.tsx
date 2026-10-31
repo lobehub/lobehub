@@ -4,10 +4,9 @@ import * as stylex from '@stylexjs/stylex';
 import { AudioLinesIcon } from 'lucide-react';
 import { memo } from 'react';
 
-import { sx } from '@/styles/sx';
 import { formatSize } from '@/utils/format';
 
-import moduleStyles from './AudioFileItem.module.css';
+const CONTROLS = '::-webkit-media-controls-panel';
 
 const styles = stylex.create({
   cover: {
@@ -39,6 +38,14 @@ const styles = stylex.create({
   player: {
     width: '100%',
     height: '32px',
+    backgroundColor: { default: null, [CONTROLS]: cssVar.colorFillQuaternary },
+    backgroundImage: { default: null, [CONTROLS]: 'none' },
+    backgroundPosition: { default: null, [CONTROLS]: '0% 0%' },
+    backgroundSize: { default: null, [CONTROLS]: 'auto' },
+    backgroundRepeat: { default: null, [CONTROLS]: 'repeat' },
+    backgroundOrigin: { default: null, [CONTROLS]: 'padding-box' },
+    backgroundClip: { default: null, [CONTROLS]: 'border-box' },
+    backgroundAttachment: { default: null, [CONTROLS]: 'scroll' },
   },
 });
 
@@ -62,7 +69,7 @@ const AudioFileItem = memo<AudioFileItemProps>(({ isInView, name, size, url }) =
         // controls stay interactive without triggering the card's open action
         <audio
           controls
-          {...sx([styles.player], moduleStyles.player)}
+          {...stylex.props(styles.player)}
           preload={'metadata'}
           src={url}
           onClick={stopPropagation}

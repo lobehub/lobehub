@@ -12,6 +12,7 @@ import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { topicsOwnership } from './task/context';
+import { countOf } from './utils/rows';
 
 export const TERMINAL_TOPIC_STATUSES = new Set([
   'canceled',
@@ -370,12 +371,10 @@ export class TaskTopicModel {
     if (options?.triggers?.length) conditions.push(inArray(taskTopics.trigger, options.triggers));
 
     const rows = await this.db
-      .select({ value: count() })
+      .select({ count: count() })
       .from(taskTopics)
       .where(and(...conditions));
-    /* v8 ignore start -- unreachable: an ungrouped count() always returns one row */
-    return rows[0]?.value ?? 0;
-    /* v8 ignore stop */
+    return countOf(rows, 'the task topic count');
   }
 
   async findByTaskId(taskId: string): Promise<TaskTopicItem[]> {
@@ -511,12 +510,11 @@ export class TaskTopicModel {
     const byTask = rows.map((row) => ({
       runs: row.runs,
       taskId: row.taskId,
-      /* v8 ignore start -- unreachable: every sum is wrapped in coalesce(…, 0), never NULL */
-      totalCost: Number(row.totalCost ?? 0),
-      totalInputTokens: Number(row.totalInputTokens ?? 0),
-      totalOutputTokens: Number(row.totalOutputTokens ?? 0),
-      totalTokens: Number(row.totalTokens ?? 0),
-      /* v8 ignore stop */
+      // Every sum is wrapped in coalesce(…, 0), so none of them is NULL.
+      totalCost: Number(row.totalCost),
+      totalInputTokens: Number(row.totalInputTokens),
+      totalOutputTokens: Number(row.totalOutputTokens),
+      totalTokens: Number(row.totalTokens),
     }));
 
     return {

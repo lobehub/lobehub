@@ -20,6 +20,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   ilike,
   inArray,
   isNull,
@@ -181,6 +182,7 @@ interface KnowledgeRow {
   embeddingTaskId: string | null;
   fileId: string | null;
   fileType: string;
+  hasChildren: boolean;
   id: string;
   knowledgeBaseIds: string[] | null;
   metadata: Record<string, any> | null;
@@ -217,6 +219,12 @@ export interface KnowledgeItem {
   embeddingTaskId?: string | null;
   fileId?: string | null;
   fileType: string;
+  /**
+   * Whether any document or file row names this row as its parent. Folders are
+   * containers either way; this is what lets a document that holds other
+   * documents expand in the tree.
+   */
+  hasChildren?: boolean;
   id: string;
   /** Knowledge bases the row is filed into (empty when it lives outside every base). */
   knowledgeBaseIds?: string[];
@@ -296,6 +304,7 @@ const toKnowledgeItem = (row: KnowledgeRow): KnowledgeItem => ({
   embeddingTaskId: row.embeddingTaskId,
   fileId: row.fileId,
   fileType: row.fileType,
+  hasChildren: Boolean(row.hasChildren),
   id: row.id,
   knowledgeBaseIds: row.knowledgeBaseIds ?? [],
   metadata: toJson(row.metadata),
@@ -356,6 +365,40 @@ export class KnowledgeRepo {
   private documentScope = () => buildWorkspaceWhere(this.scope(), d);
 
   /**
+   * `has_children` for one arm. It depends on the caller's scope, so it can't
+   * live in the static column literals; both arms append it last, which keeps
+   * the UNION positions aligned. Children always point at a document id, so the
+   * file arm passes its joined page id (NULL when the file backs no page, and
+   * then nothing can be under it).
+   *
+   * The children are scoped like any read (ownership, visibility, trash) but
+   * not by the listing's other filters, so a child the listing itself would
+   * hide (another knowledge base, a hidden source) still counts.
+   */
+  private hasChildrenColumn = (parentDocumentId: AnyPgColumn) =>
+    sql<boolean>`${or(
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.parentId, parentDocumentId),
+              buildWorkspaceWhere(this.scope(), documents),
+            ),
+          ),
+      ),
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(files)
+          .where(
+            and(eq(files.parentId, parentDocumentId), buildWorkspaceWhere(this.scope(), files)),
+          ),
+      ),
+    )}`.as('has_children');
+
+  /**
    * Narrow a workspace-scoped list to one Resources mode. Personal rows are
    * already owner-scoped and deliberately ignore the mode filter.
    */
@@ -400,7 +443,10 @@ export class KnowledgeRepo {
     includeContent: boolean = true,
     includeContentPreview: boolean = false,
   ) => {
-    const columns = includeContent ? fileArmColumns : fileArmSummaryColumns(includeContentPreview);
+    const columns = {
+      ...(includeContent ? fileArmColumns : fileArmSummaryColumns(includeContentPreview)),
+      hasChildren: this.hasChildrenColumn(d.id),
+    };
     let query = this.db.select(columns).from(f).$dynamic();
 
     if (knowledgeBaseId) {
@@ -441,9 +487,10 @@ export class KnowledgeRepo {
     includeAgentArtifacts: boolean = false,
   ) =>
     this.db
-      .select(
-        includeContent ? documentArmColumns : documentArmSummaryColumns(includeContentPreview),
-      )
+      .select({
+        ...(includeContent ? documentArmColumns : documentArmSummaryColumns(includeContentPreview)),
+        hasChildren: this.hasChildrenColumn(d.id),
+      })
       .from(d)
       .leftJoin(users, eq(users.id, d.userId))
       .where(

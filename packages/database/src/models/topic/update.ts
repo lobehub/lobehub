@@ -116,10 +116,20 @@ export const recomputeUsage = async (ctx: TopicModelContext, id: string) =>
  * Update topic metadata with merge logic
  * This method merges new metadata with existing metadata instead of replacing it
  */
+export interface UpdateMetadataOptions {
+  /**
+   * Checked against the row's current metadata under the row lock; the write is
+   * skipped (and `[]` returned) when it fails. Lets a caller undo its own
+   * earlier write without clobbering one that landed after it.
+   */
+  onlyIf?: (metadata: ChatTopicMetadata | null | undefined) => boolean;
+}
+
 export const updateMetadata = async (
   ctx: TopicModelContext,
   id: string,
   metadata: TopicMetadataPatch,
+  options?: UpdateMetadataOptions,
 ) => {
   // Merge into the existing metadata under a row lock so concurrent writers
   // can't lose each other's keys. The old read-then-write was a non-atomic
@@ -140,6 +150,7 @@ export const updateMetadata = async (
 
     // No row (missing or not owned) — nothing to update, mirror the old no-op.
     if (!existing) return [];
+    if (options?.onlyIf && !options.onlyIf(existing.metadata)) return [];
 
     const mergedOnboardingSession =
       existing.metadata?.onboardingSession && metadata.onboardingSession

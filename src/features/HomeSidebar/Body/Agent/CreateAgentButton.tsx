@@ -8,7 +8,6 @@ import {
   DropdownMenu,
   Flexbox,
   Icon,
-  Spin,
   Text,
   Tooltip,
 } from '@lobehub/ui';
@@ -33,14 +32,12 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
   const { t } = useTranslation('chat');
   const { allowed: canCreate, reason } = usePermission('create_content');
   const {
-    createAgent,
     createAgentListMenuItem,
     createAgentMenuItem,
     createConnectAgentMenuItem,
     createGroupChatMenuItem,
     createMarketAgentMenuItem,
-    isMutatingAgent,
-    openCreateModal,
+    openCreateAgentModal,
   } = useCreateMenuItems();
 
   const isCustomGroup = Boolean(groupId) && groupId !== SessionDefaultGroup.Default;
@@ -86,12 +83,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
   ]);
 
   const handleClick = () => {
-    if (!canCreate) return;
-    if (openCreateModal) {
-      openCreateModal('agent', menuOptions);
-    } else {
-      createAgent(menuOptions);
-    }
+    openCreateAgentModal(menuOptions);
   };
 
   const content = (
@@ -108,11 +100,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
       onClick={handleClick}
     >
       <Center flex={'none'} height={28} width={28}>
-        {isMutatingAgent ? (
-          <Spin size="small" variant="network" />
-        ) : (
-          <Icon icon={PlusIcon} size={'small'} />
-        )}
+        <Icon icon={PlusIcon} size={'small'} />
       </Center>
       <Text style={{ flex: 1 }} type={'secondary'}>
         {t('addAgent')}

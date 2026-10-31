@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 
 import { messagePlugins, messages } from '../../schemas';
+import { nonNull } from '../utils/rows';
 import { MessageScope } from './scope';
 
 /**
@@ -60,8 +61,11 @@ export class MessageBackgroundSubAgentQueries extends MessageScope {
       )
       .orderBy(asc(messages.createdAt), asc(messages.id));
 
-    /* v8 ignore next -- unreachable: `state` is never null here: the WHERE clause requires `state->>'background' = 'true'` */
-    return rows.map((row) => ({ ...row, state: (row.state ?? {}) as Record<string, any> }));
+    // The WHERE clause requires `state->>'background' = 'true'`, so `state` is never NULL.
+    return rows.map((row) => ({
+      ...row,
+      state: nonNull(row.state, 'message_plugins.state') as Record<string, any>,
+    }));
   };
 
   /**

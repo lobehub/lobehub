@@ -1,4 +1,5 @@
 import type {
+  UserMemory,
   UserMemoryContextWithoutVectors,
   UserMemoryDetail,
   UserMemoryWithoutVectors,
@@ -6,7 +7,6 @@ import type {
 import { LayersEnum } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
-import type { UserMemoryItem } from '../../../schemas';
 import {
   userMemories,
   userMemoriesActivities,
@@ -28,6 +28,13 @@ export const getMemoryDetail = async (
     case LayersEnum.Context: {
       const [context] = await ctx.db
         .select({
+          userMemoryId: userMemoriesContexts.userMemoryId,
+          now: userMemoriesContexts.now,
+          nextSteps: userMemoriesContexts.nextSteps,
+          openQuestions: userMemoriesContexts.openQuestions,
+          firstSeenAt: userMemoriesContexts.firstSeenAt,
+          lastEvidenceAt: userMemoriesContexts.lastEvidenceAt,
+          synthesizedAt: userMemoriesContexts.synthesizedAt,
           accessedAt: userMemoriesContexts.accessedAt,
           associatedObjects: userMemoriesContexts.associatedObjects,
           associatedSubjects: userMemoriesContexts.associatedSubjects,
@@ -84,6 +91,8 @@ export const getMemoryDetail = async (
     case LayersEnum.Activity: {
       const [activity] = await ctx.db
         .select({
+          dossierId: userMemoriesActivities.dossierId,
+          injectable: userMemoriesActivities.injectable,
           accessedAt: userMemoriesActivities.accessedAt,
           associatedLocations: userMemoriesActivities.associatedLocations,
           associatedObjects: userMemoriesActivities.associatedObjects,
@@ -134,6 +143,7 @@ export const getMemoryDetail = async (
     case LayersEnum.Experience: {
       const [experience] = await ctx.db
         .select({
+          capturedAt: userMemoriesExperiences.capturedAt,
           accessedAt: userMemoriesExperiences.accessedAt,
           action: userMemoriesExperiences.action,
           createdAt: userMemoriesExperiences.createdAt,
@@ -179,6 +189,7 @@ export const getMemoryDetail = async (
     case LayersEnum.Identity: {
       const [identity] = await ctx.db
         .select({
+          entityId: userMemoriesIdentities.entityId,
           accessedAt: userMemoriesIdentities.accessedAt,
           capturedAt: userMemoriesIdentities.capturedAt,
           createdAt: userMemoriesIdentities.createdAt,
@@ -223,6 +234,12 @@ export const getMemoryDetail = async (
     case LayersEnum.Preference: {
       const [preference] = await ctx.db
         .select({
+          lastEvidenceAt: userMemoriesPreferences.lastEvidenceAt,
+          evidenceCount: userMemoriesPreferences.evidenceCount,
+          holderEntityId: userMemoriesPreferences.holderEntityId,
+          appliesToEntityId: userMemoriesPreferences.appliesToEntityId,
+          scope: userMemoriesPreferences.scope,
+          evidenceSource: userMemoriesPreferences.evidenceSource,
           accessedAt: userMemoriesPreferences.accessedAt,
           capturedAt: userMemoriesPreferences.capturedAt,
           conclusionDirectives: userMemoriesPreferences.conclusionDirectives,
@@ -272,6 +289,10 @@ export const findUserMemoryRawById = async (
 ): Promise<UserMemoryWithoutVectors | undefined> => {
   const [memory] = await ctx.db
     .select({
+      state: userMemories.state,
+      userLocked: userMemories.userLocked,
+      deletedAt: userMemories.deletedAt,
+      isDeleted: userMemories.isDeleted,
       accessedAt: userMemories.accessedAt,
       accessedCount: userMemories.accessedCount,
       capturedAt: userMemories.capturedAt,
@@ -303,7 +324,7 @@ export const findUserMemoryRawById = async (
 export const findById = async (
   ctx: UserMemoryModelContext,
   id: string,
-): Promise<UserMemoryItem | undefined> => {
+): Promise<UserMemory | undefined> => {
   const result = await ctx.db.query.userMemories.findFirst({
     where: and(eq(userMemories.id, id), ctx.memoryWhere(userMemories)),
   });

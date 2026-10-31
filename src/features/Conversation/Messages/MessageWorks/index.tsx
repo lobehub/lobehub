@@ -1,7 +1,8 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import type { ComponentProps } from 'react';
 import { memo } from 'react';
@@ -11,11 +12,7 @@ import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { dataSelectors, useConversationStore } from '../../store';
 import { useVisitorWorkOpen } from './useVisitorWorkOpen';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({ container: { width: '100%' } });
 
 interface MessageWorkListProps {
   items: WorkSummaryItem[];
@@ -26,7 +23,7 @@ export const MessageWorkList = memo<MessageWorkListProps>(({ items, onOpen }) =>
   if (items.length === 0) return null;
 
   return (
-    <Flexbox className={styles.container} gap={8}>
+    <Flexbox className={stylex.props(styles.container).className} gap={8}>
       {items.map((item) => (
         <WorkSummaryCard item={item} key={item.id} onOpen={onOpen} />
       ))}

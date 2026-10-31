@@ -183,18 +183,6 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
         </Flexbox>
       </Flexbox>
 
-      {/* A held batch release is decided in its report, opened right here. */}
-      {goal?.reviewAcceptanceId && !brief.resolvedAction && (
-        <Flexbox horizontal justify={'flex-end'}>
-          <Button
-            size={'small'}
-            type={'primary'}
-            onClick={() => openGateReportModal({ acceptanceId: goal.reviewAcceptanceId! })}
-          >
-            {t('goalProcess.gate.openReview', { ns: 'chat' })}
-          </Button>
-        </Flexbox>
-      )}
       <BriefCardActions
         actions={brief.actions}
         agentId={brief.agentId ?? brief.agent?.id}
@@ -208,6 +196,17 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
         taskStatus={brief.taskStatus}
         topicId={brief.topicId}
         topicTitle={brief.taskName}
+        trailingAction={
+          // A held batch release is decided in its report, opened right here.
+          goal?.reviewAcceptanceId && (
+            <Button
+              type={'primary'}
+              onClick={() => openGateReportModal({ acceptanceId: goal.reviewAcceptanceId! })}
+            >
+              {t('goalProcess.gate.openReview', { ns: 'chat' })}
+            </Button>
+          )
+        }
       />
     </>
   );

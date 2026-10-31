@@ -173,6 +173,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, routeScope = 'agent', variant
       <AssigneeAgentSelector
         currentAgentId={task.assigneeAgentId}
         disabled={status === 'running'}
+        taskCreatorId={task.createdByUserId}
         taskIdentifier={task.id}
         taskVisibility={task.visibility}
       >
