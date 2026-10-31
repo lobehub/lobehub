@@ -10,6 +10,12 @@ const GPT5ReasoningEffortSlider = createLevelSliderComponent<GPT5ReasoningEffort
   configKey: 'gpt5ReasoningEffort',
   defaultValue: 'medium',
   levels: GPT5_REASONING_EFFORT_LEVELS,
+  marks: Object.fromEntries(
+    GPT5_REASONING_EFFORT_LEVELS.map((label, index) => [
+      index,
+      { label, style: { overflowWrap: 'normal', whiteSpace: 'nowrap' } },
+    ]),
+  ),
   style: { minWidth: 200 },
 });
 
