@@ -17,6 +17,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import { countStats, meanConfidence, rollupVerdict } from './reportRollup';
+import { resolveVerifyResponseLanguage } from './responseLanguage';
 import { ReportNarrativeSchema } from './schema';
 
 const log = debug('lobe-server:verify-reporter');
@@ -98,6 +99,7 @@ export class VerifyReporterService {
         title: r.checkItemTitle,
         verdict: r.verdict,
       })),
+      language: await resolveVerifyResponseLanguage(this.db, this.userId),
       stats,
       verdict,
     });
