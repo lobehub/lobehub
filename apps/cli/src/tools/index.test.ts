@@ -89,6 +89,37 @@ describe('executeToolCall', () => {
       expect(result.content).not.toContain('Unsupported binary file type');
     });
 
+    it('tells the model its quota and recovery links when storage is full', async () => {
+      uploadLocalFileMock.mockRejectedValue(new Error('storage_block:upgrade_required'));
+      const filePath = path.join(tmpDir, 'page-17.png');
+      await writeFile(filePath, jpgBytes);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          Response.json({
+            result: {
+              data: { json: { includedBytes: 1024, remainingBytes: 0, usedBytes: 2048 } },
+            },
+          }),
+        ),
+      );
+
+      const result = await executeToolCall(
+        'readFile',
+        JSON.stringify({ path: filePath }),
+        undefined,
+        auth,
+      );
+      vi.unstubAllGlobals();
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('[Image: page-17.png]');
+      expect(result.content).toContain('storage_block:upgrade_required');
+      expect(result.content).toContain('0 B of 1.0 KB remaining');
+      expect(result.content).toContain('https://lobehub.example.com/resource');
+      expect(result.content).toContain('https://lobehub.example.com/settings/plans');
+    });
+
     it('degrades to a placeholder without credentials instead of uploading', async () => {
       const filePath = path.join(tmpDir, 'test1.jpg');
       await writeFile(filePath, jpgBytes);

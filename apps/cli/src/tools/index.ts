@@ -1,5 +1,6 @@
 import { createLambdaClient } from '../api/client';
 import { log } from '../utils/logger';
+import { describeStorageBlock } from '../utils/storageBlock';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import { checkPlatformCapability } from './checkPlatformCapability';
 import { getAgentProfile } from './getAgentProfile';
@@ -57,7 +58,18 @@ export async function executeToolCall(
     // the formatted prompt text and `state` carries the structured payload for
     // client renders — matching the desktop gateway path (PR #15114).
     const localResult = await runLocalSystemTool(apiName, finalArgs, {
-      uploadImage: auth && ((filePath) => uploadLocalFile(createLambdaClient(auth), filePath)),
+      uploadImage:
+        auth &&
+        (async (filePath) => {
+          const client = createLambdaClient(auth);
+          try {
+            return await uploadLocalFile(client, filePath);
+          } catch (error) {
+            throw new Error(await describeStorageBlock(client, error, auth.serverUrl), {
+              cause: error,
+            });
+          }
+        }),
     });
     if (localResult) {
       const { error } = localResult;
