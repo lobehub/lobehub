@@ -13,6 +13,7 @@ import PlatformDetail, { type CurrentConfig } from './index';
 
 const mocks = vi.hoisted(() => ({
   connectBot: vi.fn(),
+  heterogeneous: false,
   updateBotProvider: vi.fn(),
 }));
 
@@ -51,6 +52,7 @@ vi.mock('@/store/agent', () => ({
     }),
 }));
 vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: { isAgentHeterogeneousById: () => () => mocks.heterogeneous },
   agentSelectors: { getAgentMetaById: () => () => ({ title: 'Nasa' }) },
 }));
 vi.mock('@/store/serverConfig', () => ({
@@ -85,6 +87,7 @@ const openTab = (name: string) =>
 
 describe('PlatformDetail saving', () => {
   beforeEach(() => {
+    mocks.heterogeneous = false;
     vi.clearAllMocks();
     mocks.updateBotProvider.mockResolvedValue(undefined);
     mocks.connectBot.mockResolvedValue({ status: 'connected' });

@@ -41,6 +41,9 @@ vi.mock('@/server/services/bot/agentBotProviderSettings', () => ({
   assertBotAccessSettings: vi.fn(),
   assertWatchKeywordsWritable: vi.fn(),
   invalidateBotAfterUpdate: vi.fn().mockResolvedValue(undefined),
+  mergeBotSettingsForCreate: vi.fn(
+    async (_db: unknown, _agentId: string, _platform: string, settings: unknown) => settings,
+  ),
   mergeBotSettingsForPersist: vi.fn((_platform: string, settings: unknown) => settings),
   mergeBotSettingsPatch: vi.fn(
     (
