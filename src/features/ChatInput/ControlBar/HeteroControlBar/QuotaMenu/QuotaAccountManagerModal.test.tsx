@@ -194,6 +194,8 @@ describe('QuotaAccountManager on the desktop', () => {
   beforeEach(() => {
     desktop.value = true;
     isolateQuotaReplica();
+    // A signed-in desktop: the IPC below resolves this as its stable id.
+    useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never);
     vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([
       account('here'),
       account('away'),
@@ -327,6 +329,30 @@ describe('QuotaAccountManager on the desktop', () => {
       expect(setDeviceAccount).toHaveBeenCalledWith('agent-1', 'this-desktop', 'here'),
     );
     expect(switchAccount).not.toHaveBeenCalled();
+  });
+
+  // Regression: a failed stable-id lookup read as "no device", so a switch
+  // here became an agent-wide pin that moved every other device too.
+  it('takes no writes while this desktop’s device id cannot be resolved', async () => {
+    act(() =>
+      useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
+    );
+    vi.mocked(gatewayConnectionService.getStableDeviceId).mockRejectedValue(new Error('ipc down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const switchAccount = vi.spyOn(agentQuotaService, 'switchAccount');
+    const setDeviceAccount = vi.spyOn(agentQuotaService, 'setDeviceAccount');
+
+    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+
+    await waitFor(() =>
+      expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto'),
+    );
+    for (const radio of screen.getAllByRole('radio'))
+      expect(radio.getAttribute('aria-disabled')).toBe('true');
+    for (const toggle of screen.getAllByRole('switch'))
+      expect(toggle.hasAttribute('disabled')).toBe(true);
+    expect(switchAccount).not.toHaveBeenCalled();
+    expect(setDeviceAccount).not.toHaveBeenCalled();
   });
 
   it('lists only Claude Code accounts, never another coding agent’s', async () => {

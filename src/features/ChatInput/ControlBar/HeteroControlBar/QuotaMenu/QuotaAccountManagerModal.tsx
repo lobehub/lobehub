@@ -177,6 +177,9 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   const stableDeviceId = useElectronStore(electronGatewaySelectors.gatewayStableDeviceId);
   // The replica entry is `undefined` until this device is resolved (or hydrated).
   const localDeviceSettled = !needsLocalDevice || stableDeviceId !== undefined;
+  // Resolved to no id (the IPC lookup failed): this is still a desktop picking
+  // for itself, not the web's agent-wide case, so it shows but cannot write.
+  const localDeviceMissing = needsLocalDevice && stableDeviceId === null;
   const managesLocalLogins = isDesktop && (!deviceId || deviceId === currentDeviceId);
   // A login lives on one machine, so the Manual pick belongs to one device.
   // The web without a bound device has none and keeps the agent-wide pin.
@@ -226,7 +229,10 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
     agentQuotaSelectors.isBindingsConfirmed(scope, agentId),
   );
   const canEditBindings =
-    bindingsLoaded && bindingsConfirmed && (!targetDeviceId || deviceAccountConfirmed);
+    !localDeviceMissing &&
+    bindingsLoaded &&
+    bindingsConfirmed &&
+    (!targetDeviceId || deviceAccountConfirmed);
   const readingsMap = useAgentQuotaStore((s) => s.quotaReadingsMap);
   const weeklyById = useMemo(
     () =>
@@ -315,6 +321,8 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
       run(async () => {
         const value = pending;
         if (value === null) return;
+        // Never turn this desktop's pick into an agent-wide one.
+        if (needsLocalDevice && !targetDeviceId) return;
         if (value !== AUTO && !bindings.some((b) => b.accountId === value)) {
           await bindQuotaAccount(agentId, value, 'pool');
         }
@@ -338,6 +346,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
       agentId,
       bindQuotaAccount,
       bindings,
+      needsLocalDevice,
       pending,
       pinnedId,
       run,
