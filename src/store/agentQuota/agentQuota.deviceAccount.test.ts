@@ -74,4 +74,29 @@ describe('per-device account choice', () => {
       'ext-2',
     ]);
   });
+
+  // Regression: signing out removed the pick on the server, but the manager
+  // opened right after still showed it until it was reopened.
+  it('re-reads the picks on screen for this desktop once its logins are reported', async () => {
+    vi.spyOn(heterogeneousAgentService, 'listClaudeCodeAccounts').mockResolvedValue([]);
+    vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([]);
+    vi.spyOn(useElectronStore.getState(), 'resolveGatewayDeviceId').mockResolvedValue('device-a');
+    vi.spyOn(agentQuotaService, 'syncDeviceLogins').mockResolvedValue(undefined as never);
+    const getDeviceAccount = vi
+      .spyOn(agentQuotaService, 'getDeviceAccount')
+      .mockResolvedValueOnce({ accountId: 'acc-gone' })
+      .mockResolvedValue({ accountId: null });
+
+    await useAgentQuotaStore.getState().readQuotaDeviceAccount('agent-1', 'device-a');
+    expect(
+      agentQuotaSelectors.deviceAccount('agent-1', 'device-a')(useAgentQuotaStore.getState()),
+    ).toEqual({ accountId: 'acc-gone' });
+
+    await useAgentQuotaStore.getState().refreshClaudeLocalAccounts();
+
+    expect(getDeviceAccount).toHaveBeenCalledTimes(2);
+    expect(
+      agentQuotaSelectors.deviceAccount('agent-1', 'device-a')(useAgentQuotaStore.getState()),
+    ).toEqual({ accountId: null });
+  });
 });

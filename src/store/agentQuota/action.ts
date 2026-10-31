@@ -482,14 +482,27 @@ export class ActionImpl {
     // Record which logins this machine holds, so a per-device account choice
     // can only name one it can run (and a signed-out one stops counting).
     const deviceId = await getElectronStoreState().resolveGatewayDeviceId();
-    if (deviceId)
-      await agentQuotaService
+    if (deviceId) {
+      const synced = await agentQuotaService
         .syncDeviceLogins(
           deviceId,
           'claude-code',
           accounts.flatMap((account) => account.identity.externalAccountId ?? []),
         )
-        .catch((error) => console.error('[agentQuota:syncDeviceLogins]', error));
+        .then(() => true)
+        .catch((error) => {
+          console.error('[agentQuota:syncDeviceLogins]', error);
+          return false;
+        });
+      // A login gone from this machine takes the picks made on it along, so
+      // re-read the picks already on screen for this device.
+      if (synced)
+        await Promise.all(
+          Object.keys(this.#get().quotaDeviceAccountMap)
+            .filter((key) => parseQuotaDeviceAccountKey(key).deviceId === deviceId)
+            .map((key) => this.#refresh(this.#deviceAccount, key)),
+        );
+    }
     return accounts;
   };
 
