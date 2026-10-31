@@ -80,4 +80,16 @@ describe('startProjectTopicDraft', () => {
     // The draft rides in the route so it stays with the pane that opened it.
     expect(navigate).toHaveBeenCalledWith('/project/prj_1/topic?agent=agt_1&dir=pwd_1');
   });
+
+  it('stages the project alone for a conversation-only draft', () => {
+    const navigate = vi.fn();
+
+    startProjectTopicDraft({ agentId: 'agt_1', navigate, projectId: 'prj_1' });
+
+    expect(chat.setPendingNewTopicDirectory).toHaveBeenCalledWith({
+      agentId: 'agt_1',
+      projectId: 'prj_1',
+    });
+    expect(navigate).toHaveBeenCalledWith('/project/prj_1/topic?agent=agt_1');
+  });
 });

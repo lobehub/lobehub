@@ -148,6 +148,7 @@ const SubtaskTitle = memo<{ task: TaskDetailSubtask }>(({ task }) => {
         <AssigneeAgentSelector
           currentAgentId={task.assignee?.id ?? null}
           disabled={isRunning}
+          taskCreatorId={task.createdByUserId}
           taskIdentifier={task.id}
           taskVisibility={task.visibility}
         >

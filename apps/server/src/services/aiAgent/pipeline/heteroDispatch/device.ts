@@ -37,6 +37,8 @@ const resolveClaudeAccountRouting = async (
   deps: HeteroDispatchDeps,
   params: {
     agentId: string;
+    /** Gateway id of the device the run is dispatched to. */
+    deviceId: string;
     heteroType: HeteroDispatchInput['heteroType'];
     heterogeneousProvider: HeteroDispatchInput['heterogeneousProvider'];
   },
@@ -45,11 +47,13 @@ const resolveClaudeAccountRouting = async (
   if (claudeCodeAgentEnvPicksLogin(params.heterogeneousProvider?.env)) return;
 
   try {
-    const routing = await new AgentQuotaService(
-      deps.db,
-      deps.userId,
-      deps.workspaceId,
-    ).planDeviceRouting(params.agentId, { provider: 'claude-code' });
+    const quota = new AgentQuotaService(deps.db, deps.userId, deps.workspaceId);
+    // The device's own account choice wins; an agent-wide pin made on another
+    // machine must not block this one.
+    const routing = await quota.planDeviceRouting(params.agentId, {
+      deviceId: await quota.resolveDeviceRowId(params.deviceId),
+      provider: 'claude-code',
+    });
     return routing ?? undefined;
   } catch (err) {
     log('execAgent: Claude Code account routing failed: %O', err);
@@ -206,6 +210,7 @@ export const dispatchToCliDevice = async (
 
   const claudeAccountRouting = await resolveClaudeAccountRouting(deps, {
     agentId: resolvedAgentId,
+    deviceId: dispatchDeviceId,
     heteroType,
     heterogeneousProvider,
   });

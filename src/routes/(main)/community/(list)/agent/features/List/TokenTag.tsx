@@ -1,23 +1,22 @@
 import { MCP } from '@lobehub/icons';
-import { createStaticStyles, cssVar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BookTextIcon, CoinsIcon, GitForkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatIntergerNumber } from '@/utils/format';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    token: css`
-      border-radius: 4px;
-
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 11px;
-      color: ${cssVar.colorTextSecondary};
-
-      background: ${cssVar.colorFillTertiary};
-    `,
-  };
+const styles = stylex.create({
+  token: {
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
 });
 
 interface TokenTagProps {
@@ -38,7 +37,7 @@ const TokenTag = memo<TokenTagProps>(
           styles={{ root: { pointerEvents: 'none' } }}
           title={t('assistants.tokenUsage')}
         >
-          <Tag className={styles.token} icon={<Icon icon={CoinsIcon} />}>
+          <Tag className={stylex.props(styles.token).className} icon={<Icon icon={CoinsIcon} />}>
             {formatIntergerNumber(tokenUsage)}
           </Tag>
         </Tooltip>
@@ -48,7 +47,10 @@ const TokenTag = memo<TokenTagProps>(
             styles={{ root: { pointerEvents: 'none' } }}
             title={t('fork.forksCount', { count: forkCount })}
           >
-            <Tag className={styles.token} icon={<Icon icon={GitForkIcon} />}>
+            <Tag
+              className={stylex.props(styles.token).className}
+              icon={<Icon icon={GitForkIcon} />}
+            >
               {formatIntergerNumber(forkCount)}
             </Tag>
           </Tooltip>

@@ -1,5 +1,6 @@
 import { deserializeParts } from '@lobechat/utils';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -15,13 +16,7 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../.
 import { normalizeThinkTags, processWithArtifact } from '../../../utils/markdown';
 import { useMarkdown } from '../useMarkdown';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    pWithTool: css`
-      color: ${cssVar.colorTextTertiary};
-    `,
-  };
-});
+const styles = stylex.create({ pWithTool: { color: cssVar.colorTextTertiary } });
 interface MessageContentProps {
   contentOverride?: string;
   disableStreaming?: boolean;
@@ -93,7 +88,10 @@ const MessageContent = memo<MessageContentProps>(
       content && (
         <>
           {drawer}
-          <MarkdownMessage {...markdownProps} className={cx(isToolSingleLine && styles.pWithTool)}>
+          <MarkdownMessage
+            {...markdownProps}
+            className={stylex.props(isToolSingleLine && styles.pWithTool).className}
+          >
             {message}
           </MarkdownMessage>
         </>

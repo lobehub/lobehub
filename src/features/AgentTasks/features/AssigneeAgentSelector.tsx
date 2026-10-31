@@ -1,6 +1,6 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
+import { confirmModal, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -14,6 +14,7 @@ import { type SidebarAgentItem } from '@/database/repositories/home';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
+import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -22,6 +23,8 @@ import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useTaskStore } from '@/store/task';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import {
   type AssigneeAgentSection,
@@ -30,6 +33,7 @@ import {
   matchesAssigneeSearch,
   pickRecentAssignees,
   pushRecentAssignee,
+  shouldOfferPrivateAgents,
 } from './assigneeAgentSections';
 
 interface AssigneeAgentSelectorProps {
@@ -43,6 +47,11 @@ interface AssigneeAgentSelectorProps {
   /** Why `disabled` holds; defaults to the running-Task explanation. */
   disabledReason?: string;
   onChange?: (agentId: string | null) => void;
+  /**
+   * The task's creator. On a public task, lets its creator pick a private
+   * agent: confirming makes the task private first, then assigns it.
+   */
+  taskCreatorId?: string | null;
   taskIdentifier?: string;
   taskVisibility?: 'private' | 'public' | null;
 }
@@ -145,6 +154,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     disabled,
     disabledReason,
     onChange,
+    taskCreatorId,
     taskIdentifier,
     taskVisibility,
   }) => {
@@ -157,6 +167,8 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const keyboardMovedRef = useRef(false);
 
     const updateTask = useTaskStore((s) => s.updateTask);
+    const updateTaskVisibility = useTaskStore((s) => s.updateTaskVisibility);
+    const currentUserId = useUserStore(userProfileSelectors.userId);
     const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
     const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
     const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
@@ -182,6 +194,19 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     const collapsedGroups = useGlobalStore((s) => s.status.assigneeAgentSelectorCollapsedGroups);
     const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
+    const {
+      offer: offerPrivateAgents,
+      privatizes: offerPrivateOnPublic,
+      takesOver,
+    } = shouldOfferPrivateAgents({
+      currentUserId,
+      hasOnChange: !!onChange,
+      taskCreatorId,
+      taskIdentifier,
+      taskVisibility,
+      workspaceId,
+    });
+
     const scopes = useMemo<PickerScope[]>(() => {
       const labels = {
         pinned: t('navPanel.pinned', { ns: 'common' }),
@@ -189,7 +214,7 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       };
       const result: PickerScope[] = [];
 
-      if (taskVisibility !== 'public')
+      if (offerPrivateAgents)
         result.push({
           id: 'private',
           sections: buildAssigneeAgentSections({
@@ -199,7 +224,11 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
             scope: 'private',
             ungrouped: privateUngroupedAgents,
           }),
-          title: t('taskManager.agentSelector.privateGroup', { ns: 'topic' }),
+          title: takesOver
+            ? t('taskManager.agentSelector.privateGroupTakesOver', { ns: 'topic' })
+            : offerPrivateOnPublic
+              ? t('taskManager.agentSelector.privateGroupMakesPrivate', { ns: 'topic' })
+              : t('taskManager.agentSelector.privateGroup', { ns: 'topic' }),
         });
 
       const workspaceSections = buildAssigneeAgentSections({
@@ -221,12 +250,14 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
     }, [
       agentGroups,
       hasPrivateAgents,
+      offerPrivateAgents,
+      offerPrivateOnPublic,
       pinnedAgents,
       privateAgentGroups,
       privatePinnedAgents,
       privateUngroupedAgents,
       t,
-      taskVisibility,
+      takesOver,
       ungroupedAgents,
     ]);
 
@@ -344,11 +375,18 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
       setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
     }, [currentAgentId, flatOptions, query]);
 
-    const handleAgentChange = useCallback(
+    const privateAgentIds = useMemo(
+      () =>
+        new Set(
+          scopes
+            .find((scope) => scope.id === 'private')
+            ?.sections.flatMap((section) => section.agents.map((agent) => agent.id)),
+        ),
+      [scopes],
+    );
+
+    const assignAgent = useCallback(
       (agentId: string | null, agent?: SidebarAgentItem) => {
-        if (!canEditTask || agentId === (currentAgentId ?? null)) return;
-        setKey((value) => value + 1);
-        setSearch('');
         if (agentId) {
           const current = useGlobalStore.getState().status.recentAssigneeAgentIds?.[recentKey];
           updateSystemStatus({
@@ -359,34 +397,89 @@ const AssigneeAgentSelector = memo<AssigneeAgentSelectorProps>(
           onChange(agentId);
           return;
         }
-        if (taskIdentifier)
-          void updateTask(
-            taskIdentifier,
-            { assigneeAgentId: agentId },
-            // The picker is the one place that already holds the chosen agent's
-            // display metadata, so it hands it over for the optimistic feed row.
-            {
-              optimisticAssignee: agent
-                ? {
-                    // A group agent carries a member-avatar list; the feed row
-                    // only knows how to draw a single image.
-                    avatar: typeof agent.avatar === 'string' ? agent.avatar : null,
-                    id: agent.id,
-                    name: agentDisplayName(agent),
-                    type: 'agent',
-                  }
-                : undefined,
-            },
-          );
+        if (!taskIdentifier) return;
+        return updateTask(
+          taskIdentifier,
+          { assigneeAgentId: agentId },
+          // The picker is the one place that already holds the chosen agent's
+          // display metadata, so it hands it over for the optimistic feed row.
+          {
+            optimisticAssignee: agent
+              ? {
+                  // A group agent carries a member-avatar list; the feed row
+                  // only knows how to draw a single image.
+                  avatar: typeof agent.avatar === 'string' ? agent.avatar : null,
+                  id: agent.id,
+                  name: agentDisplayName(agent),
+                  type: 'agent',
+                }
+              : undefined,
+          },
+        );
+      },
+      [onChange, recentKey, taskIdentifier, updateSystemStatus, updateTask],
+    );
+
+    const handleAgentChange = useCallback(
+      (agentId: string | null, agent?: SidebarAgentItem) => {
+        if (!canEditTask || agentId === (currentAgentId ?? null)) return;
+        setKey((value) => value + 1);
+        setSearch('');
+
+        if (!offerPrivateOnPublic || !taskIdentifier || !agentId || !privateAgentIds.has(agentId)) {
+          void assignAgent(agentId, agent);
+          return;
+        }
+
+        // The task goes private before the private agent is assigned; if that
+        // fails, the store has already explained why and nothing is assigned.
+        // Someone else's task becomes the picker's own private task.
+        const copy = takesOver
+          ? {
+              hint: t('taskManager.agentSelector.takeOverConfirm.hint', { ns: 'topic' }),
+              ok: t('taskManager.agentSelector.takeOverConfirm.ok', { ns: 'topic' }),
+              title: t('taskManager.agentSelector.takeOverConfirm.title', { ns: 'topic' }),
+            }
+          : {
+              hint: t('taskManager.agentSelector.makePrivateConfirm.hint', { ns: 'topic' }),
+              ok: t('taskManager.agentSelector.makePrivateConfirm.ok', { ns: 'topic' }),
+              title: t('taskManager.agentSelector.makePrivateConfirm.title', { ns: 'topic' }),
+            };
+        confirmModal({
+          cancelText: t('cancel', { ns: 'common' }),
+          content: (
+            <>
+              <VisibilityConfirmContent variant="makePrivate" />
+              <div style={{ marginTop: 8, opacity: 0.7 }}>{copy.hint}</div>
+            </>
+          ),
+          okButtonProps: { danger: true },
+          okText: copy.ok,
+          onOk: async () => {
+            try {
+              await (takesOver
+                ? updateTaskVisibility(taskIdentifier, 'private', { takeOwnership: true })
+                : updateTaskVisibility(taskIdentifier, 'private'));
+            } catch {
+              // The store action already surfaced a targeted toast; swallow so
+              // the confirm modal doesn't bubble a second error to base-ui.
+              return;
+            }
+            await assignAgent(agentId, agent);
+          },
+          title: copy.title,
+        });
       },
       [
+        assignAgent,
         canEditTask,
         currentAgentId,
-        onChange,
-        recentKey,
+        offerPrivateOnPublic,
+        privateAgentIds,
+        t,
+        takesOver,
         taskIdentifier,
-        updateSystemStatus,
-        updateTask,
+        updateTaskVisibility,
       ],
     );
 

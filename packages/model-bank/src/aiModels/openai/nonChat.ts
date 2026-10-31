@@ -1,4 +1,10 @@
 import { gptImage1Schema, gptImage2Schema } from '../../const/imageParameters';
+import {
+  openaiGpt4oMiniTTSSchema,
+  openaiGpt4oTTSVoices,
+  openaiTTS1Schema,
+  openaiTTS1Voices,
+} from '../../const/ttsParameters';
 import type {
   AIASRModelCard,
   AIEmbeddingModelCard,
@@ -43,28 +49,38 @@ export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
 // Text-to-speech models
 export const openaiTTSModels: AITTSModelCard[] = [
   {
-    description: 'The latest text-to-speech model optimized for real-time speed.',
+    description:
+      'Legacy text-to-speech model optimized for real-time speed. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'TTS-1',
     id: 'tts-1',
+    legacy: true,
+    parameters: openaiTTS1Schema,
     pricing: {
       units: [{ name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionCharacters' }],
     },
     type: 'tts',
+    voices: openaiTTS1Voices,
   },
   {
-    description: 'The latest text-to-speech model optimized for quality.',
+    description:
+      'Legacy text-to-speech model optimized for quality. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'TTS-1 HD',
     id: 'tts-1-hd',
+    legacy: true,
+    parameters: openaiTTS1Schema,
     pricing: {
       units: [{ name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionCharacters' }],
     },
     type: 'tts',
+    voices: openaiTTS1Voices,
   },
   {
     description:
-      'GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, converting text into natural-sounding speech with a max input of 2000 tokens.',
+      'GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, converting text into natural-sounding speech with a max input of 2000 tokens. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'GPT-4o Mini TTS',
     id: 'gpt-4o-mini-tts',
+    legacy: true,
+    parameters: openaiGpt4oMiniTTSSchema,
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
@@ -72,6 +88,7 @@ export const openaiTTSModels: AITTSModelCard[] = [
       ],
     },
     type: 'tts',
+    voices: openaiGpt4oTTSVoices,
   },
 ];
 

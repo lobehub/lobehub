@@ -10,6 +10,9 @@ const goalGraph = (goalId?: string | null) => (s: GoalStore) =>
 const goalMetricSeries = (goalId?: string | null) => (s: GoalStore) =>
   goalId ? s.goalMetricSeriesById[goalId] : undefined;
 
+const isGoalTitleRenaming = (goalId?: string | null) => (s: GoalStore) =>
+  !!goalId && s.goalTitleRenamingIds.includes(goalId);
+
 /** One list entry by its replica key — the scope itself for `all`, a tab's own key otherwise. */
 const goalListView = (entryKey: string) => (s: GoalStore) => s.goalListByAgentId[entryKey];
 
@@ -37,6 +40,7 @@ export const goalSelectors = {
   goalListView,
   goalMetricSeries,
   homeGoals,
+  isGoalTitleRenaming,
   topicGoals,
   topicGoalsConfirmed,
 };

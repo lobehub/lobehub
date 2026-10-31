@@ -18,6 +18,7 @@ import { ilikeContains } from '../../utils/like';
 import { searchableMessage } from '../../utils/searchableMessage';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { nonNull } from '../utils/rows';
 import { MessageScope } from './scope';
 import { buildMessageSearchSnippet } from './searchSnippet';
 
@@ -427,8 +428,8 @@ export class MessageLookupQueries extends MessageScope {
 
     return rows.map(({ content, ...row }) => ({
       ...row,
-      /* v8 ignore next -- unreachable: `content` is never null: the ILIKE filter on `content` drops NULL rows */
-      ...buildMessageSearchSnippet(content ?? '', needle),
+      // The ILIKE filter on `content` drops NULL rows.
+      ...buildMessageSearchSnippet(nonNull(content, 'messages.content'), needle),
     }));
   };
 
