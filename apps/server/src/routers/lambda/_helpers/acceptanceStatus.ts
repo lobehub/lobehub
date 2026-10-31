@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
+import { GoalService } from '@/server/services/goal';
 import { GoalBriefService } from '@/server/services/goal/goalBriefs';
 import type { AcceptanceService } from '@/server/services/verify/acceptanceService';
 
@@ -33,6 +34,28 @@ export const settleGoalSignOff = (
   );
 
 /**
+ * A signed-off Goal-level acceptance closes its Goal for good, so the Goal's
+ * finished Tasks are archived with it (see `GoalService.archiveSignedOffTasks`
+ * for what qualifies). Best-effort: the sign-off is already recorded, so a
+ * failure here is logged, never thrown.
+ */
+export const archiveSignedOffGoalTasks = async (
+  db: LobeChatDatabase,
+  acceptance: AcceptanceItem,
+): Promise<void> => {
+  if (acceptance.subjectType !== 'task') return;
+  try {
+    await new GoalService(
+      db,
+      acceptance.userId,
+      acceptance.workspaceId ?? undefined,
+    ).archiveSignedOffTasks(acceptance.subjectId);
+  } catch (error) {
+    console.error('[goal:sign-off:archive-tasks]', error);
+  }
+};
+
+/**
  * Apply one user-facing lifecycle override to an already-resolved,
  * already-authorized aggregate. Shared by the single-row menu action and the
  * list's multi-select sweep, so both obey exactly the same transition rules.
@@ -54,6 +77,7 @@ export const applyAcceptanceStatus = async (
   if (status === 'accepted') {
     await service.accept(acceptance.id);
     await settleGoalSignOff(db, acceptance, 'signOff');
+    await archiveSignedOffGoalTasks(db, acceptance);
     return;
   }
 

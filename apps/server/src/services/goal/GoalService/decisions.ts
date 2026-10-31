@@ -18,6 +18,7 @@ import { TRPCError } from '@trpc/server';
 
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { GoalRepository } from '@/database/repositories/goal';
 
 import { collectStrandedDependents, GOAL_ACCEPTANCE_TASK_TITLE } from '../decideNextMove';
@@ -312,6 +313,9 @@ export const reopenForChanges = async (
   if (node?.status !== 'resolved') return undefined;
 
   const reason = comment ? `Changes requested: ${comment}` : 'Changes requested';
+  // A sign-off archived the Goal's finished Tasks (`archiveSignedOffTasks`);
+  // the runner refuses an archived Task, so the one being reworked comes back.
+  await new TaskArchiveModel(ctx.db, ctx.userId, ctx.workspaceId).unarchive(taskId);
   await ctx.taskModel.updateStatus(taskId, 'backlog', { error: null });
   await ctx.graphModel.updateNodeStatus(goal.id, node.id, 'active', reason);
   await ctx.goalModel.update(goal.id, {

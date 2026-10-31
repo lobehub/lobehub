@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { GoalRepository } from '@/database/repositories/goal';
 
@@ -36,6 +37,48 @@ export const requestSignOff = async (ctx: GoalServiceContext, graph: GoalGraphSn
   // `openSignOff` re-reads the acceptance under a row lock: one the owner
   // already signed asks nothing.
   await ctx.briefs.openSignOff(graph.goal, acceptance.id);
+};
+
+const SIGNED_OFF_ARCHIVABLE_TASK_STATUSES = new Set(['canceled', 'completed']);
+
+/**
+ * The owner signed the Goal off (accepted its Goal-level acceptance), so its
+ * finished Tasks are done with: archive them instead of leaving the owner to
+ * clear them by hand. Conservative on purpose — only a signed-off `achieved`
+ * Goal, only Tasks that are completed or canceled, and only through the
+ * guarded archive write, which keeps anything running or scheduled live. An
+ * unfinished Task stays where its owner can see it, and every archived one
+ * can be restored on its own.
+ *
+ * `taskId` is the signed acceptance's Task; anything other than a Goal-level
+ * acceptance archives nothing. Returns the archived Task ids.
+ */
+export const archiveSignedOffTasks = async (
+  ctx: GoalServiceContext,
+  taskId: string,
+): Promise<string[]> => {
+  const goal = await ctx.goalModel.findByGraphTask(taskId);
+  if (goal?.status !== 'achieved') return [];
+  const graph = await ctx.graphModel.getGraph(goal.id);
+  if (!graph) return [];
+  const isGoalAcceptance = graph.nodes.some(
+    (node) =>
+      node.kind === 'task' && node.taskId === taskId && node.title === GOAL_ACCEPTANCE_TASK_TITLE,
+  );
+  if (!isGoalAcceptance) return [];
+
+  const taskIds = [
+    ...new Set(
+      graph.nodes.flatMap((node) => (node.kind === 'task' && node.taskId ? [node.taskId] : [])),
+    ),
+  ];
+  const archiveModel = new TaskArchiveModel(ctx.db, ctx.userId, ctx.workspaceId);
+  const archived: string[] = [];
+  for (const task of await ctx.taskModel.findByIds(taskIds)) {
+    if (task.archivedAt || !SIGNED_OFF_ARCHIVABLE_TASK_STATUSES.has(task.status)) continue;
+    if (await archiveModel.archive(task.id)) archived.push(task.id);
+  }
+  return archived;
 };
 
 /**
