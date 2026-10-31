@@ -74,6 +74,7 @@ export default {
   'builtins.lobe-agent-management.apiName.getAgentDetail': 'Get agent detail',
   'builtins.lobe-agent-management.apiName.installPlugin': 'Install Skill',
   'builtins.lobe-agent-management.apiName.searchAgent': 'Search agents',
+  'builtins.lobe-agent-management.apiName.searchMarketTools': 'Search Skill market',
   'builtins.lobe-agent-management.apiName.updateAgent': 'Update agent',
   'builtins.lobe-agent-management.apiName.updatePrompt': 'Update prompt',
   'builtins.lobe-agent-management.inspector.callAgent.sync': 'Calling:',
@@ -572,7 +573,8 @@ export default {
   'builtins.lobe-canvas.title': 'Canvas',
   'builtins.builtin-dashboard.approve.dryRunWidget': 'Approve dry run',
   'builtins.builtin-dashboard.approve.requestPublish': 'Approve publishing',
-  'builtins.builtin-dashboard.approveRemember.dryRunWidget': "Approve dry run, and don't ask again for the same access",
+  'builtins.builtin-dashboard.approveRemember.dryRunWidget':
+    "Approve dry run, and don't ask again for the same access",
   'builtins.builtin-dashboard.apiName.addWidgetToDashboard': 'Add widget to dashboard',
   'builtins.builtin-dashboard.apiName.createDashboard': 'Create dashboard',
   'builtins.builtin-dashboard.apiName.createWidgetDraft': 'Create widget draft',

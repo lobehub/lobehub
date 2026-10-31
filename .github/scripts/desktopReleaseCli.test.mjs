@@ -1,0 +1,383 @@
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+import { createGithubStore } from './desktopReleaseGithub.mjs';
+import { formatIntent, parseIntent } from './desktopReleaseIntent.mjs';
+import { recordPublication, sourcesHash, stablePlatforms } from './desktopReleaseSources.mjs';
+import {
+  fixtureCloud,
+  fixtureNextOss,
+  fixtureOss,
+  fixtureSources,
+  startGithubFixture,
+} from './desktopReleaseTestUtils.mjs';
+
+const exec = promisify(execFile);
+const cli = fileURLToPath(new URL('./desktopReleaseCli.mjs', import.meta.url));
+
+async function fixture(t) {
+  const github = await startGithubFixture();
+  const root = await mkdtemp(path.join(os.tmpdir(), 'desktop-release-cli-'));
+  t.after(async () => {
+    await github.close();
+    await rm(root, { recursive: true, force: true });
+  });
+  const env = {
+    ...process.env,
+    GITHUB_REPOSITORY: 'example/lobehub',
+    GITHUB_API_URL: github.apiUrl,
+    GH_TOKEN: 'oss-test-token',
+    CLOUD_REPOSITORY: 'example/cloud',
+    CLOUD_TOKEN: 'cloud-test-token',
+    RELEASE_VERSION: '2.2.21',
+    RELEASE_MODE: 'rebuild',
+    SOURCE_REF: 'v2.2.21',
+    GITHUB_RUN_ID: '40841847688',
+    GITHUB_RUN_ATTEMPT: '3',
+    GITHUB_OUTPUT: path.join(root, 'outputs'),
+    RUNNER_TEMP: root,
+    WRITE_SOURCES: 'false',
+  };
+  return {
+    github,
+    root,
+    env,
+    run: (overrides = {}, command = 'resolve') =>
+      exec(process.execPath, [cli, command], { env: { ...env, ...overrides }, cwd: root }),
+  };
+}
+
+test('the real CLI rebuilds the old product ref with its saved Cloud', async (t) => {
+  const { github, env, run } = await fixture(t);
+  github.addAsset('2.2.21', 'desktop-sources.v1.json', JSON.stringify(fixtureSources));
+  github.state.rejectHead = true;
+  await run();
+  const output = await readFile(env.GITHUB_OUTPUT, 'utf8');
+  assert.match(output, new RegExp(`oss_sha=${fixtureOss}`));
+  assert.match(output, new RegExp(`cloud_sha=${fixtureCloud}`));
+  assert.match(output, /persisted=true/);
+});
+
+test('a missing lock makes the CLI fail without querying current Cloud HEAD', async (t) => {
+  const { github, run } = await fixture(t);
+  github.state.rejectHead = true;
+  await assert.rejects(run(), (error) => /Missing source record/.test(error.stderr));
+});
+
+test('a version input cannot relabel latest main as an older source tag', async (t) => {
+  const { github, run } = await fixture(t);
+  github.addAsset('2.2.21', 'desktop-sources.v1.json', JSON.stringify(fixtureSources));
+  await assert.rejects(run({ SOURCE_REF: 'main' }), (error) =>
+    /source_ref|target tag/i.test(error.stderr),
+  );
+});
+
+test('an explicit import records the original run but does not publish delivery proof', async (t) => {
+  const { github, run } = await fixture(t);
+  await run({
+    RELEASE_MODE: 'import',
+    CLOUD_REF: fixtureCloud,
+    EVIDENCE_RUN_ID: '40841847688',
+    EVIDENCE_RUN_ATTEMPT: '1',
+    WRITE_SOURCES: 'true',
+  });
+  const names = github.releases.get('2.2.21').assets.map((asset) => asset.name);
+  assert.deepEqual(names, ['desktop-sources.v1.json']);
+  const asset = [...github.assets.values()].find((entry) => entry.name === names[0]);
+  const record = JSON.parse(asset.content);
+  assert.equal(record.selection, 'historical-import');
+  assert.equal(record.evidence.runAttempt, 1);
+});
+
+test('a dry-run ordinary candidate does not add a Release asset', async (t) => {
+  const { github, run } = await fixture(t);
+  await run({ RELEASE_MODE: 'initialize', FIRST_RELEASE: 'true', GITHUB_RUN_ATTEMPT: '1' });
+  assert.equal(github.releases.get('2.2.21').assets.length, 0);
+});
+
+test('prepare-release binds weekly intent once and automatic source resolution consumes it', async (t) => {
+  const { github, root, run } = await fixture(t);
+  const eventPath = path.join(root, 'event.json');
+  await writeFile(
+    eventPath,
+    JSON.stringify({
+      pull_request: {
+        number: 22000,
+        title: '🚀 release: 20261031',
+        body: 'Release notes',
+        html_url: 'https://example.test/pull/22000',
+        head: { ref: 'release/weekly-20261031' },
+        base: { ref: 'main', sha: fixtureOss },
+        merge_commit_sha: fixtureOss,
+      },
+    }),
+  );
+  await run({ GITHUB_EVENT_PATH: eventPath }, 'prepare-release');
+  const body = await readFile(path.join(root, 'desktop-release-body.md'), 'utf8');
+  assert.deepEqual(parseIntent(body), {
+    schemaVersion: 1,
+    mode: 'initialize',
+    mergeSha: fixtureOss,
+    prNumber: 22000,
+  });
+  await writeFile(eventPath, JSON.stringify({ action: 'published', release: { body } }));
+  await run({
+    GITHUB_EVENT_PATH: eventPath,
+    GITHUB_EVENT_NAME: 'release',
+    RELEASE_MODE: 'auto',
+    WRITE_SOURCES: 'true',
+    GITHUB_RUN_ATTEMPT: '1',
+  });
+  assert.equal(github.releases.get('2.2.21').assets.length, 1);
+});
+
+test('a release intent for a different merge cannot initialize sources', async (t) => {
+  const { github, root, run } = await fixture(t);
+  const eventPath = path.join(root, 'event.json');
+  await writeFile(
+    eventPath,
+    JSON.stringify({
+      action: 'published',
+      release: {
+        body: formatIntent({
+          schemaVersion: 1,
+          mode: 'initialize',
+          mergeSha: '1'.repeat(40),
+          prNumber: 22000,
+        }),
+      },
+    }),
+  );
+  await assert.rejects(
+    run({
+      GITHUB_EVENT_PATH: eventPath,
+      GITHUB_EVENT_NAME: 'release',
+      RELEASE_MODE: 'auto',
+      WRITE_SOURCES: 'true',
+      GITHUB_RUN_ATTEMPT: '1',
+    }),
+    (error) => /mismatch/.test(error.stderr),
+  );
+  assert.equal(github.releases.get('2.2.21').assets.length, 0);
+});
+
+test('successful jobs that skipped actual uploads cannot produce delivery proof', async (t) => {
+  const { github, run } = await fixture(t);
+  github.addAsset('2.2.21', 'desktop-sources.v1.json', JSON.stringify(fixtureSources));
+  await run(
+    {
+      SOURCES_HASH: sourcesHash(fixtureSources),
+      BUILT_PLATFORMS: JSON.stringify(stablePlatforms),
+      PUBLICATION_OUTCOMES: JSON.stringify({
+        build: 'success',
+        github: 'success',
+        s3: 'success',
+        sparkle: 'success',
+      }),
+      CORE_PUBLISHED: 'false',
+      INSTALLERS_PUBLISHED: 'true',
+      SPARKLE_PUBLISHED: 'true',
+    },
+    'publish',
+  );
+  assert.equal(
+    github.releases
+      .get('2.2.21')
+      .assets.some((asset) => asset.name === 'desktop-published.v1.json'),
+    false,
+  );
+});
+
+test('delivery proof requires public installer assets as well as completed upload stages', async (t) => {
+  const { github, run } = await fixture(t);
+  github.addAsset('2.2.21', 'desktop-sources.v1.json', JSON.stringify(fixtureSources));
+  const env = {
+    SOURCES_HASH: sourcesHash(fixtureSources),
+    BUILT_PLATFORMS: JSON.stringify(stablePlatforms),
+    PUBLICATION_OUTCOMES: JSON.stringify({
+      build: 'success',
+      github: 'success',
+      s3: 'success',
+      sparkle: 'success',
+    }),
+    CORE_PUBLISHED: 'true',
+    INSTALLERS_PUBLISHED: 'true',
+    SPARKLE_PUBLISHED: 'true',
+  };
+  await assert.rejects(run(env, 'publish'), (error) => /installer|asset/i.test(error.stderr));
+  for (const name of [
+    'latest.yml',
+    'latest-linux.yml',
+    'latest-mac-arm64.yml',
+    'latest-mac-x64.yml',
+    'LobeHub-2.2.21-arm64.dmg',
+    'LobeHub-2.2.21-x64.dmg',
+    'LobeHub-2.2.21-setup.exe',
+    'LobeHub-2.2.21.AppImage',
+  ])
+    github.addAsset('2.2.21', name, 'fixture bytes');
+  await run(env, 'publish');
+  assert.equal(
+    github.releases
+      .get('2.2.21')
+      .assets.some((asset) => asset.name === 'desktop-published.v1.json'),
+    true,
+  );
+});
+
+test('operators can generate pinned hotfix metadata for an existing manually created PR', async (t) => {
+  const { github, run } = await fixture(t);
+  const store = createGithubStore(github.options);
+  await store.createSources('2.2.21', fixtureSources);
+  await assert.rejects(run({ BASE_VERSION: '2.2.21' }, 'hotfix-intent'));
+  await recordPublication(
+    {
+      version: '2.2.21',
+      sourcesHash: sourcesHash(fixtureSources),
+      runId: '40841847688',
+      publishedAt: '2026-10-31T12:00:00Z',
+      platforms: stablePlatforms,
+      outcomes: { build: 'success', github: 'success', s3: 'success', sparkle: 'success' },
+    },
+    store,
+  );
+  const result = await run({ BASE_VERSION: '2.2.21' }, 'hotfix-intent');
+  const intent = parseIntent(result.stdout);
+  assert.equal(intent.mode, 'hotfix');
+  assert.equal(intent.cloudSha, fixtureCloud);
+  assert.equal(intent.baseSourcesHash, sourcesHash(fixtureSources));
+});
+
+async function hotfixFixture(t) {
+  const context = await fixture(t);
+  const { github, root } = context;
+  const store = createGithubStore(github.options);
+  await store.createSources('2.2.21', fixtureSources);
+  await recordPublication(
+    {
+      version: '2.2.21',
+      sourcesHash: sourcesHash(fixtureSources),
+      runId: '40841847688',
+      publishedAt: '2026-10-31T12:00:00Z',
+      platforms: stablePlatforms,
+      outcomes: { build: 'success', github: 'success', s3: 'success', sparkle: 'success' },
+    },
+    store,
+  );
+  const intent = {
+    schemaVersion: 1,
+    mode: 'hotfix',
+    baseVersion: '2.2.21',
+    cloudSha: fixtureCloud,
+    baseSourcesHash: sourcesHash(fixtureSources),
+    mergeSha: fixtureNextOss,
+    prNumber: 22000,
+    prBaseSha: fixtureCloud,
+  };
+  // Raw transport, so the test does not depend on the production formatter preserving the base SHA.
+  const body = `<!-- desktop-release-request ${JSON.stringify(intent)} -->`;
+  github.releases.get('2.2.22').body = body;
+  github.state.pullRequest = {
+    number: 22000,
+    merged: true,
+    merge_commit_sha: fixtureNextOss,
+    base: { ref: 'main', sha: fixtureCloud },
+  };
+  const eventPath = path.join(root, 'event.json');
+  await writeFile(eventPath, JSON.stringify({ action: 'published', release: { body } }));
+  const input = {
+    RELEASE_VERSION: '2.2.22',
+    SOURCE_REF: 'v2.2.22',
+    BASE_VERSION: '2.2.21',
+    WRITE_SOURCES: 'true',
+    GITHUB_RUN_ATTEMPT: '1',
+  };
+  return { ...context, input, eventPath };
+}
+
+test('manual hotfix rejects undelivered product changes in the actual merged PR base', async (t) => {
+  const { github, input, run } = await hotfixFixture(t);
+  github.state.comparison = {
+    status: 'ahead',
+    total_commits: 1,
+    files: [{ filename: 'src/features/CanvasStorage/useCanvasStorage.ts' }],
+  };
+  await assert.rejects(run({ ...input, RELEASE_MODE: 'hotfix' }), (error) =>
+    /product changes|baseline/i.test(error.stderr),
+  );
+  assert.equal(github.releases.get('2.2.22').assets.length, 0);
+  github.state.comparison.files = [{ filename: '.github/workflows/release-desktop-stable.yml' }];
+  await run({ ...input, RELEASE_MODE: 'hotfix' });
+  assert.equal(github.releases.get('2.2.22').assets.length, 1);
+});
+
+test('manual hotfix cannot invent a PR identity or change a bound baseline', async (t) => {
+  const { github, input, run } = await hotfixFixture(t);
+  github.state.pullRequest.merge_commit_sha = fixtureOss;
+  await assert.rejects(run({ ...input, RELEASE_MODE: 'hotfix' }), (error) =>
+    /PR|identity|merge/i.test(error.stderr),
+  );
+  github.state.pullRequest.merge_commit_sha = fixtureNextOss;
+  github.state.pullRequest.base.sha = fixtureOss;
+  await assert.rejects(run({ ...input, RELEASE_MODE: 'hotfix' }), (error) =>
+    /PR|identity|base/i.test(error.stderr),
+  );
+  github.state.pullRequest.base.sha = fixtureCloud;
+  github.state.comparison = { status: 'ahead', total_commits: 1, files: [] };
+  await assert.rejects(run({ ...input, RELEASE_MODE: 'hotfix', BASE_VERSION: '2.2.20' }), (error) =>
+    /conflict|mismatch/i.test(error.stderr),
+  );
+  github.releases.get('2.2.22').body = '';
+  await assert.rejects(run({ ...input, RELEASE_MODE: 'hotfix' }), (error) =>
+    /intent|metadata/i.test(error.stderr),
+  );
+  assert.equal(github.releases.get('2.2.22').assets.length, 0);
+});
+
+test('prepare-release binds the validated hotfix request to its actual PR base', async (t) => {
+  const { github, root, run, eventPath } = await hotfixFixture(t);
+  const bound = parseIntent(github.releases.get('2.2.22').body);
+  const { mergeSha, prNumber, prBaseSha, ...request } = bound;
+  github.state.comparison = { status: 'ahead', total_commits: 1, files: [] };
+  await writeFile(
+    eventPath,
+    JSON.stringify({
+      pull_request: {
+        ...github.state.pullRequest,
+        title: '🐛 fix: targeted repair',
+        head: { ref: 'hotfix/a-repair' },
+        html_url: 'https://example.test/pull/22000',
+        body: formatIntent(request),
+      },
+    }),
+  );
+  await run({ GITHUB_EVENT_PATH: eventPath, RELEASE_VERSION: '2.2.22' }, 'prepare-release');
+  const body = await readFile(path.join(root, 'desktop-release-body.md'), 'utf8');
+  assert.equal(parseIntent(body).mergeSha, mergeSha);
+  assert.equal(parseIntent(body).prNumber, prNumber);
+  assert.equal(parseIntent(body).prBaseSha, prBaseSha);
+});
+
+test('automatic hotfix reruns cannot initialize missing locks but can reuse the first attempt', async (t) => {
+  const { github, input, eventPath, run } = await hotfixFixture(t);
+  github.state.comparison = { status: 'ahead', total_commits: 1, files: [] };
+  const automatic = {
+    ...input,
+    RELEASE_MODE: 'auto',
+    GITHUB_EVENT_NAME: 'release',
+    GITHUB_EVENT_PATH: eventPath,
+  };
+  await assert.rejects(run({ ...automatic, GITHUB_RUN_ATTEMPT: '2' }), (error) =>
+    /missing|initial|first|import/i.test(error.stderr),
+  );
+  assert.equal(github.releases.get('2.2.22').assets.length, 0);
+  await run(automatic);
+  await run({ ...automatic, GITHUB_RUN_ATTEMPT: '2' });
+  assert.equal(github.releases.get('2.2.22').assets.length, 1);
+});

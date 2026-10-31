@@ -150,15 +150,15 @@ export const styles = stylex.create({
     display: 'flex',
     alignItems: 'flex-end',
     gap: 4,
-    paddingBlock: 6,
-    paddingInline: 6,
+    paddingBlock: 4,
+    paddingInline: 4,
   },
   composerEditor: {
     overflowY: 'auto',
     flex: '1',
     minWidth: 0,
     maxHeight: 240,
-    paddingBlock: 5,
+    paddingBlock: 0,
   },
   /** Takes the composer's place while the channel or thread is archived. */
   archivedNotice: {

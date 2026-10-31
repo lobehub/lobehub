@@ -1,8 +1,0 @@
-/* Strips the Input's own border, background and shadow. Its rules are not
-   layered, so only `!important` reliably wins. */
-.searchInput {
-  padding-inline: 0 !important;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}

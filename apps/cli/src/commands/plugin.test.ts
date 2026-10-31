@@ -6,6 +6,9 @@ import { registerPluginCommand } from './plugin';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
+    market: {
+      getMcpList: { query: vi.fn() },
+    },
     plugin: {
       createOrInstallPlugin: { mutate: vi.fn() },
       createPlugin: { mutate: vi.fn() },
@@ -29,7 +32,10 @@ describe('plugin command', () => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
-    for (const method of Object.values(mockTrpcClient.plugin)) {
+    for (const method of [
+      ...Object.values(mockTrpcClient.plugin),
+      ...Object.values(mockTrpcClient.market),
+    ]) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
@@ -68,6 +74,65 @@ describe('plugin command', () => {
       await program.parseAsync(['node', 'test', 'plugin', 'list', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(plugins, null, 2));
+    });
+  });
+
+  describe('search', () => {
+    it('should query the MCP marketplace and mark installed plugins', async () => {
+      mockTrpcClient.market.getMcpList.query.mockResolvedValue({
+        items: [
+          { description: 'Web search', identifier: 'tavily', name: 'Tavily' },
+          { description: 'Repos', identifier: 'github', name: 'GitHub' },
+        ],
+        totalCount: 2,
+      });
+      mockTrpcClient.plugin.getPlugins.query.mockResolvedValue([{ identifier: 'github' }]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'plugin',
+        'search',
+        'search',
+        '--category',
+        'web-search',
+        '--limit',
+        '5',
+        '--json',
+        'identifier,installed',
+      ]);
+
+      expect(mockTrpcClient.market.getMcpList.query).toHaveBeenCalledWith({
+        category: 'web-search',
+        pageSize: 5,
+        q: 'search',
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [
+            { identifier: 'tavily', installed: false },
+            { identifier: 'github', installed: true },
+          ],
+          null,
+          2,
+        ),
+      );
+    });
+
+    it('should browse without a query', async () => {
+      mockTrpcClient.market.getMcpList.query.mockResolvedValue({ items: [], totalCount: 0 });
+      mockTrpcClient.plugin.getPlugins.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'plugin', 'search']);
+
+      expect(mockTrpcClient.market.getMcpList.query).toHaveBeenCalledWith({
+        category: undefined,
+        pageSize: 20,
+        q: undefined,
+      });
+      expect(consoleSpy).toHaveBeenCalledWith('No plugins found.');
     });
   });
 

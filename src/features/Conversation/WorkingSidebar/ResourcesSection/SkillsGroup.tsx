@@ -1,13 +1,15 @@
 import { isDesktop } from '@lobechat/const';
 import type React from 'react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  filterSkillItems,
   type SkillListItem,
   SkillSection,
   SkillsList,
+  SkillsSearchBar,
   useProjectSkills,
 } from '@/features/SkillsList';
 
@@ -29,6 +31,7 @@ interface SkillsGroupProps {
 
 const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
+  const [searchQuery, setSearchQuery] = useState('');
   // Local desktop reads over IPC; a bound device reads over RPC. Either path
   // makes the skills list reachable even when this client isn't the desktop.
   const enabled = (isDesktop || !!deviceId) && !!workingDirectory;
@@ -59,28 +62,37 @@ const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
   const hasDevice = deviceItems.length > 0;
 
   if (hasProject || hasDevice) {
+    const matchedProjectItems = filterSkillItems(projectItems, searchQuery);
+    const matchedDeviceItems = filterSkillItems(deviceItems, searchQuery);
+    const hasMatchedProject = matchedProjectItems.length > 0;
+    const hasMatchedDevice = matchedDeviceItems.length > 0;
+
     return (
       <>
-        {hasProject && (
+        <SkillsSearchBar onSearch={setSearchQuery} />
+        {!hasMatchedProject && !hasMatchedDevice && (
+          <SkillSection isEmpty emptyText={t('workingPanel.skills.noSearchResults')} />
+        )}
+        {hasMatchedProject && (
           <SkillSection
             sectionHeader={{
               collapsible: false,
-              count: projectItems.length,
+              count: matchedProjectItems.length,
               title: t('workingPanel.skills.section.project'),
             }}
           >
-            {renderList(projectItems)}
+            {renderList(matchedProjectItems)}
           </SkillSection>
         )}
-        {hasDevice && (
+        {hasMatchedDevice && (
           <SkillSection
             sectionHeader={{
               collapsible: false,
-              count: deviceItems.length,
+              count: matchedDeviceItems.length,
               title: t('workingPanel.skills.section.device'),
             }}
           >
-            {renderList(deviceItems)}
+            {renderList(matchedDeviceItems)}
           </SkillSection>
         )}
       </>

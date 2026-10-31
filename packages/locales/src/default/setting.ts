@@ -562,7 +562,6 @@ export default {
   'heterogeneousStatus.device.installDesc':
     'Run one of these commands in a terminal on {{device}}:',
   'heterogeneousStatus.device.installTitle': 'Install on {{device}}',
-  'heterogeneousStatus.device.label': 'Device',
   'heterogeneousStatus.device.missing':
     'The bound device is no longer available. Choose another execution environment above.',
   'heterogeneousStatus.device.offline': '{{device}} is offline. Check again once it reconnects.',
@@ -1190,6 +1189,8 @@ export default {
   'settingAgent.personalName.pickForMe': 'Name it for me',
   'settingAgent.personalName.pickFailed': 'Could not save the name, please try again',
   'settingAgent.personalName.roll': 'Roll a random name',
+  'settingAgent.identity.create': 'Create',
+  'settingAgent.identity.createFailed': 'Could not create the agent, please try again',
   'settingAgent.identity.done': 'Done',
   'settingAgent.identity.edit': 'Edit identity',
   'settingAgent.identity.saveFailed': 'Could not save the identity, please try again',
@@ -1202,6 +1203,7 @@ export default {
   'settingAgent.slug.error.invalid': 'Use lowercase letters, numbers and hyphens only',
   'settingAgent.slug.error.reserved': 'This identifier is reserved',
   'settingAgent.slug.error.taken': 'This identifier is already in use',
+  'settingAgent.slug.autoPlaceholder': 'Leave empty to generate one',
   'settingAgent.slug.placeholder': 'url-identifier',
   'settingAgent.slug.openWith': 'Open it directly with /agent/{{slug}}',
   'settingAgent.slug.tooltip': 'The agent’s url identifier — open it with /agent/<slug>',

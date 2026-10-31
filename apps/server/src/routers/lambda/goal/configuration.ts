@@ -1,3 +1,4 @@
+import { GOAL_TITLE_MAX_LENGTH } from '@lobechat/const/goal';
 import { MAX_GOAL_METRIC_CRITERIA } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -257,6 +258,20 @@ export const configurationRouter = router({
         return { data: await ctx.goalService.updateRequirement(id, requirement), success: true };
       } catch (error) {
         mapGoalError(error, 'updateRequirement');
+      }
+    }),
+
+  /** Rename the goal; like a topic, a workspace goal is renamed by its creator or an owner. */
+  updateTitle: goalWriteProcedure
+    .input(idInput.extend({ title: z.string().trim().min(1).max(GOAL_TITLE_MAX_LENGTH) }))
+    .mutation(async ({ ctx, input: { id, title } }) => {
+      try {
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        return { data: await ctx.goalService.updateTitle(id, title), success: true };
+      } catch (error) {
+        mapGoalError(error, 'updateTitle');
       }
     }),
 });

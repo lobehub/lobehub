@@ -4,8 +4,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { channelMessages, channelThreads, messages, topics } from '../../../schemas';
+import { channelJobs, channelMessages, channelThreads, messages, topics } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import { deliver } from '../delivery';
 import { createChannelFixture, jobsOf } from './testUtils';
 
 const db: LobeChatDatabase = await getTestDB();
@@ -57,6 +58,30 @@ describe('ChannelRepository.send', () => {
         status: 'queued',
       }),
     ]);
+  });
+
+  it('keeps one job per message and member when delivery is repeated', async () => {
+    const { asMember, channel, member } = await fixture.createTeamChannel();
+    const coder = await fixture.addAgent(channel.id, 'Coder');
+    const reviewer = await fixture.addAgent(channel.id, 'Reviewer');
+    const message = await asMember.send(channel.id, {
+      content: 'Everyone',
+      requestKey: 'once',
+      routing: 'fallback',
+    });
+    const jobs = await jobsOf(db, message.id);
+    expect(jobs).toHaveLength(2);
+
+    await db.transaction((tx) => deliver(tx, message, [coder, reviewer], member.id));
+    const duplicate = await db
+      .insert(channelJobs)
+      .values({ ...jobs[0], id: undefined })
+      .onConflictDoNothing({ target: [channelJobs.messageId, channelJobs.memberId] })
+      .returning();
+
+    expect(duplicate).toEqual([]);
+    expect(await jobsOf(db, message.id)).toEqual(expect.arrayContaining(jobs));
+    expect(await jobsOf(db, message.id)).toHaveLength(2);
   });
 
   it('wakes no Agent when only people are mentioned', async () => {

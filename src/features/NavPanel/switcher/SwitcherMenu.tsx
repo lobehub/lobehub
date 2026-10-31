@@ -9,7 +9,6 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 
 import { filterSwitcherItems, pickRecentItems, type SwitcherItem } from './switcherItems';
-import moduleStyles from './SwitcherMenu.module.css';
 import SwitcherRow from './SwitcherRow';
 import { useSwitcherRecents } from './useSwitcherRecents';
 
@@ -44,6 +43,30 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: stylexCssVar.colorBorderSecondary,
   },
+  // The compiler accepts !important; the 0.19 keyword validator does not.
+  /* eslint-disable @stylexjs/valid-styles */
+  searchInput: {
+    paddingInlineStart: '0 !important',
+    paddingInlineEnd: '0 !important',
+    borderWidth: 'medium !important',
+    borderStyle: 'none !important',
+    borderColor: 'currentColor !important',
+    borderImageSource: 'none !important',
+    borderImageSlice: '100% !important',
+    borderImageWidth: '1 !important',
+    borderImageOutset: '0 !important',
+    borderImageRepeat: 'stretch !important',
+    backgroundColor: 'transparent !important',
+    backgroundImage: 'none !important',
+    backgroundPosition: '0% 0% !important',
+    backgroundSize: 'auto !important',
+    backgroundRepeat: 'repeat !important',
+    backgroundOrigin: 'padding-box !important',
+    backgroundClip: 'border-box !important',
+    backgroundAttachment: 'scroll !important',
+    boxShadow: 'none !important',
+  },
+  /* eslint-enable @stylexjs/valid-styles */
   section: {
     paddingBlockStart: '6px',
     paddingBlockEnd: '2px',
@@ -98,7 +121,7 @@ const SwitcherMenu = memo<SwitcherMenuProps>(
           <Input
             allowClear
             autoFocus
-            className={moduleStyles.searchInput}
+            className={stylex.props(styles.searchInput).className}
             placeholder={searchPlaceholder}
             prefix={<Icon color={cssVar.colorTextTertiary} icon={SearchIcon} size={14} />}
             size={'small'}

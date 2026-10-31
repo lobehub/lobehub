@@ -10,8 +10,6 @@ import { useTranslation } from 'react-i18next';
 
 import KeyValueEditor from '@/components/KeyValueEditor';
 
-import moduleStyles from './ConfigDisplay.module.css';
-
 const styles = stylex.create({
   configEditor: { marginBlockStart: cssVar.marginSM },
   configSection: {
@@ -59,6 +57,8 @@ const styles = stylex.create({
   },
   typeValue: { display: 'flex', gap: cssVar.marginXS, alignItems: 'center' },
   urlValue: {
+    // eslint-disable-next-line @stylexjs/valid-styles -- Supported by the compiler/browser, missing from the 0.19 keyword list.
+    wordBreak: 'auto-phrase',
     maxWidth: '300px',
     paddingBlock: cssVar.paddingXS,
     paddingInline: cssVar.paddingSM,
@@ -129,13 +129,7 @@ const ConfigDisplay = memo<ConfigDisplayProps>(({ schema, onConfigUpdate }) => {
           {schema.config.type === 'http' && schema.config.url && (
             <div {...stylex.props(styles.previewItem)}>
               <span {...stylex.props(styles.previewLabel)}>{t('protocolInstall.config.url')}</span>
-              <div
-                className={[stylex.props(styles.urlValue).className, moduleStyles.urlValue].join(
-                  ' ',
-                )}
-              >
-                {schema.config.url}
-              </div>
+              <div {...stylex.props(styles.urlValue)}>{schema.config.url}</div>
             </div>
           )}
 

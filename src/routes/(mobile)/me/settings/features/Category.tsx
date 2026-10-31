@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo } from 'react';
 
 import Cell from '@/components/Cell';
@@ -8,16 +9,16 @@ import Divider from '@/components/Cell/Divider';
 
 import { useCategory } from './useCategory';
 
-const styles = createStaticStyles(({ css }) => ({
-  groupTitle: css`
-    padding-block: 16px 4px;
-    padding-inline: 16px;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  groupTitle: {
+    paddingBlockStart: '16px',
+    paddingBlockEnd: '4px',
+    paddingInline: '16px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 const Category = memo(() => {
   const groups = useCategory();
@@ -27,7 +28,7 @@ const Category = memo(() => {
       {groups.map((group, groupIndex) => (
         <Fragment key={group.key}>
           {groupIndex > 0 && <Divider />}
-          <div className={styles.groupTitle}>{group.title}</div>
+          <div {...stylex.props(styles.groupTitle)}>{group.title}</div>
           {group.items.map(({ key, ...item }) => (
             <Cell key={key} {...item} />
           ))}

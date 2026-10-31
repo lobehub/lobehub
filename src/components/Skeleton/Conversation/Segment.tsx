@@ -1,27 +1,33 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import SkeletonBar from '../Bar';
 import ConversationSkeletonContainer from './Container';
 import ConversationListSkeleton from './List';
 
-const styles = createStaticStyles(({ css }) => ({
-  composer: css`
-    overflow: hidden;
-
-    height: 106px;
-    border: 1px solid ${cssVar.colorFill};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: 0 4px 4px color-mix(in srgb, #000 4%, transparent);
-  `,
-}));
+const styles = stylex.create({
+  composer: {
+    overflow: 'hidden',
+    height: '106px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFill,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: '0 4px 4px color-mix(in srgb, #000 4%, transparent)',
+  },
+});
 
 const ComposerSkeleton = () => (
   <ConversationSkeletonContainer flex={'none'} paddingBlock={'0 8px'}>
-    <Flexbox className={styles.composer} data-testid={'conversation-composer-skeleton'}>
+    <Flexbox
+      className={stylex.props(styles.composer).className}
+      data-testid={'conversation-composer-skeleton'}
+    >
       <Flexbox flex={1} paddingBlock={'12px 8px'} paddingInline={12}>
         <SkeletonBar height={14} width={'38%'} />
       </Flexbox>

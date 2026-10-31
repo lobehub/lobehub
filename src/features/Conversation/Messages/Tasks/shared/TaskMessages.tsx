@@ -1,17 +1,9 @@
 'use client';
 
 import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
-import {
-  Accordion,
-  Block,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Markdown,
-  Spin,
-  Text,
-} from '@lobehub/ui';
+import { Accordion, Block, Flexbox, Icon, Markdown, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ScrollText, Workflow } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,12 +19,7 @@ import Usage from '../../components/Extras/Usage';
 import AnimatedNumber from '../../components/Extras/Usage/UsageDetail/AnimatedNumber';
 import { accumulateUsage, formatDuration, formatElapsedTime } from './utils';
 
-const styles = createStaticStyles(({ css }) => ({
-  instructionContent: css`
-    overflow: auto;
-    max-height: 300px;
-  `,
-}));
+const styles = stylex.create({ instructionContent: { overflow: 'auto', maxHeight: '300px' } });
 
 /**
  * InstructionAccordion - Shows the task instruction in a collapsible accordion
@@ -60,7 +47,7 @@ const InstructionAccordion = memo<{ childrenCount: number; instruction: string }
           {
             children: (
               <Block
-                className={styles.instructionContent}
+                className={stylex.props(styles.instructionContent).className}
                 padding={12}
                 style={{ marginBlock: 8 }}
                 variant={'outlined'}
