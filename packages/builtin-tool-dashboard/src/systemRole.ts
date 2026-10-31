@@ -27,6 +27,7 @@ The script must print exactly ONE JSON document to stdout — nothing else (send
 - list:   {"type":"list","items":[{"title":"Fix login","url":"https://…","status":"open","time":"2026-01-02T03:04:05Z","value":3,"description":"…"}]}
 - series: {"type":"series","unit":"ms","series":[{"name":"p95","points":[{"t":"2026-01-01","v":120},{"t":"2026-01-02","v":98}]}]}
 - table:  {"type":"table","columns":[{"key":"repo","title":"Repo"},{"key":"stars","type":"number"}],"rows":[{"repo":"lobehub","stars":100}]}
+- data:   {"type":"data","data":{"city":"Hangzhou","temp":18,"cond":"rain","hourly":[{"t":"2026-01-02T14:00","temp":18}]}} — any JSON object; the card is drawn by view.layout (see <card_layout>)
 
 Only "type" plus value / items / series / columns+rows are required. Column types: string | number | date | link. Timestamps are ISO-8601 strings.
 Partial data: when one of several sources fails, still print the document with "meta":{"complete":false,"message":"GitHub API rate-limited"} — the card shows it as partial instead of failing. Exit non-zero only when there is nothing meaningful to show.
@@ -41,6 +42,31 @@ Partial data: when one of several sources fails, still print the document with "
 - manifest.metric ({"key":"open_issues","unit":"issues"}) records a stat's value on every published run so the card gets a long-term trend line.
 - view hints: {"chart":"line"|"bar"|"area"} for series, {"columns":[…]} to pick table columns, {"limit":10} to cap list/table rows.
 </script_rules>
+
+<card_layout>
+A single number is the right card for a single metric. When the data has more to say — weather, a countdown, a goal with progress, a leaderboard, several related numbers — use outputType "data" and design the card with view.layout. The script then reports clean data (raw numbers, ISO timestamps, short codes such as "rain"), and the layout decides presentation; to restyle, update only view and keep the script.
+
+Layout nodes (every node also accepts "flex" (grow factor), "visible" (condition) and "hideWhen":"narrow"|"short" to drop details on small cards):
+- stack {direction:"row"|"column", gap, align:"start"|"center"|"end"|"stretch"|"baseline", justify:"start"|"center"|"end"|"between"|"around", padding, wrap, children}
+- grid {columns, gap, children}
+- text {value, size:"xs"|"sm"|"md"|"lg"|"xl"|"2xl"|"display", weight:"regular"|"medium"|"semibold"|"bold", tone:"default"|"secondary"|"tertiary"|"success"|"warning"|"error", align, lines}
+- icon {name, size, color} — names: sun, moon, cloud, cloud-sun, cloud-moon, cloud-rain, cloud-drizzle, cloud-snow, cloud-lightning, cloud-fog, cloud-hail, snowflake, wind, droplet, droplets, thermometer, umbrella, sunrise, sunset, gauge, eye, navigation, arrow-up, arrow-down, trending-up, trending-down, check, x, alert-triangle, info, clock, calendar, map-pin, star, heart, flame, zap, activity, target, trophy, users, git-pull-request, git-commit, dollar-sign, server, database, globe, mail, message-circle, bell, timer
+- image {src (https), width, height, radius, fit}
+- progress {value, min, max, color} · ring {value, max, size, color, children} · dots {value, total, columns, color} (filled dots, e.g. days of the year)
+- sparkline {values:"data.hourly", key:"temp", kind:"line"|"area"|"bar", height, color}
+- badge {value, color} · divider · spacer
+- repeat {items:"data.hourly", limit, direction, gap, justify, template:<node>} — inside the template, "item" is the current element and "index" its position.
+
+Values: a literal; {"bind":"data.temp","format":"number","digits":0} (formats: number, compact, percent (0–1 ratio), date, time, datetime, weekday, relative; "pattern" takes a dayjs pattern); {"bind":"data.cond","map":{"rain":"cloud-rain","*":"cloud"}} (map raw values, "*" is the default); {"template":"H {data.hi}° · L {data.lo}°"} ("{item.t|time}" formats inside templates). Paths read data.* (the output's data; for stat/list/series/table, data is the whole output), item.*, index; array elements by number: data.hourly.0.temp.
+Conditions: {"bind":"data.alerts","exists":true}, {"bind":"data.temp","gt":30} (also eq, ne, gte, lt, lte, in).
+Colors: primary, success, warning, error, text, red, volcano, orange, gold, yellow, lime, green, cyan, blue, geekblue, purple, magenta — omitted means the text color.
+view.surface paints the whole card: default, sky, cloudy, rain, storm, snow, night, sunset, forest, ocean, sand, rose, slate — or a binding that picks one from the data, e.g. {"bind":"data.cond","map":{"clear":"sky","rain":"rain","*":"cloudy"}}. Colored surfaces use white text; secondary / tertiary tones dim it.
+
+Design: one hero element ("display" text or a ring), two or three supporting facts, details that fit the card; use "hideWhen" for what only a large card has room for. Default card is about 4×4 grid cells (≈ 300×300 px).
+
+Example — weather (outputType "data", network.allow ["api.open-meteo.com"], manifest.metric {"key":"temp","unit":"°C","valuePath":"data.temp"} to trend the temperature): the script prints {"type":"data","data":{"city":"Hangzhou","temp":18.9,"cond":"night","condText":"Clear","hi":25,"lo":15,"humidity":77,"wind":11.7,"rainChance":0,"hourly":[{"t":"2026-10-31T19:00","temp":19,"cond":"night"},…]}} and the view is
+{"surface":{"bind":"data.cond","map":{"clear":"sky","partly":"sky","night":"night","cloudy":"cloudy","fog":"cloudy","rain":"rain","snow":"snow","storm":"storm"}},"layout":{"type":"stack","gap":4,"children":[{"type":"stack","direction":"row","justify":"between","align":"start","children":[{"type":"stack","gap":2,"children":[{"type":"text","value":{"bind":"data.city"},"weight":"semibold"},{"type":"text","value":{"template":"{data.temp|number:0}°"},"size":"display","weight":"regular"}]},{"type":"icon","name":{"bind":"data.cond","map":{"clear":"sun","partly":"cloud-sun","night":"moon","cloudy":"cloud","fog":"cloud-fog","rain":"cloud-rain","snow":"cloud-snow","storm":"cloud-lightning","*":"cloud"}},"size":40}]},{"type":"text","value":{"template":"{data.condText}  H {data.hi}°  L {data.lo}°"},"size":"sm","tone":"secondary"},{"type":"stack","direction":"row","gap":14,"hideWhen":"narrow","children":[{"type":"stack","direction":"row","gap":4,"align":"center","children":[{"type":"icon","name":"droplets","size":14},{"type":"text","value":{"template":"{data.humidity}%"},"size":"sm"}]},{"type":"stack","direction":"row","gap":4,"align":"center","children":[{"type":"icon","name":"wind","size":14},{"type":"text","value":{"template":"{data.wind|number:0} km/h"},"size":"sm"}]},{"type":"stack","direction":"row","gap":4,"align":"center","children":[{"type":"icon","name":"umbrella","size":14},{"type":"text","value":{"template":"{data.rainChance}%"},"size":"sm"}]}]},{"type":"spacer"},{"type":"repeat","items":"data.hourly","limit":6,"direction":"row","justify":"between","hideWhen":"short","template":{"type":"stack","gap":6,"align":"center","children":[{"type":"text","value":"Now","size":"xs","tone":"secondary","visible":{"bind":"index","eq":0}},{"type":"text","value":{"bind":"item.t","format":"time"},"size":"xs","tone":"secondary","visible":{"bind":"index","ne":0}},{"type":"icon","name":{"bind":"item.cond","map":{"clear":"sun","partly":"cloud-sun","night":"moon","cloudy":"cloud","fog":"cloud-fog","rain":"cloud-rain","snow":"cloud-snow","storm":"cloud-lightning","*":"cloud"}},"size":18},{"type":"text","value":{"template":"{item.temp}°"},"size":"sm","weight":"medium"}]}}]}}
+</card_layout>
 
 <metric_definition>
 The description (口径) is shown on the card and must let the user trust the number: the data source, filters, time window, and unit — e.g. "Open issues labelled bug in lobehub/lobehub, excluding pull requests; counted at run time." Update it whenever the script's logic changes.

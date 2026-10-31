@@ -1,0 +1,84 @@
+import { systemPrompt } from '@lobechat/builtin-tool-dashboard';
+import { describe, expect, it } from 'vitest';
+
+import { widgetLayoutSchema } from '../layoutSchema';
+import { widgetViewSchema } from '../versionSchema';
+
+const text = (value: unknown) => ({ type: 'text', value });
+
+describe('widgetLayoutSchema', () => {
+  it('accepts a nested layout with bindings, templates, conditions and a repeat', () => {
+    const result = widgetLayoutSchema.safeParse({
+      children: [
+        text({ bind: 'data.temp', digits: 0, format: 'number' }),
+        text({ template: 'H {data.hi}° · L {data.lo}°' }),
+        {
+          color: { bind: 'data.level', map: { 'high': 'error', '*': 'success' } },
+          name: 'thermometer',
+          type: 'icon',
+          visible: { bind: 'data.temp', gt: 30 },
+        },
+        {
+          items: 'data.hourly',
+          limit: 6,
+          template: text({ bind: 'item.t', format: 'time' }),
+          type: 'repeat',
+        },
+        { kind: 'area', key: 'temp', type: 'sparkline', values: 'data.hourly' },
+        { max: 100, type: 'ring', value: { bind: 'data.pct' }, children: [text('ok')] },
+      ],
+      type: 'stack',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it.each([
+    ['an unknown node type', { type: 'script', value: 'alert(1)' }],
+    ['an unknown property', { type: 'text', value: 'x', style: { color: 'red' } }],
+    ['an unknown literal icon', { name: 'rocket-ship', type: 'icon' }],
+    ['an unknown literal color', { color: '#ff0000', type: 'progress', value: 1 }],
+    ['a non-https image', { src: 'http://example.com/a.png', type: 'image' }],
+    ['a path with brackets', text({ bind: 'data.hourly[0]' })],
+  ])('rejects %s', (_, layout) => {
+    expect(widgetLayoutSchema.safeParse(layout).success).toBe(false);
+  });
+
+  it('rejects a layout nested deeper than the limit', () => {
+    let layout: Record<string, unknown> = text('leaf');
+    for (let depth = 0; depth < 13; depth += 1) layout = { children: [layout], type: 'stack' };
+
+    const result = widgetLayoutSchema.safeParse(layout);
+
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('nested deeper');
+  });
+
+  it('rejects a layout with more nodes than the limit', () => {
+    const result = widgetLayoutSchema.safeParse({
+      children: Array.from({ length: 200 }, () => text('x')),
+      type: 'stack',
+    });
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('widgetViewSchema surface', () => {
+  it('accepts a surface name or a binding, and rejects an unknown name', () => {
+    expect(widgetViewSchema.safeParse({ surface: 'rain' }).success).toBe(true);
+    expect(
+      widgetViewSchema.safeParse({ surface: { bind: 'data.cond', map: { rain: 'rain' } } }).success,
+    ).toBe(true);
+    expect(widgetViewSchema.safeParse({ surface: 'neon' }).success).toBe(false);
+  });
+});
+
+describe('dashboard tool prompt', () => {
+  it('teaches a weather view that passes validation', () => {
+    const example = systemPrompt.split('and the view is\n')[1]?.split('\n</card_layout>')[0];
+
+    expect(example).toBeTruthy();
+    expect(widgetViewSchema.safeParse(JSON.parse(example!)).success).toBe(true);
+  });
+});

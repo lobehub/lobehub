@@ -5,6 +5,8 @@ import { memo } from 'react';
 
 import type { DashboardTrendSeries } from '@/services/dashboard';
 
+import DataView from './DataView';
+import LayoutView from './LayoutView';
 import ListView from './ListView';
 import SeriesView from './SeriesView';
 import StatView from './StatView';
@@ -18,12 +20,18 @@ export interface WidgetOutputViewProps {
   view?: WidgetViewHints | null;
 }
 
-/** Render one widget output by its contract type. */
+/** Render one widget output by its version's layout, else by its contract type. */
 const WidgetOutputView = memo<WidgetOutputViewProps>(
   ({ output, trend, view, density = 'compact' }) => {
     // Cards scroll and load rows as needed; only an explicit `view.limit` caps them.
     const compact = density === 'compact';
     const limit = compact ? view?.limit : undefined;
+
+    if (view?.layout) {
+      return (
+        <LayoutView framed={!compact} layout={view.layout} output={output} surface={view.surface} />
+      );
+    }
 
     switch (output.type) {
       case 'stat': {
@@ -46,6 +54,9 @@ const WidgetOutputView = memo<WidgetOutputViewProps>(
         return (
           <TableView columns={view?.columns} incremental={compact} limit={limit} output={output} />
         );
+      }
+      case 'data': {
+        return <DataView output={output} />;
       }
       default: {
         return null;

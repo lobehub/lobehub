@@ -20,6 +20,13 @@ describe('parseWidgetOutput', () => {
         type: 'table',
       },
     ],
+    [
+      'data',
+      {
+        data: { city: 'Hangzhou', hourly: [{ t: '2026-10-31T14:00', temp: 18 }], temp: 18.4 },
+        type: 'data',
+      },
+    ],
   ] as const)('accepts a valid %s output', (type, output) => {
     const result = parseWidgetOutput(json(output), type);
 
@@ -68,6 +75,13 @@ describe('parseWidgetOutput', () => {
 
     expect(result).toMatchObject({ code: 'INVALID_OUTPUT', ok: false });
     expect(!result.ok && result.message).toContain('value');
+  });
+
+  it('rejects a data output whose data is not an object', () => {
+    expect(parseWidgetOutput(json({ data: [1, 2], type: 'data' }))).toMatchObject({
+      code: 'INVALID_OUTPUT',
+      ok: false,
+    });
   });
 
   it('rejects unknown output types', () => {
