@@ -1,22 +1,11 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    h3 {
-      margin: 0;
-      font-weight: bold;
-    }
-
-    p {
-      margin: 0;
-    }
-  `,
-}));
+import styles from './GuideModal.module.css';
 
 interface GuideModalContentProps {
   cancelText?: ReactNode;

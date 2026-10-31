@@ -1,31 +1,33 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
+const spin = stylex.keyframes({
+  to: { transform: 'rotate(360deg)' },
+});
 
-    width: 100%;
-    height: 100%;
-    min-height: 96px;
-  `,
-  spinner: css`
-    width: 28px;
-    height: 28px;
-    border: 2px solid ${cssVar.colorFillSecondary};
-    border-block-start-color: ${cssVar.colorTextSecondary};
-    border-radius: 50%;
-
-    animation: content-loading-spin 0.8s linear infinite;
-
-    @keyframes content-loading-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+    minHeight: '96px',
+  },
+  spinner: {
+    width: '28px',
+    height: '28px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillSecondary,
+    borderBlockStartColor: cssVar.colorTextSecondary,
+    borderRadius: '50%',
+    animationName: spin,
+    animationDuration: '0.8s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+});
 
 /**
  * Loading state for a content region whose chrome is already on screen.
@@ -37,8 +39,8 @@ const styles = createStaticStyles(({ css }) => ({
  * conversation. `BrandTextLoading` stays for full-page boundaries.
  */
 const ContentLoading = () => (
-  <div className={styles.container}>
-    <span aria-label={'Loading'} className={styles.spinner} role={'status'} />
+  <div {...stylex.props(styles.container)}>
+    <span aria-label={'Loading'} role={'status'} {...stylex.props(styles.spinner)} />
   </div>
 );
 

@@ -1,5 +1,5 @@
 import type { DocumentItem } from '@lobechat/database/schemas';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
@@ -18,6 +18,12 @@ vi.mock('@/services/document', () => ({
     deleteDocument: vi.fn(),
     getDocumentById: vi.fn(),
     updateDocument: vi.fn(),
+  },
+}));
+
+vi.mock('@/store/home', () => ({
+  useHomeStore: {
+    getState: () => ({ refreshDocsHome: vi.fn().mockResolvedValue(undefined) }),
   },
 }));
 
@@ -85,6 +91,11 @@ const seedList = (docs: LobeDocument[]) => {
 beforeEach(() => {
   vi.clearAllMocks();
   pageActions.reset();
+});
+
+afterEach(async () => {
+  // Page mutations refresh Docs home through a fire-and-forget dynamic import.
+  await vi.dynamicImportSettled();
 });
 
 describe('pageActions — createNewPage', () => {

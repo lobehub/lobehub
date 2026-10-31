@@ -2442,6 +2442,10 @@ export default {
   'goalChat.welcome':
     "Ask the agent about this goal — how it's going, what's blocking, or what happens next.",
   'goalDetail.acceptanceError': 'Could not load acceptance checks.',
+  'goalDetail.visibility.changeFailed': 'Failed to change goal visibility',
+  'goalDetail.visibility.creatorOnly': "Only the goal's creator can change its visibility",
+  'goalDetail.visibility.privateAgentLocked': 'Private agents can only run private goals.',
+  'goalDetail.visibility.privateProjectLocked': 'Goals in a private project stay private.',
   'goalDetail.acceptanceProgress': 'Acceptance progress',
   'goalDetail.agentRun': 'Agent run',
   'goalDetail.definition': 'Goal definition',

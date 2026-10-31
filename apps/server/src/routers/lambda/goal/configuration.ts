@@ -1,5 +1,5 @@
 import { GOAL_TITLE_MAX_LENGTH } from '@lobechat/const/goal';
-import { MAX_GOAL_METRIC_CRITERIA } from '@lobechat/types';
+import { GOAL_VISIBILITIES, MAX_GOAL_METRIC_CRITERIA } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -172,6 +172,20 @@ export const configurationRouter = router({
         };
       } catch (error) {
         mapGoalError(error, 'setTaskAgent');
+      }
+    }),
+  /**
+   * Make a workspace goal private (only its creator sees it) or public. Its
+   * own Tasks follow; a public goal needs public agents.
+   */
+  setVisibility: goalWriteProcedure
+    .input(idInput.extend({ visibility: z.enum(GOAL_VISIBILITIES) }))
+    .mutation(async ({ ctx, input: { id, visibility } }) => {
+      try {
+        const data = await ctx.goalService.setVisibility(id, visibility);
+        return { data, message: 'Goal visibility updated', success: true };
+      } catch (error) {
+        mapGoalError(error, 'setVisibility');
       }
     }),
   /**

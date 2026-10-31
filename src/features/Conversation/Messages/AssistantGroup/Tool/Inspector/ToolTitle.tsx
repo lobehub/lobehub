@@ -1,5 +1,7 @@
 import { getGoalCommand, isGoalCommandFailed } from '@lobechat/shared-tool-ui/goal-command';
-import { createStaticStyles, cx, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { ChevronRight } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -8,47 +10,44 @@ import { useTranslation } from 'react-i18next';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 import { shinyTextStyles } from '@/styles';
+import { sx } from '@/styles/sx';
 
 import { getToolDisplayName } from '../../toolDisplayNames';
 import { extractToolKeyword } from './extractToolKeyword';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  aborted: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  keyword: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-  `,
-  root: css`
-    overflow: hidden;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 1px;
-
-    color: ${cssVar.colorTextDescription};
-    white-space: nowrap;
-  `,
-  label: css`
-    flex: none;
-  `,
-  standalone: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-    min-width: 0;
-    text-overflow: ellipsis;
-  `,
-}));
+export const styles = stylex.create({
+  aborted: { color: cssVar.colorTextQuaternary },
+  keyword: {
+    overflow: 'hidden',
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: 'auto',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+  },
+  root: {
+    overflow: 'hidden',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    paddingBlock: '1px',
+    color: cssVar.colorTextDescription,
+    whiteSpace: 'nowrap',
+  },
+  label: { flex: 'none' },
+  standalone: {
+    overflow: 'hidden',
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: 'auto',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+  },
+});
 
 interface ToolTitleProps {
   apiName: string;
@@ -114,24 +113,24 @@ const ToolTitle = memo<ToolTitleProps>(
       const failed = !isLoading && isGoalCommandFailed(result);
       const status = isLoading ? 'loading' : failed ? 'failed' : 'completed';
       return (
-        <div className={cx(styles.root, isAborted && styles.aborted)}>
-          <span className={cx(styles.label, isLoading && shinyTextStyles.shinyText)}>
+        <div {...stylex.props(styles.root, isAborted && styles.aborted)}>
+          <span {...sx([styles.label], isLoading ? shinyTextStyles.shinyText : undefined)}>
             {t(`builtins.goalCommand.${goalCommand.kind}.${status}`)}
           </span>
-          {goalTitle && <span className={styles.standalone}>{goalTitle}</span>}
+          {goalTitle && <span {...stylex.props(styles.standalone)}>{goalTitle}</span>}
         </div>
       );
     }
 
     return (
-      <div className={cx(styles.root, isAborted && styles.aborted)}>
+      <div {...stylex.props(styles.root, isAborted && styles.aborted)}>
         {isStandaloneDescription ? (
-          <span className={cx(styles.standalone, isLoading && shinyTextStyles.shinyText)}>
+          <span {...sx([styles.standalone], isLoading ? shinyTextStyles.shinyText : undefined)}>
             {keyword}
           </span>
         ) : (
           <>
-            <span className={cx(styles.label, isLoading && shinyTextStyles.shinyText)}>
+            <span {...sx([styles.label], isLoading ? shinyTextStyles.shinyText : undefined)}>
               {actionLabel || (
                 <>
                   {pluginTitle && (
@@ -144,7 +143,7 @@ const ToolTitle = memo<ToolTitleProps>(
                 </>
               )}
             </span>
-            {keyword && <span className={styles.keyword}>{keyword}</span>}
+            {keyword && <span {...stylex.props(styles.keyword)}>{keyword}</span>}
           </>
         )}
       </div>

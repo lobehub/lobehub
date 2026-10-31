@@ -2,7 +2,7 @@ import type { ChannelPublicMessage } from '@lobechat/types';
 import { Button, Empty, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { MessageSquare } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
@@ -20,6 +20,7 @@ import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
 import { Composer } from './Composer';
 import { JoinEventLine } from './JoinEventLine';
 import { channelJoinEvents, channelTimeline } from './joinEvents';
+import { channelTimeFormatters, presentChannelTimeline } from './messagePresentation';
 import { ReplyActivity } from './ReplyActivity';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
@@ -43,7 +44,8 @@ const Timeline = ({
   onOpenThread,
   onStartThread,
 }: ChannelConversationProps) => {
-  const { t } = useTranslation('channel');
+  const { t, i18n } = useTranslation('channel');
+  const timeFormats = useMemo(() => channelTimeFormatters(i18n.language), [i18n.language]);
   const [before, setBefore] = useState<number>();
   const reply = useReplyTarget(channelDraftKey(channelId, threadId));
   const [jumpTarget, setJumpTarget] = useState<ChannelReplyTarget | null>(null);
@@ -187,25 +189,38 @@ const Timeline = ({
                   ) : (
                     <Empty icon={MessageSquare} title={t('conversationEmpty')} />
                   ))}
-                {timeline.map((item) =>
-                  item.kind === 'event' ? (
-                    <JoinEventLine event={item.event} key={item.event.id} />
-                  ) : (
-                    <ChannelMessage
-                      detail={detail}
-                      highlighted={highlighted === item.message.id}
-                      key={item.message.id}
-                      message={item.message}
-                      threadId={threadId}
-                      onJumpToMessage={jumpToMessage}
-                      onOpenThread={onOpenThread}
-                      onStartThread={channelArchived ? undefined : onStartThread}
-                      onReply={
-                        channelArchived || thread?.status === 'archived' ? undefined : selectReply
-                      }
-                    />
-                  ),
-                )}
+                {presentChannelTimeline(timeline).map(({ item, date, startsDay, continuation }) => (
+                  <Fragment key={item.kind === 'event' ? item.event.id : item.message.id}>
+                    {startsDay && (
+                      <div
+                        aria-label={timeFormats.date.format(date)}
+                        role="separator"
+                        {...stylex.props(styles.dateDivider)}
+                      >
+                        <span {...stylex.props(styles.dateLine)} />
+                        <time dateTime={date.toISOString()}>{timeFormats.date.format(date)}</time>
+                        <span {...stylex.props(styles.dateLine)} />
+                      </div>
+                    )}
+                    {item.kind === 'event' ? (
+                      <JoinEventLine event={item.event} />
+                    ) : (
+                      <ChannelMessage
+                        continuation={continuation}
+                        detail={detail}
+                        highlighted={highlighted === item.message.id}
+                        message={item.message}
+                        threadId={threadId}
+                        onJumpToMessage={jumpToMessage}
+                        onOpenThread={onOpenThread}
+                        onStartThread={channelArchived ? undefined : onStartThread}
+                        onReply={
+                          channelArchived || thread?.status === 'archived' ? undefined : selectReply
+                        }
+                      />
+                    )}
+                  </Fragment>
+                ))}
               </WideScreenContainer>
             </Flexbox>
             {channelArchived || thread?.status === 'archived' ? (

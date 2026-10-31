@@ -2,7 +2,7 @@
 
 import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, type FC } from 'react';
 import { Suspense } from 'react';
@@ -89,9 +89,11 @@ const Layout: FC = () => {
         <DndContextWrapper>
           <Flexbox
             horizontal
-            className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
             height={`calc(100% - ${TITLE_BAR_HEIGHT}px)`}
             width={'100%'}
+            className={
+              stylex.props(isPWA ? styles.mainContainerPWA : styles.mainContainer).className
+            }
           >
             {imLayout ? (
               <>

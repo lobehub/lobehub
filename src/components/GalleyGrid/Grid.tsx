@@ -2,7 +2,8 @@ import { cx, Flexbox } from '@lobehub/ui';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
-import { MAX_SIZE_DESKTOP, MIN_IMAGE_SIZE, styles } from './style';
+import { MAX_SIZE_DESKTOP, MIN_IMAGE_SIZE } from './style';
+import styles from './style.module.css';
 
 interface GridProps {
   children: ReactNode;
