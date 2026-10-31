@@ -1,4 +1,5 @@
 import type { ChannelPublicMember } from '@lobechat/types';
+import type { ISlashOption } from '@lobehub/editor';
 import {
   INSERT_MENTION_COMMAND,
   ReactCodePlugin,
@@ -15,6 +16,7 @@ import type { ReactNode } from 'react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useLocalDragUpload } from '@/components/DragUploadZone/useLocalDragUpload';
 import { usePasteFile } from '@/components/DragUploadZone/usePasteFile';
 import DraftFile from '@/features/ChatInput/Mobile/FilePreview/FileItem/File';
@@ -60,6 +62,7 @@ export function Composer({
   ) => Promise<void>;
 }) {
   const { t } = useTranslation('channel');
+  const workspaceId = useActiveWorkspaceId();
   const editor = useEditor();
   const draft = useComposerDraft(editor, draftKey);
   const shouldSendOnEnter = useEnterToSend();
@@ -183,17 +186,25 @@ export function Composer({
                       mentionable,
                       search?.matchingString || '',
                       t('deletedMember'),
-                    ).map((group) => ({
-                      type: 'section',
-                      key: group.actorType,
-                      label: t(group.actorType === 'user' ? 'membersTitle' : 'agents'),
-                      items: group.members.map((member) => ({
+                      !!workspaceId,
+                    ).flatMap<ISlashOption>((group) => {
+                      const items = group.members.map((member) => ({
                         icon: <MemberAvatar member={member} size={24} />,
                         key: member.id,
                         label: memberName(member, t('deletedMember')),
                         metadata: { type: 'channel-member', id: member.id },
-                      })),
-                    })),
+                      }));
+                      return group.actorType
+                        ? [
+                            {
+                              type: 'section' as const,
+                              key: group.actorType,
+                              label: t(group.actorType === 'user' ? 'membersTitle' : 'agents'),
+                              items,
+                            },
+                          ]
+                        : items;
+                    }),
                   markdownWriter: (node) => `@${node.label}`,
                   onSelect: (instance, option) => {
                     instance.dispatchCommand(INSERT_MENTION_COMMAND, {
