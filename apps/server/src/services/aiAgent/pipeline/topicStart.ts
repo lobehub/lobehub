@@ -12,10 +12,15 @@ import {
   type SupersedeKind,
   type SupersedeRecord,
 } from '@/server/services/agentRuntime/foregroundOperation';
+import { isOperationLeaseFresh } from '@/server/services/agentRuntime/operationLease';
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
-import { acquireTopicStartReservation, TopicStartReservationError } from '../topicStartReservation';
+import {
+  acquireTopicStartReservation,
+  ForeignLiveRunError,
+  TopicStartReservationError,
+} from '../topicStartReservation';
 import type { InternalExecAgentParams } from '../types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -53,7 +58,10 @@ export const resolveReplacedOperationId = async (
   if (!replacesOperationId || !params.interactiveStart) return replacesOperationId;
 
   const replaced = await deps.agentOperationModel.findById(replacesOperationId);
-  return replaced?.topicId === topicId ? replacesOperationId : undefined;
+  // Workspace reads are member-wide, so the row may be a teammate's run.
+  return replaced?.topicId === topicId && replaced.userId === deps.userId
+    ? replacesOperationId
+    : undefined;
 };
 
 /**
@@ -80,6 +88,10 @@ export const resolveReplacedOperationId = async (
  *   concurrent send would fail. Those settle through `replacesOperationId`
  *   before reserving.
  *
+ * A send never retires another member's live run: in a workspace topic a
+ * teammate may be driving it, so the start is refused with
+ * {@link ForeignLiveRunError}. That also covers a teammate's device-hosted run.
+ *
  * @returns the retired run and whether it had already been asked to stop, so
  * the caller can record the overlap on the new run.
  */
@@ -91,11 +103,29 @@ export const supersedeRunningForegroundOperation = async (
   const topic = await deps.topicModel.findById(topicId);
   const marker = topic?.metadata?.runningOperation;
   const holderId = marker?.operationId;
-  if (!holderId || marker.heteroType || alreadyHandledOperationIds.includes(holderId)) return;
+  if (!holderId || alreadyHandledOperationIds.includes(holderId)) return;
 
   const holder = await deps.agentOperationModel.findById(holderId);
   if (holder?.status !== 'running') return;
+
+  // A teammate's run the send would retire (or run next to, for a device
+  // process) refuses the send. One whose lease froze is dead — often a
+  // `running` row nothing will ever settle — and must not lock the topic, so
+  // it keeps the behavior below.
+  const heterogeneous = Boolean(marker.heteroType);
+  const refuseIfForeignAndAlive = () => {
+    if (holder.userId === deps.userId || !isOperationLeaseFresh(holder, { heterogeneous })) return;
+    throw new ForeignLiveRunError(
+      `Topic ${topicId} is driven by another member's running operation ${holderId}`,
+    );
+  };
+
+  if (heterogeneous) {
+    refuseIfForeignAndAlive();
+    return;
+  }
   if (!isComposerSupersedableTrigger(holder.trigger)) return;
+  refuseIfForeignAndAlive();
 
   // Read before interrupting: afterwards the sentinel is always set. The
   // read is diagnostic only, so a failure must not fail the send.

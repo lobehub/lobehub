@@ -20,7 +20,10 @@ import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/wor
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
 import { RequestedDeviceIgnoredError } from '@/server/services/aiAgent/pipeline/turnSetup';
 import { AgentRelayHopLimitError } from '@/server/services/aiAgent/sourceAttribution';
-import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
+import {
+  ForeignLiveRunError,
+  TopicStartReservationError,
+} from '@/server/services/aiAgent/topicStartReservation';
 
 import type { ExecAgentInput } from './execSchemas';
 import {
@@ -302,6 +305,16 @@ export const execRouter = router({
           cause: error,
           code: 'CONFLICT',
           message: 'The conversation is busy with a running turn; queue the message behind it.',
+        });
+      }
+
+      // Another member's run drives the topic; a send never interrupts it, and
+      // nothing was written.
+      if (error instanceof ForeignLiveRunError) {
+        throw new TRPCError({
+          cause: error,
+          code: 'CONFLICT',
+          message: 'Another member is running this conversation; wait until their turn finishes.',
         });
       }
 

@@ -16,21 +16,12 @@ import { QueueService } from '@/server/services/queue';
 
 import { AbandonOperationService } from './AbandonOperationService';
 import { BACKGROUND_OPERATION_TRIGGERS } from './foregroundOperation';
+import {
+  HETERO_OPERATION_SILENCE_MS as HETERO_SILENCE_MS,
+  OPERATION_LEASE_STALE_MS as DEFAULT_STALE_AFTER_MS,
+} from './operationLease';
 
 const log = debug('lobe-server:stale-operation-reaper');
-
-/**
- * How long an operation may go without refreshing its durable liveness lease
- * before this sweep treats it as dead.
- *
- * `AgentRuntimeService.startStepLockHeartbeat` touches the row every
- * `STEP_LOCK_HEARTBEAT_MS * DURABLE_LEASE_HEARTBEAT_EVERY_TICKS` = 90s while a
- * step holds the step lock, so five minutes is three missed beats: comfortably
- * past jitter, and far tighter than the 30-minute in-flight window the gateway
- * watchdog has to use (it can only reason about stream events, which stop for
- * legitimately slow first-token latency too).
- */
-const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
 
 /**
  * Redriving costs a real LLM call, so a step that dies deterministically
@@ -56,20 +47,6 @@ const DEFAULT_LIMIT = 50;
  * inside it (see `HETERO_SILENCE_MS`).
  */
 const DEFAULT_LOOKBACK_MS = 24 * 60 * 60_000;
-
-/**
- * How long a heterogeneous run (Claude Code, Codex, …) may go without any
- * `heteroIngest` batch before this sweep retires it.
- *
- * Deliberately the same window as the agent-gateway inactivity watchdog uses
- * for hetero runs (`INACTIVITY_WATCHDOG_TIMEOUT_HETERO`, 60 min): a long shell
- * command inside the CLI reaches the server as silence, and this must not be
- * stricter than the path it backs up. The two read the same clock — every
- * ingest batch both refreshes this lease and pushes the events that reset the
- * gateway's — so whichever runs first wins and the other finds the row
- * terminal.
- */
-const HETERO_SILENCE_MS = 60 * 60_000;
 
 const isHeterogeneousProvider = (provider: string | null | undefined): boolean =>
   !!provider &&
