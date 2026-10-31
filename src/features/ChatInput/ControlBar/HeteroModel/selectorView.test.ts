@@ -45,13 +45,13 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives catalog-only providers the bare picker', () => {
+    expect(resolveSelectorShape({ type: 'antigravity' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'kimi-code' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'opencode' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'pi' }, true).kind).toBe('catalog');
   });
 
   it('gives a catalog provider with another dimension the full menu', () => {
-    expect(resolveSelectorShape({ type: 'antigravity' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'codebuddy' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'qoder' }, true).kind).toBe('menu');
@@ -64,19 +64,12 @@ describe('resolveSelectorShape', () => {
 });
 
 describe('dimensions per provider', () => {
-  it('offers Antigravity catalog models and native effort levels with inherited defaults', () => {
-    const view = viewOf({ type: 'antigravity' });
+  it('shows the Antigravity variant without a second effort dimension', () => {
+    const view = viewOf({ type: 'antigravity', model: 'gemini-4-argon-high' });
     expect(view.isCatalogModel).toBe(true);
-    expect(view.model).toBe('default');
-    expect(view.dimensions.map(({ key }) => key)).toEqual(['reasoning']);
-    expect(view.dimensions[0].options.map(({ value }) => value)).toEqual([
-      'default',
-      'low',
-      'medium',
-      'high',
-      'xhigh',
-      'max',
-    ]);
+    expect(view.model).toBe('gemini-4-argon-high');
+    expect(view.dimensions).toEqual([]);
+    expect(view.triggerLabel.secondaryText).toBeUndefined();
   });
   it('uses the Codex catalog while preserving reasoning levels through max', () => {
     expect(viewOf({ type: 'codex' }).isCatalogModel).toBe(true);
