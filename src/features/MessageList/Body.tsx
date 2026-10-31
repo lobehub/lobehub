@@ -26,6 +26,8 @@ import {
   buildConversationEntries,
   buildConversationSections,
   type Conversation,
+  latestActivity,
+  latestTopicOf,
 } from './conversations';
 import GroupConversation from './GroupConversation';
 import InboxConversation from './InboxConversation';
@@ -80,14 +82,21 @@ const Body = memo(() => {
     ),
   );
 
+  // The inbox is not one of the sidebar rows, so its position comes from its
+  // own latest topic rather than from the agent's configuration timestamp.
+  const inboxTopic = useMemo(
+    () => latestTopicOf(recents, inboxAgentId ?? undefined),
+    [recents, inboxAgentId],
+  );
+
   const entries = useMemo(
     () =>
       buildConversationEntries(
         buildConversationSections(items, recents),
-        { activeAt: inboxUpdatedAt ? new Date(inboxUpdatedAt) : undefined, title: inboxTitle },
+        { activeAt: latestActivity(inboxUpdatedAt, inboxTopic), title: inboxTitle },
         query,
       ),
-    [items, recents, inboxUpdatedAt, inboxTitle, query],
+    [items, recents, inboxUpdatedAt, inboxTitle, inboxTopic, query],
   );
 
   // Only the agent rows wait on the agent list: Lobe AI and Channels load on

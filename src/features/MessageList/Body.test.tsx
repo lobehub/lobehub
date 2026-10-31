@@ -12,6 +12,7 @@ const home = vi.hoisted(() => ({
   isInit: false,
   items: [] as unknown[],
   mutate: () => {},
+  recents: [] as unknown[],
 }));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -36,7 +37,7 @@ vi.mock('@/store/home', () => ({
 }));
 vi.mock('@/store/home/selectors', () => ({
   homeAgentListSelectors: { allAgents: () => home.items, isAgentListInit: () => home.isInit },
-  homeRecentSelectors: { conversationRecents: () => () => [] },
+  homeRecentSelectors: { conversationRecents: () => () => home.recents },
 }));
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: object) => unknown) => selector({ agentMap: {} }),
@@ -65,6 +66,7 @@ beforeEach(() => {
   home.error = undefined;
   home.isInit = false;
   home.items = [];
+  home.recents = [];
 });
 
 describe('MessageList Body', () => {
@@ -98,5 +100,36 @@ describe('MessageList Body', () => {
     expect(screen.getByText('Agent A')).toBeInTheDocument();
     expect(screen.queryByText('Loading agents')).not.toBeInTheDocument();
     expect(screen.getByText('Channels')).toBeInTheDocument();
+  });
+});
+
+describe('MessageList Body ordering', () => {
+  const row = (id: string, updatedAt: string) => ({
+    id,
+    pinned: false,
+    title: id,
+    type: 'agent',
+    updatedAt: new Date(updatedAt),
+  });
+  const topic = (agentId: string, updatedAt: string) => ({
+    agentId,
+    icon: '',
+    id: agentId + updatedAt,
+    routePath: `/agent/${agentId}`,
+    status: null,
+    title: 'topic',
+    type: 'topic',
+    updatedAt: new Date(updatedAt),
+  });
+
+  it('moves Lobe AI up by its latest conversation, not its configuration time', () => {
+    home.items = [row('a', '2026-10-01')];
+    home.recents = [topic('inbox', '2026-10-06'), topic('a', '2026-10-03')];
+
+    const { container } = render(createElement(Body));
+    const text = container.textContent ?? '';
+
+    expect(text).toContain('Lobe AI row');
+    expect(text.indexOf('Lobe AI row')).toBeLessThan(text.indexOf('a'));
   });
 });

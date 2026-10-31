@@ -22,6 +22,38 @@ const recentOwnerId = (recent: RecentItem): string | undefined => {
 
 const toTime = (value: Date | string) => new Date(value).getTime();
 
+/** Newest topic per owner (agent id, or the group named by the topic route). */
+const topicsByOwner = (recents: RecentItem[] | undefined): Map<string, RecentItem> => {
+  const latest = new Map<string, RecentItem>();
+  for (const recent of recents ?? []) {
+    const owner = recentOwnerId(recent);
+    if (!owner) continue;
+    const current = latest.get(owner);
+    if (!current || toTime(recent.updatedAt) > toTime(current.updatedAt)) latest.set(owner, recent);
+  }
+  return latest;
+};
+
+/**
+ * One owner's latest topic. The inbox row is not part of `items`, so it asks
+ * for its own activity instead of going through the sections builder.
+ */
+export const latestTopicOf = (
+  recents: RecentItem[] | undefined,
+  ownerId: string | undefined,
+): RecentItem | undefined => (ownerId ? topicsByOwner(recents).get(ownerId) : undefined);
+
+/** The newer of an entity's own timestamp and its latest topic. */
+export const latestActivity = (
+  own: Date | string | undefined,
+  topic: RecentItem | undefined,
+): Date | undefined => {
+  const ownTime = own ? toTime(own) : 0;
+  const topicTime = topic ? toTime(topic.updatedAt) : 0;
+  if (!ownTime && !topicTime) return undefined;
+  return new Date(Math.max(ownTime, topicTime));
+};
+
 /**
  * Turn the sidebar agent/group list into IM-style conversations: each row
  * carries a preview of its latest topic and is ordered by latest activity,
@@ -31,14 +63,7 @@ export const buildConversationSections = (
   items: SidebarAgentItem[],
   recents: RecentItem[] | undefined,
 ): ConversationSections => {
-  const latestByOwner = new Map<string, RecentItem>();
-  for (const recent of recents ?? []) {
-    const owner = recentOwnerId(recent);
-    if (!owner) continue;
-    const current = latestByOwner.get(owner);
-    if (!current || toTime(recent.updatedAt) > toTime(current.updatedAt))
-      latestByOwner.set(owner, recent);
-  }
+  const latestByOwner = topicsByOwner(recents);
 
   const seen = new Set<string>();
   const conversations: Conversation[] = [];

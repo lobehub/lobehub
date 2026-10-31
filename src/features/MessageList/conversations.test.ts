@@ -5,6 +5,8 @@ import {
   buildConversationEntries,
   buildConversationSections,
   formatConversationTime,
+  latestActivity,
+  latestTopicOf,
 } from './conversations';
 
 const agent = (id: string, updatedAt: string, extra: Partial<SidebarAgentItem> = {}) =>
@@ -126,5 +128,32 @@ describe('buildConversationEntries', () => {
 
     expect(ids(buildConversationEntries(named, undefined, 'alice'))).toEqual(['n']);
     expect(ids(buildConversationEntries(named, undefined, 'health'))).toEqual(['n']);
+  });
+});
+
+describe('latestTopicOf', () => {
+  it("takes one owner's newest topic and leaves other owners alone", () => {
+    const recents = [
+      topic({ agentId: 'inbox', updatedAt: '2026-10-03' }),
+      topic({ agentId: 'inbox', lastAssistantMessage: 'newest', updatedAt: '2026-10-06' }),
+      topic({ agentId: 'a', updatedAt: '2026-10-09' }),
+    ];
+
+    expect(latestTopicOf(recents, 'inbox')?.lastAssistantMessage).toBe('newest');
+    expect(latestTopicOf(recents, 'missing')).toBeUndefined();
+    // No owner id (inbox unresolved) must not match every topic.
+    expect(latestTopicOf(recents, undefined)).toBeUndefined();
+  });
+});
+
+describe('latestActivity', () => {
+  it('uses the later of the own timestamp and the latest topic', () => {
+    expect(latestActivity('2026-10-02', topic({ updatedAt: '2026-10-05' }))).toEqual(
+      new Date('2026-10-05'),
+    );
+    expect(latestActivity('2026-10-07', topic({ updatedAt: '2026-10-05' }))).toEqual(
+      new Date('2026-10-07'),
+    );
+    expect(latestActivity(undefined, undefined)).toBeUndefined();
   });
 });
