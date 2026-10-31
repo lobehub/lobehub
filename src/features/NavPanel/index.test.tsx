@@ -321,7 +321,7 @@ describe('NavPanel under the im_layout trial', () => {
   });
 
   it('registers the Messages list as the home entry', async () => {
-    pathname = '/agent/agent-1';
+    pathname = '/';
 
     render(<NavPanelShell />);
 

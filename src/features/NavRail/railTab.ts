@@ -1,4 +1,4 @@
-import { NAV_PANEL_CONTACTS_KEY, resolveRailNavPanelKey } from '@/features/NavPanel/railRouteKey';
+import { isRailContactsRoute } from '@/features/NavPanel/railRouteKey';
 
 export type RailTabKey =
   'contacts' | 'discover' | 'messages' | 'more' | 'projects' | 'resource' | 'settings' | 'tasks';
@@ -23,15 +23,13 @@ const TAB_BY_ROOT: Record<string, RailTabKey> = {
 
 /**
  * The rail tab a pathname belongs to. Agent / group chats and the home page
- * are Messages; their profile and config pages are Contacts (same split as
- * the list column, see `resolveRailNavPanelKey`).
+ * are Messages; their profile and config pages are Contacts.
  */
 export const resolveRailTab = (
   pathname: string,
   activeWorkspaceSlug: string | null,
 ): RailTabKey => {
-  if (resolveRailNavPanelKey(pathname, activeWorkspaceSlug) === NAV_PANEL_CONTACTS_KEY)
-    return 'contacts';
+  if (isRailContactsRoute(pathname, activeWorkspaceSlug)) return 'contacts';
 
   const segments = pathname.split('/').filter(Boolean);
   const isWorkspaceRoute =

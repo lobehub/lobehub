@@ -16,8 +16,8 @@ export const NAV_PANEL_TASKS_KEY = 'tasks';
 export const NAV_PANEL_CONTACTS_KEY = 'contacts';
 
 /**
- * Agent sub-pages that edit or describe the agent itself. They belong to the
- * Contacts tab (profile → edit), not to the conversation.
+ * Agent sub-pages that edit or describe the agent itself. The rail highlights
+ * Contacts for them (profile → edit); the list column stays the agent sidebar.
  */
 const AGENT_CONTACT_PAGES = new Set([
   'channel',
@@ -30,20 +30,41 @@ const AGENT_CONTACT_PAGES = new Set([
   'stats',
 ]);
 
-/** Agent sub-pages that keep the agent's own sidebar (tasks, goals, topics). */
-const AGENT_SIDEBAR_PAGES = new Set(['goal', 'goals', 'task', 'tasks', 'topics']);
-
 const GROUP_CONTACT_PAGES = new Set(['permission', 'profile']);
 
 const TASK_ROOTS = new Set(['goal', 'goals', 'task', 'tasks']);
 
 const FULL_PAGE_ROOTS = new Set(['projects']);
 
+const splitRoute = (pathname: string, activeWorkspaceSlug: string | null) => {
+  const segments = pathname.split('/').filter(Boolean);
+  const isWorkspaceRoute =
+    !!activeWorkspaceSlug && segments.length > 0 && segments[0] === activeWorkspaceSlug;
+  return isWorkspaceRoute ? segments.slice(1) : segments;
+};
+
+/**
+ * Whether the rail highlights Contacts for this route: the all-agents page and
+ * agent / group profile and config pages.
+ */
+export const isRailContactsRoute = (
+  pathname: string,
+  activeWorkspaceSlug: string | null,
+): boolean => {
+  const [rootSegment, , pageSegment] = splitRoute(pathname, activeWorkspaceSlug);
+  if (rootSegment === 'agents') return true;
+  if (!pageSegment) return false;
+  if (rootSegment === 'agent') return AGENT_CONTACT_PAGES.has(pageSegment);
+  if (rootSegment === 'group') return GROUP_CONTACT_PAGES.has(pageSegment);
+  return false;
+};
+
 /**
  * Nav key for the rail layout (rail + list column + content). Builds on the
  * legacy `resolveNavPanelKey`, which the mobile drawer still uses unchanged:
- * - agent / group chats share the conversation list (`home`);
- * - agent / group profile and config pages move to the Contacts list;
+ * - agent / group routes keep their own workbench sidebar (topics, profile,
+ *   goals, tasks), same as the sidebar layout;
+ * - the all-agents page shows the Contacts list;
  * - tasks and goals share the task scope list (all tasks, goals, projects);
  * - the project index renders without a list column.
  */
@@ -52,24 +73,7 @@ export const resolveRailNavPanelKey = (
   activeWorkspaceSlug: string | null,
 ): string => {
   const legacyKey = resolveNavPanelKey(pathname, activeWorkspaceSlug);
-
-  const segments = pathname.split('/').filter(Boolean);
-  const isWorkspaceRoute =
-    !!activeWorkspaceSlug && segments.length > 0 && segments[0] === activeWorkspaceSlug;
-  const [rootSegment, , pageSegment] = isWorkspaceRoute ? segments.slice(1) : segments;
-
-  if (legacyKey === 'agent') {
-    if (pageSegment && AGENT_CONTACT_PAGES.has(pageSegment)) return NAV_PANEL_CONTACTS_KEY;
-    if (pageSegment && AGENT_SIDEBAR_PAGES.has(pageSegment)) return 'agent';
-    // The chat itself (index or `:topicId`) lives in the conversation list.
-    return NAV_PANEL_MESSAGES_KEY;
-  }
-
-  if (legacyKey === 'group') {
-    return pageSegment && GROUP_CONTACT_PAGES.has(pageSegment)
-      ? NAV_PANEL_CONTACTS_KEY
-      : NAV_PANEL_MESSAGES_KEY;
-  }
+  const [rootSegment] = splitRoute(pathname, activeWorkspaceSlug);
 
   if (legacyKey === 'home') {
     if (rootSegment === 'agents') return NAV_PANEL_CONTACTS_KEY;
