@@ -108,6 +108,7 @@ export const experimentalFixtures = [
   ['Menu', 'src/components/Menu/index.tsx'],
   ['OptionCard', 'packages/shared-tool-ui/src/components/OptionCard.tsx'],
   ['OptionRow', 'src/features/ChatInput/ControlBar/OptionRow.tsx'],
+  ['SpendType', 'src/components/SpendType/index.tsx'],
   ['StatusBar', 'src/components/CodeEditorPane/StatusBar.tsx'],
   ['TailMarquee', 'src/components/TailMarquee/index.tsx'],
   ['UnreadDot', 'src/components/UnreadDot/index.tsx'],
@@ -187,6 +188,17 @@ const profiles: Record<
       { id: 'active', states: interactive },
       { id: 'disabled', states: interactive },
     ],
+  },
+  SpendType: {
+    dependencies: ['lucide-react'],
+    variants: [
+      'chat',
+      'embedding',
+      'imageGeneration',
+      'speechRecognition',
+      'textToSpeech',
+      'videoGeneration',
+    ].map((id) => ({ id })),
   },
   StatusBar: {
     dependencies: ['i18next', 'react-i18next'],
