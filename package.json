@@ -184,7 +184,7 @@
   "overrides": {
     "@types/react": "19.2.13",
     "baseline-browser-mapping": "2.10.31",
-    "better-auth": "1.6.33",
+    "better-auth": "1.7.7",
     "drizzle-orm": "^0.45.2",
     "fast-xml-parser": "5.4.2",
     "lexical": "0.42.0",
@@ -367,7 +367,7 @@
     "ahooks": "^3.9.7",
     "async-retry": "^1.3.3",
     "bcryptjs": "^3.0.3",
-    "better-auth": "1.6.33",
+    "better-auth": "1.7.7",
     "brotli-wasm": "^3.0.1",
     "buffer.js": "npm:buffer@^6.0.3",
     "chat": "~4.38.0",
