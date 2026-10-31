@@ -48,7 +48,8 @@ vi.mock('@/libs/better-auth/auth-client', () => ({
   },
 }));
 
-vi.mock('@/libs/better-auth/utils/client', () => ({
+vi.mock('@/libs/better-auth/utils/client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   isBuiltinProvider: (p: string) => ['google', 'github', 'apple'].includes(p),
   normalizeProviderId: (p: string) => p,
 }));
@@ -67,6 +68,7 @@ vi.mock('@/business/client/hooks/useBusinessSignin', () => ({
 }));
 
 let mockEnableBusinessFeatures = false;
+let mockOAuthSSOProviders = ['google', 'github'];
 let mockEnableMagicLink = false;
 vi.mock('@/features/AuthShell/AuthServerConfigProvider', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
@@ -75,7 +77,7 @@ vi.mock('@/features/AuthShell/AuthServerConfigProvider', () => ({
         disableEmailPassword: false,
         enableBusinessFeatures: mockEnableBusinessFeatures,
         enableMagicLink: mockEnableMagicLink,
-        oAuthSSOProviders: ['google', 'github'],
+        oAuthSSOProviders: mockOAuthSSOProviders,
       },
       serverConfigInit: true,
     }),
@@ -106,6 +108,7 @@ describe('useSignIn', () => {
     mockSearchParamsGet.mockReturnValue(null);
     mockEnableBusinessFeatures = false;
     mockEnableMagicLink = false;
+    mockOAuthSSOProviders = ['google', 'github'];
     mockBusinessSignin.ssoProviders = [];
     mockBusinessSignin.getAdditionalData.mockResolvedValue({});
     mockBusinessSignin.preSocialSigninCheck.mockResolvedValue(true);
@@ -724,6 +727,14 @@ describe('useSignIn', () => {
       const { result } = renderHook(() => useSignIn());
 
       expect(result.current.oAuthSSOProviders).toEqual(['saml']);
+    });
+
+    it('should not offer link-only providers as a sign-in option', () => {
+      mockOAuthSSOProviders = ['google', 'twitter', 'github'];
+
+      const { result } = renderHook(() => useSignIn());
+
+      expect(result.current.oAuthSSOProviders).toEqual(['google', 'github']);
     });
   });
 });

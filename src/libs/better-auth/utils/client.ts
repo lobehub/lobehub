@@ -1,1 +1,7 @@
-export { isBuiltinProvider, normalizeProviderId } from './common';
+export {
+  canUnlinkProvider,
+  getProviderDisplayName,
+  isBuiltinProvider,
+  isLinkOnlyProvider,
+  normalizeProviderId,
+} from './common';
