@@ -27,11 +27,12 @@ const Actions = memo<ActionsProps>(({ actionAddon, placement, actions }) => {
       gap={4}
       style={{
         alignSelf: isUser ? 'flex-end' : 'flex-start',
+        maxWidth: '100%',
       }}
     >
       {!isUser && actionAddon}
       {actions && (
-        <Flexbox horizontal align={'center'} role="menubar">
+        <Flexbox horizontal align={'center'} role="menubar" style={{ minWidth: 0 }}>
           {actions}
         </Flexbox>
       )}

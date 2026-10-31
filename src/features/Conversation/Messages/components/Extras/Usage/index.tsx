@@ -24,9 +24,25 @@ import TokenDetail from './UsageDetail';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    min-width: 0;
+    max-width: 100%;
+
     font-size: 12px;
     color: ${cssVar.colorTextQuaternary};
     white-space: nowrap;
+  `,
+  model: css`
+    overflow: hidden;
+    flex-shrink: 1;
+    min-width: 0;
+  `,
+  modelName: css`
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+  `,
+  stat: css`
+    flex-shrink: 0;
   `,
 }));
 
@@ -84,82 +100,84 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
       : undefined;
 
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={styles.container}
-      gap={12}
-      justify={'space-between'}
-    >
-      {/* The speed describes how this model ran, so it sits with the model name
-          rather than in the token/cost cluster. A spelled-out "tok/s" unit rather
-          than an icon: at 12px a gauge glyph is indistinguishable from the
-          neighbouring coin, so the reader can't tell what the number measures.
-          TTFT rides in the hover instead of taking a second inline slot — it's a
-          diagnostic, not an at-a-glance metric. */}
-      <Center horizontal gap={6} style={{ fontSize: 12 }}>
-        <Center horizontal gap={4}>
-          {heteroName || (
-            <>
-              <ModelIcon model={displayModel} type={'mono'} />
-              {modelCard?.displayName || displayModel}
-            </>
-          )}
-        </Center>
-        {!!performance?.tps && (
+    // Every usage stat stays in one start-aligned row, so the footer reads the same
+    // whatever width its host gives it. Only the model name yields when space runs out.
+    <Flexbox horizontal align={'center'} className={styles.container} gap={6}>
+      <Flexbox horizontal align={'center'} className={styles.model} gap={4}>
+        {heteroName ? (
+          <span className={styles.modelName}>{heteroName}</span>
+        ) : (
           <>
-            <span>·</span>
-            <Tooltip
-              title={
-                <Flexbox gap={6}>
-                  <span>{t('messages.tokenDetails.speed.tps.tooltip')}</span>
-                  {!!performance.ttft && (
-                    <Flexbox horizontal gap={12} justify={'space-between'}>
-                      <span>{t('messages.tokenDetails.speed.ttft.title')}</span>
-                      <span>{formatNumber(performance.ttft / 1000, 2)}s</span>
-                    </Flexbox>
-                  )}
-                </Flexbox>
-              }
-            >
-              <Center horizontal gap={4}>
-                <span>{formatNumber(performance.tps, 1)}</span>
-                <span>{t('messages.tokenDetails.speed.tps.title')}</span>
-              </Center>
-            </Tooltip>
+            <ModelIcon model={displayModel} type={'mono'} />
+            <span className={styles.modelName}>{modelCard?.displayName || displayModel}</span>
           </>
         )}
-      </Center>
-
-      <Center horizontal gap={8}>
-        {!!usage?.totalTokens && (
-          <TokenDetail
-            model={displayModel}
-            performance={performance}
-            provider={displayProvider}
-            usage={usage}
-          />
-        )}
-        {/* CLI subscription credits (e.g. Qoder) — the CLI reports these instead
-            of token counts, so without them the footer would show no usage at
-            all. Not LobeHub 积分 and not USD, hence the separate label. */}
-        {!!usage?.credits && (
+      </Flexbox>
+      {/* A spelled-out "tok/s" unit rather than an icon: at 12px a gauge glyph is
+          indistinguishable from the neighbouring coin, so the reader can't tell what
+          the number measures. TTFT rides in the hover instead of taking a second
+          inline slot — it's a diagnostic, not an at-a-glance metric. */}
+      {!!performance?.tps && (
+        <>
+          <span className={styles.stat}>·</span>
+          <Tooltip
+            title={
+              <Flexbox gap={6}>
+                <span>{t('messages.tokenDetails.speed.tps.tooltip')}</span>
+                {!!performance.ttft && (
+                  <Flexbox horizontal gap={12} justify={'space-between'}>
+                    <span>{t('messages.tokenDetails.speed.ttft.title')}</span>
+                    <span>{formatNumber(performance.ttft / 1000, 2)}s</span>
+                  </Flexbox>
+                )}
+              </Flexbox>
+            }
+          >
+            <Center horizontal className={styles.stat} gap={4}>
+              <span>{formatNumber(performance.tps, 1)}</span>
+              <span>{t('messages.tokenDetails.speed.tps.title')}</span>
+            </Center>
+          </Tooltip>
+        </>
+      )}
+      {!!usage?.totalTokens && (
+        <>
+          <span className={styles.stat}>·</span>
+          <div className={styles.stat}>
+            <TokenDetail
+              model={displayModel}
+              performance={performance}
+              provider={displayProvider}
+              usage={usage}
+            />
+          </div>
+        </>
+      )}
+      {/* CLI subscription credits (e.g. Qoder) — the CLI reports these instead
+          of token counts, so without them the footer would show no usage at
+          all. Not LobeHub 积分 and not USD, hence the separate label. */}
+      {!!usage?.credits && (
+        <>
+          <span className={styles.stat}>·</span>
           <Tooltip title={t('messages.tokenDetails.cliCredits.tooltip')}>
-            <Center horizontal gap={2}>
+            <Center horizontal className={styles.stat} gap={2}>
               <Icon icon={CoinsIcon} />
               {t('messages.tokenDetails.cliCredits.title', {
                 value: formatNumber(usage.credits, 2),
               })}
             </Center>
           </Tooltip>
-        )}
-        {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
-          <Center horizontal gap={2}>
+        </>
+      )}
+      {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
+        <>
+          <span className={styles.stat}>·</span>
+          <Center horizontal className={styles.stat} gap={2}>
             <Icon icon={CircleDollarSignIcon} />
             {formatCost(usage.cost)}
           </Center>
-        )}
-      </Center>
+        </>
+      )}
     </Flexbox>
   );
 }, isEqual);

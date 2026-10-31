@@ -340,7 +340,7 @@ const GroupMessage = memo<GroupMessageProps>(
             {/* Model + token usage rides the action row instead of claiming a
                 band of its own between the answer and the round's artifacts. */}
             {isDevMode && model && (
-              <Flexbox horizontal align={'center'} paddingInline={8}>
+              <Flexbox horizontal align={'center'} paddingInline={8} style={{ minWidth: 0 }}>
                 <Usage model={model} performance={performance} provider={provider!} usage={usage} />
               </Flexbox>
             )}
