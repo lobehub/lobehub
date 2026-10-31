@@ -431,6 +431,21 @@ describe('agent-mail provider — inbound', () => {
     expect(message!.text).toContain('the answer');
   });
 
+  it('drops a message the deployment key can read but this inbox does not own', async () => {
+    // The fetch back is not scoped to the account: it runs with the deployment
+    // key. A caller who installs their own webhook secret can sign a delivery
+    // whose payload names their inbox but whose message id lives elsewhere.
+    const { fetchImpl } = createMailFetch({ detail: { inboxId: 'inb_someone_else' } });
+    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });
+
+    const message = await provider.normalizeInbound(
+      { eventId: 'evt_1', payload: JSON.parse(inboundBody()) },
+      ref(),
+    );
+
+    expect(message).toBeNull();
+  });
+
   it('carries the attachments, so an attachment-only email still reaches the agent with its files', async () => {
     const { fetchImpl } = createMailFetch({
       detail: {

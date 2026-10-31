@@ -276,6 +276,12 @@ export const createAgentMailProvider = (
         await dedupeStore.release?.(event.eventId);
         throw error;
       }
+      // The fetch back runs with the deployment key, so it is not scoped to
+      // this account's inbox: the summary only names a message id. An editor
+      // who installs their own webhook secret could otherwise pair their own
+      // inbox address with a foreign message id and be handed its contents.
+      if (detail.inboxId !== inboxIdOf(ref)) return null;
+
       const raw = await client.getRawMessage(summaryId);
       const headers = raw ? parseRawHeaders(raw) : null;
 
