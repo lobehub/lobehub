@@ -1,6 +1,5 @@
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
 import {
-  BOT_WAKE_SETTING_KEYS,
   flattenBotWakeSettings,
   hasPassiveListeningRule,
 } from '@/server/services/agentSignal/scenarios/botWake/config';
@@ -31,30 +30,6 @@ export function mergeBotSettingsForPersist(
   const definition = platformRegistry.getPlatform(platform);
   if (!definition) return settings;
   return mergeWithDefaults(definition.schema, settings);
-}
-
-/**
- * The settings to persist for a bot being created: {@link mergeBotSettingsForPersist}, with the
- * bot-wake switch on unless the caller set it. The switch's schema default stays off, because the
- * runtime merges schema defaults into bots saved before the switch existed; only a new bot starts
- * with it on.
- */
-export function mergeBotSettingsForCreate(
-  platform: string | undefined,
-  settings: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  const definition = platform ? platformRegistry.getPlatform(platform) : undefined;
-  const hasWakeSwitch = definition?.schema
-    .find((field) => field.key === 'settings')
-    ?.properties?.some((field) => field.key === BOT_WAKE_SETTING_KEYS.enabled);
-  if (!hasWakeSwitch || settings?.[BOT_WAKE_SETTING_KEYS.enabled] !== undefined) {
-    return mergeBotSettingsForPersist(platform, settings);
-  }
-
-  return mergeBotSettingsForPersist(platform, {
-    ...settings,
-    [BOT_WAKE_SETTING_KEYS.enabled]: true,
-  });
 }
 
 /**

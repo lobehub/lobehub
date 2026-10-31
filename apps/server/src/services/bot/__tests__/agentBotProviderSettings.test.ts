@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
-  mergeBotSettingsForCreate,
-  mergeBotSettingsForPersist,
   mergeBotSettingsPatch,
 } from '../agentBotProviderSettings';
 
@@ -147,8 +145,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('stops the runtime when watch keywords go from none to some', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).toHaveBeenCalledWith('discord', 'app-1', 'user-1');
@@ -157,8 +155,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('stops the runtime when watch keywords are cleared', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: { watchKeywords: [{ keyword: 'bug' }] } },
-      { settings: { watchKeywords: [] } },
+      { ...target, settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
+      { settings: { botWakeDisabled: true, watchKeywords: [] } },
     );
 
     expect(mockStopClient).toHaveBeenCalledTimes(1);
@@ -170,8 +168,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
     gatewayState.useMessageGateway = false;
 
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).not.toHaveBeenCalled();
@@ -181,7 +179,10 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
   it('still stops the runtime for disable/rebind even without the external gateway', async () => {
     gatewayState.useMessageGateway = false;
 
-    await invalidateBotAfterUpdate({ ...target, settings: {} }, { enabled: false });
+    await invalidateBotAfterUpdate(
+      { ...target, settings: { botWakeDisabled: true } },
+      { enabled: false },
+    );
 
     expect(mockStopClient).toHaveBeenCalledTimes(1);
   });
@@ -190,8 +191,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
     // Gateway reconciliation skips webhook-mode providers, so a stop here
     // would take the bot offline until the next manual config save.
     await invalidateBotAfterUpdate(
-      { ...target, platform: 'telegram', settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, platform: 'telegram', settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).not.toHaveBeenCalled();
@@ -200,7 +201,7 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('does not stop the runtime when settings switch the bot into webhook mode', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
+      { ...target, settings: { botWakeDisabled: true } },
       { settings: { connectionMode: 'webhook', watchKeywords: [{ keyword: 'bug' }] } },
     );
 
@@ -209,7 +210,7 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('does not stop the runtime when keyword presence is unchanged', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
       { settings: { watchKeywords: [{ keyword: 'outage' }] } },
     );
 
@@ -218,7 +219,7 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
   });
 
   it('does not stop the runtime for settings-free updates', async () => {
-    await invalidateBotAfterUpdate({ ...target, settings: {} }, {});
+    await invalidateBotAfterUpdate({ ...target, settings: { botWakeDisabled: true } }, {});
 
     expect(mockStopClient).not.toHaveBeenCalled();
     expect(mockInvalidateBot).toHaveBeenCalledTimes(1);
@@ -228,7 +229,7 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 describe('mergeBotSettingsPatch', () => {
   const stored = {
     allowFrom: [{ id: 'u-1', name: 'Ada' }],
-    botWakeEnabled: true,
+    botWakeDisabled: false,
     botWakeScope: 'bot-threads',
     dmPolicy: 'pairing',
     userId: 'owner-1',
@@ -267,7 +268,7 @@ describe('mergeBotSettingsPatch', () => {
 
     expect(merged).toMatchObject({
       botWakeDuties: 'Triage bug reports.',
-      botWakeEnabled: true,
+      botWakeDisabled: false,
       botWakeScope: 'bot-threads',
       userId: 'owner-1',
     });
@@ -277,27 +278,7 @@ describe('mergeBotSettingsPatch', () => {
   it('starts from the defaults when nothing is stored', () => {
     expect(mergeBotSettingsPatch('discord', null, { botWakeDuties: 'x' })).toMatchObject({
       botWakeDuties: 'x',
-      botWakeEnabled: false,
+      botWakeDisabled: false,
     });
-  });
-});
-
-describe('mergeBotSettingsForCreate', () => {
-  it('creates a bot with the wake switch on, with or without settings', () => {
-    expect(mergeBotSettingsForCreate('discord', { dmPolicy: 'open' })).toMatchObject({
-      botWakeEnabled: true,
-      dmPolicy: 'open',
-    });
-    expect(mergeBotSettingsForCreate('discord', undefined)?.botWakeEnabled).toBe(true);
-  });
-
-  it('keeps a switch the caller set', () => {
-    expect(mergeBotSettingsForCreate('discord', { botWakeEnabled: false })?.botWakeEnabled).toBe(
-      false,
-    );
-  });
-
-  it('leaves a saved bot that never stored the switch off when it is updated', () => {
-    expect(mergeBotSettingsForPersist('discord', { dmPolicy: 'open' })?.botWakeEnabled).toBe(false);
   });
 });

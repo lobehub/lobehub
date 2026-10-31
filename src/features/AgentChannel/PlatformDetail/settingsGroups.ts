@@ -125,7 +125,7 @@ export interface WakeSection {
  *   (and how sure it must be that a message right after its own reply is still for it)
  */
 const WAKE_SECTION_KEYS: Array<[Exclude<WakeSectionKey, 'more'>, string[]]> = [
-  ['switch', ['botWakeEnabled']],
+  ['switch', ['botWakeDisabled']],
   [
     'judgement',
     [

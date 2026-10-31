@@ -11,7 +11,6 @@ import {
   mergeCredentialsForSave,
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
-  withNewBotWakeOn,
 } from './formState';
 
 const slackSchema: FieldSchema[] = [
@@ -322,32 +321,5 @@ describe('findOverLimitSettings', () => {
   it('ignores values that are not lists at all', () => {
     expect(findOverLimitSettings(listSchema, { allowChannels: '1,2,3' })).toEqual([]);
     expect(findOverLimitSettings(undefined, { allowChannels: [{ id: '1' }] })).toEqual([]);
-  });
-});
-
-describe('withNewBotWakeOn', () => {
-  const schema = [
-    {
-      key: 'settings',
-      label: 'settings',
-      properties: [{ default: false, key: 'botWakeEnabled', label: 'x', type: 'boolean' }],
-      type: 'object',
-    },
-  ] as FieldSchema[];
-
-  it('starts a new bot with the wake switch on, over the schema default', () => {
-    expect(mergeSettingsWithDefaults(schema, withNewBotWakeOn(schema, {})).botWakeEnabled).toBe(
-      true,
-    );
-  });
-
-  it('keeps a switch already set', () => {
-    const settings = { botWakeEnabled: false };
-
-    expect(withNewBotWakeOn(schema, settings)).toBe(settings);
-  });
-
-  it('adds nothing on a platform without the switch', () => {
-    expect(withNewBotWakeOn([], { charLimit: 2000 })).toEqual({ charLimit: 2000 });
   });
 });

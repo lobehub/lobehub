@@ -231,7 +231,7 @@ const Body = memo<BodyProps>(
 
     // With the wake switch off, the blocks that only tune how the bot speaks up on its own are
     // hidden; the switch and the keywords stay.
-    const wakeOn = useWatch(form, (values) => values.settings?.[WAKE_MASTER_KEY] === true);
+    const wakeOn = useWatch(form, (values) => values.settings?.[WAKE_MASTER_KEY] !== true);
     const wakeSectionShown = (section: { fields: FieldSchema[]; key: string }) =>
       wakeOn ||
       section.key === 'switch' ||

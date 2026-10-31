@@ -76,7 +76,7 @@ const config: CurrentConfig = {
   id: 'provider-1',
   platform: 'discord',
   // A custom pace, so the numbers are on the page to edit.
-  settings: { botWakeEnabled: true, botWakePace: 'custom', showUsageStats: false },
+  settings: { botWakeDisabled: false, botWakePace: 'custom', showUsageStats: false },
 };
 
 const en = agentEn as Record<string, string>;
@@ -121,35 +121,44 @@ describe('PlatformDetail saving', () => {
       timeout: 3000,
     });
     const [, , patch] = mocks.updateBotProvider.mock.calls[0];
-    expect(patch.settings.botWakeEnabled).toBe(false);
+    expect(patch.settings.botWakeDisabled).toBe(true);
     // The rest of the wake options are written as stored.
     expect(patch.settings.botWakePace).toBe('custom');
     expect(screen.queryByText(en['channel.wake.section.pace'])).toBeNull();
   });
 
-  it('keeps the wake switch off for a bot saved before it existed, also when saving something else', async () => {
-    render(
-      <PlatformDetail
-        agentId="agt"
-        currentConfig={{ ...config, settings: { showUsageStats: false } }}
-        platformDef={platformDef}
-      />,
-      { wrapper: MemoryRouter },
-    );
+  it.each([
+    ['with no switch stored', { showUsageStats: false }],
+    ['with the retired botWakeEnabled: false', { botWakeEnabled: false, showUsageStats: false }],
+  ])(
+    'shows a bot saved %s with the wake switch on, and keeps it on when saving something else',
+    async (_, settings) => {
+      render(
+        <PlatformDetail
+          agentId="agt"
+          currentConfig={{ ...config, settings }}
+          platformDef={platformDef}
+        />,
+        { wrapper: MemoryRouter },
+      );
 
-    openTab(en['channel.tab.wake']);
-    expect(
-      screen.getByRole('switch', { name: new RegExp(en['channel.botWakeEnabled']) }),
-    ).toHaveAttribute('aria-checked', 'false');
+      openTab(en['channel.tab.wake']);
+      expect(
+        screen.getByRole('switch', { name: new RegExp(en['channel.botWakeEnabled']) }),
+      ).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByText(en['channel.wake.section.pace'])).toBeVisible();
 
-    openTab(en['channel.tab.reply']);
-    fireEvent.click(screen.getByRole('switch', { name: new RegExp(en['channel.showUsageStats']) }));
+      openTab(en['channel.tab.reply']);
+      fireEvent.click(
+        screen.getByRole('switch', { name: new RegExp(en['channel.showUsageStats']) }),
+      );
 
-    await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1), {
-      timeout: 3000,
-    });
-    expect(mocks.updateBotProvider.mock.calls[0][2].settings.botWakeEnabled).toBe(false);
-  });
+      await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1), {
+        timeout: 3000,
+      });
+      expect(mocks.updateBotProvider.mock.calls[0][2].settings.botWakeDisabled).not.toBe(true);
+    },
+  );
 
   it('writes an operator’s mode override back untouched when it saves something else', async () => {
     const override = { classifier: { mode: 'off' }, mode: 'shadow' };
@@ -159,7 +168,7 @@ describe('PlatformDetail saving', () => {
         platformDef={platformDef}
         currentConfig={{
           ...config,
-          settings: { ...config.settings, botWake: override, botWakeEnabled: true },
+          settings: { ...config.settings, botWake: override, botWakeDisabled: false },
         }}
       />,
       { wrapper: MemoryRouter },

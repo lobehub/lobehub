@@ -200,22 +200,8 @@ export const isFieldReleased = (
 ): boolean => !field.featureFlag || featureFlags?.[field.featureFlag] === true;
 
 /**
- * The master switch of the bot-wake options. A switch whose effect is a plain on/off, so it saves
- * the moment it changes, like the reply display options.
+ * The master switch of the bot-wake options, stored as the off switch: a bot that never touched it
+ * speaks up on its own. A plain on/off, so it saves the moment it changes, like the reply display
+ * options.
  */
-export const WAKE_MASTER_KEY = 'botWakeEnabled';
-
-/**
- * Settings for a bot that is still being created: the wake switch starts on. A saved bot keeps
- * what it stored, and one saved before the switch existed reads as off, as the runtime does.
- */
-export const withNewBotWakeOn = (
-  schema: FieldSchema[] | undefined,
-  settings: Record<string, unknown>,
-): Record<string, unknown> => {
-  const fields = schema?.find((field) => field.key === 'settings')?.properties ?? [];
-  if (settings[WAKE_MASTER_KEY] !== undefined) return settings;
-  if (!fields.some((field) => field.key === WAKE_MASTER_KEY)) return settings;
-
-  return { ...settings, [WAKE_MASTER_KEY]: true };
-};
+export const WAKE_MASTER_KEY = 'botWakeDisabled';

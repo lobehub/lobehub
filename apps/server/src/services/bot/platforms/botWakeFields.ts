@@ -11,7 +11,8 @@ import {
 
 import type { FieldSchema } from './types';
 
-const ENABLED = { field: KEY.enabled, value: true };
+/** The off switch is unset (on) or explicitly `false`. */
+const ENABLED = { field: KEY.disabled, value: [false, undefined] };
 /** The timings show only for a custom pace; a preset sets them. */
 const CUSTOM_PACE = [ENABLED, { field: KEY.pace, value: 'custom' }];
 
@@ -50,7 +51,7 @@ const channelList = (key: string, label: string, idPlaceholder: string): FieldSc
  * enforce: there is no "record only" or "off" to pick. Appended to a platform's `settings`
  * group; the form renders them flat, so each is a top-level key (see `BOT_WAKE_SETTING_KEYS`).
  *
- * Everything but the master switch stays hidden until `botWakeEnabled` is on, and the scheduler's
+ * Everything but the master switch stays hidden while `botWakeDisabled` is set, and the scheduler's
  * timings until it is set to `enforce`.
  */
 export const makeBotWakeFields = ({
@@ -63,10 +64,11 @@ export const makeBotWakeFields = ({
   scopeBotThreadsHint?: string;
 } = {}): FieldSchema[] => [
   {
-    key: KEY.enabled,
-    // Off for a bot saved before the switch existed: the runtime merges this default into it. A new
-    // bot is created with the switch on instead (see `withNewBotWakeOn`).
+    key: KEY.disabled,
+    // Stored as the off switch, so a bot that never touched it is on; the form shows it as an on
+    // switch.
     default: false,
+    inverted: true,
     description: 'channel.botWakeEnabledHint',
     label: 'channel.botWakeEnabled',
     type: 'boolean',

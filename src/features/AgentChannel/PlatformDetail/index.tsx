@@ -51,7 +51,6 @@ import {
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
   WAKE_MASTER_KEY,
-  withNewBotWakeOn,
 } from './formState';
 import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext';
 import { QuickView } from './QuickView';
@@ -154,11 +153,7 @@ const getFormValues = (
   config?: CurrentConfig,
 ): ChannelFormValues => {
   const values = config ? getChannelFormValues(config) : { credentials: {}, settings: {} };
-  const stored = omitUndefinedValues(values.settings);
-  const settings = mergeSettingsWithDefaults(
-    schema,
-    config ? stored : withNewBotWakeOn(schema, stored),
-  );
+  const settings = mergeSettingsWithDefaults(schema, omitUndefinedValues(values.settings));
   return { ...values, settings: settings as Record<string, {} | undefined> };
 };
 
@@ -480,7 +475,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
     // Reply settings are switches and choices whose effect is seen at once in
     // the chat, and the wake switch is a plain on/off, so they are stored as soon
-    // as they change instead of waiting for the Save button. Only the reply keys are written, on top of what is stored:
+    // as they change instead of waiting for the Save button. Only the reply keys
+    // are written, on top of what is stored:
     // a half-finished edit on another tab is neither saved nor lost.
     const saveReplySettings = useCallback(async () => {
       if (!currentConfig || writeDisabled || replyKeys.length === 0) return;

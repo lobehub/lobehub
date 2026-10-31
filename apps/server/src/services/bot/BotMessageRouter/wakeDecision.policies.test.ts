@@ -74,9 +74,9 @@ describe('bot-wake recorder policy set', () => {
     mockRecordSignalDecision.mockResolvedValue({ persisted: false });
   });
 
-  it('does nothing at all for a bot without bot-wake: no row, no state read or write, no model call', async () => {
+  it('does nothing at all for a bot with bot-wake switched off: no row, no state read or write, no model call', async () => {
     const state = fakeState();
-    const recorder = make({}, state);
+    const recorder = make({ botWakeDisabled: true }, state);
 
     recorder.record(observation({ outcome: 'wake', reason: 'watch-keyword' }));
     await flush();
@@ -107,7 +107,7 @@ describe('bot-wake recorder policy set', () => {
   });
 
   it('runs the same policies from the keys the settings form writes', async () => {
-    make({ botWakeClassifierMode: 'shadow', botWakeEnabled: true }).record(observation());
+    make({ botWakeClassifierMode: 'shadow', botWakeDisabled: false }).record(observation());
     await flush();
 
     const { verdicts } = recorded()[0];
@@ -157,7 +157,7 @@ describe('bot-wake recorder policy set', () => {
 
   it('records nothing for a bot whose form was saved with bot-wake off', async () => {
     const state = fakeState();
-    make({ botWakeEnabled: false, botWakeMode: 'shadow', botWakeScope: 'all' }, state).record(
+    make({ botWakeDisabled: true, botWakeMode: 'shadow', botWakeScope: 'all' }, state).record(
       observation(),
     );
     await flush();
@@ -336,8 +336,8 @@ describe('bot-wake recorder judge (enforcement)', () => {
     expect(classify).not.toHaveBeenCalled();
   });
 
-  it('is silent for a bot without bot-wake', async () => {
-    expect(await make({}).judge(observation())).toBeUndefined();
+  it('is silent for a bot with bot-wake switched off', async () => {
+    expect(await make({ botWakeDisabled: true }).judge(observation())).toBeUndefined();
   });
 
   it('denies a follow-up wake when the owner switched the rules to enforce', async () => {

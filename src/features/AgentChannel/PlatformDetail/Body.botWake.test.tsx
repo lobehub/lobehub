@@ -118,10 +118,20 @@ const en = agentEn as Record<string, string>;
 const zh = agentZh as Record<string, string>;
 
 describe('channel settings form: bot-wake options', () => {
+  it('shows the switch on, with the options open, for a bot that never touched it', () => {
+    state.copy = en;
+
+    render(<Harness />);
+
+    expect(masterSwitch()).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText(en['channel.wake.section.judgement'])).toBeInTheDocument();
+    expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
+  });
+
   it('shows the switch, with only the keywords beside it while it is off', () => {
     state.copy = en;
 
-    render(<Harness settings={{ botWakeEnabled: false }} />);
+    render(<Harness settings={{ botWakeDisabled: true }} />);
 
     const master = masterSwitch();
     expect(screen.getByText(en['channel.botWakeEnabled'])).toBeInTheDocument();
@@ -136,7 +146,7 @@ describe('channel settings form: bot-wake options', () => {
   it('opens the options when the switch is turned on, and folds them when it is turned off', () => {
     state.copy = en;
 
-    render(<Harness settings={{ botWakeEnabled: false }} />);
+    render(<Harness settings={{ botWakeDisabled: true }} />);
     fireEvent.click(masterSwitch());
 
     expect(screen.getByText(en['channel.wake.section.judgement'])).toBeInTheDocument();
@@ -152,7 +162,7 @@ describe('channel settings form: bot-wake options', () => {
   it('shows the rules straight away for a bot with the switch on, the timings after batching is on', () => {
     state.copy = en;
 
-    render(<Harness settings={{ botWakeEnabled: true }} />);
+    render(<Harness settings={{ botWakeDisabled: false }} />);
 
     expect(masterSwitch()).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
@@ -167,7 +177,7 @@ describe('channel settings form: bot-wake options', () => {
   it('lists where it may join, and the pace, as choices that each say what they do', () => {
     state.copy = en;
 
-    render(<Harness settings={{ botWakeEnabled: true }} />);
+    render(<Harness settings={{ botWakeDisabled: false }} />);
 
     const scope = screen.getByRole('radiogroup', { name: en['channel.botWakeScope'] });
     expect(scope).toHaveTextContent(en['channel.botWakeScopeBotThreadsHint']);
@@ -182,7 +192,7 @@ describe('channel settings form: bot-wake options', () => {
   it('opens the numbers when the pace is set to custom', () => {
     state.copy = en;
 
-    render(<Harness settings={{ botWakeEnabled: true }} />);
+    render(<Harness settings={{ botWakeDisabled: false }} />);
     fireEvent.click(
       screen.getByRole('radio', { name: new RegExp(en['channel.botWakePaceCustom']) }),
     );
@@ -202,7 +212,7 @@ describe('channel settings form: bot-wake options', () => {
   it('offers them on Feishu too, naming the scope that lets the bot hear group messages', () => {
     state.copy = en;
 
-    render(<Harness def={feishuDef} settings={{ botWakeEnabled: true }} />);
+    render(<Harness def={feishuDef} settings={{ botWakeDisabled: false }} />);
 
     expect(screen.getByText(en['channel.wake.intro'])).toBeInTheDocument();
     expect(screen.getByText(en['channel.botWakeScope'])).toBeInTheDocument();
@@ -224,7 +234,7 @@ describe('channel settings form: bot-wake options', () => {
     render(
       <Harness
         settings={flattenBotWakeSettings({
-          botWakeEnabled: true,
+          botWakeDisabled: false,
           botWakeSchedulerMode: 'enforce',
         })!}
       />,
@@ -238,7 +248,7 @@ describe('channel settings form: bot-wake options', () => {
   it('reads in Chinese for a Chinese user', () => {
     state.copy = zh;
 
-    render(<Harness settings={{ botWakeEnabled: true }} />);
+    render(<Harness settings={{ botWakeDisabled: false }} />);
 
     expect(screen.getByText('插话频率')).toBeInTheDocument();
     expect(screen.getByText('自定义说明')).toBeInTheDocument();
@@ -248,7 +258,7 @@ describe('channel settings form: bot-wake options', () => {
   it('offers no "Rules" or "Addressed-to-bot check" mode to pick: they always enforce', () => {
     state.copy = en;
 
-    render(<Harness settings={{ botWakeEnabled: true }} />);
+    render(<Harness settings={{ botWakeDisabled: false }} />);
 
     expect(screen.queryByText('Rules')).not.toBeInTheDocument();
     expect(screen.queryByText('Addressed-to-bot check')).not.toBeInTheDocument();
@@ -258,7 +268,7 @@ describe('channel settings form: bot-wake options', () => {
   it('groups the options into the switch, judgement, keywords, channels and pace, each under its own title', () => {
     state.copy = en;
 
-    render(<Harness settings={{ botWakeEnabled: true }} />);
+    render(<Harness settings={{ botWakeDisabled: false }} />);
 
     const titles = ['switch', 'judgement', 'keywords', 'channels', 'pace'].map((key) =>
       screen.getByText(en[`channel.wake.section.${key}`]),
@@ -286,7 +296,7 @@ describe('channel settings form: bot-wake options', () => {
     state.copy = en;
 
     const { container } = render(
-      <Harness settings={{ botWakeCustomInstructionsEnabled: true, botWakeEnabled: true }} />,
+      <Harness settings={{ botWakeCustomInstructionsEnabled: true, botWakeDisabled: false }} />,
     );
 
     const area = instructionsArea(container)!;
@@ -300,7 +310,7 @@ describe('channel settings form: bot-wake options', () => {
   it('opens the wake options with the duties: a text area, empty by default, and its dial', () => {
     state.copy = en;
 
-    const { container } = render(<Harness settings={{ botWakeEnabled: true }} />);
+    const { container } = render(<Harness settings={{ botWakeDisabled: false }} />);
 
     const title = screen.getByText(en['channel.wake.section.judgement']);
     const label = screen.getByText(en['channel.botWakeDuties']);
@@ -316,7 +326,7 @@ describe('channel settings form: bot-wake options', () => {
   it('keeps the text area folded until its switch is on', () => {
     state.copy = en;
 
-    const { container } = render(<Harness settings={{ botWakeEnabled: true }} />);
+    const { container } = render(<Harness settings={{ botWakeDisabled: false }} />);
 
     expect(screen.getByText(en['channel.botWakeCustomInstructionsEnabled'])).toBeInTheDocument();
     expect(instructionsArea(container)).not.toBeInTheDocument();
@@ -330,7 +340,7 @@ describe('channel settings form: bot-wake options', () => {
       <Harness
         settings={flattenBotWakeSettings({
           botWakeCustomInstructions: 'Only answer billing questions.\nNever joke.',
-          botWakeEnabled: true,
+          botWakeDisabled: false,
         })!}
       />,
     );
@@ -352,7 +362,7 @@ describe('channel settings form: bot-wake options', () => {
     it('gives each of the four blocks its own Save, all disabled while nothing has changed, and the switch none', () => {
       state.copy = en;
 
-      render(<Harness moduleControls={controls()} settings={{ botWakeEnabled: true }} />);
+      render(<Harness moduleControls={controls()} settings={{ botWakeDisabled: false }} />);
 
       expect(saveButtons()).toHaveLength(4);
       for (const button of saveButtons()) expect(button).toBeDisabled();
@@ -365,7 +375,7 @@ describe('channel settings form: bot-wake options', () => {
       render(
         <Harness
           moduleControls={controls({ dirty: ['wake-pace'], onSave })}
-          settings={{ botWakeEnabled: true }}
+          settings={{ botWakeDisabled: false }}
         />,
       );
 
@@ -385,7 +395,7 @@ describe('channel settings form: bot-wake options', () => {
       render(
         <Harness
           moduleControls={controls({ dirty: ['wake-judgement'], onDiscard })}
-          settings={{ botWakeEnabled: true }}
+          settings={{ botWakeDisabled: false }}
         />,
       );
       fireEvent.click(screen.getByRole('button', { name: en['channel.discard'] }));
@@ -396,7 +406,7 @@ describe('channel settings form: bot-wake options', () => {
     it('shows no Save while the bot is still being created: the setup steps save it all at once', () => {
       state.copy = en;
 
-      render(<Harness settings={{ botWakeEnabled: true }} />);
+      render(<Harness settings={{ botWakeDisabled: false }} />);
 
       expect(screen.queryByRole('button', { name: en['channel.module.save'] })).toBeNull();
     });

@@ -79,6 +79,11 @@ export interface FieldSchema {
    * The server stays authoritative; this only keeps unreleased options out of sight.
    */
   featureFlag?: string;
+  /**
+   * For a `boolean`: the switch shows on while the stored value is not `true`. For an off switch
+   * (`...Disabled`) whose absence means on, labelled as what it turns on.
+   */
+  inverted?: boolean;
   /** Array item schema */
   items?: FieldSchema;
   /** Unique field identifier */

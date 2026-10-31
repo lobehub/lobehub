@@ -24,7 +24,7 @@ describe('resolveSaveModules', () => {
     'devicePolicy',
     'deviceAllowFrom',
     'watchKeywords',
-    'botWakeEnabled',
+    'botWakeDisabled',
     'botWakeScope',
     'botWakeAllowChannels',
     'botWakeWindowSeconds',
@@ -89,7 +89,7 @@ describe('resolveSaveModules', () => {
 
     expect(wake.length).toBeGreaterThan(0);
     for (const module of wake) {
-      expect(module.keys).not.toContain('botWakeEnabled');
+      expect(module.keys).not.toContain('botWakeDisabled');
       expect(module.alsoWrites).toBeUndefined();
     }
   });
@@ -167,13 +167,13 @@ describe('module changes', () => {
 
 describe('settingsToSave', () => {
   const modules = resolveSaveModules(
-    groups(['botWakeEnabled', 'botWakeScope', 'botWakeWindowSeconds', 'charLimit']),
+    groups(['botWakeDisabled', 'botWakeScope', 'botWakeWindowSeconds', 'charLimit']),
     false,
   );
   const byId = Object.fromEntries(modules.map((m) => [m.id, m]));
   const stored = {
     settings: {
-      botWakeEnabled: true,
+      botWakeDisabled: false,
       botWakeScope: 'all',
       botWakeWindowSeconds: 300,
       charLimit: 2000,
@@ -187,7 +187,7 @@ describe('settingsToSave', () => {
     };
 
     expect(settingsToSave(byId['wake-pace'], values, stored)).toEqual({
-      botWakeEnabled: true,
+      botWakeDisabled: false,
       botWakeScope: 'all',
       botWakeWindowSeconds: 120,
       charLimit: 2000,
@@ -202,13 +202,13 @@ describe('settingsToSave', () => {
   });
 
   it('leaves the wake switch as stored when saving a wake block', () => {
-    const values = { settings: { ...stored.settings, botWakeEnabled: false } };
+    const values = { settings: { ...stored.settings, botWakeDisabled: true } };
 
-    expect(settingsToSave(byId['wake-pace'], values, stored).botWakeEnabled).toBe(true);
+    expect(settingsToSave(byId['wake-pace'], values, stored).botWakeDisabled).toBe(false);
   });
 
   it('drops an option the form cleared instead of keeping the stored one', () => {
-    const values = { settings: { botWakeEnabled: true, botWakeScope: 'all', charLimit: 2000 } };
+    const values = { settings: { botWakeDisabled: false, botWakeScope: 'all', charLimit: 2000 } };
 
     expect('botWakeWindowSeconds' in settingsToSave(byId['wake-pace'], values, stored)).toBe(false);
   });

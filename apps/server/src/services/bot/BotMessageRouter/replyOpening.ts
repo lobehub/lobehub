@@ -87,7 +87,7 @@ export interface ReplyOpeningDeps {
   /** The bot's own platform id, so its earlier lines read as its own. */
   applicationId: string;
   client: Pick<PlatformClient, 'getReplyTargets'>;
-  /** The bot's wake switch (`botWakeEnabled`): the bot decides only while it is on. */
+  /** The bot's wake switch (on unless `botWakeDisabled`): the bot decides only while it is on. */
   decides: boolean;
   /**
    * Whether the bot is already answering in a conversation. A second reply in a busy channel

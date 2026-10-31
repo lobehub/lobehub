@@ -66,7 +66,7 @@ const decisions = () =>
 /** Decisions are recorded only for a bot whose wake switch is on, so every bot here has it on. */
 const boot = async (settings: Record<string, unknown> = { dmPolicy: 'open' }) => {
   mockFindEnabledByPlatform.mockResolvedValue([
-    makeProvider({ applicationId: 'app-1', settings: { botWakeEnabled: true, ...settings } }),
+    makeProvider({ applicationId: 'app-1', settings: { botWakeDisabled: false, ...settings } }),
   ]);
   const router = new BotMessageRouter();
   await router.getWebhookHandler(
@@ -225,7 +225,7 @@ describe('BotMessageRouter bot-wake decision records', () => {
 
   it('does not record the catch-all’s silent drops of unrelated channel chatter', async () => {
     // With the wake switch on the catch-all judges such chatter; off, it only drops it.
-    await boot({ botWakeEnabled: false, dmPolicy: 'open' });
+    await boot({ botWakeDisabled: true, dmPolicy: 'open' });
 
     await catchAllHandler()(thread({ id: 'telegram:group-9' }), message());
     await flush();

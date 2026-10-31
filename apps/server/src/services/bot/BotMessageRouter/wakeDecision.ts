@@ -317,7 +317,7 @@ export interface BotWakeRecorder {
    */
   conversation: (observation: BotWakeObservation) => Promise<WakeConversation | undefined>;
   /**
-   * The bot's own wake switch (`botWakeEnabled`). Callers that change behaviour on their own
+   * The bot's own wake switch (on unless `botWakeDisabled`). Callers that change behaviour on their own
    * (follow-up wakes that may end in silence, the follow-up gate) must check this first.
    */
   enabled: boolean;

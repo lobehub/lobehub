@@ -75,7 +75,8 @@ describe('BotMessageRouter', () => {
     }
 
     it('should not register the DM catch-all when DM is disabled', async () => {
-      const handler = await loadDmCatchAllHandler({ dmPolicy: 'disabled' });
+      // Bot-wake off too: with it on, the catch-all also listens to channel chatter.
+      const handler = await loadDmCatchAllHandler({ botWakeDisabled: true, dmPolicy: 'disabled' });
       expect(handler).toBeNull();
     });
 

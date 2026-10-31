@@ -472,7 +472,7 @@ describe('BotMessageRouter', () => {
 
     it('marks a watch-keyword wake as a followup, which may end in silence', async () => {
       const handler = await loadSubscribedHandler({
-        botWakeEnabled: true,
+        botWakeDisabled: false,
         dmPolicy: 'open',
         watchKeywords: [{ keyword: 'bug' }],
       });

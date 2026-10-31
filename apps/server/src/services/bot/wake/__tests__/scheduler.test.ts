@@ -76,17 +76,17 @@ describe('wake scheduler wiring', () => {
       {
         expected: true,
         name: 'switched on in the settings form with batching on',
-        settings: { botWakeEnabled: true, botWakeSchedulerMode: 'enforce' },
+        settings: { botWakeDisabled: false, botWakeSchedulerMode: 'enforce' },
       },
       {
         expected: false,
         name: 'switched on in the settings form, batching left off',
-        settings: { botWakeEnabled: true, botWakeSchedulerMode: 'off' },
+        settings: { botWakeDisabled: false, botWakeSchedulerMode: 'off' },
       },
       {
         expected: false,
         name: 'batching on in the settings form but bot-wake off',
-        settings: { botWakeEnabled: false, botWakeSchedulerMode: 'enforce' },
+        settings: { botWakeDisabled: true, botWakeSchedulerMode: 'enforce' },
       },
     ])('$name -> available=$expected', ({ expected, settings }) => {
       expect(!!resolveWakeScheduler('discord', 'app', settings)).toBe(expected);
@@ -178,7 +178,12 @@ describe('wake scheduler wiring', () => {
 
       mocks.botWake.recordStandDown.mockClear();
       await recordWakeRunOutcome({ ...base, spoke: false, wakeKind: 'followup' });
-      await recordWakeRunOutcome({ ...base, settings: {}, spoke: true, standDown: true });
+      await recordWakeRunOutcome({
+        ...base,
+        settings: { botWakeDisabled: true },
+        spoke: true,
+        standDown: true,
+      });
       expect(mocks.botWake.recordStandDown).not.toHaveBeenCalled();
     });
 
@@ -245,15 +250,20 @@ describe('wake scheduler wiring', () => {
         expect(mocks.botWake.mutateScheduler).toHaveBeenCalled();
       });
 
-      it('is not kept for a bot without bot-wake', async () => {
-        await recordWakeRunOutcome({ ...base, settings: {}, spoke: true, spoken });
+      it('is not kept for a bot with bot-wake switched off', async () => {
+        await recordWakeRunOutcome({
+          ...base,
+          settings: { botWakeDisabled: true },
+          spoke: true,
+          spoken,
+        });
 
         expect(mocks.botWake.rememberMessages).not.toHaveBeenCalled();
       });
     });
 
-    it('does nothing for a bot without bot-wake', async () => {
-      await recordWakeRunOutcome({ ...base, settings: {}, spoke: true });
+    it('does nothing for a bot with bot-wake switched off', async () => {
+      await recordWakeRunOutcome({ ...base, settings: { botWakeDisabled: true }, spoke: true });
 
       expect(mocks.botWake.recordBotSpoke).not.toHaveBeenCalled();
     });

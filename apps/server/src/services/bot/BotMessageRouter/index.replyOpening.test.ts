@@ -113,7 +113,7 @@ const boot = async (settings: Record<string, unknown> = {}) => {
   mockFindEnabledByPlatform.mockResolvedValue([
     makeProvider({
       applicationId: 'app-1',
-      settings: { botWakeEnabled: true, dmPolicy: 'open', userId: OWNER, ...settings },
+      settings: { botWakeDisabled: false, dmPolicy: 'open', userId: OWNER, ...settings },
     }),
   ]);
   await new BotMessageRouter().getWebhookHandler(
