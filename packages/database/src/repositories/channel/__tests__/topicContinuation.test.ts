@@ -175,6 +175,35 @@ describe('Channel topic continuation', () => {
     expect(await state.input(next.job.id)).toEqual(['Request 2']);
   });
 
+  it('hands a run the latest public messages its topic has not seen', async () => {
+    const state = await setup();
+    const say = (content: string) =>
+      state.asOwner.send(state.channel.id, {
+        content,
+        mentions: [state.member.id],
+        requestKey: content,
+        routing: 'decision',
+      });
+    const recent = async (id: string) =>
+      (await execution.recentContext(state.channel.id, id)).map((m) => m.content);
+    for (const n of [1, 2, 3, 4, 5, 6]) await say(`Earlier ${n}`);
+
+    const first = (await state.claim((await state.send()).id))!;
+    expect(await recent(first.job.id)).toEqual([
+      'Earlier 2',
+      'Earlier 3',
+      'Earlier 4',
+      'Earlier 5',
+      'Earlier 6',
+    ]);
+    await state.finish(first.job.id);
+    await say('Two o’clock?');
+
+    const second = (await state.claim((await state.send()).id))!;
+    expect(second.topic.id).toBe(first.topic.id);
+    expect(await recent(second.job.id)).toEqual(['Two o’clock?']);
+  });
+
   it('blocks a deleted Agent reference while retaining the public request', async () => {
     const state = await setup();
     const job = await state.send();

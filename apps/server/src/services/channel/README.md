@@ -73,8 +73,9 @@ token count and latency. No raw provider errors are stored. Runtime hooks still 
 
 ## Responder context
 
-Responder dispatch sends only the current request. Native agents receive the hidden `lobe-channel`
-builtin; external agents can call `lh channel history --json` and `lh channel message <id> --json`.
+Responder dispatch sends the current request, its explicit quote, and at most five recent public messages the
+responder's topic has not seen. Native agents receive the hidden `lobe-channel` builtin for anything
+older; external agents can call `lh channel history --json` and `lh channel message <id> --json`.
 Both use `ChannelHistoryService`, with operation identity supplied by the runtime, never model
 arguments. Reads are bounded, paginated and fixed to the request cutoff and current branch.
 `readMessage` expands long text and resolves shared attachment URLs. Membership removal, archive,
@@ -86,7 +87,13 @@ sequence numbers or IDs. The shared Channel instructions apply to native and ext
 including when old replies already contain metadata. Explicit, authorized technical questions
 can still receive IDs, paths or code relevant to the request.
 
-The request prompt omits sequencing and branch-control fields. Builtin tool `content` and CLI
+The request prompt is tagged text, not JSON: `channel_message` blocks for the recent context,
+an optional `channel_quote` block, and one `channel_request` block, attributed by display name and type.
+The quote retains up to 6000 characters and is omitted from the recent blocks to avoid duplication.
+Each tag carries a random
+per-run `boundary`, so a tag quoted inside message text cannot close a block or forge an author.
+It omits ids, except on a context excerpt that is truncated or has attachments, and sequencing and
+branch-control fields. Builtin tool `content` and CLI
 history output share a model-facing projection that keeps attribution, message/attachment
 references and continuation cursors but omits per-message sequence/thread IDs and the cutoff.
 The API and builtin `state` retain the original history for UI/debugging; authorization and

@@ -3,7 +3,7 @@ import type {
   ChannelContextMessage,
   ChannelJobStatus,
 } from '@lobechat/types';
-import { and, asc, eq, gt, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, isNotNull, isNull, ne, or } from 'drizzle-orm';
 
 import type { ChannelJobItem } from '../../schemas';
 import {
@@ -89,6 +89,9 @@ export const releaseOutcome = (
 
 /** Marks a lease taken from a dispatcher that never settled. See `revokeExpiredLease`. */
 const REVOKED_LEASE_PREFIX = 'revoked:';
+
+/** Unseen public messages a run receives ahead of its request; see `recentContext`. */
+export const RECENT_CONTEXT_LIMIT = 5;
 
 /**
  * Channel writes made by the system rather than by a person: the dispatcher, native
@@ -226,7 +229,7 @@ export class ChannelExecutionRepository {
     withChannelLock(this.db, channelId, (tx, channel) => claimJob(tx, channel, jobId, options));
 
   /**
-   * What a claimed job's run receives: the request and its explicit quote. Reads
+   * The triggering request and its explicit quote; see `recentContext` for the rest. Reads
    * without the channel lock, since nothing at or before the cutoff changes after the claim.
    */
   input = async (channelId: string, jobId: string): Promise<ChannelContextMessage[]> => {
@@ -251,6 +254,56 @@ export class ChannelExecutionRepository {
       messageId: replyToId,
     });
     return [...quoted, ...request];
+  };
+
+  /**
+   * Public messages before the request that this run's topic has not seen, oldest first and
+   * at most {@link RECENT_CONTEXT_LIMIT}: everything after the last request the topic accepted,
+   * except the reply it published. A new topic has seen nothing, so it gets the latest
+   * messages. Anything older stays behind the history tools.
+   */
+  recentContext = async (channelId: string, jobId: string): Promise<ChannelContextMessage[]> => {
+    const [job] = await this.db
+      .select({ manifest: channelJobs.manifest, topicId: channelJobs.topicId })
+      .from(channelJobs)
+      .where(
+        and(
+          eq(channelJobs.channelId, channelId),
+          eq(channelJobs.id, jobId),
+          isNotNull(channelJobs.manifest),
+        ),
+      );
+    if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
+
+    const [seen] = job.topicId
+      ? await this.db
+          .select({
+            manifest: channelJobs.manifest,
+            publishedMessageId: channelJobs.publishedMessageId,
+          })
+          .from(channelJobs)
+          .where(
+            and(
+              eq(channelJobs.channelId, channelId),
+              eq(channelJobs.topicId, job.topicId),
+              ne(channelJobs.id, jobId),
+              isNotNull(channelJobs.acceptedAt),
+              isNotNull(channelJobs.manifest),
+            ),
+          )
+          .orderBy(desc(channelJobs.claimedAt), desc(channelJobs.id))
+          .limit(1)
+      : [];
+    const seenThrough = seen?.manifest?.cutoffSequence ?? 0;
+    // One extra row absorbs the topic's own published reply.
+    const messages = await readManifestMessages(this.db, channelId, job.manifest, {
+      beforeSequence: job.manifest.cutoffSequence,
+      limit: RECENT_CONTEXT_LIMIT + 1,
+    });
+
+    return messages
+      .filter(({ id, sequence }) => sequence > seenThrough && id !== seen?.publishedMessageId)
+      .slice(-RECENT_CONTEXT_LIMIT);
   };
 
   /** The runtime took the input; only now may the job publish. */
