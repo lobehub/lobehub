@@ -657,10 +657,9 @@ describe('desktop router shared definition', () => {
     const electronChildren = createElectronMainAreaChildren();
     const webWorkspace = webChildren.find((route) => route.path === ':workspaceSlug');
     const electronWorkspace = electronChildren.find((route) => route.path === ':workspaceSlug');
-    // Web renders Home beside the outlet; its index element is only the
-    // `im_layout` redirect to Lobe AI, which renders nothing when the flag is off.
-    expect(webChildren.find((route) => route.index)?.element).toBeDefined();
-    expect(webWorkspace?.children?.find((route) => route.index)?.element).toBeDefined();
+
+    expect(webChildren.find((route) => route.index)?.element).toBeUndefined();
+    expect(webWorkspace?.children?.find((route) => route.index)?.element).toBeUndefined();
     expect(electronChildren.find((route) => route.index)?.element).toBeDefined();
     expect(electronWorkspace?.children?.find((route) => route.index)?.element).toBeDefined();
   });

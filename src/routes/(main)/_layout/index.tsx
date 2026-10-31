@@ -70,6 +70,10 @@ const Layout: FC = () => {
                 >
                   <NavPanelShell />
                   <DesktopLayoutContainer flush>
+                    {/* `/` stays the home dashboard; the Messages tab opens Lobe AI. */}
+                    <DesktopHomeLayout>
+                      <DesktopHome />
+                    </DesktopHomeLayout>
                     <Suspense fallback={<RouteSegmentSkeleton />}>
                       <Outlet />
                     </Suspense>
