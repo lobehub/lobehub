@@ -18,7 +18,10 @@ import { AgentAccountModel, ROUTING_KEY_HELD_STATUSES } from '@/database/models/
 import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
-import { assertCanEditResource } from '@/server/services/resourcePermission';
+import {
+  assertCanEditResource,
+  assertCanPerformResourceAction,
+} from '@/server/services/resourcePermission';
 
 import { AgentAccountError } from './errors';
 import type { AgentAccountProviderRegistry } from './registry';
@@ -332,6 +335,11 @@ export class AgentAccountService {
     message: AgentAccountOutboundMessage,
   ): Promise<{ providerMessageId: string }> => {
     const account = await this.requireActiveAccount(accountId);
+    // Sending is a *use* of the agent, not an edit of it. The account row is
+    // scoped to the workspace and carries no visibility of its own, so the
+    // model happily returns a colleague's private agent's account; without
+    // this the caller would decrypt its credential and speak as that agent.
+    await this.assertCanUseAgent(account.agentId);
     // The persisted capability is the account's contract (a phone line warming
     // up is receive-only), so it gates the irreversible provider call — not
     // the provider's declaration, which only seeds it at creation.
@@ -411,6 +419,28 @@ export class AgentAccountService {
       resourceId: agentId,
       resourceType: 'agent',
       ...ctx,
+    });
+  };
+
+  /**
+   * The rule for acting *through* an agent: visibility first, then the `use`
+   * level. Sending from the agent's account is not an edit — a member may hold
+   * `use` without holding `edit` — so this cannot reuse {@link assertCanEditAgent}.
+   * Outside a workspace visibility alone is ownership, exactly as there.
+   */
+  private assertCanUseAgent = async (agentId: string): Promise<void> => {
+    const workspaceId = this.options.workspaceId;
+    const userId = this.userId;
+    await assertAgentUsableBy(this.db, agentId, { userId, workspaceId });
+    if (!workspaceId) return;
+
+    await assertCanPerformResourceAction({
+      action: 'use',
+      db: this.db,
+      resourceId: agentId,
+      resourceType: 'agent',
+      userId,
+      workspaceId,
     });
   };
 

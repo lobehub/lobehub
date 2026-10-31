@@ -16,10 +16,14 @@ import { AgentAccountProviderRegistry } from '../registry';
 
 // The agent's edit ACL is its own suite's subject; here it is the seam whose
 // verdict the service must honor, admitting exactly whom the ACL admits.
-const { assertCanEditResource } = vi.hoisted(() => ({
+const { assertCanEditResource, assertCanPerformResourceAction } = vi.hoisted(() => ({
   assertCanEditResource: vi.fn(async (_params: { userId: string; workspaceId?: string }) => {}),
+  assertCanPerformResourceAction: vi.fn(async (_params: { userId: string }) => {}),
 }));
-vi.mock('@/server/services/resourcePermission', () => ({ assertCanEditResource }));
+vi.mock('@/server/services/resourcePermission', () => ({
+  assertCanEditResource,
+  assertCanPerformResourceAction,
+}));
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -520,6 +524,55 @@ describe('AgentAccountService — actions', () => {
 
     await serverDB.delete(agentAccounts);
     await serverDB.delete(agents).where(eq(agents.id, sharedAgentId));
+    await serverDB.delete(workspaces);
+  });
+
+  it('refuses to send through an agent the member may not use', async () => {
+    const workspaceId = 'agent-identity-service-use-ws';
+    const memberId = 'agent-identity-service-use-member';
+    const useAgentId = 'agent-identity-service-use-agent';
+    await serverDB.insert(users).values([{ id: memberId }]);
+    await serverDB
+      .insert(workspaces)
+      .values({ id: workspaceId, name: workspaceId, primaryOwnerId: userId, slug: workspaceId });
+    await serverDB
+      .insert(agents)
+      .values({ id: useAgentId, userId, visibility: 'public', workspaceId });
+
+    const { calls, fetchImpl } = createMailFetch();
+    const registry = new AgentAccountProviderRegistry().register(
+      createAgentMailProvider({ apiKey: 'am_svc', fetchImpl, webhookUrl: 'https://x/hook' }),
+    );
+    const serviceFor = (id: string) =>
+      new AgentAccountService(serverDB, id, { gateKeeper, registry, workspaceId });
+
+    const created = await serviceFor(userId).provision({
+      agentId: useAgentId,
+      provider: 'agent-mail',
+    });
+    const sent = () => calls.filter((c) => c.method === 'POST' && c.path.includes('/messages'));
+    const member = serviceFor(memberId);
+
+    // The account row is workspace-scoped, so the member can read it. Acting
+    // through it is a *use* of the parent agent, which this member lacks.
+    expect(await member.get(created.id)).toBeDefined();
+    assertCanPerformResourceAction.mockImplementation(async (params: { userId: string }) => {
+      if (params.userId === memberId) throw new TRPCError({ code: 'FORBIDDEN', message: 'no use' });
+    });
+
+    await expect(
+      member.send(created.id, { text: 'hi', to: 'human@example.com' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(sent()).toEqual([]);
+
+    // Holding `use` — even without `edit` — is enough to answer from it.
+    assertCanPerformResourceAction.mockImplementation(async () => {});
+    await expect(
+      member.send(created.id, { text: 'hi back', to: 'human@example.com' }),
+    ).resolves.toEqual({ providerMessageId: 'msg_out_1' });
+
+    await serverDB.delete(agentAccounts);
+    await serverDB.delete(agents).where(eq(agents.id, useAgentId));
     await serverDB.delete(workspaces);
   });
 
