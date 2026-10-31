@@ -1,18 +1,19 @@
-import { ActionIcon, CopyButton, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { ActionIcon, CopyButton, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  key: css`
-    overflow: hidden;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  key: {
+    overflow: 'hidden',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface ApiKeyDisplayProps {
   apiKey?: string;
@@ -43,7 +44,7 @@ const ApiKeyDisplay: FC<ApiKeyDisplayProps> = ({ apiKey }) => {
 
   return (
     <Flexbox horizontal align={'center'} gap={4}>
-      <span className={styles.key}>{displayValue}</span>
+      <span {...stylex.props(styles.key)}>{displayValue}</span>
       <ActionIcon
         icon={isVisible ? EyeOff : Eye}
         size={'small'}

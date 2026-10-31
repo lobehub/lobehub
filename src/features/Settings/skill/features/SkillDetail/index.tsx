@@ -2,16 +2,9 @@
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import {
-  Avatar,
-  Button,
-  confirmModal,
-  createStaticStyles,
-  Markdown,
-  Skeleton,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
+import { Avatar, Button, confirmModal, Markdown, Skeleton, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -49,47 +42,36 @@ export type ToolDetailType =
   | 'mcp-connector'
   | 'plugin';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  description: css`
-    margin-block-start: 8px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  header: css`
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    justify-content: space-between;
-
-    padding-block: 20px 16px;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  name: css`
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  noPermissions: css`
-    padding: 24px;
-    font-size: 14px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  noPermissionsHeader: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    margin-block-end: 8px;
-  `,
-  noPermissionsTitle: css`
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  description: {
+    marginBlockStart: '8px',
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+  },
+  header: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBlockStart: '20px',
+    paddingBlockEnd: '16px',
+    paddingInline: '24px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  name: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
+  noPermissions: { padding: '24px', fontSize: '14px', color: cssVar.colorTextTertiary },
+  noPermissionsHeader: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBlockEnd: '8px',
+  },
+  noPermissionsTitle: { fontSize: '16px', fontWeight: 600, color: cssVar.colorText },
+});
 
 interface SkillDetailProps {
   identifier: string;
@@ -458,13 +440,13 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   if (type === 'builtin-skill') {
     return (
       <div style={{ flex: 1, overflow: 'auto' }}>
-        <div className={styles.header}>
+        <div {...stylex.props(styles.header)}>
           <div style={{ alignItems: 'flex-start', display: 'flex', gap: 12 }}>
             {builtinSkill?.avatar && <Avatar avatar={builtinSkill.avatar} size={40} />}
             <div>
-              <div className={styles.name}>{builtinSkillTitle}</div>
+              <div {...stylex.props(styles.name)}>{builtinSkillTitle}</div>
               {builtinSkillDescription && (
-                <div className={styles.description}>{builtinSkillDescription}</div>
+                <div {...stylex.props(styles.description)}>{builtinSkillDescription}</div>
               )}
             </div>
           </div>
@@ -512,9 +494,9 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
 
   if (noManifest || !connector) {
     return (
-      <div className={styles.noPermissions}>
-        <div className={styles.noPermissionsHeader}>
-          <div className={styles.noPermissionsTitle}>
+      <div {...stylex.props(styles.noPermissions)}>
+        <div {...stylex.props(styles.noPermissionsHeader)}>
+          <div {...stylex.props(styles.noPermissionsTitle)}>
             {type === 'lobehub-connector' ? lobehubLabel : noPermissionsTitle}
           </div>
           {canMigrateLegacy ? (

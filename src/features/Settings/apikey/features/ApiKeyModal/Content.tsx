@@ -3,7 +3,6 @@
 import {
   Button,
   CopyButton,
-  createStaticStyles,
   Flexbox,
   Icon,
   Input,
@@ -12,6 +11,8 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { CheckCircle2 } from 'lucide-react';
@@ -24,25 +25,25 @@ import { type CreateApiKeyParams } from '@/types/apiKey';
 import ApiKeyDatePicker from '../ApiKeyDatePicker';
 import ScopeSelector from './ScopeSelector';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  keyBlock: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  keyText: css`
-    flex: 1;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    word-break: break-all;
-  `,
-  successIcon: css`
-    color: ${cssVar.colorSuccess};
-  `,
-}));
+const styles = stylex.create({
+  keyBlock: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  keyText: {
+    flex: '1',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    wordBreak: 'break-all',
+  },
+  successIcon: { color: cssVar.colorSuccess },
+});
 
 type FormValues = Omit<CreateApiKeyParams, 'expiresAt' | 'scopes'>;
 
@@ -114,11 +115,20 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
     return (
       <Flexbox gap={16}>
         <Flexbox horizontal align={'center'} gap={8}>
-          <Icon className={styles.successIcon} icon={CheckCircle2} size={18} />
+          <Icon
+            className={stylex.props(styles.successIcon).className}
+            icon={CheckCircle2}
+            size={18}
+          />
           <Text style={{ fontWeight: 500 }}>{t('apikey.created.title')}</Text>
         </Flexbox>
-        <Flexbox horizontal align={'center'} className={styles.keyBlock} gap={8}>
-          <span className={styles.keyText}>{createdKey}</span>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.keyBlock).className}
+          gap={8}
+        >
+          <span {...stylex.props(styles.keyText)}>{createdKey}</span>
           <CopyButton content={createdKey} size={'small'} title={t('apikey.display.copy')} />
         </Flexbox>
         <Text style={{ fontSize: 12 }} type={'secondary'}>

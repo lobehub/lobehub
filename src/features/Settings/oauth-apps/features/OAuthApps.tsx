@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
+import { Empty, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AppWindowIcon } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,14 +18,17 @@ import { AppRowsSkeleton } from './AppListSkeleton';
 import CreateAppButton from './CreateAppButton';
 import { useOAuthAppList } from './useOAuthAppList';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  listCol: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  listCol: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface OAuthAppsProps {
   canEdit: boolean;
@@ -86,7 +91,7 @@ const OAuthApps: FC<OAuthAppsProps> = ({ canEdit }) => {
   };
 
   return (
-    <Flexbox className={styles.listCol} gap={2} padding={4}>
+    <Flexbox className={stylex.props(styles.listCol).className} gap={2} padding={4}>
       {renderRows()}
     </Flexbox>
   );

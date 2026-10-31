@@ -1,4 +1,5 @@
-import { Center, createStaticStyles, Spin } from '@lobehub/ui';
+import { Center, Spin } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
@@ -10,13 +11,9 @@ import SettingHeader from '@/features/Settings/features/SettingHeader';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
-const styles = createStaticStyles(({ css }) => ({
-  header: css`
-    width: 100%;
-    max-width: 760px;
-    margin-inline: auto;
-  `,
-}));
+const styles = stylex.create({
+  header: { width: '100%', maxWidth: '760px', marginInline: 'auto' },
+});
 
 interface PageProps {
   showSettingHeader?: boolean;
@@ -38,7 +35,7 @@ const Page = ({ showSettingHeader = true }: PageProps) => {
   return (
     <>
       {showHeader && (
-        <div className={styles.header}>
+        <div {...stylex.props(styles.header)}>
           <SettingHeader description={t('overview.description')} title={t('overview.title')} />
         </div>
       )}

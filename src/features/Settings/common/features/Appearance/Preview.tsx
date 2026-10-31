@@ -1,57 +1,64 @@
-import { Block, createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    agent: css`
-      padding: 4px;
-      border-radius: 2px;
-    `,
-    agentActive: css`
-      background: ${cssVar.colorFillSecondary};
-    `,
-    bubble: css`
-      padding: 6px;
-      border: 1px solid color-mix(in srgb, ${cssVar.colorBorderSecondary} 66%, transparent);
-      border-radius: 3px;
-      background-color: ${cssVar.colorBgContainer};
-    `,
-    container: css`
-      overflow: hidden;
-      justify-self: flex-end;
-
-      width: 332px;
-      height: 200px;
-      border: 1px solid ${cssVar.colorBorder};
-      border-radius: ${cssVar.borderRadiusLG};
-
-      background: ${cssVar.colorBgLayout};
-    `,
-    conversation: css`
-      background: ${cssVar.colorBgContainer};
-    `,
-    header: css`
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    `,
-    icon: css`
-      flex: none;
-      border-radius: 2px;
-      background: ${cssVar.colorFillSecondary};
-    `,
-    input: css`
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    `,
-    nav: css`
-      padding: 4px;
-      border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-      background: ${cssVar.colorBgLayout};
-    `,
-    sidebar: css`
-      padding: 4px;
-      border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-      background: ${cssVar.colorBgLayout};
-    `,
-  };
+const styles = stylex.create({
+  agent: { padding: '4px', borderRadius: '2px' },
+  agentActive: { backgroundColor: cssVar.colorFillSecondary, backgroundImage: 'none' },
+  bubble: {
+    padding: '6px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: `color-mix(in srgb, ${cssVar.colorBorderSecondary} 66%, transparent)`,
+    borderRadius: '3px',
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  container: {
+    overflow: 'hidden',
+    justifySelf: 'flex-end',
+    width: '332px',
+    height: '200px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  conversation: { backgroundColor: cssVar.colorBgContainer, backgroundImage: 'none' },
+  header: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  icon: {
+    flex: 'none',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  input: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  nav: {
+    padding: '4px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  sidebar: {
+    padding: '4px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
 });
 
 const AgentItem = memo<{
@@ -62,19 +69,19 @@ const AgentItem = memo<{
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.agent, active && styles.agentActive)}
+      className={stylex.props(styles.agent, active && styles.agentActive).className}
       gap={4}
       width={'100%'}
     >
       <Flexbox
-        className={styles.icon}
+        className={stylex.props(styles.icon).className}
         height={12}
         style={{ background: color, borderRadius: '50%' }}
         width={12}
       />
       <Flexbox flex={1} gap={4}>
         <Flexbox
-          className={styles.icon}
+          className={stylex.props(styles.icon).className}
           height={2}
           width={'66%'}
           style={{
@@ -82,7 +89,7 @@ const AgentItem = memo<{
           }}
         />
         <Flexbox
-          className={styles.icon}
+          className={stylex.props(styles.icon).className}
           height={2}
           width={'100%'}
           style={{
@@ -96,21 +103,21 @@ const AgentItem = memo<{
 
 const Preview = memo(() => {
   const nav = (
-    <Flexbox align={'center'} className={styles.nav} gap={8} width={24}>
+    <Flexbox align={'center'} className={stylex.props(styles.nav).className} gap={8} width={24}>
       <Flexbox
-        className={styles.icon}
+        className={stylex.props(styles.icon).className}
         height={14}
         style={{ border: `2px solid ${cssVar.colorPrimary}`, borderRadius: '50%' }}
         width={14}
       />
-      <Flexbox className={styles.icon} height={12} width={12} />
-      <Flexbox className={styles.icon} height={12} width={12} />
-      <Flexbox className={styles.icon} height={12} width={12} />
+      <Flexbox className={stylex.props(styles.icon).className} height={12} width={12} />
+      <Flexbox className={stylex.props(styles.icon).className} height={12} width={12} />
+      <Flexbox className={stylex.props(styles.icon).className} height={12} width={12} />
     </Flexbox>
   );
 
   const sidebar = (
-    <Flexbox className={styles.sidebar} gap={4} width={72}>
+    <Flexbox className={stylex.props(styles.sidebar).className} gap={4} width={72}>
       <Flexbox
         gap={4}
         paddingInline={2}
@@ -118,9 +125,9 @@ const Preview = memo(() => {
           paddingTop: 4,
         }}
       >
-        <Flexbox className={styles.icon} height={8} width={'50%'} />
+        <Flexbox className={stylex.props(styles.icon).className} height={8} width={'50%'} />
         <Flexbox
-          className={styles.icon}
+          className={stylex.props(styles.icon).className}
           height={8}
           width={'100%'}
           style={{
@@ -139,17 +146,22 @@ const Preview = memo(() => {
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.header}
+      className={stylex.props(styles.header).className}
       justify={'space-between'}
       padding={4}
     >
       <Flexbox horizontal align={'center'} gap={4}>
-        <Flexbox className={styles.icon} height={12} style={{ borderRadius: '50%' }} width={12} />
-        <Flexbox className={styles.icon} height={8} width={32} />
+        <Flexbox
+          className={stylex.props(styles.icon).className}
+          height={12}
+          style={{ borderRadius: '50%' }}
+          width={12}
+        />
+        <Flexbox className={stylex.props(styles.icon).className} height={8} width={32} />
       </Flexbox>
       <Flexbox horizontal gap={2}>
-        <Flexbox className={styles.icon} height={10} width={10} />
-        <Flexbox className={styles.icon} height={10} width={10} />
+        <Flexbox className={stylex.props(styles.icon).className} height={10} width={10} />
+        <Flexbox className={stylex.props(styles.icon).className} height={10} width={10} />
       </Flexbox>
     </Flexbox>
   );
@@ -157,13 +169,13 @@ const Preview = memo(() => {
   const input = (
     <Flexbox
       align={'flex-end'}
-      className={styles.input}
+      className={stylex.props(styles.input).className}
       height={48}
       justify={'flex-end'}
       padding={8}
     >
       <Flexbox
-        className={styles.icon}
+        className={stylex.props(styles.icon).className}
         height={12}
         width={32}
         style={{
@@ -174,16 +186,21 @@ const Preview = memo(() => {
   );
 
   return (
-    <Block horizontal shadow className={styles.container} variant={'outlined'}>
+    <Block
+      horizontal
+      shadow
+      className={stylex.props(styles.container).className}
+      variant={'outlined'}
+    >
       {nav}
       {sidebar}
-      <Flexbox className={styles.conversation} flex={1}>
+      <Flexbox className={stylex.props(styles.conversation).className} flex={1}>
         {header}
         <Flexbox align={'flex-start'} flex={1} gap={8} padding={6}>
           <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'} width={'100%'}>
-            <Flexbox className={styles.bubble} gap={4} width={64}>
+            <Flexbox className={stylex.props(styles.bubble).className} gap={4} width={64}>
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'100%'}
                 style={{
@@ -191,7 +208,7 @@ const Preview = memo(() => {
                 }}
               />
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'66%'}
                 style={{
@@ -200,7 +217,7 @@ const Preview = memo(() => {
               />
             </Flexbox>
             <Flexbox
-              className={styles.icon}
+              className={stylex.props(styles.icon).className}
               height={14}
               style={{ borderRadius: '50%' }}
               width={14}
@@ -208,14 +225,14 @@ const Preview = memo(() => {
           </Flexbox>
           <Flexbox horizontal gap={4}>
             <Flexbox
-              className={styles.icon}
+              className={stylex.props(styles.icon).className}
               height={14}
               style={{ borderRadius: '50%' }}
               width={14}
             />
-            <Flexbox className={styles.bubble} gap={4} width={160}>
+            <Flexbox className={stylex.props(styles.bubble).className} gap={4} width={160}>
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'100%'}
                 style={{
@@ -223,7 +240,7 @@ const Preview = memo(() => {
                 }}
               />
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'66%'}
                 style={{
@@ -231,7 +248,7 @@ const Preview = memo(() => {
                 }}
               />
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'100%'}
                 style={{
@@ -239,7 +256,7 @@ const Preview = memo(() => {
                 }}
               />
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'100%'}
                 style={{
@@ -247,7 +264,7 @@ const Preview = memo(() => {
                 }}
               />
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'33%'}
                 style={{
@@ -257,9 +274,9 @@ const Preview = memo(() => {
             </Flexbox>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4} justify={'flex-end'} width={'100%'}>
-            <Flexbox className={styles.bubble} gap={4} width={100}>
+            <Flexbox className={stylex.props(styles.bubble).className} gap={4} width={100}>
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'100%'}
                 style={{
@@ -267,7 +284,7 @@ const Preview = memo(() => {
                 }}
               />
               <Flexbox
-                className={styles.icon}
+                className={stylex.props(styles.icon).className}
                 height={2}
                 width={'66%'}
                 style={{
@@ -276,7 +293,7 @@ const Preview = memo(() => {
               />
             </Flexbox>
             <Flexbox
-              className={styles.icon}
+              className={stylex.props(styles.icon).className}
               height={14}
               style={{ borderRadius: '50%' }}
               width={14}

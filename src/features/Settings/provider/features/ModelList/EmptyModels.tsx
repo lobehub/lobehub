@@ -1,4 +1,6 @@
-import { Button, Center, createStaticStyles, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
+import { Button, Center, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BrainIcon, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,41 +11,33 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { createCreateNewModelModal } from './CreateNewModelModal';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  circle: css`
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background: ${cssVar.colorFillSecondary};
-  `,
-  container: css`
-    width: 100%;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: 12px;
-    background: ${cssVar.colorBgContainer};
-  `,
-  description: css`
-    max-width: 280px;
-
-    font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorTextDescription};
-    text-align: center;
-    text-wrap: balance;
-  `,
-  iconWrapper: css`
-    position: relative;
-    width: 64px;
-    height: 64px;
-  `,
-  sparklesIcon: css`
-    font-size: 40px;
-    color: ${cssVar.colorText};
-  `,
-  title: css`
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  circle: {
+    width: '80px',
+    height: '80px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  container: {
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  description: {
+    maxWidth: '280px',
+    fontSize: cssVar.fontSize,
+    color: cssVar.colorTextDescription,
+    textAlign: 'center',
+    textWrap: 'balance',
+  },
+  sparklesIcon: { fontSize: '40px', color: cssVar.colorText },
+  title: { fontSize: cssVar.fontSizeLG, fontWeight: 500 },
+});
 
 const EmptyState = memo<{ provider: string }>(({ provider }) => {
   const { t } = useTranslation('modelProvider');
@@ -56,13 +50,13 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
   const { showDeployName } = use(ProviderSettingsContext);
 
   return (
-    <Center className={styles.container} gap={24} paddingBlock={40}>
-      <Center className={styles.circle}>
-        <Icon className={styles.sparklesIcon} icon={BrainIcon} />
+    <Center className={stylex.props(styles.container).className} gap={24} paddingBlock={40}>
+      <Center className={stylex.props(styles.circle).className}>
+        <Icon className={stylex.props(styles.sparklesIcon).className} icon={BrainIcon} />
       </Center>
       <Flexbox align={'center'} gap={8}>
-        <div className={styles.title}>{t('providerModels.list.empty.title')}</div>
-        <div className={styles.description}>{t('providerModels.list.empty.desc')}</div>
+        <div {...stylex.props(styles.title)}>{t('providerModels.list.empty.title')}</div>
+        <div {...stylex.props(styles.description)}>{t('providerModels.list.empty.desc')}</div>
       </Flexbox>
 
       <Flexbox horizontal gap={8}>

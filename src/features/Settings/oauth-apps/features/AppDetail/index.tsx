@@ -5,7 +5,6 @@ import {
   Alert,
   Button,
   confirmModal,
-  createStaticStyles,
   Flexbox,
   Skeleton,
   Tabs,
@@ -13,6 +12,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, PowerIcon, PowerOffIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useEffect } from 'react';
@@ -36,52 +37,52 @@ import ManualSetupCard from './ManualSetupCard';
 import RedirectUrisCard from './RedirectUrisCard';
 import SectionCard from './SectionCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  dangerCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorErrorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  dangerDesc: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  dangerRow: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    justify-content: space-between;
-  `,
+const styles = stylex.create({
+  card: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  dangerCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorErrorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  dangerDesc: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  dangerRow: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   // The stats slot is a business stub that renders nothing in the open-source
   // build; an empty bordered card must not be left behind.
-  statsCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-
-    &:empty {
-      display: none;
-    }
-  `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+  statsCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    display: { 'default': null, ':empty': 'none' },
+  },
+  meta: { fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 /** The app page while it loads; also shown while the Labs flag resolves on a direct visit. */
 export const AppDetailSkeleton = () => (
   <Flexbox gap={16}>
     <Skeleton.Text rows={1} width={200} />
-    <div className={styles.card}>
+    <div {...stylex.props(styles.card)}>
       <Skeleton.Text rows={4} />
     </div>
   </Flexbox>
@@ -243,7 +244,7 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
         clientId={detail.id}
         name={detail.name}
       />
-      <div className={styles.statsCard}>
+      <div {...stylex.props(styles.statsCard)}>
         <OAuthAppStats clientId={detail.id} />
       </div>
     </>
@@ -276,10 +277,10 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
   const advancedTab = (
     <>
       <SectionCard title={t('oauthApp.detail.status')}>
-        <div className={styles.dangerRow}>
+        <div {...stylex.props(styles.dangerRow)}>
           <Flexbox gap={2}>
             <Text>{t(isDisabled ? 'oauthApp.actions.enable' : 'oauthApp.actions.disable')}</Text>
-            <span className={styles.dangerDesc}>
+            <span {...stylex.props(styles.dangerDesc)}>
               {t(isDisabled ? 'oauthApp.detail.enableDesc' : 'oauthApp.detail.disableDesc')}
             </span>
           </Flexbox>
@@ -295,12 +296,12 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
         </div>
       </SectionCard>
 
-      <Flexbox className={styles.dangerCard} gap={16}>
+      <Flexbox className={stylex.props(styles.dangerCard).className} gap={16}>
         <Text weight={500}>{t('oauthApp.detail.dangerZone')}</Text>
-        <div className={styles.dangerRow}>
+        <div {...stylex.props(styles.dangerRow)}>
           <Flexbox gap={2}>
             <Text>{t('oauthApp.detail.delete')}</Text>
-            <span className={styles.dangerDesc}>{t('oauthApp.detail.deleteDesc')}</span>
+            <span {...stylex.props(styles.dangerDesc)}>{t('oauthApp.detail.deleteDesc')}</span>
           </Flexbox>
           <Button
             danger
@@ -336,7 +337,7 @@ const AppDetail: FC<AppDetailProps> = ({ canEdit, id, onBack, onChanged }) => {
           </Text>
           {isDisabled && <Tag>{t('oauthApp.item.disabledTag')}</Tag>}
         </Flexbox>
-        <span className={styles.meta} style={{ paddingInlineStart: 36 }}>
+        <span className={stylex.props(styles.meta).className} style={{ paddingInlineStart: 36 }}>
           {meta}
         </span>
       </Flexbox>

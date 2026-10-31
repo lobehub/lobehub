@@ -1,15 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  confirmModal,
-  createStaticStyles,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, confirmModal, DropdownMenu, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { MoreVerticalIcon, PowerIcon, PowerOffIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -22,31 +15,22 @@ import { appTypeLabelKey } from '../../appList';
 import AppLogo from '../AppLogo';
 import { confirmDisableOAuthApp } from '../confirmDisable';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  meta: css`
-    flex: none;
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  row: css`
-    cursor: pointer;
-
-    padding-block: 12px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -1px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  meta: { flex: 'none', fontSize: cssVar.fontSizeSM, color: cssVar.colorTextTertiary },
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '12px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background 0.15s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-1px' },
+  },
+});
 
 interface AppItemProps {
   app: OAuthAppItem;
@@ -82,7 +66,7 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.row}
+      className={stylex.props(styles.row).className}
       gap={12}
       role={'button'}
       tabIndex={0}
@@ -111,7 +95,7 @@ const AppItem = memo<AppItemProps>(({ app, canEdit, onChanged, onDeleted, onOpen
         )}
       </Flexbox>
 
-      <span className={styles.meta}>
+      <span {...stylex.props(styles.meta)}>
         {t(appTypeLabelKey(app.applicationType))} · {lastUsed}
       </span>
 

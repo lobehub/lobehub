@@ -1,16 +1,21 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type FC, type PropsWithChildren, type ReactNode } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface SectionCardProps {
   extra?: ReactNode;
@@ -18,7 +23,7 @@ interface SectionCardProps {
 }
 
 const SectionCard: FC<PropsWithChildren<SectionCardProps>> = ({ children, extra, title }) => (
-  <Flexbox className={styles.card} gap={16}>
+  <Flexbox className={stylex.props(styles.card).className} gap={16}>
     <Flexbox horizontal align={'center'} justify={'space-between'} style={{ minHeight: 28 }}>
       <Text weight={500}>{title}</Text>
       {extra}

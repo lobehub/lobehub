@@ -1,7 +1,9 @@
 'use client';
 
-import { ActionIcon, Button, createStaticStyles, Flexbox, Input, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Input, Text } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,33 +18,27 @@ import {
 } from '../../redirectUris';
 import SectionCard from './SectionCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  empty: css`
-    padding: 16px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  fieldError: css`
-    font-size: 12px;
-    color: ${cssVar.colorError};
-  `,
-  listError: css`
-    font-size: 14px;
-    line-height: 1.5;
-    color: ${cssVar.colorError};
-  `,
-  uri: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    overflow-wrap: anywhere;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  empty: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+  },
+  fieldError: { fontSize: '12px', color: cssVar.colorError },
+  listError: { fontSize: '14px', lineHeight: 1.5, color: cssVar.colorError },
+  uri: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    overflowWrap: 'anywhere',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface RedirectUrisValues {
   redirectUris: string[];
@@ -124,7 +120,7 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
                               onBlur={onBlur}
                               onChange={(e) => onChange(e.target.value)}
                             />
-                            {error && <div className={styles.fieldError}>{error}</div>}
+                            {error && <div {...stylex.props(styles.fieldError)}>{error}</div>}
                           </Flexbox>
                         )}
                         validate={(value?: string) => {
@@ -146,7 +142,7 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
                     bare
                     name={'redirectUris'}
                     render={({ error }) =>
-                      error ? <div className={styles.listError}>{error}</div> : null
+                      error ? <div {...stylex.props(styles.listError)}>{error}</div> : null
                     }
                     validate={(values?: (string | undefined)[]) => {
                       const messageKey = redirectUriListMessageKey(values);
@@ -179,7 +175,7 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
       ) : saved.length > 0 ? (
         <Flexbox gap={6}>
           {saved.map((uri) => (
-            <div className={styles.uri} key={uri}>
+            <div {...stylex.props(styles.uri)} key={uri}>
               {uri}
             </div>
           ))}
@@ -188,7 +184,7 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.empty}
+          className={stylex.props(styles.empty).className}
           gap={16}
           justify={'space-between'}
         >
