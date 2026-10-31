@@ -1,5 +1,5 @@
 import type { TopicAnalysisResult } from '@lobechat/types';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { topicAnalyses, type TopicAnalysisItem } from '../schemas';
 import type { LobeChatDatabase } from '../type';
@@ -19,7 +19,11 @@ export class TopicAnalysisModel {
     private readonly workspaceId?: string,
   ) {}
 
-  /** Insert the analysis, or replace the existing one for the same topic and taxonomy version. */
+  /**
+   * Insert the analysis, or replace the existing one for the same topic and
+   * taxonomy version. An analysis of older messages never replaces a newer one,
+   * so overlapping runs settle on the latest snapshot; returns `undefined` then.
+   */
   save = async ({
     lastMessageId,
     lastMessageUpdatedAt,
@@ -49,6 +53,10 @@ export class TopicAnalysisModel {
       })
       .onConflictDoUpdate({
         set: { ...values, updatedAt: new Date() },
+        setWhere: or(
+          isNull(topicAnalyses.lastMessageUpdatedAt),
+          lte(topicAnalyses.lastMessageUpdatedAt, sql`excluded.last_message_updated_at`),
+        ),
         target: [topicAnalyses.topicId, topicAnalyses.taxonomyVersion],
       })
       .returning();

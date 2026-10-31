@@ -6,8 +6,10 @@ export interface AnalyzeTopicParams {
   /** Model and provider the user assigned to the topic auto summary. */
   model: string;
   provider: string;
+  /** Rolling summary of the whole topic; the transcript only covers the recent window. */
+  summary?: string;
   topicId: string;
-  /** The same user / assistant transcript the summary was generated from. */
+  /** Recent user / assistant messages, oldest first, bounded like the summary input. */
   transcript: string;
   userId: string;
   workspaceId?: string;

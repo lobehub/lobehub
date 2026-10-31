@@ -11,10 +11,19 @@ export const executeTopicAutoSummary = async (
   const { force, topicId, userId, workspaceId } = context.requestPayload ?? {};
   if (!topicId || !userId) return { error: 'Missing topicId or userId', summarized: false };
 
-  return runStep(context, 'topic-auto-summary:generate-and-save', async () => {
+  const summary = await runStep(context, 'topic-auto-summary:generate-and-save', async () => {
     const db = await getServerDB();
     return new TopicAutoSummaryService(db, userId, workspaceId).summarize(topicId, { force });
   });
+  if (!summary.summarized) return summary;
+
+  // A separate step gets its own time budget and retry boundary, so a slow or
+  // failing analysis never replays (and re-bills) the summary committed above.
+  const analysis = await runStep(context, 'topic-auto-summary:analyze', async () => {
+    const db = await getServerDB();
+    return new TopicAutoSummaryService(db, userId, workspaceId).analyze(topicId, { force });
+  });
+  return { ...summary, analysis };
 };
 
 export const executeTopicAutoSummaryOptions = {
