@@ -1,8 +1,6 @@
 import { type MemoryContextStory } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ArrowLeftIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 
 import Section from '@/features/MemoryEntities/EntityPage/Section';
@@ -22,24 +20,10 @@ const styles = stylex.create({
     marginInline: 'auto',
     maxWidth: '760px',
     paddingBlockEnd: '96px',
-    paddingBlockStart: '32px',
-    paddingInline: '32px',
+    paddingBlockStart: '40px',
+    paddingInline: '48px',
   },
   header: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  back: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'transparent',
-    borderStyle: 'none',
-    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
-    cursor: 'pointer',
-    display: 'inline-flex',
-    fontSize: '13px',
-    gap: '4px',
-    marginInlineStart: '-2px',
-    paddingBlock: 0,
-    paddingInline: 0,
-  },
   eyebrow: {
     alignItems: 'center',
     color: cssVar.colorTextTertiary,
@@ -72,7 +56,6 @@ const styles = stylex.create({
 });
 
 interface StoryPageProps {
-  onBack: () => void;
   story: MemoryContextStory;
 }
 
@@ -80,7 +63,7 @@ interface StoryPageProps {
  * One context read top to bottom in decision order: where it stands → what is next and still
  * open → the dossiers that got it here → the one-off progress.
  */
-const StoryPage = memo<StoryPageProps>(({ onBack, story }) => {
+const StoryPage = memo<StoryPageProps>(({ story }) => {
   const format = useStoryFormat();
   const { t } = format;
   const { dossiers, scattered } = useMemo(() => splitDossiers(story.dossiers), [story.dossiers]);
@@ -99,10 +82,6 @@ const StoryPage = memo<StoryPageProps>(({ onBack, story }) => {
     <main aria-label={title} key={story.id} {...stylex.props(styles.scroll)}>
       <div {...stylex.props(styles.column)}>
         <header {...stylex.props(styles.header)}>
-          <button type={'button'} {...stylex.props(styles.back)} onClick={onBack}>
-            <Icon icon={ArrowLeftIcon} size={14} />
-            {t('story.back')}
-          </button>
           <div {...stylex.props(styles.eyebrow)}>
             <StatusMark status={story.status} />
             {span && <span>{span}</span>}
