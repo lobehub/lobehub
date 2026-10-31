@@ -1,30 +1,29 @@
 import { type ImageProps } from '@lobehub/ui';
-import { ActionIcon, createStaticStyles, cssVar, cx, Image } from '@lobehub/ui';
+import { ActionIcon, Image } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Trash } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
 import { usePlatform } from '@/hooks/usePlatform';
+import { sx } from '@/styles/sx';
 
 import { MIN_IMAGE_SIZE } from './style';
 
-const styles = createStaticStyles(({ css }) => ({
-  deleteButton: css`
-    color: #fff;
-    background: ${cssVar.colorBgMask};
-
-    &:hover {
-      background: ${cssVar.colorError};
-    }
-  `,
-  editableImage: css`
-    background: ${cssVar.colorBgContainer};
-    box-shadow: 0 0 0 1px ${cssVar.colorFill} inset;
-  `,
-  image: css`
-    margin-block: 0 !important;
-  `,
-}));
+const styles = stylex.create({
+  deleteButton: {
+    color: '#fff',
+    backgroundColor: { 'default': cssVar.colorBgMask, ':hover': cssVar.colorError },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  editableImage: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: `0 0 0 1px ${cssVar.colorFill} inset`,
+  },
+  image: { marginBlock: '0' },
+});
 
 interface ImageItemProps {
   alt?: string;
@@ -70,7 +69,6 @@ const ImageItem = memo<ImageItemProps>(
       <Image
         alt={alt || ''}
         alwaysShowActions={alwaysShowClose}
-        classNames={{ wrapper: cx(styles.image, editable && styles.editableImage, className) }}
         height={isSafari ? 'auto' : '100%'}
         isLoading={loading}
         preview={preview}
@@ -80,7 +78,7 @@ const ImageItem = memo<ImageItemProps>(
           editable && (
             <ActionIcon
               glass
-              className={styles.deleteButton}
+              className={stylex.props(styles.deleteButton).className}
               icon={Trash}
               size={'small'}
               onClick={(e) => {
@@ -90,6 +88,9 @@ const ImageItem = memo<ImageItemProps>(
             />
           )
         }
+        classNames={{
+          wrapper: sx([styles.image, editable && styles.editableImage], className).className,
+        }}
         style={{
           aspectRatio,
           height: aspectRatio || isSafari ? 'auto' : '100%',

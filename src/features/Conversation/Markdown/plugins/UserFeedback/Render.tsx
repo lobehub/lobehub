@@ -5,11 +5,8 @@ import { MessageSquareText } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { sx } from '@/styles/sx';
-
 import { type MarkdownElementProps } from '../type';
 import { type ParsedUserFeedbackComment, parseUserFeedback } from './parseUserFeedback';
-import summaryStyles from './Render.module.css';
 
 const styles = stylex.create({
   body: { paddingBlockStart: '12px', paddingInlineStart: '44px' },
@@ -61,6 +58,7 @@ const styles = stylex.create({
   },
   summary: {
     cursor: 'pointer',
+    display: { 'default': null, '::-webkit-details-marker': 'none' },
     listStyle: 'none',
   },
   time: { fontSize: '12px', color: cssVar.colorTextTertiary },
@@ -86,7 +84,7 @@ const Render = memo<MarkdownElementProps>(({ children }) => {
 
   return (
     <details {...stylex.props(styles.root)}>
-      <summary {...sx([styles.summary], summaryStyles.summary)}>
+      <summary {...stylex.props(styles.summary)}>
         <Flexbox horizontal align={'center'} gap={12}>
           <span {...stylex.props(styles.headerIcon)}>
             <MessageSquareText size={16} />

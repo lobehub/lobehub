@@ -1,6 +1,7 @@
 'use client';
 
 import { cssVar } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useLocation } from 'react-router';
 
@@ -21,7 +22,7 @@ const Header = memo(() => {
 
   return (
     <NavHeader
-      className={styles.headerContainer}
+      className={stylex.props(styles.headerContainer).className}
       left={<StoreSearchBar />}
       style={cssVariables}
       right={

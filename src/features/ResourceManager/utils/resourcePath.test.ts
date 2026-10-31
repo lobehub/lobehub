@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildFilePath,
   buildLibraryPath,
   buildPagePath,
   legacyLibraryItemRedirect,
@@ -25,9 +26,16 @@ describe('resourcePath', () => {
     });
   });
 
+  describe('buildFilePath', () => {
+    it('opens the file in Docs, inside the active workspace', () => {
+      expect(buildFilePath('file_1', 'acme')).toBe('/acme/resource/file/file_1');
+      expect(buildFilePath('file_1', null)).toBe('/resource/file/file_1');
+    });
+  });
+
   describe('buildPagePath', () => {
     it('prefixes the page path with the active workspace slug', () => {
-      expect(buildPagePath('docs_abc', 'acme')).toBe('/acme/resource?file=docs_abc');
+      expect(buildPagePath('docs_abc', 'acme')).toBe('/acme/resource/page/abc');
     });
 
     it('keeps a library page inside the workspace', () => {
@@ -37,7 +45,7 @@ describe('resourcePath', () => {
     });
 
     it('leaves the personal-scope page path unprefixed', () => {
-      expect(buildPagePath('docs_abc', null)).toBe('/resource?file=docs_abc');
+      expect(buildPagePath('docs_abc', null)).toBe('/resource/page/abc');
       expect(buildPagePath('docs_abc', undefined, 'kb_1')).toBe(
         '/resource/library/kb_1/docs/docs_abc',
       );

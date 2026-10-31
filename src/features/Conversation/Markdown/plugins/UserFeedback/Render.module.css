@@ -1,4 +1,0 @@
-/* Safari still draws its own disclosure marker unless this pseudo-element is hidden. */
-.summary::-webkit-details-marker {
-  display: none;
-}

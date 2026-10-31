@@ -18,7 +18,7 @@ import type { ApiResponse } from '../types';
  * `@trpc/server` keeps the package free of that dependency — `TRPCError` sets
  * `name` to `'TRPCError'`, which is part of its own public shape.
  */
-const TRPC_CODE_TO_STATUS: Record<string, number> = {
+export const TRPC_CODE_TO_STATUS: Record<string, number> = {
   BAD_REQUEST: 400,
   CLIENT_CLOSED_REQUEST: 499,
   CONFLICT: 409,

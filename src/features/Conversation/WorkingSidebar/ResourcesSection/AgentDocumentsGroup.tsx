@@ -26,11 +26,13 @@ import {
 } from '@/features/AgentDocumentsExplorer';
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  filterSkillItems,
   openRenameSkillModal,
   type SkillListItem,
   type SkillRowAction,
   SkillSection,
   SkillsList,
+  SkillsSearchBar,
   useProjectSkills,
 } from '@/features/SkillsList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -300,6 +302,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const [filter, setFilter] = useState<ResourceFilter>(() =>
       isDocumentMode ? 'documents' : 'skills',
     );
+    const [skillSearchQuery, setSkillSearchQuery] = useState('');
     const activeDocumentIdentifier = docId ? standardizeIdentifier(docId) : undefined;
     const filterOptions = isDocumentMode ? DOCUMENT_MODE_FILTER_OPTIONS : FILTER_OPTIONS;
     const resolvedFilter = controlledFilter ?? filter;
@@ -368,6 +371,11 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
           name: bundle.title || bundle.filename || '',
         })),
       [skillBundleViews],
+    );
+
+    const matchedSkillItems = useMemo(
+      () => filterSkillItems(skillItems, skillSearchQuery),
+      [skillItems, skillSearchQuery],
     );
 
     const openAgentDocument = useCallback(
@@ -540,7 +548,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     const renderAgentSkillsList = () => (
       <SkillsList
         getRowActions={getAgentSkillActions}
-        items={skillItems}
+        items={matchedSkillItems}
         onOpenFile={openAgentSkillFile}
         onOpenSkill={openAgentSkill}
         onSkillDragStart={handleAgentSkillDragStart}
@@ -586,38 +594,54 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
         );
       }
 
+      // `flat` keys off the unfiltered sources so typing doesn't make headers jump.
       const flat = activeCount === 1;
+      const hasMatchedAgent = matchedSkillItems.length > 0;
+      const hasMatchedProject =
+        hasProject && filterSkillItems(projectSkillItems, skillSearchQuery).length > 0;
+      const hasMatchedDevice =
+        hasDevice && filterSkillItems(deviceSkillItems, skillSearchQuery).length > 0;
+      const hasMatchedUser = filterSkillItems(userSkillItems, skillSearchQuery).length > 0;
+      const hasMatch = hasMatchedAgent || hasMatchedProject || hasMatchedDevice || hasMatchedUser;
 
       return (
         <Flexbox gap={16} style={{ paddingBottom: 16 }}>
-          {hasAgent &&
+          <SkillsSearchBar onSearch={setSkillSearchQuery} />
+          {!hasMatch && (
+            <Center flex={1} gap={8} paddingBlock={24}>
+              <Empty description={t('workingPanel.skills.noSearchResults')} icon={SkillsIcon} />
+            </Center>
+          )}
+          {hasMatchedAgent &&
             (flat ? (
               renderAgentSkillsList()
             ) : (
               <SkillSection
                 sectionHeader={{
-                  count: skillItems.length,
+                  count: matchedSkillItems.length,
                   title: t('workingPanel.skills.section.agent'),
                 }}
               >
                 {renderAgentSkillsList()}
               </SkillSection>
             ))}
-          {hasProject && (
+          {hasMatchedProject && (
             <ProjectLevelSkills
               deviceId={deviceId}
               hideHeader={flat}
+              searchQuery={skillSearchQuery}
               workingDirectory={workingDirectory!}
             />
           )}
-          {hasDevice && (
+          {hasMatchedDevice && (
             <DeviceLevelSkills
               deviceId={deviceId}
               hideHeader={flat}
+              searchQuery={skillSearchQuery}
               workingDirectory={workingDirectory!}
             />
           )}
-          {hasUser && <UserLevelSkills hideHeader={flat} />}
+          {hasMatchedUser && <UserLevelSkills hideHeader={flat} searchQuery={skillSearchQuery} />}
         </Flexbox>
       );
     };

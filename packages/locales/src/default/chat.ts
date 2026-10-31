@@ -33,6 +33,9 @@ export default {
   'heteroAgent.claudeQuota.manage.loginSuccess': 'Signed in as {{account}}',
   'heteroAgent.claudeQuota.manage.loginWaiting': 'Finish signing in in your browser…',
   'heteroAgent.claudeQuota.manage.notSignedIn': 'Not signed in on this device',
+  'heteroAgent.claudeQuota.manage.notSignedInOnDevice':
+    "That account isn't signed in on this device yet. Sign in there first.",
+  'heteroAgent.claudeQuota.manage.switchFailed': "Couldn't switch the account. Try again.",
   'heteroAgent.claudeQuota.manage.signIn': 'Sign in',
   'heteroAgent.claudeQuota.noRunnableAccount':
     "None of the Claude Code accounts in this agent's rotation are signed in on this device. Sign one in from Manage accounts, or add a signed-in account to the rotation.",
@@ -2225,6 +2228,18 @@ export default {
   'taskDetail.publishToWorkspace.confirmOk': 'Publish',
   'taskDetail.publishToWorkspace.errorPrivateAgent':
     'This task is assigned to a private agent. Reassign to a workspace agent, or publish the agent first.',
+  'taskDetail.makePrivate.errorOtherCreators':
+    'This task has subtasks created by other members. Move or remove them before making it private.',
+  'taskDetail.takeOver.confirmHint':
+    'This task belongs to another member. It and its subtasks become your private task: its creator and other members lose access, and its schedule or heartbeat is turned off.',
+  'taskDetail.takeOver.confirmOk': 'Take over',
+  'taskDetail.takeOver.confirmTitle': 'Take this task over as your private task?',
+  'taskDetail.takeOver.errorHiddenSubtasks':
+    'This task has private subtasks its creator kept to themselves, so it cannot be taken over.',
+  'taskDetail.takeOver.errorRunning':
+    'This task or one of its subtasks is running. Take it over once the run finishes.',
+  'taskDetail.takeOver.menuLabel': 'Take over as private',
+  'taskDetail.takeOver.success': 'Taken over as your private task',
 
   'createGoal.addCriterion': 'Add criterion',
   'createGoal.costBudgetHint':
@@ -3830,10 +3845,12 @@ export default {
     'Uninstall the skill “{{name}}”? This cannot be undone.',
   'workingPanel.skills.detail.title': 'Skill details',
   'workingPanel.skills.empty': 'No skills available',
+  'workingPanel.skills.noSearchResults': 'No matching skills',
   'workingPanel.skills.rename.action': 'Rename',
   'workingPanel.skills.rename.error': 'Failed to rename skill',
   'workingPanel.skills.rename.placeholder': 'Skill name',
   'workingPanel.skills.rename.title': 'Rename skill',
+  'workingPanel.skills.searchPlaceholder': 'Filter skills...',
   'workingPanel.skills.section.agent': 'Agent skills',
   'workingPanel.skills.section.device': 'Device skills',
   'workingPanel.skills.section.project': 'Project skills',

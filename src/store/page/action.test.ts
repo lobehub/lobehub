@@ -104,7 +104,7 @@ describe('pageActions — createNewPage', () => {
     expect(items()[0].title).toBe('My page');
     expect(usePageStore.getState().selectedPageId).toBe('docnew1');
     expect(usePageStore.getState().isCreatingNew).toBe(false);
-    expect(navigate).toHaveBeenCalledWith('/page/docnew1');
+    expect(navigate).toHaveBeenCalledWith('/resource/page/docnew1');
   });
 
   it('shows the optimistic row while the request is in flight', async () => {
@@ -140,7 +140,7 @@ describe('pageActions — createNewPage', () => {
     expect(items()).toEqual([]);
     expect(usePageStore.getState().selectedPageId).toBeNull();
     expect(usePageStore.getState().isCreatingNew).toBe(false);
-    expect(navigate).toHaveBeenCalledWith('/page');
+    expect(navigate).toHaveBeenCalledWith('/resource');
   });
 });
 
@@ -173,7 +173,7 @@ describe('pageActions — removePage', () => {
     await pageActions.removePage('docs_a');
 
     expect(usePageStore.getState().selectedPageId).toBeNull();
-    expect(navigate).toHaveBeenCalledWith('/page');
+    expect(navigate).toHaveBeenCalledWith('/resource');
   });
 });
 

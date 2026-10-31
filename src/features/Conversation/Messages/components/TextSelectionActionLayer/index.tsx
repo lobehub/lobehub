@@ -1,7 +1,8 @@
 'use client';
 
 import { nanoid } from '@lobechat/utils';
-import { Button, createStaticStyles, Flexbox, toast } from '@lobehub/ui';
+import { Button, Flexbox, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MessageCirclePlusIcon } from 'lucide-react';
 import type { CSSProperties, PointerEvent, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -32,25 +33,22 @@ interface TextSelectionActionLayerProps {
   disabled?: boolean;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    display: contents;
-  `,
-  toolbar: css`
-    position: fixed;
-    z-index: 10000;
-    transform: translate(-50%, -100%);
-
-    padding: 4px;
-    border: 1px solid light-dark(rgb(229 231 235), rgb(64 64 64));
-    border-radius: 999px;
-
-    background: light-dark(#fff, #1f1f1f);
-    box-shadow:
-      0 8px 24px rgb(0 0 0 / 12%),
-      0 2px 8px rgb(0 0 0 / 8%);
-  `,
-}));
+const styles = stylex.create({
+  root: { display: 'contents' },
+  toolbar: {
+    position: 'fixed',
+    zIndex: 10000,
+    transform: 'translate(-50%, -100%)',
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'light-dark(rgb(229 231 235), rgb(64 64 64))',
+    borderRadius: '999px',
+    backgroundColor: 'light-dark(#fff, #1f1f1f)',
+    backgroundImage: 'none',
+    boxShadow: '0 8px 24px rgb(0 0 0 / 12%), 0 2px 8px rgb(0 0 0 / 8%)',
+  },
+});
 
 const focusChatInputSoon = () => {
   window.setTimeout(() => {
@@ -182,7 +180,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
 
   return (
     <div
-      className={styles.root}
+      {...stylex.props(styles.root)}
       ref={rootRef}
       onKeyUp={scheduleSelectionUpdate}
       onPointerUp={scheduleSelectionUpdate}
@@ -193,7 +191,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.toolbar}
+            className={stylex.props(styles.toolbar).className}
             gap={2}
             ref={toolbarRef}
             style={toolbarStyle}
