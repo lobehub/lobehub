@@ -16,7 +16,6 @@ on:
       - '.github/workflows/sync*.y*ml'
       - '.github/workflows/auto-*.yml'
       - '.github/workflows/manual-*.yml'
-      - '.github/workflows/lighthouse.yml'
       - '.github/workflows/bundle-analyzer.yml'
   pull_request:
     paths-ignore:
@@ -30,7 +29,6 @@ on:
       - '.github/workflows/sync*.y*ml'
       - '.github/workflows/auto-*.yml'
       - '.github/workflows/manual-*.yml'
-      - '.github/workflows/lighthouse.yml'
       - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
@@ -47,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi @lobechat/replica'
+      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
 
     steps:
       - name: Checkout
@@ -68,6 +66,7 @@ jobs:
             .github/scripts/size-gate-comment.test.cjs \
             .github/scripts/pr-admission-check.test.cjs \
             .github/scripts/mergeAllowBuilds.test.mjs \
+            .github/scripts/desktopRelease*.test.mjs \
             .github/scripts/desktop-core-gate.test.mjs
 
       - name: Setup environment
@@ -79,6 +78,9 @@ jobs:
       - name: Install CLI deps
         run: pnpm install
         working-directory: apps/cli
+
+      - name: Verify hotfix operator CLI
+        run: node --test .github/scripts/hotfixWorkflow.test.mjs
 
       - name: Test CLI build configuration, bundle and model-facing docs
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
@@ -267,11 +269,7 @@ jobs:
       # new or cherry-picked changes (and conflict resolutions) on the branch
       # itself, so their PRs are the only place those changes get linted.
       ALINT_SKIP_REASON: >-
-        ${{
-        github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/weekly-') && 'weekly release PR, whose changes were linted on their own PRs' ||
-        github.event_name == 'push' && github.ref == 'refs/heads/main' && 'push to main, whose changes were linted on their own PRs' ||
-        ''
-        }}
+        ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/weekly-') && 'weekly release PR, whose changes were linted on their own PRs' || github.event_name == 'push' && github.ref == 'refs/heads/main' && 'push to main, whose changes were linted on their own PRs' || '' }}
 
     steps:
       - name: Checkout

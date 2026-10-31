@@ -1,0 +1,7 @@
+.flush {
+  overflow: hidden;
+}
+
+.flush [data-form-group-body] {
+  padding: 0;
+}

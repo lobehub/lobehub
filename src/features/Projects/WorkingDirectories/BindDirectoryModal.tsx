@@ -1,6 +1,5 @@
 import {
   Alert,
-  Avatar,
   Button,
   createModal,
   Flexbox,
@@ -22,6 +21,7 @@ import { useCurrentProjectList, useProjectStore } from '@/store/project';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
 import { openCreateProjectModal } from '../CreateProjectModal';
+import ProjectAvatar from '../ProjectAvatar';
 import { openEnvironmentModal } from './EnvironmentModal';
 import { useBindDirectory } from './useBindDirectory';
 
@@ -85,7 +85,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
               ...projects.map((project) => ({
                 label: (
                   <Flexbox horizontal align="center" gap={8}>
-                    <Avatar avatar={project.avatar || '📁'} size={20} />
+                    <ProjectAvatar avatar={project.avatar} name={project.name} />
                     {project.name}
                   </Flexbox>
                 ),

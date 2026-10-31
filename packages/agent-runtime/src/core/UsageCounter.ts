@@ -121,13 +121,15 @@ export class UsageCounter {
    * @returns Updated usage and cost
    */
   static accumulateLLM(params: {
+    /** Number of provider attempts this accumulation represents (defaults to 1). */
+    apiCallsDelta?: number;
     cost?: Cost;
     model: string;
     modelUsage: ModelUsage;
     provider: string;
     usage?: Usage;
   }): { cost?: Cost; usage: Usage } {
-    const { usage, cost, provider, model, modelUsage } = params;
+    const { usage, cost, provider, model, modelUsage, apiCallsDelta = 1 } = params;
 
     // Ensure usage exists
     const newUsage = usage ? structuredClone(usage) : this.createDefaultUsage();
@@ -136,7 +138,7 @@ export class UsageCounter {
     newUsage.llm.tokens.input += modelUsage.totalInputTokens ?? 0;
     newUsage.llm.tokens.output += modelUsage.totalOutputTokens ?? 0;
     newUsage.llm.tokens.total += modelUsage.totalTokens ?? 0;
-    newUsage.llm.apiCalls += 1;
+    newUsage.llm.apiCalls += apiCallsDelta;
 
     // Ensure cost exists if modelUsage has cost
     const newCost = cost
@@ -173,6 +175,19 @@ export class UsageCounter {
     }
 
     return { cost: newCost, usage: newUsage };
+  }
+
+  /**
+   * Count provider attempts that produced no finalized output.
+   *
+   * Retries and terminal failures still reached the provider, so the
+   * user-facing LLM-call metric counts them even though there are no tokens or
+   * cost to accumulate.
+   */
+  static accumulateAttempts(usage: Usage | undefined, attempts: number): Usage {
+    const newUsage = usage ? structuredClone(usage) : this.createDefaultUsage();
+    newUsage.llm.apiCalls += Math.max(0, attempts);
+    return newUsage;
   }
 
   /**

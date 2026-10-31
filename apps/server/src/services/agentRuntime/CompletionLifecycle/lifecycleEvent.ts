@@ -1,6 +1,7 @@
 /**
  * The lifecycle event payload every completion consumer receives.
  */
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 
 import {
@@ -110,7 +111,7 @@ export function buildLifecycleEvent(
       errorType: formattedError?.type === undefined ? undefined : String(formattedError.type),
       finalState: state,
       lastAssistantContent,
-      llmCalls: state?.usage?.llm?.apiCalls,
+      llmCalls: getLlmCallCount(state),
       operationId,
       reason,
       status: state?.status || reason,

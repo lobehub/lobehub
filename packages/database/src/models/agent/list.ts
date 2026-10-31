@@ -7,6 +7,7 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { notShareVisitorTopic } from '../../utils/shareVisitor';
 import { notTrashed } from '../../utils/softDelete';
+import { countOf } from '../utils/rows';
 import { type AgentModelContext } from './context';
 import { type DeviceBindingCandidate } from './types';
 
@@ -96,6 +97,44 @@ export const queryBoundToDevice = async (
       ),
     )
     .orderBy(desc(agents.updatedAt));
+
+  return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
+};
+
+/**
+ * The stored routing config of the given agents, for resolving where each runs
+ * for the caller in ONE read (a sidebar decorating many agents) instead of one
+ * config fetch per agent. Same visibility gate and row shape as
+ * {@link queryBoundToDevice}: an id the caller cannot see is dropped, never
+ * leaked.
+ */
+export const queryAgencyRoutingByIds = async (
+  ctx: AgentModelContext,
+  agentIds: string[],
+): Promise<DeviceBindingCandidate[]> => {
+  if (agentIds.length === 0) return [];
+
+  const rows = await ctx.db
+    .select({
+      agencyConfig: agents.agencyConfig,
+      avatar: agents.avatar,
+      backgroundColor: agents.backgroundColor,
+      id: agents.id,
+      name: agents.name,
+      slug: agents.slug,
+      title: agents.title,
+      userId: agents.userId,
+      visibility: agents.visibility,
+      workspaceId: agents.workspaceId,
+    })
+    .from(agents)
+    .where(
+      and(
+        ctx.ownership(),
+        or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true)),
+        inArray(agents.id, agentIds),
+      ),
+    );
 
   return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
 };
@@ -252,7 +291,7 @@ export const countAgents = async (
       ]),
     );
 
-  return result[0]?.count ?? 0;
+  return countOf(result, 'the agent count');
 };
 
 /**

@@ -31,9 +31,7 @@ export const applyLookupPricingParamDefaults = async <T extends Record<string, u
       (unit) => unit.name === 'imageGeneration' && unit.strategy === 'lookup',
     );
     pricingParams =
-      lookupUnit && lookupUnit.strategy === 'lookup'
-        ? lookupUnit.lookup?.pricingParams
-        : undefined;
+      lookupUnit && lookupUnit.strategy === 'lookup' ? lookupUnit.lookup?.pricingParams : undefined;
   } catch {
     // Pricing resolution is best-effort here: CostService will report a
     // precise error afterwards if the pricing really is unusable.
@@ -48,8 +46,7 @@ export const applyLookupPricingParamDefaults = async <T extends Record<string, u
   if (missingParams.length === 0) return generationParams;
 
   const parameters = (await getModelParameters(model, provider)) as
-    | Record<string, { default?: unknown } | undefined>
-    | undefined;
+    Record<string, { default?: unknown } | undefined> | undefined;
   if (!parameters) return generationParams;
 
   const updates: Record<string, unknown> = {};
@@ -87,3 +84,23 @@ export function validateNoUrlsInConfig(obj: any, path: string = ''): void {
     });
   }
 }
+
+/**
+ * Keys of `params` that the model's declared parameter schema does not accept.
+ *
+ * Upstream image APIs reject unknown fields outright (gpt-image returns `400 Unknown parameter:
+ * 'height'`), and that rejection only surfaces after the task is queued and charged, as an opaque
+ * async failure. Callers that build params by hand (CLI, agent tools, API) therefore need the same
+ * contract the image page enforces client-side. `prompt` is always accepted; `undefined`/`null`
+ * values carry nothing to the provider and are ignored.
+ */
+export const findUnsupportedImageParams = (
+  params: Record<string, unknown>,
+  parametersSchema: Record<string, unknown>,
+): string[] =>
+  Object.entries(params)
+    .filter(
+      ([key, value]) =>
+        key !== 'prompt' && value !== undefined && value !== null && !(key in parametersSchema),
+    )
+    .map(([key]) => key);

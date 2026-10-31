@@ -258,6 +258,22 @@ describe('GenerationService', () => {
           expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
         });
 
+        it('should retry a connection reset while reading the streamed body', async () => {
+          const reset = new Error('Fetch failed: aborted');
+          mockSsrfSafeFetch
+            .mockResolvedValueOnce({
+              ...okResponse(),
+              arrayBuffer: vi.fn().mockRejectedValue(reset),
+            })
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
         it('should retry 5xx responses', async () => {
           mockSsrfSafeFetch
             .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable' })

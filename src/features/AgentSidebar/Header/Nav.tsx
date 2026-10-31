@@ -30,6 +30,8 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import { isAgentProfileRoute } from './isAgentProfileRoute';
+
 const Nav = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tTopic } = useTranslation('topic');
@@ -40,10 +42,7 @@ const Nav = memo(() => {
   // The profile entry now owns a group of sub-views — profile / channels /
   // statistics — switched by a Segmented in the page header, so all three keep
   // this entry lit instead of leaving the sidebar with nothing selected.
-  const isProfileActive =
-    pathname.includes('/profile') ||
-    pathname.includes('/channel') ||
-    pathname.endsWith('/statistics');
+  const isProfileActive = isAgentProfileRoute(pathname);
   const isGoalsActive = pathname.endsWith('/goals');
   // 下钻页 /self-evolving/:domainId 也算在这个入口下，否则点进去侧边栏就失焦了
   const isSelfLearningActive = pathname.includes('/self-evolving');

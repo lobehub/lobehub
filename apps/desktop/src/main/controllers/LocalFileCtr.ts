@@ -101,6 +101,7 @@ import RemoteFileUploadService, {
 } from '@/services/remoteFileUploadSrv';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { shrinkImageForUpload } from '@/utils/shrinkImageForUpload';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -511,11 +512,16 @@ export default class LocalFileCtr extends ControllerModule {
           return formatUploadFailure(describeUploadFailure(error));
         },
         upload: async (filePath) => {
-          const record = await this.app
-            .getService(RemoteFileUploadService)
-            .uploadLocalFile(filePath);
-          if (!record?.url) logger.warn('Image upload returned no record:', { filePath });
-          return record;
+          const prepared = await shrinkImageForUpload(filePath, imageMimeType);
+          try {
+            const record = await this.app
+              .getService(RemoteFileUploadService)
+              .uploadLocalFile(prepared.filePath);
+            if (!record?.url) logger.warn('Image upload returned no record:', { filePath });
+            return record;
+          } finally {
+            await prepared.cleanup();
+          }
         },
       });
     }

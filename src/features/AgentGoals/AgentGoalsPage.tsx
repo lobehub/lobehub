@@ -8,6 +8,7 @@ import {
   cssVar,
   Empty,
   Flexbox,
+  ScrollShadow,
   Segmented,
   Text,
 } from '@lobehub/ui';
@@ -308,14 +309,24 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
               </Flexbox>
             )}
             <Flexbox gap={10}>
-              <Flexbox horizontal align={'center'} justify={'space-between'}>
-                <Flexbox horizontal align={'center'} gap={8}>
+              {/* Wraps so the filters drop below the title on a phone instead of crushing it. */}
+              <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
+                <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
                   <Text fontSize={16} weight={600}>
                     {t('goalPage.listTitle')}
                   </Text>
                   <span className={styles.countBadge}>{visibleGoalCount}</span>
                 </Flexbox>
-                <Flexbox horizontal align={'center'} gap={8}>
+                {/* On a phone the filters can outgrow the row; the edge fade shows it scrolls. */}
+                <ScrollShadow
+                  hideScrollBar
+                  horizontal
+                  align={'center'}
+                  gap={8}
+                  orientation={'horizontal'}
+                  size={24}
+                  style={{ maxWidth: '100%' }}
+                >
                   {isGlobal && (
                     <GoalAgentFilter
                       options={agentFilterOptions}
@@ -362,7 +373,7 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
                     variant={viewMode === 'card' ? 'filled' : 'borderless'}
                     onClick={() => setViewMode('card')}
                   />
-                </Flexbox>
+                </ScrollShadow>
               </Flexbox>
               <div className={viewMode === 'card' ? styles.list : styles.listRows}>
                 {isTabError ? (

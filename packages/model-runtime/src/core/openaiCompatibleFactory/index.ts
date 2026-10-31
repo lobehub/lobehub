@@ -102,6 +102,7 @@ import {
   parseStructuredToolArguments,
   StructuredOutputError,
 } from './structuredOutput';
+import { createOpenAICompatibleSpeech } from './textToSpeech';
 
 export type { PollVideoStatusResult };
 export * from './createVideo';
@@ -1168,25 +1169,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
-      const log = debug(`${this.logPrefix}:textToSpeech`);
-      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
-      log(
-        'textToSpeech called with input length: %d, voice: %s',
-        payload.input?.length || 0,
-        payload.voice,
-      );
-
-      try {
-        const mp3 = await this.client.audio.speech.create(requestPayload as any, {
-          headers: options?.headers,
-          signal: options?.signal,
-        });
-        const buffer = await mp3.arrayBuffer();
-        log('generated audio with size: %d bytes', buffer.byteLength);
-        return buffer;
-      } catch (error) {
-        throw this.handleError(error);
-      }
+      return createOpenAICompatibleSpeech(this.client, payload, options, {
+        handleError: (error) => this.handleError(error),
+        logPrefix: this.logPrefix,
+        provider: this.id,
+        requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
+      });
     }
 
     /**

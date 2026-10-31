@@ -4,18 +4,22 @@ import { AGENT_CHAT_URL } from '@lobechat/const';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback } from 'react';
 
+import { useOpenCreateAgentModal } from '@/features/AgentIdentityModal/useOpenCreateAgentModal';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks/useCreateMenuItems';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
+import { openCurrentWorkspaceInNewWindow } from './openCurrentWorkspaceInNewWindow';
+
 /**
  * Bridge component for handling File menu actions from Electron main process
- * Listens to broadcast events for creating new topics, agents, agent groups, and pages
+ * Listens to broadcast events for creating new topics, agents, agent groups, pages and windows
  */
 const DesktopFileMenuBridge = () => {
-  const { createAgent, createEmptyGroup, createPage } = useCreateMenuItems();
+  const { createEmptyGroup, createPage } = useCreateMenuItems();
+  const openCreateAgentModal = useOpenCreateAgentModal();
   const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -33,10 +37,10 @@ const DesktopFileMenuBridge = () => {
     navigate(AGENT_CHAT_URL(inboxAgentId, false));
   }, [activeAgentId, inboxAgentId, navigate]);
 
-  // Handle create new agent from File menu
-  const handleCreateNewAgent = useCallback(async () => {
-    await createAgent();
-  }, [createAgent]);
+  // Handle create new agent from File menu — same identity form as the sidebar
+  const handleCreateNewAgent = useCallback(() => {
+    openCreateAgentModal();
+  }, [openCreateAgentModal]);
 
   // Handle create new agent group from File menu
   const handleCreateNewAgentGroup = useCallback(async () => {
@@ -52,6 +56,7 @@ const DesktopFileMenuBridge = () => {
   useWatchBroadcast('createNewAgent', handleCreateNewAgent);
   useWatchBroadcast('createNewAgentGroup', handleCreateNewAgentGroup);
   useWatchBroadcast('createNewPage', handleCreateNewPage);
+  useWatchBroadcast('openNewWindow', openCurrentWorkspaceInNewWindow);
 
   return null;
 };

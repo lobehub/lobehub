@@ -74,6 +74,16 @@ describe('startOperation › member_runtime_end declaration', () => {
     expect(agentRuntimeService.acceptsMemberRuntimeEnd).not.toHaveBeenCalled();
   });
 
+  it('forwards the resumed LLM baseline to the new operation', async () => {
+    const { agentRuntimeService, ctx, deps, input } = setup(false);
+
+    await startOperation(deps, ctx, input({ initialLlmCalls: 3, initialStepCount: 7 }));
+
+    expect(agentRuntimeService.createOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ initialLlmCalls: 3, initialStepCount: 7 }),
+    );
+  });
+
   // The v2 approval endpoint starts the continuation server-side, without the
   // client's `streamFeatures`: it is the same client, so the parked op's
   // declaration carries over (read before that op is retired).

@@ -20,6 +20,7 @@ const TaskDetailAssignee = memo(() => {
   const status = useTaskStore(taskDetailSelectors.activeTaskStatus) as TaskStatus | undefined;
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const visibility = useTaskStore(taskDetailSelectors.activeTaskVisibility);
+  const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
   // Same source as the home list so the runtime tag stays consistent.
   const assigneeHeterogeneousType = useHomeStore(
@@ -33,6 +34,7 @@ const TaskDetailAssignee = memo(() => {
     <AssigneeAgentSelector
       currentAgentId={assigneeAgentId}
       disabled={status === 'running'}
+      taskCreatorId={createdByUserId}
       taskIdentifier={taskId}
       taskVisibility={visibility}
     >

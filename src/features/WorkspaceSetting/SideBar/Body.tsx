@@ -46,6 +46,7 @@ const Body = memo(() => {
           defaultValue={[
             WorkspaceSettingsGroupKey.Account,
             WorkspaceSettingsGroupKey.General,
+            WorkspaceSettingsGroupKey.Resource,
             WorkspaceSettingsGroupKey.Subscription,
             WorkspaceSettingsGroupKey.Agent,
             WorkspaceSettingsGroupKey.Admin,

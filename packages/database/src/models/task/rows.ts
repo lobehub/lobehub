@@ -3,6 +3,7 @@ import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
 import type { LobeChatDatabase } from '../../type';
+import { countOf } from '../utils/rows';
 import { seqOwnership, type TaskModelContext, taskOwnership } from './context';
 import { isTaskIdentifierUniqueViolation, normalizeTaskRefs } from './utils';
 
@@ -97,36 +98,6 @@ export const findAssigneesByIds = async (
     .where(and(inArray(tasks.id, ids), taskOwnership(ctx)));
 };
 
-export const resolveMany = async (
-  ctx: TaskModelContext,
-  idsOrIdentifiers: string[],
-): Promise<TaskItem[]> => {
-  if (idsOrIdentifiers.length === 0) return [];
-  const identifiers = idsOrIdentifiers.map((value) => value.toUpperCase());
-  return ctx.db
-    .select()
-    .from(tasks)
-    .where(
-      and(
-        or(inArray(tasks.id, idsOrIdentifiers), inArray(tasks.identifier, identifiers)),
-        taskOwnership(ctx),
-      ),
-    );
-};
-
-export const findByIdentifier = async (
-  ctx: TaskModelContext,
-  identifier: string,
-): Promise<TaskItem | null> => {
-  const result = await ctx.db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.identifier, identifier), taskOwnership(ctx)))
-    .limit(1);
-
-  return result[0] || null;
-};
-
 /** The column write itself — the assignee rule lives in `update`. */
 export const writeRow = async (
   ctx: TaskModelContext,
@@ -176,7 +147,7 @@ export const countTasksBlockingAgentDemotion = async (
   agentOwnerUserId: string,
 ): Promise<number> => {
   if (!ctx.workspaceId) return 0;
-  const [row] = await ctx.db
+  const rows = await ctx.db
     .select({ count: sql<number>`count(*)` })
     .from(tasks)
     .where(
@@ -186,7 +157,7 @@ export const countTasksBlockingAgentDemotion = async (
         or(eq(tasks.visibility, 'public'), ne(tasks.createdByUserId, agentOwnerUserId)),
       ),
     );
-  return Number(row?.count ?? 0);
+  return countOf(rows, 'the assigned task count');
 };
 
 /**

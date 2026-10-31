@@ -379,6 +379,13 @@ const cases: RpcCase[] = [
   },
   {
     address: address(30_000),
+    call: (g) => g.listClaudeCodeMemory({ ...base, scope: '/p' }),
+    failure: UNDEFINED,
+    name: 'listClaudeCodeMemory',
+    payload: { method: 'listClaudeCodeMemory', params: { scope: '/p' } },
+  },
+  {
+    address: address(30_000),
     call: (g) =>
       g.copyAssetForPublish({ ...base, from: '/x/a.png', to: '/p/a.png', workingDirectory: '/p' }),
     failure: errorResult('Failed to copy publish asset'),

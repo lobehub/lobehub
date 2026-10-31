@@ -24,7 +24,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Title = memo(() => {
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
-  const detail = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId] : undefined));
+  const detail = useTaskStore((s) =>
+    taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId] : undefined,
+  );
   const identifier = detail?.identifier ?? taskId;
   const name = detail?.name;
 

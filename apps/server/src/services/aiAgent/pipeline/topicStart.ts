@@ -167,11 +167,11 @@ const THREAD_START_WAIT_MS = 3000;
 /**
  * Start a run on an existing thread inside the thread's start fence.
  *
- * A server-started queued follow-up (`steer`, not interactive) must hold the
- * fence and finds no other live run of the user's on the thread, as one step —
- * otherwise it fails and its follow-ups go back to the queue, instead of
- * starting next to a run the user just sent. A person at the composer only
- * waits briefly for the fence and is never refused.
+ * A server-started queued follow-up (`queuedSuccessor`, not interactive) must
+ * hold the fence and finds no other live run of the user's on the thread, as
+ * one step — otherwise it fails and its follow-ups go back to the queue,
+ * instead of starting next to a run the user just sent. A person at the
+ * composer only waits briefly for the fence and is never refused.
  */
 const startOnThread = async (
   deps: TopicStartDeps,
@@ -179,7 +179,7 @@ const startOnThread = async (
   surface: { threadId: string; topicId: string },
   run: (params: InternalExecAgentParams) => Promise<ExecAgentResult>,
 ): Promise<ExecAgentResult> => {
-  const queuedSuccessor = !!params.steer && !params.interactiveStart;
+  const queuedSuccessor = !!params.queuedSuccessor && !params.interactiveStart;
   const owner = `thread-start-${nanoid()}`;
   const fence = await redisService.threadStartFence.acquire(
     surface.threadId,

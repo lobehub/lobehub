@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
+import { aiChatService } from '@/services/aiChat';
 import { getPendingTopicRepos, setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { type ProjectDirectory, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 import { getSessionStoreState } from '@/store/session';
@@ -165,6 +166,44 @@ describe('sendMessage in a project directory', () => {
     expect(pendingAtDispatch).toEqual([]);
   });
 
+  // Regression (acceptance): a first send the server refused (device offline)
+  // rolled the optimistic topic back but left the staging consumed, so the
+  // blank project conversation lost its directory — on a project page the
+  // composer vanished and the restored draft had nowhere to be sent.
+  it('restages the project directory when a refused first send rolls back', async () => {
+    mockConstEnv.isDesktop = true;
+    setupMockSelectors({
+      agentConfig: { agencyConfig: { boundDeviceId: DEVICE_ID, executionTarget: 'device' } },
+    });
+    const agentId = TEST_IDS.SESSION_ID;
+    const staged = { agentId, projectWorkingDirectoryId: 'dir-85' };
+    const executeGatewayAgentSpy = vi
+      .fn()
+      .mockRejectedValue(new Error('Device is offline or working directory is unavailable'));
+
+    act(() => {
+      useChatStore.setState({
+        activeAgentId: agentId,
+        activeTopicId: undefined,
+        executeGatewayAgent: executeGatewayAgentSpy,
+        isGatewayModeEnabled: () => true,
+        pendingNewTopicDirectory: staged,
+      });
+    });
+
+    const { result } = renderHook(() => useChatStore());
+    await act(async () => {
+      await result.current.sendMessage({
+        context: { agentId, threadId: null, topicId: null },
+        message: 'Start on an offline device',
+      });
+    });
+
+    expect(executeGatewayAgentSpy).toHaveBeenCalled();
+    expect(result.current.activeTopicId).toBeFalsy();
+    expect(result.current.pendingNewTopicDirectory).toEqual(staged);
+  });
+
   // `/newTopic` from a project topic creates a topic outside the project, so it
   // must not inherit the directory it was sent from.
   it('keeps a /newTopic sent from a project topic on the agent default', async () => {
@@ -229,5 +268,75 @@ describe('sendMessage in a project directory', () => {
         workingDirectoryConfig: { path: AGENT_DEFAULT_PATH },
       }),
     );
+  });
+});
+
+describe('sendMessage in a project without a directory', () => {
+  // Regression (user report): a project "+" with no runnable directory created
+  // an empty "untitled" topic up front. The blank draft now stages the project
+  // alone, and the first send creates the topic conversation-only inside it.
+  it('binds the new gateway topic to the staged project without routing to a device', async () => {
+    setupMockSelectors({ agentConfig: { agencyConfig: { executionTarget: 'cloud' } } });
+    const executeGatewayAgentSpy = vi.fn().mockResolvedValue({ topicId: 'tpc_new' });
+    const agentId = TEST_IDS.SESSION_ID;
+
+    act(() => {
+      useChatStore.setState({
+        activeAgentId: agentId,
+        activeTopicId: undefined,
+        executeGatewayAgent: executeGatewayAgentSpy,
+        isGatewayModeEnabled: () => true,
+        pendingNewTopicDirectory: { agentId, projectId: 'prj-1' },
+      });
+    });
+
+    const { result } = renderHook(() => useChatStore());
+    await act(async () => {
+      await result.current.sendMessage({
+        context: { agentId, threadId: null, topicId: null },
+        message: 'Start in the project',
+      });
+    });
+
+    const params = executeGatewayAgentSpy.mock.calls[0][0];
+    expect(params.projectId).toBe('prj-1');
+    expect(params.projectWorkingDirectoryId).toBeUndefined();
+    const optimisticRow = Object.values(result.current.topicDataMap)
+      .flatMap((data) => data.items)
+      .find((topic) => topic.id === params.optimisticTopic.id);
+    expect(optimisticRow?.projectId).toBe('prj-1');
+    expect(optimisticRow?.projectWorkingDirectoryId).toBeUndefined();
+  });
+
+  it('creates the client-runtime topic inside the staged project', async () => {
+    setupMockSelectors({ agentConfig: {} });
+    const agentId = TEST_IDS.SESSION_ID;
+    const sendMessageInServerSpy = vi
+      .spyOn(aiChatService, 'sendMessageInServer')
+      .mockRejectedValue(new Error('stop after the request is built'));
+
+    act(() => {
+      useChatStore.setState({
+        activeAgentId: agentId,
+        activeTopicId: undefined,
+        isGatewayModeEnabled: () => false,
+        pendingNewTopicDirectory: { agentId, projectId: 'prj-1' },
+      });
+    });
+
+    const { result } = renderHook(() => useChatStore());
+    await act(async () => {
+      await result.current.sendMessage({
+        context: { agentId, threadId: null, topicId: null },
+        message: 'Start in the project',
+      });
+    });
+
+    expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ newTopic: expect.objectContaining({ projectId: 'prj-1' }) }),
+      expect.any(AbortController),
+    );
+    // The refused first send hands the project back to the blank draft.
+    expect(result.current.pendingNewTopicDirectory).toEqual({ agentId, projectId: 'prj-1' });
   });
 });

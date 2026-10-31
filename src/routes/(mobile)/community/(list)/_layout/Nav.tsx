@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, Drawer, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Drawer, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MenuIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 
@@ -19,24 +21,13 @@ const scrollToTop = () => {
   scrollableElement.scrollTo({ behavior: 'smooth', top: 0 });
 };
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  activeNavItem: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  container: css`
-    height: auto;
-    padding-block: 4px;
-    background: ${cssVar.colorBgLayout};
-  `,
-  navItem: css`
-    font-weight: 500;
-  `,
-  title: css`
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 1.2;
-  `,
-}));
+const styles = stylex.create({
+  title: {
+    fontSize: '18px',
+    fontWeight: 700,
+    lineHeight: 1.2,
+  },
+});
 
 const Nav = memo(() => {
   const [open, setOpen] = useState(false);
@@ -45,7 +36,7 @@ const Nav = memo(() => {
 
   return (
     <>
-      <Flexbox horizontal align={'center'} className={styles.title} gap={4}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.title).className} gap={4}>
         <ActionIcon
           color={cssVar.colorText}
           icon={MenuIcon}

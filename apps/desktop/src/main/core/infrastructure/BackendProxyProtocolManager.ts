@@ -2,7 +2,7 @@ import { AUTH_FAILURE_HEADER, AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bri
 import { BrowserWindow, type Session, session as electronSession } from 'electron';
 
 import { isDev } from '@/const/env';
-import { isBackendPath } from '@/const/protocol';
+import { isBackendPath, isSandboxedBackendRequestAllowed } from '@/const/protocol';
 import { getDesktopEnv } from '@/env';
 import { appendVercelCookie } from '@/utils/http-headers';
 import { describeJwtClaims } from '@/utils/jwt-claims';
@@ -211,6 +211,8 @@ export class BackendProxyProtocolManager {
     return async (request) => {
       const url = new URL(request.url);
       if (!isBackendPath(url.pathname)) return null;
+      if (!isSandboxedBackendRequestAllowed(request.headers.get('origin')))
+        return new Response('Forbidden', { status: 403 });
 
       const session = electronSession.defaultSession;
       if (!session)

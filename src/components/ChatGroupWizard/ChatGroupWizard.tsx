@@ -2,12 +2,8 @@
 
 import {
   Accordion,
-  Avatar,
   Button,
   Checkbox,
-  createStaticStyles,
-  cssVar,
-  cx,
   Empty,
   Flexbox,
   List,
@@ -18,35 +14,104 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { omit } from 'es-toolkit/compat';
 import { Users } from 'lucide-react';
 import { type ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import ImperativeModal from '@/components/ImperativeModal';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSessionStore } from '@/store/session';
+import { sx } from '@/styles/sx';
 import { type LobeAgentSession } from '@/types/session';
 import { LobeSessionType } from '@/types/session';
 
 import { type GroupTemplate } from './templates';
 import { useGroupTemplates } from './templates';
 
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    flexDirection: 'row',
+    height: '500px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  description: {
+    fontSize: '12px',
+    lineHeight: 1.2,
+    color: cssVar.colorTextSecondary,
+  },
+  hostCard: {
+    marginBlockStart: cssVar.paddingSM,
+    marginInline: cssVar.paddingSM,
+    padding: cssVar.padding,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  leftColumn: {
+    userSelect: 'none',
+    overflowY: 'auto',
+    flex: '1',
+    padding: '0',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+  },
+  listItem: {
+    cursor: 'pointer',
+    position: 'relative',
+    marginBlock: '2px',
+    padding: cssVar.paddingSM,
+    borderRadius: cssVar.borderRadius,
+    transition: 'all 0.2s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  memberDescription: {
+    display: 'block',
+    paddingInlineEnd: '48px',
+  },
+  modelSelectDisabled: {
+    pointerEvents: 'none',
+  },
+  rightColumn: {
+    overflowY: 'auto',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    padding: '0',
+  },
+  title: {
+    fontSize: '14px',
+    fontWeight: 500,
+  },
+});
+
+const memberDescriptionClass = stylex.props(styles.description, styles.memberDescription).className;
+
 const TemplateItem = memo<{
-  cx: (..._args: any[]) => string;
   isSelected: boolean;
   onToggle: (_templateId: string) => void;
-  styles: Record<string, string>;
   template: GroupTemplate;
-}>(({ template, isSelected, onToggle, styles, cx }) => {
+}>(({ template, isSelected, onToggle }) => {
   const { t } = useTranslation('chat');
 
   return (
-    <div className={cx(styles.listItem)} onClick={() => onToggle(template.id)}>
+    <div {...stylex.props(styles.listItem)} onClick={() => onToggle(template.id)}>
       <Flexbox horizontal align="center" gap={12} width="100%">
         <Checkbox
           checked={isSelected}
@@ -63,8 +128,8 @@ const TemplateItem = memo<{
             }))}
         />
         <Flexbox flex={1} gap={2}>
-          <Text className={styles.title}>{template.title}</Text>
-          <Text ellipsis className={styles.description}>
+          <Text className={stylex.props(styles.title).className}>{template.title}</Text>
+          <Text ellipsis className={stylex.props(styles.description).className}>
             {template.description}
           </Text>
           <Flexbox horizontal align="center" gap={4}>
@@ -84,33 +149,38 @@ const TemplateItem = memo<{
 
 const ExistingMemberItem = memo<{
   agent: LobeAgentSession;
-  cx: (..._args: any[]) => string;
   isSelected: boolean;
   onToggle: (_agentId: string) => void;
-  styles: Record<string, string>;
-}>(({ agent, isSelected, onToggle, styles, cx }) => {
+}>(({ agent, isSelected, onToggle }) => {
   const { t } = useTranslation(['chat', 'common']);
   const agentId = agent.config?.id;
   const title = agent.meta?.title || t('defaultSession', { ns: 'common' });
   const description = agent.meta?.description || '';
-  const avatar = agent.meta?.avatar || DEFAULT_AVATAR;
+  const avatar = agent.meta?.avatar;
   const avatarBackground = agent.meta?.backgroundColor;
 
   if (!agentId) return null;
 
   return (
-    <div className={cx(styles.listItem)} onClick={() => onToggle(agentId)}>
+    <div {...stylex.props(styles.listItem)} onClick={() => onToggle(agentId)}>
       <Flexbox horizontal align="center" gap={12} width="100%">
         <Checkbox
           checked={isSelected}
           onChange={() => onToggle(agentId)}
           onClick={stopPropagation}
         />
-        <Avatar avatar={avatar} background={avatarBackground} size={40} />
+        <AgentAvatar
+          agentId={agentId}
+          avatar={avatar}
+          background={avatarBackground}
+          name={title}
+          shape={'circle'}
+          size={40}
+        />
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text className={styles.title}>{title}</Text>
+          <Text className={stylex.props(styles.title).className}>{title}</Text>
           {description && (
-            <Text ellipsis className={styles.description}>
+            <Text ellipsis className={stylex.props(styles.description).className}>
               {description}
             </Text>
           )}
@@ -119,78 +189,6 @@ const ExistingMemberItem = memo<{
     </div>
   );
 });
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    display: flex;
-    flex-direction: row;
-
-    height: 500px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  description: css`
-    font-size: 12px;
-    line-height: 1.2;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  hostCard: css`
-    margin-block-start: ${cssVar.paddingSM};
-    margin-inline: ${cssVar.paddingSM};
-    padding: ${cssVar.padding};
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  leftColumn: css`
-    user-select: none;
-
-    overflow-y: auto;
-    flex: 1;
-
-    padding: 0;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  listHeader: css`
-    padding: 0;
-    color: ${cssVar.colorTextDescription};
-  `,
-  listItem: css`
-    cursor: pointer;
-
-    position: relative;
-
-    margin-block: 2px;
-    padding: ${cssVar.paddingSM} !important;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  memberDescription: css`
-    display: block;
-    padding-inline-end: 48px;
-  `,
-  modelSelectDisabled: css`
-    pointer-events: none;
-  `,
-  rightColumn: css`
-    overflow-y: auto;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-
-    padding: 0;
-  `,
-  title: css`
-    font-size: 14px;
-    font-weight: 500;
-  `,
-}));
 
 export interface ChatGroupWizardProps {
   /**
@@ -225,8 +223,6 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       () => agentSessions.filter((session) => !session.config?.virtual),
       [agentSessions],
     );
-
-    const memberDescriptionClass = cx(styles.description, styles.memberDescription);
 
     const defaultModel = useMemo(() => {
       if (enabledModels.length > 0 && enabledModels[0].children.length > 0) {
@@ -424,7 +420,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       return template.members
         .filter((member) => member !== null && member !== undefined)
         .map((member) => ({
-          avatar: member.avatar || DEFAULT_AVATAR,
+          avatar: member.avatar,
           backgroundColor: member.backgroundColor,
           description: member.systemRole,
           isRemoved: removedForTemplate.has(member.title),
@@ -446,7 +442,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
           if (!agent) return null;
 
           const title = agent.meta?.title || t('defaultSession', { ns: 'common' });
-          const avatar = agent.meta?.avatar || DEFAULT_AVATAR;
+          const avatar = agent.meta?.avatar;
           const avatarBackground = agent.meta?.backgroundColor;
           const description = agent.meta?.description || '';
 
@@ -460,7 +456,16 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                 }}
               />
             ),
-            avatar: <Avatar avatar={avatar} background={avatarBackground} size={40} />,
+            avatar: (
+              <AgentAvatar
+                agentId={agentId}
+                avatar={avatar}
+                background={avatarBackground}
+                name={title}
+                shape={'circle'}
+                size={40}
+              />
+            ),
             description: description ? (
               <Tooltip title={description}>
                 <Text className={memberDescriptionClass} ellipsis={{ rows: 1 }}>
@@ -475,7 +480,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
         })
 
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
-    }, [selectedAgents, agentSessions, t, handleRemoveAgent, memberDescriptionClass]);
+    }, [selectedAgents, agentSessions, t, handleRemoveAgent]);
 
     const normalizedHostModelConfig = useMemo(() => {
       const model = hostModelConfig.model ?? defaultModel.model;
@@ -559,8 +564,8 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
         }
         onCancel={handleCancel}
       >
-        <Flexbox horizontal className={styles.container}>
-          <Flexbox className={styles.leftColumn} flex={1} gap={12}>
+        <Flexbox horizontal className={stylex.props(styles.container).className}>
+          <Flexbox className={stylex.props(styles.leftColumn).className} flex={1} gap={12}>
             <SearchBar
               allowClear
               placeholder={t('memberSelection.searchAgents')}
@@ -594,10 +599,8 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                         <Flexbox gap={4}>
                           {filteredTemplates.map((template) => (
                             <TemplateItem
-                              cx={cx}
                               isSelected={selectedTemplate === template.id}
                               key={template.id}
-                              styles={styles}
                               template={template}
                               onToggle={handleTemplateToggle}
                             />
@@ -625,10 +628,8 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                           {filteredAgents.map((agent) => (
                             <ExistingMemberItem
                               agent={agent}
-                              cx={cx}
                               isSelected={selectedAgents.includes(agent.config?.id || '')}
                               key={agent.id}
-                              styles={styles}
                               onToggle={handleAgentToggle}
                             />
                           ))}
@@ -646,9 +647,14 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
             </Flexbox>
           </Flexbox>
 
-          <Flexbox className={styles.rightColumn} flex={1}>
+          <Flexbox className={stylex.props(styles.rightColumn).className} flex={1}>
             <Flexbox flex={1} gap={16} style={{ overflowY: 'auto' }}>
-              <Flexbox horizontal align="center" className={styles.hostCard} gap={12}>
+              <Flexbox
+                horizontal
+                align="center"
+                className={stylex.props(styles.hostCard).className}
+                gap={12}
+              >
                 <Flexbox flex={1} gap={2}>
                   <Text
                     style={{ fontSize: 14, fontWeight: 500 }}
@@ -665,8 +671,9 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                 </Flexbox>
                 <Flexbox horizontal align="center" gap={12}>
                   <div
-                    className={cx(isHostRemoved && styles.modelSelectDisabled)}
-                    style={{ opacity: isHostRemoved ? 0.6 : 1 }}
+                    {...sx([isHostRemoved && styles.modelSelectDisabled], undefined, {
+                      opacity: isHostRemoved ? 0.6 : 1,
+                    })}
                   >
                     <ModelSelect
                       requiredAbilities={['functionCall']}
@@ -700,9 +707,11 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                           />
                         ),
                         avatar: (
-                          <Avatar
+                          <AgentAvatar
                             avatar={member.avatar}
                             background={member.backgroundColor}
+                            name={member.title}
+                            shape={'circle'}
                             size={40}
                           />
                         ),

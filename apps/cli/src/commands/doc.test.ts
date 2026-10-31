@@ -99,13 +99,21 @@ describe('doc command', () => {
     });
 
     it('should output JSON when --json flag is used', async () => {
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
       const docs = [{ fileType: 'md', id: 'doc1', title: 'Test' }];
       mockTrpcClient.document.queryDocuments.query.mockResolvedValue(docs);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'list', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(docs, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...docs[0], url: 'https://app.lobehub.com/resource/page/doc1' }],
+          null,
+          2,
+        ),
+      );
     });
 
     it('should output JSON with selected fields', async () => {
@@ -199,13 +207,21 @@ describe('doc command', () => {
     });
 
     it('should output JSON when --json flag is used', async () => {
-      const doc = { content: 'test', id: 'doc1', title: 'Test' };
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
+      const doc = { content: 'test', id: 'doc1', knowledgeBaseId: 'kb1', title: 'Test' };
       mockTrpcClient.document.getDocumentById.query.mockResolvedValue(doc);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'view', 'doc1', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(doc, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          { ...doc, url: 'https://app.lobehub.com/resource/library/kb1/file/doc1' },
+          null,
+          2,
+        ),
+      );
     });
 
     it('should exit with error when document not found', async () => {
@@ -659,13 +675,21 @@ describe('doc command', () => {
     });
 
     it('should output JSON with --json flag', async () => {
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
       const docs = [{ id: 'doc1', title: 'Note' }];
       mockTrpcClient.notebook.listDocuments.query.mockResolvedValue({ data: docs, total: 1 });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'topic-docs', 'topic_123', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(docs, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...docs[0], url: 'https://app.lobehub.com/resource/page/doc1' }],
+          null,
+          2,
+        ),
+      );
     });
 
     it('should show message when no documents found', async () => {

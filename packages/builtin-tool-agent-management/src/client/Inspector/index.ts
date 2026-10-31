@@ -1,3 +1,4 @@
+import { SearchMarketToolsInspector } from '@lobechat/builtin-tool-agent-builder/client';
 import { type BuiltinInspector } from '@lobechat/types';
 
 import { AgentManagementApiName } from '../../types';
@@ -23,6 +24,7 @@ export const AgentManagementInspectors: Record<string, BuiltinInspector> = {
   [AgentManagementApiName.getAgentDetail]: GetAgentDetailInspector as BuiltinInspector,
   [AgentManagementApiName.installPlugin]: InstallPluginInspector as BuiltinInspector,
   [AgentManagementApiName.searchAgent]: SearchAgentInspector as BuiltinInspector,
+  [AgentManagementApiName.searchMarketTools]: SearchMarketToolsInspector as BuiltinInspector,
   [AgentManagementApiName.updateAgent]: UpdateAgentInspector as BuiltinInspector,
   [AgentManagementApiName.updatePrompt]: UpdatePromptInspector as BuiltinInspector,
 };

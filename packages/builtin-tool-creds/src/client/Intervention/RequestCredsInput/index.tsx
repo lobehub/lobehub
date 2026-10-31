@@ -148,7 +148,9 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
         fields={fieldNames}
         labels={{
           cancel: t('credsInput.skip'),
+          confirmProse: t('credsInput.proseConfirm'),
           placeholder: (field) => t('credsInput.placeholder', { field }),
+          proseWarning: (fields) => t('credsInput.proseWarning', { fields: fields.join(', ') }),
           submit: t(existing ? 'credsInput.update' : 'credsInput.submit'),
           submitting: t('credsInput.submitting'),
         }}

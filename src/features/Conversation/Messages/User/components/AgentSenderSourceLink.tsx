@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Icon, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Link2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,35 +10,21 @@ import { useTranslation } from 'react-i18next';
 import { buildOperationSourcePath } from '@/features/Portal/Thread/sharePath';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  link: css`
-    display: inline-flex;
-
-    /* Shrinkable, not fixed: the header is a non-wrapping flex row, so on a
-       phone-width viewport the cap below plus the author name and avatar would
-       overflow the row — the inner ellipsis can only truncate a link that is
-       allowed to shrink past its content. */
-    flex: 0 1 auto;
-    gap: 3px;
-    align-items: center;
-
-    min-inline-size: 0;
-    max-inline-size: 320px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  label: css`
-    overflow: hidden;
-    min-inline-size: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  link: {
+    display: 'inline-flex',
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: 'auto',
+    gap: '3px',
+    alignItems: 'center',
+    minInlineSize: '0',
+    maxInlineSize: '320px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+  },
+  label: { overflow: 'hidden', minInlineSize: '0', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+});
 
 interface AgentSenderSourceLinkProps {
   /**
@@ -96,9 +84,9 @@ const AgentSenderSourceLink = memo<AgentSenderSourceLinkProps>(
         {/* `WorkspaceLink`, not the bare router `Link`: these routes are mirrored
             under `/:workspaceSlug`, so an unprefixed href would drop a workspace
             reader into their personal route and the source would not load. */}
-        <WorkspaceLink className={styles.link} to={href}>
+        <WorkspaceLink className={stylex.props(styles.link).className} to={href}>
           <Icon icon={Link2} size={12} />
-          <span className={styles.label}>{name || caption}</span>
+          <span {...stylex.props(styles.label)}>{name || caption}</span>
         </WorkspaceLink>
       </Tooltip>
     );

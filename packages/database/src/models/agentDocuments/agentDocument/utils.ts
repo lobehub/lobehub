@@ -2,13 +2,13 @@ import { eq, isNotNull, isNull, ne } from 'drizzle-orm';
 
 import { agentDocuments, type DocumentItem, documents } from '../../../schemas';
 import { deriveAgentDocumentFields } from '../deriveFields';
-import {
-  type AgentDocument,
-  type AgentDocumentListItem,
-  type AgentDocumentListSourceType,
-  type AgentDocumentPolicy,
+import type {
+  AgentDocument,
+  AgentDocumentListItem,
+  AgentDocumentListSourceType,
+  AgentDocumentPolicy,
   DocumentLoadFormat,
-  type PolicyLoad,
+  PolicyLoad,
 } from '../types';
 import type { AgentDocumentListQueryRow, AgentDocumentQueryOptions } from './types';
 
@@ -75,10 +75,7 @@ export function toAgentDocument(
   doc: DocumentItem,
 ): AgentDocument {
   const policy = (settings.policy as AgentDocumentPolicy | null) ?? null;
-  const policyLoadFormat =
-    (settings.policyLoadFormat as DocumentLoadFormat | null) ??
-    policy?.context?.policyLoadFormat ??
-    DocumentLoadFormat.RAW;
+  const policyLoadFormat = settings.policyLoadFormat as DocumentLoadFormat;
 
   return {
     accessPublic: settings.accessPublic,
@@ -104,7 +101,7 @@ export function toAgentDocument(
     policyLoadFormat,
     policyLoadPosition: settings.policyLoadPosition,
     policyLoadRule: settings.policyLoadRule,
-    source: doc.source ?? null,
+    source: doc.source,
     sourceType: doc.sourceType,
     templateId: settings.templateId ?? null,
     title: doc.title ?? doc.filename ?? '',

@@ -81,6 +81,7 @@ export const EXPERTISE_SUBJECT_TYPES = [
   'document',
   'standalone',
   'goal_gate',
+  'site',
 ] as const;
 /**
  * Two values only. There used to be a third, false_positive, and in practice it was systematically

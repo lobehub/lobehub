@@ -2,9 +2,9 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { ImessageBridgeConfig, ImessageBridgeStatus } from '@lobechat/electron-client-ipc';
-import { Button, createStaticStyles, Flexbox, Icon, Switch, Tag, Text, toast } from '@lobehub/ui';
+import { Button, createStaticStyles, Flexbox, Switch, Tag, Text, toast } from '@lobehub/ui';
 import { Form, useFormInstance, useWatch } from '@lobehub/ui/form';
-import { KeyRound, Link2, Wrench } from 'lucide-react';
+import { Wrench } from 'lucide-react';
 import { memo, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,10 +25,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
-  `,
-  fieldIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextSecondary};
   `,
   headerIcon: css`
     overflow: hidden;
@@ -252,9 +248,7 @@ const CredentialExtras = memo(() => {
 
       {/* Middle: the credential fields the operator fills in. */}
       <Form.Field
-        avatar={<Icon className={styles.fieldIcon} icon={Link2} size={20} />}
-        minWidth={'max(50%, 360px)'}
-        variant="outlined"
+        layout="vertical"
         label={
           <Flexbox horizontal align="center" gap={8}>
             {t('channel.imessage.blueBubblesServerUrl')}
@@ -277,9 +271,7 @@ const CredentialExtras = memo(() => {
       </Form.Field>
       <Form.Field
         divider
-        avatar={<Icon className={styles.fieldIcon} icon={KeyRound} size={20} />}
-        minWidth={'max(50%, 360px)'}
-        variant="outlined"
+        layout="vertical"
         label={
           <Flexbox horizontal align="center" gap={8}>
             {t('channel.imessage.blueBubblesPassword')}

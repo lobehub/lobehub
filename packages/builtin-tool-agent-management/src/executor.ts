@@ -33,6 +33,7 @@ import {
   type GetAgentDetailParams,
   type InstallPluginParams,
   type SearchAgentParams,
+  type SearchMarketToolsParams,
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from './types';
@@ -103,6 +104,10 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     return runtime.searchAgents(params);
   };
 
+  searchMarketTools = async (params: SearchMarketToolsParams): Promise<BuiltinToolResult> => {
+    return runtime.searchMarketTools(params);
+  };
+
   // ==================== Execution ====================
 
   callAgent = async (
@@ -110,6 +115,16 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const { agentId, instruction, skipCallSupervisor = false } = params;
+
+    // Background delivery wakes the caller through the server runtime, which
+    // this runtime does not have.
+    if (params.runInBackground) {
+      return {
+        content:
+          'Background agent calls (runInBackground) are not supported in this runtime. Call callAgent again without runInBackground to wait for the reply.',
+        success: false,
+      };
+    }
 
     // Execute as synchronous speak
     // Two modes: Group vs Agents

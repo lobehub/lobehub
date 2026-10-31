@@ -10,6 +10,7 @@ export type {
 } from './backend';
 export { ChildProcessBackend } from './child-process-backend';
 export { decodeClixml } from './clixml';
+export { executeDeviceOperation } from './deviceOperation';
 export type { ShellProcess } from './process-manager';
 export { ShellProcessManager } from './process-manager';
 export type { RunCommandOptions } from './runner';

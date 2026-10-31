@@ -12,7 +12,8 @@ export type FtsSearchResultType =
   | 'plugin'
   | 'communityAgent'
   | 'knowledgeBase'
-  | 'task';
+  | 'task'
+  | 'goal';
 
 export interface FtsSearchBaseResult {
   createdAt: Date;
@@ -128,6 +129,16 @@ export interface FtsSearchTaskResult extends FtsSearchBaseResult {
   type: 'task';
 }
 
+/** Goal lookup result. Goals are not indexed; `GoalSearchRepo` queries them directly. */
+export interface FtsSearchGoalResult extends FtsSearchBaseResult {
+  /** Supervising agent, when one is assigned. */
+  agentId: string | null;
+  completedAt: Date | null;
+  projectId: string | null;
+  status: string;
+  type: 'goal';
+}
+
 /**
  * Hydrated BM25 hit for KB-scoped documents. `fileId` identifies a parsed-file
  * source; inline pages use `documentId` directly.
@@ -168,7 +179,8 @@ export type FtsSearchResult =
   | FtsSearchMCPResult
   | FtsSearchPluginResult
   | FtsSearchAssistantResult
-  | FtsSearchTaskResult;
+  | FtsSearchTaskResult
+  | FtsSearchGoalResult;
 
 export interface FtsSearchOptions {
   agentId?: string;
@@ -178,6 +190,8 @@ export interface FtsSearchOptions {
   limitPerType?: number;
   offset?: number;
   query: string;
+  /** Narrows topic, message and page results; other types ignore it. */
+  timeRange?: FtsSearchTimeRange;
   type?: FtsSearchResultType;
 }
 
@@ -208,6 +222,13 @@ export interface FtsSearchBackendScope {
   workspaceId?: string;
 }
 
+/** Time window on a row's creation or last update. */
+export interface FtsSearchTimeRange {
+  end?: Date;
+  field: 'createdAt' | 'updatedAt';
+  start?: Date;
+}
+
 export interface FtsSearchBackendFilters {
   agentId?: string;
   documentKind?: 'folder' | 'knowledgeBaseDocument' | 'page';
@@ -226,6 +247,20 @@ export interface FtsSearchBackendFilters {
     start?: Date;
   };
   memoryTypes?: string[];
+  /**
+   * Message-only candidate narrowing (roles, parent topic). Bounded pools are
+   * cut by score, so filters a caller re-applies after hydration must also
+   * narrow retrieval or stronger out-of-scope rows exhaust the pool.
+   */
+  messageScope?: {
+    roles?: string[];
+    topicId?: string;
+  };
+  /**
+   * Window for topics, messages and documents; other entities ignore it. Every
+   * provider applies it during retrieval so bounded pools stay in the window.
+   */
+  timeRange?: FtsSearchTimeRange;
   topicScope?: {
     agentId?: string | null;
     containerId?: string | null;
@@ -320,6 +355,10 @@ export type FtsSearchCandidateRequest = Omit<FtsSearchBackendRequest, 'mode' | '
 
 export interface FtsSearchCandidateResult {
   candidates: FtsSearchBackendCandidate[];
+  /**
+   * Provider match count. It may be a lower bound once a bounded pool hits its
+   * cutoff, but `total > candidates.length` always means matches were dropped.
+   */
   total: number;
 }
 
