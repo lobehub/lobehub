@@ -1,3 +1,4 @@
+import { McpInputRequiredError } from '@lobechat/mcp-elicitation';
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -92,13 +93,10 @@ describe('HTTP protocol negotiation against SDK v2 servers', () => {
     expect(servers.requests.map((r) => r.method)).toEqual(['server/discover']);
   });
 
-  it('completes an input_required call as a readable failed result without continuation', async () => {
+  it('preserves an input_required checkpoint instead of swallowing user interaction', async () => {
     const client = clientAt('/modern');
     await client.initialize();
-    await expect(client.callTool('needs_input', {})).resolves.toMatchObject({
-      isError: true,
-      content: [{ type: 'text', text: expect.stringContaining('requires user input') }],
-    });
+    await expect(client.callTool('needs_input', {})).rejects.toBeInstanceOf(McpInputRequiredError);
     expect(servers.requests.filter((r) => r.method === 'tools/call')).toHaveLength(1);
   });
 });

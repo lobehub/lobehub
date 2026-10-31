@@ -17,6 +17,7 @@
   "dependencies": {
     "@lobehub/market-sdk": "0.46.0",
     "@lobehub/market-types": "^1.19.0",
+    "@modelcontextprotocol/client": "~2.4.0",
     "ajv": "^8.20.0",
     "model-bank": "workspace:*",
     "type-fest": "^4.41.0",

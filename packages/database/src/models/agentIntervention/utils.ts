@@ -265,6 +265,15 @@ export const hasValidCustomDetail = (request: AgentInterventionSanitizedRequest)
   const detailValue: unknown = request.customDetail;
   if (detailValue === undefined) return true;
   if (!isPlainRecord(detailValue)) return false;
+  if (detailValue.kind === 'mcp_elicitation') {
+    return (
+      hasExactKeys(detailValue, ['kind', 'requests', 'serverName']) &&
+      typeof detailValue.requests === 'string' &&
+      detailValue.requests.length <= 100_000 &&
+      typeof detailValue.serverName === 'string' &&
+      detailValue.serverName.length <= 500
+    );
+  }
   const agentsValue = detailValue.agents;
   if (
     !hasOnlyKeys(detailValue, ['agents', 'categoryHints', 'kind', 'requestId', 'selectedIds']) ||
@@ -321,6 +330,13 @@ export const hasValidCustomResult = (
   if (!hasBoundedFormRecord(resultValue)) return false;
   const detail = request.customDetail;
   if (!detail) return true;
+  if (detail.kind === 'mcp_elicitation') {
+    return (
+      hasExactKeys(resultValue, ['responses']) &&
+      typeof resultValue.responses === 'string' &&
+      resultValue.responses.length <= 100_000
+    );
+  }
   if (detail.kind === 'agent_marketplace') {
     const result = resultValue;
     if (!hasExactKeys(result, ['selectedIds']) || !Array.isArray(result.selectedIds)) return false;

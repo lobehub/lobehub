@@ -38,6 +38,14 @@ describe('validateOIDCJWT', () => {
     importJWKMock.mockResolvedValue('public-key');
   });
 
+  it('rejects a signed MCP callback ticket as general user authentication', async () => {
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: { sub: 'initiator', purpose: 'mcp-device-callback', grant: { operationId: 'op' } },
+    });
+    const { validateOIDCJWT } = await import('./jwt');
+    await expect(validateOIDCJWT('signed-ticket')).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
   it('should preserve the original jose error as TRPCError cause', async () => {
     const joseError = Object.assign(new Error('"exp" claim timestamp check failed'), {
       code: 'ERR_JWT_EXPIRED',

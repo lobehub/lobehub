@@ -293,6 +293,7 @@ export async function queryStepEntryMessages(
 export function resolveAsyncToolResumeParentMessageId(
   messages: AgentState['messages'],
   pendingTools: ChatToolPayload[],
+  pendingMessageIds?: Record<string, string>,
 ): string | undefined {
   const fallbackParentMessageId = messages.at(-1)?.id;
   if (pendingTools.length === 0) return fallbackParentMessageId;
@@ -337,6 +338,7 @@ export function resolveAsyncToolResumeParentMessageId(
 
   for (let index = pendingTools.length - 1; index >= 0; index -= 1) {
     const pendingTool = pendingTools[index];
+    if (pendingMessageIds?.[pendingTool.id]) return pendingMessageIds[pendingTool.id];
     if (pendingTool.result_msg_id) return pendingTool.result_msg_id;
 
     const resultMessageId = toolResultMessageIds.get(pendingTool.id);

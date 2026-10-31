@@ -13,6 +13,10 @@ import { gatewayDesiredConnections } from './handlers/gatewayDesiredConnections'
 import { gatewayStart } from './handlers/gatewayStart';
 import { groupMemberCallback } from './handlers/groupMemberCallback';
 import { llmRelayChunks, llmRelayPayload } from './handlers/llmRelay';
+import { mcpClientExpire } from './handlers/mcpClientExpire';
+import { mcpClientTool } from './handlers/mcpClientTool';
+import { mcpElicitationExpire } from './handlers/mcpElicitationExpire';
+import { mcpElicitationResume } from './handlers/mcpElicitationResume';
 import { messengerInstall } from './handlers/messengerInstall';
 import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
 import { messengerWebhook } from './handlers/messengerWebhook';
@@ -22,6 +26,7 @@ import { runStep, runStepHealth } from './handlers/runStep';
 import { subAgentCallback } from './handlers/subAgentCallback';
 import { toolResult } from './handlers/toolResult';
 import { bearerSecretAuth } from './middlewares/bearerSecretAuth';
+import { mcpQueueAuth } from './middlewares/mcpQueueAuth';
 import { qstashAuth } from './middlewares/qstashAuth';
 import { qstashOrApiKeyAuth } from './middlewares/qstashOrApiKeyAuth';
 import { serviceTokenAuth } from './middlewares/serviceTokenAuth';
@@ -41,6 +46,8 @@ app.post('/', qstashOrApiKeyAuth(), execAgent);
 
 // POST /api/agent/run — execute a single step (QStash signature)
 app.post('/run', qstashAuth(), runStep);
+app.post('/mcp-elicitation-resume', mcpQueueAuth(), mcpElicitationResume);
+app.post('/mcp-elicitation-expire', mcpQueueAuth(), mcpElicitationExpire);
 app.get('/run', runStepHealth);
 
 app.post('/channel/advance', qstashAuth(), channelAdvance);
@@ -131,3 +138,7 @@ app.get('/messenger/:platform/oauth/callback', messengerOAuthCallback);
 app.post('/messenger/webhooks/:platform', messengerWebhook);
 
 export default app;
+
+app.post('/mcp-client-tool', mcpQueueAuth(), mcpClientTool);
+
+app.post('/mcp-client-expire', mcpQueueAuth(), mcpClientExpire);

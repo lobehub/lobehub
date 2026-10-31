@@ -1,7 +1,7 @@
 import { LOADING_FLAT } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
-import { hasToolResultBody } from './toolResultBody';
+import { hasToolResultBody, isPendingMcpToolResult } from './toolResultBody';
 
 describe('hasToolResultBody', () => {
   it('counts a stored body that the read path projected away', () => {
@@ -25,4 +25,14 @@ describe('hasToolResultBody', () => {
     expect(hasToolResultBody({ content: LOADING_FLAT })).toBe(false);
     expect(hasToolResultBody({ content: LOADING_FLAT, contentLength: 12 })).toBe(false);
   });
+});
+
+it('retains the waiting MCP state after the client operation yields and clears it only on terminal backfill', () => {
+  expect(
+    isPendingMcpToolResult({
+      state: { mcpElicitation: { kind: 'mcp_elicitation', requests: {} } },
+    }),
+  ).toBe(true);
+  expect(isPendingMcpToolResult({ state: { mcpElicitation: null } })).toBe(false);
+  expect(isPendingMcpToolResult({ state: {} })).toBe(false);
 });

@@ -1,5 +1,5 @@
 /** Durable producer families which can pause an agent run for a person. */
-export const AGENT_INTERVENTION_SOURCES = ['runtime', 'heterogeneous'] as const;
+export const AGENT_INTERVENTION_SOURCES = ['runtime', 'heterogeneous', 'mcp'] as const;
 
 export type AgentInterventionSource = (typeof AGENT_INTERVENTION_SOURCES)[number];
 
@@ -182,7 +182,15 @@ export interface AgentMarketplaceInterventionDetail {
   selectedIds?: string[];
 }
 
-export type AgentInterventionCustomDetail = AgentMarketplaceInterventionDetail;
+export interface McpElicitationInterventionDetail {
+  kind: 'mcp_elicitation';
+  /** Bounded protocol request for authorized rendering; no answers or requestState. */
+  requests: string;
+  serverName: string;
+}
+
+export type AgentInterventionCustomDetail =
+  AgentMarketplaceInterventionDetail | McpElicitationInterventionDetail;
 
 /**
  * Durable render metadata. Raw arguments deliberately do not belong here: an

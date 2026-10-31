@@ -262,6 +262,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   market: rw('agent:read', 'agent:write'),
   // tool execution inside a chat run
   mcp: { any: 'model:invoke' },
+  // Resolving a human interaction can resume side effects under stored connector credentials.
+  mcpElicitation: 'blocked',
   message: rw('chat:read', 'chat:write'),
   // IM channel management carries channel credentials
   messenger: 'blocked',

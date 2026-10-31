@@ -270,6 +270,8 @@ export default defineConfig(async (env) => {
       dedupe: sharedRendererDedupe,
       tsconfigPaths: !isCloudDesktop,
     },
+    // Web and Electron share root but resolve different dependency trees.
+    cacheDir: path.resolve(__dirname, 'node_modules/.vite/renderer'),
     root: ROOT_DIR,
     // In dev the BrowserWindow loads `app://renderer/` and the Electron main process
     // proxies non-backend requests to this Vite dev server via `net.fetch`. The HMR

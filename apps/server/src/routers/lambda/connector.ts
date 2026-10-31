@@ -41,6 +41,7 @@ import {
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
+import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 import {
   resolveConnectorAuthorizerId,
@@ -59,6 +60,7 @@ import {
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
 } from './_helpers/connectorManagePolicy';
+import { McpElicitationCallSchema } from './_schema/mcpElicitation';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -829,13 +831,21 @@ export const connectorRouter = router({
     .input(
       z.object({
         args: z.string().optional(),
+        elicitation: McpElicitationCallSchema.optional(),
         identifier: z.string().min(1),
         toolName: z.string().min(1),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        return await callConnectorToolById(input, ctx);
+        return await callConnectorToolById(input, {
+          ...ctx,
+          mcpElicitationService: new McpElicitationService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ),
+        });
       } catch (err: any) {
         if (err instanceof ConnectorToolCallError) {
           throw new TRPCError({ cause: err, code: err.code, message: err.message });

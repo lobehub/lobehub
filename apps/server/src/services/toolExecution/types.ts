@@ -1,5 +1,6 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
+import type { McpElicitationContinuation } from '@lobechat/mcp-elicitation';
 import {
   type AgentShareVisitorContext,
   type ChatToolPayload,
@@ -150,6 +151,7 @@ export interface ServerAgentMemberRunner {
 }
 
 export interface ToolExecutionContext {
+  abortSignal?: AbortSignal;
   /**
    * Skills activated so far in the conversation (activateSkill /
    * activateTools tool results), extracted by the runtime executors from the
@@ -297,6 +299,7 @@ export interface ToolExecutionContext {
    * {@link localSandbox}.
    */
   localSandboxNetwork?: boolean;
+  mcpContinuation?: McpElicitationContinuation;
   /**
    * Optional server-owned embedding runtime for memory search.
    *

@@ -224,6 +224,18 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
   });
 
+  it.each(['pending', 'resolve', 'beginProducer', 'producerResult', 'legacyRequest'])(
+    'keeps MCP human interaction %s unavailable to restricted keys',
+    (procedure) => {
+      expect(
+        requiredApiKeyScopeForTrpc(
+          `mcpElicitation.${procedure}`,
+          procedure === 'pending' ? 'query' : 'mutation',
+        ),
+      ).toEqual({ blocked: true });
+    },
+  );
+
   it('keeps bootstrap namespaces open', () => {
     expect(requiredApiKeyScopeForTrpc('healthcheck', 'query')).toEqual({ open: true });
     expect(requiredApiKeyScopeForTrpc('config.getGlobalConfig', 'query')).toEqual({ open: true });

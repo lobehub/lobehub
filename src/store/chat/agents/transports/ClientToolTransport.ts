@@ -44,8 +44,9 @@ export class ClientToolTransport implements ToolTransport {
 
     const opContext = rootOperation.context;
     const messages = store.dbMessagesMap[this.messageKey] ?? [];
+    const existingToolMessageId = context.toolMessageId ?? context.parentMessageId;
     const existingToolMessage = context.reuseExistingMessage
-      ? messages.find((message) => message.id === context.parentMessageId)
+      ? messages.find((message) => message.id === existingToolMessageId)
       : undefined;
     const assistantMessage =
       messages.find(
@@ -94,7 +95,7 @@ export class ClientToolTransport implements ToolTransport {
 
     try {
       const toolMessageId = context.reuseExistingMessage
-        ? context.parentMessageId
+        ? existingToolMessageId
         : await this.createToolMessage({
             assistantGroupId: assistantMessage?.groupId ?? undefined,
             call,

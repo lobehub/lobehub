@@ -89,6 +89,47 @@ describe('ClientToolTransport', () => {
     expect(store.optimisticCreateMessage).not.toHaveBeenCalled();
   });
 
+  it('reuses the exact batch tool row rather than executing against its parent assistant', async () => {
+    const invoke = vi.fn().mockResolvedValue({ content: 'saved', success: true });
+    const store = {
+      operations: { root: { context: { agentId: 'agent' } } },
+      dbMessagesMap: {
+        key: [
+          { id: 'assistant', role: 'assistant' },
+          { id: 'persisted-tool', role: 'tool', parentId: 'assistant' },
+        ],
+      },
+      startOperation: vi.fn().mockReturnValue({ operationId: 'child' }),
+      onOperationCancel: vi.fn(),
+      internal_invokeDifferentTypePlugin: invoke,
+      completeOperation: vi.fn(),
+      failOperation: vi.fn(),
+    } as unknown as ChatStore;
+    const transport = new ClientToolTransport(
+      () => store,
+      'key',
+      'root',
+      {} as ClientMessageTransport,
+    );
+    const execution = await transport.run(
+      { id: 'call_1', identifier: 'fixture', apiName: 'form', type: 'mcp', arguments: '{}' },
+      {
+        mode: 'batch',
+        parentMessageId: 'assistant',
+        assistantMessageId: 'assistant',
+        toolMessageId: 'persisted-tool',
+        reuseExistingMessage: true,
+        toolName: 'fixture/form',
+      } as ToolRunContext,
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      'persisted-tool',
+      expect.objectContaining({ id: 'call_1' }),
+      undefined,
+    );
+    expect(execution.toolMessageId).toBe('persisted-tool');
+  });
+
   it('always drains the stashed Work intent even when the tool invoke throws', async () => {
     const failOperation = vi.fn();
     let operationIndex = 0;

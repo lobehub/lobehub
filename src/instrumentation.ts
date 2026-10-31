@@ -42,6 +42,23 @@ export async function register() {
     });
   }
 
+  // Local queues lose timers on process restart. Recover only due MCP rows and
+  // saved-answer dispatches from the existing durable operation/intervention store.
+  if (
+    process.env.NEXT_RUNTIME === 'nodejs' &&
+    process.env.DATABASE_URL &&
+    !process.env.VERCEL_ENV &&
+    process.env.AGENT_RUNTIME_MODE !== 'queue'
+  ) {
+    void (async () => {
+      const [{ getServerDB }, { startMcpRecoveryWorker }] = await Promise.all([
+        import('@lobechat/database'),
+        import('@/server/services/mcp/elicitation/recoveryWorker'),
+      ]);
+      startMcpRecoveryWorker(await getServerDB());
+    })().catch((error) => console.error('[Instrumentation] Failed to start MCP recovery', error));
+  }
+
   // Note: messenger system bot connections (Discord/Telegram) are managed
   // entirely from dc-center's System Bots admin — save / enable / forceReconnect
   // mutations call MessageGateway directly. The main app's only role here is

@@ -24,6 +24,7 @@ export type AsyncToolDeps = Pick<
   | 'resolveAsyncToolOnComplete'
   | 'serverDB'
   | 'userId'
+  | 'workspaceId'
 >;
 
 /**
@@ -113,9 +114,23 @@ export async function tryResumeParentFromAsyncTool(
   }
 
   // Barrier: every pending tool must have a fulfilled tool_result message.
+  const scope: AsyncToolMessageScope = {
+    messageIds: state.pendingToolMessageIds,
+    assistantMessageId: state.messages?.findLast((message) => message.role === 'assistant')?.id,
+  };
+  if (
+    !scope.assistantMessageId &&
+    options?.knownFulfilledMessageId &&
+    pending.some(
+      (tool) => tool.type === 'mcp' && !scope.messageIds?.[tool.id] && !tool.result_msg_id,
+    )
+  )
+    scope.assistantMessageId =
+      (await deps.messageModel.findById(options.knownFulfilledMessageId))?.parentId ?? undefined;
   const allFulfilled = await deps.allPendingToolsFulfilled(
     pending,
     options?.knownFulfilledMessageId,
+    scope,
   );
   if (!allFulfilled) {
     log('[%s] async-tool barrier not yet satisfied, holding', parentOperationId);
@@ -131,7 +146,7 @@ export async function tryResumeParentFromAsyncTool(
   // verify watchdog resolves it correctly: the option (if any) wins, else the
   // hint persisted on the parked tool message's pluginState, else resume.
   const onComplete: GroupActionOnComplete =
-    options?.onComplete ?? (await deps.resolveAsyncToolOnComplete(pending));
+    options?.onComplete ?? (await deps.resolveAsyncToolOnComplete(pending, scope));
 
   // Single-fire guard: only one concurrent completion flips the op.
   const won = await new AgentOperationModel(deps.serverDB, deps.userId).tryResumeFromAsyncTool(
@@ -253,15 +268,40 @@ export async function maybeScheduleAsyncToolVerify(
  * plugin row itself predates the park, so the `tool_call_id → plugin.id`
  * lookup still resolves; only the freshly written content/state is trusted.
  */
+interface AsyncToolMessageScope {
+  assistantMessageId?: string;
+  messageIds?: Record<string, string>;
+}
+async function findPendingPlugin(
+  deps: AsyncToolDeps,
+  tool: ChatToolPayload,
+  scope?: AsyncToolMessageScope,
+) {
+  const messageId =
+    scope?.messageIds?.[tool.id] ??
+    tool.result_msg_id ??
+    (scope?.assistantMessageId
+      ? await deps.messageModel.findToolMessageIdByToolCallId(tool.id, scope.assistantMessageId)
+      : undefined);
+  // Newly parked MCP calls always carry exact row IDs. Never guess a global provider ID.
+  if (!messageId && tool.type === 'mcp') return undefined;
+  return deps.serverDB.query.messagePlugins.findFirst({
+    where: (mp, { and, eq, isNull }) =>
+      and(
+        eq(mp.userId, deps.userId),
+        deps.workspaceId ? eq(mp.workspaceId, deps.workspaceId) : isNull(mp.workspaceId),
+        messageId ? eq(mp.id, messageId) : eq(mp.toolCallId, tool.id),
+      ),
+  });
+}
 export async function allPendingToolsFulfilled(
   deps: AsyncToolDeps,
   pending: ChatToolPayload[],
   knownFulfilledMessageId?: string,
+  scope?: AsyncToolMessageScope,
 ): Promise<boolean> {
   for (const tc of pending) {
-    const plugin = await deps.serverDB.query.messagePlugins.findFirst({
-      where: (mp, { eq }) => eq(mp.toolCallId, tc.id),
-    });
+    const plugin = await findPendingPlugin(deps, tc, scope);
     if (!plugin) return false;
 
     // Trust the caller's own just-committed backfill (read-your-writes).
@@ -288,15 +328,14 @@ export async function allPendingToolsFulfilled(
 export async function resolveAsyncToolOnComplete(
   deps: AsyncToolDeps,
   pending: ChatToolPayload[],
+  scope?: AsyncToolMessageScope,
 ): Promise<GroupActionOnComplete> {
   // A batched turn can park multiple deferred/client tools. If ANY of them is
   // a group action requesting finish (skipCallSupervisor / delegate), the
   // orchestration must finish — reading only pending[0] would miss a group
   // finish call that isn't the first pending tool and wrongly resume.
   for (const tool of pending) {
-    const plugin = await deps.serverDB.query.messagePlugins.findFirst({
-      where: (mp, { eq }) => eq(mp.toolCallId, tool.id),
-    });
+    const plugin = await findPendingPlugin(deps, tool, scope);
     const pluginState = plugin?.state as { onComplete?: string } | null;
     if (pluginState?.onComplete === 'finish') return 'finish';
   }

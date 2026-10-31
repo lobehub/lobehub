@@ -15,3 +15,14 @@ export const hasToolResultBody = (result?: Pick<ChatToolResult, 'content' | 'con
 
   return !!result.content || (result.contentLength ?? 0) > 0;
 };
+
+/** A persisted elicitation is a waiting tool even after the client runtime has yielded. */
+export const isPendingMcpToolResult = (result?: { state?: { mcpElicitation?: unknown } }) => {
+  const pending = result?.state?.mcpElicitation;
+  return (
+    !!pending &&
+    typeof pending === 'object' &&
+    'kind' in pending &&
+    pending.kind === 'mcp_elicitation'
+  );
+};

@@ -1,3 +1,4 @@
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import type { DeviceMetricSample } from '@lobechat/types';
 
 // ─── Device Info ───
@@ -136,6 +137,7 @@ export interface AuthExpiredMessage {
 export interface GatewayMcpStdioParams {
   args: string[];
   command: string;
+  elicitation?: McpElicitationCall;
   env?: Record<string, string>;
   name: string;
   type: 'stdio';
@@ -149,6 +151,7 @@ export interface GatewayMcpStdioParams {
  */
 export interface GatewayMcpHttpParams {
   auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+  elicitation?: McpElicitationCall;
   headers?: Record<string, string>;
   name: string;
   type: 'http';

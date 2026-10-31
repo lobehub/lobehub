@@ -1052,3 +1052,25 @@ export const swrKeys = {
   verify: verifyKeys,
   video: videoKeys,
 };
+
+export const mcpElicitationKeys = {
+  clientSteps: def(
+    'mcpElicitation:clientSteps',
+    (userId: string, topicId: string, threadId: string | null | undefined, revision: string) => [
+      'mcpElicitation:clientSteps',
+      userId,
+      topicId,
+      threadId ?? null,
+      revision,
+    ],
+  ),
+  pending: def(
+    'mcpElicitation:pending',
+    (userId: string, topicId: string, threadId?: string | null) => [
+      'mcpElicitation:pending',
+      userId,
+      topicId,
+      threadId ?? null,
+    ],
+  ),
+};

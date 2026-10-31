@@ -949,7 +949,7 @@ describe('ToolExecutionService', () => {
       });
     });
 
-    it('keeps other MCP failures as raw replannable errors', async () => {
+    it('stops ambiguous MCP failures without replaying a remote side effect', async () => {
       const result = await run(
         { agentShareVisitor: { shareId: 'share-1' } },
         new TRPCError({
@@ -960,7 +960,7 @@ describe('ToolExecutionService', () => {
       );
 
       expect(result.content).toBe('boom');
-      expect(result.error).toMatchObject({ code: 'MCP_EXECUTION_ERROR', kind: 'replan' });
+      expect(result.error).toMatchObject({ code: 'MCP_EXECUTION_ERROR', kind: 'stop' });
     });
   });
 });

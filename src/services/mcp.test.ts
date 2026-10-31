@@ -48,29 +48,42 @@ vi.mock('@lobechat/utils', () => ({
   }),
 }));
 
-vi.mock('@/libs/trpc/client', () => ({
-  lambdaClient: {
-    connector: {
-      callTool: { mutate: vi.fn() },
-      getForEdit: { query: vi.fn() },
-    },
-  },
-  toolsClient: {
-    market: {
-      callCloudMcpEndpoint: {
-        mutate: vi.fn(),
+vi.mock('@/libs/trpc/client', () => {
+  const result = {
+    lambdaClient: {
+      mcpElicitation: {
+        startClientTool: { mutate: vi.fn() },
+        clientToolOutcome: { query: vi.fn() },
+      },
+      connector: {
+        list: { query: vi.fn().mockResolvedValue([]) },
+        listByAgent: { query: vi.fn().mockResolvedValue([]) },
+        callTool: { mutate: vi.fn() },
+        getForEdit: { query: vi.fn() },
       },
     },
-    mcp: {
-      callTool: {
-        mutate: vi.fn(),
+    toolsClient: {
+      market: {
+        callCloudMcpEndpoint: {
+          mutate: vi.fn(),
+        },
       },
-      getStreamableMcpServerManifest: {
-        query: vi.fn(),
+      mcp: {
+        callTool: {
+          mutate: vi.fn(),
+        },
+        getStreamableMcpServerManifest: {
+          query: vi.fn(),
+        },
       },
     },
-  },
-}));
+  };
+  return {
+    ...result,
+    createWorkspaceLambdaClient: vi.fn(() => result.lambdaClient),
+    createWorkspaceToolsClient: vi.fn(() => result.toolsClient),
+  };
+});
 
 vi.mock('@/utils/electron/ipc', () => ({
   ensureElectronIpc: () => mockElectronIpc,
@@ -108,6 +121,43 @@ describe('MCPService', () => {
   });
 
   describe('invokeMcpToolCall', () => {
+    it('resolves a server-dispatched stdio connector before the settings store is initialized', async () => {
+      environment.isDesktop = true;
+      environment.deviceGatewayConfigured = false;
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      vi.mocked(lambdaClient.connector.list.query).mockResolvedValueOnce([
+        { id: 'fresh', identifier: 'cold-stdio', isEnabled: true, mcpConnectionType: 'stdio' },
+      ] as any);
+      vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValueOnce({
+        id: 'fresh',
+        identifier: 'cold-stdio',
+        isEnabled: true,
+        mcpConnectionType: 'stdio',
+        tools: [{ toolName: 'form', permission: 'auto' }],
+        mcpStdioConfig: { command: 'node', args: ['server.mjs'] },
+      } as any);
+      mockElectronIpc.mcp.callTool.mockResolvedValue(
+        superjson.serialize({ content: 'continued', success: true, state: {} }),
+      );
+      const identity = {
+        apiName: 'form',
+        assistantMessageId: 'assistant',
+        identifier: 'cold-stdio',
+        operationId: 'op',
+        toolCallId: 'original',
+      };
+      const result = await mcpService.invokeMcpToolCall(
+        { apiName: 'form', arguments: '{}', identifier: 'cold-stdio', id: 'original', type: 'mcp' },
+        { elicitation: { identity, deadline: Date.now() + 1000 } },
+      );
+      expect(result?.content).toBe('continued');
+      const payload = superjson.deserialize(
+        mockElectronIpc.mcp.callTool.mock.calls.at(-1)![0],
+      ) as any;
+      expect(payload.elicitation).toMatchObject({ identity, relayResult: true });
+      expect(lambdaClient.connector.getForEdit.query).toHaveBeenCalledWith({ id: 'fresh' });
+    });
+
     describe('HTTP connector connection failures', () => {
       const payload = {
         apiName: 'echo',
@@ -127,6 +177,92 @@ describe('MCPService', () => {
             },
           ],
         });
+      });
+
+      it('keeps awaiting a persisted client invocation after an enqueue ACK is lost', async () => {
+        const { lambdaClient } = await import('@/libs/trpc/client');
+        vi.mocked(lambdaClient.connector.list.query).mockResolvedValueOnce([
+          {
+            id: 'http-id',
+            identifier: 'http-mcp',
+            isEnabled: true,
+            mcpConnectionType: 'http',
+            mcpServerUrl: 'https://example.com/mcp',
+          },
+        ] as any);
+        vi.mocked(lambdaClient.mcpElicitation.startClientTool.mutate).mockRejectedValueOnce(
+          new TypeError('fetch failed after enqueue'),
+        );
+        vi.mocked(lambdaClient.mcpElicitation.clientToolOutcome.query).mockResolvedValueOnce({
+          content: 'committed once',
+          success: true,
+          state: {},
+        });
+        const result = await mcpService.invokeMcpToolCall(payload, {
+          clientRuntime: true,
+          elicitation: {
+            identity: {
+              apiName: 'echo',
+              identifier: 'http-mcp',
+              operationId: 'op',
+              assistantMessageId: 'assistant',
+              toolCallId: 'call_1',
+              toolMessageId: 'tool',
+            },
+            deadline: Date.now() + 1000,
+          },
+        });
+        expect(result).toMatchObject({ content: 'committed once', success: true });
+        expect(lambdaClient.mcpElicitation.startClientTool.mutate).toHaveBeenCalledOnce();
+      });
+
+      it('keeps observing a durable execution after a transient outcome read fails without re-enqueueing it', async () => {
+        vi.useFakeTimers();
+        try {
+          const { lambdaClient } = await import('@/libs/trpc/client');
+          vi.mocked(lambdaClient.connector.list.query).mockResolvedValueOnce([
+            {
+              id: 'http-id',
+              identifier: 'http-mcp',
+              isEnabled: true,
+              mcpConnectionType: 'http',
+              mcpServerUrl: 'https://example.com/mcp',
+            },
+          ] as never);
+          vi.mocked(lambdaClient.mcpElicitation.startClientTool.mutate).mockResolvedValueOnce(
+            undefined as never,
+          );
+          vi.mocked(lambdaClient.mcpElicitation.clientToolOutcome.query)
+            .mockRejectedValueOnce(new TypeError('fetch failed'))
+            .mockResolvedValueOnce({
+              content: 'actual committed receipt',
+              success: true,
+              state: {},
+            } as never);
+          const result = mcpService.invokeMcpToolCall(payload, {
+            clientRuntime: true,
+            elicitation: {
+              identity: {
+                apiName: 'echo',
+                identifier: 'http-mcp',
+                operationId: 'op',
+                assistantMessageId: 'assistant',
+                toolCallId: 'call_1',
+                toolMessageId: 'tool',
+              },
+              deadline: Date.now() + 10000,
+            },
+          });
+          const observed = result.catch((error: unknown) => error);
+          await vi.advanceTimersByTimeAsync(2000);
+          expect(await observed).toMatchObject({
+            content: 'actual committed receipt',
+            success: true,
+          });
+          expect(lambdaClient.mcpElicitation.startClientTool.mutate).toHaveBeenCalledOnce();
+        } finally {
+          vi.useRealTimers();
+        }
       });
 
       it.each(['AUTHORIZATION_ERROR', 'INITIALIZATION_TIMEOUT', 'CONNECTION_FAILED'])(
@@ -448,63 +584,69 @@ describe('MCPService', () => {
       expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
     });
 
-    it('should call toolsClient.market.callCloudMcpEndpoint for cloud type and not report from frontend', async () => {
-      const { discoverService } = await import('./discover');
-      const { toolsClient } = await import('@/libs/trpc/client');
+    it.each([false, true])(
+      'keeps cloud MCP on its market endpoint with clientRuntime=%s',
+      async (clientRuntime) => {
+        const { discoverService } = await import('./discover');
+        const { toolsClient } = await import('@/libs/trpc/client');
 
-      // Use cloud type which now reports from server-side
-      const mockPlugin = {
-        customParams: {
-          mcp: { type: 'cloud' },
-        },
-        manifest: {
-          meta: { title: 'Cloud Plugin' },
-          version: '1.0.0',
-        },
-      };
+        // Use cloud type which now reports from server-side
+        const mockPlugin = {
+          customParams: {
+            mcp: { type: 'cloud' },
+          },
+          manifest: {
+            meta: { title: 'Cloud Plugin' },
+            version: '1.0.0',
+          },
+        };
 
-      mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => mockPlugin);
-      mockPluginSelectors.getCustomPluginById.mockReturnValue(() => null);
+        mockPluginSelectors.getInstalledPluginById.mockReturnValue(() => mockPlugin);
+        mockPluginSelectors.getCustomPluginById.mockReturnValue(() => null);
 
-      // Mock the toolsClient for cloud type
-      const mockResult = {
-        content: 'response data',
-        state: {
-          content: [{ text: 'response data', type: 'text' as const }],
-        },
-        success: true,
-      };
-      vi.mocked(toolsClient.market.callCloudMcpEndpoint.mutate).mockResolvedValue(mockResult);
+        // Mock the toolsClient for cloud type
+        const mockResult = {
+          content: 'response data',
+          state: {
+            content: [{ text: 'response data', type: 'text' as const }],
+          },
+          success: true,
+        };
+        vi.mocked(toolsClient.market.callCloudMcpEndpoint.mutate).mockResolvedValue(mockResult);
 
-      const payload: ChatToolPayload = {
-        id: 'tool-call-6',
-        identifier: 'cloud-plugin',
-        apiName: 'cloudMethod',
-        arguments: '{"key": "value"}',
-        type: 'standalone',
-      };
+        const payload: ChatToolPayload = {
+          id: 'tool-call-6',
+          identifier: 'cloud-plugin',
+          apiName: 'cloudMethod',
+          arguments: '{"key": "value"}',
+          type: 'standalone',
+        };
 
-      const result = await mcpService.invokeMcpToolCall(payload, { topicId: 'topic-123' });
+        const result = await mcpService.invokeMcpToolCall(payload, {
+          topicId: 'topic-123',
+          clientRuntime,
+        });
 
-      expect(result).toEqual(mockResult);
-      expect(toolsClient.market.callCloudMcpEndpoint.mutate).toHaveBeenCalledWith({
-        apiParams: { key: 'value' },
-        identifier: 'cloud-plugin',
-        meta: {
-          customPluginInfo: undefined,
-          isCustomPlugin: false,
-          sessionId: 'topic-123',
-          version: '1.0.0',
-        },
-        toolName: 'cloudMethod',
-      });
+        expect(result).toEqual(mockResult);
+        expect(toolsClient.market.callCloudMcpEndpoint.mutate).toHaveBeenCalledWith({
+          apiParams: { key: 'value' },
+          identifier: 'cloud-plugin',
+          meta: {
+            customPluginInfo: undefined,
+            isCustomPlugin: false,
+            sessionId: 'topic-123',
+            version: '1.0.0',
+          },
+          toolName: 'cloudMethod',
+        });
 
-      // Wait for async reporting
-      await new Promise((resolve) => setTimeout(resolve, 10));
+        // Wait for async reporting
+        await new Promise((resolve) => setTimeout(resolve, 10));
 
-      // Cloud type should NOT report from frontend (handled server-side)
-      expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
-    });
+        // Cloud type should NOT report from frontend (handled server-side)
+        expect(discoverService.reportPluginCall).not.toHaveBeenCalled();
+      },
+    );
 
     it('should handle abort signal', async () => {
       const { toolsClient } = await import('@/libs/trpc/client');

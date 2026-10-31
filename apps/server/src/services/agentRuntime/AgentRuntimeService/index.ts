@@ -1,4 +1,7 @@
 import type { Agent, GeneralAgentConfig } from '@lobechat/agent-runtime';
+import { selectOperationToolSet } from '@lobechat/agent-runtime';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
+import type { LobeAgentConfig } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -9,6 +12,10 @@ import { appEnv } from '@/envs/app';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { mcpService } from '@/server/services/mcp';
+import type { ClientMcpStep } from '@/server/services/mcp/elicitation/clientStep';
+import { expireMcpElicitation } from '@/server/services/mcp/elicitation/expire';
+import { McpElicitationService } from '@/server/services/mcp/elicitation/McpElicitationService';
+import type { McpElicitationRuntime } from '@/server/services/mcp/elicitation/resume';
 import { MessageService } from '@/server/services/message';
 import { QueueService } from '@/server/services/queue';
 import { ToolExecutionService } from '@/server/services/toolExecution';
@@ -209,6 +216,9 @@ export class AgentRuntimeService {
     this.toolExecutionService = new ToolExecutionService({
       builtinToolsExecutor,
       mcpService,
+      onMcpElicitationExpired: (service, itemId) =>
+        expireMcpElicitation(service, itemId, this.getMcpElicitationRuntime()),
+      mcpRuntime: this.getMcpElicitationRuntime(),
     });
 
     // Setup local execution callback for LocalQueueServiceImpl
@@ -216,6 +226,49 @@ export class AgentRuntimeService {
   }
 
   // ==================== Operation Interruption ====================
+  getMcpElicitationRuntime(): McpElicitationRuntime {
+    return {
+      executeTool: (...args) => this.toolExecutionService.executeTool(...args),
+      isOperationInterrupted: (id) => this.isOperationInterrupted(id),
+      getToolResultPolicy: async (id) => {
+        const operation = await new AgentOperationModel(
+          this.serverDB,
+          this.userId,
+          this.workspaceId,
+        ).findById(id);
+        const clientStep = operation?.metadata?.clientMcpStep as ClientMcpStep | undefined;
+        if (clientStep?.resultPolicy) return clientStep.resultPolicy;
+        const state = await this.coordinator.loadAgentState(id);
+        return {
+          limit: (state?.world?.agent as LobeAgentConfig | undefined)?.chatConfig
+            ?.toolResultMaxLength,
+          canReadArchive:
+            !!state &&
+            selectOperationToolSet(state).enabledToolIds.includes(AgentDocumentsIdentifier),
+        };
+      },
+      controlCompletedToolResult: (...args) => this.controlCompletedToolResult(...args),
+      tryResumeParentFromAsyncTool: async (...args) => {
+        const operation = await new AgentOperationModel(
+          this.serverDB,
+          this.userId,
+          this.workspaceId,
+        ).findById(args[0].parentOperationId!);
+        if (operation?.metadata?.clientMcpStep) return false;
+        return this.tryResumeParentFromAsyncTool(...args);
+      },
+    };
+  }
+
+  createMcpElicitationService() {
+    return new McpElicitationService(
+      this.serverDB,
+      this.userId,
+      this.workspaceId,
+      (service, itemId) => expireMcpElicitation(service, itemId, this.getMcpElicitationRuntime()),
+      this.getMcpElicitationRuntime(),
+    );
+  }
 
   // ==================== Operation Management ====================
 

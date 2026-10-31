@@ -310,6 +310,7 @@
     "@lobechat/llm-generation-tracing": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
     "@lobechat/markdown-patch": "workspace:*",
+    "@lobechat/mcp-elicitation": "workspace:*",
     "@lobechat/mecha": "workspace:*",
     "@lobechat/memory-user-memory": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",

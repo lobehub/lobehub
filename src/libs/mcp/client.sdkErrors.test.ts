@@ -43,16 +43,15 @@ describe('MCP SDK v2 error handling', () => {
     await expect(httpClient().callTool('test', {})).rejects.toMatchObject({ status: 404 });
   });
 
-  it('returns a completed tool failure for unsupported input_required', async () => {
+  it('does not swallow an unsupported input result as a completed tool error', async () => {
     vi.spyOn(Client.prototype, 'callTool').mockRejectedValue(
       new SdkError(SdkErrorCode.UnsupportedResultType, 'input_required', {
         resultType: 'input_required',
         method: 'tools/call',
       }),
     );
-    await expect(httpClient().callTool('test', {})).resolves.toMatchObject({
-      isError: true,
-      content: [{ type: 'text', text: expect.stringContaining('requires user input') }],
+    await expect(httpClient().callTool('test', {})).rejects.toMatchObject({
+      code: SdkErrorCode.UnsupportedResultType,
     });
   });
 

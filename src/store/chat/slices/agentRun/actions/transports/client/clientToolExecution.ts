@@ -1,8 +1,10 @@
 import { type ToolExecuteData, type ToolResultMessage } from '@lobechat/agent-gateway-client';
+import { mcpTransportContext } from '@lobechat/mcp-elicitation/transport';
 import { type BuiltinToolContext } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 // Import the state-taking resolver, NOT `@/helpers/parserPlaceholder` — that
 // module imports `useChatStore`, which would close a cycle back into this store
 // and leave the action classes undefined at module-eval time.
@@ -11,6 +13,8 @@ import { mcpService } from '@/services/mcp';
 import { type ChatStore } from '@/store/chat/store';
 import { hasExecutor, invokeExecutor } from '@/store/tool/slices/builtin/executors';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 import { takeWorkIntent } from '@/utils/clientWorkIntentStash';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
@@ -246,6 +250,11 @@ export class ClientToolExecutionActionImpl {
       }
 
       // ─── MCP fallback — unified dispatch, mirrors invokeMCPTypePlugin shape ───
+      const invocation = mcpTransportContext(operationId, toolCallId, {
+        assistantMessageId,
+        userId: userProfileSelectors.userId(useUserStore.getState()),
+      });
+      const originalMcpCallId = invocation.toolCallId;
       const mcpResult = await this.#raceAgainstDeadline(
         () =>
           mcpService
@@ -253,11 +262,28 @@ export class ClientToolExecutionActionImpl {
               {
                 apiName,
                 arguments: argsString,
-                id: toolCallId,
+                id: originalMcpCallId,
                 identifier,
                 type: 'default',
               },
               {
+                agentId: agentId ?? undefined,
+                elicitation: assistantMessageId
+                  ? {
+                      identity: {
+                        apiName,
+                        assistantMessageId,
+                        identifier,
+                        operationId,
+                        toolCallId: originalMcpCallId,
+                        toolMessageId,
+                      },
+                      deadline: Date.now() + executionTimeoutMs,
+                      workspaceId: invocation.scoped
+                        ? invocation.workspaceId
+                        : (getActiveWorkspaceId() ?? undefined),
+                    }
+                  : undefined,
                 signal: operation?.abortController?.signal,
                 topicId: operation?.context?.topicId ?? undefined,
               },

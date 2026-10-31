@@ -152,6 +152,12 @@ export const validateOIDCJWT = async (token: string) => {
 
     log('JWT validation successful, payload: %O', payload);
 
+    if (payload.purpose === 'mcp-device-callback')
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        message: 'MCP device callback tickets cannot authenticate a user',
+      });
+
     const userId = payload.sub;
     const clientId = payload.client_id;
     const aud = payload.aud;

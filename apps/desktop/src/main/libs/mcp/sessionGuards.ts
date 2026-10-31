@@ -42,6 +42,8 @@ export const serializeMcpClientParams = (params: MCPClientParams): string =>
  * errors are server-side application errors and do NOT trigger a retry.
  */
 export const isStaleSessionError = (error: unknown, era?: 'modern' | 'legacy'): boolean => {
+  if (error instanceof Error && error.name === 'McpCallNotStartedError')
+    return (error as Error & { retryable?: boolean }).retryable !== false;
   if (era === 'modern') return false;
   if (!error) return false;
   if (SdkHttpError.isInstance(error) && error.status === 404) return true;

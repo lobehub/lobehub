@@ -1,9 +1,11 @@
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 
+import type { McpElicitationService } from '../mcp/elicitation/McpElicitationService';
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
@@ -32,8 +34,8 @@ export class ConnectorToolCallError extends Error {
  * credentials. Shared by the `connector.callTool` tRPC procedure.
  */
 export const callConnectorToolById = async (
-  params: { args?: string; identifier: string; toolName: string },
-  ctx: ConnectorToolSyncContext,
+  params: { args?: string; identifier: string; toolName: string; elicitation?: McpElicitationCall },
+  ctx: ConnectorToolSyncContext & { mcpElicitationService?: McpElicitationService },
 ): Promise<unknown> => {
   const [connector] = await ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (!connector) {
@@ -101,7 +103,29 @@ export const callConnectorToolById = async (
 
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
+  const elicitation = params.elicitation;
+  const deadline = elicitation && Math.min(elicitation.deadline, Date.now() + 120_000);
+  const host =
+    elicitation && ctx.mcpElicitationService
+      ? ctx.mcpElicitationService.createLegacyHost(elicitation.identity, deadline!)
+      : undefined;
+  if (elicitation && ctx.mcpElicitationService) {
+    if (
+      elicitation.identity.identifier !== params.identifier ||
+      elicitation.identity.apiName !== params.toolName
+    )
+      throw new ConnectorToolCallError('FORBIDDEN', 'MCP interaction identity mismatch');
+    await ctx.mcpElicitationService.assertIdentity(elicitation.identity);
+  }
   return mcpService.callTool({
+    elicitation: {
+      host,
+      interactive: !!host,
+      timeoutMs: host && deadline ? Math.max(1, deadline - Date.now()) : undefined,
+      scope: ctx.mcpElicitationService
+        ? JSON.stringify([ctx.mcpElicitationService.userId, ctx.mcpElicitationService.workspaceId])
+        : undefined,
+    },
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
     toolName: params.toolName,

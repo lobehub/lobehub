@@ -18,6 +18,9 @@ export const lambdaClient = createTRPCClient<LambdaRouter>({
 export const asyncClient = reject('asyncClient');
 export const toolsClient = reject('toolsClient');
 export const lambdaQuery = reject('lambdaQuery');
+// Chat execution can enter this bundle through shared store tails, but Workbench
+// has no chat runtime and must not create a workspace-scoped execution client.
+export const createWorkspaceLambdaClient = reject('createWorkspaceLambdaClient');
 
 // Workbench never relays an LLM call to a tab, so a call carries no relay headers.
 export const withLlmRelay = (_relay?: {

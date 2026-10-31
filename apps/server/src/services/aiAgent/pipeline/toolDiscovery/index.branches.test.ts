@@ -553,3 +553,27 @@ describe('discoverTools — credential snapshot', () => {
     expect(credsList).not.toHaveBeenCalled();
   });
 });
+
+it.each(['http', 'stdio'] as const)(
+  'keeps server-owned installed-plugin %s configuration through discovery and executor selection',
+  async (type) => {
+    const connection =
+      type === 'http'
+        ? { type, url: 'https://example.test/mcp', headers: { tenant: 'one' } }
+        : { type, command: 'fixture', args: ['--stdio'] };
+    const result = await run({
+      agentConfig: { plugins: ['installed-mcp'] },
+      installedPlugins: [
+        {
+          identifier: 'installed-mcp',
+          customParams: { mcp: connection },
+          manifest: { ...skillManifest('installed-mcp'), type: 'mcp' },
+        },
+      ],
+    }).promise;
+    expect(result.toolManifestMap['installed-mcp']).toMatchObject({
+      mcpParams: { ...connection, name: 'installed-mcp' },
+    });
+    if (type === 'stdio') expect(result.toolExecutorMap['installed-mcp']).toBe('client');
+  },
+);

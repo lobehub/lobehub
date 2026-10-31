@@ -344,6 +344,25 @@ export const execAgentTurn = async (
     ),
   );
 
+  const onOperationCreated = async (id: string) => {
+    // Approval continuations execute tools owned by an earlier assistant. Persist
+    // those exact sources before dispatch; provider IDs and client operation IDs
+    // alone cannot authorize an elicitation checkpoint.
+    const sources = approvedToolEntries
+      .filter(({ plugin }) => plugin.type === 'mcp')
+      .map(({ plugin, toolMessageId }) => ({
+        assistantMessageId: approvalOwnerAssistantId ?? resumeParentMessage?.parentId,
+        toolCallId: plugin.toolCallId,
+        toolMessageId,
+      }));
+    if (
+      sources.length &&
+      !(await deps.agentOperationModel.mergeMetadata(id, { mcpInvocationSources: sources }))
+    )
+      throw new Error('Could not persist MCP continuation identity');
+    await params.onOperationCreated?.(id);
+  };
+
   // Deterministic continuation identity for a generic (v2) approval claim.
   // Also consumed by the turn setup below: a crash-safe re-entry must find
   // the SAME assistant placeholder instead of minting a second turn.
@@ -530,7 +549,7 @@ export const execAgentTurn = async (
         maxSteps,
         memberDeviceOverride,
         operationTaskId,
-        onOperationCreated: params.onOperationCreated,
+        onOperationCreated,
         reservedOperationId: params.reservedOperationId,
         parentOperationId,
         pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
@@ -735,7 +754,7 @@ export const execAgentTurn = async (
         approvalSourceOperationId,
         approvalSourceToolMessageIds,
         autoStart,
-        onOperationCreated: params.onOperationCreated,
+        onOperationCreated,
         botContext,
         botPlatformContext,
         clientIp,

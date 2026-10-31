@@ -94,6 +94,8 @@ export interface ToolCallResult {
 
 export interface MCPToolCallResult {
   content: string;
+  /** Set by the LobeHub durable client transport after host-side archive finalization. */
+  contentFinalized?: boolean;
   error?: any;
   state: ToolCallResult;
   success: boolean;
@@ -118,6 +120,7 @@ export interface AuthConfig {
 
   // B. Authorization server metadata obtained through server discovery mechanism
   serverMetadata?: {
+    issuer?: string;
     authorization_endpoint?: string;
     registration_endpoint?: string;
     token_endpoint?: string;

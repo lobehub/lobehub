@@ -21,6 +21,9 @@ importers:
       '@auv-js/sdk':
         specifier: 0.0.38
         version: 0.0.38
+      '@lobechat/mcp-elicitation':
+        specifier: workspace:*
+        version: link:../../packages/mcp-elicitation
       '@lobehub/fluent-emoji':
         specifier: ^5.0.0
         version: 5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -373,6 +376,9 @@ importers:
 
   ../../packages/device-gateway-client:
     dependencies:
+      '@lobechat/mcp-elicitation':
+        specifier: workspace:*
+        version: link:../mcp-elicitation
       '@lobechat/types':
         specifier: workspace:*
         version: link:../types
@@ -532,7 +538,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.204
-        version: 0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)
+        version: 0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)
       '@anthropic-ai/sdk':
         specifier: ^0.93.0
         version: 0.93.0(zod@4.6.5)
@@ -614,6 +620,18 @@ importers:
         specifier: ^4.1.13
         version: 4.1.13
 
+  ../../packages/mcp-elicitation:
+    dependencies:
+      '@cfworker/json-schema':
+        specifier: ^4.1.1
+        version: 4.1.1
+      '@lobechat/utils':
+        specifier: workspace:*
+        version: link:../utils
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
+
   ../../packages/model-bank:
     dependencies:
       '@lobechat/business-const':
@@ -685,6 +703,9 @@ importers:
       '@lobehub/ui':
         specifier: ^6.0.4
         version: 6.0.4(@lobehub/fluent-emoji@5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/icons@6.0.0)(@shikijs/themes@4.5.0)(@types/mdast@4.0.4)(@types/react@19.3.0)(date-fns@4.4.0)(micromark-util-types@2.0.3)(micromark@4.0.3(supports-color@9.4.0))(motion@14.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(supports-color@9.4.0)
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -1221,6 +1242,9 @@ packages:
 
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
+
+  '@cfworker/json-schema@4.1.1':
+    resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
 
   '@csstools/css-calc@3.4.2':
     resolution: {integrity: sha512-tL6LRF844sHjAKO7jt2w+uHo8Tocqpb9+KPUvIQETpR4RU87IaUzDuOV0QyzuQ37jmzFgwPHLLtLu/PDuH5qgg==}
@@ -3769,6 +3793,11 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
+    peerDependencies:
+      ajv: ^8.0.0
+    peerDependenciesMeta:
+      ajv:
+        optional: true
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
@@ -8426,10 +8455,10 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.204':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)':
+  '@anthropic-ai/claude-agent-sdk@0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
       '@anthropic-ai/sdk': 0.93.0(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.32.1(supports-color@9.4.0)(zod@4.6.5)
+      '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(supports-color@9.4.0)(zod@4.6.5)
       zod: 4.6.5
     optionalDependencies:
       '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.204
@@ -8710,6 +8739,8 @@ snapshots:
     dependencies:
       hashery: 1.5.1
       keyv: 5.6.0
+
+  '@cfworker/json-schema@4.1.1': {}
 
   '@csstools/css-calc@3.4.2(@csstools/css-parser-algorithms@4.0.2(@csstools/css-tokenizer@4.0.2))(@csstools/css-tokenizer@4.0.2)':
     dependencies:
@@ -9730,11 +9761,11 @@ snapshots:
       '@modelcontextprotocol/server': 2.4.0
       hono: 4.13.12
 
-  '@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5)':
+  '@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(supports-color@9.4.0)(zod@4.6.5)':
     dependencies:
       '@hono/node-server': 2.1.3(hono@4.13.12)
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
       cors: 2.8.6
       cross-spawn: 7.0.6
@@ -9749,6 +9780,8 @@ snapshots:
       raw-body: 3.0.2
       zod: 4.6.5
       zod-to-json-schema: 3.25.2(zod@4.6.5)
+    optionalDependencies:
+      '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
       - supports-color
 
@@ -11063,8 +11096,8 @@ snapshots:
     dependencies:
       humanize-ms: 1.2.1
 
-  ajv-formats@3.0.1:
-    dependencies:
+  ajv-formats@3.0.1(ajv@8.20.0):
+    optionalDependencies:
       ajv: 8.20.0
 
   ajv@6.15.0:
@@ -11535,7 +11568,7 @@ snapshots:
   conf@13.1.0:
     dependencies:
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       atomically: 2.1.1
       debounce-fn: 6.0.0
       dot-prop: 9.0.0
@@ -11547,7 +11580,7 @@ snapshots:
   conf@15.1.0:
     dependencies:
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       atomically: 2.1.1
       debounce-fn: 6.0.0
       dot-prop: 10.2.0

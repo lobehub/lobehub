@@ -1,0 +1,21 @@
+{
+  "name": "@lobechat/mcp-elicitation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./form": "./src/form.ts",
+    "./types": "./src/types.ts",
+    "./transport": "./src/transport.ts"
+  },
+  "scripts": {
+    "test": "bunx vitest run --silent='passed-only'",
+    "test:coverage": "bunx vitest run --coverage"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "^4.1.1",
+    "@lobechat/utils": "workspace:*",
+    "@modelcontextprotocol/client": "~2.4.0"
+  }
+}

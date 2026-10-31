@@ -1,4 +1,5 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import type { McpElicitationCall } from '@lobechat/mcp-elicitation/types';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
@@ -14,6 +15,7 @@ import { type MCPToolCallResult } from '@/libs/mcp';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
 import { getServerConfigStoreState } from '@/store/serverConfig/store';
+import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { discoverService } from './discover';
@@ -36,7 +38,19 @@ function calculateObjectSizeBytes(obj: any): number {
 class MCPService {
   async invokeMcpToolCall(
     payload: ChatToolPayload,
-    { signal, topicId }: { signal?: AbortSignal; topicId?: string },
+    {
+      signal,
+      clientRuntime,
+      topicId,
+      elicitation,
+      agentId,
+    }: {
+      signal?: AbortSignal;
+      clientRuntime?: boolean;
+      topicId?: string;
+      elicitation?: McpElicitationCall;
+      agentId?: string;
+    },
   ) {
     await discoverService.safeInjectMPToken();
 
@@ -45,6 +59,17 @@ class MCPService {
 
     const s = getToolStoreState();
     const { identifier, arguments: args, apiName } = payload;
+    const {
+      lambdaClient: defaultClient,
+      createWorkspaceLambdaClient,
+      createWorkspaceToolsClient,
+    } = await import('@/libs/trpc/client');
+    const executionClient = elicitation
+      ? createWorkspaceLambdaClient(elicitation.workspaceId ?? null)
+      : defaultClient;
+    const executionTools = elicitation
+      ? createWorkspaceToolsClient(elicitation.workspaceId ?? null)
+      : toolsClient;
 
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
@@ -53,13 +78,80 @@ class MCPService {
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifier(identifier)(s);
+    let connector:
+      | Pick<
+          ConnectorWithTools,
+          'id' | 'identifier' | 'isEnabled' | 'mcpConnectionType' | 'mcpServerUrl'
+        >
+      | undefined = connectorSelectors.connectorByIdentifier(identifier)(s);
+    if (elicitation) {
+      // A server-dispatched MCP call must work before any connector settings UI
+      // has mounted. Resolve the current scoped installation independently.
+      const [base, owned] = await Promise.all([
+        executionClient.connector.list.query(),
+        agentId ? executionClient.connector.listByAgent.query({ agentId }) : Promise.resolve([]),
+      ]);
+      connector = [...owned, ...base].find((entry) => entry.identifier === identifier);
+    }
+    const runDurableClientTool = async () => {
+      if (!elicitation) throw new Error('Client MCP invocation has no durable identity');
+      let enqueueUnconfirmed = true;
+      let observationFailures = 0;
+      while (!signal?.aborted && Date.now() < elicitation.deadline + 60_000) {
+        if (enqueueUnconfirmed) {
+          try {
+            await executionClient.mcpElicitation.startClientTool.mutate(elicitation.identity, {
+              signal,
+            });
+            enqueueUnconfirmed = false;
+          } catch (error) {
+            const status = toRecord(toRecord(error)?.data)?.httpStatus;
+            if (signal?.aborted || (typeof status === 'number' && status >= 400 && status < 500))
+              throw error;
+            // The enqueue may have committed before its ACK was lost. Await its
+            // exact saved result; an empty long poll retries the same fenced outbox.
+          }
+        }
+        try {
+          const outcome = await executionClient.mcpElicitation.clientToolOutcome.query(
+            elicitation.identity,
+            { signal },
+          );
+          observationFailures = 0;
+          if (outcome) return { ...outcome, contentFinalized: true } as MCPToolCallResult;
+        } catch (error) {
+          const status = toRecord(toRecord(error)?.data)?.httpStatus;
+          if (
+            signal?.aborted ||
+            (typeof status === 'number' &&
+              status >= 400 &&
+              status < 500 &&
+              status !== 408 &&
+              status !== 429)
+          )
+            throw error;
+          // A failed read says nothing about the worker's result. Retry observation only.
+          console.warn('MCP outcome observation failed; awaiting the durable result', error);
+          const delay = Math.min(
+            10_000,
+            500 * 2 ** Math.min(observationFailures++, 5),
+            elicitation.deadline + 60_000 - Date.now(),
+          );
+          if (delay > 0) await new Promise<void>((resolve) => setTimeout(resolve, delay));
+        }
+      }
+      throw new Error(
+        signal?.aborted
+          ? 'The user aborted a request.'
+          : 'MCP invocation did not finish before its deadline',
+      );
+    };
+    if (connector && !connector.isEnabled) throw new Error('Connector is disabled');
     if (
       connector &&
       connector.isEnabled &&
       (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
     ) {
-      const { lambdaClient } = await import('@/libs/trpc/client');
       if (
         isDesktop &&
         connector.mcpConnectionType === 'stdio' &&
@@ -67,7 +159,7 @@ class MCPService {
       ) {
         // Persisted connector projections omit env secrets and may be stale.
         // This protected read retains the connector's credential ownership gate.
-        const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+        const detail = await executionClient.connector.getForEdit.query({ id: connector.id });
         if (!detail.isEnabled) throw new Error('Connector is disabled');
         const tool = detail.tools.find((item) => item.toolName === apiName);
         if (!tool || tool.permission === 'disabled') {
@@ -79,6 +171,7 @@ class MCPService {
         }
         const result = await ensureElectronIpc().mcp.callTool(
           serializeMcpIpcPayload({
+            elicitation: elicitation ? { ...elicitation, relayResult: true } : undefined,
             args: safeParseJSON(args) ?? {},
             env: config.env,
             params: {
@@ -92,9 +185,10 @@ class MCPService {
         );
         return deserializeMcpIpcPayload<MCPToolCallResult>(result);
       }
+      if (clientRuntime) return runDurableClientTool();
       try {
-        return (await lambdaClient.connector.callTool.mutate(
-          { args, identifier, toolName: apiName },
+        return (await executionClient.connector.callTool.mutate(
+          { args, elicitation, identifier, toolName: apiName },
           { signal },
         )) as MCPToolCallResult;
       } catch (error) {
@@ -116,11 +210,21 @@ class MCPService {
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
 
-    const plugin = installPlugin || customPlugin;
+    let plugin = installPlugin || customPlugin;
+    if (!plugin && elicitation) {
+      plugin = (await executionClient.plugin.getPlugins.query()).find(
+        (entry) => entry.identifier === identifier,
+      );
+    }
 
     if (!plugin) return;
-
     const connection = plugin.customParams?.mcp;
+    if (
+      clientRuntime &&
+      (connection?.type === 'http' || connection?.type === 'stdio') &&
+      !(isDesktop && connection.type === 'stdio')
+    )
+      return runDurableClientTool();
     const settingsEntries = plugin.settings
       ? Object.entries(plugin.settings as Record<string, any>).filter(
           ([, value]) => value !== undefined && value !== null,
@@ -173,6 +277,7 @@ class MCPService {
     };
 
     const data = {
+      elicitation,
       // For desktop IPC, always pass a record/object for tool "arguments"
       // (IPC layer serializes the whole payload into a JSON envelope).
       args: isDesktop && isStdio ? (safeParseJSON(args) ?? {}) : args,
@@ -199,7 +304,7 @@ class MCPService {
         // Server will automatically get user access token from database
         // and format the result to MCPToolCallResult
         // Server-side also handles telemetry reporting
-        result = await toolsClient.market.callCloudMcpEndpoint.mutate({
+        result = await executionTools.market.callCloudMcpEndpoint.mutate({
           apiParams,
           identifier,
           meta,
@@ -208,12 +313,15 @@ class MCPService {
       } else if (isDesktop && isStdio) {
         // For desktop and stdio, use IPC (main process)
         // Note: IPC doesn't support AbortSignal yet
-        const serialized = serializeMcpIpcPayload(data);
+        const serialized = serializeMcpIpcPayload({
+          ...data,
+          elicitation: elicitation ? { ...elicitation, relayResult: true } : undefined,
+        });
         const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
         result = deserializeMcpIpcPayload(serializedResult) as any;
       } else {
         // For other types, use the toolsClient
-        result = await toolsClient.mcp.callTool.mutate(data, { signal });
+        result = await executionTools.mcp.callTool.mutate(data, { signal });
       }
 
       success = true;

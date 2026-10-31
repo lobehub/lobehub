@@ -398,14 +398,7 @@ const pauseForTools = async ({
   instruction?: AgentInstruction;
   reason: string;
   state: AgentState;
-  /**
-   * `tool_call_id → tool message id`, for pending tools whose row the server has
-   * already created (today: deferred async tools such as `callSubAgent`). Tells
-   * the client to pull those rows in — without it the parked parent's placeholder
-   * never reaches the store, and anything addressed at it silently no-ops.
-   * Same optional field the human-approval pause chunk carries; legacy consumers
-   * ignore it.
-   */
+  /** Exact rows for this parked invocation, also persisted for scoped completion. */
   toolMessageIds?: Record<string, string>;
   toolsCalling: ChatToolPayload[];
 }) => {
@@ -427,6 +420,7 @@ const pauseForTools = async ({
     reason,
   };
   newState.pendingToolsCalling = toolsCalling;
+  newState.pendingToolMessageIds = toolMessageIds;
 
   // Same rule as the human-approval pause: an approve resume seeds an assistant
   // placeholder for its first `call_llm`, but an approved async tool (a group

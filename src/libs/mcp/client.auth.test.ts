@@ -1,15 +1,19 @@
+import type * as McpSdk from '@modelcontextprotocol/client';
 import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from './client';
 
 const connect = vi.hoisted(() => vi.fn());
-vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Client: class {
-    connect = connect;
-  },
-}));
+vi.mock('@modelcontextprotocol/client', async (importOriginal) => {
+  const original = await importOriginal<typeof McpSdk>();
+  return {
+    ...original,
+    Client: class extends original.Client {
+      connect = connect;
+    },
+  };
+});
 
 const httpError = (status: number, message: string) =>
   new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, message, { status });

@@ -80,6 +80,7 @@ import { knowledgeBaseRouter } from './knowledgeBase';
 import { linearRouter } from './linear';
 import { llmGenerationTracingRouter } from './llmGenerationTracing';
 import { marketRouter } from './market';
+import { mcpElicitationRouter } from './mcpElicitation';
 import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
 import { metricRouter } from './metric';
@@ -123,6 +124,7 @@ import { workRouter } from './work';
 import { workspaceUserSettingsRouter } from './workspaceUserSettings';
 
 export const lambdaRouter = router({
+  mcpElicitation: mcpElicitationRouter,
   acceptance: acceptanceRouter,
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,

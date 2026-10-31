@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
+      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/mcp-elicitation @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
 
     steps:
       - name: Checkout
@@ -61,6 +61,7 @@ jobs:
       - name: Verify CI scripts
         run: |
           node --test \
+            .github/scripts/standalone-workspaces.test.mjs \
             .github/scripts/vercel-ignored-build-step.test.cjs \
             .github/scripts/bundle-size-gate.test.cjs \
             .github/scripts/size-gate-comment.test.cjs \
@@ -73,6 +74,9 @@ jobs:
 
       - name: Install deps
         run: pnpm install
+
+      - name: Verify MCP tool route bundle boundary
+        run: node --test .github/scripts/mcp-tools-bundle.test.mjs
 
       - name: Install CLI deps
         run: pnpm install

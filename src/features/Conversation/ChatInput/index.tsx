@@ -30,7 +30,9 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
 import { usePendingInterventions } from '../hooks/usePendingInterventions';
+import { useRecoverClientMcpSteps } from '../hooks/useRecoverClientMcpSteps';
 import InterventionBar from '../InterventionBar';
+import { McpElicitationConnectionError } from '../InterventionBar/McpElicitationForm';
 import {
   dataSelectors,
   messageStateSelectors,
@@ -199,6 +201,7 @@ const ChatInput = memo<ChatInputProps>(
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
+    useRecoverClientMcpSteps();
     const { t } = useTranslation('chat');
 
     // ConversationStore state
@@ -486,6 +489,7 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
+          <McpElicitationConnectionError />
           {sendMessageErrorTitle && (
             <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
               <Alert

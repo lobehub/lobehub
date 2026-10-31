@@ -121,6 +121,51 @@ describe('callConnectorToolById', () => {
     );
   });
 
+  it.each([90_000, 180_000])(
+    'keeps interactive MCP timeout aligned with the bounded elicitation deadline (%i ms)',
+    async (budget) => {
+      const now = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+      try {
+        const createLegacyHost = vi.fn(() => ({ request: vi.fn() }));
+        const ctx = {
+          ...makeCtx([connector], [tool()]),
+          mcpElicitationService: {
+            assertIdentity: vi.fn(),
+            createLegacyHost,
+            userId: 'owner',
+          },
+        };
+        await callConnectorToolById(
+          {
+            identifier: 'my-conn',
+            toolName: 'do_thing',
+            elicitation: {
+              deadline: now + budget,
+              identity: {
+                apiName: 'do_thing',
+                assistantMessageId: 'assistant',
+                identifier: 'my-conn',
+                operationId: 'operation',
+                toolCallId: 'call_1',
+              },
+            },
+          },
+          ctx,
+        );
+        const bounded = Math.min(budget, 120_000);
+        expect(createLegacyHost).toHaveBeenCalledWith(expect.anything(), now + bounded);
+        expect(mcpService.callTool).toHaveBeenCalledWith(
+          expect.objectContaining({
+            elicitation: expect.objectContaining({ interactive: true, timeoutMs: bounded }),
+          }),
+        );
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
+
   it('schedules a background tool-list refresh for the connector', async () => {
     vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
     const ctx = makeCtx([connector], [tool()]);

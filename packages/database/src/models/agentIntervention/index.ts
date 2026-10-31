@@ -1,4 +1,5 @@
 import { AgentInterventionRepository } from '../../repositories/agentIntervention';
+import { completeResolution } from '../../repositories/agentIntervention/resolution';
 import type { AgentInterventionItem, AgentInterventionResolutionItem } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import type { AgentInterventionContext } from './context';
@@ -191,6 +192,9 @@ export class AgentInterventionModel {
     producerAckAt = new Date(),
   ): Promise<AgentInterventionBatchMutationResult> =>
     this.repository.acknowledgeProducerResolution(resolutionRequestId, producerAckAt);
+
+  completeMcpResolution = (resolutionRequestId: string) =>
+    completeResolution(this.ctx, resolutionRequestId, 'mcp', new Date());
 
   /** Timeout/session teardown of every still-open item in one sealed batch. */
   markBatchTerminal = (

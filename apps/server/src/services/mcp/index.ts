@@ -1,5 +1,11 @@
 import { isDesktop } from '@lobechat/const';
 import {
+  McpCallNotStartedError,
+  type McpElicitationContinuation,
+  type McpElicitationHost,
+  McpInputRequiredError,
+} from '@lobechat/mcp-elicitation';
+import {
   type CheckMcpInstallResult,
   ConnectorErrorCode,
   type CustomPluginMetadata,
@@ -125,6 +131,7 @@ export class MCPService {
     params: MCPClientParams,
     operationName: string,
     operation: (client: MCPClient) => Promise<T>,
+    scope = 'metadata',
   ): Promise<T> {
     const connection = this.getConnectionLogMetadata(params);
 
@@ -140,11 +147,18 @@ export class MCPService {
           // failure (bad URL/token, stdio spawn error) is NOT a stale-session
           // error, so it must bail immediately instead of retrying — otherwise
           // we'd repeat auth attempts / respawn stdio commands needlessly.
-          const client = await this.getClient(params, skipCache);
+          const client = await this.getClient(params, skipCache, scope);
           return await operation(client);
         } catch (error) {
+          if (error instanceof McpInputRequiredError) {
+            bail(error);
+            return undefined as T;
+          }
           // Only retry for NoValidSessionId errors
-          if ((error as Error).message !== 'NoValidSessionId') {
+          if (
+            !(error instanceof McpCallNotStartedError && error.retryable) &&
+            (error as Error).message !== 'NoValidSessionId'
+          ) {
             console.error('MCP operation failed:', {
               ...operationLog,
               error: getMCPErrorLogMetadata(error),
@@ -215,6 +229,14 @@ export class MCPService {
   // callTool now accepts an object with clientParams, toolName, argsStr, and processContentBlocks
   async callTool(options: {
     argsStr: any;
+    elicitation?: {
+      host?: McpElicitationHost;
+      continuation?: McpElicitationContinuation;
+      signal?: AbortSignal;
+      interactive?: boolean;
+      timeoutMs?: number;
+      scope?: string;
+    };
     clientParams: MCPClientParams;
     processContentBlocks?: ProcessContentBlocksFn;
     toolName: string;
@@ -228,53 +250,62 @@ export class MCPService {
 
     const args = safeParseJSON(argsStr);
 
-    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, async (client) => {
-      log('Calling MCP tool: %s', toolName);
+    return this.withSessionRetry(
+      clientParams,
+      `calling tool "${toolName}"`,
+      async (client) => {
+        log('Calling MCP tool: %s', toolName);
 
-      try {
-        // Delegate the call to the MCPClient instance
-        const result = await client.callTool(toolName, args); // Pass args directly
+        try {
+          // Delegate the call to the MCPClient instance
+          const result = await client.callTool(toolName, args, options.elicitation); // Pass args directly
 
-        // Use the common processing method
-        const processedResult = await MCPService.processToolCallResult(
-          result,
-          processContentBlocksFn,
-        );
+          // Use the common processing method
+          const processedResult = await MCPService.processToolCallResult(
+            result,
+            processContentBlocksFn,
+          );
 
-        log('MCP tool call completed: %O', {
-          contentBlockCount: Array.isArray(processedResult.state.content)
-            ? processedResult.state.content.length
-            : 0,
-          isError: processedResult.state.isError === true,
-          toolName,
-        });
+          log('MCP tool call completed: %O', {
+            contentBlockCount: Array.isArray(processedResult.state.content)
+              ? processedResult.state.content.length
+              : 0,
+            isError: processedResult.state.isError === true,
+            toolName,
+          });
 
-        return processedResult;
-      } catch (error) {
-        // Session errors must bubble up so withSessionRetry can reconnect & retry
-        if ((error as Error).message === 'NoValidSessionId') throw error;
+          return processedResult;
+        } catch (error) {
+          // Session errors must bubble up so withSessionRetry can reconnect & retry
+          if ((error as Error).message === 'NoValidSessionId') throw error;
 
-        // Tool-level MCP errors are returned as a failed tool result, not thrown
-        if (isMcpToolFailure(error)) {
-          return {
-            content: error.message,
-            error,
-            state: {
-              content: [{ text: error.message, type: 'text' }],
-              isError: true,
-            },
-            success: false,
-          };
+          // Tool-level MCP errors are returned as a failed tool result, not thrown
+          if (isMcpToolFailure(error)) {
+            return {
+              content: error.message,
+              error,
+              state: {
+                content: [{ text: error.message, type: 'text' }],
+                isError: true,
+              },
+              success: false,
+            };
+          }
+
+          // Other errors propagate; withSessionRetry wraps them as a TRPCError
+          throw error;
         }
-
-        // Other errors propagate; withSessionRetry wraps them as a TRPCError
-        throw error;
-      }
-    });
+      },
+      `${options.elicitation?.scope ?? 'tool'}:${options.elicitation?.host ? 'elicitation' : 'plain'}`,
+    );
   }
 
   // Private method to get or initialize a client based on parameters
-  private async getClient(params: MCPClientParams, skipCache = false): Promise<MCPClient> {
+  private async getClient(
+    params: MCPClientParams,
+    skipCache = false,
+    scope = 'metadata',
+  ): Promise<MCPClient> {
     // Every server caller (including connector sync and agent tool execution)
     // must enforce the same Desktop-only stdio boundary, even for cached clients.
     if (params.type === 'stdio' && !isDesktop) {
@@ -285,7 +316,7 @@ export class MCPService {
       });
     }
 
-    const key = this.serializeParams(params); // Use custom serialization
+    const key = `${scope}:${this.serializeParams(params)}`; // Use custom serialization
 
     if (!skipCache && this.clients.has(key)) {
       return this.clients.get(key)!;
@@ -294,7 +325,7 @@ export class MCPService {
     const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
-      const client = new MCPClient(params);
+      const client = new MCPClient(params, scope.endsWith(':elicitation'));
       await client.initialize({
         onProgress: (progress) => {
           log(`New client initializing... ${progress.progress}/${progress.total}`);
