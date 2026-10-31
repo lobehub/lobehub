@@ -93,6 +93,12 @@ export interface State extends ResourceSearchState {
    */
   listVisibility: ResourceListVisibilityFilter;
   /**
+   * Workspace whose space `listVisibility` currently reflects, set by hydrate
+   * and by the toggle. `undefined` until either runs, so readers outside
+   * /resource can tell the in-memory value apart from the never-hydrated default.
+   */
+  listVisibilityWorkspaceId?: string;
+  /**
    * View mode for displaying resources
    */
   mode: ResourceManagerMode;

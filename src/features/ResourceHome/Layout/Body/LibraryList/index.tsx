@@ -53,6 +53,8 @@ const LibraryList = memo(() => {
   const handleCreate = () => {
     if (!canCreate) return;
     open({
+      // The empty entry names the space ("Create a private knowledge base"), so create there.
+      initialVisibility: listVisibility,
       onSuccess: (id) => {
         navigate(`/resource/library/${id}`);
       },
