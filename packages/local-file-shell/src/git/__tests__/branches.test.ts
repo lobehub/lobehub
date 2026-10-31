@@ -64,6 +64,18 @@ describe('branch read operations', () => {
     expect(await listGitRemoteBranches(repo)).toEqual([]);
   });
 
+  it('listGitRemoteBranches leaves out the origin/HEAD symref of a clone', async () => {
+    git(repo, 'branch', 'release');
+    const clone = await mkdtemp(path.join(tmpdir(), 'lfs-git-clone-'));
+    cleanup.push(clone);
+    execFileSync('git', ['clone', '--quiet', repo, clone]);
+
+    const branches = await listGitRemoteBranches(clone);
+
+    expect(branches.map((b) => b.name).sort()).toEqual(['origin/main', 'origin/release']);
+    expect(branches).toContainEqual({ isDefault: true, name: 'origin/main' });
+  });
+
   it('parseGitWorktreeList handles branch, detached, and locked records', () => {
     expect(
       parseGitWorktreeList(

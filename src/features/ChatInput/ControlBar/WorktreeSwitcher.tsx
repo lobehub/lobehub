@@ -42,7 +42,14 @@ import { gitService } from '@/services/git';
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
 import { gitMenuTriggerStyles } from './gitMenuTriggerStyles';
 import { useSwitchWorktree } from './useSwitchWorktree';
-import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';
+import {
+  getForkPointLabelArgs,
+  getPathName,
+  getShortSha,
+  getWorktreeBaseDefault,
+  isDisabled,
+  normalizeDisplayPath,
+} from './worktreeHelpers';
 
 const styles = createStaticStyles(({ css }) => ({
   badge: css`
@@ -260,15 +267,24 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  forkPoint: css`
+    flex: none;
+    color: ${cssVar.colorTextSecondary};
+  `,
   path: css`
     overflow: hidden;
+    text-overflow: ellipsis;
+  `,
+  subtitle: css`
+    overflow: hidden;
+    display: flex;
+    gap: 6px;
 
     margin-block-start: 1px;
 
     font-size: 11px;
     line-height: 16px;
     color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
     white-space: nowrap;
   `,
   rowTitle: css`
@@ -574,10 +590,32 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     // branch" flow), then switch the working directory into it. Returns an error
     // message for inline display in the modal, or undefined on success.
     const handleCreateWorktree = useCallback(
-      async (branch: string): Promise<string | undefined> => {
+      async (branch: string, baseRef?: string): Promise<string | undefined> => {
         const worktreePath = deriveWorktreePath(sourcePath, branch);
-        const result = await gitService.addGitWorktree({ branch, deviceId, path, worktreePath });
+        const result = await gitService.addGitWorktree({
+          baseRef,
+          branch,
+          deviceId,
+          path,
+          worktreePath,
+        });
         if (!result.success) return result.error || t('workingDirectory.createWorktreeFailed');
+
+        // Say what the branch forked from — above all a detached HEAD, which
+        // would otherwise succeed without a word. A device too old to report a
+        // base also ignored the requested one and forked from its current HEAD.
+        if (!result.base) {
+          if (baseRef) toast.warning(t('workingDirectory.createWorktreeBaseIgnored'));
+        } else {
+          const sha = getShortSha(result.base.sha);
+          toast.success(
+            result.base.detached
+              ? t('workingDirectory.createWorktreeBasedOnDetached', { sha })
+              : t('workingDirectory.createWorktreeBasedOn', {
+                  base: result.base.ref ? `${result.base.ref} @${sha}` : sha,
+                }),
+          );
+        }
 
         // Point the conversation at the freshly created worktree, then reconcile
         // the list so the new row (now `current`) appears.
@@ -591,6 +629,11 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const openCreateWorktree = useCallback(() => {
       setOpen(false);
       openCreateWorktreeModal({
+        // The checkout `git worktree add` runs in — its HEAD is the default base.
+        defaultBase: getWorktreeBaseDefault(
+          worktrees.find((worktree) => worktree.current),
+          detached ? '' : currentBranch,
+        ),
         // The modal reads the repo's full local branch list itself and draws the
         // generated default from it, so a name is not handed out twice and does
         // not collide with a ref on the `wt` namespace path (see
@@ -602,7 +645,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
         path,
         resolvePath: (branch) => deriveWorktreePath(sourcePath, branch),
       });
-    }, [deviceId, handleCreateWorktree, path, sourcePath]);
+    }, [currentBranch, detached, deviceId, handleCreateWorktree, path, sourcePath, worktrees]);
 
     // Scroll the current worktree into view each time the dropdown opens — the
     // list mounts at scrollTop=0, so a current worktree below the fold would
@@ -702,6 +745,8 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                       const removing = removingPaths.has(worktree.path);
                       const removable =
                         canRemoveWorktree(worktree, sourcePath, mainWorktree?.path) && !removing;
+                      const forkPoint =
+                        worktree.forkPoint && getForkPointLabelArgs(worktree.forkPoint);
 
                       return (
                         <DropdownMenuItem
@@ -743,8 +788,15 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                                 </span>
                               )}
                             </div>
-                            <div className={styles.path} title={worktree.path}>
-                              {displayPath}
+                            <div className={styles.subtitle}>
+                              {forkPoint && (
+                                <span className={styles.forkPoint} title={worktree.forkPoint?.sha}>
+                                  {t(forkPoint.key, forkPoint.values)}
+                                </span>
+                              )}
+                              <span className={styles.path} title={worktree.path}>
+                                {displayPath}
+                              </span>
                             </div>
                           </div>
                           <div className={styles.dirtyCell}>

@@ -212,12 +212,13 @@ const cases: RpcCase[] = [
   },
   {
     address: address(30_000),
-    call: (g) => g.addGitWorktree({ ...base, branch: 'b', path: '/p', worktreePath: '/w' }),
+    call: (g) =>
+      g.addGitWorktree({ ...base, baseRef: 'main', branch: 'b', path: '/p', worktreePath: '/w' }),
     failure: errorResult('Add worktree failed'),
     name: 'addGitWorktree',
     payload: {
       method: 'addGitWorktree',
-      params: { branch: 'b', path: '/p', worktreePath: '/w' },
+      params: { baseRef: 'main', branch: 'b', path: '/p', worktreePath: '/w' },
     },
   },
   {

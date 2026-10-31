@@ -9,6 +9,9 @@ const confirmModalMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const messageSuccessMock = vi.hoisted(() => vi.fn());
 const removeGitWorktreeMock = vi.hoisted(() => vi.fn());
+const addGitWorktreeMock = vi.hoisted(() => vi.fn());
+const openCreateWorktreeModalMock = vi.hoisted(() => vi.fn());
+const messageWarningMock = vi.hoisted(() => vi.fn());
 const toastLoadingCloseMock = vi.hoisted(() => vi.fn());
 const toastLoadingMock = vi.hoisted(() =>
   vi.fn(() => ({ close: toastLoadingCloseMock, id: 'pending', update: vi.fn() })),
@@ -20,8 +23,13 @@ vi.mock('../useCommitWorkingDirectory', () => ({
 
 vi.mock('@/services/git', () => ({
   gitService: {
+    addGitWorktree: addGitWorktreeMock,
     removeGitWorktree: removeGitWorktreeMock,
   },
+}));
+
+vi.mock('../CreateWorktreeModal', () => ({
+  openCreateWorktreeModal: openCreateWorktreeModalMock,
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
@@ -62,6 +70,7 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
         info: vi.fn(),
         loading: toastLoadingMock,
         success: messageSuccessMock,
+        warning: messageWarningMock,
       },
     }),
   ];
@@ -88,6 +97,9 @@ beforeEach(() => {
   toastLoadingMock.mockClear();
   toastLoadingCloseMock.mockReset();
   removeGitWorktreeMock.mockReset();
+  addGitWorktreeMock.mockReset();
+  openCreateWorktreeModalMock.mockReset();
+  messageWarningMock.mockReset();
   removeGitWorktreeMock.mockResolvedValue({ success: true });
 });
 
@@ -245,6 +257,47 @@ describe('WorktreeSwitcher', () => {
       screen.getByText('workingDirectory.currentWorktree').parentElement?.textContent,
     ).toContain('feat/current');
     expect(screen.queryByText('workingDirectory.clean')).toBeNull();
+  });
+
+  it('shows each worktree fork point off the default branch', () => {
+    render(
+      <WorktreeSwitcher
+        isGithub
+        agentId="agent-1"
+        currentBranch="canary"
+        path="/repo"
+        sourcePath="/repo"
+        worktrees={[
+          { branch: 'canary', current: true, path: '/repo' },
+          {
+            branch: 'wt/fresh',
+            current: false,
+            forkPoint: { atTip: true, baseBranch: 'origin/canary', sha: 'a'.repeat(40) },
+            path: '/repo-fresh',
+          },
+          {
+            branch: 'wt/stale',
+            current: false,
+            forkPoint: { atTip: false, baseBranch: 'origin/canary', sha: '9a1b3127deadbeef' },
+            path: '/repo-stale',
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      rowTextOf(
+        screen.getByText('workingDirectory.worktreeForkPointAtTip:{"branch":"origin/canary"}'),
+      ),
+    ).toContain('wt/fresh');
+    expect(
+      rowTextOf(
+        screen.getByText(
+          'workingDirectory.worktreeForkPoint:{"branch":"origin/canary","sha":"9a1b3127"}',
+        ),
+      ),
+    ).toContain('wt/stale');
+    expect(rowTextOf(screen.getByText('canary'))).not.toContain('worktreeForkPoint');
   });
 
   it('shows worktree paths relative to the source path except temp paths', () => {
@@ -525,5 +578,72 @@ describe('WorktreeSwitcher', () => {
     fireEvent.click(screen.getByTitle('/repo'));
 
     expect(commitMock).toHaveBeenCalledWith({ path: '/repo', repoType: 'git' });
+  });
+
+  describe('create worktree base', () => {
+    const sha = '9a1b3127deadbeefcafe0000000000000000beef';
+
+    /** Open the create modal and hand back the options the switcher gave it. */
+    const openCreate = (worktrees: Parameters<typeof WorktreeSwitcher>[0]['worktrees']) => {
+      render(
+        <WorktreeSwitcher
+          isGithub
+          agentId="agent-1"
+          currentBranch="canary"
+          path="/repo"
+          sourcePath="/repo"
+          worktrees={worktrees}
+        />,
+      );
+      fireEvent.click(screen.getByText('workingDirectory.createWorktreeAction'));
+      return openCreateWorktreeModalMock.mock.calls[0][0];
+    };
+
+    it('defaults the base to the current checkout and forwards a chosen baseRef', async () => {
+      addGitWorktreeMock.mockResolvedValue({
+        base: { ref: 'origin/release', sha },
+        success: true,
+        worktreePath: '/repo-wt',
+      });
+      const options = openCreate([{ branch: 'canary', current: true, head: sha, path: '/repo' }]);
+
+      expect(options.defaultBase).toEqual({ branch: 'canary', sha, value: 'canary' });
+
+      await options.onSubmit('wt/new', 'origin/release');
+
+      expect(addGitWorktreeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ baseRef: 'origin/release', branch: 'wt/new', path: '/repo' }),
+      );
+      expect(messageSuccessMock).toHaveBeenCalledWith(
+        'workingDirectory.createWorktreeBasedOn:{"base":"origin/release @9a1b3127"}',
+      );
+    });
+
+    it('calls out a detached HEAD base after creating', async () => {
+      addGitWorktreeMock.mockResolvedValue({
+        base: { detached: true, sha },
+        success: true,
+        worktreePath: '/repo-wt',
+      });
+      const options = openCreate([{ current: true, detached: true, head: sha, path: '/repo' }]);
+
+      expect(options.defaultBase).toEqual({ detached: true, sha, value: '9a1b3127' });
+
+      await options.onSubmit('wt/new', undefined);
+
+      expect(messageSuccessMock).toHaveBeenCalledWith(
+        'workingDirectory.createWorktreeBasedOnDetached:{"sha":"9a1b3127"}',
+      );
+    });
+
+    it('warns when an older device ignored the chosen base', async () => {
+      addGitWorktreeMock.mockResolvedValue({ success: true, worktreePath: '/repo-wt' });
+      const options = openCreate([{ branch: 'canary', current: true, head: sha, path: '/repo' }]);
+
+      await options.onSubmit('wt/new', 'origin/release');
+
+      expect(messageWarningMock).toHaveBeenCalledWith('workingDirectory.createWorktreeBaseIgnored');
+      expect(messageSuccessMock).not.toHaveBeenCalled();
+    });
   });
 });

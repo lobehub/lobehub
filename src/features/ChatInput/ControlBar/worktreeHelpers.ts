@@ -27,3 +27,44 @@ export const findWorktreeForBranch = (
   worktrees.find(
     (worktree) => !worktree.current && !isDisabled(worktree) && worktree.branch === branch,
   );
+
+export const getShortSha = (sha: string): string => sha.slice(0, 8);
+
+/**
+ * The base a new worktree forks from by default: the source checkout's current
+ * branch and HEAD, read off its `git worktree list` record. `value` is what the
+ * base field starts with — the branch, or the short SHA when HEAD is detached.
+ */
+export interface WorktreeBaseDefault {
+  branch?: string;
+  detached?: boolean;
+  sha?: string;
+  value: string;
+}
+
+export const getWorktreeBaseDefault = (
+  worktree: DeviceGitWorktreeListItem | undefined,
+  fallbackBranch: string,
+): WorktreeBaseDefault => {
+  const sha = worktree?.head;
+  if (worktree?.detached && sha) return { detached: true, sha, value: getShortSha(sha) };
+
+  const branch = worktree?.branch ?? (fallbackBranch || undefined);
+  return { branch, sha, value: branch ?? (sha ? getShortSha(sha) : '') };
+};
+
+/**
+ * Translation inputs for a worktree's fork point: `based on <default>` when it
+ * still sits on the default branch's tip, `based on <default>@<sha>` otherwise.
+ */
+export const getForkPointLabelArgs = (
+  forkPoint: NonNullable<DeviceGitWorktreeListItem['forkPoint']>,
+):
+  | { key: 'workingDirectory.worktreeForkPointAtTip'; values: { branch: string } }
+  | { key: 'workingDirectory.worktreeForkPoint'; values: { branch: string; sha: string } } =>
+  forkPoint.atTip
+    ? { key: 'workingDirectory.worktreeForkPointAtTip', values: { branch: forkPoint.baseBranch } }
+    : {
+        key: 'workingDirectory.worktreeForkPoint',
+        values: { branch: forkPoint.baseBranch, sha: getShortSha(forkPoint.sha) },
+      };

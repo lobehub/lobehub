@@ -562,6 +562,19 @@ export interface DeviceGitWorkingTreeStatus {
 }
 
 /**
+ * Where a worktree's history leaves the repo's default branch (`git merge-base`).
+ * Mirrors the desktop `GitWorktreeForkPoint`.
+ */
+export interface DeviceGitWorktreeForkPoint {
+  /** True when the fork point is still the default branch's tip. */
+  atTip: boolean;
+  /** Default branch the fork point was computed against (`origin/canary`, or local `main`). */
+  baseBranch: string;
+  /** Full SHA of the merge base. */
+  sha: string;
+}
+
+/**
  * One git worktree attached to a repository, returned by the `listGitWorktrees`
  * device RPC. Mirrors the desktop `GitWorktreeListItem`.
  */
@@ -570,6 +583,8 @@ export interface DeviceGitWorktreeListItem {
   branch?: string;
   current: boolean;
   detached?: boolean;
+  /** Fork point off the default branch. Mirrors the desktop `GitWorktreeForkPoint`. */
+  forkPoint?: DeviceGitWorktreeForkPoint;
   head?: string;
   locked?: boolean;
   lockReason?: string;
@@ -721,8 +736,20 @@ export interface DeviceGitRemoveWorktreeResult {
   success: boolean;
 }
 
+/** The commit a new worktree branch was created from. Mirrors the desktop `GitWorktreeBase`. */
+export interface DeviceGitWorktreeBase {
+  /** True when the base defaulted to a detached HEAD, so there was no branch to name. */
+  detached?: boolean;
+  /** Branch or ref the base was named by; absent when it is a bare SHA or a detached HEAD. */
+  ref?: string;
+  /** Full SHA the new branch points at. */
+  sha: string;
+}
+
 /** Result of the `addGitWorktree` device RPC. Mirrors the desktop shape. */
 export interface DeviceGitAddWorktreeResult {
+  /** What the new branch forked from, so the UI can say it rather than succeed silently. */
+  base?: DeviceGitWorktreeBase;
   error?: string;
   success: boolean;
   /** Absolute path of the created worktree, echoed back so the UI can switch to it. */

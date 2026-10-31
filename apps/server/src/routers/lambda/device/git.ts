@@ -269,10 +269,13 @@ export const gitRouter = router({
    * (a `<repo>-<branch>` sibling) rather than accepted from the request, so a
    * crafted web call can't ask the device to check out at an arbitrary absolute
    * path — the branch is folded to `-` in the folder name, so it can't traverse.
+   * `baseRef` only picks the commit the branch forks from; the device validates
+   * it as a ref name and resolves it to a SHA before `git worktree add`.
    */
   addGitWorktree: deviceProcedure
     .input(
       z.object({
+        baseRef: z.string().max(256).optional(),
         branch: z.string(),
         deviceId: z.string(),
         path: z.string(),
@@ -280,6 +283,7 @@ export const gitRouter = router({
     )
     .mutation(async ({ ctx, input }) =>
       deviceGateway.addGitWorktree({
+        baseRef: input.baseRef,
         branch: input.branch,
         deviceId: input.deviceId,
         path: input.path,

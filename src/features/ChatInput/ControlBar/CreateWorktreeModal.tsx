@@ -3,6 +3,7 @@
 import { cssVar, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
+  AutoComplete,
   Button,
   createModal,
   Input,
@@ -16,22 +17,56 @@ import { DicesIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFetchGitBranches, useGitRemoteBranches } from '@/store/device';
+
 import { useWorktreeBranchSeed } from './useWorktreeBranchSeed';
+import { getShortSha, type WorktreeBaseDefault } from './worktreeHelpers';
+
+const MAX_BASE_OPTIONS = 50;
+
+/**
+ * Local then remote branch names for the base field, filtered by what was
+ * typed. Filtered here rather than by the AutoComplete (its built-in filter is
+ * switched off) so the untouched default shows the whole list: opening the field
+ * offers every branch rather than only the one already in it.
+ */
+const useBaseOptions = (
+  deviceId: string | undefined,
+  path: string,
+  query: string,
+  showAll: boolean,
+): string[] => {
+  const { data: local } = useFetchGitBranches(deviceId, path);
+  const { data: remote } = useGitRemoteBranches(path, true, deviceId);
+
+  return useMemo(() => {
+    const names = [
+      ...new Set([...(local ?? []).map((b) => b.name), ...(remote ?? []).map((b) => b.name)]),
+    ];
+    const needle = query.trim().toLowerCase();
+    const matched =
+      showAll || !needle ? names : names.filter((name) => name.toLowerCase().includes(needle));
+    return matched.slice(0, MAX_BASE_OPTIONS);
+  }, [local, query, remote, showAll]);
+};
 
 interface CreateWorktreeContentProps {
+  /** The source checkout's current branch and HEAD, the base used when left as is. */
+  defaultBase: WorktreeBaseDefault;
   deviceId?: string;
   /**
-   * Create the worktree on a fresh branch. Return an error message to show
-   * inline and keep the modal open; return undefined on success (modal closes).
+   * Create the worktree on a fresh branch. `baseRef` is undefined when the base
+   * was left at the current HEAD. Return an error message to show inline and
+   * keep the modal open; return undefined on success (modal closes).
    */
-  onSubmit: (branch: string) => Promise<string | undefined>;
+  onSubmit: (branch: string, baseRef?: string) => Promise<string | undefined>;
   path: string;
   /** Preview the target directory the new worktree will occupy for a branch name. */
   resolvePath: (branch: string) => string;
 }
 
 const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
-  ({ deviceId, onSubmit, path, resolvePath }) => {
+  ({ defaultBase, deviceId, onSubmit, path, resolvePath }) => {
     const { t: tDevice } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const { close } = useModalContext();
@@ -43,12 +78,50 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
     // Typing (and an explicit re-roll) shadows the generated name, so a redraw
     // never overwrites what the user chose.
     const [edited, setEdited] = useState<string>();
+    // `undefined` keeps the base on the current HEAD; anything typed replaces it.
+    const [baseEdited, setBaseEdited] = useState<string>();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>();
     const inputRef = useRef<HTMLInputElement>(null);
 
     const value = edited ?? name ?? '';
     const trimmed = value.trim();
+
+    const baseValue = baseEdited ?? defaultBase.value;
+    const baseTrimmed = baseValue.trim();
+    // Typing the default back in is the same as never touching it: fork from HEAD.
+    const isDefaultBase = !baseTrimmed || baseTrimmed === defaultBase.value;
+    const baseOptions = useBaseOptions(deviceId, path, baseValue, baseEdited === undefined);
+
+    // Pin the untouched default to the commit it stands for, so the field itself
+    // reads `canary @9a1b3127`. A detached default already is the SHA.
+    const baseSuffix =
+      isDefaultBase && !defaultBase.detached && defaultBase.sha ? (
+        <Text code style={{ fontSize: 12 }} type={'secondary'}>
+          @{getShortSha(defaultBase.sha)}
+        </Text>
+      ) : undefined;
+
+    // Say what the new branch forks from before it is created: the current
+    // branch and its short SHA, a detached HEAD called out as such, or the typed
+    // ref (resolved to a SHA by git at create time).
+    const baseHint = useMemo(() => {
+      if (!isDefaultBase)
+        return {
+          text: tDevice('workingDirectory.newWorktreeBaseResolveOnCreate', { ref: baseTrimmed }),
+          warning: false,
+        };
+      const sha = defaultBase.sha ? getShortSha(defaultBase.sha) : undefined;
+      if (defaultBase.detached && sha)
+        return {
+          text: tDevice('workingDirectory.newWorktreeBaseDetached', { sha }),
+          warning: true,
+        };
+      const base = [defaultBase.branch, sha && `@${sha}`].filter(Boolean).join(' ');
+      return base
+        ? { text: tDevice('workingDirectory.newWorktreeBaseHint', { base }), warning: false }
+        : undefined;
+    }, [baseTrimmed, defaultBase, isDefaultBase, tDevice]);
 
     // Focus once the field exists; while the branch list is loading there is
     // nothing to focus yet.
@@ -75,7 +148,7 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
       if (!branch) return;
       setLoading(true);
       try {
-        const message = await onSubmit(branch);
+        const message = await onSubmit(branch, isDefaultBase ? undefined : baseTrimmed);
         if (message) {
           setError(message);
           return;
@@ -84,7 +157,7 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
       } finally {
         setLoading(false);
       }
-    }, [close, loading, onSubmit, value]);
+    }, [baseTrimmed, close, isDefaultBase, loading, onSubmit, value]);
 
     return (
       <Flexbox gap={16}>
@@ -117,6 +190,35 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
               {tDevice('workingDirectory.newWorktreeLocation', { path: previewPath })}
             </Text>
           ) : null}
+        </Flexbox>
+        <Flexbox gap={6}>
+          <Text style={{ fontSize: 12 }} type={'secondary'}>
+            {tDevice('workingDirectory.newWorktreeBaseLabel')}
+          </Text>
+          <AutoComplete
+            // `useBaseOptions` already filtered the list; the built-in filter would
+            // narrow the untouched default down to the one branch already typed.
+            filter={null}
+            options={baseOptions}
+            placeholder={tDevice('workingDirectory.newWorktreeBasePlaceholder')}
+            suffix={baseSuffix}
+            value={baseValue}
+            onChange={(next) => {
+              setBaseEdited(next);
+              setError(undefined);
+            }}
+          />
+          {baseHint ? (
+            <Text
+              style={{
+                color: baseHint.warning ? cssVar.colorWarning : cssVar.colorTextTertiary,
+                fontSize: 12,
+                wordBreak: 'break-all',
+              }}
+            >
+              {baseHint.text}
+            </Text>
+          ) : null}
           {isReady && error ? (
             <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text>
           ) : null}
@@ -145,21 +247,24 @@ CreateWorktreeContent.displayName = 'CreateWorktreeContent';
  * Branch-name entry for "create worktree". Mirrors the create-branch modal but
  * seeds the field with a generated branch name (time prefix + word pair, so it
  * sorts chronologically and needs no inventing) and adds a live preview of the
- * sibling directory the new worktree will occupy. Submitting runs
- * `git worktree add -b <branch> <path>` and switches into it.
+ * sibling directory the new worktree will occupy, plus the base it forks from
+ * (the current branch and short SHA unless changed). Submitting runs
+ * `git worktree add -b <branch> <path> <base>` and switches into it.
  *
  * The name is drawn against the working directory's full local branch list, so
  * the directory it reads is part of the contract.
  */
 export const openCreateWorktreeModal = (options: {
+  defaultBase: WorktreeBaseDefault;
   deviceId?: string;
-  onSubmit: (branch: string) => Promise<string | undefined>;
+  onSubmit: (branch: string, baseRef?: string) => Promise<string | undefined>;
   path: string;
   resolvePath: (branch: string) => string;
 }): ModalInstance =>
   createModal({
     content: (
       <CreateWorktreeContent
+        defaultBase={options.defaultBase}
         deviceId={options.deviceId}
         path={options.path}
         resolvePath={options.resolvePath}
