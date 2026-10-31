@@ -11,6 +11,10 @@ import type {
   HeterogeneousProviderBindingReference,
 } from '@lobechat/heterogeneous-agents';
 import type {
+  AntigravityQuotaParams,
+  AntigravityQuotaSnapshot,
+} from '@lobechat/heterogeneous-agents/quota';
+import type {
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
@@ -121,6 +125,10 @@ class HeterogeneousAgentService {
     params: ListHeterogeneousAgentModelsParams,
   ): Promise<HeterogeneousAgentModelCatalog> {
     return this.ipc.heterogeneousAgent.listModels(params);
+  }
+
+  async getAntigravityQuota(params?: AntigravityQuotaParams): Promise<AntigravityQuotaSnapshot> {
+    return this.ipc.heterogeneousAgent.getAntigravityQuota(params);
   }
 
   async getCodexQuota(params?: {

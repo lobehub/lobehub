@@ -137,8 +137,8 @@ describe('resolveCliCommand', () => {
     });
 
     it('finds agy in the official Unix user install directory', async () => {
-      const originalShell = process.env.SHELL;
-      delete process.env.SHELL;
+      const originalEnv = process.env;
+      process.env = { ...process.env, PATH: '/usr/bin:/bin', SHELL: '' };
       try {
         callExecFileError(new Error('not found'));
         callExecFile('1.2.13');
@@ -149,7 +149,7 @@ describe('resolveCliCommand', () => {
           path: path.join(os.homedir(), '.local', 'bin', 'agy'),
         });
       } finally {
-        if (originalShell !== undefined) process.env.SHELL = originalShell;
+        process.env = originalEnv;
       }
     });
 
