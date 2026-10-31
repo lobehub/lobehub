@@ -133,7 +133,6 @@ export class TaskModel {
 
   async resolve(ref: string): Promise<TaskItem | null> {
     const result = await this.resolveRefs([ref]);
-    /* v8 ignore next -- unreachable: one ref matches at most one row, ids are primary keys and identifiers are unique per scope (tasks_identifier_idx / tasks_identifier_workspace_id_unique) */
     if (result.ambiguous.length) throw new Error(`Ambiguous task reference: ${ref}`);
     return result.byRef.get(ref) ?? null;
   }
@@ -191,6 +190,14 @@ export class TaskModel {
     agentOwnerUserId: string,
   ): Promise<number> {
     return rows.countTasksBlockingAgentDemotion(this.ctx, assigneeAgentId, agentOwnerUserId);
+  }
+
+  async lockWholeSubtree(rootId: string): Promise<{ id: string; status: string }[]> {
+    return tree.lockWholeSubtree(this.ctx, rootId);
+  }
+
+  async takeOverSubtree(taskIds: string[]): Promise<void> {
+    return tree.takeOverSubtree(this.ctx, taskIds);
   }
 
   async subtreeHasOtherCreators(rootTaskId: string, creatorUserId: string): Promise<boolean> {
@@ -667,7 +674,6 @@ export class TaskModel {
           }
         : data;
       const updated = await scoped.update(id, writeData);
-      /* v8 ignore next -- unreachable: the row was just locked FOR UPDATE in this transaction under the same ownership predicate, so the write always returns it */
       if (!updated) return null;
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];

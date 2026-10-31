@@ -5,7 +5,13 @@ import { hierarchySearchResource } from '@/features/ResourceManager/store/projec
 import type * as ReplicaModule from '@/libs/replica';
 import { createReplicaState } from '@/libs/replica';
 
-import { sortTreeItems, toTreeItem, toTreeItemFromResource, TreeActionImpl } from './actions';
+import {
+  isExpandable,
+  sortTreeItems,
+  toTreeItem,
+  toTreeItemFromResource,
+  TreeActionImpl,
+} from './actions';
 import type { TreeState } from './types';
 
 const {
@@ -771,5 +777,29 @@ describe('toTreeItemFromResource', () => {
 
   it('produces the same row as the tree fetch does for the same input', () => {
     expect(toTreeItemFromResource(row)).toEqual(toTreeItem(row));
+  });
+
+  it('keeps a document with children expandable', () => {
+    // Dropping `hasChildren` here would take the caret off a parent page on
+    // every explorer refresh.
+    const parent = toTreeItemFromResource({ ...row, hasChildren: true });
+
+    expect(parent).toMatchObject({ hasChildren: true, isFolder: false });
+    expect(isExpandable(parent)).toBe(true);
+  });
+});
+
+describe('toTreeItem hasChildren', () => {
+  const doc = { fileType: 'custom/document', id: 'docs_1', name: 'Page' };
+
+  it('carries hasChildren from the server row', () => {
+    expect(toTreeItem({ ...doc, hasChildren: true }).hasChildren).toBe(true);
+    expect(toTreeItem({ ...doc, hasChildren: false }).hasChildren).toBe(false);
+  });
+
+  it('treats folders and documents with children as expandable, leaves as not', () => {
+    expect(isExpandable(toTreeItem({ ...doc, hasChildren: true }))).toBe(true);
+    expect(isExpandable(toTreeItem(doc))).toBe(false);
+    expect(isExpandable(toTreeItem({ ...doc, fileType: CUSTOM_FOLDER_FILE_TYPE }))).toBe(true);
   });
 });

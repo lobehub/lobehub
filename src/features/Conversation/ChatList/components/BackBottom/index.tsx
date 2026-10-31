@@ -1,4 +1,5 @@
-import { ActionIcon, cx } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowDownIcon } from 'lucide-react';
 import { lazy, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,7 +40,7 @@ const BackBottom = memo<BackBottomProps>(
 
         <ActionIcon
           glass
-          className={cx(styles.container, visible && styles.visible)}
+          className={stylex.props(styles.container, visible && styles.visible).className}
           icon={ArrowDownIcon}
           style={bottomOffset ? { insetBlockEnd: 16 + bottomOffset } : undefined}
           title={t('backToBottom')}

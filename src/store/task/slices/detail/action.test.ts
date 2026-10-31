@@ -42,6 +42,7 @@ vi.mock('@/services/task', () => ({
     reorderSubtasks: vi.fn(),
     unpinDocument: vi.fn(),
     update: vi.fn(),
+    updateVisibility: vi.fn(),
   },
 }));
 
@@ -966,6 +967,35 @@ describe('TaskDetailSliceAction', () => {
       // Returning to T-1 still reflects its own failed save.
       useTaskStore.getState().setActiveTaskId('T-1');
       expect(taskDetailSelectors.taskSaveStatus(useTaskStore.getState())).toBe('failed');
+    });
+  });
+
+  describe('updateTaskVisibility', () => {
+    it('resolves once the change is saved even when the refresh fails', async () => {
+      vi.mocked(taskService.updateVisibility).mockResolvedValue({} as any);
+      const refreshTaskList = vi.fn().mockRejectedValue(new Error('network down'));
+      useTaskStore.setState({ refreshTaskList } as any);
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        useTaskStore.getState().updateTaskVisibility('T-1', 'private'),
+      ).resolves.toBeUndefined();
+      expect(taskService.updateVisibility).toHaveBeenCalledWith('T-1', 'private');
+      expect(toast.error).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
+
+    it('rejects with a targeted toast when the change itself is refused', async () => {
+      vi.mocked(taskService.updateVisibility).mockRejectedValue(
+        new Error('Cannot make this task private while it has subtasks created by other members.'),
+      );
+
+      await expect(useTaskStore.getState().updateTaskVisibility('T-1', 'private')).rejects.toThrow(
+        'subtasks created by other members',
+      );
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringContaining('subtasks created by other members'),
+      );
     });
   });
 

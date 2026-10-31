@@ -120,7 +120,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
   // the first directory it can run in when there is one.
   const handleAddTopic = (initialDirectoryId?: string) => {
     if (!scope || !agentId) return;
-    void startTopic({ agentId, directoryId: initialDirectoryId ?? startDirectories?.[0]?.id });
+    startTopic({ agentId, directoryId: initialDirectoryId ?? startDirectories?.[0]?.id });
   };
 
   // The agent bucket already sits inside one project, so its rows skip the

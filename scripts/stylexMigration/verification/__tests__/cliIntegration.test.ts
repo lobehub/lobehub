@@ -6,8 +6,8 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { git } from '../git';
-import { resolveCommit } from '../revisionResolver';
+import { git } from '../source/git';
+import { resolveCommit } from '../source/revisionResolver';
 
 const runner = path.resolve(import.meta.dirname, '../run.ts');
 const owned: string[] = [];

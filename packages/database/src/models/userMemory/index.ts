@@ -1,4 +1,5 @@
 export * from './activity';
+export * from './consolidation';
 export * from './context';
 export * from './experience';
 export * from './identity';

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   mergeQueuedFollowUps,
   type QueuedFollowUp,
+  queuedUserMessageId,
   startQueuedFollowUp,
   takeSameSenderFollowUps,
 } from './index';
@@ -32,6 +33,12 @@ vi.mock('@/server/services/redis', () => ({
   redisService: { steerQueue: { boundOperations, drain, restore, settle } },
 }));
 vi.mock('./liveRuns', () => ({ findOwnLiveRuns, isRunAlive }));
+const { findMessageById } = vi.hoisted(() => ({ findMessageById: vi.fn() }));
+vi.mock('@/database/models/message', () => ({
+  MessageModel: class {
+    findById = findMessageById;
+  },
+}));
 vi.mock('../composerRun', () => ({ startComposerRun }));
 vi.mock('@/server/routers/lambda/_helpers/workspaceAgentGuard', () => ({
   assertCanUseWorkspaceAgent,
@@ -154,6 +161,7 @@ describe('startQueuedFollowUp', () => {
     assertCanUseWorkspaceAgent.mockResolvedValue(undefined);
     assertCanUseAgentRunConversation.mockResolvedValue(undefined);
     startComposerRun.mockResolvedValue({ operationId: 'op-2' });
+    findMessageById.mockResolvedValue(undefined);
   });
 
   it('starts the drained follow-ups as their own turn on the same surface', async () => {
@@ -235,6 +243,73 @@ describe('startQueuedFollowUp', () => {
 
     expect(settle).toHaveBeenCalledWith(
       { threadId: null, topicId: 'tpc-1', userId: 'user-1' },
+      expect.any(String),
+      entries.map((e) => e.id),
+    );
+  });
+
+  it('sends a batch under one user message id that every attempt at it shares', async () => {
+    drain.mockResolvedValue([followUp('b', 2, {}), followUp('a', 1, {})]);
+    startComposerRun.mockRejectedValueOnce(new Error('topic busy'));
+
+    await startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }));
+    drain.mockResolvedValue([followUp('a', 1, {}), followUp('b', 2, {})]);
+    await startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }));
+
+    const [first, second] = startComposerRun.mock.calls.map(([, request]) => request);
+    expect(first.clientIds.userMessageId).toMatch(/^msg_[\da-f]{24}$/);
+    expect(second.clientIds.userMessageId).toBe(first.clientIds.userMessageId);
+    // A single follow-up keeps the id its optimistic row was minted under.
+    const single = [followUp('a', 1, { clientIds: { userMessageId: 'msg_client' } })];
+    expect(queuedUserMessageId('user-1', single, mergeQueuedFollowUps(single))).toBe('msg_client');
+  });
+
+  it('acknowledges the follow-ups when the start failed after writing the user message', async () => {
+    // Regression: a start can write the message and still fail (a Task run lost
+    // to a concurrent send is stopped and rejected). Returning the follow-ups
+    // made the next run that ended send the same message again.
+    drain.mockResolvedValue([followUp('a', 1, {}), followUp('b', 2, {})]);
+    startComposerRun.mockImplementation(async (_ctx, request) => {
+      findMessageById.mockImplementation(async (id: string) =>
+        id === request.clientIds.userMessageId ? { id } : undefined,
+      );
+      throw new TRPCError({ code: 'CONFLICT', message: 'Another run is already live' });
+    });
+
+    await expect(startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }))).resolves.toBeUndefined();
+
+    expect(settle).toHaveBeenCalledOnce();
+    expect(settle).toHaveBeenCalledWith(
+      { threadId: null, topicId: 'tpc-1', userId: 'user-1' },
+      expect.any(String),
+    );
+  });
+
+  it('acknowledges a batch an earlier attempt already wrote, without starting it again', async () => {
+    drain.mockResolvedValue([followUp('a', 1, { clientIds: { userMessageId: 'msg_written' } })]);
+    findMessageById.mockImplementation(async (id: string) =>
+      id === 'msg_written' ? { id } : undefined,
+    );
+
+    await expect(startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }))).resolves.toBeUndefined();
+
+    expect(startComposerRun).not.toHaveBeenCalled();
+    expect(settle).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: 'tpc-1' }),
+      expect.any(String),
+    );
+  });
+
+  it('puts the follow-ups back when it cannot tell whether a failed start wrote the message', async () => {
+    const entries = [followUp('a', 1, {})];
+    drain.mockResolvedValue(entries);
+    startComposerRun.mockRejectedValue(new Error('topic busy'));
+    findMessageById.mockRejectedValue(new Error('connection reset'));
+
+    await startQueuedFollowUp(ctx, finished({ topicId: 'tpc-1' }));
+
+    expect(settle).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: 'tpc-1' }),
       expect.any(String),
       entries.map((e) => e.id),
     );

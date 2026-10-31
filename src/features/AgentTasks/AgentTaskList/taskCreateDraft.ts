@@ -5,7 +5,7 @@
  */
 export interface TaskCreateDraft {
   assigneeAgentId?: string;
-  assigneeUserId?: string;
+  assigneeUserId?: string | null;
   execution?: unknown;
   markdown?: string;
   priority?: number;

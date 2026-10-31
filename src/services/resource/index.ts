@@ -41,6 +41,8 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
 
     finishEmbedding: item.finishEmbedding,
 
+    hasChildren: item.hasChildren,
+
     id: item.id,
 
     knowledgeBaseIds: item.knowledgeBaseIds,

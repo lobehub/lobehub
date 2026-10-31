@@ -1,22 +1,20 @@
-import { Accordion, createStaticStyles, Divider, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Accordion, Divider, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const PROCESS_KEY = 'process';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  title: css`
-    min-width: 0;
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-    transition: color 150ms ${cssVar.motionEaseOut};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-}));
+const styles = stylex.create({
+  title: {
+    minWidth: '0',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+    transition: `color 150ms ${cssVar.motionEaseOut}`,
+  },
+});
 
 /**
  * The Accordion's borderless header paints a hover fill that bleeds outward
@@ -58,7 +56,7 @@ const ProcessFold = memo<ProcessFoldProps>(
     const value = useMemo(() => (expanded ? [PROCESS_KEY] : []), [expanded]);
 
     const title = (
-      <Flexbox horizontal align={'center'} className={styles.title} gap={6}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.title).className} gap={6}>
         <Text style={{ color: 'inherit', minWidth: 0 }}>
           {durationText
             ? t('turnProcess.ranFor', { count: stepCount, duration: durationText })

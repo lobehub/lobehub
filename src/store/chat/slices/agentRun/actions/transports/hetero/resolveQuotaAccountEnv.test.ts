@@ -7,9 +7,14 @@ const listAccounts = vi.hoisted(() => vi.fn());
 const listClaudeCodeAccounts = vi.hoisted(() => vi.fn());
 const resolveClaudeCodeAccount = vi.hoisted(() => vi.fn());
 const getClaudeCodeInheritedRoutingEnv = vi.hoisted(() => vi.fn());
+const resolveGatewayDeviceId = vi.hoisted(() => vi.fn());
 
 vi.mock('@/services/agentQuota', () => ({
   agentQuotaService: { listAccounts, selectAccountForAgent },
+}));
+
+vi.mock('@/store/electron', () => ({
+  getElectronStoreState: () => ({ resolveGatewayDeviceId }),
 }));
 
 vi.mock('@/services/electron/heterogeneousAgent', () => ({
@@ -42,6 +47,7 @@ beforeEach(() => {
     .mockResolvedValue([localAccount('ext-default', null), localAccount('ext-1', '/profiles/one')]);
   resolveClaudeCodeAccount.mockReset();
   getClaudeCodeInheritedRoutingEnv.mockReset().mockResolvedValue({});
+  resolveGatewayDeviceId.mockReset().mockResolvedValue(undefined);
 });
 
 describe('resolveQuotaAccountSpawnPlan', () => {
@@ -77,6 +83,63 @@ describe('resolveQuotaAccountSpawnPlan', () => {
 
     // Names the account so the run error says which login is missing.
     await expect(resolveQuotaAccountSpawnPlan('agt-1', 'claude-code')).rejects.toThrow('max@x.com');
+  });
+
+  it('asks for the account chosen on this device', async () => {
+    resolveGatewayDeviceId.mockResolvedValue('device-b');
+    selectAccountForAgent.mockResolvedValue(selection({ pinScope: 'device' }));
+    resolveClaudeCodeAccount.mockResolvedValue({ configDir: '/profiles/one', kind: 'profile' });
+
+    await resolveQuotaAccountSpawnPlan('agt-1', 'claude-code');
+
+    expect(selectAccountForAgent).toHaveBeenCalledWith('agt-1', {
+      deviceId: 'device-b',
+      provider: 'claude-code',
+    });
+  });
+
+  it("fails this device's own pick when its login is gone instead of running another", async () => {
+    resolveGatewayDeviceId.mockResolvedValue('device-b');
+    selectAccountForAgent.mockResolvedValue(
+      selection({ externalAccountId: 'ext-elsewhere', pinScope: 'device' }),
+    );
+    resolveClaudeCodeAccount.mockResolvedValue({ kind: 'missing' });
+    listAccounts.mockResolvedValue([{ email: 'max@x.com', id: 'acc-1', label: null }]);
+
+    await expect(resolveQuotaAccountSpawnPlan('agt-1', 'claude-code')).rejects.toThrow('max@x.com');
+    expect(listClaudeCodeAccounts).not.toHaveBeenCalled();
+  });
+
+  // Regression: an account pinned on device A made every run of the agent on
+  // device B fail with "not signed in on this device".
+  it('re-balances an agent-wide pin made on another device onto the logins here', async () => {
+    resolveGatewayDeviceId.mockResolvedValue('device-b');
+    selectAccountForAgent
+      .mockResolvedValueOnce(selection({ externalAccountId: 'ext-a', pinScope: 'agent' }))
+      .mockResolvedValueOnce(
+        selection({ accountId: 'acc-2', externalAccountId: 'ext-1', reason: 'balanced' }),
+      );
+    resolveClaudeCodeAccount.mockResolvedValue({ kind: 'missing' });
+
+    const plan = await resolveQuotaAccountSpawnPlan('agt-1', 'claude-code');
+
+    expect(selectAccountForAgent).toHaveBeenLastCalledWith('agt-1', {
+      deviceId: 'device-b',
+      provider: 'claude-code',
+      runnableExternalAccountIds: ['ext-default', 'ext-1'],
+    });
+    expect(plan).toMatchObject({ accountId: 'acc-2', env: { CLAUDE_CONFIG_DIR: '/profiles/one' } });
+  });
+
+  it('runs on the default login when a pin from another device leaves nothing runnable here', async () => {
+    selectAccountForAgent
+      .mockResolvedValueOnce(selection({ externalAccountId: 'ext-a', pinScope: 'agent' }))
+      .mockResolvedValueOnce(null);
+    resolveClaudeCodeAccount.mockResolvedValue({ kind: 'missing' });
+
+    await expect(resolveQuotaAccountSpawnPlan('agt-1', 'claude-code')).resolves.toEqual({
+      env: {},
+    });
   });
 
   it('re-balances Auto mode onto the accounts signed in here', async () => {
