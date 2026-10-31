@@ -1,90 +1,50 @@
+import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
+import { type SidebarAgentItem } from '@lobechat/types';
 import { createStaticStyles } from '@lobehub/ui';
-import { memo } from 'react';
 import LazyLoad from 'react-lazy-load';
-import { Link } from 'react-router';
 
-import { AGENT_CHAT_URL } from '@/const/index';
-import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
-import { useAnalytics } from '@/libs/analytics/client';
-import { useServerConfigStore } from '@/store/serverConfig';
-import { getSessionStoreState, useSessionStore } from '@/store/session';
-import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
-import { getUserStoreState } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
-import { type LobeSessions } from '@/types/session';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import SkeletonList from '../../SkeletonList';
+import { useListNavigation } from '../useListNavigation';
 import AddButton from './AddButton';
-import SessionItem from './Item';
+import AgentItem from './Item';
 
 const styles = createStaticStyles(
   ({ css }) => css`
     min-height: 70px;
   `,
 );
-interface SessionListProps {
-  dataSource?: LobeSessions;
-  groupId?: string;
+
+interface AgentListProps {
+  dataSource: SidebarAgentItem[];
+  groupId?: string | null;
   showAddButton?: boolean;
+  visibility?: 'private' | 'public';
 }
-const SessionList = memo<SessionListProps>(({ dataSource, groupId, showAddButton = true }) => {
-  const { analytics } = useAnalytics();
+const AgentList = ({ dataSource, groupId, visibility, showAddButton = true }: AgentListProps) => {
+  const onNavigate = useListNavigation('list');
+  const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+  if (!isInit) return <SkeletonList />;
+  return dataSource.length
+    ? dataSource.map((item) => {
+        const categoryId = groupId === undefined ? (item.groupId ?? null) : groupId;
+        return (
+          <LazyLoad className={styles} key={item.id}>
+            <WorkspaceLink
+              aria-label={item.id}
+              key={item.id}
+              to={item.type === 'group' ? GROUP_CHAT_URL(item.id) : AGENT_CHAT_URL(item.id, true)}
+              onClick={(event) => onNavigate(event, item, categoryId)}
+            >
+              <AgentItem groupId={categoryId} item={item} />
+            </WorkspaceLink>
+          </LazyLoad>
+        );
+      })
+    : showAddButton && <AddButton groupId={groupId ?? undefined} visibility={visibility} />;
+};
 
-  const isInit = useSessionStore(sessionSelectors.isSessionListInit);
-  const mobile = useServerConfigStore((s) => s.isMobile);
-
-  const navigateToAgent = useNavigateToAgent();
-
-  const isEmpty = !dataSource || dataSource.length === 0;
-  return !isInit ? (
-    <SkeletonList />
-  ) : !isEmpty ? (
-    dataSource.map(({ id, ...res }) => (
-      <LazyLoad className={styles} key={id}>
-        <Link
-          aria-label={id}
-          to={AGENT_CHAT_URL((res as any).config?.id, mobile)}
-          onClick={(e) => {
-            e.preventDefault();
-            navigateToAgent((res as any).config?.id);
-
-            // Enhanced analytics tracking
-            if (analytics) {
-              const userStore = getUserStoreState();
-              const sessionStore = getSessionStoreState();
-
-              const userId = userProfileSelectors.userId(userStore);
-              const session = sessionSelectors.getSessionById(id)(sessionStore);
-
-              if (session) {
-                const sessionGroupId = session.group || 'default';
-                const group = sessionGroupSelectors.getGroupById(sessionGroupId)(sessionStore);
-                const groupName =
-                  group?.name || (sessionGroupId === 'default' ? 'Default' : 'Unknown');
-
-                analytics?.track({
-                  name: 'switch_session',
-                  properties: {
-                    assistant_name: session.meta?.title || 'Untitled Agent',
-                    assistant_tags: session.meta?.tags || [],
-                    group_id: sessionGroupId,
-                    group_name: groupName,
-                    session_id: id,
-                    spm: 'homepage.chat.session_list_item.click',
-                    user_id: userId || 'anonymous',
-                  },
-                });
-              }
-            }
-          }}
-        >
-          <SessionItem id={id} />
-        </Link>
-      </LazyLoad>
-    ))
-  ) : (
-    showAddButton && <AddButton groupId={groupId} />
-  );
-});
-
-export default SessionList;
+export default AgentList;

@@ -365,3 +365,17 @@ it('records where the delivery is deployed for preview review', async () => {
     url: 'https://pr-12.example.com/',
   });
 });
+
+it('includes video time for the root and its replies in actionable feedback', async () => {
+  listComments.mockResolvedValue({
+    items: [
+      comment('video-root', { time: { start: 1.25 } }),
+      comment('video-reply', { parentCommentId: 'video-root', evidenceId: null, rect: null }),
+    ],
+  });
+  const result = await feedback('--json');
+  const video = result.entries.filter((item: { kind: string }) => item.kind === 'comment');
+  expect(video).toHaveLength(2);
+  expect(video[0].annotations[0].time).toEqual({ start: 1.25 });
+  expect(video[1].annotations[0].time).toEqual({ start: 1.25 });
+});

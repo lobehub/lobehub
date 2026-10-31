@@ -12,7 +12,12 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   liveCandidates: vi.fn(),
   remove: vi.fn(),
+  resolveAgentSender: vi.fn(),
   snapshot: vi.fn(),
+}));
+
+vi.mock('@/server/services/aiAgent/agentSenderResolver', () => ({
+  resolveAgentSender: mocks.resolveAgentSender,
 }));
 
 vi.mock('@/database/models/topic', () => ({
@@ -141,6 +146,45 @@ describe('agentSteerQueueRouter.append', () => {
     expect(entry.request.streamFeatures).toBeUndefined();
   });
 
+  it('stores the sending agent, resolved while its run can still vouch for it', async () => {
+    const sender = { agentId: 'agt-writer', hop: 2, topicId: 'tpc-writer' };
+    mocks.resolveAgentSender.mockResolvedValue(sender);
+
+    await caller().append({
+      ...appendInput,
+      request: { ...appendInput.request, sourceOperationId: 'op-writer' },
+    });
+
+    expect(mocks.resolveAgentSender).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1' }),
+      { destinationAgentId: 'agt-1', sourceOperationId: 'op-writer' },
+    );
+    const [, entry] = mocks.append.mock.calls[0];
+    expect(entry.agentSender).toEqual(sender);
+    // The follow-up usually starts after the sending run settled: only the
+    // resolved sender is kept, never the operation id.
+    expect(entry.request).not.toHaveProperty('sourceOperationId');
+  });
+
+  it('refuses an agent send past the relay bound, queueing nothing', async () => {
+    mocks.resolveAgentSender.mockResolvedValue({ agentId: 'agt-writer', hop: 6 });
+
+    await expect(
+      caller().append({
+        ...appendInput,
+        request: { ...appendInput.request, sourceOperationId: 'op-writer' },
+      }),
+    ).rejects.toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+    expect(mocks.append).not.toHaveBeenCalled();
+  });
+
+  it('resolves no sender for a person’s follow-up', async () => {
+    await caller().append(appendInput);
+
+    expect(mocks.resolveAgentSender).not.toHaveBeenCalled();
+    expect(mocks.append.mock.calls[0][1].agentSender).toBeUndefined();
+  });
+
   it('keeps the composer state it was sent from, up to a cap', async () => {
     const editorData = { root: { children: [], type: 'root' } };
     await caller().append({ ...appendInput, composer: { editorData } });
@@ -168,6 +212,19 @@ describe('agentSteerQueueRouter.append', () => {
       editorData: undefined,
       filesPreview,
     });
+  });
+
+  it('stores a follow-up sent in the old shape with its selections as attached content', async () => {
+    const quote = { content: 'Quoted reply', id: 'selection-1', source: 'text' as const };
+
+    await caller().append({
+      ...appendInput,
+      request: { ...appendInput.request, contextSelections: [quote] },
+    });
+
+    const [, entry] = mocks.append.mock.calls[0];
+    expect(entry.request.userMessage).toEqual({ metadata: { contextSelections: [quote] } });
+    expect(entry.request).not.toHaveProperty('contextSelections');
   });
 
   it('tells the client to send directly when no run is live', async () => {
@@ -205,14 +262,28 @@ describe('agentSteerQueueRouter.append', () => {
     });
   });
 
-  it('refuses to guess between two live runs on the same surface', async () => {
-    mocks.liveCandidates.mockReturnValue([{ id: 'op-1' }, { id: 'op-2' }]);
+  // ROOT CAUSE:
+  //
+  // A run whose answer is done keeps its row `running` until its last step
+  // commits, which took minutes. A follow-up typed behind the next run then saw
+  // two live runs and was refused as ambiguous: the client kept it locally, the
+  // run handed its turn back without answering, and the follow-up waited for
+  // both runs to end.
+  //
+  // Before: two live runs refused the follow-up.
+  // After: it queues behind the newest run, the one the user is looking at.
+  it('queues behind the newest run while an older one still reads as live', async () => {
+    mocks.liveCandidates.mockReturnValue([{ id: 'op-new' }, { id: 'op-old' }]);
 
-    await expect(caller().append(appendInput)).resolves.toEqual({
-      queued: false,
-      reason: 'ambiguous',
+    await expect(caller().append(appendInput)).resolves.toMatchObject({
+      queued: true,
+      state: 'queued',
     });
-    expect(mocks.append).not.toHaveBeenCalled();
+    expect(mocks.append).toHaveBeenCalledWith(
+      { threadId: null, topicId: 'tpc-1', userId: 'user-1' },
+      expect.objectContaining({ id: 'q-1' }),
+      'op-new',
+    );
   });
 
   it('answers neither queued nor send-directly when the write outcome is unknown', async () => {

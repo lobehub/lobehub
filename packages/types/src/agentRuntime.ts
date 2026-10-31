@@ -74,6 +74,8 @@ export enum RequestTrigger {
   TopicTitle = 'topic_title',
   /** Translation of a chat message or a generation prompt, including language detection. */
   Translate = 'translate',
+  /** Text-to-speech synthesis, e.g. `lh generate tts`. */
+  Tts = 'tts',
   /** Acceptance verification: plan generation, judging, review prediction and reports. */
   Verify = 'verify',
   Video = 'video',

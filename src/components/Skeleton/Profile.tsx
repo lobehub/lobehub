@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
@@ -13,36 +15,43 @@ interface ProfileSkeletonProps extends RouteSkeletonProps {
   variant?: ProfileSkeletonVariant;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  configPanel: css`
-    padding: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  cover: css`
-    width: calc(100% + 32px);
-    height: 80px;
-    margin-inline: -16px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  divider: css`
-    width: 100%;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  editor: css`
-    padding-block: 24px 96px;
-  `,
-  header: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  configPanel: {
+    padding: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  cover: {
+    width: 'calc(100% + 32px)',
+    height: '80px',
+    marginInline: '-16px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  divider: {
+    width: '100%',
+    height: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  editor: { paddingBlockStart: '24px', paddingBlockEnd: '96px' },
+  header: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
-const NavigationSkeleton = () => <Flexbox className={styles.header} flex={'none'} height={44} />;
+const NavigationSkeleton = () => (
+  <Flexbox className={stylex.props(styles.header).className} flex={'none'} height={44} />
+);
 
 const EditorPlaceholder = () => (
-  <Flexbox className={styles.editor} gap={14}>
+  <Flexbox className={stylex.props(styles.editor).className} gap={14}>
     <SkeletonBar height={18} width={120} />
     <SkeletonBar height={14} width={'92%'} />
     <SkeletonBar height={14} width={'84%'} />
@@ -54,7 +63,7 @@ const AgentProfileSkeleton = () => (
   <WideScreenContainer>
     <Flexbox style={{ marginBottom: 28 }}>
       <Flexbox paddingBlock={'0 16px'} style={{ marginInline: -16 }}>
-        <div className={styles.cover} />
+        <div {...stylex.props(styles.cover)} />
         <Flexbox
           horizontal
           align={'flex-end'}
@@ -69,7 +78,7 @@ const AgentProfileSkeleton = () => (
           </Flexbox>
         </Flexbox>
       </Flexbox>
-      <Flexbox className={styles.configPanel} gap={14}>
+      <Flexbox className={stylex.props(styles.configPanel).className} gap={14}>
         <Flexbox horizontal align={'center'} justify={'space-between'}>
           <SkeletonBar height={12} width={96} />
           <SkeletonBar height={12} width={72} />
@@ -97,7 +106,7 @@ const GroupProfileSkeleton = () => (
       <SkeletonBar height={32} width={132} />
       <SkeletonBar height={32} width={96} />
     </Flexbox>
-    <div className={styles.divider} />
+    <div {...stylex.props(styles.divider)} />
     <EditorPlaceholder />
   </WideScreenContainer>
 );

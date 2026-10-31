@@ -10,6 +10,7 @@ import type { OidcClientMetadata, OidcInteractionDetailsResponse } from '@/types
 import OAuthApplicationLogo from '../OAuthApplicationLogo';
 import ThirdPartyNotice from '../ThirdPartyNotice';
 import BuiltinConsent from './BuiltinConsent';
+import ReviewTarget from './ReviewTarget';
 
 interface ClientProps {
   acceptanceReview?: OidcInteractionDetailsResponse['acceptanceReview'];
@@ -23,11 +24,13 @@ interface ClientProps {
 /**
  * Get the description for a scope
  */
-function getScopeDescription(scope: string, t: any): string {
+function getScopeDescription(scope: string, t: any, reviewKind?: 'acceptance' | 'site'): string {
+  if (scope === 'acceptance:review' && reviewKind === 'site')
+    return t('consent.scope.acceptance-review-site');
   return t(`consent.scope.${scope.replace(':', '-')}`, scope);
 }
 
-const BUILTIN_CLIENTS = new Set(['lobehub-desktop', 'lobehub-mobile', 'lobehub-market']);
+const BUILTIN_CLIENTS = new Set(['lobehub-desktop', 'lobehub-mobile', 'lobehub-market', 'toby']);
 
 const ConsentClient = memo<ClientProps>(
   ({ acceptanceReview, uid, clientId, scopes, clientMetadata }) => {
@@ -96,22 +99,14 @@ const ConsentClient = memo<ClientProps>(
               />
             </Flexbox>
           )}
-          {acceptanceReview && (
-            <Block padding={16} style={{ marginBottom: 16 }} variant={'outlined'}>
-              <Text type={reviewDenied ? 'danger' : undefined} weight={500}>
-                {reviewDenied
-                  ? t('consent.acceptanceReview.denied')
-                  : t('consent.acceptanceReview.target', { title: acceptanceReview.title ?? '' })}
-              </Text>
-            </Block>
-          )}
+          {acceptanceReview && <ReviewTarget review={acceptanceReview} />}
           <Text fontSize={16} type={'secondary'}>
             {t('consent.permissionsTitle')}
           </Text>
           <Flexbox gap={4} style={{ marginTop: 8 }} width={'100%'}>
             {scopes.map((scope) => (
               <Block key={scope} padding={16} variant={'filled'}>
-                <Text>{getScopeDescription(scope, t)}</Text>
+                <Text>{getScopeDescription(scope, t, acceptanceReview?.kind)}</Text>
               </Block>
             ))}
           </Flexbox>

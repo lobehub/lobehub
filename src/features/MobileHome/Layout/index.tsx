@@ -1,18 +1,14 @@
-import { type FC } from 'react';
 import { Outlet } from 'react-router';
 
-import MobileLayout from '@/features/MobileHome/Layout/MobileLayout';
-import SessionHydration from '@/features/MobileHome/Layout/SessionHydration';
+import { AgentSearchProvider } from './AgentSearchContext';
+import MobileLayout from './MobileLayout';
 
-const Layout: FC = () => {
-  return (
-    <>
-      <MobileLayout>
-        <Outlet />
-      </MobileLayout>
-      <SessionHydration />
-    </>
-  );
-};
+const Layout = () => (
+  <AgentSearchProvider>
+    <MobileLayout>
+      <Outlet />
+    </MobileLayout>
+  </AgentSearchProvider>
+);
 
 export default Layout;

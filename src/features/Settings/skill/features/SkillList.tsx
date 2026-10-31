@@ -8,10 +8,11 @@ import {
   resolveConnectorCatalogItem,
 } from '@lobechat/const';
 import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
-import { Center, Empty } from '@lobehub/ui';
-import { SkillsIcon } from '@lobehub/ui/icons';
+import { Center, cx, Empty } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+
+import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import type React from 'react';
@@ -41,23 +42,9 @@ import ComposioSkillItem from './ComposioSkillItem';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
 import type { ToolDetailType } from './SkillDetail';
+import { useSkillListVariant } from './SkillListRow';
 
-const styles = stylex.create({
-  container: { display: 'flex', flexDirection: 'column', gap: '2px' },
-  sectionHeader: {
-    cursor: 'pointer',
-    userSelect: 'none',
-    display: 'flex',
-    gap: '4px',
-    alignItems: 'center',
-    paddingBlockStart: '12px',
-    paddingBlockEnd: '4px',
-    paddingInline: '4px',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
-  },
-});
+const styles = stylex.create({ container: { display: "flex", flexDirection: "column", gap: "2px" }, description: { marginBlockEnd: "8px", color: cssVar.colorTextSecondary }, empty: { padding: "24px", color: cssVar.colorTextTertiary, textAlign: "center" }, sectionHeader: { cursor: "pointer", userSelect: "none", display: "flex", gap: "4px", alignItems: "center", paddingBlockStart: "12px", paddingBlockEnd: "4px", paddingInline: "4px", fontSize: "12px", fontWeight: 500, color: { default: cssVar.colorTextSecondary, ":hover": cssVar.colorText } }, sectionHeaderPage: { gap: "8px", paddingBlockStart: "24px", paddingBlockEnd: "8px", paddingInline: "12px", fontSize: "13px", fontWeight: 600 }, sectionCount: { fontWeight: 400, color: cssVar.colorTextDescription } });
 
 export type SkillViewMode = 'connector' | 'skill';
 
@@ -72,6 +59,7 @@ const SkillList = memo<SkillListProps>(
   ({ onSelect, onDeleteSelected, selectedIdentifier, viewMode = 'connector' }) => {
     const { t } = useTranslation('setting');
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+    const isPage = useSkillListVariant() === 'page';
 
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
     const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
@@ -399,8 +387,25 @@ const SkillList = memo<SkillListProps>(
       });
     };
 
-    const renderSection = (key: string, label: string, children: React.ReactNode) => {
+    const renderSection = (
+      key: string,
+      label: string,
+      children: React.ReactNode,
+      count?: number,
+    ) => {
       const isCollapsed = collapsed.has(key);
+      // The page list is short enough to scan whole, so its groups are plain
+      // headings with a count instead of collapsible sidebar sections.
+      if (isPage)
+        return (
+          <>
+            <div {...stylex.props(styles.sectionHeader, styles.sectionHeaderPage)}>
+              {label}
+              {count !== undefined && <span {...stylex.props(styles.sectionCount)}>{count}</span>}
+            </div>
+            {children}
+          </>
+        );
       return (
         <>
           <div {...stylex.props(styles.sectionHeader)} onClick={() => toggleSection(key)}>
@@ -444,6 +449,7 @@ const SkillList = memo<SkillListProps>(
               return (
                 <BuiltinSkillItem
                   avatar={item.builtinTool.avatar}
+                  description={item.builtinTool.description}
                   identifier={item.builtinTool.identifier}
                   isSelected={selectedIdentifier === item.builtinTool.identifier}
                   key={item.builtinTool.identifier}
@@ -454,6 +460,7 @@ const SkillList = memo<SkillListProps>(
                 />
               );
             }),
+            builtinToolItems.length,
           )}
 
         {hasBuiltinSkills &&
@@ -510,6 +517,7 @@ const SkillList = memo<SkillListProps>(
                 />
               );
             }),
+            communitySkillItems.length,
           )}
 
         {/* Skill view: community agent skills only (OAuth connectors are in the Connectors view) */}
@@ -525,6 +533,7 @@ const SkillList = memo<SkillListProps>(
             'communityTools',
             t('skillGroup.communityTools', 'Community Tools'),
             renderCommunityMCPs(),
+            communityMCPs.length,
           )}
 
         {hasCustomConnectors &&
@@ -535,6 +544,7 @@ const SkillList = memo<SkillListProps>(
               {renderCustomConnectors()}
               {renderCustomMCPs()}
             </>,
+            customConnectors.length + customMCPs.length,
           )}
 
         {hasAgentConnectors &&
@@ -549,6 +559,7 @@ const SkillList = memo<SkillListProps>(
                 onSelect={onSelect ? () => onSelect(c.id, 'agent-connector') : undefined}
               />
             )),
+            agentBoundConnectors.length,
           )}
 
         {hasCustomSkills &&

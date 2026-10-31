@@ -1,7 +1,9 @@
 'use client';
 
 import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router';
@@ -13,11 +15,9 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 import PopupTitleBar from './TitleBar';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  container: { backgroundColor: cssVar.colorBgContainer, backgroundImage: 'none' },
+});
 
 const PopupLayout: FC = () => {
   const topicTitle = useChatStore((s) => topicSelectors.currentActiveTopic(s)?.title);
@@ -29,7 +29,7 @@ const PopupLayout: FC = () => {
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
       <Flexbox
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         height={'100%'}
         style={{ overflow: 'hidden' }}
         width={'100%'}

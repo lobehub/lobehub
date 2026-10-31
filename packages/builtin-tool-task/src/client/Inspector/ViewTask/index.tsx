@@ -30,7 +30,7 @@ export const ViewTaskInspector = memo<BuiltinInspectorProps<ViewTaskParams, View
   ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
     const { t } = useTranslation('plugin');
 
-    const identifier = args?.identifier || partialArgs?.identifier || pluginState?.identifier;
+    const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
 
     return (
       <div className={inspectorTextStyles.root}>

@@ -75,6 +75,11 @@ export interface TaskRunTarget {
   /** Where the run lands: the task's pin if it has one, else the agent's own target. */
   effectiveTarget: DeviceExecutionTarget;
   /**
+   * The machine the assignee agent's own target lands on, when it names one. The
+   * "follow the agent" state starts from it, and the device list marks it.
+   */
+  inheritedDeviceId?: string;
+  /**
    * The directory the run will start in when the task does not choose one,
    * resolved through the same chain the runtime uses. Shown as the greyed hint
    * so inheritance is legible instead of a black box.
@@ -188,13 +193,13 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   // dead "Follow agent" hint, although the run starts in a path on a machine.
   // Picking a directory then pins this machine (`applyTaskDirectorySelection`),
   // so the run is routed to where the path exists.
-  const deviceId = pinApplies
-    ? pinnedDeviceId
-    : inheritedTarget === 'device'
+  const inheritedDeviceId =
+    inheritedTarget === 'device'
       ? agencyConfig?.boundDeviceId
       : inheritedTarget === 'local'
         ? localDeviceId
         : undefined;
+  const deviceId = pinApplies ? pinnedDeviceId : inheritedDeviceId;
 
   // From the device list this hook already fetched, not the device store,
   // which a task page may never populate.
@@ -263,6 +268,7 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
     devicesFailed,
     directoryKind,
     effectiveTarget,
+    inheritedDeviceId,
     inheritedDirectory,
     inheritedLabel,
     inheritedTarget,

@@ -147,12 +147,7 @@ export const transformSource = (source: string, fileName = 'file.tsx'): Transfor
         const converted = convertCss({ expressions, quasis }, names);
         usesCssVar ||= converted.usesCssVar;
         usesMedia ||= converted.usesMedia;
-        const commentRanges = ts.getLeadingCommentRanges(source, prop.getFullStart()) ?? [];
-        const leadingComments =
-          commentRanges.length > 0
-            ? `\n${commentRanges.map(({ end, pos }) => source.slice(pos, end)).join('\n')}\n`
-            : '';
-        entries.push(`${leadingComments}${text(prop.name)}: ${converted.code}`);
+        entries.push(`${text(prop.name)}: ${converted.code}`);
       }
       replace(init, `stylex.create({ ${entries.join(', ')} })`);
     }

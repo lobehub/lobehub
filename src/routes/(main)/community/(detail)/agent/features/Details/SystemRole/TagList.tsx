@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Tag } from '@lobehub/ui';
+import { Flexbox, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import qs from 'query-string';
 import { memo } from 'react';
 
@@ -8,17 +10,14 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
 import { type AssistantMarketSource } from '@/types/discover';
 
-const styles = createStaticStyles(({ cssVar, css }) => {
-  return {
-    tag: css`
-      margin: 0;
-      padding-block: 4px;
-      padding-inline: 12px;
-      border-radius: 16px;
-
-      color: ${cssVar.colorTextSecondary};
-    `,
-  };
+const styles = stylex.create({
+  tag: {
+    margin: '0',
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderRadius: '16px',
+    color: cssVar.colorTextSecondary,
+  },
 });
 
 const TagList = memo<{ tags: string[] }>(({ tags }) => {
@@ -42,7 +41,7 @@ const TagList = memo<{ tags: string[] }>(({ tags }) => {
               { skipNull: true },
             )}
           >
-            <Tag className={styles.tag}>{tag}</Tag>
+            <Tag className={stylex.props(styles.tag).className}>{tag}</Tag>
           </WorkspaceLink>
         ))}
       </Flexbox>

@@ -140,7 +140,11 @@ describe('public response field projections', () => {
       ],
     );
 
-    expect(Object.keys(projected).sort()).toEqual([...PUBLIC_CHAT_GROUP_FIELDS, 'members'].sort());
+    expect(Object.keys(projected).sort()).toEqual(
+      [...PUBLIC_CHAT_GROUP_FIELDS, 'members', 'personal'].sort(),
+    );
+    expect(projected.personal).toBe(false);
+    expect(projected).not.toHaveProperty('config');
     expect(projected.members).toEqual([
       { agentId: 'agt-1', enabled: true, order: 0, role: 'participant' },
     ]);

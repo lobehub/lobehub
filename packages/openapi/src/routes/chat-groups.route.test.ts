@@ -85,12 +85,18 @@ describe('POST /chat-groups', () => {
         'description',
         'id',
         'members',
+        'personal',
         'pinned',
         'title',
         'updatedAt',
       ].sort(),
     );
-    expect(group).toMatchObject({ avatar: '🤖', backgroundColor: '#000', title: 'Toby crew' });
+    expect(group).toMatchObject({
+      avatar: '🤖',
+      backgroundColor: '#000',
+      personal: false,
+      title: 'Toby crew',
+    });
 
     const [supervisor, ...members] = group.members;
     expect(supervisor).toMatchObject({ order: -1, role: 'supervisor' });
@@ -277,5 +283,65 @@ describe('DELETE /chat-groups/:id', () => {
 
   it('returns 404 for an unknown group', async () => {
     expect((await request('/missing', { method: 'DELETE' })).status).toBe(404);
+  });
+});
+
+describe('personal chat groups', () => {
+  it('creates a personal group and stores the flag in config', async () => {
+    const group = await createGroup({
+      members: [{ agentId: 'agt_a' }],
+      personal: true,
+      title: 'Personal',
+    });
+
+    expect(group.personal).toBe(true);
+    const [row] = await db.select().from(chatGroups).where(eq(chatGroups.id, group.id));
+    expect(row.config).toEqual({ personal: true });
+  });
+
+  it('filters the list by personal', async () => {
+    const personal = await createGroup({
+      members: [{ agentId: 'agt_a' }],
+      personal: true,
+      title: 'Personal',
+    });
+    const other = await createGroup({ members: [{ agentId: 'agt_b' }], title: 'Other' });
+
+    const ids = async (query: string) =>
+      (await json(await request(`/${query}`))).chatGroups.map((group: { id: string }) => group.id);
+
+    expect(await ids('?personal=true')).toEqual([personal.id]);
+    expect(await ids('?personal=false')).toEqual([other.id]);
+    expect((await ids('')).sort()).toEqual([personal.id, other.id].sort());
+
+    const page = await json(await request('/?personal=true&pageSize=1'));
+    expect(page.total).toBe(1);
+  });
+
+  it('rejects a personal filter that is not a boolean', async () => {
+    expect((await request('/?personal=yes')).status).toBe(400);
+  });
+
+  it('toggles the flag without dropping the rest of config', async () => {
+    const group = await createGroup({ members: [{ agentId: 'agt_a' }], title: 'Crew' });
+    await db
+      .update(chatGroups)
+      .set({ config: { allowDM: true, systemPrompt: 'keep me' } })
+      .where(eq(chatGroups.id, group.id));
+
+    const res = await request(`/${group.id}`, {
+      body: { personal: true, title: 'Renamed' },
+      method: 'PATCH',
+    });
+
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({ personal: true, title: 'Renamed' });
+    const [row] = await db.select().from(chatGroups).where(eq(chatGroups.id, group.id));
+    expect(row.config).toEqual({ allowDM: true, personal: true, systemPrompt: 'keep me' });
+
+    const cleared = await json(
+      await request(`/${group.id}`, { body: { personal: false }, method: 'PATCH' }),
+    );
+    expect(cleared.personal).toBe(false);
   });
 });

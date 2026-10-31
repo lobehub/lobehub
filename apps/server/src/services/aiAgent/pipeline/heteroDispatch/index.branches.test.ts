@@ -1,4 +1,6 @@
 import { HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR } from '@lobechat/heterogeneous-agents';
+import { CHANNEL_INSTRUCTIONS } from '@lobechat/prompts';
+import { ChatErrorType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -15,10 +17,13 @@ const mocks = vi.hoisted(() => ({
   dispatchAgentRun: vi.fn(),
   executeToolCall: vi.fn(),
   finalizeHeteroDispatchError: vi.fn(),
+  planDeviceRouting: vi.fn(),
   publishAgentRuntimeInit: vi.fn(),
+  readDeviceSystemInfo: vi.fn(),
   recordStart: vi.fn(),
   resolveDeviceDispatchAuthorizationFailure: vi.fn(),
   resolveSandboxSessionConfig: vi.fn(),
+  scheduleTimedOutDispatchConfirmation: vi.fn(),
   selectCodexDeviceDispatch: vi.fn(),
   signHeteroOperationJWT: vi.fn(),
   signUserJWT: vi.fn(),
@@ -56,11 +61,20 @@ vi.mock('@/server/modules/AgentRuntime/factory', () => ({
   createStreamEventManager: () => ({ publishAgentRuntimeInit: mocks.publishAgentRuntimeInit }),
 }));
 
+vi.mock('@/server/services/agentQuota', () => ({
+  AgentQuotaService: vi.fn(function () {
+    return {
+      planDeviceRouting: mocks.planDeviceRouting,
+      resolveDeviceRowId: async (id?: string) => (id ? `row-${id}` : undefined),
+    };
+  }),
+}));
+
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mocks.dispatchAgentRun,
     executeToolCall: mocks.executeToolCall,
-    readDeviceSystemInfo: vi.fn(),
+    readDeviceSystemInfo: mocks.readDeviceSystemInfo,
   },
 }));
 
@@ -87,6 +101,10 @@ vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
 
 vi.mock('../finalizeHeteroDispatchError', () => ({
   finalizeHeteroDispatchError: mocks.finalizeHeteroDispatchError,
+}));
+
+vi.mock('./timeoutConfirmation', () => ({
+  scheduleTimedOutDispatchConfirmation: mocks.scheduleTimedOutDispatchConfirmation,
 }));
 
 vi.mock('../codexDeviceRuntime', () => ({
@@ -180,10 +198,37 @@ beforeEach(() => {
   mocks.resolveSandboxSessionConfig.mockResolvedValue(undefined);
   mocks.selectCodexDeviceDispatch.mockResolvedValue({ kind: 'exec' });
   mocks.dispatchAgentRun.mockResolvedValue({ success: true });
+  mocks.planDeviceRouting.mockResolvedValue(null);
   mocks.executeToolCall.mockResolvedValue({ success: true });
   mocks.spawnHeteroSandbox.mockResolvedValue(undefined);
   mocks.publishAgentRuntimeInit.mockResolvedValue('init');
   mocks.createOperationMetadata.mockResolvedValue(undefined);
+});
+
+describe('Channel history context', () => {
+  it.each([true, false])(
+    'passes complete Channel instructions only for a reserved Channel run (%s)',
+    async (channel) => {
+      const { deps } = createDeps();
+      const result = await dispatchHeteroAgent(
+        deps,
+        createCtx(
+          {
+            boundDeviceId: 'dev-1',
+            executionTarget: 'device',
+            heterogeneousProvider: { type: 'claude-code' },
+          },
+          { trigger: channel ? 'channel' : 'user' },
+        ),
+        createInput('claude-code', channel ? { reservedOperationId: 'op-channel' } : {}),
+      );
+      expect(result.success).toBe(true);
+      const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
+      expect((dispatched.systemContext ?? '').includes(CHANNEL_INSTRUCTIONS)).toBe(channel);
+      const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+      expect(signed.capabilities.includes('channel:read')).toBe(channel);
+    },
+  );
 });
 
 describe('dispatchHeteroAgent — preparation failures', () => {
@@ -491,6 +536,136 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
       heteroType: 'claude-code',
     });
     expect(result).toMatchObject({ status: 'created', success: true, token: 'user-jwt' });
+  });
+
+  it('sends the Claude Code account the agent is routed to', async () => {
+    // Without it the device always spawned on its default login, so picking an
+    // account in Manage accounts changed nothing for a device-bound agent.
+    const routing = { candidates: [{ externalAccountId: 'acc-1' }], mode: 'pinned' };
+    mocks.planDeviceRouting.mockResolvedValueOnce(routing);
+    const { deps } = createDeps();
+    const deviceCtx = {
+      boundDeviceId: 'dev-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'claude-code' },
+    };
+
+    await dispatchHeteroAgent(deps, createCtx(deviceCtx), createInput('claude-code'));
+
+    // The routing is asked for this device, so its own account choice applies.
+    expect(mocks.planDeviceRouting).toHaveBeenCalledWith('agent-1', {
+      deviceId: 'row-dev-1',
+      provider: 'claude-code',
+    });
+    expect(mocks.dispatchAgentRun.mock.calls[0][0].claudeAccountRouting).toEqual(routing);
+  });
+
+  it('dispatches without account routing when the agent env picks the login or routing fails', async () => {
+    const { deps } = createDeps();
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code', {
+        heterogeneousProvider: { env: { ANTHROPIC_API_KEY: 'sk' }, type: 'claude-code' },
+      }),
+    );
+    expect(mocks.planDeviceRouting).not.toHaveBeenCalled();
+
+    mocks.planDeviceRouting.mockRejectedValueOnce(new Error('db down'));
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(2);
+    for (const [params] of mocks.dispatchAgentRun.mock.calls)
+      expect(params).not.toHaveProperty('claudeAccountRouting');
+  });
+
+  it('spawns in the source repo and names the active worktree in the context', async () => {
+    // The agent created this worktree last turn and may have removed it since:
+    // spawning in it failed every later turn with working_directory_not_found.
+    const workingDirectoryConfig = {
+      git: { activeWorktree: '/repo-wt-21058' },
+      path: '/repo',
+      repoType: 'github' as const,
+    };
+    const { deps, topicModel } = createDeps();
+    topicModel.findById.mockResolvedValue({
+      metadata: { boundDeviceId: 'dev-1', workingDirectory: '/repo', workingDirectoryConfig },
+    });
+
+    await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
+    expect(dispatched.cwd).toBe('/repo');
+    expect(dispatched.systemContext).toContain('/repo-wt-21058');
+    // The worktree stays on the topic as the selected one; only the spawn cwd moved.
+    expect(deps.bindTopicWorkingDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ config: workingDirectoryConfig }),
+    );
+  });
+
+  it('keeps a timed-out dispatch alive and settles it later as a device timeout', async () => {
+    // Whether the run started is unknowable after a timeout: the device may
+    // have received it before the ack was lost, and its CLI may already be
+    // starting. Failing it now would refuse that CLI's first batch as
+    // `operation-not-running`; asking the device now must not decide it either.
+    const raw = JSON.stringify({ error: 'TIMEOUT', success: false, timeSinceHeartbeatMs: 70_000 });
+    mocks.dispatchAgentRun.mockResolvedValueOnce({ error: raw, success: false });
+    mocks.readDeviceSystemInfo.mockResolvedValue({ ok: false, reason: 'DEVICE_OFFLINE' });
+    const { deps, topicModel } = createDeps();
+
+    const result = await dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+
+    expect(mocks.finalizeHeteroDispatchError).not.toHaveBeenCalled();
+    expect(mocks.scheduleTimedOutDispatchConfirmation).toHaveBeenCalledWith(
+      deps,
+      expect.objectContaining({ operationId: result.operationId }),
+      {
+        dispatchedAt: expect.any(Date),
+        finalize: expect.objectContaining({
+          detail: raw,
+          errorType: ChatErrorType.DeviceResponseTimeout,
+          message: humanizeHeteroDispatchError('DEVICE_RESPONSE_TIMEOUT'),
+        }),
+        result: expect.objectContaining({ error: raw }),
+      },
+    );
+    // Stop must still reach a run that may be live on the device.
+    expect(topicModel.patchRunningOperation).toHaveBeenCalledWith(
+      'topic-1',
+      result.operationId,
+      expect.objectContaining({ deviceId: 'dev-1' }),
+    );
+    expect(result).toMatchObject({ status: 'created', success: true });
+    expect(mocks.readDeviceSystemInfo).not.toHaveBeenCalled();
   });
 
   it('never routes a device-only provider to the cloud sandbox', async () => {

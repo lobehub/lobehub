@@ -1,5 +1,6 @@
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
+  AgentSenderMetadataSchema,
   CreateNewMessageParamsSchema,
   omitServerOwnedMessageMetadata,
   UpdateMessageParamsSchema,
@@ -15,7 +16,7 @@ import {
   cloudWorkspaceAuth,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { MessageModel } from '@/database/models/message';
+import { MESSAGE_KEYWORD_SEARCH_MAX_LIMIT, MessageModel } from '@/database/models/message';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { CompressionRepository } from '@/database/repositories/compression';
 import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
@@ -31,15 +32,17 @@ import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
   assertCanViewMessageTargets,
+  assertCanViewTopicTargets,
 } from './_helpers/conversationResourceGuard';
 import { getMessagesPageSizeSchema } from './_helpers/getMessagesPageSize';
 import { messagesByCursorInputSchema, readMessagesByCursor } from './_helpers/messagesByCursor';
 import { projectSharedTopicMessages } from './_helpers/projectSharedTopicMessages';
-import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
+import { resolveContext } from './_helpers/resolveContext';
 import {
   assertCreatorMessageTargets,
   assertCreatorTopicTargets,
 } from './_helpers/shareVisitorTargetGuard';
+import { readTopicPreviews, topicPreviewsInputSchema } from './_helpers/topicPreviews';
 import { basicContextSchema } from './_schema/context';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
@@ -176,16 +179,9 @@ export const messageRouter = router({
                   },
                 }
               : rawOperation;
-          if (
-            operation.type !== 'createMessage' ||
-            operation.message.agentId ||
-            !operation.message.sessionId
-          ) {
-            return operation as MessageBatchOperation;
-          }
-
-          const agentId = await resolveAgentIdFromSession(
-            operation.message.sessionId,
+          if (operation.type !== 'createMessage') return operation as MessageBatchOperation;
+          const resolved = await resolveContext(
+            { ...operation.message, agentId: operation.message.agentId ?? undefined },
             ctx.serverDB,
             ctx.userId,
             ctx.workspaceId ?? undefined,
@@ -195,7 +191,8 @@ export const messageRouter = router({
             ...operation,
             message: {
               ...operation.message,
-              agentId: agentId!,
+              agentId: resolved.agentId,
+              sessionId: resolved.sessionId,
             },
           } as MessageBatchOperation;
         }),
@@ -337,18 +334,13 @@ export const messageRouter = router({
     .use(withScopedPermission('message:create'))
     .input(CreateNewMessageParamsSchema)
     .mutation(async ({ input, ctx }) => {
-      // If there's no agentId but has sessionId, resolve agentId from sessionId
-      let agentId = input.agentId;
-      if (!agentId && input.sessionId) {
-        agentId = (await resolveAgentIdFromSession(
-          input.sessionId,
-          ctx.serverDB,
-          ctx.userId,
-          ctx.workspaceId ?? undefined,
-        ))!;
-      }
-
-      await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
+      const resolved = await resolveContext(
+        { ...input, agentId: input.agentId ?? undefined },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
       // The declared agent/group is client-supplied and can be omitted or
       // forged while still inserting into `topicId` — guard the topic's own
       // DB-resolved target as well.
@@ -363,7 +355,8 @@ export const messageRouter = router({
       // server-owned metadata a client slipped in is dropped here.
       return ctx.messageService.createMessage({
         ...input,
-        agentId,
+        agentId: resolved.agentId,
+        sessionId: resolved.sessionId,
         metadata: omitServerOwnedMessageMetadata(input.metadata),
       } as any);
     }),
@@ -425,6 +418,32 @@ export const messageRouter = router({
       await assertCanViewMessageTargets(guardCtx(ctx), input.messageIds);
 
       return ctx.messageService.getToolResultPayloads(input.messageIds);
+    }),
+
+  /**
+   * Where a message came from, for answering it: its conversation and, for a
+   * message another agent sent, that agent and its conversation
+   * (`metadata.agentSender`). Read by `lh message reply`.
+   */
+  getMessageOrigin: messageProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), [input.id]);
+
+      const message = await ctx.messageModel.findById(input.id);
+      if (!message) return null;
+
+      const agentSender = AgentSenderMetadataSchema.safeParse(
+        (message.metadata as Record<string, unknown> | null)?.agentSender,
+      );
+      return {
+        agentId: message.agentId ?? null,
+        agentSender: agentSender.success ? agentSender.data : null,
+        id: message.id,
+        role: message.role,
+        threadId: message.threadId ?? null,
+        topicId: message.topicId ?? null,
+      };
     }),
 
   getToolResultPayload: messageProcedure
@@ -538,9 +557,19 @@ export const messageRouter = router({
       const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
       const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
 
-      const messages = await messageModel.query(queryParams, {
-        postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
-      });
+      const resolved = await resolveContext(
+        { ...queryParams, agentId: queryParams.agentId ?? undefined },
+        ctx.serverDB,
+        ctx.userId,
+        wsId,
+      );
+      await assertCanUseConversationTargets(guardCtx({ ...ctx, userId: ctx.userId }), [resolved]);
+      const messages = await messageModel.query(
+        { ...queryParams, ...resolved },
+        {
+          postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
+        },
+      );
 
       // Only the caller knows whether this list is going to be rendered or fed
       // to a model: a run that executes in the browser assembles its context
@@ -562,6 +591,10 @@ export const messageRouter = router({
     .use(serverDatabase)
     .input(messagesByCursorInputSchema)
     .query(({ ctx, input }) => readMessagesByCursor(ctx, input)),
+
+  getTopicPreviews: messageProcedure
+    .input(topicPreviewsInputSchema)
+    .query(({ ctx, input }) => readTopicPreviews(ctx, input)),
 
   rankModels: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.rankModels();
@@ -644,24 +677,21 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { agentId, ...options } = input;
-      // Row-based guard via the topic when available; sweeps without a topic
-      // fall back to the declared agent target.
-      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
-      else
-        await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
-      // Same visitor guard as `addFilesToMessage` above.
-      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
       );
+      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
+      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
 
       return ctx.messageModel.deleteMessagesBySession(
         resolved.sessionId,
         resolved.topicId,
         input.groupId,
+        { agentId: resolved.agentId ?? undefined },
       );
     }),
 
@@ -682,10 +712,44 @@ export const messageRouter = router({
       return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
     }),
 
+  /** Find-in-topic: literal keyword matches across a topic's whole history. */
+  searchInTopic: messageProcedure
+    .input(z.object({ keyword: z.string().max(200), topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]);
+
+      return ctx.messageModel.searchInTopic(input);
+    }),
+
   searchMessages: messageSearchProcedure
     .input(z.object({ keywords: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.messageModel.queryByKeyword(input.keywords);
+    }),
+
+  /**
+   * Filtered, paginated history search for CLI and agent callers. Returns a
+   * lean projection (topic title, snippet) instead of full message rows, and
+   * hides system-written prompts of automation topics unless asked.
+   */
+  searchByKeyword: messageSearchProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        endDate: z.coerce.date().optional(),
+        exact: z.boolean().optional(),
+        includeAutomatedPrompts: z.boolean().optional(),
+        keywords: z.string(),
+        limit: z.number().int().min(1).max(MESSAGE_KEYWORD_SEARCH_MAX_LIMIT).optional(),
+        offset: z.number().int().min(0).optional(),
+        roles: z.array(z.string()).optional(),
+        startDate: z.coerce.date().optional(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const { keywords, ...params } = input;
+      return ctx.messageModel.searchByKeyword({ ...params, keyword: keywords });
     }),
 
   update: messageProcedure

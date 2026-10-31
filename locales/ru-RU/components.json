@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "Эта модель поддерживает распознавание видео",
   "ModelSelect.featureTag.vision": "Эта модель поддерживает визуальное распознавание.",
   "ModelSelect.removed": "Модель отсутствует в списке. Она будет автоматически удалена при снятии выбора.",
+  "ModelSelect.routing": "Маршрутизация",
+  "ModelSelect.routingTooltip": "Группа маршрутизации: несколько провайдеров обслуживают эту модель, и каждый запрос направляется тому, кто отвечает.",
   "ModelSelect.staleModel.current": "Текущий выбор",
   "ModelSelect.staleModel.notEnabled.action": "Включить эту модель",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Не удалось включить модель. Пожалуйста, попробуйте снова.",

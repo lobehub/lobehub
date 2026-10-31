@@ -67,6 +67,11 @@ export interface ModelTokensUsage {
 
   inputCacheMissTokens?: number;
   /**
+   * Input text characters, billed through `millionCharacters` pricing units
+   * (e.g. character-billed text-to-speech models).
+   */
+  inputCharacters?: number;
+  /**
    * currently only pplx has citation_tokens
    */
   inputCitationTokens?: number;
@@ -125,6 +130,7 @@ export const ModelUsageSchema = z.object({
   inputVideoTokens: z.number().optional(),
   inputCitationTokens: z.number().optional(),
   inputToolTokens: z.number().optional(),
+  inputCharacters: z.number().optional(),
 
   // Output tokens breakdown
   outputTextTokens: z.number().optional(),
@@ -175,6 +181,13 @@ export const MessageSignalSchema = z.object({
   sourceToolCallId: z.string(),
   sourceToolName: z.string(),
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
+});
+
+export const MessageSubAgentCallbackSchema = z.object({
+  agentId: z.string().optional(),
+  name: z.string(),
+  status: z.enum(['completed', 'error']),
+  threadId: z.string(),
 });
 
 export const MessageTaskCallbackSchema = z.object({
@@ -229,6 +242,13 @@ export interface AgentSenderMetadata {
    * own conversation instead of the group the turn actually came from.
    */
   chatGroupId?: string;
+  /**
+   * How many agent → agent sends in a row led to this message: 1 when the
+   * sending turn was started by a person, one more than the message that
+   * started the sending turn otherwise. The server refuses a send past
+   * `MAX_AGENT_RELAY_HOPS`, so two agents cannot keep waking each other.
+   */
+  hop?: number;
   /** Sending agent's personal name at send time; resolve the label with `agentDisplayName`. */
   name?: string;
   /**
@@ -259,6 +279,7 @@ export const AgentSenderMetadataSchema = z.object({
   agentId: z.string(),
   avatar: z.string().optional(),
   chatGroupId: z.string().optional(),
+  hop: z.number().int().positive().optional(),
   name: z.string().optional(),
   threadId: z.string().optional(),
   title: z.string().optional(),
@@ -357,6 +378,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   steer: z.boolean().optional(),
+  // User message carrying a background sub-agent's answer back to its parent;
+  // its sender is that sub-agent.
+  subAgentCallback: MessageSubAgentCallbackSchema.optional(),
   subAgentId: z.string().optional(),
   // role='taskCallback' card: which task delivered its handoff back to this
   // conversation, and the run outcome. The card header + jump link read this.
@@ -645,6 +669,13 @@ export interface MessageMetadata {
    * - scope: 'group' | 'group_agent': indicates the agent that generated this message in group mode
    * Used by callAgent tool (sub_agent) and group orchestration (group modes)
    */
+  /**
+   * Present on a user message that delivers a background sub-agent's answer
+   * (`callSubAgent` / `callAgent` with `runInBackground`) back to its parent
+   * conversation: the answer is the content, and this is its sender in place
+   * of the human.
+   */
+  subAgentCallback?: MessageSubAgentCallback;
   subAgentId?: string;
   /**
    * Task-callback card pointer (for role='taskCallback' messages). Identifies
@@ -702,6 +733,20 @@ export interface MessageMetadata {
 export interface MessageWorkMetadata {
   rootOperationId: string;
   userMessageId?: string;
+}
+
+/** Who sent a background sub-agent's answer — see `MessageMetadata.subAgentCallback`. */
+export interface MessageSubAgentCallback {
+  /**
+   * The agent that answered: a `callAgent` target, or the parent agent itself
+   * for an anonymous `callSubAgent` clone. Its avatar is the sender's.
+   */
+  agentId?: string;
+  /** The sender's label: the call's description, or the target agent's name. */
+  name: string;
+  status: 'completed' | 'error';
+  /** The sub-agent's isolation thread (its full trace, and its id to follow up). */
+  threadId: string;
 }
 
 /**

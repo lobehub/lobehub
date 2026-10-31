@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import {
+  extractHtmlTitle,
   gatherWorkspaceHtmlArtifact,
   hostedPath,
   packWorkspaceHtmlDocument,
@@ -17,9 +18,11 @@ import {
   resolveManifest,
   writeBinding,
 } from '../utils/artifactManifest';
+import { formatError } from '../utils/error';
 import { outputJson } from '../utils/format';
 import { log } from '../utils/logger';
 import { readLocalHtmlAsset } from '../utils/readLocalHtmlAsset';
+import { publishCanvasArtifact } from './artifactCanvas';
 
 interface PreparedUploadTarget {
   headers: Record<string, string>;
@@ -33,6 +36,7 @@ interface DeploymentRecord {
   publicUrl?: string;
   slug?: string;
   status?: string;
+  subdomainLabel?: string | null;
 }
 
 /**
@@ -84,6 +88,26 @@ export function registerArtifactCommand(program: Command) {
   const artifact = program.command('artifact').description('Publish local pages as artifacts');
 
   artifact
+    .command('guide <type>')
+    .description('Read the generation guide for an artifact type (canvas)')
+    .action(async (type: string) => {
+      if (type !== 'canvas') {
+        fail('The supported guide type is canvas.');
+        return;
+      }
+      const client = await getTrpcClient();
+      const { output } = await client.canvas.runAgentTool.mutate({
+        apiName: 'readCanvasGuide',
+        args: {},
+      });
+      if (!output.success) {
+        fail(String(output.content));
+        return;
+      }
+      console.log(output.content);
+    });
+
+  artifact
     .command('publish <file>')
     .description('Publish a local HTML file, bundling the assets it references')
     .option(
@@ -92,6 +116,10 @@ export function registerArtifactCommand(program: Command) {
     )
     .option('--deployment <id>', 'Publish to this deployment for this run only')
     .option('--new', 'Create a separate deployment instead of updating the bound one')
+    .option(
+      '--type <type>',
+      'Artifact content type: html or canvas (defaults to the bound type, then html)',
+    )
     .option('--title <title>', 'Override the page title')
     .option('--slug <slug>', 'Requested public slug')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
@@ -105,6 +133,7 @@ export function registerArtifactCommand(program: Command) {
           title?: string;
           deployment?: string;
           new?: boolean;
+          type?: string;
         },
       ) => {
         const entryPath = path.resolve(file);
@@ -120,6 +149,71 @@ export function registerArtifactCommand(program: Command) {
         const entry = await readLocalHtmlAsset(entryPath);
         if (!entry.ok || entry.text === undefined) {
           fail(`Cannot read ${file}`);
+          return;
+        }
+
+        const manifest = resolveManifest(entryPath, rootDirectory);
+        const binding = readBinding(manifest);
+        const type = options.type ?? binding.pendingType ?? binding.type ?? 'html';
+        if (type !== 'html' && type !== 'canvas') {
+          fail('Artifact type must be html or canvas.');
+          return;
+        }
+        if (options.new && options.deployment) {
+          fail('--new and --deployment cannot be combined.');
+          return;
+        }
+        if (binding.pendingType && binding.pendingType !== type) {
+          fail('Complete the pending publication before changing its type.');
+          return;
+        }
+        if (type === 'canvas' && binding.pendingCreateKey && !binding.pendingCanvas) {
+          fail('Complete the pending HTML publication before changing its type.');
+          return;
+        }
+        if (
+          !options.new &&
+          options.type &&
+          options.type !== (binding.pendingType ?? binding.type ?? 'html') &&
+          (binding.deploymentId || binding.canvasId || binding.pendingCreateKey)
+        ) {
+          fail('Changing a bound artifact type requires --new.');
+          return;
+        }
+        if (type === 'canvas') {
+          try {
+            const payload = await publishCanvasArtifact(await getTrpcClient(), {
+              binding,
+              deployment: options.deployment,
+              html: entry.text,
+              manifest,
+              new: options.new,
+              slug: options.slug || undefined,
+              title:
+                options.title ||
+                extractHtmlTitle(entry.text) ||
+                path.basename(entryPath, path.extname(entryPath)),
+            });
+            if (options.json !== undefined) {
+              outputJson(payload, typeof options.json === 'string' ? options.json : undefined);
+            } else {
+              console.log(
+                `${pc.green('✓')} Published Canvas ${payload.canvasId} (version ${payload.version})`,
+              );
+              console.log(`  URL: ${payload.publicUrl}`);
+              console.log(`  Share: ${payload.shareUrl}`);
+            }
+          } catch (error) {
+            const pending = readBinding(manifest).pendingCanvas;
+            const saved = pending?.saved;
+            if (options.json !== undefined)
+              outputJson({ ...saved, error: formatError(error), success: false });
+            fail(
+              pending
+                ? `${formatError(error)}. ${pending.rejectedPublication ? 'Correct the rejected slug and retry with the same content and target.' : 'Retry the same command with the original input to resume publication.'}`
+                : formatError(error),
+            );
+          }
           return;
         }
 
@@ -169,14 +263,6 @@ export function registerArtifactCommand(program: Command) {
         const client = await getTrpcClient();
         const title = options.title || gathered.title;
 
-        const manifest = resolveManifest(entryPath, rootDirectory);
-        const binding = readBinding(manifest);
-
-        if (options.new && options.deployment) {
-          fail('--new and --deployment cannot be combined.');
-          return;
-        }
-
         const boundDeploymentId = options.new
           ? undefined
           : (options.deployment ?? binding.deploymentId);
@@ -195,7 +281,11 @@ export function registerArtifactCommand(program: Command) {
         // then loses its response must still be recoverable on the next run.
         const persistsBinding = target.kind === 'create' && !options.deployment;
         if (persistsBinding && idempotencyKey !== binding.pendingCreateKey) {
-          writeBinding(manifest, { ...binding, pendingCreateKey: idempotencyKey });
+          writeBinding(manifest, {
+            ...binding,
+            pendingCreateKey: idempotencyKey,
+            pendingType: 'html',
+          });
         }
 
         const deployments = deploymentClient(client).market.deployments;
@@ -242,10 +332,10 @@ export function registerArtifactCommand(program: Command) {
           writeBinding(manifest, { deploymentId: result.data.id });
         }
 
-        const publicUrl = result.data.id
+        const shareUrl = result.data.id
           ? artifactShareUrl(resolveServerUrl(), result.data.id)
-          : result.data.publicUrl;
-        const payload = { ...result.data, publicUrl };
+          : undefined;
+        const payload = { ...result.data, shareUrl };
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -254,7 +344,8 @@ export function registerArtifactCommand(program: Command) {
         }
 
         console.log(`${pc.green('✓')} Published ${pc.bold(title)} (${entries.length} file(s))`);
-        if (publicUrl) console.log(`  URL: ${pc.dim(publicUrl)}`);
+        if (payload.publicUrl) console.log(`  URL: ${pc.dim(payload.publicUrl)}`);
+        if (shareUrl) console.log(`  Share: ${pc.dim(shareUrl)}`);
         console.log(`  Deployment: ${pc.dim(result.data.id ?? '')}`);
       },
     );

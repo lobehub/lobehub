@@ -43,10 +43,6 @@ const currentGroupAgents = (s: SessionStore): GroupMemberWithAgent[] => {
   return session ? (session.members ?? []) : [];
 };
 
-const isSessionListInit = (s: SessionStore) => s.isSessionsFirstFetchFinished;
-
-const isSomeSessionActive = (s: SessionStore) => !!s.activeId && isSessionListInit(s);
-
 export const sessionSelectors = {
   currentGroupAgents,
   currentSession,
@@ -55,7 +51,5 @@ export const sessionSelectors = {
   getSessionById,
   isCurrentSessionGroupSession,
   isInboxSession,
-  isSessionListInit,
-  isSomeSessionActive,
   pinnedSessions,
 };

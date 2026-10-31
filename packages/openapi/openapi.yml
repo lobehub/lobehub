@@ -224,6 +224,8 @@ components:
               - role
             type: object
           type: array
+        personal:
+          type: boolean
         pinned:
           type:
             - boolean
@@ -241,6 +243,7 @@ components:
         - description
         - avatar
         - backgroundColor
+        - personal
         - pinned
         - members
         - createdAt
@@ -1000,6 +1003,44 @@ components:
             - since
             - until
           type: object
+        quota:
+          additionalProperties: false
+          properties:
+            limit:
+              type:
+                - number
+                - "null"
+            remaining:
+              type:
+                - number
+                - "null"
+            resetsAt:
+              format: date-time
+              type:
+                - string
+                - "null"
+            source:
+              enum:
+                - personal
+                - workspace_pool
+                - member_budget
+              type: string
+            used:
+              type: number
+            usedRatio:
+              type:
+                - number
+                - "null"
+          required:
+            - limit
+            - remaining
+            - resetsAt
+            - source
+            - used
+            - usedRatio
+          type:
+            - object
+            - "null"
         remainingBalance:
           type:
             - number
@@ -1034,6 +1075,7 @@ components:
         - currency
         - daily
         - period
+        - quota
         - remainingBalance
         - scope
         - spent
@@ -3249,6 +3291,174 @@ paths:
           description: Internal server error
       tags:
         - api-keys
+  /api/v1/audio/speech:
+    post:
+      operationId: postApiV1AudioSpeech
+      description: "OpenAI-compatible text-to-speech. Point an OpenAI SDK at `/api/v1`
+        and call `audio.speech.create`. `model` takes `provider/model` (for
+        example `lobehub/speech-2.8-hd`) or a bare model id; the optional
+        `provider` and `params` (emotion, pitch, volume, sampleRate) are LobeHub
+        extensions. Returns the audio bytes; usage is reported in `X-LobeHub-*`
+        headers. Synthesis errors use OpenAI's `{ error: { message, type, code,
+        param } }` body; authentication and permission errors use the platform
+        `ApiError` envelope."
+      responses:
+        "200":
+          content:
+            audio/aac:
+              schema:
+                format: binary
+                type: string
+            audio/mpeg:
+              schema:
+                format: binary
+                type: string
+            audio/opus:
+              schema:
+                format: binary
+                type: string
+          description: Synthesized audio
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type:
+                          - string
+                          - "null"
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                    required:
+                      - message
+                      - type
+                    type: object
+                required:
+                  - error
+                type: object
+          description: Invalid request, unsupported format or invalid params
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "402":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type:
+                          - string
+                          - "null"
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                    required:
+                      - message
+                      - type
+                    type: object
+                required:
+                  - error
+                type: object
+          description: Insufficient credits
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type:
+                          - string
+                          - "null"
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                    required:
+                      - message
+                      - type
+                    type: object
+                required:
+                  - error
+                type: object
+          description: Upstream provider rate limit
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+        "502":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type:
+                          - string
+                          - "null"
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                    required:
+                      - message
+                      - type
+                    type: object
+                required:
+                  - error
+                type: object
+          description: Upstream provider error
+      summary: Create speech
+      tags:
+        - audio
   /api/v1/chat:
     post:
       operationId: postApiV1Chat
@@ -3759,6 +3969,13 @@ paths:
           name: pageSize
           schema:
             type: string
+        - in: query
+          name: personal
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
       responses:
         "200":
           content:
@@ -3886,6 +4103,8 @@ paths:
                           - assistant
                     required:
                       - agentId
+                personal:
+                  type: boolean
                 title:
                   type: string
                   minLength: 1
@@ -4088,6 +4307,8 @@ paths:
                   type:
                     - string
                     - "null"
+                personal:
+                  type: boolean
                 pinned:
                   type: boolean
                 title:
@@ -13534,6 +13755,28 @@ paths:
                             type: string
                           error:
                             type: boolean
+                          files:
+                            type: array
+                            items:
+                              type: object
+                              additionalProperties: false
+                              properties:
+                                id:
+                                  type: string
+                                name:
+                                  type: string
+                                fileType:
+                                  type: string
+                                size:
+                                  type: number
+                                url:
+                                  type: string
+                              required:
+                                - id
+                                - name
+                                - fileType
+                                - size
+                                - url
                           id:
                             type: string
                           role:
@@ -13639,8 +13882,13 @@ paths:
                       pattern: ^msg_[\w-]{8,64}$
                     content:
                       type: string
-                      minLength: 1
                       maxLength: 100000
+                    fileIds:
+                      maxItems: 10
+                      type: array
+                      items:
+                        type: string
+                        minLength: 1
                     groupId:
                       type: string
                       minLength: 1
@@ -13662,8 +13910,13 @@ paths:
                       pattern: ^msg_[\w-]{8,64}$
                     content:
                       type: string
-                      minLength: 1
                       maxLength: 100000
+                    fileIds:
+                      maxItems: 10
+                      type: array
+                      items:
+                        type: string
+                        minLength: 1
                     groupId:
                       type: string
                       minLength: 1
@@ -13708,6 +13961,28 @@ paths:
                               type: string
                             error:
                               type: boolean
+                            files:
+                              type: array
+                              items:
+                                type: object
+                                additionalProperties: false
+                                properties:
+                                  id:
+                                    type: string
+                                  name:
+                                    type: string
+                                  fileType:
+                                    type: string
+                                  size:
+                                    type: number
+                                  url:
+                                    type: string
+                                required:
+                                  - id
+                                  - name
+                                  - fileType
+                                  - size
+                                  - url
                             id:
                               type: string
                             role:
@@ -17304,6 +17579,7 @@ paths:
                   - text2video
                   - text2music
                   - realtime
+                  - decision
                   - stt
               - type: "null"
       responses:
@@ -17484,6 +17760,7 @@ paths:
                         - text2video
                         - text2music
                         - realtime
+                        - decision
                         - stt
                     - type: "null"
                 id:
@@ -17778,6 +18055,7 @@ paths:
                         - text2video
                         - text2music
                         - realtime
+                        - decision
                         - stt
                     - type: "null"
       responses:
@@ -17979,6 +18257,297 @@ paths:
           description: Internal server error
       tags:
         - notifications
+  /api/v1/notifications/settings:
+    get:
+      operationId: getNotificationSettings
+      summary: Get notification delivery settings
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: query
+          name: scope
+          schema:
+            default: personal
+            type: string
+            enum:
+              - personal
+              - workspace
+    patch:
+      operationId: updateNotificationSettings
+      summary: Update notification delivery settings
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: query
+          name: scope
+          schema:
+            default: personal
+            type: string
+            enum:
+              - personal
+              - workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: object
+                  properties:
+                    scheduledTaskSummary:
+                      type: boolean
+                  additionalProperties: false
+                email:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    items:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          type: boolean
+                  additionalProperties: false
+                im:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    items:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          type: boolean
+                    platforms:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        properties:
+                          enabled:
+                            type: boolean
+                          items:
+                            type: object
+                            propertyNames:
+                              type: string
+                            additionalProperties:
+                              type: object
+                              propertyNames:
+                                type: string
+                              additionalProperties:
+                                type: boolean
+                          tenantId:
+                            type: string
+                        additionalProperties: false
+                  additionalProperties: false
+                inbox:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    items:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          type: boolean
+                  additionalProperties: false
+                push:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    items:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties:
+                        type: object
+                        propertyNames:
+                          type: string
+                        additionalProperties:
+                          type: boolean
+                  additionalProperties: false
+              additionalProperties: false
   /api/v1/notifications/unread-count:
     get:
       operationId: getUnreadNotificationCount
@@ -21722,6 +22291,10 @@ paths:
                   type:
                     - string
                     - "null"
+                heartbeatInterval:
+                  type: integer
+                  minimum: -9007199254740991
+                  maximum: 9007199254740991
                 instruction:
                   type: string
                 name:
@@ -21949,6 +22522,208 @@ paths:
                     - canceled
               required:
                 - status
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - tasks
+  /api/v1/tasks/{id}/runs:
+    post:
+      operationId: postApiV1TasksByIdRuns
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prompt:
+                  type: string
+                  minLength: 1
+              additionalProperties: false
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - tasks
+    get:
+      operationId: getApiV1TasksByIdRuns
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
       responses:
         "200":
           content:

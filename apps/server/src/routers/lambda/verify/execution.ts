@@ -8,7 +8,12 @@ import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { finalizeVerifyRun } from '@/server/services/verify';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
-import { resolveCheckResult, verifyProcedure, verifyWriteProcedure } from './procedures';
+import {
+  assertOperationInScope,
+  resolveCheckResult,
+  verifyProcedure,
+  verifyWriteProcedure,
+} from './procedures';
 import { checkItemSchema, modelConfigSchema, onFailSchema, verifierTypeSchema } from './schemas';
 
 const decisionSchema = z.enum(['accepted', 'rejected', 'overridden']);
@@ -196,7 +201,10 @@ export const executionRouter = router({
     }),
   getVerifyState: verifyProcedure
     .input(z.object({ operationId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.runModel.getStateByOperation(input.operationId)),
+    .query(async ({ ctx, input }) => {
+      assertOperationInScope(ctx, input.operationId);
+      return ctx.runModel.getStateByOperation(input.operationId);
+    }),
   skipPlan: verifyWriteProcedure
     .input(z.object({ operationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -254,6 +262,7 @@ export const executionRouter = router({
   listResults: verifyProcedure
     .input(z.object({ operationId: z.string() }))
     .query(async ({ ctx, input }) => {
+      assertOperationInScope(ctx, input.operationId);
       const run = await ctx.runModel.findByOperation(input.operationId);
       return run ? ctx.resultModel.listByRun(run.id) : [];
     }),

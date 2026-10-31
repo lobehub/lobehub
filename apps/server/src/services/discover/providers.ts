@@ -70,7 +70,7 @@ export const getProviderDetail = async (
     try {
       const normalizedLocale = normalizeLocale(locale);
       const readmeUrl = urlJoin(
-        'https://raw.githubusercontent.com/lobehub/lobe-chat/refs/heads/main/docs/usage/providers',
+        'https://raw.githubusercontent.com/lobehub/lobehub/refs/heads/main/docs/usage/providers',
         normalizedLocale === 'zh-CN' ? `${identifier}.zh-CN.mdx` : `${identifier}.mdx`,
       );
       log('getProviderDetail: readme URL=%s', readmeUrl);

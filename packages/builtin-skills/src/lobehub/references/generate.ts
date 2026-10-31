@@ -4,8 +4,10 @@ Generate text, images, videos, and audio. Alias: \`lh generate\`.
 
 ## Subcommands
 
-- \`lh gen text <prompt> [-m <model>] [-p <provider>] [--stream] [--temperature <t>]\` - Generate text
-- \`lh gen image <prompt> [-m <model>] [-n <count>] [--width <w>] [--height <h>]\` - Generate image
+- \`lh gen text <prompt> [-m <model>] [-p <provider>] [--temperature <t>]\` - Generate text
+- \`lh gen json <prompt> [-m <model>] [-p <provider>] [--schema <json|file>] [--schema-name <name>] [--strict]\` - Generate a JSON object (structured output)
+- \`lh gen image-params -m <model> -p <provider>\` - Show the parameters an image model accepts (e.g. \`size\`, \`aspectRatio\`, \`quality\`)
+- \`lh gen image <prompt> [-m <model>] [-p <provider>] [-n <count>] [--param <key=value>...]\` - Generate image; pass only parameters listed by \`image-params\` (unsupported ones are rejected)
 - \`lh gen video <prompt> -m <model> -p <provider> [--aspect-ratio <r>] [--duration <d>] [--resolution <res>]\` - Generate video
 - \`lh gen tts <text> [-m <model>] [-p <provider>] [-o <output>] [--voice <v>] [--speed <s>]\` - Text-to-speech using the selected provider's saved configuration
 - \`lh gen asr <audioFile> [--model <m>] [--language <l>]\` - Speech-to-text
@@ -13,10 +15,28 @@ Generate text, images, videos, and audio. Alias: \`lh generate\`.
 - \`lh gen download <generationId> <asyncTaskId> [-o <output>]\` - Wait and download result
 - \`lh gen list\` - List generation topics
 
+## Structured Output
+
+\`lh gen json\` returns a parsed JSON object instead of text. \`--schema\` is required — the server needs a
+schema, so pass one inline or as a file.
+
+\`\`\`bash
+# Inline schema
+lh gen json "Extract the person" --schema '{"properties":{"name":{"type":"string"}},"required":["name"],"type":"object"}'
+
+# Schema from a file, named and strictly enforced
+lh gen json "Extract the person" --schema ./person.json --schema-name person --strict
+\`\`\`
+
+- The command prints the pretty-printed object; a reply the server cannot parse into the schema exits with code 1
+- The server keeps only \`type\`, \`properties\`, \`required\`, \`additionalProperties\` and \`$defs\`, so schemas using \`allOf\`, \`minProperties\` or \`patternProperties\` are rejected
+- It is a single request: \`--stream\`, \`--temperature\` and \`--max-tokens\` are not accepted options
+- Use \`lh gen text\` when you want prose
+
 ## Tips
 
 - Image/video generation is async; use \`status\` or \`download\` to get results
-- \`--stream\` for text generation outputs tokens as they arrive
+- Text generation returns the complete response, without incremental streaming
 - \`--pipe\` for text generation outputs only the raw text (no formatting)
 
 ## Finding Available Video / Image Models

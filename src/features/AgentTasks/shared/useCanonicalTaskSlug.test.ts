@@ -27,7 +27,11 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
 
 const setTaskDetail = (detail?: { instruction?: string; name?: string | null }) => {
   useTaskStore.setState({
-    taskDetailMap: detail === undefined ? {} : ({ 'T-1': detail } as never),
+    taskRefIndex: { 'T-1': 'task_1', 'task_1': 'task_1' },
+    taskDetailMap:
+      detail === undefined
+        ? {}
+        : ({ task_1: { ...detail, id: 'task_1', identifier: 'T-1' } } as never),
   });
 };
 
@@ -104,7 +108,7 @@ describe('useCanonicalTaskSlug', () => {
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1', { replace: true });
   });
 
-  it('leaves a nameless task at its bare id instead of slugging the instruction', () => {
+  it('leaves a nameless task at its bare identifier instead of slugging the instruction', () => {
     // A task's instruction is a prompt body: putting it in the path would leak
     // it into history, analytics page views and every copied link. A task with
     // no name simply has no slug.
@@ -122,6 +126,17 @@ describe('useCanonicalTaskSlug', () => {
     renderHook(() => useCanonicalTaskSlug('T-1'));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1', { replace: true });
+  });
+
+  it('preserves a stable id URL even when cached label metadata may be stale', () => {
+    mocks.params = { slug: 'stale-title', aid: 'agt_owner', workspaceSlug: 'team' };
+    mocks.location = { hash: '#activity', search: '?tab=runs' };
+    setTaskName('Ship the Thing');
+    renderHook(() => useCanonicalTaskSlug('task_1'));
+    expect(mocks.navigate).toHaveBeenCalledWith(
+      '/team/agent/agt_owner/task/task_1/ship-the-thing?tab=runs#activity',
+      { replace: true },
+    );
   });
 
   it('leaves the URL alone while the title is still unknown', () => {

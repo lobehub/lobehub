@@ -16,11 +16,11 @@ importers:
   .:
     dependencies:
       '@auv-js/cli':
-        specifier: 0.0.33
-        version: 0.0.33
+        specifier: 0.0.38
+        version: 0.0.38
       '@auv-js/sdk':
-        specifier: 0.0.33
-        version: 0.0.33
+        specifier: 0.0.38
+        version: 0.0.38
       '@lobehub/fluent-emoji':
         specifier: ^5.0.0
         version: 5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -91,6 +91,9 @@ importers:
       '@lobechat/electron-mac-permission-guide':
         specifier: workspace:*
         version: link:../../packages/electron-mac-permission-guide
+      '@lobechat/electron-mac-sidebar-glass':
+        specifier: workspace:*
+        version: link:../../packages/electron-mac-sidebar-glass
       '@lobechat/electron-server-ipc':
         specifier: workspace:*
         version: link:../../packages/electron-server-ipc
@@ -115,9 +118,9 @@ importers:
       '@lobehub/i18n-cli':
         specifier: ^1.27.0
         version: 1.27.0(@types/react@19.3.0)(immer@11.1.18)(supports-color@9.4.0)(typescript@6.0.3)(use-sync-external-store@1.7.0(react@19.2.7))(ws@8.22.0)(zod@4.6.5)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.31.0
-        version: 1.31.0(supports-color@9.4.0)(zod@4.6.5)
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
       '@sentry/electron':
         specifier: 7.20.0
         version: 7.20.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(supports-color@9.4.0)
@@ -446,6 +449,19 @@ importers:
         specifier: ^12.4.0
         version: 12.4.0
 
+  ../../packages/electron-mac-sidebar-glass:
+    dependencies:
+      '@lobechat/napi-loader':
+        specifier: workspace:*
+        version: link:../napi-loader
+    devDependencies:
+      node-addon-api:
+        specifier: ^8.5.0
+        version: 8.9.2
+      node-gyp:
+        specifier: ^12.4.0
+        version: 12.4.0
+
   ../../packages/electron-server-ipc:
     dependencies:
       debug:
@@ -516,7 +532,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.204
-        version: 0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.31.0(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)
+        version: 0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)
       '@anthropic-ai/sdk':
         specifier: ^0.93.0
         version: 0.93.0(zod@4.6.5)
@@ -532,9 +548,12 @@ importers:
       '@lobehub/icons':
         specifier: ^6.0.0
         version: 6.0.0(@lobehub/ui@6.0.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.29.0
-        version: 1.31.0(supports-color@9.4.0)(zod@4.6.5)
+      '@modelcontextprotocol/node':
+        specifier: ~2.1.2
+        version: 2.1.2(@modelcontextprotocol/server@2.4.0)
+      '@modelcontextprotocol/server':
+        specifier: ~2.4.0
+        version: 2.4.0
       diff:
         specifier: ^8.0.4
         version: 8.0.4
@@ -544,6 +563,10 @@ importers:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+    devDependencies:
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
 
   ../../packages/html-artifact:
     dependencies:
@@ -654,11 +677,11 @@ importers:
   ../../packages/types:
     dependencies:
       '@lobehub/market-sdk':
-        specifier: 0.42.0
-        version: 0.42.0(supports-color@9.4.0)(zod@4.6.5)
+        specifier: 0.46.0
+        version: 0.46.0(supports-color@9.4.0)(zod@4.6.5)
       '@lobehub/market-types':
-        specifier: ^1.17.1
-        version: 1.17.1
+        specifier: ^1.19.0
+        version: 1.19.0
       '@lobehub/ui':
         specifier: ^6.0.4
         version: 6.0.4(@lobehub/fluent-emoji@5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/icons@6.0.0)(@shikijs/themes@4.5.0)(@types/mdast@4.0.4)(@types/react@19.3.0)(date-fns@4.4.0)(micromark-util-types@2.0.3)(micromark@4.0.3(supports-color@9.4.0))(motion@14.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(supports-color@9.4.0)
@@ -758,6 +781,9 @@ importers:
       superjson:
         specifier: ^2.2.6
         version: 2.2.6
+      tldts:
+        specifier: ^7.4.18
+        version: 7.4.18
       tokenx:
         specifier: ^1.3.0
         version: 1.6.0
@@ -814,6 +840,9 @@ importers:
       '@lobechat/local-file-shell':
         specifier: workspace:*
         version: link:../../packages/local-file-shell
+      '@lobechat/prompts':
+        specifier: workspace:*
+        version: link:../../packages/prompts
       '@lobechat/tool-runtime':
         specifier: workspace:*
         version: link:../../packages/tool-runtime
@@ -961,53 +990,53 @@ packages:
       zod:
         optional: true
 
-  '@auv-js/api-client@0.0.33':
-    resolution: {integrity: sha512-arcCp/DlfKZb2ZPuHxM3GUs5Ehi2ZgW152CGhKKjXdopzWkGus0esFS8L+vbpTqzq0B1P9kNGxVSTFepFJ9dhw==}
+  '@auv-js/api-client@0.0.38':
+    resolution: {integrity: sha512-5TWH9YTxtN18MnyUtWw0bpYCMycAbSkZMJGIC+LlRIdHNFdD4b6JydU0Ptb/HfZWt221gOH+4BBptBrWaVdQ0w==}
 
-  '@auv-js/cli-darwin-arm64@0.0.33':
-    resolution: {integrity: sha512-Djp1dglnU6a3Hgi07zv0dTT7OBbONFJ/lxb65vIJ0vUWBziQSFlKqAOWUo3zwkaSTy5N/Wy5uOHBPhSZwO6gtg==}
+  '@auv-js/cli-darwin-arm64@0.0.38':
+    resolution: {integrity: sha512-2jOUDX5Z9Ya3B0yOJYpYDTB/0uMS2PZrSellXxoUPYnVq2zNcDSKnT14XK+HP5puUt2K+1vBKfeawNUFw1xUrA==}
     engines: {node: '>=20.19.0'}
     cpu: [arm64]
     os: [darwin]
 
-  '@auv-js/cli-darwin-x64@0.0.33':
-    resolution: {integrity: sha512-oyBJdXg8thX+jX5vAo085PzibCgVazRIbYjckgL6NAlFej5rj1Xkh7Q+Z3iqag4c3tAonLcGS2nlfL6arkNY8g==}
+  '@auv-js/cli-darwin-x64@0.0.38':
+    resolution: {integrity: sha512-zfSYeQMJkCh2MvRuCFXFZd2C6JLBYp0VOCyLZnBqvQbkh0Y8LZfb0LUCEykLgNOUyZ9v3eO5YWT6vceOEXwj4A==}
     engines: {node: '>=20.19.0'}
     cpu: [x64]
     os: [darwin]
 
-  '@auv-js/cli-linux-arm64-gnu@0.0.33':
-    resolution: {integrity: sha512-LFlsLTUozhvAnJhdimEt16RbJYYWZxqpnrsr9YQS/u7l5dUetJgvDignNp2Ey61a620U1LfwinCsCyBqmfbPQA==}
+  '@auv-js/cli-linux-arm64-gnu@0.0.38':
+    resolution: {integrity: sha512-EAKqJpT2vh0RW186vpjZeStkgz89dSfZlVok7f6XlXEDzJRMO2D7Op2YsXh2qnjQe4VsntvQJ8x1WeT5i0z7dg==}
     engines: {node: '>=20.19.0'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@auv-js/cli-linux-x64-gnu@0.0.33':
-    resolution: {integrity: sha512-Tjkgd2UUbiL36fuKoKi1VQDD/66KIzMIIn4RAbm36ThbjpLcy3mQ39zI4+5UqQp7HZ/hBv21R8UUGwviaYH9eA==}
+  '@auv-js/cli-linux-x64-gnu@0.0.38':
+    resolution: {integrity: sha512-gDjiTdWhraVDRYtCRCjpQGT1S6pUoc3x3Ex4cu+DzhlqqBEdzZCG3R3kp2OfPHj5c7wYZ5jTVYlse8fgKnJiEg==}
     engines: {node: '>=20.19.0'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@auv-js/cli-win32-arm64-msvc@0.0.33':
-    resolution: {integrity: sha512-3qekgM/FGSeU0yFbTakhY5EJBGFE3N26isJUN+fUJO1oT1HWy//JDWCB7Yn38FcBp+eH+wM8zJIQpLuS1Se0BA==}
+  '@auv-js/cli-win32-arm64-msvc@0.0.38':
+    resolution: {integrity: sha512-ASacCa5ID4q+PcWEte2pwhGExX8N4+/z0u5oHba88EOJv7gcTkxvqE+bcGtB++q2PshOUjWXSw8bVjXirquvvA==}
     engines: {node: '>=20.19.0'}
     cpu: [arm64]
     os: [win32]
 
-  '@auv-js/cli-win32-x64-msvc@0.0.33':
-    resolution: {integrity: sha512-kz62T+9OxdH0w/y8WqiLGayGM0L2mXdR3hCr5nrhwB9pzp28jT5fhtfTznwu0GC5nfT2MFL93tmkhckVxmfPUg==}
+  '@auv-js/cli-win32-x64-msvc@0.0.38':
+    resolution: {integrity: sha512-11XZT8y0Lqel9koA0saOqdRw9PX7zOkqwM5iOl1Z8yMmpnMiV0XOvTUskUjPeKlseipUfKfk0kBVXMBbTGlbrg==}
     engines: {node: '>=20.19.0'}
     cpu: [x64]
     os: [win32]
 
-  '@auv-js/cli@0.0.33':
-    resolution: {integrity: sha512-mAMGRwrrC+UUTEK5hdBrYhPsamuR+6sRF8eEO9GJABXmvYfsSE6BifY8WrlfepSrEi6JUcTNEVEucxcaC3+KkQ==}
+  '@auv-js/cli@0.0.38':
+    resolution: {integrity: sha512-Onm/Wy0eYdikZOvjyuajn5QaqGuOdGeKe4YXf3XlMc6GO7AY9izsIdlYFnM/qGEfYKtfvMXvSJUjkoPlTVZkKQ==}
     hasBin: true
 
-  '@auv-js/sdk@0.0.33':
-    resolution: {integrity: sha512-9Oadm9bNLPEOcHNC9NoXPL1I5njz5eKfLGN7KhcbA2yenPjigSoT0WIvO3TuEvVubRqHykZLZQdGD11AM2xJUA==}
+  '@auv-js/sdk@0.0.38':
+    resolution: {integrity: sha512-yK6nuWUwVTnUp2UHB+VXU8FF8f8G/64JbihCxNUr8QTJvdrxGkD4GPGkxlpGJpNWVEIILNQrFCAc+EasCHg6EA==}
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -2168,16 +2197,16 @@ packages:
       react: 19.2.7
       react-dom: 19.2.7
 
-  '@lobehub/market-sdk@0.42.0':
-    resolution: {integrity: sha512-1c+hf2lP9tqX9qyg6+J5Q90dYqvdZz7agrYWB9h9tiEJdIS57bzFcSRJZzxUiesbQ7jmvS5a7kBMUwsd9kxzKw==}
+  '@lobehub/market-sdk@0.46.0':
+    resolution: {integrity: sha512-N2TFEUJLQ8GZwFaRimoTU6rPZEgMz3Qk9765e+2YrODv+H5qAGEXavTz1EnQww9FrrdpgzzhUhGmwxksh6wOxQ==}
     peerDependencies:
       zod: ^3.24.4
 
-  '@lobehub/market-types@1.17.1':
-    resolution: {integrity: sha512-jwY3nXyJaP4V3kBYQpnPMYgWC4LWW03g1BP+s43p4d7SMWJ/wlDwfENoIyDP5p9NFZPIPV4ajaWpidcW7iENOg==}
+  '@lobehub/market-types@1.19.0':
+    resolution: {integrity: sha512-t6384KeWcSii42kuOqZClhoMs4tus+bW/izoNq96p0M5CvTVxUjrqpmXcKQUK+bnOXMzqqcJZcCU/3hTmFz0lQ==}
 
-  '@lobehub/market-types@1.18.0':
-    resolution: {integrity: sha512-1xx+y4rtRpN0oplvJEC1WvmCymJoUNUJIR8wr/U+d/jgrPvJSb3as/NZRCUrxeFd6BDSlQHyJl12CwzFNA6ZAw==}
+  '@lobehub/market-types@1.22.0':
+    resolution: {integrity: sha512-QAgcPaXgaelqPtiplYuV2aJO0JJ0N6NFICXrM0oUI+IPfFpYlTi4UUARzKCprLGnDg4rQvGHVrdiKEzOTaYYpw==}
 
   '@lobehub/streamdown@1.4.0':
     resolution: {integrity: sha512-kkqq2nqwcqz+rV/eUPQ7vY1TQWHWZE3kQt1MsSLtNFLNXMoKYPiF+cdahP97uunWKtf2dB48q/nkSWaZzEKRSw==}
@@ -2244,8 +2273,22 @@ packages:
   '@mdx-js/mdx@3.1.1':
     resolution: {integrity: sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ==}
 
-  '@modelcontextprotocol/sdk@1.31.0':
-    resolution: {integrity: sha512-UvTMgnNlnIBO/22ob2RcVGDlcvOslQs8T59+FTGdA0L27a39fdGF/EDETNtDVK4DZGpwomlsYpRdA8UXcVL/pw==}
+  '@modelcontextprotocol/client@2.4.0':
+    resolution: {integrity: sha512-LgrD2OphHuG12vfKFKz6SOnq7bKHQmhGJIAYdD+MZBn2npHEyry6uD8zvktodtl5CQM85MO0anUyD9JwmUmxww==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/core@2.4.0':
+    resolution: {integrity: sha512-z8QBKqdfXLPzkLQuG4xp8hrVEMm1PZ1IgxMN2sMbJiFiAKOWXnAzogXn2W4aqIBlP1ea6U5yiqVquvUNM1Cj6Q==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/node@2.1.2':
+    resolution: {integrity: sha512-IIcIqBpr6NCQQs5DgJTgvbSOAw+3iaR/uquqg+e0nXCdudfjPg/80x0TseUnQx14AUAtE4fsJCEpJKPyb6WPVA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@modelcontextprotocol/server': ^2.4.0
+
+  '@modelcontextprotocol/sdk@1.32.1':
+    resolution: {integrity: sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -2253,6 +2296,10 @@ packages:
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
+
+  '@modelcontextprotocol/server@2.4.0':
+    resolution: {integrity: sha512-rgR9yxSaAJ+bcsi/XroT/S2AfPiIWloXAnrdfYSCms9ivVju0ishu/wW0J21Ho6+ZOR1r7RyeRbjiRuF87ix5Q==}
+    engines: {node: '>=20'}
 
   '@moeru/std@0.1.0-beta.20':
     resolution: {integrity: sha512-09Nunc5dLT0+oAaLV18nIGHLkQO3LOUGOpGcQ2VIFTqWybJojT9geawhTVtuclYcJtIApgIt+3BLWI1K9dYpFw==}
@@ -3722,11 +3769,6 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
-    peerDependencies:
-      ajv: ^8.0.0
-    peerDependenciesMeta:
-      ajv:
-        optional: true
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
@@ -7614,6 +7656,13 @@ packages:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
 
+  tldts-core@7.4.18:
+    resolution: {integrity: sha512-KI2PKvCmvQI/xD6ypPqkU0i7oxNXR/O58RLRaHR4svsgVUQ2JE/XC8BtMbG6PSehD27I8sZJRcC1ASnCy6lp3g==}
+
+  tldts@7.4.18:
+    resolution: {integrity: sha512-somxA8xKAUzlAxl0TX/jMSYIbRNFIVGnI96pVGJPeMc5BsHmfVXn6mOJT6U++ELnl04eGfzpfcEuZe8WiASkXg==}
+    hasBin: true
+
   tmp-promise@3.0.3:
     resolution: {integrity: sha512-RwM7MoPojPxsOBYnyd2hy0bxtIlVrihNs9pj5SUvY8Zz1sQcQG2tG1hSr8PDxfgEB8RNKDhqbIlroIarSNDNsQ==}
 
@@ -8377,10 +8426,10 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.204':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.31.0(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)':
+  '@anthropic-ai/claude-agent-sdk@0.3.204(@anthropic-ai/sdk@0.93.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5))(zod@4.6.5)':
     dependencies:
       '@anthropic-ai/sdk': 0.93.0(zod@4.6.5)
-      '@modelcontextprotocol/sdk': 1.31.0(supports-color@9.4.0)(zod@4.6.5)
+      '@modelcontextprotocol/sdk': 1.32.1(supports-color@9.4.0)(zod@4.6.5)
       zod: 4.6.5
     optionalDependencies:
       '@anthropic-ai/claude-agent-sdk-darwin-arm64': 0.3.204
@@ -8412,40 +8461,40 @@ snapshots:
     optionalDependencies:
       zod: 4.6.5
 
-  '@auv-js/api-client@0.0.33': {}
+  '@auv-js/api-client@0.0.38': {}
 
-  '@auv-js/cli-darwin-arm64@0.0.33':
+  '@auv-js/cli-darwin-arm64@0.0.38':
     optional: true
 
-  '@auv-js/cli-darwin-x64@0.0.33':
+  '@auv-js/cli-darwin-x64@0.0.38':
     optional: true
 
-  '@auv-js/cli-linux-arm64-gnu@0.0.33':
+  '@auv-js/cli-linux-arm64-gnu@0.0.38':
     optional: true
 
-  '@auv-js/cli-linux-x64-gnu@0.0.33':
+  '@auv-js/cli-linux-x64-gnu@0.0.38':
     optional: true
 
-  '@auv-js/cli-win32-arm64-msvc@0.0.33':
+  '@auv-js/cli-win32-arm64-msvc@0.0.38':
     optional: true
 
-  '@auv-js/cli-win32-x64-msvc@0.0.33':
+  '@auv-js/cli-win32-x64-msvc@0.0.38':
     optional: true
 
-  '@auv-js/cli@0.0.33':
+  '@auv-js/cli@0.0.38':
     dependencies:
       std-env: 4.2.0
     optionalDependencies:
-      '@auv-js/cli-darwin-arm64': 0.0.33
-      '@auv-js/cli-darwin-x64': 0.0.33
-      '@auv-js/cli-linux-arm64-gnu': 0.0.33
-      '@auv-js/cli-linux-x64-gnu': 0.0.33
-      '@auv-js/cli-win32-arm64-msvc': 0.0.33
-      '@auv-js/cli-win32-x64-msvc': 0.0.33
+      '@auv-js/cli-darwin-arm64': 0.0.38
+      '@auv-js/cli-darwin-x64': 0.0.38
+      '@auv-js/cli-linux-arm64-gnu': 0.0.38
+      '@auv-js/cli-linux-x64-gnu': 0.0.38
+      '@auv-js/cli-win32-arm64-msvc': 0.0.38
+      '@auv-js/cli-win32-x64-msvc': 0.0.38
 
-  '@auv-js/sdk@0.0.33':
+  '@auv-js/sdk@0.0.38':
     dependencies:
-      '@auv-js/api-client': 0.0.33
+      '@auv-js/api-client': 0.0.38
       '@bufbuild/protobuf': 2.13.0
       '@grpc/grpc-js': 1.14.4
       '@moeru/std': 0.1.0-beta.20
@@ -9463,9 +9512,9 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@lobehub/market-sdk@0.42.0(supports-color@9.4.0)(zod@4.6.5)':
+  '@lobehub/market-sdk@0.46.0(supports-color@9.4.0)(zod@4.6.5)':
     dependencies:
-      '@lobehub/market-types': 1.18.0
+      '@lobehub/market-types': 1.22.0
       '@opentelemetry/api': 1.9.1
       debug: 4.4.3(supports-color@9.4.0)
       jose: 6.2.12
@@ -9474,11 +9523,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@lobehub/market-types@1.17.1':
+  '@lobehub/market-types@1.19.0':
     dependencies:
       zod: 3.25.76
 
-  '@lobehub/market-types@1.18.0':
+  '@lobehub/market-types@1.22.0':
     dependencies:
       zod: 3.25.76
 
@@ -9661,11 +9710,31 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.31.0(supports-color@9.4.0)(zod@4.6.5)':
+  '@modelcontextprotocol/client@2.4.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.4.0
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.1
+      jose: 6.2.12
+      pkce-challenge: 5.0.1
+      zod: 4.6.5
+
+  '@modelcontextprotocol/core@2.4.0':
+    dependencies:
+      zod: 4.6.5
+
+  '@modelcontextprotocol/node@2.1.2(@modelcontextprotocol/server@2.4.0)':
+    dependencies:
+      '@hono/node-server': 2.1.3(hono@4.13.12)
+      '@modelcontextprotocol/server': 2.4.0
+      hono: 4.13.12
+
+  '@modelcontextprotocol/sdk@1.32.1(supports-color@9.4.0)(zod@4.6.5)':
     dependencies:
       '@hono/node-server': 2.1.3(hono@4.13.12)
       ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
+      ajv-formats: 3.0.1
       content-type: 1.0.5
       cors: 2.8.6
       cross-spawn: 7.0.6
@@ -9682,6 +9751,11 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
+
+  '@modelcontextprotocol/server@2.4.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.4.0
+      zod: 4.6.5
 
   '@moeru/std@0.1.0-beta.20': {}
 
@@ -10989,8 +11063,8 @@ snapshots:
     dependencies:
       humanize-ms: 1.2.1
 
-  ajv-formats@3.0.1(ajv@8.20.0):
-    optionalDependencies:
+  ajv-formats@3.0.1:
+    dependencies:
       ajv: 8.20.0
 
   ajv@6.15.0:
@@ -11461,7 +11535,7 @@ snapshots:
   conf@13.1.0:
     dependencies:
       ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
+      ajv-formats: 3.0.1
       atomically: 2.1.1
       debounce-fn: 6.0.0
       dot-prop: 9.0.0
@@ -11473,7 +11547,7 @@ snapshots:
   conf@15.1.0:
     dependencies:
       ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
+      ajv-formats: 3.0.1
       atomically: 2.1.1
       debounce-fn: 6.0.0
       dot-prop: 10.2.0
@@ -15530,6 +15604,12 @@ snapshots:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.7)
       picomatch: 4.0.7
+
+  tldts-core@7.4.18: {}
+
+  tldts@7.4.18:
+    dependencies:
+      tldts-core: 7.4.18
 
   tmp-promise@3.0.3:
     dependencies:

@@ -77,3 +77,61 @@ export const resolveCheckResult = async (
 
   return result;
 };
+
+/**
+ * A run's operation token (`heteroOperationScope`, let through by
+ * `authorizeHeteroOperationEvidence`) reaches only the round of the operation
+ * it was minted for. A user session passes through.
+ */
+export const assertOperationInScope = (
+  ctx: { heteroOperationScope?: string },
+  operationId: string | null | undefined,
+) => {
+  if (ctx.heteroOperationScope && operationId !== ctx.heteroOperationScope) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: "This run's token can only reach its own verification round",
+    });
+  }
+};
+
+/**
+ * Fields a builder may send under its run's operation token: which check the
+ * evidence answers, the evidence itself, and the observation it shows. The
+ * verdict, status, confidence, required-ness, verifier, title, index,
+ * suggestion and Toulmin judgement belong to the round's independent verifier.
+ */
+const OPERATION_TOKEN_SUBMIT_FIELDS = new Set([
+  'checkItemId',
+  'evidence',
+  'operationId',
+  'toulmin',
+  'verifyRunId',
+]);
+
+/**
+ * Refuse a run's operation token any result-authoring field on
+ * `submitCheckEvidence`, so the Task cannot judge its own check before the
+ * verifier does. A user session passes through.
+ */
+export const assertEvidenceOnlySubmission = (
+  ctx: { heteroOperationScope?: string },
+  input: Record<string, unknown> & { toulmin?: Record<string, unknown> },
+) => {
+  if (!ctx.heteroOperationScope) return;
+
+  const authored = [
+    ...Object.keys(input).filter(
+      (key) => input[key] !== undefined && !OPERATION_TOKEN_SUBMIT_FIELDS.has(key),
+    ),
+    ...Object.keys(input.toulmin ?? {})
+      .filter((key) => input.toulmin![key] !== undefined && key !== 'evidence')
+      .map((key) => `toulmin.${key}`),
+  ];
+  if (authored.length > 0) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: `This run's token submits evidence only; the verifier sets ${authored.join(', ')}`,
+    });
+  }
+};

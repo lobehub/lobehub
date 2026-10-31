@@ -1,5 +1,4 @@
 import type { ModelPerformance, ModelUsage, TracePayload } from '@lobechat/types';
-import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import type { ClientOptions } from 'openai';
 
 import type { LobeBedrockAIParams } from '../providers/bedrock';
@@ -12,6 +11,10 @@ import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
+  DecisionOptions,
+  DecisionPayload,
+  DecisionQuestions,
+  DecisionResponse,
   EmbeddingsOptions,
   EmbeddingsPayload,
   GenerateObjectOptions,
@@ -19,6 +22,7 @@ import type {
   ModelRequestOptions,
   OnFinishData,
   PullModelParams,
+  TextToSpeechOptions,
   TextToSpeechPayload,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
@@ -35,6 +39,7 @@ import type {
   VideoPollingRoute,
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
+import { createTimingHelpers, getDurationMs } from '../utils/timing';
 import { createVideoWithCompletionMode } from '../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from './BaseAI';
 
@@ -74,6 +79,9 @@ const getLobeHubTimingMetadata = (options?: {
 }): Record<string, unknown> | undefined =>
   options?.metadata?.provider === 'lobehub' ? options.metadata : undefined;
 
+const getRuntimeProviderId = (runtime: LobeRuntimeAI) =>
+  'id' in runtime && typeof runtime.id === 'string' ? runtime.id : 'unknown';
+
 const buildGenerateObjectSpeed = (startedAt: number, usage: ModelUsage): ModelPerformance => {
   const latency = Math.max(Date.now() - startedAt, 0);
   const totalOutputTokens = usage.totalOutputTokens ?? usage.outputTextTokens ?? 0;
@@ -107,10 +115,15 @@ export interface ModelRuntimeHooks {
     payload: CreateVideoPayload,
     options?: CreateVideoMethodOptions,
   ) => Promise<void>;
+  beforeDecide?: (payload: DecisionPayload, options?: DecisionOptions) => Promise<void>;
   beforeEmbeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<void>;
   beforeGenerateObject?: (
     payload: GenerateObjectPayload,
     options?: GenerateObjectOptions,
+  ) => Promise<void>;
+  beforeTextToSpeech?: (
+    payload: TextToSpeechPayload,
+    options?: TextToSpeechOptions,
   ) => Promise<void>;
   beforeTranscribe?: (payload: ASRPayload, options?: ASROptions) => Promise<void>;
   /**
@@ -145,6 +158,27 @@ export interface ModelRuntimeHooks {
   onChatStreamError?: (
     error: unknown,
     context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+
+  onDecideError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: DecisionOptions; payload: DecisionPayload },
+  ) => void | Promise<void>;
+
+  /**
+   * Fires once after a successful decision, including when some answers are refusals.
+   * `usage` is undefined when the provider reports none, so consumers can still settle or
+   * release anything taken in `beforeDecide`.
+   */
+  onDecideFinal?: (
+    data: {
+      latencyMs: number;
+      /** USD charge reported by the upstream provider. Server-side only, like chat's. */
+      providerReportedCost?: number;
+      response: DecisionResponse;
+      usage?: ModelUsage;
+    },
+    context: { options?: DecisionOptions; payload: DecisionPayload },
   ) => void | Promise<void>;
 
   onEmbeddingsError?: (
@@ -184,6 +218,21 @@ export interface ModelRuntimeHooks {
   onGenerateObjectFinal?: (
     data: { speed?: ModelPerformance; usage?: ModelUsage },
     context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
+  ) => void | Promise<void>;
+
+  onTextToSpeechError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: TextToSpeechOptions; payload: TextToSpeechPayload },
+  ) => void | Promise<void>;
+
+  /**
+   * Fires once after a successful synthesis. `usage` is undefined when the provider
+   * reports none, so consumers can still settle or release anything taken in
+   * `beforeTextToSpeech`.
+   */
+  onTextToSpeechFinal?: (
+    data: { latencyMs: number; usage?: ModelUsage },
+    context: { options?: TextToSpeechOptions; payload: TextToSpeechPayload },
   ) => void | Promise<void>;
 
   onTranscribeError?: (
@@ -549,8 +598,46 @@ export class ModelRuntime {
       throw error;
     }
   }
-  async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
-    return this._runtime.textToSpeech?.(payload, options);
+  async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
+    try {
+      const hookOptions = this._hooks?.beforeTextToSpeech && !options ? {} : options;
+      await this._hooks?.beforeTextToSpeech?.(payload, hookOptions);
+
+      const startTime = Date.now();
+      let usage: ModelUsage | undefined;
+      const finalOptions = this._hooks?.onTextToSpeechFinal
+        ? {
+            ...hookOptions,
+            onUsage: async (reported: ModelUsage) => {
+              usage = reported;
+              await hookOptions?.onUsage?.(reported);
+            },
+          }
+        : hookOptions;
+
+      const result = await this._runtime.textToSpeech?.(payload, finalOptions);
+
+      if (this._hooks?.onTextToSpeechFinal) {
+        try {
+          await this._hooks.onTextToSpeechFinal(
+            { latencyMs: Date.now() - startTime, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onTextToSpeechFinal hook error:', e);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      if (this._hooks?.onTextToSpeechError) {
+        await this._hooks.onTextToSpeechError(error as ChatCompletionErrorPayload, {
+          options,
+          payload,
+        });
+      }
+      throw error;
+    }
   }
 
   async transcribe(payload: ASRPayload, options?: ASROptions) {
@@ -587,6 +674,68 @@ export class ModelRuntime {
     } catch (error) {
       if (this._hooks?.onTranscribeError) {
         await this._hooks.onTranscribeError(error as ChatCompletionErrorPayload, {
+          options,
+          payload,
+        });
+      }
+      throw error;
+    }
+  }
+
+  async decide<Q extends DecisionQuestions>(
+    payload: DecisionPayload<Q>,
+    options?: DecisionOptions,
+  ): Promise<DecisionResponse<Q>> {
+    // Unlike the optional-chained passthroughs above, an unsupported provider must not
+    // resolve to `undefined`: callers branch on the answers and would read it as a result.
+    // Thrown before the hooks run, so there is nothing for `onDecideError` to release.
+    const decide = this._runtime.decide?.bind(this._runtime);
+    if (!decide) {
+      throw AgentRuntimeError.chat({
+        error: new Error('Decision models are not supported by this provider'),
+        errorType: AgentRuntimeErrorType.CapabilityNotSupported,
+        provider: getRuntimeProviderId(this._runtime),
+      });
+    }
+
+    try {
+      const hookOptions = this._hooks?.beforeDecide && !options ? {} : options;
+      await this._hooks?.beforeDecide?.(payload, hookOptions);
+
+      const startTime = Date.now();
+      let usage: ModelUsage | undefined;
+      let providerReportedCost: number | undefined;
+      const finalOptions = this._hooks?.onDecideFinal
+        ? {
+            ...hookOptions,
+            onProviderReportedCost: async (cost: number) => {
+              providerReportedCost = cost;
+              await hookOptions?.onProviderReportedCost?.(cost);
+            },
+            onUsage: async (reported: ModelUsage) => {
+              usage = reported;
+              await hookOptions?.onUsage?.(reported);
+            },
+          }
+        : hookOptions;
+
+      const response = await decide(payload, finalOptions);
+
+      if (this._hooks?.onDecideFinal) {
+        try {
+          await this._hooks.onDecideFinal(
+            { latencyMs: Date.now() - startTime, providerReportedCost, response, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onDecideFinal hook error:', e);
+        }
+      }
+
+      return response as DecisionResponse<Q>;
+    } catch (error) {
+      if (this._hooks?.onDecideError) {
+        await this._hooks.onDecideError(error as ChatCompletionErrorPayload, {
           options,
           payload,
         });

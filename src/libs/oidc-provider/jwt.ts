@@ -1,6 +1,8 @@
-import { acceptanceIdFromReviewResource } from '@lobechat/const';
+import { acceptanceIdFromReviewResource, siteReviewFromResource } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import type { JSONWebKeySet, JWK, JWK_RSA_Public } from 'jose';
+import { calculateJwkThumbprint } from 'jose';
 
 import { authEnv } from '@/envs/auth';
 
@@ -51,7 +53,22 @@ export const getJWKS = (): object => {
   }
 };
 
-const getVerificationKey = async () => {
+const isRsaSigningKey = (key: JWK): key is JWK_RSA_Public =>
+  key.alg === 'RS256' &&
+  key.kty === 'RSA' &&
+  typeof key.e === 'string' &&
+  typeof key.n === 'string';
+
+const toPublicRsaKey = async (key: JWK_RSA_Public): Promise<JWK_RSA_Public> => ({
+  alg: 'RS256',
+  e: key.e,
+  kid: key.kid ?? (await calculateJwkThumbprint(key)),
+  kty: 'RSA',
+  n: key.n,
+  ...(key.use ? { use: key.use } : {}),
+});
+
+const getVerificationKeys = async () => {
   try {
     const jwksString = getJwksKeyString();
 
@@ -59,43 +76,60 @@ const getVerificationKey = async () => {
       throw new Error('JWKS_KEY environment variable is not set');
     }
 
-    const jwks = JSON.parse(jwksString);
+    const jwks = JSON.parse(jwksString) as JSONWebKeySet;
 
     if (!jwks.keys || !Array.isArray(jwks.keys) || jwks.keys.length === 0) {
       throw new Error('Invalid JWKS format: missing or empty keys array');
     }
 
-    const privateRsaKey = jwks.keys.find((key: any) => key.alg === 'RS256' && key.kty === 'RSA');
-    if (!privateRsaKey) {
+    const publicKeys = await Promise.all(jwks.keys.filter(isRsaSigningKey).map(toPublicRsaKey));
+    if (publicKeys.length === 0) {
       throw new Error('No RSA key with RS256 algorithm found in JWKS');
     }
 
-    // Create a “clean” JWK object containing only public key components.
-    // The key fields of an RSA public key are kty, n, e. Others like kid, alg, use are also public.
-    const publicKeyJwk = {
-      alg: privateRsaKey.alg,
-      e: privateRsaKey.e,
-      kid: privateRsaKey.kid,
-      kty: privateRsaKey.kty,
-      n: privateRsaKey.n,
-      use: privateRsaKey.use,
-    };
-
-    // Remove any undefined fields to keep the object clean
-    Object.keys(publicKeyJwk).forEach(
-      (key) => (publicKeyJwk as any)[key] === undefined && delete (publicKeyJwk as any)[key],
-    );
-
     const { importJWK } = await import('jose');
 
-    // Now, in any environment, `importJWK` will correctly identify this object as a public key.
-    return await importJWK(publicKeyJwk, 'RS256');
+    // Validate configuration before token verification so a malformed JWK remains an
+    // infrastructure error (500) instead of being misreported as invalid user auth (401).
+    await Promise.all(publicKeys.map((key) => importJWK(key, 'RS256')));
+
+    return publicKeys;
   } catch (error) {
     log('Failed to get JWKS public key: %O', error);
     throw new Error(`JWKS_KEY public key retrieval failed: ${(error as Error).message}`, {
       cause: error,
     });
   }
+};
+
+const isSignatureVerificationError = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  error.code === 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED';
+
+const verifyJwt = async (token: string, publicKeys: JWK_RSA_Public[]) => {
+  const { createLocalJWKSet, decodeProtectedHeader, importJWK, jwtVerify } = await import('jose');
+  const options = { algorithms: ['RS256'] };
+
+  if (decodeProtectedHeader(token).kid) {
+    return jwtVerify(token, createLocalJWKSet({ keys: publicKeys }), options);
+  }
+
+  // Tokens issued before this rotation support landed did not include `kid`.
+  // Try each retained key only for those in-flight tokens; newly issued tokens
+  // keep the exact-key lookup above and avoid ambiguous JWKS selection.
+  let signatureError: unknown;
+  for (const publicKey of publicKeys) {
+    try {
+      return await jwtVerify(token, await importJWK(publicKey, 'RS256'), options);
+    } catch (error) {
+      if (!isSignatureVerificationError(error)) throw error;
+      signatureError = error;
+    }
+  }
+
+  throw signatureError ?? new Error('No RSA key available for JWT verification');
 };
 
 /**
@@ -111,13 +145,10 @@ export const validateOIDCJWT = async (token: string) => {
   // plain Error so upstream middleware maps them to 500 and triggers ops
   // alerts — treating them as 401 would incorrectly ask clients to re-auth
   // while the real problem is server-side.
-  const publicKey = await getVerificationKey();
+  const publicKeys = await getVerificationKeys();
 
   try {
-    const { jwtVerify } = await import('jose');
-    const { payload } = await jwtVerify(token, publicKey, {
-      algorithms: ['RS256'],
-    });
+    const { payload } = await verifyJwt(token, publicKeys);
 
     log('JWT validation successful, payload: %O', payload);
 
@@ -173,11 +204,15 @@ export const validateOIDCJWT = async (token: string) => {
 };
 
 export const verifyAcceptanceReviewJWT = async (token: string) => {
-  const publicKey = await getVerificationKey();
-  const { jwtVerify } = await import('jose');
-  const { payload } = await jwtVerify(token, publicKey, { algorithms: ['RS256'] });
+  const publicKeys = await getVerificationKeys();
+  const { payload } = await verifyJwt(token, publicKeys);
   const acceptanceId = acceptanceIdFromReviewResource(payload.aud);
-  if (!isAcceptanceReviewClient(payload.client_id as string) || !acceptanceId || !payload.sub)
+  const site = siteReviewFromResource(payload.aud);
+  if (
+    !isAcceptanceReviewClient(payload.client_id as string) ||
+    (!acceptanceId && !site) ||
+    !payload.sub
+  )
     throw new Error('Not an acceptance review token');
-  return { acceptanceId, expiresAt: payload.exp, userId: payload.sub };
+  return { acceptanceId, expiresAt: payload.exp, site, userId: payload.sub };
 };

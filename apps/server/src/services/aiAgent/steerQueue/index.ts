@@ -1,9 +1,13 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
+import type { AgentSenderMetadata, ComposerUserMessage, MessageMetadata } from '@lobechat/types';
+import { COMPOSER_USER_MESSAGE_METADATA_KEYS, toComposerUserMessage } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
+import { MessageModel } from '@/database/models/message';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
+import { foldLegacyUserMessageFields } from '@/server/routers/lambda/aiAgent/execSchemas';
 import { assertCanUseAgentRunConversation } from '@/server/routers/lambda/aiAgent/guards';
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueEntry, SteerQueueScope } from '@/server/services/redis/steerQueue';
@@ -25,15 +29,25 @@ export type QueuedFollowUpRequest = Omit<
   | 'existingMessageIds'
   | 'includeFinalState'
   | 'parentMessageId'
+  | 'queuedSuccessor'
   | 'replacesOperationId'
+  | 'requireDevice'
   | 'resumeApproval'
   | 'resumeApprovals'
   | 'resumeToolResult'
   | 'sourceOperationId'
   | 'steer'
+  | 'title'
 >;
 
 export interface QueuedFollowUp extends SteerQueueEntry {
+  /**
+   * The sending agent, when another agent queued this (`lh topic send` into a
+   * busy conversation). Resolved by the server when it was queued: by the time
+   * the follow-up starts, the sending run has usually settled and can no longer
+   * vouch for it.
+   */
+  agentSender?: AgentSenderMetadata;
   /** Server-derived provenance of the request that queued it. */
   audit?: { clientIp?: string; userAgent?: string };
   /**
@@ -50,6 +64,24 @@ export interface QueuedFollowUp extends SteerQueueEntry {
 const uniq = <T>(items: T[]) => [...new Set(items)];
 
 /**
+ * Every follow-up's attached content is kept, in queue order. Rich text belongs
+ * to one message's text, so it survives only when a single follow-up is sent:
+ * a merged send's text is the joined prompts.
+ */
+const mergeComposerUserMessages = (
+  messages: (ComposerUserMessage | undefined)[],
+): ComposerUserMessage | undefined => {
+  const metadata: Record<string, unknown[]> = {};
+  for (const key of COMPOSER_USER_MESSAGE_METADATA_KEYS) {
+    const values = messages.flatMap((message): unknown[] => message?.metadata?.[key] ?? []);
+    if (values.length) metadata[key] = values;
+  }
+  const editorData = messages.length === 1 ? messages[0]?.editorData : undefined;
+
+  return toComposerUserMessage({ editorData, metadata: metadata as MessageMetadata });
+};
+
+/**
  * Fold every waiting follow-up into one request, the way the client merges its
  * own queue: the texts in queue order, every attachment and selection kept.
  * The newest entry decides the run settings (model, device, approvals), since
@@ -60,8 +92,6 @@ export const mergeQueuedFollowUps = (entries: QueuedFollowUp[]): QueuedFollowUpR
   const latest = sorted.at(-1)!.request;
 
   const fileIds = uniq(sorted.flatMap((entry) => entry.request.fileIds ?? []));
-  const contextSelections = sorted.flatMap((entry) => entry.request.contextSelections ?? []);
-  const pageSelections = sorted.flatMap((entry) => entry.request.pageSelections ?? []);
   const selectedSkillIds = uniq(sorted.flatMap((entry) => entry.request.selectedSkillIds ?? []));
   const selectedToolIds = uniq(sorted.flatMap((entry) => entry.request.selectedToolIds ?? []));
   const mentionedAgents = [
@@ -75,13 +105,40 @@ export const mergeQueuedFollowUps = (entries: QueuedFollowUp[]): QueuedFollowUpR
     // Client-minted row ids belong to one optimistic send; a merged send
     // creates rows none of the queued sends announced.
     clientIds: sorted.length === 1 ? latest.clientIds : undefined,
-    contextSelections: contextSelections.length ? contextSelections : undefined,
     fileIds: fileIds.length ? fileIds : undefined,
     mentionedAgents: mentionedAgents.length ? mentionedAgents : undefined,
-    pageSelections: pageSelections.length ? pageSelections : undefined,
     prompt: sorted.map((entry) => entry.request.prompt).join('\n\n'),
     selectedSkillIds: selectedSkillIds.length ? selectedSkillIds : undefined,
     selectedToolIds: selectedToolIds.length ? selectedToolIds : undefined,
+    userMessage: mergeComposerUserMessages(sorted.map((entry) => entry.request.userMessage)),
+  };
+};
+
+const senderKey = (entry: QueuedFollowUp) =>
+  entry.agentSender
+    ? [entry.agentSender.agentId, entry.agentSender.topicId, entry.agentSender.threadId].join('|')
+    : '';
+
+/**
+ * Split off the leading follow-ups that share one author — the person, or one
+ * sending agent's conversation. Merged follow-ups become one user message with
+ * one author, so an agent's message must not be folded into the person's (it
+ * would read as typed by them) nor into another agent's (the reply would go to
+ * only one of them). The rest wait for the next turn.
+ */
+export const takeSameSenderFollowUps = (
+  entries: QueuedFollowUp[],
+): { agentSender?: AgentSenderMetadata; rest: QueuedFollowUp[]; taken: QueuedFollowUp[] } => {
+  const sorted = [...entries].sort((a, b) => a.createdAt - b.createdAt);
+  if (sorted.length === 0) return { rest: [], taken: [] };
+  const key = senderKey(sorted[0]);
+  const firstOther = sorted.findIndex((entry) => senderKey(entry) !== key);
+  const taken = firstOther === -1 ? sorted : sorted.slice(0, firstOther);
+
+  return {
+    agentSender: sorted[0].agentSender,
+    rest: sorted.slice(taken.length),
+    taken,
   };
 };
 
@@ -180,7 +237,11 @@ export const drainOwnFollowUps = async (
     return drain();
   });
 
-  const entries = drained.filter((entry) => entry.userId === ctx.userId);
+  const entries = drained
+    .filter((entry) => entry.userId === ctx.userId)
+    // Entries queued before `userMessage` existed (they live in Redis across a
+    // deploy) still carry the top-level selection fields; read them as one shape.
+    .map((entry) => ({ ...entry, request: foldLegacyUserMessageFields(entry.request) }));
   if (entries.length < drained.length) {
     // Acknowledged along with the rest of the batch; never sent.
     log('[%s] Dropped %d foreign queued follow-ups', operationId, drained.length - entries.length);
@@ -224,6 +285,43 @@ export const checkFollowUpAccess = async (
 };
 
 /**
+ * The id of the user message a drained batch is sent as. A single follow-up
+ * keeps the id its optimistic row was minted under; a merged batch gets one
+ * derived from its entries, so every attempt at the same batch names the same
+ * row and a later attempt can tell whether an earlier one already wrote it.
+ */
+export const queuedUserMessageId = (
+  userId: string,
+  entries: QueuedFollowUp[],
+  request: QueuedFollowUpRequest,
+): string =>
+  request.clientIds?.userMessageId ??
+  `msg_${createHash('sha256')
+    .update(JSON.stringify([userId, ...entries.map((entry) => entry.id).sort()]))
+    .digest('hex')
+    .slice(0, 24)}`;
+
+/**
+ * Whether the batch's user message is already in the conversation. A start
+ * that wrote it can still fail afterwards (a Task run lost to a concurrent
+ * send, an abort, a failure past turn setup); sending the batch again would
+ * then add the same message twice, or — with a fixed id — fail on it forever.
+ * `undefined` when the lookup itself failed.
+ */
+const isUserMessageWritten = async (
+  ctx: Pick<ComposerRunContext, 'db' | 'userId' | 'workspaceId'>,
+  messageId: string,
+): Promise<boolean | undefined> => {
+  try {
+    const messageModel = new MessageModel(ctx.db, ctx.userId, ctx.workspaceId ?? undefined);
+    return !!(await messageModel.findById(messageId));
+  } catch (error) {
+    console.error('[startQueuedFollowUp] reading user message %s failed: %O', messageId, error);
+    return undefined;
+  }
+};
+
+/**
  * A top-level run just finished on `scope`: start the follow-ups still queued
  * behind it as the next turn, here on the server, instead of waiting for a
  * client to drain them. A native run takes most follow-ups into itself before
@@ -234,6 +332,8 @@ export const checkFollowUpAccess = async (
  * Drain is atomic, so exactly one finishing run takes a given follow-up. When
  * the next turn cannot start, the follow-ups go back to the head of the queue —
  * the next run that ends picks them up, and the client can still list them.
+ * Only a start that never wrote the user message goes back: once it is in the
+ * conversation the follow-ups are delivered, even if the run then failed.
  * When the user lost access to the agent or conversation meanwhile, they are
  * dropped instead.
  *
@@ -247,10 +347,15 @@ export const startQueuedFollowUp = async (
   const { scope } = params;
 
   const drained = await drainOwnFollowUps(ctx, scope, params.operationId);
-  const { entries } = drained;
-  if (entries.length === 0) return;
+  if (drained.entries.length === 0) return;
 
-  const request = mergeQueuedFollowUps(entries);
+  // One author per turn; the run this starts picks the others up when it ends.
+  const { agentSender, rest, taken: entries } = takeSameSenderFollowUps(drained.entries);
+  await returnFollowUps(scope, drained, rest, 'sent by another author');
+
+  const merged = mergeQueuedFollowUps(entries);
+  const userMessageId = queuedUserMessageId(ctx.userId, entries, merged);
+  const request = { ...merged, clientIds: { ...merged.clientIds, userMessageId } };
   const audit = entries.at(-1)!.audit;
 
   try {
@@ -272,6 +377,14 @@ export const startQueuedFollowUp = async (
       await returnFollowUps(scope, drained, entries, `left to live run ${others[0]}`);
       return;
     }
+
+    // An earlier attempt wrote the message but was never acknowledged (its
+    // process died, or its batch lapsed back): it is already delivered.
+    if (await isUserMessageWritten(ctx, userMessageId)) {
+      log('[%s] Queued follow-up %s was already written', params.operationId, userMessageId);
+      await ackFollowUps(scope, drained);
+      return;
+    }
   } catch (error) {
     await returnFollowUps(scope, drained, entries, error);
     return;
@@ -284,8 +397,11 @@ export const startQueuedFollowUp = async (
       { ...ctx, clientIp: audit?.clientIp, supersedeLiveRun: false, userAgent: audit?.userAgent },
       {
         ...request,
+        agentSender,
         appContext: { ...request.appContext, threadId: scope.threadId, topicId: scope.topicId },
-        steer: true,
+        // A drained follow-up starts its own turn — it did not steer the run
+        // it waited behind, so the user message stays unmarked.
+        queuedSuccessor: true,
       },
     );
     log(
@@ -297,6 +413,15 @@ export const startQueuedFollowUp = async (
     await ackFollowUps(scope, drained);
     return { operationId: result.operationId };
   } catch (error) {
+    if (await isUserMessageWritten(ctx, userMessageId)) {
+      console.error(
+        '[startQueuedFollowUp] queued follow-up %s was written but its run failed to start: %O',
+        userMessageId,
+        error,
+      );
+      await ackFollowUps(scope, drained);
+      return;
+    }
     await returnFollowUps(scope, drained, entries, error);
     return;
   }

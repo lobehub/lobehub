@@ -29,7 +29,14 @@ export interface AcceptanceListFacets {
 /** The key a project choice is scoped to: the active workspace, or `personal`. */
 export const acceptanceProjectScopeKey = (workspaceId?: string | null) => workspaceId ?? 'personal';
 
-export const DEFAULT_ACCEPTANCE_LIST_FACETS: AcceptanceListFacets = { scope: 'all', source: 'all' };
+/** A list opens on the caller's own deliveries; `all` widens to the whole scope. */
+export const DEFAULT_ACCEPTANCE_LIST_FACETS: AcceptanceListFacets = {
+  scope: 'created',
+  source: 'all',
+};
+
+/** What "show all" resets to — every facet open, unlike the default. */
+const SHOW_ALL_ACCEPTANCE_LIST_FACETS: AcceptanceListFacets = { scope: 'all', source: 'all' };
 
 /**
  * Persisted facets are untrusted — a stale or hand-edited value falls back per
@@ -40,7 +47,9 @@ export const normalizeAcceptanceListFacets = (
   projectScope: string = acceptanceProjectScopeKey(),
 ): AcceptanceListFacets => {
   const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
-  const scope = ACCEPTANCE_LIST_SCOPES.find((item) => item === raw.scope) ?? 'all';
+  const scope =
+    ACCEPTANCE_LIST_SCOPES.find((item) => item === raw.scope) ??
+    DEFAULT_ACCEPTANCE_LIST_FACETS.scope;
   const source = ACCEPTANCE_LIST_SOURCES.find((item) => item === raw.source) ?? 'all';
   const sameScope = (raw.projectScope ?? acceptanceProjectScopeKey()) === projectScope;
   const projectId = !sameScope
@@ -73,11 +82,11 @@ export const resetAcceptanceListFacets = (
 ): AcceptanceListFacets =>
   hostProjectId
     ? {
-        ...DEFAULT_ACCEPTANCE_LIST_FACETS,
+        ...SHOW_ALL_ACCEPTANCE_LIST_FACETS,
         projectId: facets.projectId,
         projectScope: facets.projectScope,
       }
-    : DEFAULT_ACCEPTANCE_LIST_FACETS;
+    : SHOW_ALL_ACCEPTANCE_LIST_FACETS;
 
 /** Whether the facets narrow the list beyond what its host already fixes. */
 export const isAcceptanceListFacetsNarrowed = (

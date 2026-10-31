@@ -1,4 +1,6 @@
 export default {
+  'navigation.resourceDrive': 'Drive',
+  'navigation.resourceWorks': 'Works',
   'startupUpdate.requiredTitle': 'Update required',
   'startupUpdate.requiredDescription': 'This version has a security issue. Update to continue.',
   'startupUpdate.checking': 'Checking for updates…',
@@ -10,7 +12,7 @@ export default {
 
   'navigation.agentShare': 'Share',
   'navigation.agents': 'Agents',
-  'navigation.channels': 'Channels',
+  'navigation.channels': 'IM Bots',
   'navigation.chat': 'Chat',
   'navigation.dashboard': 'Dashboards',
   'navigation.discover': 'Discover',
@@ -45,7 +47,7 @@ export default {
   'navigation.projects': 'Projects',
   'navigation.provider': 'Provider',
   'navigation.recentView': 'Recent pages',
-  'navigation.resources': 'Resources',
+  'navigation.resources': 'Docs',
   'navigation.resourceAll': 'All',
   'navigation.resourceAudios': 'Audio',
   'navigation.resourceDocuments': 'Documents',
@@ -114,6 +116,14 @@ export default {
   'proxy.validation.typeRequired': 'Proxy type is required when proxy is enabled',
   'proxy.validation.usernameRequired': 'Username is required when authentication is enabled',
   'gateway.enableConnection': 'Connect to Gateway',
+  'gateway.error.authRejected':
+    'Device Gateway rejected this sign-in. Retry or sign in again. If it persists, ask your server administrator to check the gateway configuration.',
+  'gateway.error.configUnavailable':
+    "Couldn't load this server's configuration. Check your connection and retry.",
+  'gateway.error.invalidAddress':
+    'The Device Gateway address is invalid. Check the desktop environment or existing configuration, or ask your server administrator to check the gateway address.',
+  'gateway.error.notSignedIn': 'Sign in to connect this device.',
+  'gateway.retry': 'Retry',
   'gateway.manageDevices': 'Manage devices',
   'gateway.statusConnected': 'This device is connected to Gateway',
   'gateway.statusConnectedConnections_one': 'Online · {{count}} connection',

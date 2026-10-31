@@ -14,8 +14,13 @@ vi.mock('@/database/models/workspaceMember', () => ({
 }));
 
 const db = {} as never;
-const row = (userId: string, workspaceId: string | null) =>
-  ({ userId, workspaceId }) as { userId: string; workspaceId: string | null };
+type Visibility = 'owner' | 'private' | 'public';
+const row = (userId: string, workspaceId: string | null, visibility: Visibility = 'private') =>
+  ({ userId, visibility, workspaceId }) as {
+    userId: string;
+    visibility: Visibility;
+    workspaceId: string | null;
+  };
 
 beforeEach(() => {
   getMember.mockReset();
@@ -41,12 +46,32 @@ describe('canManageAcceptance', () => {
     expect(getMember).toHaveBeenCalledWith('ws_a', 'me');
   });
 
-  it('does not let an ordinary member write a teammate delivery', async () => {
-    getMember.mockResolvedValue({ role: 'member' });
+  it("lets an admin of the acceptance's own workspace write a teammate's delivery", async () => {
+    getMember.mockResolvedValue({ role: 'admin' });
+
+    await expect(
+      canManageAcceptance({ serverDB: db, userId: 'me' }, row('teammate', 'ws_a')),
+    ).resolves.toBe(true);
+    expect(getMember).toHaveBeenCalledWith('ws_a', 'me');
+  });
+
+  it('does not let a viewer write a teammate delivery', async () => {
+    getMember.mockResolvedValue({ role: 'viewer' });
 
     await expect(
       canManageAcceptance({ serverDB: db, userId: 'me' }, row('teammate', 'ws_a')),
     ).resolves.toBe(false);
+  });
+
+  // A member holds write access, like a repository's write permission that is
+  // enough to merge a pull request — only viewers are kept to comments.
+  it("lets an ordinary member of the acceptance's own workspace write a teammate's delivery", async () => {
+    getMember.mockResolvedValue({ role: 'member' });
+
+    await expect(
+      canManageAcceptance({ serverDB: db, userId: 'me' }, row('teammate', 'ws_a')),
+    ).resolves.toBe(true);
+    expect(getMember).toHaveBeenCalledWith('ws_a', 'me');
   });
 
   it('does not let a non-member write it', async () => {
@@ -64,11 +89,31 @@ describe('canManageAcceptance', () => {
     expect(getMember).not.toHaveBeenCalled();
   });
 
+  it("keeps an only-me delivery its creator's, whatever the teammate's role", async () => {
+    getMember.mockResolvedValue({ role: 'owner' });
+
+    await expect(
+      canManageAcceptance({ serverDB: db, userId: 'me' }, row('teammate', 'ws_a', 'owner')),
+    ).resolves.toBe(false);
+    await expect(
+      canManageAcceptance({ serverDB: db, userId: 'me' }, row('me', 'ws_a', 'owner')),
+    ).resolves.toBe(true);
+  });
+
   it('refuses an anonymous caller', async () => {
     await expect(canManageAcceptance({ serverDB: db }, row('teammate', 'ws_a'))).resolves.toBe(
       false,
     );
     expect(getMember).not.toHaveBeenCalled();
+  });
+
+  it('keeps a site review read-only even for its creator', async () => {
+    await expect(
+      canManageAcceptance(
+        { serverDB: db, userId: 'me' },
+        { ...row('me', 'ws_a'), subjectType: 'site' },
+      ),
+    ).resolves.toBe(false);
   });
 });
 
@@ -77,20 +122,35 @@ describe('filterManageableAcceptances', () => {
     getRolesInWorkspaces.mockResolvedValue(
       new Map([
         ['ws_owned', 'owner'],
+        ['ws_admin', 'admin'],
         ['ws_member', 'member'],
+        ['ws_viewer', 'viewer'],
       ]),
     );
 
     const rows = [
       row('me', null),
       row('me', 'ws_member'),
+      { ...row('me', 'ws_owned'), subjectType: 'site' as const },
+      { ...row('teammate', 'ws_member'), subjectType: 'site' as const },
       row('teammate', 'ws_owned'),
+      row('teammate', 'ws_admin'),
       row('teammate', 'ws_member'),
+      row('teammate', 'ws_viewer'),
       row('teammate', null),
+      row('teammate', 'ws_owned', 'owner'),
+      row('me', 'ws_owned', 'owner'),
     ];
     await expect(
       filterManageableAcceptances({ serverDB: db, userId: 'me' }, rows),
-    ).resolves.toEqual([row('me', null), row('me', 'ws_member'), row('teammate', 'ws_owned')]);
+    ).resolves.toEqual([
+      row('me', null),
+      row('me', 'ws_member'),
+      row('teammate', 'ws_owned'),
+      row('teammate', 'ws_admin'),
+      row('teammate', 'ws_member'),
+      row('me', 'ws_owned', 'owner'),
+    ]);
   });
 
   it('reads roles for every distinct foreign workspace in one query', async () => {

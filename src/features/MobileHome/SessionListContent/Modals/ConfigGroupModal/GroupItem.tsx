@@ -10,8 +10,8 @@ import { PencilLine, Trash } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useSessionStore } from '@/store/session';
-import { type SessionGroupItem } from '@/types/session';
+import { useHomeStore } from '@/store/home';
+import { type SessionGroupItemBase } from '@/types/session';
 
 const styles = createStaticStyles(({ css }) => ({
   content: css`
@@ -27,7 +27,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface GroupItemProps extends SessionGroupItem {
+interface GroupItemProps extends SessionGroupItemBase {
   disabled?: boolean;
 }
 
@@ -35,9 +35,9 @@ const GroupItem = memo<GroupItemProps>(({ id, name, disabled = false }) => {
   const { t } = useTranslation(['chat', 'common']);
 
   const [editing, setEditing] = useState(false);
-  const [updateSessionGroupName, removeSessionGroup] = useSessionStore((s) => [
-    s.updateSessionGroupName,
-    s.removeSessionGroup,
+  const [updateSessionGroupName, removeSessionGroup] = useHomeStore((s) => [
+    s.updateGroupName,
+    s.removeGroup,
   ]);
 
   return (

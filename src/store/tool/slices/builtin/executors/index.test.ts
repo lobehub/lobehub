@@ -1,3 +1,8 @@
+import {
+  DashboardApiName,
+  DashboardIdentifier,
+  LegacyDashboardIdentifier,
+} from '@lobechat/builtin-tool-dashboard';
 import { LobeAgentApiName, LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import {
   WebOnboardingApiName,
@@ -39,6 +44,16 @@ describe('builtin executor registry', () => {
   it('does not register executors as an import side effect', () => {
     expect(getRegisteredIdentifiers()).toEqual([]);
   });
+
+  it('runs dashboard calls under the current and the pre-rename identifier', async () => {
+    await registerBuiltinToolExecutors();
+
+    for (const identifier of [DashboardIdentifier, LegacyDashboardIdentifier]) {
+      await expect(hasExecutor(identifier, DashboardApiName.createDashboard)).resolves.toBe(true);
+      await expect(hasExecutor(identifier, DashboardApiName.updateDashboard)).resolves.toBe(true);
+    }
+    // First test to load every builtin executor; the cold import alone can pass 5s on CI.
+  }, 30_000);
 
   it('registers web onboarding executor APIs explicitly', async () => {
     await registerBuiltinToolExecutors();

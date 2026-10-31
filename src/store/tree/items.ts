@@ -55,10 +55,19 @@ export const sortTreeItems = <T extends TreeItem>(items: T[]): T[] => {
   });
 };
 
+/**
+ * Whether a row has children to walk: every folder, plus a document the server
+ * reports something under. Only for walking and expanding — folder navigation,
+ * drop targets and folder-only actions keep checking `isFolder`.
+ */
+export const isExpandable = (item: Pick<TreeItem, 'hasChildren' | 'isFolder'>): boolean =>
+  item.isFolder || !!item.hasChildren;
+
 export const toTreeItem = (item: {
   createdAt?: Date | string | null;
   fileId?: string | null;
   fileType: string;
+  hasChildren?: boolean;
   id: string;
   metadata?: Record<string, any> | null;
   name: string;
@@ -73,6 +82,7 @@ export const toTreeItem = (item: {
   createdAt: item.createdAt ?? undefined,
   fileId: item.fileId,
   fileType: item.fileType,
+  hasChildren: item.hasChildren,
   id: item.id,
   isFolder: item.fileType === CUSTOM_FOLDER_FILE_TYPE,
   metadata: item.metadata ?? undefined,
@@ -100,6 +110,7 @@ export const toTreeItemFromResource = (item: {
   createdAt?: Date | string | null;
   fileId?: string | null;
   fileType: string;
+  hasChildren?: boolean;
   id: string;
   metadata?: Record<string, any> | null;
   name: string;

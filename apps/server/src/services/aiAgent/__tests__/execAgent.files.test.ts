@@ -438,13 +438,18 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         { content: 'Quoted reply', format: 'text' as const, id: 'sel-1', source: 'text' as const },
       ];
 
-      await service.execAgent({ agentId: 'agent-1', contextSelections, prompt: 'Explain this' });
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Explain this',
+        userMessage: { metadata: { contextSelections } },
+      });
 
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
       expect(userMessageCall![0].metadata).toMatchObject({ contextSelections });
-      // The context engine injects selections from the user message metadata.
+      // The run sees the same metadata the row was persisted with; the context
+      // engine injects selections from it.
       const lastMessage = mockCreateOperation.mock.calls[0][0].initialMessages.at(-1);
-      expect(lastMessage.metadata).toEqual({ contextSelections });
+      expect(lastMessage.metadata).toEqual(userMessageCall![0].metadata);
     });
   });
 

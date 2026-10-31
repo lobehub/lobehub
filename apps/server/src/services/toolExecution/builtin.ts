@@ -157,7 +157,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     // budget and an upstream that closed the stream early look identical.
     // Naming max_tokens made models tell users the platform caps output and
     // that they should raise a setting, which was wrong for interrupted streams
-    // (LOBE-14901), so the message lists both causes and asks the model not to
+    // so the message lists both causes and asks the model not to
     // assert either one.
     if (parsed === undefined && argsStr?.trim()) {
       const truncationReason = detectTruncatedJSON(argsStr);

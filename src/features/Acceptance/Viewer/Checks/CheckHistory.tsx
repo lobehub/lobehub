@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import AudioPlayer from '@/features/AudioPlayer';
 import { useIsHydrated } from '@/hooks/useIsHydrated';
 
+import { TerminalEvidenceCard } from '../../Report/TerminalEvidence';
 import { AnnotatedImage } from '../Evidence/Annotation';
 import { AttachmentThumbs } from '../Evidence/attachments';
 import { IMAGE_EVIDENCE, imageRatio } from '../Evidence/evidence';
@@ -266,6 +267,12 @@ export const IterationTimeline = memo<{
                           downloadFileName={item.fileName ?? 'audio'}
                           url={item.fileUrl}
                         />
+                      </div>
+                    ) : item.type === 'terminal' ? (
+                      // An earlier round's execution keeps its command card —
+                      // folded to one line, the same record the live row shows.
+                      <div key={item.id} style={{ width: '100%' }}>
+                        <TerminalEvidenceCard evidence={item} />
                       </div>
                     ) : item.content ? (
                       <div

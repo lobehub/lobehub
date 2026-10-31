@@ -27,11 +27,13 @@ import { agents } from '@/database/schemas';
 import { notTrashed } from '@/database/utils/softDelete';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
   mergeBotSettingsForPersist,
+  mergeBotSettingsPatch,
 } from '@/server/services/bot/agentBotProviderSettings';
 import type { ResolvedMessageTarget } from '@/server/services/bot/messageTarget';
 import {
@@ -58,6 +60,7 @@ import { sendMessengerPush } from '@/server/services/messenger/push';
 import type { ServerRuntimeRegistration } from '../types';
 import type { MessageRouteParams } from './MessageDispatcherService';
 import { MessageDispatcherService } from './MessageDispatcherService';
+import { createMessageImageStore } from './storeMessageImages';
 
 /**
  * Shape returned by `listMessengers` / `getMessengerDetail` to the tool runtime.
@@ -415,8 +418,24 @@ export const messageRuntime: ServerRuntimeRegistration = {
 
     const service = new MessageDispatcherService(serviceFactories, { resolveRoute });
 
+    /**
+     * Bot runs act with the owner's credentials, so whoever talks to the bot in a shared channel
+     * could otherwise talk it into rewiring itself. Every call that changes a bot or messenger
+     * connection refuses unless the person who sent the message this run answers is the owner.
+     * Keyed on the run's own sender (`botContext`, built per inbound message), not the topic's
+     * first author; a run outside an IM conversation carries none and is unaffected.
+     */
+    const assertOwnerMayManageBots = () => {
+      if (context.botContext && !context.botContext.isOwner) {
+        throw new Error(
+          "Only the bot's owner can change its settings. Ask them to make this change.",
+        );
+      }
+    };
+
     const botProvider: BotProviderQuery = {
       connectBot: async (botId) => {
+        assertOwnerMayManageBots();
         const bot = await providerModel.findById(botId);
         if (!bot) throw new Error(`Bot not found: ${botId}`);
         await assertBotFeatureAccess({
@@ -431,6 +450,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return { status };
       },
       createBot: async (params) => {
+        assertOwnerMayManageBots();
         await assertBotFeatureAccess({
           action: 'manage',
           applicationId: params.applicationId,
@@ -451,6 +471,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return { id: result.id, platform: params.platform };
       },
       deleteBot: async (botId) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         await providerModel.delete(botId);
         if (existing) {
@@ -474,7 +495,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
           id: bot.id,
           platform: bot.platform,
           runtimeStatus: status.status,
-          settings: (bot.settings as Record<string, unknown>) ?? undefined,
+          // As the settings form shows them, so the agent reads the keys `updateBot` writes
+          // (`botWakeDuties`) even for a bot configured with a nested `botWake` object.
+          settings: flattenBotWakeSettings(bot.settings as Record<string, unknown>) ?? undefined,
         };
       },
       listBots: async () => {
@@ -515,6 +538,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         });
       },
       toggleBot: async (botId, enabled) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
         if (enabled) {
@@ -537,6 +561,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         );
       },
       updateBot: async (botId, params) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
         await assertBotFeatureAccess({
@@ -551,7 +576,12 @@ export const messageRuntime: ServerRuntimeRegistration = {
           {};
         if (params.credentials !== undefined) value.credentials = params.credentials;
         if (params.settings !== undefined) {
-          const merged = mergeBotSettingsForPersist(existing.platform, params.settings);
+          // A partial update: the keys the agent did not send keep their stored values.
+          const merged = mergeBotSettingsPatch(
+            existing.platform,
+            existing.settings as Record<string, unknown> | null,
+            params.settings,
+          );
           assertBotAccessSettings(merged);
           await assertWatchKeywordsWritable({
             applicationId: existing.applicationId,
@@ -693,6 +723,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       uninstallMessenger: async (installationId) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required to uninstall');
         }
@@ -782,6 +813,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       setMessengerActiveAgent: async (params) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required');
         }
@@ -825,6 +857,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       unlinkMessenger: async (params) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required');
         }
@@ -874,7 +907,16 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
     };
 
-    return new MessageExecutionRuntime({ botProvider, service });
+    return new MessageExecutionRuntime({
+      botProvider,
+      resolveImages: createMessageImageStore({
+        agentId: context.agentId,
+        serverDB,
+        userId,
+        workspaceId: context.workspaceId,
+      }),
+      service,
+    });
   },
   identifier: MessageToolIdentifier,
 };

@@ -66,6 +66,50 @@ describe('AgentManagementContextInjector', () => {
       expect(result.messages[2].content).toBe('create an agent');
       expect(result.metadata.agentManagementContextInjected).toBe(true);
     });
+
+    it('names the current agent and the available ones by name and title', async () => {
+      const injector = new AgentManagementContextInjector({
+        enabled: true,
+        context: {
+          availableAgents: [
+            { id: 'agt_2', name: 'Tiko', title: 'Design reviewer' },
+            { description: 'drafts docs', id: 'agt_3', title: 'Writer' },
+          ],
+          currentAgent: { id: 'agt_1', name: 'Nasa', title: 'Shadow Arvin' },
+        },
+      });
+
+      const result = await injector.process(
+        createContext([
+          { role: 'system', content: 'sys' },
+          { role: 'user', content: 'who are you' },
+        ]),
+      );
+      const content = result.messages[1].content as string;
+
+      expect(content).toContain('<current_agent id="agt_1" name="Nasa" title="Shadow Arvin" />');
+      expect(content).toContain('<agent id="agt_2">Tiko (Design reviewer)</agent>');
+      // An agent without a name keeps its title, as before.
+      expect(content).toContain('<agent id="agt_3">Writer - drafts docs</agent>');
+    });
+
+    it('leaves out a blank name or title instead of an empty attribute', async () => {
+      const injector = new AgentManagementContextInjector({
+        enabled: true,
+        context: { currentAgent: { id: 'agt_1', name: '  ', title: 'Shadow Arvin' } },
+      });
+
+      const result = await injector.process(
+        createContext([
+          { role: 'system', content: 'sys' },
+          { role: 'user', content: 'hi' },
+        ]),
+      );
+
+      expect(result.messages[1].content).toContain(
+        '<current_agent id="agt_1" title="Shadow Arvin" />',
+      );
+    });
   });
 
   describe('mentionedAgents delegation', () => {

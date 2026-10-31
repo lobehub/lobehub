@@ -2,6 +2,7 @@ import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
 import { type DropdownItem } from '@lobehub/ui';
 import { copyToClipboard, Icon, toast } from '@lobehub/ui';
+import { useLatest, useUnmountedRef } from 'ahooks';
 import {
   Archive,
   ArchiveRestore,
@@ -15,8 +16,9 @@ import {
   PanelRight,
   PanelTop,
   PencilLine,
+  Pin,
+  PinOff,
   Share,
-  Star,
   Stethoscope,
   Trash,
   Wand2,
@@ -32,7 +34,8 @@ import { isDesktop } from '@/const/version';
 import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { createTopicForwardModal } from '@/features/Conversation/MessageForward/TopicForwardModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
-import { getProjectConversationPath } from '@/features/Projects/Layout/navigation';
+import { useFavoriteMenuItem } from '@/features/Favorites';
+import { getProjectTopicPath } from '@/features/Projects/Layout/navigation';
 import { openShareModal } from '@/features/ShareModal';
 import { openTopicDoctorModal } from '@/features/TopicDoctorModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -42,6 +45,7 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
@@ -72,7 +76,11 @@ export const useTopicItemDropdownMenu = ({
   const navigate = useWorkspaceAwareNavigate();
   const activeWorkspaceId = useActiveWorkspaceId();
   const { pathname } = useActiveLocation();
-  const routeTopicId = pathname.match(/\/project\/[^/]+\/conversation\/([^/]+)\/?$/)?.[1];
+  const routeTopicId = pathname.match(/\/project\/[^/]+\/topic\/([^/]+)\/?$/)?.[1];
+  // Read after awaits: the user may open another topic, or leave the project
+  // (unmounting this sidebar), while an archive is in flight.
+  const routeTopicIdRef = useLatest(routeTopicId);
+  const unmountedRef = useUnmountedRef();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canCreateTopic } = usePermission('create_content');
   const { allowed: canEditTopic } = usePermission('edit_own_content');
@@ -83,10 +91,33 @@ export const useTopicItemDropdownMenu = ({
   const { scope, refresh } = useScopedTopics();
   const fallbackAgentId = useAgentStore((s) => s.activeAgentId);
   const activeAgentId = scopedTopic?.agentId ?? fallbackAgentId;
+  // Project rows carry their agent's provider type, since a cold project visit
+  // never loads each row agent's config into the store.
+  const isHeterogeneous = useAgentStore(
+    (s) =>
+      !!scopedTopic?.agentHeterogeneousProviderType ||
+      (!!activeAgentId &&
+        !!agentSelectors.getAgentConfigById(activeAgentId)(s)?.agencyConfig?.heterogeneousProvider),
+  );
   const addTab = useElectronStore((s) => s.addTab);
   const appOrigin = useAppOrigin();
   const enableTopicBugReport = useUserStore(labPreferSelectors.enableTopicBugReport);
   const bugReportItem = useTopicBugReportMenuItem({ agentId: activeAgentId, topicId: id });
+  // Pin (`fav`) orders the topic list; a favorite adds the topic to the home
+  // sidebar's Favorites section. A topic still titled `...` is being named, so
+  // it waits for its real title before it can be added.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    id && activeAgentId
+      ? {
+          path: AGENT_CHAT_TOPIC_URL(activeAgentId, id),
+          snapshotReady: !!title && title !== '...',
+          targetId: id,
+          title,
+          type: 'topic',
+        }
+      : undefined,
+    { showHotkey: false },
+  );
 
   const [
     autoRenameTopicTitle,
@@ -107,6 +138,27 @@ export const useTopicItemDropdownMenu = ({
   ]);
 
   const isCompleted = status === 'completed';
+  const toggleCompleted = useCallback(async () => {
+    if (!id) return;
+    if (isCompleted) await unmarkTopicCompleted(id);
+    else await markTopicCompleted(id);
+    if (scope) {
+      if (!isCompleted && !unmountedRef.current && routeTopicIdRef.current === id)
+        navigate(`/project/${scope.projectId}`);
+      await refresh();
+    }
+  }, [
+    id,
+    isCompleted,
+    markTopicCompleted,
+    unmarkTopicCompleted,
+    scope,
+    routeTopicIdRef,
+    unmountedRef,
+    navigate,
+    refresh,
+  ]);
+
   const handleOpenShareModal = useCallback(() => {
     if (!id) return;
 
@@ -124,24 +176,21 @@ export const useTopicItemDropdownMenu = ({
         label:
           completionLabel ??
           (isCompleted ? t('actions.unmarkCompleted') : t('actions.markCompleted')),
-        onClick: async () => {
-          if (isCompleted) await unmarkTopicCompleted(id);
-          else await markTopicCompleted(id);
-          if (scope) await refresh();
-        },
+        onClick: toggleCompleted,
         sfSymbol: isCompleted ? 'tray.and.arrow.up' : 'archivebox',
       },
       {
         disabled: !canEditTopic,
-        icon: <Icon icon={Star} />,
+        icon: <Icon icon={fav ? PinOff : Pin} />,
         key: 'favorite',
-        label: fav ? t('actions.unfavorite') : t('actions.favorite'),
+        label: fav ? t('actions.unpin') : t('actions.pin'),
         onClick: async () => {
           await favoriteTopic(id, !fav);
           if (scope) await refresh();
         },
-        sfSymbol: fav ? 'star.slash' : 'star',
+        sfSymbol: fav ? 'pin.slash' : 'pin',
       },
+      ...(favoriteMenuItem ? [favoriteMenuItem] : []),
       {
         type: 'divider' as const,
       },
@@ -241,7 +290,10 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.copyLink'),
         onClick: async () => {
           if (!activeAgentId) return;
-          const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(activeAgentId, id)}`;
+          const url = `${appOrigin}${buildWorkspaceAwarePath(
+            AGENT_CHAT_TOPIC_URL(activeAgentId, id),
+            activeWorkspaceSlug,
+          )}`;
           await copyToClipboard(url);
           toast.success(t('actions.copyLinkSuccess'));
         },
@@ -272,7 +324,7 @@ export const useTopicItemDropdownMenu = ({
               t('duplicateTitle', { ns: 'chat', title }),
             );
             await refresh();
-            navigate(getProjectConversationPath(scope.projectId, newId));
+            navigate(getProjectTopicPath(scope.projectId, newId));
             toast.success(t('duplicateSuccess', { ns: 'topic' }));
           } finally {
             loadingToast.close();
@@ -372,9 +424,9 @@ export const useTopicItemDropdownMenu = ({
     enableTopicBugReport,
     autoRenameTopicTitle,
     duplicateTopic,
+    favoriteMenuItem,
     favoriteTopic,
-    markTopicCompleted,
-    unmarkTopicCompleted,
+    toggleCompleted,
     removeTopic,
     updateTopicTitle,
     openTopicInNewWindow,
@@ -384,5 +436,9 @@ export const useTopicItemDropdownMenu = ({
     t,
     handleOpenShareModal,
   ]);
-  return { dropdownMenu };
+  // Heterogeneous agents (Claude Code / Codex) run task-like topics that get
+  // archived once done, so their sidebar rows surface archive as a one-click action.
+  const canInlineArchive = !!id && canEditTopic && isHeterogeneous;
+
+  return { canInlineArchive, dropdownMenu, isCompleted, toggleCompleted };
 };

@@ -261,7 +261,7 @@ export const convertCss = (template: CssTemplate, names: TokenNames): ConvertedS
   };
 
   const renderValue = (prop: string, raw: string): Rendered => {
-    const value = raw.trim().replaceAll(/\s*\n\s*/g, ' ');
+    const value = raw.trim();
     if (/!important/i.test(value)) throw new UnsupportedCssError(`!important in ${prop}`);
     let cssVarUsed = false;
     let hasInterpolation = false;
@@ -309,29 +309,16 @@ export const convertCss = (template: CssTemplate, names: TokenNames): ConvertedS
     node.value = value;
   };
 
-  // Comments are design notes; each moves to the property declared after it.
-  const comments = new Map<string, string[]>();
-  let pendingComments: string[] = [];
-
   const walk = (container: Container, conditions: string[], pseudoElement: string) => {
     for (const node of container.nodes ?? []) visit(node, conditions, pseudoElement);
   };
 
   const visit = (node: ChildNode, conditions: string[], pseudoElement: string) => {
-    if (node.type === 'comment') {
-      if (node.text) pendingComments.push(node.text);
-      return;
-    }
+    if (node.type === 'comment') return;
     if (node.type === 'decl') {
       const prop = camelCase(node.prop);
       if (node.important) throw new UnsupportedCssError(`!important in ${node.prop}`);
-      const longhands = expandShorthand(prop, node.value);
-      if (pendingComments.length > 0 && longhands.length > 0) {
-        const commentKey = `${pseudoElement}|${longhands[0][0]}`;
-        comments.set(commentKey, [...(comments.get(commentKey) ?? []), ...pendingComments]);
-        pendingComments = [];
-      }
-      for (const [longhand, value] of longhands) {
+      for (const [longhand, value] of expandShorthand(prop, node.value)) {
         const rendered = renderValue(longhand, value);
         usesCssVar ||= rendered.usesCssVar;
         setValue(pseudoElement, conditions, longhand, rendered.expr);
@@ -373,10 +360,7 @@ export const convertCss = (template: CssTemplate, names: TokenNames): ConvertedS
     css += `__lobeX${i}__${template.quasis[i + 1]}`;
   }
   // Emotion accepts // line comments; postcss does not.
-  css = css.replaceAll(
-    /^(\s*)\/\/(.*)$/gm,
-    (_, indent: string, body: string) => `${indent}/*${body.replaceAll('*/', '* /')} */`,
-  );
+  css = css.replaceAll(/^\s*\/\/.*$/gm, '');
 
   let root;
   try {
@@ -419,13 +403,6 @@ export const convertCss = (template: CssTemplate, names: TokenNames): ConvertedS
 
   const renderNode = (node: ValueNode): string => {
     checkConditionOrder(node);
-    // A condition repeating the default only does nothing when every condition
-    // does; otherwise it may be the one overriding another (`:active` after
-    // `:hover`, a narrow media query inside a wider one).
-    const allRepeatDefault = [...node.children.values()].every(
-      (child) => child.children.size === 0 && child.value === node.value,
-    );
-    if (allRepeatDefault) node.children.clear();
     if (node.children.size === 0) return node.value ?? 'null';
     const entries = [`default: ${node.value ?? 'null'}`];
     for (const [condition, child] of node.children)
@@ -433,25 +410,13 @@ export const convertCss = (template: CssTemplate, names: TokenNames): ConvertedS
     return `{ ${entries.join(', ')} }`;
   };
   const key = (prop: string) => (/^[$A-Z_][\w$]*$/i.test(prop) ? prop : JSON.stringify(prop));
-  const commentLines = (texts: string[] = []) => {
-    const lines = texts
-      .flatMap((t) => t.split('\n'))
-      .map((line) => line.trim().replace(/^\*\s?/, ''))
-      .filter(Boolean);
-    return lines.length > 0 ? `\n${lines.map((line) => `// ${line}`).join('\n')}\n` : '';
-  };
-  const renderProps = (props: Map<string, ValueNode>, pseudoElement: string) =>
-    [...props].map(
-      ([prop, node]) =>
-        `${commentLines(comments.get(`${pseudoElement}|${prop}`))}${key(prop)}: ${renderNode(node)}`,
-    );
+  const renderProps = (props: Map<string, ValueNode>) =>
+    [...props].map(([prop, node]) => `${key(prop)}: ${renderNode(node)}`);
 
-  const entries = renderProps(roots.get('') ?? new Map(), '');
+  const entries = renderProps(roots.get('') ?? new Map());
   for (const [element, props] of roots) {
-    if (element)
-      entries.push(`${JSON.stringify(element)}: { ${renderProps(props, element).join(', ')} }`);
+    if (element) entries.push(`${JSON.stringify(element)}: { ${renderProps(props).join(', ')} }`);
   }
-  if (pendingComments.length > 0) entries.push(commentLines(pendingComments));
 
   return { code: `{ ${entries.join(', ')} }`, usesCssVar, usesMedia };
 };

@@ -1,0 +1,32 @@
+.trigger {
+  display: inline-flex;
+  flex: none;
+  min-width: 0;
+}
+
+/* The stable menu anchor must not paint behind the child's rounded chip or
+   overview row. Keep hover and popup-open feedback on that same surface. */
+.trigger.trigger.trigger[data-popup-open] {
+  background: transparent;
+}
+
+/* Child rules use !important: the chips inside are StyleX-styled, and StyleX
+   longhands (raised specificity) would otherwise beat these selectors. */
+
+/* A column host stretches the anchor for overview rows; compact composer
+   chips use their intrinsic width instead of 100% of the whole git group. */
+.trigger.trigger > * {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.trigger[data-popup-open] > * {
+  background: var(--lobe-color-fill-tertiary) !important;
+}
+
+/* Stale-first: the trigger stays in place (no layout jump) but cannot
+   checkout until the current probe confirms the branch. */
+.trigger[aria-disabled='true'] > * {
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+}

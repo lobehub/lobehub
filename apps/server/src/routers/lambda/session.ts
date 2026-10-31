@@ -1,25 +1,17 @@
+import { CreateAgentSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
-import { ChatGroupModel } from '@/database/models/chatGroup';
-import { ResourcePermissionModel } from '@/database/models/resourcePermission';
-import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
-import { SessionModel } from '@/database/models/session';
-import { SessionGroupModel } from '@/database/models/sessionGroup';
-import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { TrashService } from '@/server/services/trash';
-import { type ChatSessionList, type LobeGroupSession } from '@/types/session';
-import { TransferErrorCode } from '@/types/transferError';
+import { AgentService } from '@/server/services/agent';
+import { resolveAgentReference } from '@/server/services/agent/resolveReference';
+import { createAgentDirectChannel } from '@/server/services/channel/defaultChannel';
 
-import {
-  assertWorkspaceRowManageable,
-  isWorkspaceNonOwner,
-} from './_helpers/assertWorkspaceRowManageable';
+import { assertCanUseConversationTargets } from './_helpers/conversationResourceGuard';
 
 const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -27,165 +19,84 @@ const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
   return opts.next({
     ctx: {
-      sessionGroupModel: new SessionGroupModel(ctx.serverDB, ctx.userId, wsId),
-      sessionModel: new SessionModel(ctx.serverDB, ctx.userId, wsId),
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
+      agentService: new AgentService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
-/**
- * @deprecated Session router is legacy. Use agent router for agent CRUD operations.
- * Session-based agent creation (createSession) should migrate
- * to agent.createAgent which uses agentModel.create directly.
- * Session query/update methods are still used by mobile but should be migrated.
- */
+/** Native Session compatibility adapters. New clients should use the Agent router. */
 export const sessionRouter = router({
-  cloneSession: sessionProcedure
-    .use(withScopedPermission('session:create'))
-    .input(z.object({ id: z.string(), newTitle: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      const data = await ctx.sessionModel.duplicate(input.id, input.newTitle);
-
-      return data?.id;
-    }),
-
-  /** @deprecated Use agent.createAgent instead */
+  /** Native compatibility adapter: keep the Session envelope, create only an Agent. */
   createSession: sessionProcedure
-    .use(withScopedPermission('session:create'))
+    .use(withScopedPermission('agent:create'))
     .input(
       z.object({
-        config: insertAgentSchema
-          .omit({
-            chatConfig: true,
-            openingMessage: true,
-            openingQuestions: true,
-            plugins: true,
-            tags: true,
-            tts: true,
-          })
-          .passthrough()
-          .partial(),
-        session: insertSessionSchema.omit({ createdAt: true, updatedAt: true }).partial(),
+        // Zod strips redundant fields in full default Session configs. This is
+        // a user-configurable whitelist, never a database insert permission.
+        config: CreateAgentSchema.extend({
+          examples: z.unknown().optional(),
+          identifier: z.string().optional(),
+        }),
+        session: z.object({
+          groupId: z.string().nullish(),
+          pinned: z.boolean().optional(),
+        }),
         type: z.enum(['agent', 'group']),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const data = await ctx.sessionModel.create(input);
-
-      return data.id;
-    }),
-
-  getGroupedSessions: wsCompatProcedure
-    .use(serverDatabase)
-    .query(async ({ ctx }): Promise<ChatSessionList> => {
-      const userId = ctx.userId;
-      const serverDB = ctx.serverDB;
-      const wsId = ctx.workspaceId ?? undefined;
-      const sessionModel = new SessionModel(serverDB, userId, wsId);
-      const chatGroupModel = new ChatGroupModel(serverDB, userId, wsId);
-
-      const [{ sessions, sessionGroups }, chatGroups] = await Promise.all([
-        sessionModel.queryWithGroups(),
-        chatGroupModel.queryWithMemberDetails(),
-      ]);
-
-      const groupSessions: LobeGroupSession[] = chatGroups.map((group) => {
-        const { title, description, avatar, backgroundColor, groupId, ...rest } = group;
-        return {
-          ...rest,
-          group: groupId, // Map groupId to group for consistent API
-          meta: { avatar, backgroundColor, description, title },
-          type: 'group',
-        };
+      if (input.type !== 'agent') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Use agentGroup to create a group' });
+      }
+      const { examples, identifier, ...config } = input.config;
+      const groupId = input.session.groupId ?? config.sessionGroupId;
+      const { agentId } = await ctx.agentService.createAgent({
+        config: {
+          ...config,
+          fewShots: config.fewShots ?? examples,
+          marketIdentifier: config.marketIdentifier ?? identifier,
+          pinned: input.session.pinned,
+        },
+        groupId: groupId && groupId !== 'default' ? groupId : undefined,
+        visibility: config.visibility,
       });
-
-      const allSessions = [...sessions, ...groupSessions].sort(
-        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
-
-      return { sessionGroups, sessions: allSessions };
+      await createAgentDirectChannel({
+        agentId,
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return agentId;
     }),
 
-  removeSession: sessionProcedure
-    .use(withScopedPermission('session:delete'))
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      const session = await ctx.sessionModel.findByIdOrSlug(input.id);
-      if (session) assertWorkspaceRowManageable(ctx, session.userId, 'session');
-
-      // Deleting the last session of a workspace-shared agent orphan-deletes
-      // the agent itself, and the session cascade erases every member's
-      // topics/messages on it — the same blast radius as `agent.removeAgent`,
-      // so apply the same foreign-rows owner gate here.
-      if (
-        ctx.workspaceId &&
-        session?.agent &&
-        session.agent.visibility === 'public' &&
-        isWorkspaceNonOwner(ctx)
-      ) {
-        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
-        if (await agentModel.transferHasForeignRows(session.agent.id)) {
-          throw new TRPCError({
-            cause: { data: { code: TransferErrorCode.OwnerOnly } },
-            code: 'FORBIDDEN',
-            message:
-              "Only workspace owners can delete a session whose shared agent carries others' conversations",
-          });
-        }
-      }
-
-      // A session is normally the legacy 1:1 shell of an agent: removing it
-      // means removing the agent, so route through the agent's recycle-bin
-      // cascade (agent + session + topics all stamped, restorable as one unit).
-      // When the agent has other shells (or this shell holds other agents),
-      // only this session goes — the agent must stay with its other sessions.
-      if (
-        session?.agent &&
-        (await ctx.sessionModel.isSoleShellOfAgent(session.id, session.agent.id))
-      ) {
-        const trashService = new TrashService(
-          ctx.serverDB,
-          ctx.userId,
-          ctx.workspaceId ?? undefined,
-        );
-        const trashed = await trashService.trashAgent(session.agent.id);
-        // Same as `agent.removeAgent`: the trashed agent is invisible to a
-        // pending handover's recipient too, so an acceptance would move
-        // ownership of recycle-bin content — void it now.
-        if (ctx.workspaceId) {
-          await new ResourceTransferRequestModel(
-            ctx.serverDB,
-            ctx.workspaceId,
-          ).invalidateForResources('agent', [session.agent.id]);
-        }
-        return trashed;
-      }
-
-      // No linked agent (a stray legacy row) or a shell the agent does not
-      // depend on: hard delete this session only, as before. An agent left
-      // without any shell is orphan-deleted by the model.
-      const { orphanedAgentIds, result } = await ctx.sessionModel.delete(input.id);
-      if (ctx.workspaceId && orphanedAgentIds.length > 0) {
-        const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
-        await Promise.all(orphanedAgentIds.map((id) => permissionModel.removeAll('agent', id)));
-      }
-
-      return result;
-    }),
-
+  /** Native activity signal. Payload dates are accepted but never trusted. */
   updateSession: sessionProcedure
     .use(withScopedPermission('session:update'))
     .input(
       z.object({
         id: z.string(),
-        value: insertSessionSchema.partial(),
+        value: z
+          .object({
+            groupId: z.undefined().optional(),
+            pinned: z.undefined().optional(),
+            updatedAt: z.union([z.date(), z.number(), z.string()]).optional(),
+          })
+          .strict(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const session = await ctx.sessionModel.findByIdOrSlug(input.id);
-      if (session) assertWorkspaceRowManageable(ctx, session.userId, 'session');
-
-      return ctx.sessionModel.update(input.id, input.value);
+      const { agentId } = await resolveAgentReference(
+        input.id,
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      await assertCanUseConversationTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [{ agentId }],
+      );
+      return ctx.agentModel.touchUpdatedAt(agentId);
     }),
 });
 

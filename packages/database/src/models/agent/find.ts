@@ -221,7 +221,7 @@ export const getAgentVisibilityMeta = async (
   return {
     slug: row.slug,
     userId: row.userId,
-    visibility: (row.visibility as 'private' | 'public' | null) ?? 'public',
+    visibility: row.visibility,
   };
 };
 

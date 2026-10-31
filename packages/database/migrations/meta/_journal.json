@@ -1274,6 +1274,125 @@
       "when": 1792164852926,
       "tag": "0181_linear_integration",
       "breakpoints": true
+    },
+    {
+      "idx": 182,
+      "version": "7",
+      "when": 1792246871224,
+      "tag": "0182_project_coordinator_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1792606514901,
+      "tag": "0183_project_order_and_agent_signals",
+      "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "7",
+      "when": 1792830037847,
+      "tag": "0184_channel_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1792857768178,
+      "tag": "0185_signal_decisions_and_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 186,
+      "version": "7",
+      "when": 1792919636489,
+      "tag": "0186_project_sites_and_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 187,
+      "version": "7",
+      "when": 1792987514341,
+      "tag": "0187_channel_preserve_active_writer",
+      "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "7",
+      "when": 1793034171659,
+      "tag": "0188_workspace_member_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1793075261489,
+      "tag": "0189_channel_soft_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1793084535893,
+      "tag": "0190_channel_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "7",
+      "when": 1793116364829,
+      "tag": "0191_linear_issue_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1793201098555,
+      "tag": "0192_user_favorites",
+      "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1793247094452,
+      "tag": "0193_goal_file_shares_memory_structure_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1793260018928,
+      "tag": "0194_document_histories_attribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "7",
+      "when": 1793336966391,
+      "tag": "0195_memory_columns_account_logins_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1793337113351,
+      "tag": "0196_memory_large_table_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "7",
+      "when": 1793371200635,
+      "tag": "0197_channel_jobs_message_member_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 198,
+      "version": "7",
+      "when": 1793450092790,
+      "tag": "0198_goal_visibility",
+      "breakpoints": true
     }
   ],
   "version": "6"

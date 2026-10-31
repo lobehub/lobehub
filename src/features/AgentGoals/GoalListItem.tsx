@@ -10,6 +10,7 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import GoalAgentLabel from './GoalAgentLabel';
 import GoalItemMoreButton from './GoalItemMoreButton';
 import { goalItemPath } from './goalItemPath';
+import GoalPrivateMark from './GoalPrivateMark';
 import { GoalProgress } from './GoalProgress';
 import GoalStatusGlyph from './GoalStatusGlyph';
 import type { GoalItemProps } from './types';
@@ -27,6 +28,21 @@ const styles = createStaticStyles(({ css }) => ({
     &:hover,
     &[data-popup-open] {
       background: ${cssVar.colorFillQuaternary};
+    }
+
+    /* A phone row wraps: the title takes the first line, agent / progress / menu
+       the second. Same breakpoint as GoalProgress. */
+    @media (width <= 767px) {
+      flex-wrap: wrap;
+      row-gap: 6px;
+    }
+  `,
+  title: css`
+    flex: 1;
+    min-width: 0;
+
+    @media (width <= 767px) {
+      flex-basis: 100%;
     }
   `,
 }));
@@ -72,12 +88,13 @@ export const GoalListItem = memo<GoalItemProps>(({ globalScopeId, goal: item, pr
         onClick={handleClick}
         onKeyDown={handleKeyDown}
       >
-        <Flexbox gap={4} style={{ flex: 1, minWidth: 0 }}>
+        <Flexbox className={styles.title} gap={4}>
           <Flexbox horizontal align={'center'} gap={7}>
             <GoalStatusGlyph size={13} status={goal.status} />
             <Text ellipsis fontSize={15} weight={600}>
               {goal.title}
             </Text>
+            <GoalPrivateMark goal={goal} />
           </Flexbox>
           {goal.requirement && goal.requirement !== goal.title && (
             <Text ellipsis fontSize={12} type={'secondary'}>

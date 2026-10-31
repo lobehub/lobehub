@@ -60,7 +60,10 @@ export class ChatGroupService extends BaseService {
   async listChatGroups(request: GetChatGroupsRequest): ServiceResult<ChatGroupListResponse> {
     try {
       const groups = await this.chatGroupModel.query();
-      const visibleGroups = await this.filterViewableGroups(groups);
+      const visibleGroups = (await this.filterViewableGroups(groups)).filter(
+        (group) =>
+          request.personal === undefined || (group.config?.personal === true) === request.personal,
+      );
       const { limit = visibleGroups.length, offset = 0 } = processPaginationConditions(request);
       const page = visibleGroups.slice(offset, offset + limit);
 
@@ -97,6 +100,7 @@ export class ChatGroupService extends BaseService {
         avatar: request.avatar,
         backgroundColor: request.backgroundColor,
         clientId: request.clientId,
+        config: request.personal ? { personal: true } : undefined,
         title: request.title,
       });
 
@@ -145,7 +149,7 @@ export class ChatGroupService extends BaseService {
     request: UpdateChatGroupRequest,
   ): ServiceResult<PublicChatGroup> {
     try {
-      await this.assertGroupExists(id);
+      const group = await this.assertGroupExists(id);
       await assertCanEditResource({
         db: this.db,
         resourceId: id,
@@ -159,7 +163,11 @@ export class ChatGroupService extends BaseService {
         if (blockedBy) throw this.createConflictError('Group is being edited by another user');
       }
 
-      await this.chatGroupModel.update(id, request);
+      const { personal, ...value } = request;
+      await this.chatGroupModel.update(
+        id,
+        personal === undefined ? value : { ...value, config: { ...group.config, personal } },
+      );
       return await this.getChatGroup(id);
     } catch (error) {
       this.rethrow(error, 'update chat group');

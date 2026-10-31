@@ -1,15 +1,18 @@
+import { claudeCodeAgentEnvPicksLogin } from '@lobechat/heterogeneous-agents/quota';
 import type { ExecAgentResult } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { getWorkingDirSourcePath } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
 import type { ExecutionPlan } from '@/helpers/executionTarget';
+import { AgentQuotaService } from '@/server/services/agentQuota';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 
 import {
   humanizeHeteroDispatchError,
+  isDeviceResponseTimeout,
   resolveHeteroDispatchErrorType,
   supportsCloudHeterogeneousSandbox,
 } from '../../helpers/heteroErrors';
@@ -17,10 +20,46 @@ import { resolveDeviceWorkingDirectoryConfig } from '../../resolveDeviceWorkingD
 import type { ExecRunContext } from '../../types';
 import { selectCodexDeviceDispatch } from '../codexDeviceRuntime';
 import type { PreparedHeteroRun } from './prepare';
+import { scheduleTimedOutDispatchConfirmation } from './timeoutConfirmation';
 import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types';
 import { failHeteroDispatch } from './utils';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * The Claude Code account the agent's Manage-accounts choice routes this run
+ * to. The device maps it to one of its own logins: without it the device
+ * always spawned on its default login, whatever account the user picked.
+ * An agent whose env picks its own login, or the quota service failing, means
+ * no routing — the run must not be blocked by account bookkeeping.
+ */
+const resolveClaudeAccountRouting = async (
+  deps: HeteroDispatchDeps,
+  params: {
+    agentId: string;
+    /** Gateway id of the device the run is dispatched to. */
+    deviceId: string;
+    heteroType: HeteroDispatchInput['heteroType'];
+    heterogeneousProvider: HeteroDispatchInput['heterogeneousProvider'];
+  },
+) => {
+  if (params.heteroType !== 'claude-code') return;
+  if (claudeCodeAgentEnvPicksLogin(params.heterogeneousProvider?.env)) return;
+
+  try {
+    const quota = new AgentQuotaService(deps.db, deps.userId, deps.workspaceId);
+    // The device's own account choice wins; an agent-wide pin made on another
+    // machine must not block this one.
+    const routing = await quota.planDeviceRouting(params.agentId, {
+      deviceId: await quota.resolveDeviceRowId(params.deviceId),
+      provider: 'claude-code',
+    });
+    return routing ?? undefined;
+  } catch (err) {
+    log('execAgent: Claude Code account routing failed: %O', err);
+    return;
+  }
+};
 
 /**
  * Dispatch a local CLI hetero agent to the device its execution plan routed it
@@ -29,7 +68,7 @@ const log = debug('lobe-server:ai-agent-service');
  * request reaches the process.
  *
  * Returns the terminal error result when the run cannot start, `undefined`
- * once the device accepted it.
+ * once the device accepted it — or may have, when only its ack timed out.
  */
 export const dispatchToCliDevice = async (
   deps: HeteroDispatchDeps,
@@ -61,6 +100,7 @@ export const dispatchToCliDevice = async (
     resumeSessionId,
     topic,
     topicRepos,
+    unansweredUserTurns,
   } = prepared;
   const { agentId: resolvedAgentId, operationId, topicId } = run;
 
@@ -127,7 +167,16 @@ export const dispatchToCliDevice = async (
     topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
     workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
   });
-  const deviceCwd = getWorkingDirEffectivePath(deviceCwdConfig);
+  // Local CLIs (Claude Code, Codex) key their sessions by cwd, so the spawn cwd
+  // stays on the SOURCE repo, mirroring the client's `conversationLifecycle`.
+  // The active worktree is a record the agent may already have deleted:
+  // spawning in it would lose the session, or fail the run outright once the
+  // directory is gone. The agent is told about it in the system context instead.
+  const deviceCwd = getWorkingDirSourcePath(deviceCwdConfig);
+  const worktreePath = deviceCwdConfig?.git?.activeWorktree;
+  const worktreeContext = worktreePath
+    ? { activeWorktree: { path: worktreePath, sourceDirectory: deviceCwd } }
+    : {};
 
   // An unbound topic has no pinned cwd yet: the directory was only
   // recorded at agent level (`workingDirByDevice`) when no topic existed.
@@ -145,16 +194,26 @@ export const dispatchToCliDevice = async (
   // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
   // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
   const deviceSystemContext = buildRemoteDeviceHeteroContext({
+    ...worktreeContext,
     agentSystemContext,
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
+    unansweredUserTurns,
   });
   const deviceResumeFallbackSystemContext =
     resumeSessionId && conversationHistory
       ? buildRemoteDeviceHeteroContext({
+          ...worktreeContext,
           agentSystemContext,
           conversationHistory,
         })
       : undefined;
+
+  const claudeAccountRouting = await resolveClaudeAccountRouting(deps, {
+    agentId: resolvedAgentId,
+    deviceId: dispatchDeviceId,
+    heteroType,
+    heterogeneousProvider,
+  });
 
   const authorizationError = await resolveDeviceDispatchAuthorizationFailure(
     deps.db,
@@ -162,6 +221,8 @@ export const dispatchToCliDevice = async (
     dispatchDeviceId,
     dispatchWorkspaceId,
   );
+  // Anything that touches the run after this instant proves it started.
+  const dispatchedAt = new Date();
   const result = authorizationError
     ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
     : await deviceGateway.dispatchAgentRun({
@@ -169,6 +230,7 @@ export const dispatchToCliDevice = async (
         agentId: resolvedAgentId,
         // Only a live client advertising the native protocol receives these wrapper flags.
         args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
+        ...(claudeAccountRouting && { claudeAccountRouting }),
         clientKinds: nativeCodex?.clientKinds,
         cwd: deviceCwd,
         deviceId: dispatchDeviceId,
@@ -183,31 +245,37 @@ export const dispatchToCliDevice = async (
         ingestWorkspaceId: deps.workspaceId,
       });
   if (!result.success) {
-    log('execAgent: hetero device dispatch failed: %s', result.error);
-    return failHeteroDispatch(
-      deps,
-      run,
-      {
-        detail: result.error ?? 'Device dispatch failed',
-        deviceRoute: {
-          deviceId: dispatchDeviceId,
-          userId: deps.userId,
-          ...(dispatchWorkspaceId ? { workspaceId: dispatchWorkspaceId } : {}),
-        },
-        errorData: result.errorData,
-        errorType: resolveHeteroDispatchErrorType(result.error),
-        message: humanizeHeteroDispatchError(result.error),
+    const finalize = {
+      detail: result.error ?? 'Device dispatch failed',
+      deviceRoute: {
+        deviceId: dispatchDeviceId,
+        userId: deps.userId,
+        ...(dispatchWorkspaceId ? { workspaceId: dispatchWorkspaceId } : {}),
       },
-      {
-        error: result.error,
-        errorData: result.errorData,
-        message: 'Hetero agent device dispatch failed',
-      },
-    );
+      errorData: result.errorData,
+      errorType: resolveHeteroDispatchErrorType(result.error),
+      message: humanizeHeteroDispatchError(result.error),
+    };
+    const failure = {
+      error: result.error,
+      errorData: result.errorData,
+      message: 'Hetero agent device dispatch failed',
+    };
+
+    // A lost ack is not proof the run never started — the device may already
+    // be spawning it. Keep the run alive and fail it only if nothing shows up.
+    if (!isDeviceResponseTimeout(result.error)) {
+      log('execAgent: hetero device dispatch failed: %s', result.error);
+      return failHeteroDispatch(deps, run, finalize, failure);
+    }
+
+    log('execAgent: hetero device dispatch unconfirmed, awaiting first ingest op=%s', operationId);
+    scheduleTimedOutDispatchConfirmation(deps, run, { dispatchedAt, finalize, result: failure });
   }
 
   // Local CLI hetero agents dispatch to a device just like remote platform
-  // agents, so persist the device route after the dispatch is accepted.
+  // agents, so persist the device route once the dispatch is accepted (or may
+  // have been, after a timeout).
   // interruptTask uses these fields to find and stop the native process.
   try {
     const patched = await deps.topicModel.patchRunningOperation(topicId, operationId, {

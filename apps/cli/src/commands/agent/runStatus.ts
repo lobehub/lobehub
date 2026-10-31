@@ -93,7 +93,7 @@ export const probeRunOutcome = async (
 };
 
 /**
- * Fallback when the live stream (gateway WebSocket / SSE) is unavailable or
+ * Fallback when the live stream (gateway WebSocket) is unavailable or
  * ended without a terminal event: the run may still be executing server-side,
  * so poll its status until it reaches a terminal state.
  *

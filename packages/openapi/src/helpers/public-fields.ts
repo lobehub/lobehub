@@ -317,6 +317,7 @@ export type PublicChatGroupMember = Pick<
 >;
 export type PublicChatGroup = Pick<ChatGroupItem, (typeof PUBLIC_CHAT_GROUP_FIELDS)[number]> & {
   members: PublicChatGroupMember[];
+  personal: boolean;
 };
 export type PublicSession = Pick<SessionItem, (typeof PUBLIC_SESSION_FIELDS)[number]>;
 export type PublicTopic = Pick<TopicItem, (typeof PUBLIC_TOPIC_FIELDS)[number]>;
@@ -367,6 +368,7 @@ export const projectPublicChatGroup = (
 ): PublicChatGroup => ({
   ...pickPublicFields(value, PUBLIC_CHAT_GROUP_FIELDS),
   members: members.map((member) => pickPublicFields(member, PUBLIC_CHAT_GROUP_MEMBER_FIELDS)),
+  personal: value.config?.personal === true,
 });
 
 export const projectPublicSession = (value: SessionItem): PublicSession =>

@@ -329,6 +329,48 @@ const getRunningQueueBlockingOperationIds =
       .map((op) => op.id);
   };
 
+/**
+ * Whether the run a context's queue waits behind sends it only once the whole
+ * run ends, instead of at the next step boundary.
+ *
+ * Heterogeneous CLI runs (Claude Code, Codex, …) cannot hand the turn back
+ * mid-run: a local `execHeterogeneousAgent` drains the queue after the CLI
+ * exits, and a Gateway run the server dispatched to an external producer
+ * (`heteroType`) drains it in `heteroFinish`. Read from the running operation,
+ * not the conversation's agent config, which can differ from what actually
+ * runs (an `@Agent` route, a legacy CLI agent recovered from its model id).
+ *
+ * A Gateway run whose producer went unreported (`heteroType` undefined: an
+ * older server or topic marker) may be a CLI run, so it promises the later
+ * timing, as the Gateway lifecycle treats it (`heteroType !== null`). A group
+ * member's run is skipped: its supervisor's run owns the queue.
+ *
+ * With nothing holding the queue locally, the queue still waits behind its
+ * idle host: a Gateway CLI socket that closes without its terminal completes
+ * the local op, yet the server keeps the producer running until `heteroFinish`.
+ */
+const isQueueDrainedAtRunEnd =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): boolean => {
+    if (!context.agentId) return false;
+    const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
+    const isCliRun = (op: Operation) => {
+      if (op.type === 'execHeterogeneousAgent') return true;
+      if (op.type !== 'execServerAgentRuntime') return false;
+
+      const parent = op.parentOperationId ? s.operations[op.parentOperationId] : undefined;
+      return parent?.type !== 'execServerAgentRuntime' && op.metadata.heteroType !== null;
+    };
+
+    const blocking = getOperationsByContext(context)(s).filter((op) =>
+      isQueueBlockingOperation(op, { hasQueuedMessages }),
+    );
+    if (blocking.length > 0) return blocking.some(isCliRun);
+
+    const host = getIdleQueueHost(context)(s);
+    return !!host && isCliRun(host);
+  };
+
 const getOperationTurnStartTime = (op: Operation) =>
   op.metadata.turnStartTime ?? op.metadata.startTime;
 
@@ -486,6 +528,23 @@ const isAgentVisiblyRunning =
         return op && isVisiblyRunningOperation(op) && op.context.agentId === agentId;
       });
       if (hasRunning) return true;
+    }
+    return false;
+  };
+
+/** Check visible runtime loading across all agents and topics in a chat group. */
+const isGroupVisiblyRunning =
+  (groupId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of AI_RUNTIME_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      if (
+        operationIds.some((id) => {
+          const op = s.operations[id];
+          return op && isVisiblyRunningOperation(op) && op.context.groupId === groupId;
+        })
+      )
+        return true;
     }
     return false;
   };
@@ -1017,6 +1076,7 @@ export const operationSelectors = {
 
   isAgentRunning,
   isAgentVisiblyRunning,
+  isGroupVisiblyRunning,
   isAgentRuntimeRunning,
   isAgentRuntimeVisiblyRunning,
   isAgentUnreadCompleted,
@@ -1038,6 +1098,7 @@ export const operationSelectors = {
   isMessageProcessing,
   isMessageRegenerating,
   isRegenerating,
+  isQueueDrainedAtRunEnd,
   isQueueDrainPending,
   isSendingMessage,
   isSteerHandoffPending,

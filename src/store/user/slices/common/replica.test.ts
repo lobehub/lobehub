@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The user bootstrap is a `@lobechat/replica` resource whose view is the user
+ * The user bootstrap is a `local-replica` resource whose view is the user
  * store's flat flags (`isUserStateInit`, `user`, `settings` …). It stays
  * memory-only on purpose: `@/store/user/displaySnapshot` — not a persisted
  * payload — bridges a cold boot, so entitlement (`isFreePlan`) and onboarding

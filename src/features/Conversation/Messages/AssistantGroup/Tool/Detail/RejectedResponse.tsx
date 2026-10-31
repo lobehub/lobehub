@@ -1,24 +1,16 @@
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AlertTriangle, CornerUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { resolveRejectedCopyKey } from './resolveRejectedCopyKey';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 8px;
-    padding-inline: 6px;
-  `,
-  reason: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  title: css`
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  container: { paddingBlock: '8px', paddingInline: '6px' },
+  title: { fontSize: '14px', color: cssVar.colorTextSecondary },
+});
 
 interface RejectedResponseProps {
   /** Distinguishes question skips from other skipped interactions in the copy. */
@@ -42,14 +34,14 @@ const RejectedResponse = memo<RejectedResponseProps>(({ apiName, reason, skipped
   const copyKey = resolveRejectedCopyKey({ apiName, reason, skipped, timedOut });
 
   return (
-    <Flexbox className={styles.container} gap={8}>
+    <Flexbox className={stylex.props(styles.container).className} gap={8}>
       <Flexbox horizontal align={'center'} gap={8}>
         {skipped || timedOut ? (
           <Icon color={cssVar.colorTextTertiary} icon={CornerUpRight} size={16} />
         ) : (
           <Icon color={cssVar.colorWarning} icon={AlertTriangle} size={16} />
         )}
-        <div className={styles.title}>{t(copyKey, { reason })}</div>
+        <div {...stylex.props(styles.title)}>{t(copyKey, { reason })}</div>
       </Flexbox>
     </Flexbox>
   );

@@ -51,7 +51,7 @@ describe('spawnAgent preset env', () => {
     vi.unstubAllEnvs();
   });
 
-  // LOBE-14393: claude.ai connectors finish connecting after the first model call.
+  // claude.ai connectors finish connecting after the first model call.
   it('makes Claude Code wait for MCP servers before its first turn', async () => {
     vi.stubEnv('MCP_CONNECTION_NONBLOCKING', undefined);
 

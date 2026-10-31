@@ -30,6 +30,7 @@ import {
   type ReplicaPageResult,
   type ReplicaSyncResult,
 } from '@/libs/replica';
+import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { mutate } from '@/libs/swr';
 import { cronKeys, topicKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
@@ -68,7 +69,8 @@ import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
-import { type TopicData } from './initialState';
+import { type PendingNewTopicDirectory, type TopicData } from './initialState';
+import { type PendingTopicStatusSource, PendingTopicStatusWrites } from './pendingStatusWrites';
 import {
   applyTopicDispatchToBucket,
   normalizeTopicListParams,
@@ -76,6 +78,7 @@ import {
   topicAgentViewResource,
   type TopicListParams,
   topicListResource,
+  topicListViewFields,
 } from './projection';
 import { type ChatTopicDispatch } from './reducer';
 import { topicSelectors } from './selectors';
@@ -126,8 +129,6 @@ type TopicPatchScope = {
   groupId?: string;
   scope?: TopicMapScope;
 };
-
-type PendingTopicStatusSource = 'cache' | 'server';
 
 /**
  * Options for switchTopic action
@@ -243,13 +244,7 @@ export class ChatTopicActionImpl {
       stateKey: 'topicListReplica',
       toPersisted,
       view: recordLens<ChatStore, TopicData>('topicDataMap'),
-      viewFields: ({ excludeStatuses, excludeTriggers, isInbox, sortBy, withDetails }) => ({
-        excludeStatuses,
-        excludeTriggers,
-        isInbox: Boolean(isInbox),
-        sortBy,
-        withDetails,
-      }),
+      viewFields: topicListViewFields,
     });
     this.#topicAgentView = createReplicaSlice(topicAgentViewResource, {
       actionPrefix: n('topicAgentView'),
@@ -276,6 +271,7 @@ export class ChatTopicActionImpl {
       this.#topicAgentView,
       this.#topicDetail,
     ]);
+    subscribeCacheScope((scope) => this.#topicList.ensureScope(scope));
   }
 
   #resolveTopicLinkedPullRequestRefreshParams = (
@@ -319,10 +315,7 @@ export class ChatTopicActionImpl {
    * Without it the deferred row would be born with only a path — outside the
    * project list, the sidebar's project grouping and its execution routing.
    */
-  setPendingNewTopicDirectory = (value?: {
-    agentId: string;
-    projectWorkingDirectoryId: string;
-  }): void => {
+  setPendingNewTopicDirectory = (value?: PendingNewTopicDirectory): void => {
     this.#set({ pendingNewTopicDirectory: value }, false, n('setPendingNewTopicDirectory'));
   };
 
@@ -552,10 +545,9 @@ export class ChatTopicActionImpl {
   };
 
   markTopicCompleted = async (id: string): Promise<void> => {
-    await this.#get().internal_updateTopic(id, {
-      completedAt: new Date(),
-      status: 'completed',
-    });
+    await this.#get().internal_updateTopic(id, { completedAt: new Date(), status: 'completed' });
+    // Like deleting it, archiving the topic the user is on opens a new one.
+    if (this.#get().activeTopicId === id) this.#get().switchTopic(null);
   };
 
   unmarkTopicCompleted = async (id: string): Promise<void> => {
@@ -887,72 +879,15 @@ export class ChatTopicActionImpl {
     throw error;
   };
 
-  /**
-   * Optimistic `updateTopicStatus` writes that a topic-list refetch must not
-   * clobber. A refetch whose server query ran BEFORE a status write can land
-   * AFTER the optimistic dispatch and revert the row — e.g. a run-end 'unread'
-   * reverting to 'running', leaving the sidebar spinning forever on a finished
-   * topic. Fetched rows are reconciled against this map: a row still carrying
-   * the pre-write status gets the pending status re-applied; a row already
-   * reflecting it confirms propagation and drops the pin. TTL-bounded so a
-   * failed persist or a legit cross-device status change can't be suppressed
-   * indefinitely.
-   */
-  #pendingTopicStatusWrites = new Map<string, { expiresAt: number; status: ChatTopicStatus }>();
-
-  /**
-   * Reconcile ONE server-sourced row against the pending optimistic writes.
-   *
-   * Every path that brings a topic row back from the server must go through
-   * here before the row reaches the store — list fetches, search, and the
-   * single-topic pull in {@link syncScheduledTopicRun} alike. A path that
-   * bypasses it silently reverts whatever the user just did, and the reader
-   * that trips it is usually the one the optimistic write itself woke up.
-   *
-   * Returns the row to trust: the fetched one, or the fetched one with the
-   * pending status re-applied when it predates the write.
-   */
-  #applyPendingStatusWrite = (item: ChatTopic, source: PendingTopicStatusSource): ChatTopic => {
-    const pending = this.#pendingTopicStatusWrites.get(item.id);
-    if (!pending) return item;
-    if (pending.expiresAt <= Date.now()) {
-      this.#pendingTopicStatusWrites.delete(item.id);
-      return item;
-    }
-    if (item.status === pending.status) {
-      if (source === 'server') this.#pendingTopicStatusWrites.delete(item.id);
-      return item;
-    }
-    return { ...item, status: pending.status };
-  };
-
-  /**
-   * Apply pending terminal statuses before a fetched topic list enters SWR.
-   *
-   * Reconciling only in `onData` keeps Zustand correct but is too late for the
-   * persisted cache: SWR has already accepted the older raw response and can
-   * flush `running` to IndexedDB. After the 15-second pin expires, remounting
-   * the sidebar restores that stale spinner. This step deliberately
-   * handles statuses only; client-only optimistic rows are still added later by
-   * {@link #reconcileFetchedTopics} and never enter the persisted response.
-   * Persisting the pin also means a failed write can survive until the next
-   * successful revalidation; that bounded, self-healing window is preferable to
-   * reintroducing an older response after a confirmed local terminal event.
-   */
-  #applyPendingStatusWrites = (
-    items: ChatTopic[],
-    source: PendingTopicStatusSource,
-  ): ChatTopic[] => {
-    if (this.#pendingTopicStatusWrites.size === 0) return items;
-    return items.map((item) => this.#applyPendingStatusWrite(item, source));
-  };
+  /** Optimistic status writes a refetch must not clobber — see {@link PendingTopicStatusWrites}. */
+  #pendingTopicStatusWrites = new PendingTopicStatusWrites();
 
   #reconcileFetchedTopics = (
     items: ChatTopic[],
     currentItems: ChatTopic[] | undefined,
     source: PendingTopicStatusSource,
   ): ChatTopic[] => {
-    let next = this.#applyPendingStatusWrites(items, source);
+    let next = this.#pendingTopicStatusWrites.applyAll(items, source);
 
     // In-flight first-send optimistic rows are client-only, so any refetch
     // landing mid-send (e.g. the fire-and-forget refreshTopic after a previous
@@ -1023,26 +958,26 @@ export class ChatTopicActionImpl {
   };
 
   /**
-   * Persist the topic's status. Optimistically patches the in-memory map so
-   * the sidebar reflects the change immediately; persistence runs
-   * fire-and-forget so a transient network blip never tears down the agent
-   * run that owns the write.
+   * Persist the topic's status. Optimistically patches the in-memory map so the
+   * sidebar reflects it at once; persistence is fire-and-forget so a network
+   * blip never tears down the agent run that owns the write.
    *
-   * Pass `agentId`/`groupId` when the call originates from an agent run
-   * rather than the active UI — without them, the lookup falls back to the
-   * currently active agent, and a status write arriving after the user has
-   * switched agents lands in the wrong bucket. The DB write is unconditional
-   * so even if no bucket is loaded for this topic, the next refetch picks
-   * up the persisted status.
+   * Pass `agentId`/`groupId` when the call originates from an agent run rather
+   * than the active UI — without them, the lookup falls back to the currently
+   * active agent, and a write arriving after the user switched agents lands in
+   * the wrong bucket. The DB write is unconditional so even if no bucket is
+   * loaded for this topic, the next refetch picks up the persisted status.
    */
   updateTopicStatus = async (params: {
     agentId?: string;
+    /** Write even when the local row already reads `status`; the server's may differ. */
+    force?: boolean;
     groupId?: string;
     scope?: TopicMapScope;
     status: ChatTopicStatus;
     topicId: string;
   }): Promise<void> => {
-    const { topicId, status, agentId, groupId, scope } = params;
+    const { agentId, force, groupId, scope, status, topicId } = params;
     const state = this.#get();
     const scopedAgentId = scope ? agentId : (agentId ?? state.activeAgentId);
     const scopedGroupId = scope ? groupId : (groupId ?? state.activeGroupId);
@@ -1054,7 +989,7 @@ export class ChatTopicActionImpl {
     const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
 
     // Already at the target status — both the in-memory and DB writes are no-ops.
-    if (topic?.status === status) return;
+    if (!force && topic?.status === status) return;
 
     this.internal_pinTopicStatus(params);
 
@@ -1068,7 +1003,7 @@ export class ChatTopicActionImpl {
     await topicService.updateTopic(topicId, patch).catch((err) => {
       console.error('[updateTopicStatus] persist failed:', err);
       // The DB never got the write — stop pinning it over fetched rows.
-      this.#pendingTopicStatusWrites.delete(topicId);
+      this.#pendingTopicStatusWrites.drop(topicId);
     });
   };
 
@@ -1112,7 +1047,7 @@ export class ChatTopicActionImpl {
     const patch: Partial<ChatTopic> =
       status === 'completed' ? { completedAt: new Date(), status } : { status };
 
-    this.#pendingTopicStatusWrites.set(topicId, { expiresAt: Date.now() + 15_000, status });
+    this.#pendingTopicStatusWrites.pin(topicId, status);
 
     // Scope on the payload routes the write to the owning bucket inside
     // `internal_dispatchTopic`. A no-op if the bucket isn't loaded; the pin
@@ -1125,6 +1060,26 @@ export class ChatTopicActionImpl {
       groupId,
       scope,
     });
+  };
+
+  /**
+   * Local mirror of a server-confirmed `unread → active` clear (`markTopicRead`).
+   * Unlike {@link internal_pinTopicStatus} it never pins: the clear's response
+   * may already be stale when it lands (a run started meanwhile, here or on
+   * another device), so a newer pending write wins and the next fetch stays
+   * authoritative. Only loaded copies that are still unread follow — every one
+   * of them, since the sidebar's unread dot reads all loaded buckets.
+   *
+   * `status` is the server's current status when the clear found the row
+   * already moved on; it defaults to the `active` the clear itself wrote.
+   */
+  internal_settleTopicRead = (params: { status?: ChatTopicStatus; topicId: string }) => {
+    const { status = 'active', topicId } = params;
+    if (!this.#pendingTopicStatusWrites.settle(topicId, 'unread')) return;
+
+    this.#topicEntity.update(topicId, (topic) =>
+      topic.status === 'unread' ? { ...topic, status } : topic,
+    );
   };
 
   #getTopicUpdatedAt = (topic: RunningTopicForWatchdog): number | undefined => {
@@ -1279,7 +1234,7 @@ export class ChatTopicActionImpl {
     // (the button reading as a no-op until pressed a second time). The pin is
     // dropped when the persist fails, so a write that never reached the DB
     // still reverts here.
-    const fresh = this.#applyPendingStatusWrite(fetched, 'server');
+    const fresh = this.#pendingTopicStatusWrites.apply(fetched, 'server');
     if (fresh.status !== fetched.status) return false;
 
     // Server still parked — nothing to fold in.
@@ -1353,7 +1308,7 @@ export class ChatTopicActionImpl {
         pageSize,
         ...query,
       });
-      const items = this.#applyPendingStatusWrites(result.items, 'server');
+      const items = this.#pendingTopicStatusWrites.applyAll(result.items, 'server');
       if (isHead)
         this.#prefetchUnreadTopicMessages(items, this.#get().topicDataMap[containerKey]?.items, {
           agentId,
@@ -1377,7 +1332,7 @@ export class ChatTopicActionImpl {
       withDetails,
     });
     return {
-      items: this.#applyPendingStatusWrites(result.items, 'server'),
+      items: this.#pendingTopicStatusWrites.applyAll(result.items, 'server'),
       total: result.total,
     };
   };
@@ -1387,9 +1342,8 @@ export class ChatTopicActionImpl {
    * projection, then revalidates; results land in `topicDataMap` — read them
    * through `topicSelectors`, never from this hook.
    */
-  useFetchTopics = (enable: boolean, params: Partial<TopicListParams> = {}): ReplicaSyncResult => {
-    return this.#topicList.useSync(normalizeTopicListParams(params), { enabled: enable });
-  };
+  useFetchTopics = (enable: boolean, params: Partial<TopicListParams> = {}): ReplicaSyncResult =>
+    this.#topicList.useSync(normalizeTopicListParams(params), { enabled: enable });
 
   /**
    * Seed the sidebar's persisted page for a session before its first paint.
@@ -1479,6 +1433,7 @@ export class ChatTopicActionImpl {
       excludeTriggers: currentData?.excludeTriggers,
       groupId: activeGroupId,
       isInbox: currentData?.isInbox,
+      onlyMine: currentData?.onlyMine,
       pageSize: currentData?.pageSize || useGlobalStore.getState().status.topicPageSize || 20,
       sortBy: currentData?.sortBy,
       withDetails: currentData?.withDetails,
@@ -1490,15 +1445,16 @@ export class ChatTopicActionImpl {
     {
       agentId,
       groupId,
+      onlyMine,
     }: {
       agentId?: string;
       groupId?: string;
+      onlyMine?: boolean;
     } = {},
-  ): SWRResponse<ChatTopic[]> => {
-    return useSWR<ChatTopic[]>(
-      keywords ? topicKeys.search(keywords, agentId, groupId) : null,
-      ([, keywords, agentId, groupId]: [string, string, string | undefined, string | undefined]) =>
-        topicService.searchTopics(keywords, agentId, groupId),
+  ): SWRResponse<ChatTopic[]> =>
+    useSWR<ChatTopic[]>(
+      keywords ? topicKeys.search(keywords, agentId, groupId, onlyMine || undefined) : null,
+      () => topicService.searchTopics(keywords ?? '', agentId, groupId, onlyMine),
       {
         onSuccess: (data) => {
           // Search rows render the same status icon as the sidebar — pin
@@ -1515,7 +1471,6 @@ export class ChatTopicActionImpl {
         },
       },
     );
-  };
 
   switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
@@ -1603,7 +1558,7 @@ export class ChatTopicActionImpl {
     );
 
     if (activeAgentId) {
-      this.#get().markTopicRead({ agentId: activeAgentId, topicId: id ?? null });
+      void this.#get().markTopicRead({ agentId: activeAgentId, topicId: id ?? null });
     }
 
     if (opts.skipRefreshMessage) return;
@@ -1875,12 +1830,14 @@ export class ChatTopicActionImpl {
     // directory must never land on another agent's topic.
     const pending = this.#get().pendingNewTopicDirectory;
     const targetSessionId = params.sessionId ?? this.#get().activeAgentId;
-    const pendingDirectoryId =
-      pending && pending.agentId === targetSessionId
-        ? pending.projectWorkingDirectoryId
-        : undefined;
-    const createParams: CreateTopicParams = pendingDirectoryId
-      ? { ...params, projectWorkingDirectoryId: pendingDirectoryId }
+    const staged = pending?.agentId === targetSessionId ? pending : undefined;
+    const createParams: CreateTopicParams = staged
+      ? {
+          ...params,
+          ...(staged.projectWorkingDirectoryId
+            ? { projectWorkingDirectoryId: staged.projectWorkingDirectoryId }
+            : { projectId: staged.projectId }),
+        }
       : params;
 
     const tmpId = Date.now().toString();
@@ -1890,7 +1847,7 @@ export class ChatTopicActionImpl {
     );
 
     const topicId = await topicService.createTopic(createParams);
-    if (pendingDirectoryId) this.#get().setPendingNewTopicDirectory();
+    if (staged) this.#get().setPendingNewTopicDirectory();
     await this.#get().refreshTopic();
 
     return topicId;
@@ -2027,6 +1984,7 @@ export class ChatTopicActionImpl {
           isExpandingPageSize: false,
           isLoadingMore: false,
           items: nextItems,
+          onlyMine: currentData?.onlyMine,
           pageSize,
           sortBy: currentData?.sortBy,
           total,

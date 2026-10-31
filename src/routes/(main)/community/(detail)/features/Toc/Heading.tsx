@@ -1,11 +1,15 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { kebabCase } from 'es-toolkit/compat';
 import { Heading2, Heading3, Heading4, Heading5 } from 'lucide-react';
 import { type ComponentProps, type FC, type ReactNode } from 'react';
 import { Children, isValidElement, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { useToc } from './useToc';
 
@@ -30,23 +34,13 @@ const HeadingIcon: any = {
   h5: Heading5,
 };
 
-const styles = createStaticStyles(({ cx, css, cssVar }) => ({
-  anchor: cx(
-    'toc-anchor',
-    css`
-      display: none;
-      margin-inline-start: 0.5rem;
-      color: ${cssVar.colorTextDescription} !important;
-    `,
-  ),
-  container: css`
-    &:hover {
-      .toc-anchor {
-        display: inline;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  anchor: {
+    display: { default: 'none', [stylex.when.ancestor(':hover')]: 'inline' },
+    marginInlineStart: '0.5rem',
+    color: cssVar.colorTextDescription,
+  },
+});
 
 const createHeading = (Tag: `h${1 | 2 | 3 | 4 | 5 | 6}`) => {
   const Heading: FC<ComponentProps<'h2'>> = ({ children, className, style, ...props }) => {
@@ -79,15 +73,14 @@ const createHeading = (Tag: `h${1 | 2 | 3 | 4 | 5 | 6}`) => {
 
     return (
       <Tag
-        className={cx(styles.container, className)}
-        style={{ color: cssVar.colorText, ...style }}
+        {...sx(stylex.defaultMarker(), className, { color: cssVar.colorText, ...style })}
         {...props}
         id={id}
       >
         {children}
         <a
           aria-label={t('toc.permalink')}
-          className={styles.anchor}
+          className={stylex.props(styles.anchor).className}
           href={`#${id}`}
           style={{ scrollMarginTop: 96 }}
         >

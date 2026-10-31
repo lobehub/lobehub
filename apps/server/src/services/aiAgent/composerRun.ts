@@ -18,11 +18,11 @@ export type ComposerRunRequest = Pick<
   | 'acceptsFileWorks'
   | 'acceptsMemberRuntimeEnd'
   | 'agentId'
+  | 'agentSender'
   | 'appContext'
   | 'autoStart'
   | 'clientIds'
   | 'clientProtocol'
-  | 'contextSelections'
   | 'deviceId'
   | 'existingMessageIds'
   | 'fileIds'
@@ -30,10 +30,11 @@ export type ComposerRunRequest = Pick<
   | 'llmExecutor'
   | 'localDeviceId'
   | 'mentionedAgents'
-  | 'pageSelections'
   | 'parentMessageId'
   | 'prompt'
+  | 'queuedSuccessor'
   | 'replacesOperationId'
+  | 'requireDevice'
   | 'resumeApproval'
   | 'resumeApprovals'
   | 'resumeToolResult'
@@ -42,8 +43,10 @@ export type ComposerRunRequest = Pick<
   | 'slug'
   | 'sourceOperationId'
   | 'steer'
+  | 'title'
   | 'trigger'
   | 'userInterventionConfig'
+  | 'userMessage'
 > & {
   clientOperations?: NonNullable<InternalExecAgentParams['clientRunSnapshot']>['operations'];
 };
@@ -103,7 +106,6 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
       replacesOperationId: input.replacesOperationId,
     },
     clientProtocol: input.clientProtocol,
-    contextSelections: input.contextSelections,
     includeFinalState: input.includeFinalState,
     llmExecutor: input.llmExecutor,
     // This path serves the composer (`aiAgentService.execAgentTask`).
@@ -116,6 +118,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     // intentionally not part of the client-passable input schema.
     clientIp: ctx.clientIp,
     deviceId: input.deviceId,
+    requireDevice: input.requireDevice,
     localDeviceId: input.localDeviceId,
     existingMessageIds: input.existingMessageIds,
     ...(topicRun && {
@@ -143,9 +146,9 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     }),
     fileIds: input.fileIds,
     mentionedAgents: input.mentionedAgents,
-    pageSelections: input.pageSelections,
     parentMessageId,
     prompt: input.prompt,
+    queuedSuccessor: input.queuedSuccessor,
     replacesOperationId: input.replacesOperationId,
     // When parentMessageId is provided, this is a regeneration/continue or a
     // human-approval resume — either way, skip user message creation.
@@ -156,11 +159,14 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     selectedSkillIds: input.selectedSkillIds,
     selectedToolIds: input.selectedToolIds,
     slug: input.slug,
+    agentSender: input.agentSender,
     sourceOperationId: input.sourceOperationId,
     steer: input.steer,
+    title: input.title,
     trigger: input.trigger ?? RequestTrigger.Chat,
     userAgent: ctx.userAgent,
     userInterventionConfig: input.userInterventionConfig,
+    userMessage: input.userMessage,
   });
   // The run was dispatched but it did not take the Task's run row over. Two
   // ways that happens: the Task was retired while the run was starting (the

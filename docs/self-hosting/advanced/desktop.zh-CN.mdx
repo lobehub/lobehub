@@ -65,6 +65,29 @@ LobeHub 桌面端可以与您自托管的 LobeHub 实例连接，以便您可以
 4. 点击 "连接" 按钮
 5. 您将被重定向到登录页面，完成授权后即可使用您的自托管配置
 
+### 连接设备网关
+
+设备网关让助理在这台电脑上运行本地工具。
+
+1. 按 [Docker Compose 部署说明](/zh/docs/self-hosting/platform/docker-compose) 启动网关。通过域名访问时，反向代理到 `8788` 端口，并开启 HTTPS 和 WebSocket 支持。
+
+2. 如需让客户端自动获取地址，在 LobeHub 服务端设置以下环境变量，然后重新部署：
+
+   ```env
+   DEVICE_GATEWAY_PUBLIC_URL=https://device-gateway.example.com
+   ```
+
+3. 在桌面端登录该实例，打开标题栏中的 **设备网关** 开关。CLI 用户运行：
+
+   ```sh
+   lh login --server https://lobe.example.com
+   lh connect
+   ```
+
+连接后，可在设备列表中查看这台电脑的在线状态。
+
+<Callout>已有的自定义网关地址仍会优先使用。也可通过桌面端的 `DEVICE_GATEWAY_URL` 环境变量或 `lh connect --gateway <url>` 手动指定地址，无需配置服务端环境变量。</Callout>
+
 ## 常见问题
 
 ### 502 Bad Gateway
@@ -92,6 +115,11 @@ proxy_busy_buffers_size 32k;
 **解决方案：**
 
 检查 `APP_URL` 环境变量是否与您访问的 URL 一致
+
+### 设备网关无法连接
+
+- **打开后立即断开**：确认网关地址属于当前登录的实例，并检查客户端已有的自定义地址。
+- **连接超时**：在客户端电脑运行 `curl https://device-gateway.example.com/health`，应返回 `OK`；否则检查网关地址、网络和反向代理设置。
 
 ### macOS 启动卡住或闪退
 

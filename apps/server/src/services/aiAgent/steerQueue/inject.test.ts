@@ -67,10 +67,13 @@ describe('canJoinRunningTurn', () => {
   it.each([
     ['an attachment', { fileIds: ['f1'] }],
     [
-      'an attached selection',
-      { contextSelections: [{ content: 'q', id: 'c1', source: 'text' as const }] },
+      'attached content',
+      {
+        userMessage: {
+          metadata: { contextSelections: [{ content: 'q', id: 'c1', source: 'text' as const }] },
+        },
+      },
     ],
-    ['a page selection', { pageSelections: [{ content: 'p', id: 'p1', pageId: 'page-1' }] }],
     ['a selected tool', { selectedToolIds: ['t1'] }],
     ['a selected skill', { selectedSkillIds: ['s1'] }],
     ['an @-mention', { mentionedAgents: [{ id: 'a2', name: 'B' }] }],
@@ -137,6 +140,17 @@ describe('injectQueuedFollowUp', () => {
     mocks.assertCanUseAgentRunConversation.mockResolvedValue(undefined);
   });
 
+  it('keeps the rich text of a single follow-up that joins the run', async () => {
+    const editorData = { root: { children: [], type: 'root' } };
+    mocks.drain.mockResolvedValue([followUp('only', 1, { userMessage: { editorData } })]);
+
+    await expect(inject()).resolves.toEqual({ messageId: 'msg-steer' });
+
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'only', editorData }),
+    );
+  });
+
   it('joins the queued follow-ups into the run as one steer user message', async () => {
     mocks.drain.mockResolvedValue([followUp('first', 1), followUp('second', 2)]);
 
@@ -176,8 +190,46 @@ describe('injectQueuedFollowUp', () => {
     );
   });
 
+  it('joins an agent’s follow-up under that agent, and leaves another author’s for later', async () => {
+    const writer = { agentId: 'agt-writer', hop: 1, topicId: 'tpc-writer' };
+    const fromWriter = [
+      { ...followUp('one', 1), agentSender: writer },
+      { ...followUp('two', 2), agentSender: writer },
+    ];
+    const typed = followUp('typed', 3);
+    mocks.drain.mockResolvedValue([...fromWriter, typed]);
+
+    await expect(inject()).resolves.toEqual({ messageId: 'msg-steer' });
+
+    // One message, one author: the person's text must not read as the agent's.
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'one\n\ntwo',
+        metadata: expect.objectContaining({ agentSender: writer, steer: true }),
+      }),
+    );
+    expect(mocks.settle).toHaveBeenCalledWith(scope, expect.any(String), [typed.id]);
+  });
+
   it('joins nothing when the first follow-up needs a turn of its own', async () => {
     const entries = [followUp('with-file', 1, { fileIds: ['f1'] })];
+    mocks.drain.mockResolvedValue(entries);
+
+    await expect(inject()).resolves.toBeUndefined();
+
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.settle).toHaveBeenCalledWith(
+      scope,
+      expect.any(String),
+      entries.map((e) => e.id),
+    );
+  });
+
+  it('does not join an old-shape follow-up whose quote sits in top-level selections', async () => {
+    // Queued by a client from before `userMessage`. Joined as a plain steer
+    // message, its quote would be dropped; it must start a turn of its own.
+    const quote = { content: 'Quoted reply', id: 'selection-1', source: 'text' as const };
+    const entries = [followUp('legacy', 1, { contextSelections: [quote] } as any)];
     mocks.drain.mockResolvedValue(entries);
 
     await expect(inject()).resolves.toBeUndefined();

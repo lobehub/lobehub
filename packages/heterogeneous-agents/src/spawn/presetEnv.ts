@@ -12,7 +12,6 @@ const HETEROGENEOUS_AGENT_PRESET_ENV: Partial<Record<string, Readonly<Record<str
    * Our runs send the prompt at spawn and usually exit after one turn, so those
    * tools never reach the model. Waiting costs about 1.5s per turn and is
    * capped by `MCP_CONNECT_TIMEOUT_MS` (5s by default) when a server hangs.
-   * See https://linear.app/lobehub/issue/LOBE-14393
    */
   'claude-code': { MCP_CONNECTION_NONBLOCKING: 'false' },
   /** A one-shot print-mode process cannot reliably service background tasks. */

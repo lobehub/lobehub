@@ -1,9 +1,14 @@
-import type { GoalEdgeKind, GoalItem } from '@lobechat/types';
+import type { GoalEdgeKind, GoalItem, GoalVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { and, eq, inArray } from 'drizzle-orm';
 
+import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
+import { TaskSubtreeRepository } from '@/database/repositories/taskSubtree';
+import { goals } from '@/database/schemas';
 
 import { TaskService } from '../../task';
 import { GoalAssignmentService } from '../assignment';
@@ -14,6 +19,11 @@ import {
 } from '../decideNextMove';
 import { managerTurnsSpent } from '../recoveryPolicy';
 import { isGoalReportNode } from '../report';
+import {
+  assertGoalAgentVisibilityCompat,
+  assertGoalProjectVisibilityCompat,
+  goalTasksToCascade,
+} from '../visibility';
 import type { CreateGoalNodeInput, GoalServiceContext } from './types';
 
 /**
@@ -63,6 +73,38 @@ export const updateRequirement = async (
 };
 
 /**
+ * Rename the goal. Only the label changes: the requirement and the Tasks already
+ * dispatched keep their own text. The map's root question and the management
+ * topic were named after the goal, so they follow unless someone renamed them.
+ */
+export const updateTitle = async (ctx: GoalServiceContext, goalId: string, title: string) => {
+  // The goal row is locked so concurrent renames apply to all three in the same order.
+  return ctx.db.transaction(async (tx) => {
+    const goalModel = new GoalModel(tx, ctx.userId, ctx.workspaceId);
+    const previous = await goalModel.findByIdForUpdate(goalId);
+    if (!previous) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    const goal = await goalModel.update(goalId, { title });
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    if (previous.title === title) return goal;
+
+    await new GoalGraphModel(tx, ctx.userId, ctx.workspaceId).renameProblemNode(
+      goalId,
+      previous.title,
+      title,
+    );
+
+    const topicId = goal.config?.managerState?.topicId;
+    if (topicId) {
+      const topicModel = new TopicModel(tx, ctx.userId, ctx.workspaceId);
+      const topic = await topicModel.findById(topicId);
+      if (topic?.title === `Goal management: ${previous.title}`)
+        await topicModel.update(topicId, { title: `Goal management: ${title}` });
+    }
+    return goal;
+  });
+};
+
+/**
  * Who works on a goal and with which model lives in `GoalAssignmentService`:
  * handoffs, the Task executor and both model slots share its locked
  * transactions, so these methods only bind it to this service's principal.
@@ -87,6 +129,88 @@ export const setTaskAgent = (
   ctx: GoalServiceContext,
   ...args: Parameters<GoalAssignmentService['setTaskAgent']>
 ) => assignmentFor(ctx).setTaskAgent(...args);
+
+/**
+ * Move a workspace goal to a new visibility; its own Tasks follow (see
+ * `goalTasksToCascade`). Only the creator may: a private goal is invisible to
+ * everyone else, and making someone's public goal private would take it out
+ * of their hands. A public goal needs public agents, as a public Task does.
+ */
+export const setVisibility = async (
+  ctx: GoalServiceContext,
+  goalId: string,
+  visibility: GoalVisibility,
+): Promise<{ goal: GoalItem; taskIds: string[] }> => {
+  if (!ctx.workspaceId)
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Visibility only applies to workspace goals',
+    });
+  const goal = await ctx.goalModel.findById(goalId);
+  if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+  if (goal.userId !== ctx.userId)
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the goal creator can change its visibility',
+    });
+  if (goal.visibility === visibility) return { goal, taskIds: [] };
+  await assertGoalAgentVisibilityCompat(ctx.db, { ...goal, visibility }, [
+    goal.agentId,
+    goal.config?.taskAgentId,
+  ]);
+  await assertGoalProjectVisibilityCompat(ctx.db, { ...goal, visibility });
+
+  // The goal first: on the way to private, a failure partway through the
+  // Tasks leaves the goal already hidden rather than a public goal over
+  // half-private work. A retry picks up the Tasks that did not move.
+  const updated = await ctx.goalModel.update(goalId, { visibility });
+  if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+  const subtree = new TaskSubtreeRepository(ctx.db, ctx.userId, ctx.workspaceId);
+  const taskIds = await goalTasksToCascade(ctx.db, goal, visibility);
+  for (const taskId of taskIds) await subtree.updateVisibility(taskId, visibility);
+  return { goal: updated, taskIds };
+};
+
+/**
+ * A project went private, so its public goals follow: members could otherwise
+ * still open goals of a project they can no longer see. The caller's own goals
+ * move with their Tasks (`setVisibility`). Another member's goal is only
+ * hidden: the project's creator cannot act on that member's Tasks, just as a
+ * project's own Tasks do not cascade when it goes private.
+ */
+export const privatizeProjectGoals = async (
+  ctx: GoalServiceContext,
+  projectId: string,
+): Promise<string[]> => {
+  if (!ctx.workspaceId) return [];
+  const rows = await ctx.db
+    .select({ id: goals.id, isDeleted: goals.isDeleted, userId: goals.userId })
+    .from(goals)
+    .where(
+      and(
+        eq(goals.projectId, projectId),
+        eq(goals.workspaceId, ctx.workspaceId),
+        eq(goals.visibility, 'public'),
+      ),
+    );
+  if (rows.length === 0) return [];
+  for (const row of rows)
+    if (row.userId === ctx.userId && !row.isDeleted) await setVisibility(ctx, row.id, 'private');
+  // Everything left — other members' goals, and trashed ones `findById` cannot reach.
+  await ctx.db
+    .update(goals)
+    .set({ updatedAt: new Date(), visibility: 'private' })
+    .where(
+      and(
+        inArray(
+          goals.id,
+          rows.map((row) => row.id),
+        ),
+        eq(goals.visibility, 'public'),
+      ),
+    );
+  return rows.map((row) => row.id);
+};
 
 /** The model planning turns run on; see `GoalAssignmentService.setModel`. */
 export const setModel = (

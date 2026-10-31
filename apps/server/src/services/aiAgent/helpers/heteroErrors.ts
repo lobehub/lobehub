@@ -30,9 +30,26 @@ export const HETERO_DISPATCH_ERROR_HEADLINES: Record<string, string> = {
   DEVICE_OFFLINE:
     "The device this agent runs on is offline, so the run couldn't start. Check that the LobeHub desktop app (or the `lh` CLI) is running and connected, then try again.",
   DEVICE_RESPONSE_TIMEOUT:
-    "The device didn't answer in time, so we can't tell whether this run started. Check the device before starting it again.",
+    "The device didn't answer in time. It may be offline or asleep, or it may still be starting this run. Check that the LobeHub desktop app (or the `lh` CLI) is connected and whether this run is already in progress before starting it again.",
   GATEWAY_NOT_CONFIGURED:
     "The run device gateway isn't configured on the server, so this agent can't reach a device to run on. Configure the device gateway, or switch this agent to a connected local device.",
+};
+
+/**
+ * The gateway's own codes for a failure the transport already names. A run
+ * dispatch answers 504 `{"error":"TIMEOUT"}` when the device sent no
+ * `agent_run_ack` in time — the same 504 the transport calls
+ * `DEVICE_RESPONSE_TIMEOUT`. Most often the socket was already dead (the
+ * gateway only drops it after a missed heartbeat) and nothing ran, but a slow
+ * spawn or a lost ack means the run may have started; the copy covers both.
+ * Do not reclassify it from a later look at the device: a device that is
+ * offline now may still have received the run before dropping (or run it when
+ * it wakes), so only a gateway refusal *before* sending proves nothing ran.
+ * Keeping the body verbatim (so `detail` stays diagnostic) meant the code
+ * missed every lookup and the raw JSON became the headline.
+ */
+const GATEWAY_CODE_ALIASES: Record<string, string> = {
+  TIMEOUT: 'DEVICE_RESPONSE_TIMEOUT',
 };
 
 /**
@@ -57,7 +74,9 @@ const toDispatchErrorCode = (raw?: string): string | undefined => {
     }
   }
 
-  return text?.match(/^([A-Z][\dA-Z_]*)/)?.[1];
+  const code = text?.match(/^([A-Z][\dA-Z_]*)/)?.[1];
+
+  return (code && GATEWAY_CODE_ALIASES[code]) || code;
 };
 
 /**
@@ -85,6 +104,14 @@ export const readDeviceDispatchRoute = (error: unknown): DeviceDispatchRoute | u
   };
 };
 
+/**
+ * Whether a dispatch failed only because the device's ack never arrived. Unlike
+ * every other dispatch failure this does not prove nothing ran — see
+ * {@link GATEWAY_CODE_ALIASES}.
+ */
+export const isDeviceResponseTimeout = (raw?: string): boolean =>
+  toDispatchErrorCode(raw) === 'DEVICE_RESPONSE_TIMEOUT';
+
 export const humanizeHeteroDispatchError = (raw?: string): string => {
   const code = toDispatchErrorCode(raw);
 
@@ -104,6 +131,9 @@ const HETERO_DISPATCH_ERROR_TYPES: Record<string, ErrorType> = {
   DEVICE_CHANNEL_UNAVAILABLE: ChatErrorType.DeviceGatewayNotConfigured,
   DEVICE_NOT_FOUND: ChatErrorType.DeviceGatewayNotConfigured,
   DEVICE_OFFLINE: ChatErrorType.DeviceGatewayNotConfigured,
+  // Not an unreachable device: the run was delivered and may be running, so
+  // "connect a device, then try again" would invite a duplicate run.
+  DEVICE_RESPONSE_TIMEOUT: ChatErrorType.DeviceResponseTimeout,
   GATEWAY_NOT_CONFIGURED: ChatErrorType.DeviceGatewayNotConfigured,
 };
 

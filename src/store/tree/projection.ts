@@ -1,5 +1,6 @@
 import { defineReplica } from '@/libs/replica';
 
+import { isExpandable } from './items';
 import type { TreeItem } from './types';
 
 /**
@@ -27,6 +28,7 @@ const compactItem = (item: TreeItem): TreeItem => {
     createdAt: item.createdAt,
     fileId: item.fileId,
     fileType: item.fileType,
+    hasChildren: item.hasChildren,
     id: item.id,
     isFolder: item.isFolder,
     metadata: emoji ? { emoji } : undefined,
@@ -66,7 +68,7 @@ export const buildLibraryTreeSnapshot = (
     folders += 1;
 
     for (const item of kept) {
-      if (item.isFolder && expanded[item.id] && children[item.id]) queue.push(item.id);
+      if (isExpandable(item) && expanded[item.id] && children[item.id]) queue.push(item.id);
     }
   }
 

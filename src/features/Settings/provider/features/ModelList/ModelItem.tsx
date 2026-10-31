@@ -19,17 +19,13 @@ import { useTranslation } from 'react-i18next';
 import { ModelIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
+import RoutingBadge from '@/components/ModelSelect/RoutingBadge';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
-import { formatPriceByCurrency } from '@/utils/format';
-import {
-  getAudioInputUnitRate,
-  getTextInputUnitRate,
-  getTextOutputUnitRate,
-} from '@/utils/pricing';
 
 import { createModelConfigModal } from './ModelConfigModal';
+import { formatModelPricingLabels } from './pricingLabels';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
 const styles = createStaticStyles(({ css, cx }) => {
@@ -103,65 +99,9 @@ const ModelItem = memo<ModelItemProps>(
 
     const [checked, setChecked] = useState(enabled);
 
-    const formatPricing = (): string[] => {
-      if (!pricing) return [];
-
-      switch (type) {
-        case 'chat': {
-          const inputRate = getTextInputUnitRate(pricing);
-          const outputRate = getTextOutputUnitRate(pricing);
-          return [
-            typeof inputRate === 'number' &&
-              t('providerModels.item.pricing.inputTokens', {
-                amount: formatPriceByCurrency(inputRate, pricing?.currency),
-              }),
-            typeof outputRate === 'number' &&
-              t('providerModels.item.pricing.outputTokens', {
-                amount: formatPriceByCurrency(outputRate, pricing?.currency),
-              }),
-          ].filter(Boolean) as string[];
-        }
-        case 'embedding': {
-          const inputRate = getTextInputUnitRate(pricing);
-          return [
-            typeof inputRate === 'number' &&
-              t('providerModels.item.pricing.inputTokens', {
-                amount: formatPriceByCurrency(inputRate, pricing?.currency),
-              }),
-          ].filter(Boolean) as string[];
-        }
-        case 'tts': {
-          const inputRate = getAudioInputUnitRate(pricing);
-          return [
-            typeof inputRate === 'number' &&
-              t('providerModels.item.pricing.inputCharts', {
-                amount: formatPriceByCurrency(inputRate, pricing?.currency),
-              }),
-          ].filter(Boolean) as string[];
-        }
-        case 'asr': {
-          const inputRate = getAudioInputUnitRate(pricing);
-          return [
-            typeof inputRate === 'number' &&
-              t('providerModels.item.pricing.inputMinutes', {
-                amount: formatPriceByCurrency(inputRate, pricing?.currency),
-              }),
-          ].filter(Boolean) as string[];
-        }
-
-        case 'image': {
-          return [];
-        }
-
-        default: {
-          return [];
-        }
-      }
-    };
-
     const content = [
       releasedAt && t('providerModels.item.releasedAt', { releasedAt }),
-      ...formatPricing(),
+      ...formatModelPricingLabels(type, pricing, t),
     ].filter(Boolean) as string[];
 
     const copyModelId = async () => {
@@ -253,6 +193,7 @@ const ModelItem = memo<ModelItemProps>(
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}
+              <RoutingBadge id={id} provider={activeAiProvider} />
               <Flexbox horizontal align={'center'} gap={8}>
                 <ModelInfoTags
                   placement={'top'}
@@ -287,6 +228,7 @@ const ModelItem = memo<ModelItemProps>(
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8}>
               {displayName || id}
+              <RoutingBadge id={id} provider={activeAiProvider} />
               {ModelIdTag}
               {NewTag}
               {Actions && Actions()}

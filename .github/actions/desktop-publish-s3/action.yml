@@ -33,6 +33,14 @@ inputs:
     required: false
     default: 'true'
 
+outputs:
+  core-published:
+    description: Whether the versioned Core update was uploaded
+    value: ${{ steps.base.outputs.published }}
+  installers-published:
+    description: Whether installer files and manifests were uploaded
+    value: ${{ steps.installers.outputs.published }}
+
 runs:
   using: composite
   steps:
@@ -121,6 +129,7 @@ runs:
         VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
+        echo "published=false" >> "$GITHUB_OUTPUT"
         if [ -z "$S3_BUCKET" ]; then
           echo "⚠️ S3 bucket is not configured, skipping S3 upload"
           exit 0
@@ -189,6 +198,7 @@ runs:
         done
 
         echo ""
+        echo "published=true" >> "$GITHUB_OUTPUT"
         echo "✅ S3 upload completed!"
         echo ""
         echo "📋 Files in s3://$S3_BUCKET/$CHANNEL/:"

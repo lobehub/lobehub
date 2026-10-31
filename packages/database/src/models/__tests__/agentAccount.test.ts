@@ -263,6 +263,48 @@ describe('AgentAccountModel scope and writes', () => {
     expect(withoutGatekeeper).toBeUndefined();
   });
 
+  it('stops routing inbound once an account is released', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+    const created = await model.create({
+      ...mailAccount('released@lobe.id'),
+      credential: { webhookSecret: 'whsec_released' },
+    });
+
+    // Live: the webhook resolves the account and can decrypt its credential.
+    await expect(
+      AgentAccountModel.findForInboundVerification(
+        serverDB,
+        'agent-mail',
+        'released@lobe.id',
+        mockGateKeeper,
+      ),
+    ).resolves.toMatchObject({ credential: { webhookSecret: 'whsec_released' } });
+
+    await model.revoke(created.id);
+
+    // Released: a delivery addressed to the same handle must no longer resolve.
+    // Revocation that stops sending but keeps receiving is not a release.
+    await expect(
+      AgentAccountModel.findForInboundVerification(
+        serverDB,
+        'agent-mail',
+        'released@lobe.id',
+        mockGateKeeper,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('stops routing inbound while an account is suspended', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const created = await model.create(mailAccount('suspended@lobe.id'));
+
+    await model.update(created.id, { status: 'suspended' });
+
+    await expect(
+      AgentAccountModel.findForInboundVerification(serverDB, 'agent-mail', 'suspended@lobe.id'),
+    ).resolves.toBeUndefined();
+  });
+
   it('keeps one account per (agent, kind, provider, identifier)', async () => {
     const model = new AgentAccountModel(serverDB, userId);
     await model.create(mailAccount('dupe@lobe.id'));
@@ -291,5 +333,66 @@ describe('AgentAccountModel schema invariants', () => {
             VALUES (${agentId}, ${userId}, 'mail', 'nocaps@lobe.id', 'agent-mail')`,
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe('AgentAccountModel query filters', () => {
+  it('narrows by kind and provider within the caller scope', async () => {
+    const model = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+
+    await model.create({
+      ...mailAccount('filter-mail@lobe.id'),
+      credential: { webhookSecret: 'whsec_filter' },
+    });
+    await model.create({
+      ...mailAccount('+15550000000'),
+      capabilities: { receive: true, send: true },
+      kind: 'phone',
+      provider: 'agent-sms',
+    });
+
+    expect((await model.query({ kind: 'mail' })).map((a) => a.identifier)).toEqual([
+      'filter-mail@lobe.id',
+    ]);
+    expect((await model.query({ provider: 'agent-sms' })).map((a) => a.kind)).toEqual(['phone']);
+    expect(await model.query({ kind: 'wallet' })).toHaveLength(0);
+  });
+});
+
+describe('AgentAccountModel credential read discipline', () => {
+  it('refuses to decrypt a stored credential without a gatekeeper, with an actionable message', async () => {
+    const writing = new AgentAccountModel(serverDB, userId, mockGateKeeper);
+    const created = await writing.create({
+      ...mailAccount('read-nogk@lobe.id'),
+      credential: { webhookSecret: 'whsec_read' },
+    });
+
+    const reading = new AgentAccountModel(serverDB, userId);
+    await expect(reading.getCredential(created.id)).rejects.toThrow(
+      /needs a gatekeeper to read credentials/,
+    );
+  });
+});
+
+describe('AgentAccountModel.findForInboundVerification', () => {
+  it('returns undefined when no live account matches the routing key', async () => {
+    expect(
+      await AgentAccountModel.findForInboundVerification(serverDB, 'agent-mail', 'nobody@lobe.id'),
+    ).toBeUndefined();
+  });
+
+  it('reports a null credential for an account that never stored one', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const created = await model.create(mailAccount('no-cred-inbound@lobe.id'));
+
+    const inbound = await AgentAccountModel.findForInboundVerification(
+      serverDB,
+      'agent-mail',
+      'no-cred-inbound@lobe.id',
+      mockGateKeeper,
+    );
+
+    expect(inbound?.view.id).toBe(created.id);
+    expect(inbound?.credential).toBeNull();
   });
 });

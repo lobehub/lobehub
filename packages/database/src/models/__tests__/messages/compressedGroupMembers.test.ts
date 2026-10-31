@@ -189,8 +189,22 @@ describe('MessageModel.query compression group member cap', () => {
 
     it('should not add state messages when nothing was omitted', async () => {
       await serverDB.insert(messages).values([
-        { content: 'a', id: 'st-small-1', role: 'user', topicId, userId },
-        { content: 'b', id: 'st-small-2', role: 'tool', topicId, userId },
+        {
+          content: 'a',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          id: 'st-small-1',
+          role: 'user',
+          topicId,
+          userId,
+        },
+        {
+          content: 'b',
+          createdAt: new Date('2024-01-01T00:00:01Z'),
+          id: 'st-small-2',
+          role: 'tool',
+          topicId,
+          userId,
+        },
       ]);
       await serverDB.insert(messagePlugins).values({
         apiName: 'activateTools',

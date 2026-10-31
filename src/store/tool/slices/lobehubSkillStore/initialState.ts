@@ -1,4 +1,5 @@
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
+import { type ScopedConnectorActionError } from '@/utils/connectorActionError';
 
 import { type LobehubSkillServer, type LobehubSkillTool } from './types';
 
@@ -9,6 +10,11 @@ import { type LobehubSkillServer, type LobehubSkillTool } from './types';
  * API — the replica persists them and the network only confirms.
  */
 export interface LobehubSkillStoreState {
+  /**
+   * Last failed connect / disconnect per provider id, so the settings row can
+   * show why it failed in place (local UI state; never persisted).
+   */
+  lobehubSkillErrors: Record<string, ScopedConnectorActionError>;
   /** Set of executing tool call IDs */
   lobehubSkillExecutingToolIds: Set<string>;
   /** Set of loading Provider IDs */
@@ -32,6 +38,7 @@ export interface LobehubSkillStoreState {
  * LobeHub Skill Store initial state
  */
 export const initialLobehubSkillStoreState: LobehubSkillStoreState = {
+  lobehubSkillErrors: {},
   lobehubSkillExecutingToolIds: new Set(),
   lobehubSkillLoadingIds: new Set(),
   // Absent until the persisted row hydrates or the first network response lands.

@@ -1,4 +1,5 @@
 import {
+  ComposerUserMessageSchema,
   ContextSelectionSchema,
   CreateThreadWithMessageSchema,
   initialTopicMetadataSchema,
@@ -182,6 +183,8 @@ export const ExecAgentFieldsSchema = z.object({
        * identity survives the gateway step_start snapshot / refetch.
        */
       orchestrationRole: z.enum(['supervisor', 'member']).optional(),
+      /** Bind a NEW topic to this project (ignored with topicId; resolved from the topic). */
+      projectId: z.string().optional(),
       /** Bind a NEW topic to this project working directory (ignored with topicId). */
       projectWorkingDirectoryId: z.string().optional(),
       scope: z.string().nullish(),
@@ -197,6 +200,12 @@ export const ExecAgentFieldsSchema = z.object({
   clientIds: execAgentClientIdsSchema,
   /** Explicit device ID to bind to the topic and activate for this run */
   deviceId: z.string().optional(),
+  /**
+   * The run must take place on `deviceId`: refuse it (`PRECONDITION_FAILED`,
+   * nothing written) when the agent's effective execution target would drop
+   * that device. Sent by `lh topic send --new --device`.
+   */
+  requireDevice: z.boolean().optional(),
   /** Current desktop device hint, honored only for an effective local target */
   localDeviceId: z.string().optional(),
   /** Optional existing message IDs to include in context */
@@ -204,12 +213,14 @@ export const ExecAgentFieldsSchema = z.object({
   /** File IDs of already-uploaded attachments to attach to the new user message */
   fileIds: z.array(z.string()).optional(),
   /**
-   * Content the user attached from the conversation, a page or code. The gateway
-   * path never calls `aiChat.sendMessageInServer`, so this is the only way the
-   * selections reach the user message the server persists and the run's context.
+   * The composer-authored part of the new user message (rich-text editorData,
+   * attached content). The gateway path never calls `aiChat.sendMessageInServer`,
+   * so this is how the row the server persists matches a client-runtime send.
    */
+  userMessage: ComposerUserMessageSchema.optional(),
+  /** @deprecated Sent by clients before `userMessage`; folded into `userMessage.metadata`. */
   contextSelections: z.array(ContextSelectionSchema).optional(),
-  /** Page-editor selections, mirrored from `contextSelections` for compatibility. */
+  /** @deprecated Sent by clients before `userMessage`; folded into `userMessage.metadata`. */
   pageSelections: z.array(PageSelectionSchema).optional(),
   /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
   parentMessageId: z.string().optional(),
@@ -293,11 +304,26 @@ export const ExecAgentFieldsSchema = z.object({
    * `'openapi'`, `'eval'`, …) to override.
    */
   /**
-   * The prompt was queued while the previous turn was still running. The
-   * persisted user message carries `metadata.steer` so it renders as a
-   * continuation of that turn instead of a new one.
+   * The send directly steered the turn it replaces (an interrupting "send
+   * now"). The persisted user message carries `metadata.steer` so it renders
+   * as a continuation of that turn instead of a new one. A follow-up that
+   * waited in queue and starts a turn of its own is not marked.
    */
   steer: z.boolean().optional(),
+  /**
+   * Whether this send may take the topic over from a run that still owns it,
+   * as a person at the composer does (default). `false` — another agent
+   * delivering through `lh topic send` — never interrupts: a live run makes the
+   * call fail with `CONFLICT` before anything is written, and the caller queues
+   * the message behind that run instead.
+   */
+  supersedeLiveRun: z.boolean().optional(),
+  /**
+   * Title of the topic this send creates (`lh topic send --new --title`).
+   * Ignored when the send continues an existing topic; without it the topic is
+   * named after the prompt.
+   */
+  title: z.string().max(255).optional(),
   trigger: z
     .string()
     .refine((value) => value !== RequestTrigger.Bot, {
@@ -419,3 +445,32 @@ export const ExecSubAgentTaskSchema = z.object({
   /** The Topic ID */
   topicId: z.string(),
 });
+
+/**
+ * Fold the deprecated top-level selection fields into `userMessage.metadata`,
+ * so everything downstream reads one shape. `userMessage` wins when a client
+ * sends both. Applied wherever a request enters: `execAgent`, a queued
+ * follow-up's append, and every queued entry read back from Redis (an entry
+ * stored before this shape existed still carries the old fields).
+ */
+export const foldLegacyUserMessageFields = <
+  T extends Partial<Pick<ExecAgentInput, 'contextSelections' | 'pageSelections' | 'userMessage'>>,
+>({
+  contextSelections,
+  pageSelections,
+  ...input
+}: T): Omit<T, 'contextSelections' | 'pageSelections'> => {
+  if (!contextSelections?.length && !pageSelections?.length) return input;
+
+  return {
+    ...input,
+    userMessage: {
+      ...input.userMessage,
+      metadata: {
+        ...(contextSelections?.length ? { contextSelections } : undefined),
+        ...(pageSelections?.length ? { pageSelections } : undefined),
+        ...input.userMessage?.metadata,
+      },
+    },
+  };
+};

@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { DecisionPayload, DecisionQuestions } from '@lobechat/model-runtime';
 import { getErrorCodeSpec, StructuredOutputError } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
-import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
+import {
+  AiSendMessageServerSchema,
+  DecisionOutputSchema,
+  RequestTrigger,
+  StructureOutputSchema,
+} from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
 import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
@@ -16,13 +22,16 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { LOADING_FLAT } from '@/const/message';
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
+import { ProjectModel } from '@/database/models/project';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
+import { assertCanUseConversationTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
+import { resolveAgentReference } from '@/server/services/agent/resolveReference';
 import { AiChatService } from '@/server/services/aiChat';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
@@ -145,6 +154,44 @@ const aiChatProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
 const aiChatWriteProcedure = aiChatProcedure.use(withScopedPermission('message:create'));
 
 export const aiChatRouter = router({
+  /**
+   * Asks a decision model (e.g. `lobehub/jev-1.14.0`) typed questions about one state and returns
+   * its answers with probabilities: `lh generate decide`. The same `runtime.decide` call bot wake
+   * and channel routing make, so a prompt can be replayed on the model production uses.
+   */
+  decide: aiChatWriteProcedure.input(DecisionOutputSchema).mutation(async ({ input, ctx }) => {
+    log('decide called with provider: %s, model: %s', input.provider, input.model);
+
+    const tracingId = input.tracing?.tracingId ?? randomUUID();
+
+    try {
+      const data = await ctx.aiGenerationService.decide(
+        {
+          model: input.model,
+          provider: input.provider,
+          // Validated by `DecisionOutputSchema`, which mirrors the runtime's decision types.
+          questions: input.questions as DecisionQuestions,
+          state: input.state as DecisionPayload['state'],
+        },
+        {
+          metadata: {
+            trigger: RequestTrigger.Chat,
+            ...input.metadata,
+            userAgent: ctx.userAgent,
+          },
+          tracing: { ...input.tracing, tracingId },
+        },
+      );
+
+      return { data, tracingId };
+    } catch (error) {
+      const runtimeTRPCError = createRuntimeTRPCError(error);
+      if (runtimeTRPCError) throw runtimeTRPCError;
+
+      throw error;
+    }
+  }),
+
   outputJSON: aiChatWriteProcedure.input(StructureOutputSchema).mutation(async ({ input, ctx }) => {
     log('outputJSON called with provider: %s, model: %s', input.provider, input.model);
     log('messages count: %d', input.messages.length);
@@ -204,7 +251,34 @@ export const aiChatRouter = router({
 
   sendMessageInServer: aiChatWriteProcedure
     .input(AiSendMessageServerSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input: rawInput, ctx }) => {
+      const context = await resolveContext(
+        rawInput,
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      await assertCanUseConversationTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [context],
+      );
+      const replyId = rawInput.newAssistantMessage.agentId;
+      const replyAgentId =
+        replyId && (replyId.startsWith('ssn_') || replyId === 'inbox')
+          ? (
+              await resolveAgentReference(
+                replyId,
+                ctx.serverDB,
+                ctx.userId,
+                ctx.workspaceId ?? undefined,
+              )
+            ).agentId
+          : replyId;
+      const input = {
+        ...rawInput,
+        agentId: context.agentId ?? undefined,
+        sessionId: context.sessionId ?? undefined,
+      };
       const timingContext =
         input.newAssistantMessage.provider === 'lobehub'
           ? { requestId: createTimingRequestId(), startedAt: Date.now() }
@@ -223,16 +297,7 @@ export const aiChatRouter = router({
         input.newTopic,
         input.newThread,
       );
-      let sessionId = input.sessionId;
-      if (!sessionId) {
-        const context = await runTimedStage(
-          timingContext,
-          'lambda.aiChat.resolveContext',
-          () => resolveContext(input, ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
-          { hasAgentId: !!input.agentId },
-        );
-        if (!!context.sessionId) sessionId = context.sessionId;
-      }
+      const sessionId = input.sessionId;
 
       let topicId = input.topicId!;
       let threadId = input.threadId;
@@ -244,6 +309,14 @@ export const aiChatRouter = router({
       // create topic if there should be a new topic
       if (input.newTopic) {
         log('creating new topic with title: %s', input.newTopic.title);
+        const { projectId } = input.newTopic;
+        if (
+          projectId &&
+          !(await new ProjectModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).findById(
+            projectId,
+          ))
+        )
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
         const topicItem = await runTimedStage(
           timingContext,
           'lambda.aiChat.topic.create',
@@ -254,6 +327,7 @@ export const aiChatRouter = router({
               messages: input.newTopic!.topicMessageIds,
               metadata: input.newTopic!.metadata,
               model: input.newTopic!.model,
+              projectId,
               provider: input.newTopic!.provider,
               sessionId,
               title: input.newTopic!.title,
@@ -449,7 +523,7 @@ export const aiChatRouter = router({
             topicId,
           } satisfies CreateMessageParams;
           const assistantMessage = {
-            agentId: input.newAssistantMessage.agentId ?? input.agentId,
+            agentId: replyAgentId ?? input.agentId,
             content: LOADING_FLAT,
             groupId: input.groupId,
             metadata: input.newAssistantMessage.metadata,
