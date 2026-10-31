@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Block,
-  Button,
-  confirmModal,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Skeleton,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Block, Button, confirmModal, Flexbox, Skeleton, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,26 +18,18 @@ import { createRunCreateModal } from '../RunCreateModal';
 import DatasetCard from './DatasetCard';
 import EmptyState from './EmptyState';
 
-const loadingStyles = createStaticStyles(({ css }) => ({
-  card: css`
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  header: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    padding: 16px;
-  `,
-  icon: css`
-    flex-shrink: 0;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const loadingStyles = stylex.create({
+  card: { borderRadius: cssVar.borderRadiusLG },
+  header: { display: 'flex', gap: '12px', alignItems: 'center', padding: '16px' },
+  icon: {
+    flexShrink: 0,
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface DatasetsTabProps {
   benchmarkId: string;
@@ -193,9 +177,13 @@ const DatasetsTab = memo<DatasetsTabProps>(
           {datasetsLoading && datasets.length === 0 ? (
             <Flexbox gap={12}>
               {[1, 2, 3].map((i) => (
-                <Block className={loadingStyles.card} key={i} variant={'outlined'}>
-                  <div className={loadingStyles.header}>
-                    <div className={loadingStyles.icon} />
+                <Block
+                  className={stylex.props(loadingStyles.card).className}
+                  key={i}
+                  variant={'outlined'}
+                >
+                  <div {...stylex.props(loadingStyles.header)}>
+                    <div {...stylex.props(loadingStyles.icon)} />
                     <Flexbox flex={1} gap={8}>
                       <Skeleton height={16} width={120} />
                       <Skeleton height={12} width={200} />

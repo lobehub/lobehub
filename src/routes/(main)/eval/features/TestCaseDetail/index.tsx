@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Breadcrumb,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Tag,
-  Text,
-  TextArea,
-  toast,
-} from '@lobehub/ui';
+import { Breadcrumb, Button, Flexbox, Tag, Text, TextArea, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileText, Pencil } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,58 +10,37 @@ import { useTranslation } from 'react-i18next';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
 
+import moduleStyles from './index.module.css';
 import Transcript from './Transcript';
 import { useCaseDraft } from './useCaseDraft';
 
-const styles = createStaticStyles(({ css }) => ({
-  breadcrumb: css`
-    font-size: ${cssVar.fontSize};
-
-    a {
-      color: ${cssVar.colorTextTertiary};
-      text-decoration: none;
-      transition: color 0.15s ease;
-
-      &:hover {
-        color: ${cssVar.colorText};
-      }
-    }
-  `,
-  icon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  label: css`
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  editor: css`
-    font-size: ${cssVar.fontSize};
-
-    textarea {
-      line-height: 1.75;
-    }
-  `,
-  prose: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: 10px;
-
-    font-size: ${cssVar.fontSize};
-    line-height: 1.75;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  icon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  label: {
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  prose: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: '10px',
+    fontSize: cssVar.fontSize,
+    lineHeight: 1.75,
+    whiteSpace: 'pre-wrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 export interface TestCaseDetailProps {
   /** Shown in the breadcrumb; falls back to a generic label when unknown. */
@@ -147,7 +118,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
       }}
     >
       <Breadcrumb
-        className={styles.breadcrumb}
+        className={moduleStyles.breadcrumb}
         items={[
           {
             title: <WorkspaceLink to="/eval">{t('testCaseDetail.breadcrumb.eval')}</WorkspaceLink>,
@@ -165,7 +136,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
 
       <Flexbox horizontal align="center" gap={12} justify="space-between">
         <Flexbox horizontal align="center" gap={12}>
-          <div className={styles.icon}>
+          <div {...stylex.props(styles.icon)}>
             <FileText size={18} style={{ color: cssVar.colorTextSecondary }} />
           </div>
           <Flexbox gap={6}>
@@ -194,7 +165,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
       </Flexbox>
 
       <Flexbox gap={10}>
-        <span className={styles.label}>{t('testCaseDetail.definition')}</span>
+        <span {...stylex.props(styles.label)}>{t('testCaseDetail.definition')}</span>
         <Transcript
           input={content.input ?? ''}
           messages={content.messages}
@@ -202,7 +173,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
             editing ? (
               <TextArea
                 autoSize={{ maxRows: 12, minRows: 3 }}
-                className={styles.editor}
+                className={moduleStyles.editor}
                 value={draft.input}
                 onChange={(e) => setDraft({ input: e.target.value })}
               />
@@ -214,12 +185,12 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
       {capturedOutput && !capturedIsPositive && (
         <Flexbox gap={10}>
           <Flexbox horizontal align="center" gap={8}>
-            <span className={styles.label}>{t('testCaseDetail.capturedOutput')}</span>
+            <span {...stylex.props(styles.label)}>{t('testCaseDetail.capturedOutput')}</span>
             <Tag color="error" size="small">
               {t('testCaseDetail.counterExample')}
             </Tag>
           </Flexbox>
-          <div className={styles.prose}>{capturedOutput}</div>
+          <div {...stylex.props(styles.prose)}>{capturedOutput}</div>
           <Text style={{ fontSize: 12 }} type="secondary">
             {t('testCaseDetail.capturedOutputHint')}
           </Text>
@@ -227,16 +198,16 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
       )}
 
       <Flexbox gap={10}>
-        <span className={styles.label}>{t('testCaseDetail.criteria')}</span>
+        <span {...stylex.props(styles.label)}>{t('testCaseDetail.criteria')}</span>
         {editing ? (
           <TextArea
             autoSize={{ maxRows: 12, minRows: 3 }}
-            className={styles.editor}
+            className={moduleStyles.editor}
             value={draft.criteria}
             onChange={(e) => setDraft({ criteria: e.target.value })}
           />
         ) : criteria ? (
-          <div className={styles.prose}>{criteria}</div>
+          <div {...stylex.props(styles.prose)}>{criteria}</div>
         ) : (
           <Text style={{ fontSize: 12 }} type="secondary">
             {t('testCaseDetail.criteria.empty')}
@@ -245,18 +216,18 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
       </Flexbox>
 
       <Flexbox gap={10}>
-        <span className={styles.label}>{t('testCaseDetail.expected')}</span>
+        <span {...stylex.props(styles.label)}>{t('testCaseDetail.expected')}</span>
         {editing ? (
           <TextArea
             autoSize={{ maxRows: 12, minRows: 3 }}
-            className={styles.editor}
+            className={moduleStyles.editor}
             placeholder={t('testCaseDetail.expected.placeholder')}
             value={draft.expected}
             onChange={(e) => setDraft({ expected: e.target.value })}
           />
         ) : expected ? (
           <>
-            <div className={styles.prose}>{expected}</div>
+            <div {...stylex.props(styles.prose)}>{expected}</div>
             {capturedIsPositive && (
               <Text style={{ fontSize: 12 }} type="secondary">
                 {t('testCaseDetail.expectedFromCapture')}

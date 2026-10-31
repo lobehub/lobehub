@@ -3,7 +3,9 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
 import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, createStaticStyles, cssVar, Text } from '@lobehub/ui';
+import { Button, confirmModal, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CircleDollarSign,
   Clock,
@@ -28,64 +30,60 @@ import { formatDuration, formatDurationMinutes } from '../../../../utils';
 
 const RANK_COLORS = [cssVar.colorPrimary, cssVar.colorSuccess, cssVar.colorTextQuaternary];
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  heroBand: css`
-    padding: 20px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  heroValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeHeading1};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  description: css`
-    margin: 0;
-    margin-block-start: 2px;
-    font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  iconBox: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  statCard: css`
-    flex: 1;
-
-    min-width: 0;
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  statIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  statLabel: css`
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    margin: 0;
-    font-size: ${cssVar.fontSizeHeading3};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  heroBand: {
+    padding: '20px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  heroValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeHeading1,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  description: {
+    margin: '0',
+    marginBlockStart: '2px',
+    fontSize: cssVar.fontSize,
+    color: cssVar.colorTextTertiary,
+  },
+  iconBox: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40px',
+    height: '40px',
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  statCard: {
+    flex: '1',
+    minWidth: '0',
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  statIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: cssVar.borderRadius,
+  },
+  statLabel: { fontSize: cssVar.fontSizeSM, fontWeight: 600, color: cssVar.colorTextSecondary },
+  title: {
+    margin: '0',
+    fontSize: cssVar.fontSizeHeading3,
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+});
 
 interface BenchmarkHeaderProps {
   benchmark: any;
@@ -220,7 +218,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
           <Flexbox horizontal align="start" justify="space-between">
             <Flexbox horizontal align="start" gap={12}>
               <div
-                className={styles.iconBox}
+                className={stylex.props(styles.iconBox).className}
                 style={{
                   background:
                     benchmark.source === 'user' ? cssVar.colorSuccessBg : cssVar.colorPrimaryBg,
@@ -235,9 +233,9 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 />
               </div>
               <Flexbox gap={4}>
-                <h1 className={styles.title}>{benchmark.name}</h1>
+                <h1 {...stylex.props(styles.title)}>{benchmark.name}</h1>
                 {benchmark.description && (
-                  <p className={styles.description}>{benchmark.description}</p>
+                  <p {...stylex.props(styles.description)}>{benchmark.description}</p>
                 )}
               </Flexbox>
             </Flexbox>
@@ -259,12 +257,12 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.heroBand}
+          className={stylex.props(styles.heroBand).className}
           gap={16}
           justify={'space-between'}
         >
           <Flexbox gap={6}>
-            <span className={styles.heroValue}>
+            <span {...stylex.props(styles.heroValue)}>
               {bestPassRate !== undefined ? `${(bestPassRate * 100).toFixed(0)}%` : '—'}
             </span>
             <Text color={cssVar.colorTextSecondary} fontSize={14}>
@@ -282,13 +280,18 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
         {/* Stats Cards */}
         <Flexbox horizontal gap={12}>
           {/* Card 1: Top Agents */}
-          <div className={styles.statCard}>
+          <div {...stylex.props(styles.statCard)}>
             <Flexbox gap={12}>
               <Flexbox horizontal align="center" gap={8}>
-                <div className={styles.statIcon} style={{ background: cssVar.colorWarningBg }}>
+                <div
+                  className={stylex.props(styles.statIcon).className}
+                  style={{ background: cssVar.colorWarningBg }}
+                >
                   <Trophy size={16} style={{ color: cssVar.colorWarning }} />
                 </div>
-                <span className={styles.statLabel}>{t('benchmark.detail.stats.topAgents')}</span>
+                <span {...stylex.props(styles.statLabel)}>
+                  {t('benchmark.detail.stats.topAgents')}
+                </span>
               </Flexbox>
 
               {!hasDatasets && !hasCompletedRuns && (
@@ -364,13 +367,18 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
           </div>
 
           {/* Card 2: Data Scale */}
-          <div className={styles.statCard}>
+          <div {...stylex.props(styles.statCard)}>
             <Flexbox gap={12}>
               <Flexbox horizontal align="center" gap={8}>
-                <div className={styles.statIcon} style={{ background: cssVar.colorPrimaryBg }}>
+                <div
+                  className={stylex.props(styles.statIcon).className}
+                  style={{ background: cssVar.colorPrimaryBg }}
+                >
                   <Layers size={16} style={{ color: cssVar.colorPrimary }} />
                 </div>
-                <span className={styles.statLabel}>{t('benchmark.detail.stats.dataScale')}</span>
+                <span {...stylex.props(styles.statLabel)}>
+                  {t('benchmark.detail.stats.dataScale')}
+                </span>
                 {totalCases === 0 && (
                   <span
                     style={{
@@ -419,13 +427,18 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
           </div>
 
           {/* Card 3: Avg Duration */}
-          <div className={styles.statCard}>
+          <div {...stylex.props(styles.statCard)}>
             <Flexbox gap={12}>
               <Flexbox horizontal align="center" gap={8}>
-                <div className={styles.statIcon} style={{ background: cssVar.colorInfoBg }}>
+                <div
+                  className={stylex.props(styles.statIcon).className}
+                  style={{ background: cssVar.colorInfoBg }}
+                >
                   <Clock size={16} style={{ color: cssVar.colorInfo }} />
                 </div>
-                <span className={styles.statLabel}>{t('benchmark.detail.stats.avgDuration')}</span>
+                <span {...stylex.props(styles.statLabel)}>
+                  {t('benchmark.detail.stats.avgDuration')}
+                </span>
               </Flexbox>
 
               {avgDuration == null ? (
@@ -468,13 +481,18 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
           </div>
 
           {/* Card 4: Avg Cost */}
-          <div className={styles.statCard}>
+          <div {...stylex.props(styles.statCard)}>
             <Flexbox gap={12}>
               <Flexbox horizontal align="center" gap={8}>
-                <div className={styles.statIcon} style={{ background: cssVar.colorSuccessBg }}>
+                <div
+                  className={stylex.props(styles.statIcon).className}
+                  style={{ background: cssVar.colorSuccessBg }}
+                >
                   <CircleDollarSign size={16} style={{ color: cssVar.colorSuccess }} />
                 </div>
-                <span className={styles.statLabel}>{t('benchmark.detail.stats.avgCost')}</span>
+                <span {...stylex.props(styles.statLabel)}>
+                  {t('benchmark.detail.stats.avgCost')}
+                </span>
               </Flexbox>
 
               {avgCost == null ? (

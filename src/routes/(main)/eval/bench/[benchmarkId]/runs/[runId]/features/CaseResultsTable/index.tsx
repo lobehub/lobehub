@@ -2,7 +2,7 @@
 
 import type { EvalThreadResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Badge,
@@ -13,110 +13,107 @@ import {
   Tag,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Footprints, Play, RotateCcw, SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import SegmentBar from '@/routes/(main)/eval/features/SegmentBar';
+import { sx } from '@/styles/sx';
 
 import { getResumeTarget } from '../resumeTarget';
 
-const styles = createStaticStyles(({ css }) => ({
-  caseLink: css`
-    color: inherit;
-    text-decoration: none;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-  durationSub: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  chip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 4px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      border-color 0.15s ease,
-      background 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 1px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  chipActive: css`
-    border-color: ${cssVar.colorText};
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  chipCount: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-weight: 600;
-  `,
-  chipDot: css`
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-  `,
-  filterBar: css`
-    padding-block: 12px;
-    padding-inline: 20px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  summaryBar: css`
-    padding-block: 16px;
-    padding-inline: 20px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  summaryLabel: css`
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  indexCell: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  monoCell: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  threadDot: css`
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-  `,
-}));
+const styles = stylex.create({
+  caseLink: {
+    color: { 'default': 'inherit', ':hover': cssVar.colorPrimary },
+    textDecoration: 'none',
+  },
+  durationSub: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  chip: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '999px',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    transition: {
+      'default': 'border-color 0.15s ease, background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  // Hover still lightens an active chip, as the `:hover` rule outranked the active one.
+  chipActive: {
+    borderColor: cssVar.colorText,
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+  },
+  chipCount: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontWeight: 600,
+  },
+  chipDot: {
+    display: 'inline-block',
+    width: '8px',
+    height: '8px',
+    borderRadius: '999px',
+  },
+  filterBar: {
+    paddingBlock: '12px',
+    paddingInline: '20px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  summaryBar: {
+    paddingBlock: '16px',
+    paddingInline: '20px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  summaryLabel: {
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  indexCell: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  monoCell: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+  },
+  threadDot: {
+    display: 'inline-block',
+    width: '8px',
+    height: '8px',
+    borderRadius: '999px',
+  },
+  badgeText: {
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 interface CaseResultsTableProps {
   benchmarkId: string;
@@ -128,14 +125,8 @@ interface CaseResultsTableProps {
   runStatus?: string;
 }
 
-const badgeTextStyle = createStaticStyles(({ css, cssVar }) => ({
-  text: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
-
 const BadgeText = memo<{ children: string }>(({ children }) => (
-  <span className={badgeTextStyle.text}>{children}</span>
+  <span {...stylex.props(styles.badgeText)}>{children}</span>
 ));
 
 const StatusBadge = memo<{ record: any }>(({ record }) => {
@@ -221,7 +212,7 @@ const ThreadDots = memo<{ threads: EvalThreadResult[] }>(({ threads }) => (
 
       return (
         <Tooltip key={thread.threadId} title={label}>
-          <span className={styles.threadDot} style={{ backgroundColor: color }} />
+          <span {...sx([styles.threadDot], undefined, { backgroundColor: color })} />
         </Tooltip>
       );
     })}
@@ -231,16 +222,16 @@ const ThreadDots = memo<{ threads: EvalThreadResult[] }>(({ threads }) => (
 const DurationCell = memo<{ ms: number }>(({ ms }) => {
   const sec = ms / 1000;
   if (sec < 60) {
-    return <span className={styles.monoCell}>{sec.toFixed(1)}s</span>;
+    return <span {...stylex.props(styles.monoCell)}>{sec.toFixed(1)}s</span>;
   }
   const min = Math.floor(sec / 60);
   const remSec = Math.floor(sec % 60);
   return (
     <Flexbox gap={2}>
-      <span className={styles.monoCell}>
+      <span {...stylex.props(styles.monoCell)}>
         {min}m {remSec}s
       </span>
-      <span className={styles.durationSub}>{sec.toFixed(1)}s</span>
+      <span {...stylex.props(styles.durationSub)}>{sec.toFixed(1)}s</span>
     </Flexbox>
   );
 });
@@ -347,7 +338,9 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
         {
           key: 'index',
           render: (_: any, record: any, index: number) => (
-            <span className={styles.indexCell}>{record.testCase?.sortOrder ?? index + 1}</span>
+            <span {...stylex.props(styles.indexCell)}>
+              {record.testCase?.sortOrder ?? index + 1}
+            </span>
           ),
           title: '#',
           width: 48,
@@ -356,7 +349,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           key: 'input',
           render: (_: any, record: any) => (
             <WorkspaceLink
-              className={styles.caseLink}
+              className={stylex.props(styles.caseLink).className}
               to={`/eval/bench/${benchmarkId}/runs/${runId}/cases/${record.testCaseId}`}
             >
               {record.testCase?.content?.input}
@@ -395,7 +388,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
                       <Tag color="red">{t('table.filter.failed')}</Tag>
                     ))}
                   {hasAllK && (
-                    <span className={styles.durationSub}>
+                    <span {...stylex.props(styles.durationSub)}>
                       ^{k}: {passAllK ? t('table.filter.passed') : t('table.filter.failed')}
                     </span>
                   )}
@@ -448,10 +441,10 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
               <Flexbox gap={2}>
                 <Flexbox horizontal align="center" gap={4}>
                   <Icon icon={Footprints} size={12} style={{ opacity: 0.5 }} />
-                  <span className={styles.monoCell}>{steps}</span>
+                  <span {...stylex.props(styles.monoCell)}>{steps}</span>
                 </Flexbox>
                 {hasDetail && (
-                  <span className={styles.durationSub}>
+                  <span {...stylex.props(styles.durationSub)}>
                     {llmCalls ?? 0} llm / {toolCalls ?? 0} tool
                   </span>
                 )}
@@ -473,9 +466,11 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
             if (!hasCost && !hasTokens) return '-';
             return (
               <Flexbox gap={2}>
-                {hasCost && <span className={styles.monoCell}>${formatCost(cost)}</span>}
+                {hasCost && <span {...stylex.props(styles.monoCell)}>${formatCost(cost)}</span>}
                 {hasTokens && (
-                  <span className={styles.durationSub}>{formatShortenNumber(tokens)} tokens</span>
+                  <span {...stylex.props(styles.durationSub)}>
+                    {formatShortenNumber(tokens)} tokens
+                  </span>
                 )}
               </Flexbox>
             );
@@ -499,9 +494,11 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
             if (!hasCost && !hasTokens) return '-';
             return (
               <Flexbox gap={2}>
-                {hasCost && <span className={styles.monoCell}>${formatCost(cost)}</span>}
+                {hasCost && <span {...stylex.props(styles.monoCell)}>${formatCost(cost)}</span>}
                 {hasTokens && (
-                  <span className={styles.durationSub}>{formatShortenNumber(tokens)} tokens</span>
+                  <span {...stylex.props(styles.durationSub)}>
+                    {formatShortenNumber(tokens)} tokens
+                  </span>
                 )}
               </Flexbox>
             );
@@ -586,15 +583,15 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
     return (
       <Flexbox gap={0}>
         {/* Status distribution summary — outcome at a glance + quick filter chips */}
-        <Flexbox className={styles.summaryBar} gap={12}>
-          <span className={styles.summaryLabel}>{t('table.columns.status')}</span>
+        <Flexbox {...stylex.props(styles.summaryBar)} gap={12}>
+          <span {...stylex.props(styles.summaryLabel)}>{t('table.columns.status')}</span>
           <SegmentBar segments={segments} />
           <Flexbox horizontal gap={8} wrap="wrap">
             {statusChips.map((chip) => {
               const isActive = statusFilter === chip.value;
               return (
                 <span
-                  className={`${styles.chip}${isActive ? ` ${styles.chipActive}` : ''}`}
+                  {...stylex.props(styles.chip, isActive && styles.chipActive)}
                   key={chip.value}
                   role={'button'}
                   tabIndex={0}
@@ -606,9 +603,9 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
                     }
                   }}
                 >
-                  <span className={styles.chipDot} style={{ backgroundColor: chip.color }} />
+                  <span {...sx([styles.chipDot], undefined, { backgroundColor: chip.color })} />
                   {chip.label}
-                  <span className={styles.chipCount}>{chip.count}</span>
+                  <span {...stylex.props(styles.chipCount)}>{chip.count}</span>
                 </span>
               );
             })}
@@ -616,7 +613,7 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
         </Flexbox>
 
         {/* Filters */}
-        <Flexbox horizontal align="center" className={styles.filterBar} gap={8}>
+        <Flexbox horizontal align="center" {...stylex.props(styles.filterBar)} gap={8}>
           <Input
             allowClear
             placeholder={t('table.search.placeholder')}

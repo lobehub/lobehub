@@ -1,49 +1,47 @@
 'use client';
 
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { createStaticStyles, cssVar, Divider, Flexbox, Tag, Tooltip, useTheme } from '@lobehub/ui';
+import { Divider, Flexbox, Tag, Tooltip, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
+import { sx } from '@/styles/sx';
 
-const styles = createStaticStyles(({ css }) => ({
-  axisLabel: css`
-    pointer-events: none;
-    position: absolute;
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  dot: css`
-    cursor: pointer;
-    transition:
-      transform 0.15s ease,
-      opacity 0.15s ease;
-
-    &:hover {
-      transform: translate(-50%, 50%) scale(1.5);
-      opacity: 1 !important;
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 1px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  scatterArea: css`
-    position: relative;
-    overflow: hidden;
-    flex: 1;
-  `,
-  tooltipLabel: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  axisLabel: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  // The hover `transform: scale(1.5)` of the emotion version never applied (the
+  // inline translate beat it), so only the hover opacity is kept. Opacity lives
+  // here rather than inline so `:hover` can override it without `!important`.
+  dot: {
+    cursor: 'pointer',
+    opacity: { 'default': 0.8, ':hover': 1 },
+    transition: {
+      'default': 'transform 0.15s ease, opacity 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  scatterArea: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: '1',
+  },
+  tooltipLabel: {
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 interface ScatterPlotProps {
   benchmarkId: string;
@@ -84,7 +82,7 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
   if (!results || results.length === 0) return null;
 
   return (
-    <div className={styles.scatterArea}>
+    <div {...stylex.props(styles.scatterArea)}>
       {/* Grid lines via SVG */}
       <svg
         preserveAspectRatio="none"
@@ -155,7 +153,7 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
                       {statusLabel}
                     </Tag>
                   </Flexbox>
-                  <span className={styles.tooltipLabel}>{d.duration.toFixed(2)}s</span>
+                  <span {...stylex.props(styles.tooltipLabel)}>{d.duration.toFixed(2)}s</span>
                 </Flexbox>
                 {/* Row 2: Input */}
                 {inputPreview && (
@@ -164,8 +162,10 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
                 {/* Row 3: Expected */}
                 {expectedPreview && (
                   <div
-                    className={styles.tooltipLabel}
-                    style={{ lineHeight: 1.4, wordBreak: 'break-all' }}
+                    {...sx([styles.tooltipLabel], undefined, {
+                      lineHeight: 1.4,
+                      wordBreak: 'break-all',
+                    })}
                   >
                     {expectedPreview}
                   </div>
@@ -175,12 +175,12 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
                 {/* Tokens & Cost */}
                 <Flexbox horizontal gap={16}>
                   <div>
-                    <span className={styles.tooltipLabel}>{t('run.chart.tokens')}: </span>
+                    <span {...stylex.props(styles.tooltipLabel)}>{t('run.chart.tokens')}: </span>
                     {formatShortenNumber(d.tokens)}
                   </div>
                   {d.cost !== undefined && (
                     <div>
-                      <span className={styles.tooltipLabel}>{t('run.metrics.cost')}: </span>$
+                      <span {...stylex.props(styles.tooltipLabel)}>{t('run.metrics.cost')}: </span>$
                       {formatCost(d.cost)}
                     </div>
                   )}
@@ -189,20 +189,18 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
             }
           >
             <div
-              className={styles.dot}
               role={'button'}
               tabIndex={0}
-              style={{
+              {...sx([styles.dot], undefined, {
                 background: fill,
                 borderRadius: '50%',
                 bottom: `${yPct}%`,
                 height: 7,
                 left: `${xPct}%`,
-                opacity: 0.8,
                 position: 'absolute',
                 transform: 'translate(-50%, 50%)',
                 width: 7,
-              }}
+              })}
               onClick={() => window.open(workspaceAwareCaseUrl, '_blank')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -215,10 +213,10 @@ const ScatterPlot = memo<ScatterPlotProps>(({ results, benchmarkId, runId }) => 
         );
       })}
       {/* Axis labels */}
-      <span className={styles.axisLabel} style={{ bottom: 2, right: 4 }}>
+      <span {...sx([styles.axisLabel], undefined, { bottom: 2, right: 4 })}>
         {t('run.chart.tokens')}
       </span>
-      <span className={styles.axisLabel} style={{ left: 4, top: 0 }}>
+      <span {...sx([styles.axisLabel], undefined, { left: 4, top: 0 })}>
         {t('run.chart.duration')}
       </span>
     </div>

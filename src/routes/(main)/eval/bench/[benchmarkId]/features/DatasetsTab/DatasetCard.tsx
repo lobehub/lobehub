@@ -3,14 +3,14 @@ import {
   Block,
   Button,
   confirmModal,
-  createStaticStyles,
-  cssVar,
   DropdownMenu,
   Flexbox,
   Spin,
   Tag,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,115 +22,89 @@ import { DATASET_PRESETS } from '../../../../config/datasetPresets';
 import TestCaseEmptyState from './TestCaseEmptyState';
 import TestCaseTable from './TestCaseTable';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  // Tonal figure block that leads with the dataset's headline metric — its
-  // test-case count — given mono weight so it reads as a result at a glance.
-  caseCount: css`
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    gap: 2px;
-    align-items: flex-end;
-
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  caseCountLabel: css`
-    font-size: ${cssVar.fontSizeSM};
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  caseCountValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  chevron: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 0.15s ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  datasetDescription: css`
-    overflow: hidden;
-
-    margin: 0;
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  datasetHeader: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    width: 100%;
-    padding: 16px;
-    border: none;
-
-    text-align: start;
-
-    background: transparent;
-
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -1px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  datasetIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-  datasetName: css`
-    margin: 0;
-    font-size: ${cssVar.fontSize};
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  expandedSection: css`
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  footer: css`
-    padding: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  footerLink: css`
-    text-decoration: none;
-  `,
-}));
+const styles = stylex.create({
+  card: { borderRadius: cssVar.borderRadiusLG },
+  caseCount: {
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    gap: '2px',
+    alignItems: 'flex-end',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  caseCountLabel: { fontSize: cssVar.fontSizeSM, lineHeight: 1, color: cssVar.colorTextTertiary },
+  caseCountValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeLG,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  chevron: {
+    flexShrink: 0,
+    color: cssVar.colorTextTertiary,
+    transition: {
+      'default': 'transform 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+  },
+  datasetDescription: {
+    overflow: 'hidden',
+    margin: '0',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  datasetHeader: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    width: '100%',
+    padding: '16px',
+    borderStyle: 'none',
+    textAlign: 'start',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: {
+      'default': 'background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-1px' },
+  },
+  datasetIcon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+  datasetName: { margin: '0', fontSize: cssVar.fontSize, fontWeight: 500, color: cssVar.colorText },
+  expandedSection: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  footer: {
+    padding: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  footerLink: { textDecoration: 'none' },
+});
 
 interface DatasetCardProps {
   benchmarkId: string;
@@ -198,9 +172,9 @@ const DatasetCard = memo<DatasetCardProps>(
     }, [dataset.id, deleteDataset, onRefresh, t]);
 
     return (
-      <Block className={styles.card} variant={'outlined'}>
+      <Block className={stylex.props(styles.card).className} variant={'outlined'}>
         <div
-          className={styles.datasetHeader}
+          {...stylex.props(styles.datasetHeader)}
           role="button"
           tabIndex={0}
           onClick={onExpand}
@@ -211,23 +185,25 @@ const DatasetCard = memo<DatasetCardProps>(
             }
           }}
         >
-          <div className={styles.datasetIcon}>
+          <div {...stylex.props(styles.datasetIcon)}>
             <Database size={16} style={{ color: cssVar.colorPrimary }} />
           </div>
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align="center" gap={8}>
-              <p className={styles.datasetName}>{dataset.name}</p>
+              <p {...stylex.props(styles.datasetName)}>{dataset.name}</p>
               {dataset.metadata?.preset && DATASET_PRESETS[dataset.metadata.preset] && (
                 <Tag size="small">{DATASET_PRESETS[dataset.metadata.preset].name}</Tag>
               )}
             </Flexbox>
             {dataset.description && (
-              <p className={styles.datasetDescription}>{dataset.description}</p>
+              <p {...stylex.props(styles.datasetDescription)}>{dataset.description}</p>
             )}
           </Flexbox>
-          <div className={styles.caseCount}>
-            <span className={styles.caseCountValue}>{dataset.testCaseCount || 0}</span>
-            <span className={styles.caseCountLabel}>{t('benchmark.detail.stats.cases')}</span>
+          <div {...stylex.props(styles.caseCount)}>
+            <span {...stylex.props(styles.caseCountValue)}>{dataset.testCaseCount || 0}</span>
+            <span {...stylex.props(styles.caseCountLabel)}>
+              {t('benchmark.detail.stats.cases')}
+            </span>
           </div>
           <Button
             icon={Play}
@@ -261,14 +237,14 @@ const DatasetCard = memo<DatasetCardProps>(
             <ActionIcon icon={Ellipsis} size="small" onClick={(e) => e.stopPropagation()} />
           </DropdownMenu>
           <ChevronRight
-            className={styles.chevron}
+            className={stylex.props(styles.chevron).className}
             size={16}
             style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
           />
         </div>
 
         {isExpanded && (
-          <div className={styles.expandedSection}>
+          <div {...stylex.props(styles.expandedSection)}>
             {loading ? (
               <Flexbox align="center" justify="center" style={{ padding: '48px 24px' }}>
                 <Spin size="large" />
@@ -289,9 +265,14 @@ const DatasetCard = memo<DatasetCardProps>(
                 onSearchChange={onSearchChange}
               />
             )}
-            <Flexbox horizontal align="center" className={styles.footer} justify="center">
+            <Flexbox
+              horizontal
+              align="center"
+              className={stylex.props(styles.footer).className}
+              justify="center"
+            >
               <WorkspaceLink
-                className={styles.footerLink}
+                className={stylex.props(styles.footerLink).className}
                 to={`/eval/bench/${benchmarkId}/datasets/${dataset.id}`}
               >
                 <Button icon={ArrowRight} iconPosition="end" size="small" type="text">

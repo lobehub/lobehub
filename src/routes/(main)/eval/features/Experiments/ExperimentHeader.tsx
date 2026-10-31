@@ -1,8 +1,10 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Button, confirmModal, type DropdownItem, DropdownMenu, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Ellipsis, Pencil, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,12 +14,7 @@ import { useEvalStore } from '@/store/eval';
 
 import { createExperimentModal } from './ExperimentCreateModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  meta: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({ meta: { fontSize: '13px', color: cssVar.colorTextTertiary } });
 
 interface ExperimentHeaderProps {
   experiment: AgentEvalExperimentDetail;
@@ -61,7 +58,7 @@ const ExperimentHeader = memo<ExperimentHeaderProps>(({ experiment }) => {
           {experiment.name}
         </Text>
         {experiment.description && <Text type="secondary">{experiment.description}</Text>}
-        <span className={styles.meta}>
+        <span {...stylex.props(styles.meta)}>
           {t('experiment.detail.lastAccessed', {
             time: new Date(experiment.accessedAt).toLocaleString(),
           })}

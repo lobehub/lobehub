@@ -5,13 +5,13 @@ import {
   ActionIcon,
   Block,
   Center,
-  createStaticStyles,
-  cssVar,
   DropdownMenu,
   Skeleton,
   stopPropagation,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Activity,
   Award,
@@ -50,11 +50,7 @@ const getSystemIcon = (id: string) => {
   return SYSTEM_ICONS[hash % SYSTEM_ICONS.length];
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  menuIcon: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({ menuIcon: { color: cssVar.colorTextTertiary } });
 
 const BenchmarkHead = memo<{ id: string }>(({ id }) => {
   const navigate = useWorkspaceAwareNavigate();
@@ -84,7 +80,11 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
 
     return benchmarkList.map((b: any) => ({
       icon: (
-        <Center className={styles.menuIcon} style={{ minWidth: 16 }} width={16}>
+        <Center
+          className={stylex.props(styles.menuIcon).className}
+          style={{ minWidth: 16 }}
+          width={16}
+        >
           {(() => {
             const BIcon = getSystemIcon(b.id);
             return <BIcon size={14} />;
@@ -96,7 +96,7 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
       onClick: () => handleBenchmarkSwitch(b.id),
       style: b.id === id ? { backgroundColor: cssVar.controlItemBgActive } : {},
     }));
-  }, [benchmarkList, handleBenchmarkSwitch, id, styles.menuIcon]);
+  }, [benchmarkList, handleBenchmarkSwitch, id, stylex.props(styles.menuIcon).className]);
 
   return (
     <Block

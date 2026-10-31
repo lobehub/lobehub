@@ -1,0 +1,21 @@
+.breadcrumb {
+  font-size: var(--lobe-font-size);
+}
+
+.breadcrumb a {
+  color: var(--lobe-color-text-tertiary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.breadcrumb a:hover {
+  color: var(--lobe-color-text);
+}
+
+.editor {
+  font-size: var(--lobe-font-size);
+}
+
+.editor textarea {
+  line-height: 1.75;
+}

@@ -4,8 +4,6 @@ import { AGENT_PROFILE_URL, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobe
 import {
   Accordion,
   ActionIcon,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Input,
   InputNumber,
@@ -15,6 +13,8 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,33 +30,25 @@ const DEFAULT_MAX_STEPS = 100;
 const DEFAULT_TIMEOUT_MINUTES = 30;
 const MAX_TIMEOUT_MINUTES = 240;
 
-const styles = createStaticStyles(({ css }) => ({
-  hint: css`
-    display: inline-block;
-    margin-block-start: 4px;
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  timestampLink: css`
-    cursor: pointer;
-
-    display: inline-block;
-
-    margin-block-start: 4px;
-
-    font-size: ${cssVar.fontSizeSM};
-
-    transition: color 0.15s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  hint: {
+    display: 'inline-block',
+    marginBlockStart: '4px',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextQuaternary,
+  },
+  timestampLink: {
+    cursor: 'pointer',
+    display: 'inline-block',
+    marginBlockStart: '4px',
+    fontSize: cssVar.fontSizeSM,
+    transition: {
+      'default': 'color 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    color: { 'default': null, ':hover': cssVar.colorText },
+  },
+});
 
 interface RunCreateFormValues {
   datasetId?: string;
@@ -244,7 +236,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
         required={t('run.create.name.required')}
         extra={
           <Text
-            className={styles.timestampLink}
+            className={stylex.props(styles.timestampLink).className}
             type="secondary"
             onClick={() => {
               const now = new Date();
@@ -331,7 +323,9 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
                   name="k"
                   style={{ paddingBlock: 0 }}
                   extra={
-                    <span className={styles.hint}>{t('run.config.k.hint', { k: kValue })}</span>
+                    <span {...stylex.props(styles.hint)}>
+                      {t('run.config.k.hint', { k: kValue })}
+                    </span>
                   }
                 >
                   <InputNumber
@@ -343,10 +337,12 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
                   />
                 </Form.Field>
                 <Form.Field
-                  extra={<span className={styles.hint}>{t('run.config.maxSteps.hint')}</span>}
                   label={t('run.config.maxSteps')}
                   name="maxSteps"
                   style={{ paddingBlock: 0 }}
+                  extra={
+                    <span {...stylex.props(styles.hint)}>{t('run.config.maxSteps.hint')}</span>
+                  }
                 >
                   <InputNumber
                     max={1000}

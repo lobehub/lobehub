@@ -1,104 +1,95 @@
-import { createStaticStyles, cssVar, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Input, Pagination, Table, type TableColumn, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Ellipsis, ExternalLink, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import SegmentBar from '../../../../features/SegmentBar';
+import moduleStyles from './TestCaseTable.module.css';
 
-const styles = createStaticStyles(({ css }) => ({
-  filterButton: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-    border: none;
-
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    text-transform: capitalize;
-
-    background: transparent;
-
-    transition:
-      color 0.15s ease,
-      background 0.15s ease;
-
-    &[data-active='true'] {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &[data-active='false'] {
-      color: ${cssVar.colorTextTertiary};
-
-      &:hover {
-        color: ${cssVar.colorText};
-      }
-    }
-
-    &:not(:first-child) {
-      border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -1px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  filterContainer: css`
-    overflow: hidden;
-    display: flex;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-  filtersRow: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
+const styles = stylex.create({
+  filterButton: {
+    cursor: 'pointer',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    borderInlineEndWidth: 0,
+    borderInlineStartWidth: { 'default': 0, ':not(:first-child)': '1px' },
+    borderStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    textTransform: 'capitalize',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: {
+      'default': 'color 0.15s ease, background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-1px' },
+  },
+  filterButtonActive: {
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+  },
+  filterButtonInactive: {
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+  },
+  filterContainer: {
+    overflow: 'hidden',
+    display: 'flex',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusSM,
+  },
+  filtersRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
   // Summary strip — leads the table with the case total as a mono figure plus a
   // proportional read of the difficulty mix across the loaded cases.
-  summaryDot: css`
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-  `,
-  summaryRow: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  summaryValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  table: css`
-    .row-selected > td,
-    .row-selected:hover > td {
-      background: ${cssVar.colorPrimaryBg};
-    }
-  `,
-  tableHeader: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+  summaryDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '999px',
+  },
+  summaryRow: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  summaryValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeLG,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  tableHeader: {
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 interface TestCaseTableProps {
   datasetEvalMode?: string | null;
@@ -291,9 +282,9 @@ const TestCaseTable = memo<TestCaseTableProps>(
 
     return (
       <>
-        <div className={styles.summaryRow}>
+        <div {...stylex.props(styles.summaryRow)}>
           <Flexbox gap={2}>
-            <span className={styles.summaryValue}>{total}</span>
+            <span {...stylex.props(styles.summaryValue)}>{total}</span>
             <Text color={cssVar.colorTextTertiary} fontSize={12}>
               {t('benchmark.detail.stats.cases')}
             </Text>
@@ -305,15 +296,14 @@ const TestCaseTable = memo<TestCaseTableProps>(
                 {(['easy', 'medium', 'hard'] as const).map((d) => (
                   <Flexbox horizontal align="center" gap={6} key={d}>
                     <span
-                      className={styles.summaryDot}
-                      style={{
+                      {...sx([styles.summaryDot], undefined, {
                         background:
                           d === 'easy'
                             ? cssVar.colorSuccess
                             : d === 'medium'
                               ? cssVar.colorWarning
                               : cssVar.colorError,
-                      }}
+                      })}
                     />
                     <Text color={cssVar.colorTextTertiary} fontSize={12}>
                       {t(`difficulty.${d}`)} {difficulty.counts[d]}
@@ -324,7 +314,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
             </Flexbox>
           )}
         </div>
-        <div className={styles.filtersRow}>
+        <div {...stylex.props(styles.filtersRow)}>
           <Flexbox horizontal align="center" gap={8}>
             <Input
               placeholder={t('testCase.search.placeholder')}
@@ -336,10 +326,13 @@ const TestCaseTable = memo<TestCaseTableProps>(
                 onSearchChange(e.target.value);
               }}
             />
-            <div className={styles.filterContainer}>
+            <div {...stylex.props(styles.filterContainer)}>
               {(['all', 'easy', 'medium', 'hard'] as const).map((f) => (
                 <button
-                  className={styles.filterButton}
+                  {...stylex.props(
+                    styles.filterButton,
+                    diffFilter === f ? styles.filterButtonActive : styles.filterButtonInactive,
+                  )}
                   data-active={diffFilter === f}
                   key={f}
                   onClick={() => {
@@ -362,9 +355,9 @@ const TestCaseTable = memo<TestCaseTableProps>(
             </Flexbox>
           )}
         </div>
-        <div className={styles.table}>
+        <div className={moduleStyles.table}>
           <Table
-            classNames={{ header: { cell: styles.tableHeader } }}
+            classNames={{ header: { cell: stylex.props(styles.tableHeader).className } }}
             columns={columns}
             dataSource={testCases}
             pagination={false}

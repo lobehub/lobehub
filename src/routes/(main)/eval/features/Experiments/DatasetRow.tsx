@@ -1,43 +1,40 @@
 'use client';
 
 import type { AgentEvalDatasetListItem } from '@lobechat/types';
-import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, Database, Play } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
-const styles = createStaticStyles(({ css }) => ({
-  iconBox: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorPrimary};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-  row: css`
-    padding-block: 10px;
-    padding-inline: 4px;
-    border-radius: ${cssVar.borderRadius};
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  iconBox: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorPrimary,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+  row: {
+    paddingBlock: '10px',
+    paddingInline: '4px',
+    borderRadius: cssVar.borderRadius,
+    transition: {
+      'default': 'background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface DatasetRowProps {
   dataset: AgentEvalDatasetListItem;
@@ -52,8 +49,8 @@ const DatasetRow = memo<DatasetRowProps>(({ dataset, onAddRun }) => {
   const { t } = useTranslation('eval');
 
   return (
-    <Flexbox horizontal align="center" className={styles.row} gap={12}>
-      <div className={styles.iconBox}>
+    <Flexbox horizontal align="center" className={stylex.props(styles.row).className} gap={12}>
+      <div {...stylex.props(styles.iconBox)}>
         <Icon icon={Database} size={16} />
       </div>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>

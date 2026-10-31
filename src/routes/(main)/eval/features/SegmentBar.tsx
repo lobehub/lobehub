@@ -1,27 +1,23 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  segment: css`
-    height: 100%;
-    transition: width 0.3s ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  track: css`
-    overflow: hidden;
-    display: flex;
-
-    width: 100%;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  segment: {
+    height: '100%',
+    transition: { 'default': 'width 0.3s ease', '@media (prefers-reduced-motion: reduce)': 'none' },
+  },
+  track: {
+    overflow: 'hidden',
+    display: 'flex',
+    width: '100%',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 interface SegmentBarProps {
   height?: number;
@@ -38,12 +34,12 @@ const SegmentBar = memo<SegmentBarProps>(({ segments, height = 8 }) => {
   const total = segments.reduce((sum, s) => sum + s.value, 0);
 
   return (
-    <div className={styles.track} style={{ height }}>
+    <div className={stylex.props(styles.track).className} style={{ height }}>
       {total > 0 &&
         segments.map((s, i) =>
           s.value > 0 ? (
             <span
-              className={styles.segment}
+              className={stylex.props(styles.segment).className}
               key={i}
               style={{ background: s.color, width: `${(s.value / total) * 100}%` }}
             />

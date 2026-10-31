@@ -1,20 +1,21 @@
 'use client';
 
 import { Badge, Checkbox, Table, type TableColumn, Tag, Text, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type FC, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ArticleSkeleton } from '@/components/Skeleton';
 import { agentEvalService } from '@/services/agentEval';
 
-const styles = createStaticStyles(({ css }) => ({
-  indexCell: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  indexCell: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 type ResumableCase = Awaited<ReturnType<typeof agentEvalService.getResumableCases>>[number];
 
@@ -120,7 +121,7 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
       {
         key: 'index',
         render: (_: any, record: ResumableCase) => (
-          <span className={styles.indexCell}>{record.sortOrder ?? '-'}</span>
+          <span {...stylex.props(styles.indexCell)}>{record.sortOrder ?? '-'}</span>
         ),
         title: '#',
         width: 48,

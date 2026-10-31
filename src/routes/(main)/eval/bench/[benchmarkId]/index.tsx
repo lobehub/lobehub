@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Activity,
   Award,
@@ -45,30 +47,27 @@ const getSystemIcon = (id: string) => {
   return SYSTEM_ICONS[hash % SYSTEM_ICONS.length];
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow-y: auto;
-    padding-block: 24px;
-    padding-inline: 32px;
-  `,
-  sectionTitle: css`
-    margin: 0;
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  tag: css`
-    padding-block: 2px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusXS};
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-  `,
-}));
+const styles = stylex.create({
+  container: { overflowY: 'auto', paddingBlock: '24px', paddingInline: '32px' },
+  sectionTitle: {
+    margin: '0',
+    fontSize: cssVar.fontSizeLG,
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  tag: {
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusXS,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+});
 
 const BenchmarkDetail = memo(() => {
   const { t } = useTranslation('eval');
@@ -117,7 +116,12 @@ const BenchmarkDetail = memo(() => {
   }
 
   return (
-    <Flexbox className={styles.container} gap={24} height="100%" width="100%">
+    <Flexbox
+      className={stylex.props(styles.container).className}
+      gap={24}
+      height="100%"
+      width="100%"
+    >
       {/* Header + Stats */}
       <BenchmarkHeader
         benchmark={benchmark}
@@ -133,7 +137,7 @@ const BenchmarkDetail = memo(() => {
       {(benchmark as any).tags && (benchmark as any).tags.length > 0 && (
         <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap' }}>
           {(benchmark as any).tags.map((tag: string) => (
-            <span className={styles.tag} key={tag}>
+            <span {...stylex.props(styles.tag)} key={tag}>
               {tag}
             </span>
           ))}
@@ -141,7 +145,7 @@ const BenchmarkDetail = memo(() => {
       )}
 
       {/* Datasets Section */}
-      <h3 className={styles.sectionTitle}>{t('benchmark.detail.tabs.datasets')}</h3>
+      <h3 {...stylex.props(styles.sectionTitle)}>{t('benchmark.detail.tabs.datasets')}</h3>
       <DatasetsTab
         benchmarkId={benchmarkId!}
         datasets={datasets}
@@ -151,7 +155,7 @@ const BenchmarkDetail = memo(() => {
       />
 
       {/* Evaluations Section */}
-      <h3 className={styles.sectionTitle}>{t('benchmark.detail.tabs.runs')}</h3>
+      <h3 {...stylex.props(styles.sectionTitle)}>{t('benchmark.detail.tabs.runs')}</h3>
       <RunsTab benchmarkId={benchmarkId!} />
     </Flexbox>
   );

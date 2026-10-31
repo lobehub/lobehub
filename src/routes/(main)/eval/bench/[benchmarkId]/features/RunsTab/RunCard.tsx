@@ -1,6 +1,8 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { confirmModal, createStaticStyles, cssVar, toast } from '@lobehub/ui';
+import { confirmModal, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   AlertTriangle,
   ArrowRight,
@@ -17,159 +19,140 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
+import { sx } from '@/styles/sx';
 
 import SegmentBar from '../../../../features/SegmentBar';
 import StatusBadge from '../../../../features/StatusBadge';
 import { formatDuration } from '../../../../utils';
 
-const styles = createStaticStyles(({ css }) => ({
-  arrowIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 0.15s ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  card: css`
-    padding: 20px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      border-color 0.15s ease,
-      background 0.15s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-
-    &:hover .run-card-arrow {
-      transform: translateX(2px);
-      color: ${cssVar.colorText};
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-
-      &:hover .run-card-arrow {
-        transform: none;
-      }
-    }
-  `,
-  cardLink: css`
-    text-decoration: none;
-  `,
-  dropdownTrigger: css`
-    cursor: pointer;
-
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition:
-      color 0.15s ease,
-      background 0.15s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -1px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
+const styles = stylex.create({
+  arrowIcon: {
+    flexShrink: 0,
+    color: {
+      default: cssVar.colorTextTertiary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorText,
+    },
+    transform: {
+      'default': null,
+      [stylex.when.ancestor(':hover')]: 'translateX(2px)',
+      // At-rules outrank the ancestor selector, so reduced motion cancels the nudge.
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    transition: {
+      'default': 'transform 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+  },
+  card: {
+    padding: '20px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: {
+      'default': 'border-color 0.15s ease, background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+  },
+  cardLink: {
+    textDecoration: 'none',
+  },
+  dropdownTrigger: {
+    cursor: 'pointer',
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: cssVar.borderRadiusSM,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: {
+      'default': 'color 0.15s ease, background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-1px' },
+  },
   // Tonal hero band carrying the headline outcome — the first thing the eye lands on.
-  hero: css`
-    padding: 16px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  heroValue: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeHeading2};
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorText};
-  `,
-  meta: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  metaHighlight: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  monoText: css`
-    font-family: ${cssVar.fontFamilyCode};
-  `,
-  name: css`
-    overflow: hidden;
+  hero: {
+    padding: '16px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  heroValue: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeHeading2,
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorText,
+  },
+  meta: {
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  metaHighlight: {
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+  },
+  monoText: {
+    fontFamily: cssVar.fontFamilyCode,
+  },
+  name: {
+    overflow: 'hidden',
+    fontSize: cssVar.fontSizeLG,
+    fontWeight: 600,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+    transition: {
+      'default': 'width 0.3s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+  },
+  progressTrack: {
+    overflow: 'hidden',
+    width: '100%',
+    height: '8px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  separator: {
+    color: cssVar.colorBorderSecondary,
+  },
+  stat: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    fontSize: cssVar.fontSizeSM,
+  },
+  statError: { color: cssVar.colorError },
+  statSuccess: { color: cssVar.colorSuccess },
+  statWarning: { color: cssVar.colorWarning },
+  unit: {
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+});
 
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  progressFill: css`
-    height: 100%;
-    border-radius: 999px;
-    background: ${cssVar.colorPrimary};
-    transition: width 0.3s ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  progressTrack: css`
-    overflow: hidden;
-
-    width: 100%;
-    height: 8px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  separator: css`
-    color: ${cssVar.colorBorderSecondary};
-  `,
-  stat: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-    font-size: ${cssVar.fontSizeSM};
-  `,
-  statError: css`
-    color: ${cssVar.colorError};
-  `,
-  statSuccess: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  statWarning: css`
-    color: ${cssVar.colorWarning};
-  `,
-  unit: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+interface MetaPart {
+  style?: stylex.StyleXStyles;
+  text: string;
+}
 
 interface RunCardProps {
   benchmarkId: string;
@@ -297,40 +280,44 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
     },
   ];
 
-  const metaParts = [
+  const metaPartCandidates: Array<MetaPart | false | '' | null | undefined> = [
     run.createdAt && { text: formatDate(run.createdAt) },
     run.datasetName && { text: run.datasetName },
     run.targetAgent?.title && { text: run.targetAgent.title },
     run.targetAgent?.model && {
-      className: styles.monoText,
+      style: styles.monoText,
       text: run.targetAgent.model,
     },
     metrics?.duration != null && {
-      className: styles.metaHighlight,
+      style: styles.metaHighlight,
       text: formatDuration(metrics.duration),
     },
     metrics?.totalCost != null && {
-      className: styles.metaHighlight,
+      style: styles.metaHighlight,
       text: `$${metrics.totalCost.toFixed(2)}`,
     },
-  ].filter((item): item is { className?: string; text: string } => Boolean(item));
+  ];
+  const metaParts = metaPartCandidates.filter((item): item is MetaPart => Boolean(item));
 
   return (
-    <WorkspaceLink className={styles.cardLink} to={`/eval/bench/${benchmarkId}/runs/${run.id}`}>
-      <Flexbox className={styles.card} gap={16}>
+    <WorkspaceLink
+      className={stylex.props(styles.cardLink).className}
+      to={`/eval/bench/${benchmarkId}/runs/${run.id}`}
+    >
+      <Flexbox {...stylex.props(styles.card, stylex.defaultMarker())} gap={16}>
         {/* Identity row */}
         <Flexbox horizontal align="flex-start" gap={12} justify="space-between">
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Flexbox horizontal align="center" gap={8}>
-              <span className={styles.name}>{run.name}</span>
+              <span {...stylex.props(styles.name)}>{run.name}</span>
               <StatusBadge status={run.status} />
             </Flexbox>
             {metaParts.length > 0 && (
-              <Flexbox horizontal align="center" className={styles.meta} gap={4} wrap="wrap">
+              <Flexbox horizontal align="center" {...stylex.props(styles.meta)} gap={4} wrap="wrap">
                 {metaParts.map((item, i) => (
                   <Fragment key={i}>
-                    {i > 0 && <span className={styles.separator}>/</span>}
-                    <span className={item.className}>{item.text}</span>
+                    {i > 0 && <span {...stylex.props(styles.separator)}>/</span>}
+                    <span {...stylex.props(item.style)}>{item.text}</span>
                   </Fragment>
                 ))}
               </Flexbox>
@@ -339,7 +326,7 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
           <Flexbox horizontal align="center" gap={4} style={{ flexShrink: 0 }}>
             <DropdownMenu items={menuItems} placement="bottomRight">
               <span
-                className={styles.dropdownTrigger}
+                {...stylex.props(styles.dropdownTrigger)}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -348,43 +335,43 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
                 <Ellipsis size={16} />
               </span>
             </DropdownMenu>
-            <Icon className={`${styles.arrowIcon} run-card-arrow`} icon={ArrowRight} size={16} />
+            <Icon {...stylex.props(styles.arrowIcon)} icon={ArrowRight} size={16} />
           </Flexbox>
         </Flexbox>
 
         {/* Outcome hero — pass-rate headline + breakdown, or live progress */}
         {showProgress ? (
-          <Flexbox className={styles.hero} gap={10}>
+          <Flexbox {...stylex.props(styles.hero)} gap={10}>
             <Flexbox horizontal align="center" justify="space-between">
-              <span className={styles.meta}>
+              <span {...stylex.props(styles.meta)}>
                 {completedCases}/{totalCases}
               </span>
-              <span className={styles.metaHighlight}>{progress.toFixed(0)}%</span>
+              <span {...stylex.props(styles.metaHighlight)}>{progress.toFixed(0)}%</span>
             </Flexbox>
-            <div className={styles.progressTrack}>
-              <div className={styles.progressFill} style={{ width: `${progress}%` }} />
+            <div {...stylex.props(styles.progressTrack)}>
+              <div {...sx([styles.progressFill], undefined, { width: `${progress}%` })} />
             </div>
           </Flexbox>
         ) : hasStats ? (
-          <Flexbox className={styles.hero} gap={12}>
+          <Flexbox {...stylex.props(styles.hero)} gap={12}>
             <Flexbox horizontal align="flex-end" gap={16} justify="space-between">
               <Flexbox gap={4}>
                 <Flexbox horizontal align="baseline" gap={6}>
-                  <span className={styles.heroValue}>{passRate.toFixed(0)}%</span>
-                  <span className={styles.unit}>{t('run.metrics.passRate')}</span>
+                  <span {...stylex.props(styles.heroValue)}>{passRate.toFixed(0)}%</span>
+                  <span {...stylex.props(styles.unit)}>{t('run.metrics.passRate')}</span>
                 </Flexbox>
               </Flexbox>
               <Flexbox horizontal align="center" gap={12}>
-                <span className={`${styles.stat} ${styles.statSuccess}`}>
+                <span {...stylex.props(styles.stat, styles.statSuccess)}>
                   <Icon icon={CheckCircle2} size={14} />
                   {passedCases}
                 </span>
-                <span className={`${styles.stat} ${styles.statError}`}>
+                <span {...stylex.props(styles.stat, styles.statError)}>
                   <Icon icon={XCircle} size={14} />
                   {failedCases}
                 </span>
                 {errorCases > 0 && (
-                  <span className={`${styles.stat} ${styles.statWarning}`}>
+                  <span {...stylex.props(styles.stat, styles.statWarning)}>
                     <Icon icon={AlertTriangle} size={14} />
                     {errorCases}
                   </span>

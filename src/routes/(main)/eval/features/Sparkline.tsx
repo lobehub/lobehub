@@ -1,17 +1,17 @@
 'use client';
 
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  bar: css`
-    transition: height 0.2s ease;
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  bar: {
+    transition: {
+      'default': 'height 0.2s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+  },
+});
 
 interface SparklineProps {
   /** Highest-index value is the most recent run. */
@@ -38,7 +38,7 @@ const Sparkline = memo<SparklineProps>(({ values, width = 132 }) => {
         const isLatest = i === n - 1;
         return (
           <rect
-            className={styles.bar}
+            {...stylex.props(styles.bar)}
             fill={isLatest ? cssVar.colorPrimary : cssVar.colorSuccess}
             height={barHeight}
             key={i}

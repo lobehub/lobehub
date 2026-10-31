@@ -1,0 +1,4 @@
+.table :global(.row-selected) > td,
+.table :global(.row-selected:hover) > td {
+  background: var(--lobe-color-primary-bg);
+}

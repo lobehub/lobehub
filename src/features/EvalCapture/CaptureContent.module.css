@@ -1,0 +1,10 @@
+/* Sized down to sit with the label it qualifies rather than compete with it. */
+.kind {
+  font-size: var(--lobe-font-size-sm);
+}
+
+.kind [role='tab'],
+.kind button {
+  padding-block: 1px;
+  padding-inline: 8px;
+}

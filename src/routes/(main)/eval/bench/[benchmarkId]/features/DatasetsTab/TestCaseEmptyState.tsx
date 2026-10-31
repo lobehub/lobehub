@@ -1,22 +1,23 @@
-import { Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Database, FileUp, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  emptyIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 48px;
-    height: 48px;
-    margin-block-end: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-}));
+const styles = stylex.create({
+  emptyIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '48px',
+    height: '48px',
+    marginBlockEnd: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+});
 
 interface TestCaseEmptyStateProps {
   onAddCase: () => void;
@@ -28,7 +29,7 @@ const TestCaseEmptyState = memo<TestCaseEmptyStateProps>(({ onAddCase, onImport 
 
   return (
     <Flexbox align="center" gap={8} justify="center" style={{ padding: '48px 24px' }}>
-      <div className={styles.emptyIcon}>
+      <div {...stylex.props(styles.emptyIcon)}>
         <Database size={20} style={{ color: cssVar.colorPrimary }} />
       </div>
       <Text weight={600}>{t('testCase.empty.title')}</Text>

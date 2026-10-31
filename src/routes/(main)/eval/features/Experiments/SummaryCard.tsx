@@ -1,7 +1,9 @@
 'use client';
 
 import type { AgentEvalExperimentListItem } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowRight, Beaker } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,66 +12,51 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import RunRow from './RunRow';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    height: 100%;
-    padding: 20px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: border-color 0.15s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  detailLink: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  iconBox: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorInfo};
-
-    background: ${cssVar.colorInfoBg};
-  `,
-  name: css`
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    height: '100%',
+    padding: '20px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: {
+      'default': 'border-color 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+  },
+  detailLink: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: cssVar.borderRadiusSM,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  iconBox: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40px',
+    height: '40px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorInfo,
+    backgroundColor: cssVar.colorInfoBg,
+    backgroundImage: 'none',
+  },
+  name: {
+    fontSize: cssVar.fontSizeLG,
+    fontWeight: 600,
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorPrimary },
+  },
+});
 
 interface SummaryCardProps {
   experiment: AgentEvalExperimentListItem;
@@ -82,14 +69,17 @@ const SummaryCard = memo<SummaryCardProps>(({ experiment }) => {
   const fallbackBenchmarkId = experiment.benchmarks[0]?.id || '';
 
   return (
-    <Flexbox className={styles.card} gap={16}>
+    <Flexbox className={stylex.props(styles.card).className} gap={16}>
       <Flexbox horizontal align="flex-start" gap={12} justify="space-between">
         <Flexbox horizontal align="center" gap={12} style={{ minWidth: 0 }}>
-          <div className={styles.iconBox}>
+          <div {...stylex.props(styles.iconBox)}>
             <Icon icon={Beaker} size={22} />
           </div>
           <Flexbox gap={2} style={{ minWidth: 0 }}>
-            <WorkspaceLink className={styles.name} to={`/eval/experiments/${experiment.id}`}>
+            <WorkspaceLink
+              className={stylex.props(styles.name).className}
+              to={`/eval/experiments/${experiment.id}`}
+            >
               {experiment.name}
             </WorkspaceLink>
             <Text color={cssVar.colorTextTertiary} fontSize={12}>
@@ -99,7 +89,10 @@ const SummaryCard = memo<SummaryCardProps>(({ experiment }) => {
             </Text>
           </Flexbox>
         </Flexbox>
-        <WorkspaceLink className={styles.detailLink} to={`/eval/experiments/${experiment.id}`}>
+        <WorkspaceLink
+          className={stylex.props(styles.detailLink).className}
+          to={`/eval/experiments/${experiment.id}`}
+        >
           <Icon icon={ArrowRight} size={16} />
         </WorkspaceLink>
       </Flexbox>

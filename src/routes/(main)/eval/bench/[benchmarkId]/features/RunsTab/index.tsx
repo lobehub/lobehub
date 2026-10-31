@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Select, Text } from '@lobehub/ui';
+import { Button, Flexbox, Select, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,30 +14,28 @@ import { createRunEditModal } from '../RunEditModal';
 import EmptyState from './EmptyState';
 import RunCard from './RunCard';
 
-const styles = createStaticStyles(({ css }) => ({
-  // Results-led run cards sit on a responsive grid; they collapse to a single
-  // column on narrow viewports.
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-    gap: 12px;
-
-    @media (width <= 640px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  filterEmpty: css`
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 48px;
-    padding-inline: 24px;
-    border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'repeat(auto-fill, minmax(420px, 1fr))',
+      '@media (width <= 640px)': '1fr',
+    },
+    gap: '12px',
+  },
+  filterEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '48px',
+    paddingInline: '24px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface RunsTabProps {
   benchmarkId: string;
@@ -104,11 +104,11 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
       {sortedRuns.length === 0 ? (
         <EmptyState onCreate={() => createRunCreateModal({ benchmarkId })} />
       ) : filteredRuns.length === 0 ? (
-        <Flexbox className={styles.filterEmpty}>
+        <Flexbox className={stylex.props(styles.filterEmpty).className}>
           <Text color={cssVar.colorTextTertiary}>{t('run.filter.empty')}</Text>
         </Flexbox>
       ) : (
-        <div className={styles.grid}>
+        <div {...stylex.props(styles.grid)}>
           {filteredRuns.map((run) => (
             <RunCard
               benchmarkId={benchmarkId}
