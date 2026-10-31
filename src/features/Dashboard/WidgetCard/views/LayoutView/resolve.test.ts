@@ -60,6 +60,13 @@ describe('resolveText', () => {
     expect(resolveText({ bind: 'data.nope', fallback: '--' }, scope)).toBe('--');
   });
 
+  it('clips long values and every template slot, so a repeated long string stays bounded', () => {
+    const long = createLayoutScope({ data: { a: 'x'.repeat(250_000) }, type: 'data' });
+
+    expect(resolveText({ bind: 'data.a' }, long)).toHaveLength(500);
+    expect(resolveText({ template: '{data.a}'.repeat(62) }, long)).toHaveLength(500);
+  });
+
   it('never prints an object', () => {
     expect(resolveText({ bind: 'data.hourly' }, scope)).toBe('');
   });

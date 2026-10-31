@@ -319,4 +319,6 @@ export const WIDGET_LAYOUT_LIMITS = {
   repeat: 48,
   /** Most points a sparkline draws; longer arrays are sampled down. */
   seriesPoints: 240,
+  /** Most characters one text value prints, and one template slot contributes. */
+  textLength: 500,
 } as const;

@@ -119,24 +119,38 @@ export const resolveRaw = (value: WidgetLayoutValue | undefined, scope: LayoutSc
   return raw ?? value.fallback;
 };
 
+const clip = (text: string) =>
+  text.length > WIDGET_LAYOUT_LIMITS.textLength
+    ? `${text.slice(0, WIDGET_LAYOUT_LIMITS.textLength - 1)}…`
+    : text;
+
+/**
+ * A layout value as printed text, at most `textLength` characters. Template
+ * slots are clipped before they are joined, so a template that repeats a long
+ * output string never builds a large string first.
+ */
 export const resolveText = (value: WidgetLayoutValue | undefined, scope: LayoutScope): string => {
   if (value === undefined) return '';
   if (isTemplate(value)) {
-    return value.template.replaceAll(
-      TEMPLATE_SLOT,
-      (_, path: string, format?: string, digits?: string) =>
-        formatLayoutValue(getPath(scope, path), format as WidgetLayoutFormat | undefined, {
-          digits: digits === undefined ? undefined : Number(digits),
-        }),
+    return clip(
+      value.template.replaceAll(
+        TEMPLATE_SLOT,
+        (_, path: string, format?: string, digits?: string) =>
+          clip(
+            formatLayoutValue(getPath(scope, path), format as WidgetLayoutFormat | undefined, {
+              digits: digits === undefined ? undefined : Number(digits),
+            }),
+          ),
+      ),
     );
   }
   if (isBinding(value)) {
     // A mapped value is the layout's own word ("Rain"), not a number to format.
     const raw = resolveRaw(value, scope);
     const mapped = value.map && raw !== getPath(scope, value.bind);
-    return formatLayoutValue(raw, mapped ? undefined : value.format, value);
+    return clip(formatLayoutValue(raw, mapped ? undefined : value.format, value));
   }
-  return formatLayoutValue(value);
+  return clip(formatLayoutValue(value));
 };
 
 export const resolveNumber = (
