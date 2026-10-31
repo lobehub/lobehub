@@ -1,9 +1,10 @@
 // @vitest-environment node
 import type { TopicAnalysisResult } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { topicAnalyses, topics, users, workspaces } from '../../schemas';
+import { messages, topicAnalyses, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { TopicAnalysisModel } from '../topicAnalysis';
 
@@ -45,6 +46,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await serverDB.delete(messages);
   await serverDB.delete(topicAnalyses);
   await serverDB.delete(topics);
   await serverDB.delete(users);
@@ -135,5 +137,72 @@ describe('TopicAnalysisModel', () => {
     await serverDB.delete(topics);
 
     expect(await serverDB.select().from(topicAnalyses)).toHaveLength(0);
+  });
+
+  describe('topic usage snapshot', () => {
+    it('reads the topic totals and counts live messages by role', async () => {
+      await serverDB
+        .update(topics)
+        .set({
+          model: 'gpt-x',
+          provider: 'openai',
+          totalCost: 0.0123,
+          totalInputTokens: 900,
+          totalOutputTokens: 100,
+          totalTokens: 1000,
+          usage: { llm: { apiCalls: 3 } },
+        })
+        .where(eq(topics.id, topicId));
+      await serverDB.insert(messages).values([
+        { content: 'q1', role: 'user', topicId, userId },
+        { content: 'a1', role: 'assistant', topicId, userId },
+        { content: 'run', role: 'tool', topicId, userId },
+        { content: 'run', role: 'tool', topicId, userId },
+        { content: 'q2', role: 'user', topicId, userId },
+        { content: 'trashed', isDeleted: true, role: 'user', topicId, userId },
+      ]);
+
+      expect(await personalModel.snapshotTopicUsage(topicId)).toEqual({
+        assistantMessages: 1,
+        llmCalls: 3,
+        toolCalls: 2,
+        topicModel: 'gpt-x',
+        topicProvider: 'openai',
+        totalCost: 0.0123,
+        totalInputTokens: 900,
+        totalOutputTokens: 100,
+        totalTokens: 1000,
+        userMessages: 2,
+      });
+    });
+
+    it('keeps unmeasured totals null instead of zero', async () => {
+      expect(await personalModel.snapshotTopicUsage(topicId)).toMatchObject({
+        assistantMessages: 0,
+        llmCalls: null,
+        totalCost: null,
+        totalTokens: null,
+        userMessages: 0,
+      });
+    });
+
+    it('stores the snapshot with the analysis', async () => {
+      const usage = {
+        assistantMessages: 4,
+        llmCalls: 5,
+        toolCalls: 6,
+        topicModel: 'gpt-x',
+        topicProvider: 'openai',
+        totalCost: 1.5,
+        totalInputTokens: 70,
+        totalOutputTokens: 30,
+        totalTokens: 100,
+        userMessages: 3,
+      };
+
+      await personalModel.save({ ...snapshot, result: result(), topicId, usage });
+
+      expect(await personalModel.findByTopic(topicId, 'v1')).toMatchObject(usage);
+    });
   });
 });

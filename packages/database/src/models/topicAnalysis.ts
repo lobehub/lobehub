@@ -1,14 +1,30 @@
 import type { TopicAnalysisResult } from '@lobechat/types';
-import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, count, eq, isNull, lte, or, sql } from 'drizzle-orm';
 
-import { topicAnalyses, type TopicAnalysisItem } from '../schemas';
+import { messages, topicAnalyses, type TopicAnalysisItem, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
+
+/** The topic's own consumption at analysis time; `null` means not measured. */
+export interface TopicUsageSnapshot {
+  assistantMessages: number;
+  llmCalls: number | null;
+  toolCalls: number;
+  topicModel: string | null;
+  topicProvider: string | null;
+  totalCost: number | null;
+  totalInputTokens: number | null;
+  totalOutputTokens: number | null;
+  totalTokens: number | null;
+  userMessages: number;
+}
 
 export interface SaveTopicAnalysisParams {
   lastMessageId: string;
   lastMessageUpdatedAt: Date;
   result: TopicAnalysisResult;
   topicId: string;
+  usage?: TopicUsageSnapshot;
 }
 
 /** Topic classifications owned by one user, scoped to a workspace when given. */
@@ -29,8 +45,10 @@ export class TopicAnalysisModel {
     lastMessageUpdatedAt,
     result,
     topicId,
+    usage,
   }: SaveTopicAnalysisParams) => {
     const values = {
+      ...usage,
       category: result.category,
       intent: result.intent ?? null,
       labels: result.labels ?? null,
@@ -62,6 +80,43 @@ export class TopicAnalysisModel {
       .returning();
 
     return row;
+  };
+
+  /**
+   * Read the topic's rolled-up token and cost totals plus live message counts.
+   * The topic is not re-checked for ownership: callers pass a topic they already
+   * resolved for this user.
+   */
+  snapshotTopicUsage = async (topicId: string): Promise<TopicUsageSnapshot | undefined> => {
+    const [topic] = await this.db
+      .select({
+        llmCalls: sql<number | null>`NULLIF(${topics.usage}->'llm'->>'apiCalls', '')::int`,
+        topicModel: topics.model,
+        topicProvider: topics.provider,
+        totalCost: topics.totalCost,
+        totalInputTokens: topics.totalInputTokens,
+        totalOutputTokens: topics.totalOutputTokens,
+        totalTokens: topics.totalTokens,
+      })
+      .from(topics)
+      .where(eq(topics.id, topicId))
+      .limit(1);
+    if (!topic) return;
+
+    const roleCounts = await this.db
+      .select({ count: count(), role: messages.role })
+      .from(messages)
+      .where(and(eq(messages.topicId, topicId), notTrashed(messages.isDeleted)))
+      .groupBy(messages.role);
+    const countOf = (role: string) => roleCounts.find((row) => row.role === role)?.count ?? 0;
+
+    return {
+      ...topic,
+      assistantMessages: countOf('assistant'),
+      llmCalls: topic.llmCalls === null ? null : Number(topic.llmCalls),
+      toolCalls: countOf('tool'),
+      userMessages: countOf('user'),
+    };
   };
 
   findByTopic = async (
