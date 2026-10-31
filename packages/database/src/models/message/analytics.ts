@@ -1,11 +1,11 @@
 import type { DBMessageItem, ModelRankItem } from '@lobechat/types';
 import type { HeatmapsProps } from '@lobehub/charts';
 import dayjs from 'dayjs';
-import { and, asc, count, desc, eq, getTableColumns, gt, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, getTableColumns, gt, isNotNull, type SQL, type SQLWrapper, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
 
-import { agents, messages } from '../../schemas';
+import { agents, messagePlugins, messages } from '../../schemas';
 import { notCopiedTranscript } from '../../utils/copiedTranscript';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../../utils/genWhere';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
@@ -73,6 +73,101 @@ const computeTopicMessageStats = (counts: number[]): TopicMessageStats => {
   };
 };
 
+/**
+ * SQL-layer redaction of inline media bodies, shared by the `arguments`
+ * (text) and `state` (jsonb) projections of {@link queryAll}. The predicate
+ * must cover everything the ingestion side accepts — builtin-tool-lobe-agent
+ * media.ts accepts `/^data:(?:audio|image|video)\//i` URLs up to 2,000,000
+ * chars, both `;base64,` and raw forms (`data:image/svg+xml,%3Csvg...` or
+ * unencoded `<svg ...>` markup) — so the match is case-insensitive ('gi'),
+ * the header uses the RFC 2045 token grammar (same as the file-loaders ipynb
+ * scrub), the comma separator is REQUIRED (a plain long string like
+ * `data:image/png followed by docs...` is not a data URL and must not be
+ * rewritten), and the body has two branches: base64/percent bodies stop at
+ * the first character outside the payload alphabet (suffix-preserving),
+ * while raw-markup bodies redact through the JSON-string boundary via
+ * complete units (`[^"\]` or an escaped pair like `\"`) — a bare-backslash
+ * class would consume the `\` of a `\"` escape, leave the quote dangling,
+ * and corrupt the JSON text (the jsonb cast then fails the whole query). The
+ * mime header is kept as the capture so the export stays attribution-complete
+ * without dumping megabytes of body.
+ */
+const MIME_TOKEN = '[^\\s()<>@,;:\\\\"/\\[\\]?=]';
+const DATA_URL_HEADER =
+// The parameter loop refuses only the exact `;base64,` encoding sentinel
+// (`(?!base64(?=,))`). An earlier `(?!base64)` prefix lookahead also
+// rejected ordinary parameters whose name merely starts with `base64`
+// (e.g. `;base64url=x`) — ingestion accepts those via `new URL()`, and with
+// the parameter stuck outside the header none of the redaction passes could
+// reach the comma, so the full payload leaked through the export (Codex
+// round-9 P2).
+  `(data:(?:audio|image|video)/${MIME_TOKEN}+(?:;(?!base64(?=,))${MIME_TOKEN}+(?:=${MIME_TOKEN}*)?)*)`;
+// base64 form: the payload alphabet stops at the first character outside it,
+// so anything after the data URL (e.g. an escaped quote in an HTML
+// attribute) survives the rewrite. The alphabet covers standard base64 AND
+// the URL-safe variant (`-`/`_`): ingestion (builtin-tool-lobe-agent
+// media.ts) accepts any parseable data:audio|image|video URL without
+// validating the body encoding, so base64url bodies are a supported
+// persisted form that must not leak through the export.
+const DATA_URL_BASE64_PATTERN =
+  `(${DATA_URL_HEADER};base64,)` +
+  '(?:[A-Za-z0-9+/=_\\s-]|\\\\[nrtbf]|%[0-9a-fA-F]{2}){64,}';
+// raw (non-base64) form, primary pass: markup/percent-encoded payloads stop
+// at an escaped quote in complete units (`[^"\\]`, or an escaped pair whose
+// second character is neither a quote nor a backslash `\\[^"\\]`). `\"`
+// closes the embedded JSON string, so treating it as payload would run
+// through the surrounding text (attribute suffix, markup tail) to the outer
+// JSON boundary and silently truncate the exported content beyond the URL —
+// the defect Codex flagged. `\\` pairs are refused here too: in DB text a
+// post-URL escaped quote reads `\\\"` (escaped backslash + escaped quote),
+// and consuming the `\\` pair would eat the value-level backslash that
+// belongs to the suffix after the URL — refusing it keeps that backslash in
+// the export and hands payloads that contain real backslashes to the
+// fallback pass below. A bare-backslash class would also eat the `\` of a
+// `\"` escape, leaving the quote dangling and corrupting the JSON text (the
+// jsonb cast then fails the whole query) — both are excluded by the
+// second-character guard. The lookahead keeps base64 URLs out of this
+// branch, and the comma separator is REQUIRED so plain long strings
+// (`data:image/png followed by docs...`) never match.
+const DATA_URL_RAW_PATTERN =
+  `(${DATA_URL_HEADER}(?!;base64),)` +
+  '(?:(?:[^"\\\\]|\\\\[^"\\\\])){64,}';
+// raw form, fallback pass: the primary pass above cannot match a payload
+// that itself contains `\"` (double-quoted SVG attributes are the common
+// case) — the match dies on the first embedded escaped quote and the whole
+// URL leaks. This pass restores full-payload redaction for those (matching
+// through to the outer JSON boundary, accepting the suffix truncation the
+// primary pass avoids). The `(?!...redacted...)` lookahead after the comma
+// keeps this pass off the primary pass's own output: the placeholder is a
+// fixed 15-character quote-free literal, so a redacted URL can never
+// re-match here and its preserved suffix is safe.
+const DATA_URL_RAW_FALLBACK_PATTERN =
+  `(${DATA_URL_HEADER}(?!;base64),(?!\\.\\.\\.redacted\\.\\.\\.))` +
+  '(?:[^"\\\\]|\\\\.){64,}';
+const DATA_URL_REDACT_PATTERNS = [
+  DATA_URL_BASE64_PATTERN,
+  DATA_URL_RAW_PATTERN,
+  DATA_URL_RAW_FALLBACK_PATTERN,
+];
+const DATA_URL_REDACT_REPLACEMENT = '\\1...redacted...';
+
+
+/**
+ * Chain one `regexp_replace` per redaction pattern over the same column
+ * expression (PostgreSQL ARE alternation is leftmost-longest, so the
+ * base64 and raw-form predicates must run as sequential passes: the raw
+ * branch's string-boundary semantics would otherwise swallow a base64
+ * match's JSON suffix).
+ */
+const redactInlineMedia = (column: SQLWrapper, isJsonb: boolean) => {
+  const base = isJsonb ? sql`${column}::text` : column;
+  return DATA_URL_REDACT_PATTERNS.reduce(
+    (acc, pattern) =>
+      sql`regexp_replace(${acc}, ${pattern}, ${DATA_URL_REDACT_REPLACEMENT}, 'gi')`,
+    base,
+  );
+};
+
 export class MessageAnalyticsQueries extends MessageScope {
   /**
    * Full creator-facing message dump (`getAllMessages` / CLI export), so
@@ -90,9 +185,45 @@ export class MessageAnalyticsQueries extends MessageScope {
         ...getTableColumns(messages),
         agentName: agents.name,
         agentTitle: agents.title,
+        // Tool-call metadata lives on the 1:1 `message_plugins` row, not on
+        // `messages`. Consumers (lh CLI `message list --json`, wiki-ingest
+        // image-evidence verification) rely on these fields to attribute a
+        // tool result to its originating call — same shape as queryByIds.
+        tool_call_id: messagePlugins.toolCallId,
+        plugin: {
+          // `id` MUST be the first selected field: drizzle decides whether a
+          // left-joined nested selection is null from its first column (see
+          // queryWithWhere sender note), and every other plugin column is
+          // nullable while partial rows without `api_name` are a supported
+          // shape (write.ts persists `plugin?.apiName`). Anchoring on the
+          // non-null PK keeps partial rows projected; it equals the message
+          // id, so no sentinel stripping is needed.
+          id: messagePlugins.id,
+          apiName: messagePlugins.apiName,
+          // `arguments` can carry inline-media payloads (data: URLs of up to
+          // ~2MB each — see builtin-tool-lobe-agent media limits), and this
+          // dump feeds `lh message list --json`, which prints rows verbatim.
+          // Redact data-URL bodies (keep the mime header + `,...` marker, the
+          // same shape `formatMediaUrlForError` uses) so the export stays
+          // attribution-complete without dumping megabytes of base64.
+          arguments: sql<string | null>`${redactInlineMedia(messagePlugins.arguments, false)}`,
+          identifier: messagePlugins.identifier,
+          type: messagePlugins.type,
+        },
+        pluginError: messagePlugins.error,
+        pluginIntervention: messagePlugins.intervention,
+        // `state` is jsonb and can carry inline media too — browser-tool
+        // screenshots persist as `state.dataUrl` (builtin-tool-browser client
+        // executor) and would otherwise serialize multi-MB base64 into the
+        // verbatim CLI dump. Redact inside the JSON text at the SQL layer and
+        // cast back to jsonb so consumers keep the object shape.
+        pluginState: sql<
+          Record<string, unknown> | null
+        >`${redactInlineMedia(messagePlugins.state, true)}::jsonb`,
       })
       .from(messages)
       .leftJoin(agents, eq(messages.agentId, agents.id))
+      .leftJoin(messagePlugins, and(eq(messagePlugins.id, messages.id), this.pluginsOwnership()))
       .where(genWhere(this.analyticsConditions(filters)))
       .orderBy(desc(messages.createdAt))
       .limit(pageSize)
