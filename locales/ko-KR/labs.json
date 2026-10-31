@@ -36,8 +36,6 @@
   "features.messageTextSelectionActions.title": "메시지 텍스트 선택 작업",
   "features.oauthApps.desc": "개인 및 워크스페이스 설정에서 OAuth 앱 관리를 표시합니다. 이 기능은 기본적으로 숨겨져 있습니다.",
   "features.oauthApps.title": "OAuth 앱",
-  "features.persistentSandbox.desc": "클라우드 샌드박스가 작성한 파일을 유지합니다. 작업 디렉토리는 세션 재활용 후에도 유지되며, 샌드박스와 함께 삭제되지 않고 주제 간에 공유됩니다. 유료 플랜이 필요하며, 대규모 다운로드 및 종속성은 여전히 /tmp에 속합니다.",
-  "features.persistentSandbox.title": "영구 샌드박스",
   "features.projects.desc": "장기적인 목표를 전용 작업 공간으로 구성하여 고유한 에이전트, 지식 베이스 및 작업을 관리하세요.",
   "features.projects.title": "프로젝트 작업 공간",
   "features.selfLearning.desc": "각 에이전트가 실제 연습을 통해 학습한 내용을 보여줍니다 — 규칙 기반, 실제로 사용된 규칙, 그리고 아직 비어 있는 레이어를 확인할 수 있습니다.",

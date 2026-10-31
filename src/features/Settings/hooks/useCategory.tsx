@@ -87,7 +87,6 @@ export const useCategory = () => {
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const enableIntegrations = useUserStore(labPreferSelectors.enableIntegrations);
-  const enablePersistentSandbox = useUserStore(labPreferSelectors.enablePersistentSandbox);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -164,9 +163,9 @@ export const useCategory = () => {
         label: t('tab.environments'),
       },
       // The drives a cloud-sandbox run keeps files on, with their usage and
-      // the way to a plan — behind the same lab switch the composer's folder
-      // picker is, since without it no run ever touches a drive.
-      enablePersistentSandbox && {
+      // the way to a plan. A self-hosted deployment has no drive service, so
+      // the tab would only ever lead to an empty page there.
+      enableBusinessFeatures && {
         icon: HardDriveIcon,
         key: SettingsTabs.Drive,
         label: t('tab.drive'),
@@ -340,7 +339,6 @@ export const useCategory = () => {
     isDevMode,
     enableOAuthApps,
     enableIntegrations,
-    enablePersistentSandbox,
     avatarUrl,
     username,
   ]);

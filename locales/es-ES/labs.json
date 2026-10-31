@@ -36,8 +36,6 @@
   "features.messageTextSelectionActions.title": "Acciones de Selección de Texto en Mensajes",
   "features.oauthApps.desc": "Mostrar la gestión de aplicaciones OAuth en la configuración personal y del espacio de trabajo. Esta función está oculta por defecto.",
   "features.oauthApps.title": "Aplicaciones OAuth",
-  "features.persistentSandbox.desc": "Conserva los archivos que la sandbox en la nube escribe. Su directorio de trabajo sobrevive al reciclaje de sesiones y se comparte entre tus temas, en lugar de descartarse con la sandbox. Requiere un plan de pago; las descargas grandes y las dependencias aún pertenecen a /tmp.",
-  "features.persistentSandbox.title": "Sandbox Persistente",
   "features.projects.desc": "Organiza objetivos a largo plazo en espacios de trabajo dedicados con sus propios agentes, bases de conocimiento y tareas.",
   "features.projects.title": "Espacios de Trabajo de Proyectos",
   "features.selfLearning.desc": "Muestra lo que cada agente ha aprendido de la práctica real: su base de reglas, qué reglas se utilizan realmente y qué capas aún están en blanco.",

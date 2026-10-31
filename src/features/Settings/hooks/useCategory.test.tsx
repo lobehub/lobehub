@@ -130,25 +130,21 @@ describe('settings useCategory', () => {
     expect(accountGroup?.items.map((item) => item.key)).toContain(SettingsTabs.Integrations);
   });
 
-  // The drives are what a persistent sandbox run keeps files on, so the tab
-  // that sets them out follows the same lab switch as the composer's picker.
-  it('shows Storage beside Environments once persistent sandboxes are switched on', () => {
+  // The drives are what a persistent sandbox run keeps files on. Every Cloud
+  // account can reach them with no opt-in; a self-hosted deployment has no
+  // drive service, so it gets no tab.
+  it('shows Storage beside Environments wherever business features are on', () => {
     expect(getItemKeys()).not.toContain(SettingsTabs.Drive);
 
-    useUserStore.setState({
-      preference: {
-        ...initialUserStoreState.preference,
-        lab: { ...initialUserStoreState.preference.lab, enablePersistentSandbox: true },
-      },
+    const { result } = renderHook(() => useCategory(), {
+      wrapper: createWrapper(true, true),
     });
-    const { result } = renderHook(() => useCategory(), { wrapper: createWrapper(true) });
     const generalGroup = result.current.find((group) => group.key === SettingsGroupKey.General);
-    expect(generalGroup?.items.map((item) => item.key)).toEqual([
-      SettingsTabs.Stats,
-      SettingsTabs.Devices,
-      SettingsTabs.Environments,
-      SettingsTabs.Drive,
-    ]);
+    expect(generalGroup?.items.map((item) => item.key)).toEqual(
+      expect.arrayContaining([SettingsTabs.Environments, SettingsTabs.Drive]),
+    );
+    const keys = generalGroup!.items.map((item) => item.key);
+    expect(keys.indexOf(SettingsTabs.Drive)).toBe(keys.indexOf(SettingsTabs.Environments) + 1);
   });
 
   it('shows OAuth Apps when the Labs preference is enabled', () => {

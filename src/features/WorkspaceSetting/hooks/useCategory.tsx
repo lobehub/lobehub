@@ -82,7 +82,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const enableIntegrations = useUserStore(labPreferSelectors.enableIntegrations);
-  const enablePersistentSandbox = useUserStore(labPreferSelectors.enablePersistentSandbox);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
@@ -213,9 +212,8 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Environments,
               label: t('tab.environments'),
             },
-            // The public drive and the member's own, with the pool's usage —
-            // behind the same lab switch as the composer's folder picker.
-            enablePersistentSandbox && {
+            // The public drive and the member's own, with the pool's usage.
+            {
               icon: HardDriveIcon,
               key: WorkspaceSettingsTabs.Drive,
               label: t('tab.drive'),
@@ -377,7 +375,6 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       tSubscription,
       enableOAuthApps,
       enableIntegrations,
-      enablePersistentSandbox,
       canManageWorkspace,
       canViewBilling,
       canCreateContent,

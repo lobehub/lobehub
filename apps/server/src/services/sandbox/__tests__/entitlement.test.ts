@@ -1,28 +1,17 @@
-import type { LobeChatDatabase } from '@lobechat/database';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const resolveSandboxStorageEntitlement = vi.fn();
-const getUserPreference = vi.fn();
 
 vi.mock('@/business/server/sandboxStorage', () => ({
   resolveSandboxStorageEntitlement: (...args: unknown[]) =>
     resolveSandboxStorageEntitlement(...args),
 }));
 
-vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn(function () {
-    return { getUserPreference };
-  }),
-}));
-
 const { resolveSandboxStorageClaim } = await import('../entitlement');
-
-const serverDB = {} as LobeChatDatabase;
 
 const resolve = (overrides: Record<string, unknown> = {}) =>
   resolveSandboxStorageClaim({
     isShareVisitorRun: false,
-    serverDB,
     userId: 'user_1',
     ...overrides,
   });
@@ -30,8 +19,6 @@ const resolve = (overrides: Record<string, unknown> = {}) =>
 describe('resolveSandboxStorageClaim', () => {
   beforeEach(() => {
     resolveSandboxStorageEntitlement.mockReset();
-    getUserPreference.mockReset();
-    getUserPreference.mockResolvedValue({ lab: { enablePersistentSandbox: true } });
     resolveSandboxStorageEntitlement.mockResolvedValue({ quotaBytes: 2048 });
   });
 
@@ -48,7 +35,7 @@ describe('resolveSandboxStorageClaim', () => {
     });
 
     await expect(
-      resolveSandboxStorageClaim({ isShareVisitorRun: false, serverDB: {} as any, userId: 'u1' }),
+      resolveSandboxStorageClaim({ isShareVisitorRun: false, userId: 'u1' }),
     ).resolves.toMatchObject({ overageAllowed: true });
 
     resolveSandboxStorageEntitlement.mockResolvedValue({ quotaBytes: 2048 });
@@ -56,7 +43,6 @@ describe('resolveSandboxStorageClaim', () => {
     expect(
       await resolveSandboxStorageClaim({
         isShareVisitorRun: false,
-        serverDB: {} as any,
         userId: 'u1',
       }),
     ).not.toHaveProperty('overageAllowed');
@@ -75,15 +61,14 @@ describe('resolveSandboxStorageClaim', () => {
     });
   });
 
-  // The lab flag is the whole feature's gate: without a claim the execution
-  // plane routes to the ephemeral sandbox whatever mode the request asks for.
-  it('issues nothing until the lab experiment is switched on', async () => {
-    for (const lab of [undefined, {}, { enablePersistentSandbox: false }]) {
-      getUserPreference.mockResolvedValue(lab === undefined ? undefined : { lab });
-      await expect(resolve()).resolves.toBeNull();
-    }
+  // The plan is the whole feature's gate: no opt-in stands between an entitled
+  // account and its drive, and without a claim the execution plane routes to
+  // the ephemeral sandbox whatever mode the request asks for.
+  it('is decided by the plan alone, with no opt-in', async () => {
+    await expect(resolve()).resolves.toEqual({ key: 'ws-user_1', quotaBytes: 2048 });
 
-    expect(resolveSandboxStorageEntitlement).not.toHaveBeenCalled();
+    resolveSandboxStorageEntitlement.mockResolvedValue(undefined);
+    await expect(resolve()).resolves.toBeNull();
   });
 
   // A share visitor's run executes under the CREATOR's identity, so every input
@@ -92,7 +77,6 @@ describe('resolveSandboxStorageClaim', () => {
   it('issues nothing for a share-visitor run, without reading the creator at all', async () => {
     await expect(resolve({ isShareVisitorRun: true })).resolves.toBeNull();
 
-    expect(getUserPreference).not.toHaveBeenCalled();
     expect(resolveSandboxStorageEntitlement).not.toHaveBeenCalled();
   });
 
@@ -113,20 +97,15 @@ describe('resolveSandboxStorageClaim', () => {
   });
 
   // An unsafe id costs persistence, not the whole request.
-  it('skips both lookups when no safe key can be derived', async () => {
+  it('skips the lookup when no safe key can be derived', async () => {
     await expect(resolve({ userId: '../etc/passwd' })).resolves.toBeNull();
 
-    expect(getUserPreference).not.toHaveBeenCalled();
     expect(resolveSandboxStorageEntitlement).not.toHaveBeenCalled();
   });
 
-  // Losing either lookup must degrade to an ephemeral sandbox — the behaviour
-  // every session has today — not fail the tool call.
-  it('degrades to no entitlement when a lookup throws', async () => {
-    getUserPreference.mockRejectedValue(new Error('db down'));
-    await expect(resolve()).resolves.toBeNull();
-
-    getUserPreference.mockResolvedValue({ lab: { enablePersistentSandbox: true } });
+  // Losing the lookup must degrade to an ephemeral sandbox — the behaviour
+  // every free session has — not fail the tool call.
+  it('degrades to no entitlement when the lookup throws', async () => {
     resolveSandboxStorageEntitlement.mockRejectedValue(new Error('entitlement lookup failed'));
     await expect(resolve()).resolves.toBeNull();
   });

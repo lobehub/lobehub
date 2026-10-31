@@ -207,7 +207,7 @@ const resolvePlacement = async ({
   // One claim per drive, and each is resolved at most once: the topic decides
   // which drive the run addresses, and a run only ever addresses one.
   const claimFor = (drive: SandboxDrive) =>
-    resolveSandboxStorageClaim({ drive, isShareVisitorRun, serverDB, userId, workspaceId });
+    resolveSandboxStorageClaim({ drive, isShareVisitorRun, userId, workspaceId });
 
   if (!topicId) {
     const claim = await claimFor(defaultDrive);
