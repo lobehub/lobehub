@@ -16,3 +16,13 @@ export const filterMemberCandidates = <T extends MemberCandidate>(
     [member.name, member.email].some((field) => field?.toLocaleLowerCase().includes(keyword)),
   );
 };
+
+/**
+ * Every role change is authorized as the acting admin, and a project role overrides the
+ * workspace one. Saving the actor's own change first could demote them mid-batch and get the
+ * rest refused, so it goes last.
+ */
+export const actorLast = (userIds: string[], actorId?: string): string[] =>
+  actorId && userIds.includes(actorId)
+    ? [...userIds.filter((id) => id !== actorId), actorId]
+    : userIds;

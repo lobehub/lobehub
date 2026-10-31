@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { filterMemberCandidates } from './memberSearch';
+import { actorLast, filterMemberCandidates } from './memberSearch';
 
 const candidates = [
   { email: 'arvinx@foxmail.com', name: 'Arvin Xu', userId: 'u1' },
@@ -17,5 +17,16 @@ describe('filterMemberCandidates', () => {
     expect(filterMemberCandidates(candidates, 'foxmail').map(({ userId }) => userId)).toEqual([
       'u1',
     ]);
+  });
+});
+
+describe('actorLast', () => {
+  it('moves the acting admin to the end of the batch', () => {
+    expect(actorLast(['me', 'a', 'b'], 'me')).toEqual(['a', 'b', 'me']);
+  });
+
+  it('keeps the order when the actor is not selected or unknown', () => {
+    expect(actorLast(['a', 'b'], 'me')).toEqual(['a', 'b']);
+    expect(actorLast(['a', 'b'])).toEqual(['a', 'b']);
   });
 });

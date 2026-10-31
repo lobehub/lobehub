@@ -7,14 +7,18 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import SkeletonBar from '@/components/Skeleton/Bar';
 import { projectReviewService } from '@/services/projectReview';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { openAddMemberModal } from './AddMemberModal';
 import { MemberRow } from './MemberRow';
+import { actorLast } from './memberSearch';
 import { isForbidden, useProjectMembers } from './useProjectReview';
 
 export function MembersSettings({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project');
   const { data, error, mutate } = useProjectMembers(projectId);
+  const actorId = useUserStore(userProfileSelectors.userId);
   const [busyId, setBusyId] = useState<string>();
 
   if (isForbidden(error)) return <Empty description={t('review.accessForbidden')} />;
@@ -39,7 +43,7 @@ export function MembersSettings({ projectId }: { projectId: string }) {
 
   const add = async (userIds: string[], role: ProjectMemberRole) => {
     try {
-      for (const userId of userIds) {
+      for (const userId of actorLast(userIds, actorId)) {
         await projectReviewService.setMemberRole(projectId, userId, role);
       }
     } catch (error) {

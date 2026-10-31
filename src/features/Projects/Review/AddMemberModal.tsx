@@ -21,6 +21,7 @@ import UserAvatar from '@/components/UserAvatar';
 
 import type { MemberCandidate } from './memberSearch';
 import { filterMemberCandidates } from './memberSearch';
+import { useMemberBatch } from './useMemberBatch';
 
 const styles = stylex.create({
   footer: {
@@ -108,26 +109,8 @@ function AddMemberContent({ candidates, onAdd }: AddMemberContentProps) {
   const { t } = useTranslation('project');
   const { close } = useModalContext();
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [role, setRole] = useState<ProjectMemberRole>('member');
-  const [adding, setAdding] = useState(false);
+  const { adding, role, selected, setRole, submit, toggle } = useMemberBatch(onAdd, close);
   const filtered = filterMemberCandidates(candidates, query);
-  const toggle = (userId: string) =>
-    setSelected((current) =>
-      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId],
-    );
-
-  const submit = async () => {
-    setAdding(true);
-    try {
-      await onAdd(selected, role);
-      close();
-    } catch {
-      // `onAdd` already told the user; keep the selection so they can retry.
-    } finally {
-      setAdding(false);
-    }
-  };
 
   return (
     <Flexbox>
@@ -142,7 +125,9 @@ function AddMemberContent({ candidates, onAdd }: AddMemberContentProps) {
       </Flexbox>
       <Flexbox
         aria-multiselectable
+        aria-disabled={adding}
         aria-label={t('review.members.add')}
+        inert={adding}
         role="listbox"
         {...stylex.props(styles.list)}
       >
