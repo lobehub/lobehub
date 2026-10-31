@@ -208,6 +208,15 @@ describe('listGitWorktrees fork point', () => {
     expect(worktree?.forkPoint).toEqual({ atTip: true, baseBranch: 'origin/main', sha: tip });
   });
 
+  it('falls back to the main worktree branch when the trunk is neither main nor master', async () => {
+    git(repo, 'branch', '-m', 'main', 'trunk');
+    const tip = git(repo, 'rev-parse', 'HEAD');
+    await addGitWorktree({ branch: 'wt/trunk', path: repo, worktreePath: target('trunk') });
+
+    const worktree = (await listGitWorktrees(repo)).find((w) => w.branch === 'wt/trunk');
+    expect(worktree?.forkPoint).toEqual({ atTip: true, baseBranch: 'trunk', sha: tip });
+  });
+
   it('includes a fork point for a detached worktree', async () => {
     const first = git(repo, 'rev-parse', 'HEAD');
     await commit(repo, 'b.txt');

@@ -122,18 +122,28 @@ interface DefaultBranch {
 
 /**
  * The repo's default branch: the remote default (`origin/HEAD`), else a local
- * `main` / `master`. A repo that was `git init`-ed and never cloned has no
- * `origin/HEAD`, so the local fallbacks keep fork points visible there too.
+ * one — `init.defaultBranch`, `main`, `master`, then whatever the main worktree
+ * has checked out. A repo that was `git init`-ed and never cloned has no
+ * `origin/HEAD`, and its trunk may be called anything (`trunk`, `develop`), so
+ * the local fallbacks keep fork points visible there too.
  */
-const resolveDefaultBranch = async (dirPath: string): Promise<DefaultBranch | undefined> => {
+const resolveDefaultBranch = async (
+  dirPath: string,
+  mainWorktreeBranch: string | undefined,
+): Promise<DefaultBranch | undefined> => {
   const remoteDefault = await runGit(dirPath, [
     'symbolic-ref',
     '--short',
     'refs/remotes/origin/HEAD',
   ]);
-  const candidates = remoteDefault ? [remoteDefault] : ['main', 'master'];
+  const configured = remoteDefault
+    ? undefined
+    : await runGit(dirPath, ['config', '--get', 'init.defaultBranch']);
+  const candidates = remoteDefault
+    ? [remoteDefault]
+    : [configured, 'main', 'master', mainWorktreeBranch].filter((ref): ref is string => !!ref);
 
-  for (const ref of candidates) {
+  for (const ref of new Set(candidates)) {
     const sha = await resolveCommit(dirPath, ref);
     if (sha) return { ref, sha };
   }
@@ -156,17 +166,18 @@ const readForkPoint = async (
 
 export const listGitWorktrees = async (dirPath: string): Promise<GitWorktreeListItem[]> => {
   try {
-    const [{ stdout: rootStdout }, { stdout }, defaultBranch] = await Promise.all([
+    const [{ stdout: rootStdout }, { stdout }] = await Promise.all([
       execFileAsync('git', ['rev-parse', '--show-toplevel'], { cwd: dirPath, timeout: 5000 }),
       execFileAsync('git', ['worktree', 'list', '--porcelain', '-z'], {
         cwd: dirPath,
         timeout: 5000,
       }),
-      resolveDefaultBranch(dirPath),
     ]);
 
     const currentRoot = await safeRealpath(rootStdout.trim());
     const parsed = parseGitWorktreeList(stdout);
+    // `git worktree list` always emits the main worktree first.
+    const defaultBranch = await resolveDefaultBranch(dirPath, parsed[0]?.branch);
     const [statuses, forkPoints] = await Promise.all([
       Promise.all(parsed.map(readStatus)),
       Promise.all(parsed.map((worktree) => readForkPoint(dirPath, worktree, defaultBranch))),

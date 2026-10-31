@@ -219,10 +219,12 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
               {baseHint.text}
             </Text>
           ) : null}
-          {isReady && error ? (
-            <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text>
-          ) : null}
         </Flexbox>
+        {/* Creation can fail on the branch, the path or the device, not only the
+            base, so its error sits under both fields rather than inside one. */}
+        {isReady && error ? (
+          <Text style={{ color: cssVar.colorError, fontSize: 12, marginTop: -8 }}>{error}</Text>
+        ) : null}
         <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button disabled={loading} onClick={close}>
             {tCommon('cancel')}
