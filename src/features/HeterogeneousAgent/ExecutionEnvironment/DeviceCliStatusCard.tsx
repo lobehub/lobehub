@@ -22,8 +22,6 @@ import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getPlatformLabel } from '@/features/DeviceManager/getDeviceIcon';
-import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/ExecutionTargetPicker';
 import { electronSystemService } from '@/services/electron/system';
 
 import { type DeviceCliState, getDeviceInstallCommands } from './deviceCliStatus';
@@ -38,24 +36,6 @@ const styles = stylex.create({
     borderWidth: 1,
     paddingBlock: 16,
     paddingInline: 16,
-  },
-  detailLabel: {
-    color: cssVar.colorTextTertiary,
-    flexShrink: 0,
-    fontSize: 12,
-    width: 96,
-  },
-  detailRow: {
-    borderBlockStartColor: cssVar.colorBorderSecondary,
-    borderBlockStartStyle: 'solid',
-    borderBlockStartWidth: 1,
-    minHeight: 48,
-    paddingBlock: 8,
-  },
-  deviceName: {
-    color: cssVar.colorText,
-    fontSize: 14,
-    minWidth: 0,
   },
   metaText: {
     color: cssVar.colorTextSecondary,
@@ -84,6 +64,9 @@ const openExternal = (url: string) => {
 /**
  * The agent CLI on the device a heterogeneous agent is bound to, probed over
  * the device gateway rather than on whichever machine the profile is open.
+ *
+ * The device itself (name, platform, presence) is not repeated here: the
+ * execution environment picker right above already shows it.
  *
  * The local-only controls of the desktop card are absent on purpose: a device
  * run resolves the CLI's default command itself and authenticates with the
@@ -201,7 +184,6 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
     state.status === 'unavailable' && install
       ? getDeviceInstallCommands(install.commands, device?.platform)
       : [];
-  const platformLabel = getPlatformLabel(device?.platform, device?.architecture);
 
   return (
     <Flexbox {...stylex.props(styles.card)} gap={12}>
@@ -226,26 +208,6 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
             onClick={redetect}
           />
         </Tooltip>
-      </Flexbox>
-
-      <Flexbox horizontal align="center" gap={16} {...stylex.props(styles.detailRow)}>
-        <Text {...stylex.props(styles.detailLabel)}>{t('heterogeneousStatus.device.label')}</Text>
-        <Flexbox horizontal align="center" gap={8} style={{ minWidth: 0 }} wrap={'wrap'}>
-          <ExecutionTargetIcon devicePlatform={device?.platform} target={'device'} />
-          <Text ellipsis {...stylex.props(styles.deviceName)}>
-            {deviceName}
-          </Text>
-          {platformLabel && <Text type={'secondary'}>{platformLabel}</Text>}
-          {device && (
-            <ExecutionTargetDeviceStatus
-              offlineLabel={t('chat:heteroAgent.executionTarget.offline')}
-              online={device.online}
-              onlineLabel={t('chat:heteroAgent.executionTarget.online')}
-              unknown={device.onlineUnknown}
-              unknownLabel={t('chat:heteroAgent.executionTarget.presenceChecking')}
-            />
-          )}
-        </Flexbox>
       </Flexbox>
 
       {installCommands.length > 0 && install && (
