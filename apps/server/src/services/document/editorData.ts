@@ -88,3 +88,25 @@ export const resolveDocumentWrite = async ({
   const snapshot = await createMarkdownEditorSnapshot(body);
   return { content: body, editorData: snapshot.editorData };
 };
+
+/**
+ * Counts the visible text carried by Lexical editor data. Callers may send editor
+ * data without a matching Markdown `content`, so length limits measure both and
+ * keep the larger one instead of trusting the client-supplied Markdown alone.
+ */
+export const countEditorDataText = (editorData: unknown): number => {
+  if (!isValidEditorData(editorData)) return 0;
+
+  let count = 0;
+  const stack: unknown[] = [editorData.root];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (typeof node !== 'object' || node === null) continue;
+
+    const { children, text } = node as { children?: unknown; text?: unknown };
+    if (typeof text === 'string') count += text.length;
+    if (Array.isArray(children)) stack.push(...children);
+  }
+
+  return count;
+};

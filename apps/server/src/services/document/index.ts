@@ -33,6 +33,7 @@ import { type LobeDocument } from '@/types/document';
 import { EditLockService } from '../editLock';
 import { FileService } from '../file';
 import { publishResourceEvent } from '../resourceEvents';
+import { countEditorDataText } from './editorData';
 import { DocumentHistoryService } from './history';
 import type {
   CompareDocumentHistoryItemsParams,
@@ -222,7 +223,7 @@ export class DocumentService {
     } = params;
     // Refuse before any row (including the KB mirror file) is written.
     await assertDocumentWriteWithinLimit({
-      charCount: content?.length ?? 0,
+      charCount: Math.max(content?.length ?? 0, countEditorDataText(editorData)),
       source: params.writeSource,
       userId: this.userId,
       workspaceId: this.workspaceId,
@@ -822,20 +823,28 @@ export class DocumentService {
 
       const updates: Record<string, unknown> = {};
 
+      // Room projections persist what the room already accepted. Checked before
+      // anything is persisted. `restoreFromHistoryId` is not an exemption: the
+      // client sends it with a body the server does not match against the
+      // version, so only server-side restores opt out via `writeSource`.
+      // Editor data is measured too because it can arrive without `content`.
+      if (
+        (params.content !== undefined || editorDataParam !== undefined) &&
+        params.origin !== 'room-projection'
+      ) {
+        await assertDocumentWriteWithinLimit({
+          charCount: Math.max(params.content?.length ?? 0, countEditorDataText(editorDataParam)),
+          previousCharCount: Math.max(
+            currentDocument.content?.length ?? 0,
+            countEditorDataText(currentDocument.editorData),
+          ),
+          source: params.writeSource,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
+      }
+
       if (params.content !== undefined) {
-        // Room projections persist what the room already accepted. Checked before
-        // anything is persisted. `restoreFromHistoryId` is not an exemption: the
-        // client sends it with a body the server does not match against the
-        // version, so only server-side restores opt out via `writeSource`.
-        if (params.origin !== 'room-projection') {
-          await assertDocumentWriteWithinLimit({
-            charCount: params.content.length,
-            previousCharCount: currentDocument.content?.length ?? 0,
-            source: params.writeSource,
-            userId: this.userId,
-            workspaceId: this.workspaceId,
-          });
-        }
         updates.content = params.content;
         updates.totalCharCount = params.content.length;
         updates.totalLineCount = params.content.split('\n').length;

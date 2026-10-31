@@ -20,6 +20,13 @@ vi.mock('@/database/models/knowledgeBase');
 vi.mock('../../file');
 vi.mock('../history');
 
+const longEditorData = (length: number) => ({
+  root: {
+    children: [{ children: [{ text: 'x'.repeat(length), type: 'text' }], type: 'paragraph' }],
+    type: 'root',
+  },
+});
+
 const refuse = () => checkDocumentCharLimit.mockResolvedValue({ allowed: false, limit: 10 });
 
 describe('DocumentService per-document character limit', () => {
@@ -93,6 +100,19 @@ describe('DocumentService per-document character limit', () => {
       );
     });
 
+    it('measures editor data sent without matching content', async () => {
+      refuse();
+
+      await expect(
+        service().createDocument({ content: '', editorData: longEditorData(11), title: 'T' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      expect(checkDocumentCharLimit).toHaveBeenCalledWith(
+        expect.objectContaining({ charCount: 11 }),
+      );
+      expect(documentModel.create).not.toHaveBeenCalled();
+    });
+
     it('does not check a document without content', async () => {
       refuse();
 
@@ -153,7 +173,17 @@ describe('DocumentService per-document character limit', () => {
       expect(documentModel.update).not.toHaveBeenCalled();
     });
 
-    it('does not check an editorData-only update', async () => {
+    it('refuses over-limit editor data sent without content', async () => {
+      refuse();
+
+      await expect(
+        service().updateDocument('doc-1', { editorData: longEditorData(20) }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+      expect(documentModel.update).not.toHaveBeenCalled();
+    });
+
+    it('allows editor data that carries no more text than the stored body', async () => {
       refuse();
 
       await service().updateDocument('doc-1', { editorData: { root: {} } });
