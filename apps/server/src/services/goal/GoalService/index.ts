@@ -50,6 +50,7 @@ import {
   setTaskModel,
   stopFencedTasks,
   updateRequirement,
+  updateTitle,
 } from './editing';
 import {
   close,
@@ -290,6 +291,7 @@ export class GoalService {
       tickOnce: (...args) => self.tickOnce(...args),
       transitionStatus: (...args) => self.transitionStatus(...args),
       updateRequirement: (...args) => self.updateRequirement(...args),
+      updateTitle: (...args) => self.updateTitle(...args),
       get userId() {
         return self.userId;
       },
@@ -385,6 +387,8 @@ export class GoalService {
 
   updateRequirement = (...args: MethodArgs<typeof updateRequirement>) =>
     updateRequirement(this.context, ...args);
+
+  updateTitle = (...args: MethodArgs<typeof updateTitle>) => updateTitle(this.context, ...args);
 
   setAgent = (...args: MethodArgs<typeof setAgent>) => setAgent(this.context, ...args);
 

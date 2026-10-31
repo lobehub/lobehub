@@ -5,9 +5,9 @@ import path from 'node:path';
 
 import { afterEach, expect, it } from 'vitest';
 
-import { runFixtureBatch } from '../fixtureBatch';
-import { getStyleFixture } from '../fixtureRegistry';
-import { sha256 } from '../report';
+import { getStyleFixture } from '../fixtures/fixtureRegistry';
+import { runFixtureBatch } from '../pipeline/fixtureBatch';
+import { sha256 } from '../reporting/report';
 
 const owned: string[] = [];
 afterEach(async () => {

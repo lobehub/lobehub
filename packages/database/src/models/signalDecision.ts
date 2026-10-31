@@ -1,5 +1,12 @@
-import type { SignalDecisionLabel, SignalDecisionLabelMetadata } from '@lobechat/types';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import type {
+  SignalDecisionLabel,
+  SignalDecisionLabelMetadata,
+  SignalDecisionOutcome,
+  SignalDecisionVerdict,
+} from '@lobechat/types';
+import { SIGNAL_DECISION_LABEL_CLEARED } from '@lobechat/types';
+import type { SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import type { NewSignalDecision, SignalDecisionItem, SignalDecisionLabelItem } from '../schemas';
 import { signalDecisionLabels, signalDecisions, signals } from '../schemas';
@@ -26,6 +33,92 @@ export interface AddSignalDecisionLabelInput {
   source: string;
 }
 
+/** How far back a scope read looks when the caller does not say. */
+export const SCOPE_READ_DEFAULT_DAYS = 30;
+/** Longest message preview a scope read returns. */
+export const SCOPE_READ_TEXT_PREVIEW = 200;
+/** Largest page a scope read returns. */
+export const SCOPE_READ_MAX_LIMIT = 50;
+
+/** Keyset position: the last row of the previous page, `createdAt` as ISO with microseconds. */
+export interface ScopeDecisionCursor {
+  createdAt: string;
+  id: string;
+}
+
+export interface ListDecisionsByScopeParams {
+  cursor?: ScopeDecisionCursor;
+  /** Only decisions whose `final_reason` is one of these; ignored when empty. */
+  finalReasons?: readonly string[];
+  /**
+   * `has: true`: only decisions whose current label from source `by` is set; `has: false`: only
+   * those without one (never labeled, or the latest label is `cleared`).
+   */
+  labeled?: { by: string; has: boolean };
+  /** 1..{@link SCOPE_READ_MAX_LIMIT}; defaults to 20. */
+  limit?: number;
+  outcome?: SignalDecisionOutcome;
+  scopeKey: string;
+  /** Lower bound on `created_at`; defaults to {@link SCOPE_READ_DEFAULT_DAYS} days ago. */
+  since?: Date;
+}
+
+/** The latest label of one source on a decision: that source's current opinion. */
+export interface CurrentDecisionLabel {
+  createdAt: Date;
+  label: SignalDecisionLabel;
+  metadata: SignalDecisionLabelMetadata;
+  source: string;
+}
+
+export interface ScopeDecisionListItem {
+  /** Where the message was addressed (`signals.metadata.address`); survives the payload purge. */
+  address: Record<string, string> | null;
+  createdAt: Date;
+  finalReason: string | null;
+  id: string;
+  /** Current label per source. */
+  labels: CurrentDecisionLabel[];
+  outcome: SignalDecisionOutcome;
+  /** First {@link SCOPE_READ_TEXT_PREVIEW} characters of the message; null once purged. */
+  text: string | null;
+  /** The retention sweep blanked the message, or its signal is gone. */
+  textPurged: boolean;
+  toTag: string | null;
+  /** Every policy's opinion, shadow ones included. */
+  verdicts: SignalDecisionVerdict[];
+}
+
+export interface ScopeDecisionPage {
+  items: ScopeDecisionListItem[];
+  nextCursor?: ScopeDecisionCursor;
+}
+
+export interface SummarizeDecisionsByScopeParams {
+  /** Reasons counted as follow-up (unprompted) wakes. */
+  followupReasons: readonly string[];
+  /** Label sources whose current labels are counted, e.g. `['user', 'agent:no_reply']`. */
+  labelSources: readonly string[];
+  scopeKey: string;
+  since: Date;
+}
+
+export interface ScopeDecisionSummary {
+  defer: number;
+  /** Wakes whose reason is one of `followupReasons`. */
+  followupWakes: number;
+  /** Count of decisions per `source` → current `label`. */
+  labels: Record<string, Partial<Record<SignalDecisionLabel, number>>>;
+  skip: number;
+  total: number;
+  wake: number;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** `created_at` at full (microsecond) precision, so a keyset cursor never skips a row. */
+const createdAtIso = sql<string>`to_char(${signalDecisions.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
 /**
  * User-scoped access to `signal_decisions` and their append-only `signal_decision_labels`.
  */
@@ -38,6 +131,21 @@ export class SignalDecisionModel {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+  }
+
+  /**
+   * The scope that recorded a decision, as a predicate: workspace rows carry their `workspace_id`,
+   * personal ones leave it null.
+   *
+   * Scope reads cannot skip this. A bot binding is looked up by `platform:applicationId`, so
+   * deleting a binding in one scope and recreating the same platform app in another reuses the
+   * exact same `scope_key` under the same owner — owner + scope key alone would hand the new
+   * scope's members the previous scope's history.
+   */
+  private get scopeOfRecord() {
+    return this.workspaceId
+      ? eq(signalDecisions.workspaceId, this.workspaceId)
+      : isNull(signalDecisions.workspaceId);
   }
 
   /**
@@ -143,5 +251,190 @@ export class SignalDecisionModel {
       .from(signalDecisionLabels)
       .where(eq(signalDecisionLabels.decisionId, decisionId))
       .orderBy(desc(signalDecisionLabels.createdAt), desc(signalDecisionLabels.id));
+  };
+
+  // --------------- Scope reads (one channel's decisions) ---------------
+
+  /**
+   * One channel's decisions, newest first, with the message preview and each source's current
+   * label. Every predicate starts from `(user_id, scope_key, created_at)`, so the read stays on the
+   * composite index; labels come in one extra query for the page's ids.
+   */
+  listByScope = async (params: ListDecisionsByScopeParams): Promise<ScopeDecisionPage> => {
+    const limit = Math.min(Math.max(params.limit ?? 20, 1), SCOPE_READ_MAX_LIMIT);
+    const since = params.since ?? new Date(Date.now() - SCOPE_READ_DEFAULT_DAYS * DAY_MS);
+
+    const conditions: SQL[] = [
+      eq(signalDecisions.userId, this.userId),
+      eq(signalDecisions.scopeKey, params.scopeKey),
+      gte(signalDecisions.createdAt, since),
+      this.scopeOfRecord,
+    ];
+    if (params.outcome) conditions.push(eq(signalDecisions.outcome, params.outcome));
+    if (params.finalReasons?.length)
+      conditions.push(inArray(signalDecisions.finalReason, [...params.finalReasons]));
+    if (params.cursor)
+      conditions.push(
+        sql`(${signalDecisions.createdAt}, ${signalDecisions.id}) < (${params.cursor.createdAt}::timestamptz, ${params.cursor.id}::uuid)`,
+      );
+    if (params.labeled) {
+      // The source's latest label; `cleared` (or none) means it has no current opinion.
+      const latest = sql`coalesce((select ${signalDecisionLabels.label} from ${signalDecisionLabels} where ${signalDecisionLabels.decisionId} = ${signalDecisions.id} and ${signalDecisionLabels.source} = ${params.labeled.by} order by ${signalDecisionLabels.createdAt} desc, ${signalDecisionLabels.id} desc limit 1), ${SIGNAL_DECISION_LABEL_CLEARED})`;
+      conditions.push(
+        params.labeled.has
+          ? sql`${latest} <> ${SIGNAL_DECISION_LABEL_CLEARED}`
+          : sql`${latest} = ${SIGNAL_DECISION_LABEL_CLEARED}`,
+      );
+    }
+
+    const rows = await this.db
+      .select({
+        address: sql<Record<string, string> | null>`${signals.metadata} -> 'address'`,
+        createdAt: signalDecisions.createdAt,
+        createdAtIso,
+        finalReason: signalDecisions.finalReason,
+        id: signalDecisions.id,
+        outcome: signalDecisions.outcome,
+        purged: sql<boolean>`(${signals.id} is null or ${signals.payloadPurgedAt} is not null)`,
+        text: sql<
+          string | null
+        >`case when ${signals.payloadPurgedAt} is null then left(${signals.payload} ->> 'text', ${SCOPE_READ_TEXT_PREVIEW}) end`,
+        toTag: signalDecisions.toTag,
+        verdicts: signalDecisions.verdicts,
+      })
+      .from(signalDecisions)
+      .leftJoin(signals, eq(signals.id, signalDecisions.signalId))
+      .where(and(...conditions))
+      .orderBy(desc(signalDecisions.createdAt), desc(signalDecisions.id))
+      .limit(limit + 1);
+
+    const page = rows.slice(0, limit);
+    const labels = await this.currentLabels(page.map((row) => row.id));
+    const last = page.at(-1);
+
+    return {
+      items: page.map((row) => ({
+        address: row.address ?? null,
+        createdAt: row.createdAt,
+        finalReason: row.finalReason,
+        id: row.id,
+        labels: labels.get(row.id) ?? [],
+        outcome: row.outcome,
+        text: row.purged ? null : (row.text ?? null),
+        textPurged: row.purged,
+        toTag: row.toTag,
+        verdicts: row.verdicts ?? [],
+      })),
+      nextCursor:
+        rows.length > limit && last ? { createdAt: last.createdAtIso, id: last.id } : undefined,
+    };
+  };
+
+  /**
+   * Counts for one channel since `since`: decisions by outcome, follow-up wakes, and how many
+   * decisions each label source currently holds each label for. Two aggregates, both bounded by
+   * the `(user_id, scope_key, created_at)` index range.
+   */
+  summaryByScope = async (
+    params: SummarizeDecisionsByScopeParams,
+  ): Promise<ScopeDecisionSummary> => {
+    const inScope = and(
+      eq(signalDecisions.userId, this.userId),
+      eq(signalDecisions.scopeKey, params.scopeKey),
+      gte(signalDecisions.createdAt, params.since),
+      this.scopeOfRecord,
+    );
+    const followup = params.followupReasons.length
+      ? inArray(signalDecisions.finalReason, [...params.followupReasons])
+      : sql`false`;
+
+    const [counts] = await this.db
+      .select({
+        defer: sql<number>`count(*) filter (where ${signalDecisions.outcome} = 'defer')::int`,
+        followupWakes: sql<number>`count(*) filter (where ${signalDecisions.outcome} = 'wake' and ${followup})::int`,
+        skip: sql<number>`count(*) filter (where ${signalDecisions.outcome} = 'skip')::int`,
+        total: sql<number>`count(*)::int`,
+        wake: sql<number>`count(*) filter (where ${signalDecisions.outcome} = 'wake')::int`,
+      })
+      .from(signalDecisions)
+      .where(inScope);
+
+    const labels: ScopeDecisionSummary['labels'] = {};
+    if (params.labelSources.length > 0 && (counts?.total ?? 0) > 0) {
+      const current = this.db
+        .selectDistinctOn([signalDecisionLabels.decisionId, signalDecisionLabels.source], {
+          label: signalDecisionLabels.label,
+          source: signalDecisionLabels.source,
+        })
+        .from(signalDecisionLabels)
+        .innerJoin(signalDecisions, eq(signalDecisions.id, signalDecisionLabels.decisionId))
+        .where(and(inScope, inArray(signalDecisionLabels.source, [...params.labelSources])))
+        .orderBy(
+          signalDecisionLabels.decisionId,
+          signalDecisionLabels.source,
+          desc(signalDecisionLabels.createdAt),
+          desc(signalDecisionLabels.id),
+        )
+        .as('current');
+
+      const grouped = await this.db
+        .select({
+          count: sql<number>`count(*)::int`,
+          label: current.label,
+          source: current.source,
+        })
+        .from(current)
+        .where(ne(current.label, SIGNAL_DECISION_LABEL_CLEARED))
+        .groupBy(current.source, current.label);
+
+      for (const row of grouped) {
+        (labels[row.source] ??= {})[row.label] = row.count;
+      }
+    }
+
+    return {
+      defer: counts?.defer ?? 0,
+      followupWakes: counts?.followupWakes ?? 0,
+      labels,
+      skip: counts?.skip ?? 0,
+      total: counts?.total ?? 0,
+      wake: counts?.wake ?? 0,
+    };
+  };
+
+  /**
+   * Current label per source for each decision, keyed by decision id; a source whose latest label
+   * is `cleared` is left out. Callers pass owned ids.
+   */
+  private currentLabels = async (decisionIds: string[]) => {
+    const byDecision = new Map<string, CurrentDecisionLabel[]>();
+    if (decisionIds.length === 0) return byDecision;
+
+    const rows = await this.db
+      .selectDistinctOn([signalDecisionLabels.decisionId, signalDecisionLabels.source], {
+        createdAt: signalDecisionLabels.createdAt,
+        decisionId: signalDecisionLabels.decisionId,
+        label: signalDecisionLabels.label,
+        metadata: signalDecisionLabels.metadata,
+        source: signalDecisionLabels.source,
+      })
+      .from(signalDecisionLabels)
+      .where(inArray(signalDecisionLabels.decisionId, decisionIds))
+      .orderBy(
+        signalDecisionLabels.decisionId,
+        signalDecisionLabels.source,
+        desc(signalDecisionLabels.createdAt),
+        desc(signalDecisionLabels.id),
+      );
+
+    for (const { decisionId, ...label } of rows) {
+      // A withdrawn label leaves the source without a current one.
+      if (label.label === SIGNAL_DECISION_LABEL_CLEARED) continue;
+      const list = byDecision.get(decisionId) ?? [];
+      list.push(label);
+      byDecision.set(decisionId, list);
+    }
+
+    return byDecision;
   };
 }

@@ -1,5 +1,7 @@
 import { getCachedTextInputUnitRate, getWriteCacheInputUnitRate } from '@lobechat/utils';
-import { createStaticStyles, Flexbox, Icon, Tabs, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tabs, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowDownToDot, ArrowUpFromDot, BookUp2Icon, CircleFadingArrowUp } from 'lucide-react';
 import { type LobeDefaultAiModelListItem } from 'model-bank';
 import { memo } from 'react';
@@ -11,20 +13,10 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { getPrice } from './pricing';
 
-export const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    container: css`
-      font-size: 12px;
-    `,
-    desc: css`
-      line-height: 12px;
-      color: ${cssVar.colorTextDescription};
-    `,
-    pricing: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-    `,
-  };
+export const styles = stylex.create({
+  container: { fontSize: '12px' },
+  desc: { lineHeight: '12px', color: cssVar.colorTextDescription },
+  pricing: { fontSize: '12px', color: cssVar.colorTextSecondary },
 });
 
 interface ModelCardProps extends LobeDefaultAiModelListItem {
@@ -44,7 +36,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         flex={1}
         gap={40}
         justify={'space-between'}
@@ -55,7 +47,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
             <Flexbox horizontal align={'center'} gap={8} style={{ lineHeight: '12px' }}>
               {displayName || id}
             </Flexbox>
-            <span className={styles.desc}>{provider}</span>
+            <span {...stylex.props(styles.desc)}>{provider}</span>
           </Flexbox>
         </Flexbox>
         {!!pricing && (
@@ -84,7 +76,12 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
       {isShowCredit ? (
         <Flexbox horizontal justify={'space-between'}>
           <div />
-          <Flexbox horizontal align={'center'} className={styles.pricing} gap={8}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.pricing).className}
+            gap={8}
+          >
             {t('messages.modelCard.creditPricing')}:
             {getCachedTextInputUnitRate(pricing) && (
               <Tooltip

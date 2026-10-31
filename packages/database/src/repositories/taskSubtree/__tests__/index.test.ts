@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../../core/getTestDB';
 import { TaskModel } from '../../../models/task';
 import { TaskTopicModel } from '../../../models/taskTopic';
-import { acceptances, documents, topics, users, workspaces } from '../../../schemas';
+import { WorkModel } from '../../../models/work';
+import { acceptances, documents, topics, users, works, workspaces } from '../../../schemas';
 import { taskTopics } from '../../../schemas/task';
 import type { LobeChatDatabase } from '../../../type';
 import { TaskSubtreeRepository } from '../index';
@@ -145,6 +146,133 @@ describe('TaskSubtreeRepository', () => {
       // DB state matches the returned row (no silent mutation drift).
       const reload = await alice.findById(aliceTask.id);
       expect(reload?.visibility).toBe('private');
+    });
+
+    it('should unassign other members across the subtree when demoting to private', async () => {
+      // A private task is creator-only: a member assignee could no longer open
+      // it, so demotion clears them. The creator's own assignment stays.
+      const alice = new TaskModel(serverDB, userId, wsId);
+
+      const root = await alice.create({
+        assigneeUserId: userId2,
+        instruction: 'Root assigned to Bob',
+        visibility: 'public',
+      });
+      const childForBob = await alice.create({
+        assigneeUserId: userId2,
+        instruction: 'Child assigned to Bob',
+        parentTaskId: root.id,
+        visibility: 'public',
+      });
+      const childForAlice = await alice.create({
+        assigneeUserId: userId,
+        instruction: 'Child assigned to Alice',
+        parentTaskId: root.id,
+        visibility: 'public',
+      });
+
+      const demoted = await subtreeRepo(userId, wsId).updateVisibility(root.id, 'private');
+      expect(demoted?.assigneeUserId).toBeNull();
+
+      expect((await alice.findById(childForBob.id))?.assigneeUserId).toBeNull();
+      expect((await alice.findById(childForAlice.id))?.assigneeUserId).toBe(userId);
+    });
+
+    it('should hand the subtree to the caller when taking it over as private', async () => {
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const bob = new TaskModel(serverDB, userId2, wsId);
+
+      const root = await alice.create({
+        automationMode: 'schedule',
+        instruction: 'Alice root',
+        schedulePattern: '0 9 * * *',
+        visibility: 'public',
+      });
+      await alice.update(root.id, { status: 'scheduled' });
+      const child = await alice.create({ instruction: 'Alice child', parentTaskId: root.id });
+      await alice.addComment({
+        authorUserId: userId,
+        content: 'alice context',
+        taskId: root.id,
+        userId,
+      });
+
+      const taken = await subtreeRepo(userId2, wsId).updateVisibility(root.id, 'private', {
+        takeOwnership: true,
+      });
+      expect(taken).toMatchObject({
+        automationMode: null,
+        createdByUserId: userId2,
+        status: 'backlog',
+        visibility: 'private',
+      });
+      expect((await bob.findById(child.id))?.createdByUserId).toBe(userId2);
+
+      // Bob keeps Alice's comment (author unchanged); Alice loses the task.
+      const comments = await bob.getComments(root.id);
+      expect(comments.map((c) => [c.content, c.authorUserId])).toEqual([['alice context', userId]]);
+      expect(await alice.findById(root.id)).toBeNull();
+    });
+
+    it('should refuse a takeover that would leave the creator’s private subtasks behind', async () => {
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const root = await alice.create({ instruction: 'Public root', visibility: 'public' });
+      await alice.create({
+        instruction: 'Alice private child',
+        parentTaskId: root.id,
+        visibility: 'private',
+      });
+
+      await expect(
+        subtreeRepo(userId2, wsId).updateVisibility(root.id, 'private', { takeOwnership: true }),
+      ).rejects.toThrow('private subtasks you cannot see');
+      expect(await alice.findById(root.id)).toMatchObject({
+        createdByUserId: userId,
+        visibility: 'public',
+      });
+    });
+
+    it('should refuse a takeover while a subtask is running', async () => {
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const root = await alice.create({ instruction: 'Public root', visibility: 'public' });
+      const child = await alice.create({ instruction: 'Busy child', parentTaskId: root.id });
+      await alice.update(child.id, { status: 'running' });
+
+      await expect(
+        subtreeRepo(userId2, wsId).updateVisibility(root.id, 'private', { takeOwnership: true }),
+      ).rejects.toThrow('while it or a subtask is running');
+      expect((await alice.findById(root.id))?.createdByUserId).toBe(userId);
+    });
+
+    it('should move the task’s Work to the member taking it over', async () => {
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const root = await alice.create({ instruction: 'Registered task', visibility: 'public' });
+      const work = await new WorkModel(serverDB, userId, wsId).registerTask({
+        changeType: 'created',
+        taskId: root.id,
+        toolIdentifier: 'lobe-task',
+        toolName: 'createTask',
+      });
+      expect(work?.userId).toBe(userId);
+
+      await subtreeRepo(userId2, wsId).updateVisibility(root.id, 'private', {
+        takeOwnership: true,
+      });
+
+      const [row] = await serverDB
+        .select({ userId: works.userId, visibility: works.visibility })
+        .from(works)
+        .where(eq(works.resourceId, root.id));
+      expect(row).toEqual({ userId: userId2, visibility: 'private' });
+    });
+
+    it('should keep member assignees when promoting to public', async () => {
+      const alice = new TaskModel(serverDB, userId, wsId);
+      const task = await alice.create({ instruction: 'Private', visibility: 'private' });
+      await alice.update(task.id, { assigneeUserId: userId2 });
+
+      const promoted = await subtreeRepo(userId, wsId).updateVisibility(task.id, 'public');
+      expect(promoted?.assigneeUserId).toBe(userId2);
     });
 
     it('should NOT cascade updateVisibility into historical task_comments', async () => {

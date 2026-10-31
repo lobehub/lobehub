@@ -3,6 +3,7 @@ import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
 import type { LobeChatDatabase } from '../../type';
+import { countOf } from '../utils/rows';
 import { seqOwnership, type TaskModelContext, taskOwnership } from './context';
 import { isTaskIdentifierUniqueViolation, normalizeTaskRefs } from './utils';
 
@@ -146,7 +147,7 @@ export const countTasksBlockingAgentDemotion = async (
   agentOwnerUserId: string,
 ): Promise<number> => {
   if (!ctx.workspaceId) return 0;
-  const [row] = await ctx.db
+  const rows = await ctx.db
     .select({ count: sql<number>`count(*)` })
     .from(tasks)
     .where(
@@ -156,8 +157,7 @@ export const countTasksBlockingAgentDemotion = async (
         or(eq(tasks.visibility, 'public'), ne(tasks.createdByUserId, agentOwnerUserId)),
       ),
     );
-  /* v8 ignore next -- unreachable: an ungrouped count() always returns exactly one non-null row */
-  return Number(row?.count ?? 0);
+  return countOf(rows, 'the assigned task count');
 };
 
 /**

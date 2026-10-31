@@ -1,31 +1,30 @@
 import { type FlexboxProps } from '@lobehub/ui';
-import { createStaticStyles, cx, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { HelpCircleIcon } from 'lucide-react';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-    min-width: 64px;
-  `,
-  number: css`
-    margin: 0 !important;
+import { sx } from '@/styles/sx';
 
-    font-size: 16px;
-    font-weight: 500;
-    line-height: 1.4;
-    text-align: center;
-  `,
-  title: css`
-    margin: 0 !important;
-
-    font-size: 12px;
-    line-height: 1.2;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({
+  container: { overflow: 'hidden', minWidth: '64px' },
+  number: {
+    margin: '0',
+    fontSize: '16px',
+    fontWeight: 500,
+    lineHeight: 1.4,
+    textAlign: 'center',
+  },
+  title: {
+    margin: '0',
+    fontSize: '12px',
+    lineHeight: 1.2,
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+});
 
 export interface StatisticProps extends Omit<FlexboxProps, 'children' | 'title'> {
   title: ReactNode;
@@ -49,12 +48,20 @@ const Statistic = memo<StatisticProps>(
   }) => {
     const isTop = valuePlacement === 'top';
     const valueContent = (
-      <Text className={styles.number} ellipsis={{ rows: 1 }} style={valueStyle}>
+      <Text
+        className={stylex.props(styles.number).className}
+        ellipsis={{ rows: 1 }}
+        style={valueStyle}
+      >
         {value}
       </Text>
     );
     const titleContent = (
-      <Text className={styles.title} ellipsis={{ rows: 1 }} style={titleStyle}>
+      <Text
+        className={stylex.props(styles.title).className}
+        ellipsis={{ rows: 1 }}
+        style={titleStyle}
+      >
         {title}
         {tooltip && <Icon icon={HelpCircleIcon} style={{ marginLeft: '0.4em' }} />}
       </Text>
@@ -62,9 +69,9 @@ const Statistic = memo<StatisticProps>(
     const content = (
       <Flexbox
         align={'center'}
-        className={cx(styles.container, className)}
         flex={1}
         justify={'center'}
+        {...sx(styles.container, className)}
         {...rest}
       >
         {isTop ? (

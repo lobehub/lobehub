@@ -131,6 +131,18 @@ const KIND_BY_REASON: Record<BotWakeReason, BotWakeKind> = {
 
 export const botWakeKindFor = (reason: BotWakeReason): BotWakeKind => KIND_BY_REASON[reason];
 
+/**
+ * Every `finalReason` of a wake nobody asked for: the `followup` reasons above, plus the retired
+ * ones older rows still carry (`classifier-confident`, `proactive-help` were follow-ups too).
+ */
+export const BOT_WAKE_FOLLOWUP_REASONS: readonly string[] = [
+  ...(Object.keys(KIND_BY_REASON) as BotWakeReason[]).filter(
+    (reason) => KIND_BY_REASON[reason] === 'followup',
+  ),
+  'classifier-confident',
+  'proactive-help',
+];
+
 const TAG_BY_REASON: Record<BotWakeReason, string> = {
   'access-gate-rejected': 'blocked',
   'addressed': 'addressed',

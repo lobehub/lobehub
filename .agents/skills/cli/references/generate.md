@@ -237,16 +237,29 @@ Text-to-speech generation.
 **Source**: `apps/cli/src/commands/generate/tts.ts`
 
 ```bash
-lh gen tts <text> [-o <file>] [--voice <voice>] [--speed <n>] [-m <model>] [-p <provider>]
+lh gen tts <text> [-o <file>] [--voice <voice>] [-m <model>] [-p <provider>] \
+  [--speed <n>] [--pitch <n>] [--volume <n>] [--emotion <e>] [--format <f>] \
+  [--sample-rate <hz>] [--instructions <text>] [--params <json>]
 ```
 
-| Option                      | Description                              | Default      |
-| --------------------------- | ---------------------------------------- | ------------ |
-| `-o, --output <file>`       | Output audio file path                   | `output.mp3` |
-| `--voice <voice>`           | Voice name                               | `alloy`      |
-| `--speed <n>`               | Speed multiplier (0.25-4.0)              | `1`          |
-| `-m, --model <model>`       | Model ID (`provider/model` supported)    | `tts-1`      |
-| `-p, --provider <provider>` | Provider (derived from model if omitted) | `openai`     |
+| Option                      | Description                                                  | Default               |
+| --------------------------- | ------------------------------------------------------------ | --------------------- |
+| `-o, --output <file>`       | Output audio file path                                       | `output.<format>`     |
+| `--voice <voice>`           | Voice id from the model card's `voices`                      | model's default voice |
+| `--speed <n>`               | Speed multiplier                                             | model default         |
+| `--pitch <n>`               | Pitch adjustment (provider-specific unit)                    | model default         |
+| `--volume <n>`              | Volume adjustment (provider-specific unit)                   | model default         |
+| `--emotion <emotion>`       | Emotion, e.g. `happy`                                        | model default         |
+| `--format <format>`         | `mp3`, `opus`, `aac` (compressed only: audio returns inline) | `mp3`                 |
+| `--sample-rate <hz>`        | Output sample rate                                           | model default         |
+| `--instructions <text>`     | Style instructions (e.g. `gpt-4o-mini-tts`)                  | —                     |
+| `--params <json>`           | Standard TTS params as JSON; dedicated flags override it     | —                     |
+| `-m, --model <model>`       | Model ID (`provider/model` supported)                        | `tts-1`               |
+| `-p, --provider <provider>` | Provider (derived from model if omitted)                     | `openai`              |
+
+Params are standard TTS parameters (`TTSModelParamsMetaSchema` in model-bank). The server
+rejects params the model card does not declare or values outside its range. On success the
+command prints the file size plus usage (characters, tokens, cost) when the provider reports it.
 
 Uses the selected provider's saved configuration through ModelRuntime, with the same
 authenticated tRPC client as `lh gen asr`.
