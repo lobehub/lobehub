@@ -9,7 +9,10 @@ import { memo, type ReactNode } from 'react';
 
 import { sx } from '@/styles/sx';
 
-import moduleStyles from './GeneratingBorder.module.css';
+const sweep = stylex.keyframes({
+  from: { '--lobe-generating-border-angle': '0deg' },
+  to: { '--lobe-generating-border-angle': '360deg' },
+});
 
 const styles = stylex.create({
   shell: { position: 'relative', borderRadius: '8px' },
@@ -18,6 +21,16 @@ const styles = stylex.create({
   shellGenerating: {
     'overflow': 'hidden',
     '::after': {
+      animationName: { 'default': sweep, '@media (prefers-reduced-motion: reduce)': 'none' },
+      animationDuration: { 'default': '1.8s', '@media (prefers-reduced-motion: reduce)': '0s' },
+      animationTimingFunction: {
+        'default': 'linear',
+        '@media (prefers-reduced-motion: reduce)': 'ease',
+      },
+      animationIterationCount: {
+        'default': 'infinite',
+        '@media (prefers-reduced-motion: reduce)': 1,
+      },
       pointerEvents: 'none',
       content: '""',
       position: 'absolute',
@@ -62,13 +75,7 @@ export interface GeneratingBorderProps {
  */
 const GeneratingBorder = memo<GeneratingBorderProps>(
   ({ children, className, generating, style }) => (
-    <Flexbox
-      {...sx(
-        [styles.shell, generating && styles.shellGenerating],
-        [generating && moduleStyles.generating, className].filter(Boolean).join(' '),
-        style,
-      )}
-    >
+    <Flexbox {...sx([styles.shell, generating && styles.shellGenerating], className, style)}>
       {children}
     </Flexbox>
   ),

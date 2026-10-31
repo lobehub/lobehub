@@ -105,6 +105,7 @@ export const experimentalFixtures = [
   ['GeneratingBorder', 'src/components/GeneratingBorder/index.tsx'],
   ['InlineTable', 'src/components/InlineTable/index.tsx'],
   ['LiteTable', 'src/components/LiteTable/index.tsx'],
+  ['Menu', 'src/components/Menu/index.tsx'],
   ['OptionCard', 'packages/shared-tool-ui/src/components/OptionCard.tsx'],
   ['OptionRow', 'src/features/ChatInput/ControlBar/OptionRow.tsx'],
   ['StatusBar', 'src/components/CodeEditorPane/StatusBar.tsx'],
@@ -159,6 +160,13 @@ const profiles: Record<
     variants: ['normal', 'wide', 'fixed', 'loading', 'empty'].map((id) => ({
       id,
       states: id === 'loading' || id === 'empty' ? ['default'] : interactive,
+    })),
+  },
+  Menu: {
+    selector: '[data-component-mount] li:not([role="separator"])',
+    variants: ['normal', 'compact', 'selectable', 'custom'].map((id) => ({
+      id,
+      states: interactive,
     })),
   },
   OptionCard: {
