@@ -2,6 +2,7 @@ interface SendPayload {
   content: string;
   fileIds: string[];
   mentions: string[];
+  replyToId?: string;
 }
 
 interface PendingRequest {
@@ -46,8 +47,13 @@ const write = (requests: PendingRequest[]) => {
 export const createChannelSendRequest = () => {
   let pending: PendingRequest | undefined;
   return {
-    get: (scope: string, { content, fileIds, mentions }: SendPayload): string => {
-      const fingerprint = JSON.stringify([content, [...mentions].sort(), fileIds]);
+    get: (scope: string, { content, fileIds, mentions, replyToId }: SendPayload): string => {
+      const fingerprint = JSON.stringify([
+        content,
+        [...mentions].sort(),
+        fileIds,
+        ...(replyToId ? [replyToId] : []),
+      ]);
       const requests = read();
       const previous = pending?.scope === scope ? pending : requests.find((r) => r.scope === scope);
       pending = {

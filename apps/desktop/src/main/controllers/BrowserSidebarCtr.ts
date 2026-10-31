@@ -20,6 +20,7 @@ import {
   ELEMENT_PICKER_CANCEL_SCRIPT,
   elementPickerScript,
 } from '@/modules/browser/elementPickerScript';
+import { guestViewportScale } from '@/modules/browser/guestViewport';
 import { importChromeLoginData } from '@/modules/browser/importChromeLoginData';
 import { createLogger } from '@/utils/logger';
 
@@ -209,10 +210,13 @@ export default class BrowserSidebarCtr extends ControllerModule {
     const { rect, viewport } = payload;
     if (!rect || !viewport) return undefined;
 
-    const x = Math.max(0, Math.floor(rect.x));
-    const y = Math.max(0, Math.floor(rect.y));
-    const width = Math.floor(Math.min(rect.x + rect.width, viewport.width) - x);
-    const height = Math.floor(Math.min(rect.y + rect.height, viewport.height) - y);
+    // The picker measures in page (CSS) pixels; under an agent's fixed viewport
+    // the panel draws the page shrunk, and the capture is in panel pixels.
+    const scale = guestViewportScale(webContents);
+    const x = Math.max(0, Math.floor(rect.x * scale));
+    const y = Math.max(0, Math.floor(rect.y * scale));
+    const width = Math.floor(Math.min(rect.x + rect.width, viewport.width) * scale - x);
+    const height = Math.floor(Math.min(rect.y + rect.height, viewport.height) * scale - y);
     if (width < 4 || height < 4) return undefined;
 
     try {

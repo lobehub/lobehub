@@ -12,7 +12,7 @@ import type { MessageListPage, MessageRoundCursor } from './cache';
 export const MESSAGE_PAGE_ROW_BUDGET = 1000;
 
 // Client-mode reads keep the full budget: the client runtime replays the loaded rows as model history.
-export const GATEWAY_PAGE_ROW_BUDGET = 50;
+export const GATEWAY_PAGE_ROW_BUDGET = 500;
 
 /** Page sizes for reading a topic forward from its first round. */
 export interface ForwardPageSize {

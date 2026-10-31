@@ -32,13 +32,28 @@ let seq = 0;
 const nextContext = () => ({ agentId: 'agent-1', topicId: 'topic-1', topicShareId: `s${++seq}` });
 
 describe('toRoundCursorQueryInput', () => {
-  it('reads a gateway display page with the 50-row budget', () => {
-    const input = toRoundCursorQueryInput(
-      { agentId: 'a', projectToolPayloads: true, topicId: 't' },
-      null,
-    );
+  it('requests 500-row gateway pages for the initial window and older history', async () => {
+    query.mockReset();
+    const service = new MessageService();
+    const context = { ...nextContext(), projectToolPayloads: true };
+    const cursor = { createdAt: '2026-01-01T00:00:00.000000Z', id: 'oldest-head' };
+    const messages = Array.from({ length: 500 }, (_, index) => ({ id: `head-${index}` }));
+    query.mockResolvedValueOnce({ ...page('head'), hasMore: true, messages, nextCursor: cursor });
+    query.mockResolvedValueOnce(page('older'));
 
-    expect(input).toMatchObject({ countBudget: 50, roundLimit: 1000 });
+    const head = await service.getMessageListPage(context);
+    const older = await service.getEarlierMessages(context, cursor);
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ countBudget: 500, cursor: null, projectToolPayloads: true }),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ countBudget: 500, cursor, projectToolPayloads: true }),
+    );
+    expect(head).toEqual({ messages, olderCursor: cursor });
+    expect(older).toEqual({ messages: [{ id: 'older' }], olderCursor: null });
   });
 
   it('keeps the full window for client-mode reads', () => {

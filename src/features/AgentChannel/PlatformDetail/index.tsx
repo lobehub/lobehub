@@ -47,11 +47,10 @@ import { FooterActions, FooterNotices } from './Footer';
 import {
   findOverLimitSettings,
   getChannelFormValues,
-  isWakeMasterReleased,
   mergeCredentialsForSave,
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
-  withWakeMasterOn,
+  WAKE_MASTER_KEY,
 } from './formState';
 import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext';
 import { QuickView } from './QuickView';
@@ -152,14 +151,10 @@ const omitUndefinedValues = <T extends Record<string, unknown>>(record: T) =>
 const getFormValues = (
   schema: SerializedPlatformDefinition['schema'],
   config?: CurrentConfig,
-  wakeReleased = false,
 ): ChannelFormValues => {
   const values = config ? getChannelFormValues(config) : { credentials: {}, settings: {} };
   const settings = mergeSettingsWithDefaults(schema, omitUndefinedValues(values.settings));
-  return {
-    ...values,
-    settings: withWakeMasterOn(settings, wakeReleased) as Record<string, {} | undefined>,
-  };
+  return { ...values, settings: settings as Record<string, {} | undefined> };
 };
 
 export interface CurrentConfig {
@@ -209,13 +204,12 @@ const PlatformDetail = memo<PlatformDetailProps>(
     // Options behind a rollout flag are left out of the tabs until the flag is on.
     const featureFlags = useServerConfigStore((state) => state.featureFlags) as
       Record<string, unknown> | undefined;
-    const wakeReleased = isWakeMasterReleased(platformDef.schema, featureFlags);
     // What is stored, in form shape. The reply settings are compared against it
     // to decide what to save on the spot, everything else to decide what still
     // waits for the Save button.
     const storedValues = useMemo(
-      () => getFormValues(platformDef.schema, currentConfig, wakeReleased),
-      [platformDef.schema, currentConfig, wakeReleased],
+      () => getFormValues(platformDef.schema, currentConfig),
+      [platformDef.schema, currentConfig],
     );
     const storedRef = useRef(storedValues);
     useEffect(() => {
@@ -227,9 +221,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const [previewOpen, setPreviewOpen] = useState(true);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const previewInline = !narrow && previewOpen;
+    // The settings that save as soon as they change: how a reply looks, and the wake switch.
     const replyKeys = useMemo(
       () =>
-        REPLY_KEYS.filter((key) =>
+        [...REPLY_KEYS, WAKE_MASTER_KEY].filter((key) =>
           getSchemaFields(platformDef.schema, 'settings').some((field) => field.key === key),
         ),
       [platformDef.schema],
@@ -246,7 +241,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const [savingModule, setSavingModule] = useState<SaveModuleId>();
     const saveQueueRef = useRef<Promise<void>>(undefined);
     const form = useForm<ChannelFormValues>({
-      initialValues: getFormValues(platformDef.schema, currentConfig, wakeReleased),
+      initialValues: getFormValues(platformDef.schema, currentConfig),
       onValuesChange: () => valuesChangedRef.current?.(),
     });
 
@@ -473,14 +468,15 @@ const PlatformDetail = memo<PlatformDetailProps>(
       // person's latest toggle yet, and adopting it would flip the toggle back.
       if (autoSavingRef.current) return;
 
-      form.reset(getFormValues(platformDef.schema, currentConfig, wakeReleased));
+      form.reset(getFormValues(platformDef.schema, currentConfig));
       setIsDirty(false);
       setDirtyModules([]);
-    }, [currentConfig, wakeReleased, form, platformDef.schema, isDirty]);
+    }, [currentConfig, form, platformDef.schema, isDirty]);
 
     // Reply settings are switches and choices whose effect is seen at once in
-    // the chat, so they are stored as soon as they change instead of waiting for
-    // the Save button. Only the reply keys are written, on top of what is stored:
+    // the chat, and the wake switch is a plain on/off, so they are stored as soon
+    // as they change instead of waiting for the Save button. Only the reply keys
+    // are written, on top of what is stored:
     // a half-finished edit on another tab is neither saved nor lost.
     const saveReplySettings = useCallback(async () => {
       if (!currentConfig || writeDisabled || replyKeys.length === 0) return;
@@ -757,23 +753,14 @@ const PlatformDetail = memo<PlatformDetailProps>(
           try {
             await deleteBotProvider(currentConfig.id, agentId);
             toast.success(t('channel.removed'));
-            form.reset(getFormValues(platformDef.schema, undefined, wakeReleased));
+            form.reset(getFormValues(platformDef.schema));
           } catch {
             toast.error(t('channel.removeFailed'));
           }
         },
         title: t('channel.removeChannel'),
       });
-    }, [
-      readOnly,
-      currentConfig,
-      agentId,
-      deleteBotProvider,
-      t,
-      form,
-      platformDef.schema,
-      wakeReleased,
-    ]);
+    }, [readOnly, currentConfig, agentId, deleteBotProvider, t, form, platformDef.schema]);
 
     const handleTestConnection = useCallback(async () => {
       if (writeDisabled) return;
@@ -809,11 +796,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
     }, [writeDisabled, currentConfig, connectResult, platformDef.id, testConnection, t]);
 
     const handleDiscard = useCallback(() => {
-      form.reset(getFormValues(platformDef.schema, currentConfig, wakeReleased));
+      form.reset(getFormValues(platformDef.schema, currentConfig));
       setIsDirty(false);
       setSaveResult(undefined);
       setTestResult(undefined);
-    }, [currentConfig, wakeReleased, form, platformDef.schema]);
+    }, [currentConfig, form, platformDef.schema]);
 
     const handleFormValuesChange = handleValuesChange;
 
