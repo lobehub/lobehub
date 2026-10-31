@@ -50,7 +50,7 @@ describe('useToolStore:customPlugin', () => {
         result.current.uninstallCustomPlugin(pluginId);
       });
 
-      expect(pluginService.uninstallPlugin).toBeCalledWith(pluginId);
+      expect(pluginService.uninstallPlugin).toHaveBeenCalledWith(pluginId);
     });
   });
 
@@ -77,7 +77,7 @@ describe('useToolStore:customPlugin', () => {
       });
 
       expect(result.current.newCustomPlugin).toEqual(defaultCustomPlugin);
-      expect(pluginService.createCustomPlugin).toBeCalledWith(newPlugin);
+      expect(pluginService.createCustomPlugin).toHaveBeenCalledWith(newPlugin);
     });
   });
   describe('updateCustomPlugin', () => {

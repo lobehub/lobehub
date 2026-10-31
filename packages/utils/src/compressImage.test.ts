@@ -26,7 +26,7 @@ describe('compressImage', () => {
     const r = compressImage({ img });
 
     expect(r).toMatch(/^data:image\/png;base64,/);
-    expect(drawImageSpy).toBeCalledWith(img, 0, 0, 3000, 2000, 0, 0, 1920, 1280);
+    expect(drawImageSpy).toHaveBeenCalledWith(img, 0, 0, 3000, 2000, 0, 0, 1920, 1280);
   });
 
   it('should compress image when height exceeds maxSize', () => {
@@ -37,7 +37,7 @@ describe('compressImage', () => {
     const r = compressImage({ img });
 
     expect(r).toMatch(/^data:image\/png;base64,/);
-    expect(drawImageSpy).toBeCalledWith(img, 0, 0, 2000, 3000, 0, 0, 1280, 1920);
+    expect(drawImageSpy).toHaveBeenCalledWith(img, 0, 0, 2000, 3000, 0, 0, 1280, 1920);
   });
 
   it('should not compress image when within maxSize', () => {
@@ -47,7 +47,7 @@ describe('compressImage', () => {
 
     compressImage({ img });
 
-    expect(drawImageSpy).toBeCalledWith(img, 0, 0, 1800, 1800, 0, 0, 1800, 1800);
+    expect(drawImageSpy).toHaveBeenCalledWith(img, 0, 0, 1800, 1800, 0, 0, 1800, 1800);
   });
 
   it('should use specified output type', () => {
@@ -97,7 +97,7 @@ describe('compressImage', () => {
 
     compressImage({ img, maxSize: 400 });
 
-    expect(drawImageSpy).toBeCalledWith(img, 0, 0, 500, 300, 0, 0, 400, 240);
+    expect(drawImageSpy).toHaveBeenCalledWith(img, 0, 0, 500, 300, 0, 0, 400, 240);
   });
 });
 
