@@ -149,6 +149,16 @@ describe('markdown rendering', () => {
   it('renders ordered lists as <ol>', () => {
     expect(markdownToHtml('1. a\n2. b')).toContain('<ol><li>a</li><li>b</li></ol>');
   });
+
+  it('renders a line that only starts or ends with a rule marker as text, without hanging', () => {
+    // Each of these once matched a block start that no branch consumed, so the
+    // tokenizer spun forever on the first line of the reply.
+    expect(markdownToHtml('--- note')).toBe('<p>--- note</p>');
+    expect(markdownToHtml('***Important***')).toBe('<p><em><strong>Important</strong></em></p>');
+    expect(markdownToPlainText('intro\n--- note\nmore')).toBe('intro\n--- note\nmore');
+
+    expect(markdownToHtml('above\n\n---\n\nbelow')).toBe('<p>above</p>\n<hr />\n<p>below</p>');
+  });
 });
 
 describe('quoted reply stripping', () => {

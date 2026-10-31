@@ -24,7 +24,7 @@ export const isReservedAgentAccountProvider = (provider: string): boolean =>
  * The set of account providers this deployment can issue accounts from.
  *
  * Registration is explicit and provider-name keyed, so a caller can never
- * invent a provider at runtime: `get('linq')` either returns the provider the
+ * invent a provider at runtime: `get('agent-mail')` either returns the provider the
  * deployment registered or fails with the list of ones it did. That is the
  * whole point of a registry here — the account row stores a `provider` string,
  * and this is what turns that string back into behaviour.

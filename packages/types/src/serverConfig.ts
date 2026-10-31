@@ -142,6 +142,12 @@ export interface GlobalServerConfig {
    * events via the Gateway instead of running the agent loop client-side.
    */
   agentGatewayUrl?: string;
+  /**
+   * Agent identity providers this deployment has credentials for
+   * (`agent-mail`). Empty means an agent cannot be given an address
+   * here, so the identity settings have nothing to offer.
+   */
+  agentIdentityProviders?: string[];
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   /** Whether the server has DEVICE_GATEWAY_URL configured, independent of its public URL. */

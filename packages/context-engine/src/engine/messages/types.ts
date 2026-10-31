@@ -1,6 +1,7 @@
 /* eslint-disable perfectionist/sort-interfaces */
 import type { AgentIdentityContext, FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
 import type {
+  AgentAccountContext,
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
@@ -274,6 +275,12 @@ export interface MessagesEngineParams {
    * it. Ignored in group chat, where GroupContextInjector owns identity.
    */
   agentIdentity?: AgentIdentityContext;
+  /**
+   * The agent's own accounts and inbox, gathered fresh for this step. Appended
+   * to the system message so "I have these addresses and this mail" is state
+   * rather than a tool the model has to call.
+   */
+  agentAccountContext?: AgentAccountContext;
   /** Agent-materialized presentation contexts for this LLM call */
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   /** Immutable expertise captured when the operation started. */
