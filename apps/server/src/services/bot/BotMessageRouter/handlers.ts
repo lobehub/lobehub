@@ -847,7 +847,10 @@ export function registerHandlers(
         charLimit,
         client,
         displayToolCalls,
-        duty: wakeReason === 'in-duty' ? { matched: initiation?.duty } : undefined,
+        duty:
+          wakeReason === 'in-duty'
+            ? { helpful: initiation?.helpful, matched: initiation?.duty }
+            : undefined,
         followup: wakeReason === 'followup-window' ? initiation?.followup : undefined,
         named: wakeReason === 'named-in-text',
         openingReply,

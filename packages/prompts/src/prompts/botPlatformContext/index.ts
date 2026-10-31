@@ -57,10 +57,11 @@ export interface BotPlatformInfo {
   currentChannel?: CurrentBotChannel;
   /**
    * The bot woke on its own because a message nobody addressed to it falls within its duties (a
-   * `followup` wake). `matched` names the duty, when the judgement said which. The agent is told
-   * why, so it acts on the duty or stays silent.
+   * `followup` wake). `matched` names the duty, when the judgement said which. `helpful`: it woke
+   * instead because stepping in would help, an open question nobody settled. The agent is told
+   * why, so it acts or stays silent.
    */
-  duty?: { matched?: string };
+  duty?: { helpful?: boolean; matched?: string };
   /**
    * The bot woke because it spoke in this conversation lately and the message came after (a
    * `followup` wake), not because anyone addressed it. `score` is how sure the addressed check was
@@ -259,11 +260,19 @@ export const formatBotPlatformContext = ({
             `Why you were woken: your name appears in the message, but nobody @-mentioned you or replied to you. People often talk about you rather than to you: commenting on what you did, joking, or asking each other why you spoke up. Decide the way a teammate in the room would: speak when the message asks you to do or answer something, or when you have something the conversation actually needs; let a passing remark or a joke about you go by and end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`. When someone is unhappy with something you did (you replied when you should not have, got it wrong, were too noisy), do respond: acknowledge it plainly, without defending yourself, and save what you will do differently as <self_improvement> describes. Say it once, briefly, then keep to it: do not apologise again or announce that you are staying out.${standDown ? ' If they say you are interfering or should stay out, stand down (see <stand_down>).' : ''}`,
           ]
         : []),
-      ...(duty
+      ...(duty?.helpful
         ? [
-            `Why you were woken: nobody addressed you, but the message falls within the duties your owner gave you${duty.matched?.trim() ? ` (the duty: "${sanitize(duty.matched.trim())}")` : ''}. Read the conversation first. If the duty applies, carry it out the way a teammate holding it would: do the work it describes, and say what you did or will do. If on a closer look it does not apply, end with \`${BOT_NO_REPLY_TOKEN}:off_topic\`; if someone is already handling it, with \`${BOT_NO_REPLY_TOKEN}:already_handled\`.`,
+            `Why you were woken: nobody addressed you and the message is not one of your duties, but it leaves something open (a question, an undecided choice, a problem someone just noticed) that nobody has settled, and you may be able to settle it. Nobody can see you working: no typing, no reactions, nothing shows until you post. Work first, then decide whether to speak:`,
+            `1. Look into it: read the code, the data, the task or PR, your own earlier output; reproduce it if that is quick. Keep it to a few lookups, not an investigation.`,
+            `2. If it turns out simple, settle it: give the answer you checked, or do the work, but only work your duties already allow (for example a task for the person they name, after checking for a duplicate). Lookups, checks and reproductions are fine; do not open a pull request, change settings or touch live data unasked.`,
+            `3. ${canReadHistory ? 'Before you post, read the newest messages again (`readMessages`)' : 'Before you post, check the conversation you were given'}: if someone answered it or took it on while you worked, end with \`${BOT_NO_REPLY_TOKEN}:already_handled\`.`,
+            `4. Then post briefly what you found or did and where it is, the way a teammate who looked it up would. If you could not settle it, are not sure, or all you could add is a general opinion, end with \`${BOT_NO_REPLY_TOKEN}:off_topic\` and say nothing: never post that you looked and could not tell. If it was a question for a particular person, end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`.`,
           ]
-        : []),
+        : duty
+          ? [
+              `Why you were woken: nobody addressed you, but the message falls within the duties your owner gave you${duty.matched?.trim() ? ` (the duty: "${sanitize(duty.matched.trim())}")` : ''}. Read the conversation first. If the duty applies, carry it out the way a teammate holding it would: do the work it describes, and say what you did or will do. If on a closer look it does not apply, end with \`${BOT_NO_REPLY_TOKEN}:off_topic\`; if someone is already handling it, with \`${BOT_NO_REPLY_TOKEN}:already_handled\`.`,
+            ]
+          : []),
       '</optional_reply>',
     );
   }

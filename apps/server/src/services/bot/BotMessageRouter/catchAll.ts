@@ -291,7 +291,10 @@ export const registerCatchAllHandler = (bot: Chat<any>, ctx: BotHandlerContext):
           openingReply,
           reactionMode,
           replyLocale,
-          duty: initiation?.reason === 'in-duty' ? { matched: initiation.duty } : undefined,
+          duty:
+            initiation?.reason === 'in-duty'
+              ? { helpful: initiation.helpful, matched: initiation.duty }
+              : undefined,
           followup: initiation?.reason === 'followup-window' ? initiation.followup : undefined,
           named: wakeReason === 'named-in-text',
           ...replyVoiceFor(thread.id),

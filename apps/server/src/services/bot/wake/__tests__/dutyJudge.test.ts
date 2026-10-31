@@ -22,10 +22,11 @@ describe('createWakeDutyJudge', () => {
     mockInit.mockResolvedValue({ decide: mockDecide, generateObject: mockGenerateObject });
   });
 
-  it('asks the decision model whether the message is within the duties, and which one', async () => {
+  it('asks the decision model whether the message is within the duties, which one, and whether stepping in helps', async () => {
     mockDecide.mockResolvedValue({
       answers: {
         duty: { choice: 'duty-1', type: 'choice' },
+        helpful: { probability: 0.42, type: 'boolean' },
         inDuty: { probability: 0.86, type: 'boolean' },
       },
     });
@@ -38,11 +39,12 @@ describe('createWakeDutyJudge', () => {
 
     expect(result).toEqual({
       duty: '群里有人描述需求时评估一下，简单的给 dario 建任务',
+      helpful: 0.42,
       inDuty: 0.86,
-      reason: 'gpt-6-luna:decision p=0.86',
+      reason: 'gpt-6-luna:decision p=0.86 helpful=0.42',
     });
     const [payload, options] = mockDecide.mock.calls[0];
-    expect(Object.keys(payload.questions).sort()).toEqual(['duty', 'inDuty']);
+    expect(Object.keys(payload.questions).sort()).toEqual(['duty', 'helpful', 'inDuty']);
     expect(payload.state).toContain("The assistant's duties, written by its owner:");
     expect(payload.state).toContain('The assistant is called: Nasa');
     // Anyone's message is judged; nothing marks it as the owner's.
@@ -50,7 +52,7 @@ describe('createWakeDutyJudge', () => {
     expect(options.signal).toBe(abort.signal);
     expect(options.tracing).toMatchObject({
       agentId: 'agt',
-      promptVersion: 'duty-v2',
+      promptVersion: 'duty-v3',
       scenario: 'bot_wake_classifier',
       schemaName: 'bot_wake_duty_decision',
     });
@@ -64,8 +66,8 @@ describe('createWakeDutyJudge', () => {
 
     await expect(
       judge({ conversation, duties: 'Triage bug reports.', signal }, new AbortController().signal),
-    ).resolves.toMatchObject({ duty: 'Triage bug reports.', inDuty: 0.9 });
-    expect(Object.keys(mockDecide.mock.calls[0][0].questions)).toEqual(['inDuty']);
+    ).resolves.toMatchObject({ duty: 'Triage bug reports.', helpful: undefined, inDuty: 0.9 });
+    expect(Object.keys(mockDecide.mock.calls[0][0].questions)).toEqual(['inDuty', 'helpful']);
 
     mockDecide.mockResolvedValueOnce({
       answers: {
@@ -93,7 +95,12 @@ describe('createWakeDutyJudge', () => {
   });
 
   it('can use a chat model through generateObject, which names the duty by key', async () => {
-    mockGenerateObject.mockResolvedValue({ duty: 'duty-2', inDuty: 0.3, reason: 'just a remark' });
+    mockGenerateObject.mockResolvedValue({
+      duty: 'duty-2',
+      helpful: 0.2,
+      inDuty: 0.3,
+      reason: 'just a remark',
+    });
 
     const result = await createWakeDutyJudge({
       db: {} as never,
@@ -103,16 +110,19 @@ describe('createWakeDutyJudge', () => {
 
     expect(result).toEqual({
       duty: 'PR 提了之后通知提需求的人',
+      helpful: 0.2,
       inDuty: 0.3,
       reason: 'just a remark',
     });
     const [payload, options] = mockGenerateObject.mock.calls[0];
     expect(payload.schema.name).toBe('bot_wake_duty');
     expect(payload.schema.schema.properties.duty.enum).toEqual(['duty-1', 'duty-2', 'none']);
+    expect(payload.schema.schema.required).toEqual(['inDuty', 'helpful', 'duty', 'reason']);
     expect(payload.messages[0].content).toContain('falls within its duties');
+    expect(payload.messages[0].content).toContain('"helpful" high:');
     expect(payload.messages[1].content).toContain('PR 提了之后通知提需求的人');
     expect(options.tracing).toMatchObject({
-      promptVersion: 'duty-v2',
+      promptVersion: 'duty-v3',
       schemaName: 'bot_wake_duty',
     });
   });

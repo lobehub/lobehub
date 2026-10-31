@@ -225,6 +225,39 @@ describe('formatBotPlatformContext', () => {
     );
   });
 
+  it('tells an agent woken to settle an open question to work first, unseen, and stay silent unless it settles it', () => {
+    const base = { platformName: 'Discord', supportsMarkdown: true, wakeKind: 'followup' as const };
+    const helpful = formatBotPlatformContext({ ...base, duty: { helpful: true } });
+
+    expect(helpful).toContain(
+      'the message is not one of your duties, but it leaves something open',
+    );
+    expect(helpful).toContain('Nobody can see you working');
+    // Work first; side effects only within the duties, never a PR or live data unasked.
+    expect(helpful).toContain('Keep it to a few lookups');
+    expect(helpful).toContain('only work your duties already allow');
+    expect(helpful).toContain(
+      'do not open a pull request, change settings or touch live data unasked',
+    );
+    // Re-read before posting: the work may take a while.
+    expect(helpful).toContain('read the newest messages again (`readMessages`)');
+    expect(helpful).toContain('NO_REPLY:already_handled');
+    // Silent on failure, never a "could not tell" post.
+    expect(helpful).toContain('NO_REPLY:off_topic');
+    expect(helpful).toContain('never post that you looked and could not tell');
+    expect(helpful).toContain('NO_REPLY:not_addressed');
+    expect(helpful).not.toContain('falls within the duties your owner gave you');
+
+    // A platform that cannot read history is not told to call `readMessages`.
+    const noHistory = formatBotPlatformContext({
+      ...base,
+      canReadHistory: false,
+      duty: { helpful: true },
+    });
+    expect(noHistory).toContain('check the conversation you were given');
+    expect(noHistory).not.toContain('read the newest messages again (`readMessages`)');
+  });
+
   it('tells an agent woken by its duties which duty, and to act on it or stay silent', () => {
     const base = { platformName: 'Discord', supportsMarkdown: true };
     const duty = formatBotPlatformContext({

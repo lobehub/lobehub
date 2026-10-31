@@ -42,6 +42,7 @@ describe('parseBotWakeSettings', () => {
     const K = BOT_WAKE_SETTING_KEYS;
 
     expect(parseBotWakeSettings({ [K.disabled]: false }).rules.duties).toEqual({
+      helpfulThreshold: 0.7,
       mode: 'enforce',
       text: undefined,
       threshold: 0.65,
@@ -60,7 +61,12 @@ describe('parseBotWakeSettings', () => {
         [K.dutiesThreshold]: 0.6,
         [K.disabled]: false,
       }).rules.duties,
-    ).toEqual({ mode: 'enforce', text: '评估需求\n通知提需求的人', threshold: 0.6 });
+    ).toEqual({
+      helpfulThreshold: 0.7,
+      mode: 'enforce',
+      text: '评估需求\n通知提需求的人',
+      threshold: 0.6,
+    });
     expect(
       parseBotWakeSettings({ [K.duties]: 'x'.repeat(MAX_DUTIES_LENGTH + 10) }).rules.duties.text,
     ).toHaveLength(MAX_DUTIES_LENGTH);
@@ -72,7 +78,7 @@ describe('parseBotWakeSettings', () => {
     expect(
       parseBotWakeSettings({ botWake: { duties: { text: 'Triage bugs.', threshold: 0.9 } } }).rules
         .duties,
-    ).toEqual({ mode: 'enforce', text: 'Triage bugs.', threshold: 0.9 });
+    ).toEqual({ helpfulThreshold: 0.7, mode: 'enforce', text: 'Triage bugs.', threshold: 0.9 });
   });
 
   // Saved by the forms of "help others" and "help me", which the duties replaced.
@@ -333,7 +339,12 @@ describe('parseBotWakeSettings from the settings form', () => {
       classifier: { mode: 'enforce', threshold: 0.7 },
       customInstructions: 'Only billing questions.',
       denyChannels: ['c9'],
-      duties: { mode: 'enforce', text: 'Triage bug reports.', threshold: 0.7 },
+      duties: {
+        helpfulThreshold: 0.7,
+        mode: 'enforce',
+        text: 'Triage bug reports.',
+        threshold: 0.7,
+      },
       maxSilentWakes: 1,
       ownerPresenceSeconds: 15,
       scope: 'bot-threads',
@@ -351,6 +362,7 @@ describe('parseBotWakeSettings from the settings form', () => {
     };
 
     expect(parseBotWakeSettings(settings).rules.duties).toEqual({
+      helpfulThreshold: 0.7,
       mode: 'shadow',
       text: 'Triage bug reports.',
       threshold: 0.6,

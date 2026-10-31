@@ -254,6 +254,49 @@ describe('AgentBridgeService no_reply and deferred follow-up feedback', () => {
       expect(progress.delete).not.toHaveBeenCalled();
     });
 
+    it('quiet followup (woken to settle a question) works unseen and only posts its reply', async () => {
+      runHooks({
+        afterStep: [
+          { shouldContinue: true, stepType: 'call_tool', toolsCalling: [{}] },
+          { shouldContinue: true, stepType: 'call_tool', toolsCalling: [{}] },
+        ],
+        onComplete: { lastAssistantContent: 'checked: it is in Settings → Usage', reason: 'done' },
+      });
+      const { thread } = createThread();
+      const { client, replaceReaction } = createClient();
+
+      await subscribed(thread, client, { duty: { helpful: true }, wakeKind: 'followup' });
+
+      expect(thread.startTyping).not.toHaveBeenCalled();
+      expect(replaceReaction).not.toHaveBeenCalled();
+      // No placeholder: the one post is the reply itself.
+      expect(thread.post).toHaveBeenCalledTimes(1);
+      expect(execParams().botPlatformContext.duty).toEqual({ helpful: true });
+    });
+
+    it('quiet followup that could not settle it leaves no trace', async () => {
+      runHooks({
+        afterStep: [{ shouldContinue: true, stepType: 'call_tool', toolsCalling: [{}] }],
+        onComplete: {
+          lastAssistantContent: 'NO_REPLY:off_topic',
+          operationId: 'op-1',
+          reason: 'done',
+        },
+      });
+      const { thread } = createThread();
+      const { client, replaceReaction } = createClient();
+
+      await subscribed(thread, client, { duty: { helpful: true }, wakeKind: 'followup' });
+
+      expect(thread.startTyping).not.toHaveBeenCalled();
+      expect(replaceReaction).not.toHaveBeenCalled();
+      expect(thread.post).not.toHaveBeenCalled();
+      expect(mockRecordNoReplyLabel).toHaveBeenCalledWith(
+        FAKE_DB,
+        expect.objectContaining({ noReply: { reason: 'off_topic' } }),
+      );
+    });
+
     it('followup that acted and then chose silence removes the placeholder it showed', async () => {
       runHooks({
         afterStep: [{ shouldContinue: true, stepType: 'call_tool', toolsCalling: [{}] }],
@@ -520,6 +563,31 @@ describe('AgentBridgeService no_reply and deferred follow-up feedback', () => {
         wakeKind: 'followup',
       });
       expect(execParams().botPlatformContext.wakeKind).toBe('followup');
+    });
+
+    it('quiet followup: tells both webhooks to keep every feedback back', async () => {
+      const { thread } = createThread();
+      const { client } = createClient();
+
+      await subscribed(thread, client, { duty: { helpful: true }, wakeKind: 'followup' });
+
+      expect(hook('bot-step-progress').webhook.body).toMatchObject({
+        quiet: true,
+        wakeKind: 'followup',
+      });
+      expect(hook('bot-completion').webhook.body).toMatchObject({
+        quiet: true,
+        wakeKind: 'followup',
+      });
+    });
+
+    it('a duty wake is not quiet: it shows feedback once it acts', async () => {
+      const { thread } = createThread();
+      const { client } = createClient();
+
+      await subscribed(thread, client, { duty: { matched: '评估需求' }, wakeKind: 'followup' });
+
+      expect(hook('bot-step-progress').webhook.body.quiet).toBeUndefined();
     });
 
     it('mention: keeps the immediate reaction, typing and placeholder, and forwards wakeKind=mention', async () => {

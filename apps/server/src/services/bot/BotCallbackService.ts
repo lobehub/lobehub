@@ -130,6 +130,11 @@ export interface BotCallbackBody {
   operationId?: string;
   platformThreadId: string;
   progressMessageId?: string;
+  /**
+   * A wake to settle an open question: it works unseen (no feedback, no step reactions, no
+   * typing) and only its reply, if any, shows. Set with `wakeKind: 'followup'`.
+   */
+  quiet?: boolean;
   reason?: string;
   reasoning?: string;
   shouldContinue?: boolean;
@@ -202,7 +207,7 @@ export class BotCallbackService {
       // A follow-up wake held its feedback back; the agent going on to another step means it is
       // acting, so show it now. (The placeholder message is not posted here: a callback cannot
       // delete it again if the run still ends in silence, so the reply goes out as a new message.)
-      if (body.wakeKind === 'followup' && body.shouldContinue) {
+      if (body.wakeKind === 'followup' && body.shouldContinue && !body.quiet) {
         await this.revealFollowupFeedback(body, messenger, client, platform, reactionMode);
       }
       if (canEdit && progressMessageId && settings.displayToolCalls === true) {
@@ -213,13 +218,13 @@ export class BotCallbackService {
       // the progress-message edit and the reaction are separate UX channels —
       // but only under the `full` reaction mode: every swap is a platform
       // notification for users with message alerts on.
-      if (shouldApplyReaction(reactionMode, 'step')) {
+      if (!body.quiet && shouldApplyReaction(reactionMode, 'step')) {
         await this.swapStepReaction(body, client, platform);
       }
       // Only renew typing when more steps are expected. The final step
       // (shouldContinue=false) may arrive after the completion callback
       // via async delivery (QStash), which would restart typing after stop.
-      if (body.shouldContinue) {
+      if (body.shouldContinue && !body.quiet) {
         this.renewGatewayTyping(connectionId, platformThreadId);
       }
     } else if (type === 'completion') {

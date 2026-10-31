@@ -64,6 +64,11 @@ export async function executeWithHooksLocalMode(
     gatewayConnectionId?: string;
     progressMessage?: SentMessage;
     prompt: string;
+    /**
+     * Nothing is shown while the agent works, not even once it acts: no feedback, no step
+     * reactions. Only the reply, if it posts one. See `quiet` in `./execute`.
+     */
+    quiet?: boolean;
     reactionMode?: BotReactionMode;
     replyLocale: BotReplyLocale;
     /**
@@ -95,6 +100,7 @@ export async function executeWithHooksLocalMode(
     displayToolCalls,
     files,
     prompt,
+    quiet = false,
     reactionMode = DEFAULT_BOT_REACTION_MODE,
     replyLocale,
     toolModeOverride,
@@ -170,6 +176,7 @@ export async function executeWithHooksLocalMode(
 
                 if (
                   event.shouldContinue &&
+                  !quiet &&
                   userMessage &&
                   shouldApplyReaction(reactionMode, 'step')
                 ) {
