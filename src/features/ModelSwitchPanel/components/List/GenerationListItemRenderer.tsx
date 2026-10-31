@@ -13,6 +13,7 @@ import {
   Icon,
   menuSharedStyles,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
@@ -54,7 +55,7 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
         return (
           <Flexbox
             horizontal
-            className={modelSwitchPanelStyles.menuItem}
+            className={stylex.props(modelSwitchPanelStyles.menuItem).className}
             gap={8}
             style={{ color: cssVar.colorTextTertiary }}
             onClick={() => {
@@ -72,7 +73,7 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
         return (
           <Flexbox
             horizontal
-            className={modelSwitchPanelStyles.groupHeader}
+            className={stylex.props(modelSwitchPanelStyles.groupHeader).className}
             justify="space-between"
             paddingBlock="12px 4px"
             paddingInline="12px 8px"
@@ -108,7 +109,7 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
         return (
           <Flexbox
             horizontal
-            className={modelSwitchPanelStyles.menuItem}
+            className={stylex.props(modelSwitchPanelStyles.menuItem).className}
             gap={8}
             style={{ color: cssVar.colorTextTertiary }}
             onClick={() => {
@@ -132,7 +133,7 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
                 style={{ paddingBlock: 8, paddingInline: 8 }}
                 className={cx(
                   menuSharedStyles.item,
-                  isActive && modelSwitchPanelStyles.menuItemActive,
+                  isActive && stylex.props(modelSwitchPanelStyles.menuItemActive).className,
                 )}
                 onClick={() => {
                   setDetailOpen(false);
@@ -148,7 +149,9 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
-                  <DropdownMenuPopup className={modelSwitchPanelStyles.detailPopup}>
+                  <DropdownMenuPopup
+                    className={stylex.props(modelSwitchPanelStyles.detailPopup).className}
+                  >
                     <ModelDetailPanel
                       enabledList={enabledList}
                       model={item.model.id}
@@ -174,7 +177,7 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
                 style={{ paddingBlock: 8, paddingInline: 8 }}
                 className={cx(
                   menuSharedStyles.item,
-                  isActive && modelSwitchPanelStyles.menuItemActive,
+                  isActive && stylex.props(modelSwitchPanelStyles.menuItemActive).className,
                 )}
                 onClick={() => {
                   setDetailOpen(false);
@@ -190,7 +193,9 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
                 <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
-                  <DropdownMenuPopup className={modelSwitchPanelStyles.detailPopup}>
+                  <DropdownMenuPopup
+                    className={stylex.props(modelSwitchPanelStyles.detailPopup).className}
+                  >
                     <ModelDetailPanel
                       enabledList={enabledList}
                       model={item.data.model.id}

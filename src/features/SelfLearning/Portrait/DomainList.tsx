@@ -1,6 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import type { ExpertiseDomainItem } from '@/services/expertise';
 
 import { countTiers } from '../helpers';
+import { rowMarker } from './markers.stylex';
 import { portraitStyles as styles } from './styles';
 import TierBar from './TierBar';
 
@@ -39,7 +41,7 @@ const DomainList = memo<DomainListProps>(({ domains, onOpen }) => {
               horizontal
               align={'center'}
               as={'button'}
-              className={styles.row}
+              className={stylex.props(styles.row, rowMarker).className}
               gap={12}
               key={d.id}
               style={{
@@ -55,7 +57,7 @@ const DomainList = memo<DomainListProps>(({ domains, onOpen }) => {
               </Text>
               <TierBar counts={counts} total={d.lessons.length} />
               <Text
-                className={counts.recurring ? styles.accent : undefined}
+                className={counts.recurring ? stylex.props(styles.accent).className : undefined}
                 fontSize={12.5}
                 style={{ flex: 1 }}
                 type={counts.recurring ? undefined : 'secondary'}

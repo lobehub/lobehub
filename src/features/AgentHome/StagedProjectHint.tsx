@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FolderIcon } from 'lucide-react';
 import { memo } from 'react';
 import { Trans } from 'react-i18next';
@@ -12,32 +14,28 @@ import { useDeviceList } from '@/store/device';
 
 import { useStagedNewTopicDirectory } from './useStagedNewTopicDirectory';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    overflow: hidden;
-
-    width: 100%;
-    padding-block: 12px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  path: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  project: css`
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    width: '100%',
+    paddingBlock: '12px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  path: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  project: { fontWeight: 600, color: cssVar.colorText },
+});
 
 /**
  * Tells a blank conversation opened by a project device group's "+" where its
@@ -53,12 +51,12 @@ const StagedProjectHint = memo(() => {
   if (!directory) return null;
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.card} gap={12}>
+    <Flexbox horizontal align={'center'} className={stylex.props(styles.card).className} gap={12}>
       <ProjectAvatar avatar={directory.projectAvatar} name={directory.projectName} size={32} />
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Text fontSize={14}>
           <Trans
-            components={{ project: <span className={styles.project} /> }}
+            components={{ project: <span {...stylex.props(styles.project)} /> }}
             i18nKey={'directories.stagedNewTopic'}
             ns={'project'}
             values={{ name: directory.projectName }}
@@ -73,7 +71,7 @@ const StagedProjectHint = memo(() => {
           <ExecutionTargetIcon devicePlatform={directory.platform} target={'device'} />
           <span style={{ flex: 'none' }}>{projectDirectoryDeviceName(directory, devices)}</span>
           <Icon icon={FolderIcon} size={12} style={{ flex: 'none', marginInlineStart: 4 }} />
-          <span className={styles.path} title={directory.path}>
+          <span {...stylex.props(styles.path)} title={directory.path}>
             {directory.path}
           </span>
         </Flexbox>

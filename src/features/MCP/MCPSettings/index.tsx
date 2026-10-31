@@ -1,5 +1,7 @@
-import { Button, createStaticStyles, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { EditIcon, LinkIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
 import { useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,127 +12,91 @@ import ArgsInput from '@/features/PluginDevModal/MCPManifestForm/ArgsInput';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  configFormContainer: css`
-    padding: ${cssVar.paddingLG};
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillAlter};
-  `,
+const styles = stylex.create({
+  connectionForm: {
+    padding: cssVar.paddingMD,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillAlter,
+    backgroundImage: 'none',
+  },
 
-  configHeader: css`
-    margin-block-end: ${cssVar.marginLG};
+  editButton: {
+    position: 'absolute',
+    insetBlockStart: cssVar.paddingXS,
+    insetInlineEnd: cssVar.paddingXS,
+  },
 
-    h5 {
-      margin-block-end: ${cssVar.marginXS} !important;
-      color: ${cssVar.colorTextHeading};
-    }
-  `,
+  emptyState: {
+    padding: cssVar.paddingXL,
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
 
-  connectionForm: css`
-    padding: ${cssVar.paddingMD};
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillAlter};
-  `,
+  footer: {
+    display: 'flex',
+    gap: cssVar.marginSM,
+    marginBlockStart: cssVar.marginLG,
+  },
 
-  connectionPreview: css`
-    padding: ${cssVar.paddingMD};
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillAlter};
-  `,
+  previewItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: cssVar.paddingXS,
+    paddingInline: 0,
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
 
-  editButton: css`
-    position: absolute;
-    inset-block-start: ${cssVar.paddingXS};
-    inset-inline-end: ${cssVar.paddingXS};
-  `,
+  previewLabel: {
+    display: 'flex',
+    gap: cssVar.marginXS,
+    alignItems: 'center',
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
 
-  emptyState: css`
-    padding: ${cssVar.paddingXL};
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
+  previewValue: {
+    paddingBlock: cssVar.paddingXXS,
+    paddingInline: cssVar.paddingXS,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 600,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
 
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-
-  footer: css`
-    display: flex;
-    gap: ${cssVar.marginSM};
-    margin-block-start: ${cssVar.marginLG};
-  `,
-
-  markdown: css`
-    p {
-      margin-block-end: ${cssVar.marginXS};
-      color: ${cssVar.colorTextDescription};
-    }
-  `,
-
-  previewItem: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: ${cssVar.paddingXS};
-    padding-inline: 0;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-
-  previewLabel: css`
-    display: flex;
-    gap: ${cssVar.marginXS};
-    align-items: center;
-
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-
-  previewValue: css`
-    padding-block: ${cssVar.paddingXXS};
-    padding-inline: ${cssVar.paddingXS};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-
-  sectionTitle: css`
-    position: relative;
-
-    display: flex;
-    gap: ${cssVar.marginXS};
-    align-items: center;
-
-    height: 32px;
-
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-    color: ${cssVar.colorTextHeading};
-
-    &::after {
-      content: '';
-
-      flex: 1;
-
-      height: 1px;
-      margin-inline-start: ${cssVar.marginMD};
-
-      background: linear-gradient(to right, ${cssVar.colorBorder}, transparent);
-    }
-  `,
-}));
+  sectionTitle: {
+    'position': 'relative',
+    'display': 'flex',
+    'gap': cssVar.marginXS,
+    'alignItems': 'center',
+    'height': '32px',
+    'fontSize': cssVar.fontSizeLG,
+    'fontWeight': 600,
+    'color': cssVar.colorTextHeading,
+    '::after': {
+      content: '""',
+      flex: '1',
+      height: '1px',
+      marginInlineStart: cssVar.marginMD,
+      backgroundColor: 'transparent',
+      backgroundImage: `linear-gradient(to right, ${cssVar.colorBorder}, transparent)`,
+    },
+  },
+});
 
 export interface SettingsRef {
   reset: () => void;
@@ -251,12 +217,12 @@ const Settings = ({
     <Flexbox paddingBlock={8} paddingInline={12}>
       <Flexbox gap={24}>
         <Flexbox gap={24}>
-          <div className={styles.sectionTitle}>
+          <div {...stylex.props(styles.sectionTitle)}>
             <LinkIcon size={16} />
             {t('settings.connection.title')}
             {!isEditingConnection && (
               <Button
-                className={styles.editButton}
+                className={stylex.props(styles.editButton).className}
                 icon={<EditIcon size={12} />}
                 size="small"
                 type="text"
@@ -270,38 +236,42 @@ const Settings = ({
           {!isEditingConnection ? (
             // Preview mode
             <Flexbox paddingInline={8}>
-              <div className={styles.previewItem}>
-                <span className={styles.previewLabel}>{t('settings.connection.type')}</span>
+              <div {...stylex.props(styles.previewItem)}>
+                <span {...stylex.props(styles.previewLabel)}>{t('settings.connection.type')}</span>
                 <Flexbox horizontal>
                   <Icon icon={TerminalIcon} />
-                  <Text className={styles.previewValue}>
+                  <Text className={stylex.props(styles.previewValue).className}>
                     {customParams?.type?.toUpperCase() || 'Unknown'}
                   </Text>
                 </Flexbox>
               </div>
 
               {customParams?.type === 'http' && customParams?.url && (
-                <div className={styles.previewItem}>
-                  <span className={styles.previewLabel}>{t('settings.connection.url')}</span>
-                  <span className={styles.previewValue}>{customParams.url}</span>
+                <div {...stylex.props(styles.previewItem)}>
+                  <span {...stylex.props(styles.previewLabel)}>{t('settings.connection.url')}</span>
+                  <span {...stylex.props(styles.previewValue)}>{customParams.url}</span>
                 </div>
               )}
 
               {customParams?.type === 'stdio' && (
                 <>
                   {customParams?.command && (
-                    <div className={styles.previewItem}>
-                      <span className={styles.previewLabel}>
+                    <div {...stylex.props(styles.previewItem)}>
+                      <span {...stylex.props(styles.previewLabel)}>
                         {t('settings.connection.command')}
                       </span>
-                      <span className={styles.previewValue}>{customParams.command}</span>
+                      <span {...stylex.props(styles.previewValue)}>{customParams.command}</span>
                     </div>
                   )}
 
                   {customParams?.args && customParams.args.length > 0 && (
-                    <div className={styles.previewItem}>
-                      <span className={styles.previewLabel}>{t('settings.connection.args')}</span>
-                      <span className={styles.previewValue}>{customParams.args.join(' ')}</span>
+                    <div {...stylex.props(styles.previewItem)}>
+                      <span {...stylex.props(styles.previewLabel)}>
+                        {t('settings.connection.args')}
+                      </span>
+                      <span {...stylex.props(styles.previewValue)}>
+                        {customParams.args.join(' ')}
+                      </span>
                     </div>
                   )}
                 </>
@@ -309,7 +279,7 @@ const Settings = ({
             </Flexbox>
           ) : (
             // Edit mode
-            <div className={styles.connectionForm}>
+            <div {...stylex.props(styles.connectionForm)}>
               <Form form={connectionForm} layout="vertical">
                 {customParams?.type === 'http' && (
                   <Form.Field
@@ -346,7 +316,7 @@ const Settings = ({
                     </Form.Field>
                   </>
                 )}
-                <Flexbox horizontal className={styles.footer} gap={8}>
+                <Flexbox horizontal className={stylex.props(styles.footer).className} gap={8}>
                   <Button htmlType="submit" loading={connectionLoading} type="primary">
                     {t('common:save')}
                   </Button>
@@ -360,7 +330,7 @@ const Settings = ({
         {/* Environment variable configuration (stdio type only) */}
         {isStdioType && (
           <Flexbox gap={12}>
-            <div className={styles.sectionTitle}>
+            <div {...stylex.props(styles.sectionTitle)}>
               <Settings2Icon size={16} />
               {t('settings.configuration.title')}
             </div>
@@ -375,7 +345,7 @@ const Settings = ({
                 />
               </Form.Field>
               {!hideFooter && (
-                <Flexbox horizontal className={styles.footer} gap={8}>
+                <Flexbox horizontal className={stylex.props(styles.footer).className} gap={8}>
                   <Button htmlType="submit" loading={loading} type="primary">
                     {t('common:save')}
                   </Button>
@@ -389,11 +359,11 @@ const Settings = ({
         {/* HTTP type notice */}
         {!isStdioType && (
           <div>
-            <div className={styles.sectionTitle}>
+            <div {...stylex.props(styles.sectionTitle)}>
               <Settings2Icon size={16} />
               {t('settings.configuration.title')}
             </div>
-            <div className={styles.emptyState}>
+            <div {...stylex.props(styles.emptyState)}>
               <Text type="secondary">{t('settings.httpTypeNotice')}</Text>
             </div>
           </div>

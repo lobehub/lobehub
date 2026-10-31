@@ -1,6 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,7 +19,7 @@ const LayerProfile = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
   return (
     <Block padding={0} variant={'outlined'}>
       <Flexbox>
-        <Text className={styles.profileTitle} type={'secondary'}>
+        <Text className={stylex.props(styles.profileTitle).className} type={'secondary'}>
           {t('profile.title')}
         </Text>
         {domain.layers.map((layer, index) => {
@@ -33,9 +34,13 @@ const LayerProfile = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
             counts.fresh ? t('profile.fresh', { count: counts.fresh }) : null,
           ].filter(Boolean);
           return (
-            <div className={styles.profileRow} key={layer.key}>
+            <div {...stylex.props(styles.profileRow)} key={layer.key}>
               <Flexbox horizontal align={'center'} gap={10} style={{ minWidth: 0 }}>
-                <Text className={styles.profileKey} fontSize={12} type={'secondary'}>
+                <Text
+                  className={stylex.props(styles.profileKey).className}
+                  fontSize={12}
+                  type={'secondary'}
+                >
                   {layerLabel(index)}
                 </Text>
                 <Text
@@ -48,18 +53,22 @@ const LayerProfile = memo<{ domain: ExpertiseDomainItem }>(({ domain }) => {
                   {layer.title}
                 </Text>
               </Flexbox>
-              <div className={styles.profileProgress}>
+              <div {...stylex.props(styles.profileProgress)}>
                 <TierBar counts={counts} total={habits.length} />
               </div>
               <Text
-                className={weak ? styles.accent : undefined}
+                className={weak ? stylex.props(styles.accent).className : undefined}
                 fontSize={13}
                 type={weak ? undefined : 'secondary'}
                 weight={weak ? 600 : undefined}
               >
                 {t(`profile.word.${word}`)}
               </Text>
-              <Text className={styles.profileCounts} fontSize={12.5} type={'secondary'}>
+              <Text
+                className={stylex.props(styles.profileCounts).className}
+                fontSize={12.5}
+                type={'secondary'}
+              >
                 {parts.join(' · ')}
               </Text>
             </div>

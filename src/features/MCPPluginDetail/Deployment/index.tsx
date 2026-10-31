@@ -4,8 +4,6 @@ import {
   Accordion,
   ActionIcon,
   Block,
-  createStaticStyles,
-  cssVar,
   Divider,
   Empty,
   Flexbox,
@@ -15,6 +13,8 @@ import {
   Steps,
   Tag,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { startCase } from 'es-toolkit/compat';
 import {
   CheckIcon,
@@ -39,13 +39,7 @@ import CollapseLayout from '../CollapseLayout';
 import { useDetailContext } from '../DetailProvider';
 import Platform from './Platform';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    code: css`
-      font-family: ${cssVar.fontFamilyCode};
-    `,
-  };
-});
+const styles = stylex.create({ code: { fontFamily: cssVar.fontFamilyCode } });
 
 const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation(['discover', 'plugin']);
@@ -202,7 +196,7 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                           dataIndex: 'name',
                           render: (_, record) => (
                             <span
-                              className={styles.code}
+                              className={stylex.props(styles.code).className}
                               style={{
                                 color: cssVar.gold,
                               }}
@@ -214,7 +208,9 @@ const Deployment = memo<{ mobile?: boolean }>(({ mobile }) => {
                         },
                         {
                           dataIndex: 'type',
-                          render: (_, record) => <Tag className={styles.code}>{record.type}</Tag>,
+                          render: (_, record) => (
+                            <Tag className={stylex.props(styles.code).className}>{record.type}</Tag>
+                          ),
                           title: t('mcp.details.deployment.table.type'),
                         },
                         {

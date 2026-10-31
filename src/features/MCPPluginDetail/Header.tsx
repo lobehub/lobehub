@@ -5,8 +5,6 @@ import {
   ActionIcon,
   Avatar,
   Button,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   stopPropagation,
@@ -16,6 +14,8 @@ import {
   Tooltip,
   useResponsive,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BookmarkIcon,
   BookmarkMinusIcon,
@@ -43,20 +43,9 @@ import InstallationIcon from '../../components/MCPDepsIcon';
 import PublishedTime from '../../components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    desc: css`
-      color: ${cssVar.colorTextSecondary};
-    `,
-    time: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
-    `,
-    version: css`
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 13px;
-    `,
-  };
+const styles = stylex.create({
+  time: { fontSize: '12px', color: cssVar.colorTextDescription },
+  version: { fontFamily: cssVar.fontFamilyCode, fontSize: '13px' },
 });
 
 const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile, inModal }) => {
@@ -223,7 +212,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             </Flexbox>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
-            <div className={styles.version}>{version}</div>
+            <div {...stylex.props(styles.version)}>{version}</div>
             <Icon icon={DotIcon} />
             {author?.url ? (
               <a href={author?.url} rel="noreferrer" target={'_blank'}>
@@ -234,7 +223,10 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             )}
             {isClaimed && <Tag size={'small'}>{t('isClaimed')}</Tag>}
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={(updatedAt || createdAt) as string} />
+            <PublishedTime
+              className={stylex.props(styles.time).className}
+              date={(updatedAt || createdAt) as string}
+            />
           </Flexbox>
         </Flexbox>
       </Flexbox>

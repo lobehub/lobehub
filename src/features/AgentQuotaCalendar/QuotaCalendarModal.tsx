@@ -2,7 +2,7 @@
 
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { projectWindows } from '@lobechat/heterogeneous-agents/quota';
-import { createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   createModal,
@@ -11,12 +11,16 @@ import {
   Skeleton,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import { t as i18nT } from 'i18next';
 import { BanIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import {
   buildBurnSeries,
@@ -48,288 +52,243 @@ import {
 } from './quotaCalendarModel';
 import { useQuotaCalendarHistory } from './useQuotaCalendarHistory';
 
-const styles = createStaticStyles(({ css }) => ({
-  calendarGrid: css`
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 4px;
-  `,
-  /**
-   * Windows on the left, the month calendar on the right. Both are 7-column
-   * grids, so they get an even split — narrower than this and the day cells
-   * clip their cost badge.
-   */
-  layout: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
-    align-items: start;
-
-    /* Nothing to pair the calendar with, so let it take the whole width. */
-    &[data-single='true'] {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    @container quota-calendar (width < 900px) {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  `,
-  root: css`
-    container-name: quota-calendar;
-    container-type: inline-size;
-  `,
-  chartFrame: css`
-    padding: 4px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  /** The lead number of a day cell: what the day cost. */
-  cost: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    line-height: 16px;
-    text-overflow: ellipsis;
-
-    /* "at least $404" must stay one line — a wrap pushes it out of the cell. */
-    white-space: nowrap;
-  `,
-  /**
-   * The cell is the only surface here — no panel behind it — so it carries a
-   * fill of its own. Intensity stays on the corner dot, not on this tint.
-   */
-  dayCell: css`
-    position: relative;
-
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-
-    height: 58px;
-    padding-block: 4px;
-    padding-inline: 6px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-
-    background: ${cssVar.colorFillQuaternary};
-
-    &[data-in-month='false'] {
-      opacity: 0.35;
-    }
-
-    /* The date labels the cell; the number below it carries the information. */
-    & [data-day-number] {
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    /* Rate limited: the provider refused work that day — an error state, not heat. */
-    &[data-rate-limited='true'] {
-      color: ${cssVar.colorErrorText};
-      background: ${cssVar.colorErrorBg};
-    }
-
-    /* A refused day states itself in one colour, date and volume included. */
-    &[data-rate-limited='true'] [data-day-number],
-    &[data-rate-limited='true'] [data-day-secondary] {
-      color: inherit;
-    }
-
-    /* Today is a marker, not an alarm — the lightest ring that still reads. */
-    &[data-today='true'] {
-      box-shadow: inset 0 0 0 1px ${cssVar.colorPrimaryBorder};
-    }
-  `,
-  dayFooter: css`
-    display: flex;
-    gap: 4px;
-    align-items: flex-end;
-    justify-content: space-between;
-
-    min-height: 14px;
-  `,
-  heatDot: css`
-    position: absolute;
-    inset-block-start: 6px;
-    inset-inline-end: 6px;
-
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-
-    opacity: 0.45;
-    background: ${cssVar.colorSuccess};
-
-    &[data-heat='2'] {
-      width: 6px;
-      height: 6px;
-      opacity: 0.65;
-    }
-
-    &[data-heat='3'] {
-      width: 8px;
-      height: 8px;
-      opacity: 0.82;
-    }
-
-    &[data-heat='4'] {
-      width: 10px;
-      height: 10px;
-      opacity: 1;
-    }
-
-    &[data-legend='true'] {
-      position: relative;
-      inset: auto;
-      flex: none;
-    }
-  `,
-  legendSwatch: css`
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
-    background: ${cssVar.colorFillQuaternary};
-
-    &[data-rate-limited='true'] {
-      background: ${cssVar.colorErrorBg};
-    }
-  `,
-  capacityRing: css`
-    position: relative;
-
-    display: grid;
-    flex: none;
-    place-items: center;
-
-    width: 54px;
-    height: 54px;
-
-    color: ${cssVar.colorSuccess};
-
-    &[data-status='warning'] {
-      color: ${cssVar.colorWarning};
-    }
-
-    &[data-status='error'] {
-      color: ${cssVar.colorError};
-    }
-  `,
-  capacityRingLabel: css`
-    position: absolute;
-
-    font-size: 13px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: currentcolor;
-  `,
-  capacityRingSvg: css`
-    transform: rotate(-90deg);
-    display: block;
-    width: 100%;
-    height: 100%;
-  `,
-  statusExhausted: css`
-    font-size: 12px;
-    color: ${cssVar.colorErrorText};
-  `,
-  /* A forecast is a warning, not a failure — the quota has not run out yet. */
-  statusForecast: css`
-    font-size: 12px;
-    color: ${cssVar.colorWarningText};
-  `,
-  statusSafe: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  /** Backs up the cost with the volume behind it. */
-  tokens: css`
-    font-size: 10px;
-    font-variant-numeric: tabular-nums;
-    line-height: 14px;
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-  `,
-  capacityFill: css`
-    height: 100%;
-    border-radius: inherit;
-    background: ${cssVar.colorSuccess};
-
-    &[data-status='warning'] {
-      background: ${cssVar.colorWarning};
-    }
-
-    &[data-status='error'] {
-      background: ${cssVar.colorError};
-    }
-  `,
-  capacityTrack: css`
-    overflow: hidden;
-
-    width: 100%;
-    height: 5px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  windowCell: css`
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-
-    min-width: 0;
-    height: 38px;
-    padding: 4px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-size: 10px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.2;
-    color: ${cssVar.colorTextSecondary};
-
-    /* "09:42 100%" is one unit — wrapping it splits the percentage in half. */
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillQuaternary};
-
-    &[data-rate-limited='true'] {
-      color: ${cssVar.colorErrorText};
-      background: ${cssVar.colorErrorBg};
-    }
-  `,
-  windowGrid: css`
-    display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 4px;
-  `,
-  /**
-   * One line per window — the row is a scannable comparison, not a card. Six
-   * filled rows running would read as a block of surfaces, so the rows are
-   * separated by rules instead. The rule is translucent: it sits straight on the
-   * modal surface, and in dark mode the solid secondary border is that surface's
-   * exact colour.
-   */
-  windowListRow: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(110px, 1fr) minmax(0, 1fr);
-    gap: 12px;
-    align-items: center;
-
-    min-height: 30px;
-    padding-block: 5px;
-    padding-inline: 2px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorSplit};
-    }
-  `,
-  weekday: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({
+  calendarGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+    gap: '4px',
+  },
+  // Windows on the left, the month calendar on the right. Both are 7-column
+  // grids, so they get an even split — narrower than this and the day cells
+  // clip their cost badge.
+  layout: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'minmax(0, 1fr) minmax(0, 1fr)',
+      // Nothing to pair the calendar with, so let it take the whole width.
+      '[data-single="true"]': 'minmax(0, 1fr)',
+      '@container quota-calendar (width < 900px)': 'minmax(0, 1fr)',
+    },
+    gap: '16px',
+    alignItems: 'start',
+  },
+  root: {
+    containerName: 'quota-calendar',
+    containerType: 'inline-size',
+  },
+  chartFrame: {
+    padding: '4px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  // The lead number of a day cell: what the day cost.
+  cost: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: '16px',
+    textOverflow: 'ellipsis',
+    // "at least $404" must stay one line — a wrap pushes it out of the cell.
+    whiteSpace: 'nowrap',
+  },
+  // The cell is the only surface here — no panel behind it — so it carries a
+  // fill of its own. Intensity stays on the corner dot, not on this tint.
+  dayCell: {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    height: '58px',
+    paddingBlock: '4px',
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    // Rate limited: the provider refused work that day — an error state, not heat.
+    color: { 'default': null, '[data-rate-limited="true"]': cssVar.colorErrorText },
+    backgroundColor: {
+      'default': cssVar.colorFillQuaternary,
+      '[data-rate-limited="true"]': cssVar.colorErrorBg,
+    },
+    backgroundImage: 'none',
+    opacity: { 'default': null, '[data-in-month="false"]': 0.35 },
+    // Today is a marker, not an alarm — the lightest ring that still reads.
+    boxShadow: {
+      'default': null,
+      '[data-today="true"]': `inset 0 0 0 1px ${cssVar.colorPrimaryBorder}`,
+    },
+  },
+  // The date labels the cell; the number below it carries the information.
+  dayNumber: {
+    color: cssVar.colorTextSecondary,
+  },
+  // A refused day states itself in one colour, date and volume included.
+  inheritColor: {
+    color: 'inherit',
+  },
+  dayFooter: {
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    minHeight: '14px',
+  },
+  heatDot: {
+    position: { 'default': 'absolute', '[data-legend="true"]': 'relative' },
+    insetBlockStart: { 'default': '6px', '[data-legend="true"]': 'auto' },
+    insetInlineEnd: { 'default': '6px', '[data-legend="true"]': 'auto' },
+    insetBlockEnd: { 'default': null, '[data-legend="true"]': 'auto' },
+    insetInlineStart: { 'default': null, '[data-legend="true"]': 'auto' },
+    flex: { 'default': null, '[data-legend="true"]': 'none' },
+    width: {
+      'default': '4px',
+      '[data-heat="2"]': '6px',
+      '[data-heat="3"]': '8px',
+      '[data-heat="4"]': '10px',
+    },
+    height: {
+      'default': '4px',
+      '[data-heat="2"]': '6px',
+      '[data-heat="3"]': '8px',
+      '[data-heat="4"]': '10px',
+    },
+    borderRadius: '50%',
+    opacity: {
+      'default': 0.45,
+      '[data-heat="2"]': 0.65,
+      '[data-heat="3"]': 0.82,
+      '[data-heat="4"]': 1,
+    },
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+  },
+  legendSwatch: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '3px',
+    backgroundColor: {
+      'default': cssVar.colorFillQuaternary,
+      '[data-rate-limited="true"]': cssVar.colorErrorBg,
+    },
+    backgroundImage: 'none',
+  },
+  capacityRing: {
+    position: 'relative',
+    display: 'grid',
+    flex: 'none',
+    placeItems: 'center',
+    width: '54px',
+    height: '54px',
+    color: {
+      'default': cssVar.colorSuccess,
+      '[data-status="warning"]': cssVar.colorWarning,
+      '[data-status="error"]': cssVar.colorError,
+    },
+  },
+  capacityRingLabel: {
+    position: 'absolute',
+    fontSize: '13px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    color: 'currentcolor',
+  },
+  capacityRingSvg: {
+    transform: 'rotate(-90deg)',
+    display: 'block',
+    width: '100%',
+    height: '100%',
+  },
+  statusExhausted: {
+    fontSize: '12px',
+    color: cssVar.colorErrorText,
+  },
+  // A forecast is a warning, not a failure — the quota has not run out yet.
+  statusForecast: {
+    fontSize: '12px',
+    color: cssVar.colorWarningText,
+  },
+  statusSafe: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  // Backs up the cost with the volume behind it.
+  tokens: {
+    fontSize: '10px',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: '14px',
+    color: cssVar.colorTextTertiary,
+    whiteSpace: 'nowrap',
+  },
+  capacityFill: {
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: {
+      'default': cssVar.colorSuccess,
+      '[data-status="warning"]': cssVar.colorWarning,
+      '[data-status="error"]': cssVar.colorError,
+    },
+    backgroundImage: 'none',
+  },
+  capacityTrack: {
+    overflow: 'hidden',
+    width: '100%',
+    height: '5px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  windowCell: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+    minWidth: '0',
+    height: '38px',
+    padding: '4px',
+    borderRadius: cssVar.borderRadiusSM,
+    fontSize: '10px',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.2,
+    color: {
+      'default': cssVar.colorTextSecondary,
+      '[data-rate-limited="true"]': cssVar.colorErrorText,
+    },
+    // "09:42 100%" is one unit — wrapping it splits the percentage in half.
+    whiteSpace: 'nowrap',
+    backgroundColor: {
+      'default': cssVar.colorFillQuaternary,
+      '[data-rate-limited="true"]': cssVar.colorErrorBg,
+    },
+    backgroundImage: 'none',
+  },
+  windowGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+    gap: '4px',
+  },
+  // One line per window — the row is a scannable comparison, not a card. Six
+  // filled rows running would read as a block of surfaces, so the rows are
+  // separated by rules instead. The rule is translucent: it sits straight on the
+  // modal surface, and in dark mode the solid secondary border is that surface's
+  // exact colour.
+  windowListRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1.1fr) minmax(110px, 1fr) minmax(0, 1fr)',
+    gap: '12px',
+    alignItems: 'center',
+    minHeight: '30px',
+    paddingBlock: '5px',
+    paddingInline: '2px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorSplit },
+  },
+  weekday: {
+    fontSize: '11px',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'center',
+  },
+});
 
 const toMs = (value: Date | number | string | null | undefined): number | null =>
   value == null ? null : new Date(value).getTime();
@@ -459,19 +418,19 @@ const BurnChart = memo<{
           </Flexbox>
         </Flexbox>
         <span
-          className={
+          {...stylex.props(
             exhausted
               ? styles.statusExhausted
               : willExhaust
                 ? styles.statusForecast
-                : styles.statusSafe
-          }
+                : styles.statusSafe,
+          )}
         >
           {statusText}
         </span>
       </Flexbox>
 
-      <div className={styles.chartFrame}>
+      <div {...stylex.props(styles.chartFrame)}>
         <svg
           height={CHART_H}
           preserveAspectRatio={'none'}
@@ -556,11 +515,11 @@ const CapacityRing = memo<{ utilization: number }>(({ utilization }) => {
       aria-valuemax={100}
       aria-valuemin={0}
       aria-valuenow={Math.round(utilization)}
-      className={styles.capacityRing}
+      {...stylex.props(styles.capacityRing)}
       data-status={utilizationStatusOf(utilization)}
       role={'meter'}
     >
-      <svg className={styles.capacityRingSvg} viewBox={'0 0 54 54'}>
+      <svg {...stylex.props(styles.capacityRingSvg)} viewBox={'0 0 54 54'}>
         <circle
           cx={27}
           cy={27}
@@ -581,7 +540,7 @@ const CapacityRing = memo<{ utilization: number }>(({ utilization }) => {
           strokeWidth={5}
         />
       </svg>
-      <span className={styles.capacityRingLabel}>{Math.round(utilization)}%</span>
+      <span {...stylex.props(styles.capacityRingLabel)}>{Math.round(utilization)}%</span>
     </div>
   );
 });
@@ -594,13 +553,14 @@ const CapacityMeter = memo<{ utilization: number }>(({ utilization }) => (
     aria-valuemax={100}
     aria-valuemin={0}
     aria-valuenow={Math.round(utilization)}
-    className={styles.capacityTrack}
+    {...stylex.props(styles.capacityTrack)}
     role={'meter'}
   >
     <div
-      className={styles.capacityFill}
+      {...sx([styles.capacityFill], undefined, {
+        width: `${Math.min(100, Math.max(0, utilization))}%`,
+      })}
       data-status={utilizationStatusOf(utilization)}
-      style={{ width: `${Math.min(100, Math.max(0, utilization))}%` }}
     />
   </div>
 ));
@@ -644,20 +604,21 @@ const WindowHistory = memo<{
             {t('heteroAgent.claudeQuota.calendar.sessionHistoryHint')}
           </Text>
         </Flexbox>
-        <div className={styles.windowGrid}>
+        <div {...stylex.props(styles.windowGrid)}>
           {grid.columns.map((column) => (
-            <div className={styles.weekday} key={column.key}>
+            <div {...stylex.props(styles.weekday)} key={column.key}>
               {column.date.format('dd M/D')}
             </div>
           ))}
           {Array.from({ length: grid.rowCount }, (_, row) =>
             grid.columns.map((column) => {
               const stat = column.slots[row];
-              if (!stat) return <div className={styles.windowCell} key={`${column.key}-${row}`} />;
+              if (!stat)
+                return <div {...stylex.props(styles.windowCell)} key={`${column.key}-${row}`} />;
 
               const cell = (
                 <div
-                  className={styles.windowCell}
+                  {...stylex.props(styles.windowCell)}
                   data-rate-limited={stat.rateLimitedAt != null}
                   key={`${column.key}-${stat.resetsAt}`}
                 >
@@ -704,7 +665,7 @@ const WindowHistory = memo<{
       </Flexbox>
       <Flexbox>
         {stats.map((stat) => (
-          <div className={styles.windowListRow} key={stat.resetsAt}>
+          <div {...stylex.props(styles.windowListRow)} key={stat.resetsAt}>
             <Flexbox horizontal align={'baseline'} gap={6}>
               <Text style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
                 {dayjs(stat.windowStartAt).format('M/D')} – {dayjs(stat.resetsAt).format('M/D')}
@@ -921,8 +882,8 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider })
   const hasWindowColumn = Boolean(chartWindow) || windowStats.length > 0;
 
   return (
-    <div className={styles.root}>
-      <div className={styles.layout} data-single={!hasWindowColumn}>
+    <div {...stylex.props(styles.root)}>
+      <div {...stylex.props(styles.layout)} data-single={!hasWindowColumn}>
         <Flexbox gap={16}>
           {/* The series switcher heads the window column, so the calendar beside
               it starts at the body top instead of below a full-width control. */}
@@ -979,9 +940,9 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider })
             </Flexbox>
           </Flexbox>
 
-          <div className={styles.calendarGrid}>
+          <div {...stylex.props(styles.calendarGrid)}>
             {weekdayLabels.map((label) => (
-              <div className={styles.weekday} key={label}>
+              <div {...stylex.props(styles.weekday)} key={label}>
                 {label}
               </div>
             ))}
@@ -1010,18 +971,23 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider })
 
               const day = (
                 <div
-                  className={styles.dayCell}
+                  {...stylex.props(styles.dayCell)}
                   data-in-month={cell.inMonth}
                   data-rate-limited={rateLimited}
                   data-today={cell.key === todayKey}
                   key={cell.key}
                 >
-                  <span data-day-number>{cell.date.date()}</span>
+                  <span
+                    data-day-number
+                    {...stylex.props(styles.dayNumber, rateLimited && styles.inheritColor)}
+                  >
+                    {cell.date.date()}
+                  </span>
                   {shouldShowHeatDot(heatLevel, rateLimited) && (
-                    <span aria-hidden className={styles.heatDot} data-heat={heatLevel} />
+                    <span aria-hidden {...stylex.props(styles.heatDot)} data-heat={heatLevel} />
                   )}
-                  <span className={styles.dayFooter}>
-                    <span className={styles.cost}>{primary}</span>
+                  <span {...stylex.props(styles.dayFooter)}>
+                    <span {...stylex.props(styles.cost)}>{primary}</span>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                       {rateLimited && <Icon color={cssVar.colorError} icon={BanIcon} size={12} />}
                       {resetsAt && (
@@ -1030,7 +996,10 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider })
                     </span>
                   </span>
                   {secondary && (
-                    <span data-day-secondary className={styles.tokens}>
+                    <span
+                      data-day-secondary
+                      {...stylex.props(styles.tokens, rateLimited && styles.inheritColor)}
+                    >
                       {secondary}
                     </span>
                   )}
@@ -1054,7 +1023,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider })
               </Text>
               {[1, 2, 3, 4].map((level) => (
                 <span
-                  className={styles.heatDot}
+                  {...stylex.props(styles.heatDot)}
                   data-heat={level}
                   data-legend={'true'}
                   key={level}
@@ -1065,7 +1034,7 @@ const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider })
               </Text>
             </Flexbox>
             <Flexbox horizontal align={'center'} gap={4}>
-              <span className={styles.legendSwatch} data-rate-limited={'true'} />
+              <span {...stylex.props(styles.legendSwatch)} data-rate-limited={'true'} />
               <Icon color={cssVar.colorError} icon={BanIcon} size={11} />
               <Text style={{ fontSize: 11 }} type={'secondary'}>
                 {t('heteroAgent.claudeQuota.calendar.rateLimited')}

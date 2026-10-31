@@ -5,7 +5,7 @@ import {
   type AgentArtworkStyle,
   DEFAULT_AGENT_ARTWORK_STYLE,
 } from '@lobechat/prompts';
-import { Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -15,6 +15,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } from 'lucide-react';
 import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,155 +34,147 @@ import { agentArtworkSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
 import { useFileStore } from '@/store/file';
+import { sx } from '@/styles/sx';
 
+import { avatarEntryMarker, backgroundMarker } from './markers.stylex';
 import { avatarRemountKey, openFilePicker, resolveAgentBackground } from './utils';
 
 const MAX_ARTWORK_SIZE = 1024 * 1024;
 
-const styles = createStaticStyles(({ css }) => ({
-  avatar: css`
-    position: absolute;
-    z-index: 4;
-    inset-block-end: 0;
-    inset-inline-start: 24px;
-
-    border: 4px solid ${cssVar.colorBgContainer};
-    border-radius: calc(${cssVar.borderRadiusLG} + 4px);
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  avatarGenerating: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 3;
-    inset: 4px;
-
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 82%, transparent);
-    backdrop-filter: blur(8px);
-  `,
-  background: css`
-    position: relative;
-
-    overflow: hidden;
-
-    /* The cover bleeds flush to the pane edges, so rounded corners would leave
-       bare notches in the two narrow strips where it meets them. */
-    width: calc(100% + 32px);
-    height: 160px;
-    margin-inline: -16px;
-
-    background: transparent;
-    background-position: center;
-    background-size: cover;
-
-    transition: height ${cssVar.motionDurationMid};
-  `,
-  backgroundActions: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 12px;
-    inset-inline-end: 12px;
-
-    opacity: 0;
-
-    transition: opacity ${cssVar.motionDurationFast};
-
-    .agent-background:hover &,
-    .agent-background:focus-within & {
-      opacity: 1;
-    }
-  `,
-  compactBackground: css`
-    height: 80px;
-  `,
-  emptyBackgroundActions: css`
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    transition: opacity ${cssVar.motionDurationFast};
-
-    .agent-background:hover &,
-    .agent-background:focus-within & {
-      opacity: 1;
-    }
-  `,
-  emptyBackgroundHint: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  generationFeedback: css`
-    position: absolute;
-    z-index: 3;
-    inset: 0;
-
-    padding: 16px;
-
-    color: ${cssVar.colorText};
-
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent);
-    backdrop-filter: blur(12px);
-  `,
-  generationHint: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  generationActions: css`
-    margin-block-start: 4px;
-  `,
-  generationTitle: css`
-    font-weight: 500;
-  `,
-  generatedPreview: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  studioBadge: css`
-    position: absolute;
-    z-index: 5;
-    inset-block-end: -6px;
-    inset-inline-end: -6px;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    opacity: 0;
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    transition: opacity ${cssVar.motionDurationFast};
-
-    .agent-avatar-entry:hover &,
-    .agent-avatar-entry:focus-within & {
-      opacity: 1;
-    }
-  `,
-  visuallyHiddenInput: css`
-    pointer-events: none;
-
-    position: fixed;
-
-    overflow: hidden;
-
-    width: 1px;
-    height: 1px;
-
-    opacity: 0;
-  `,
-  scrim: css`
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, transparent 45%, rgb(0 0 0 / 16%));
-  `,
-}));
+const styles = stylex.create({
+  avatar: {
+    position: 'absolute',
+    zIndex: 4,
+    insetBlockEnd: 0,
+    insetInlineStart: '24px',
+    borderWidth: '4px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: `calc(${cssVar.borderRadiusLG} + 4px)`,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  avatarGenerating: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 3,
+    insetBlock: '4px',
+    insetInline: '4px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 82%, transparent)`,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(8px)',
+  },
+  background: {
+    position: 'relative',
+    overflow: 'hidden',
+    // The cover bleeds flush to the pane edges, so rounded corners would leave
+    // bare notches in the two narrow strips where it meets them.
+    width: 'calc(100% + 32px)',
+    height: '160px',
+    marginInline: '-16px',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    backgroundPosition: 'center',
+    backgroundSize: 'cover',
+    transition: `height ${cssVar.motionDurationMid}`,
+  },
+  backgroundActions: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: '12px',
+    insetInlineEnd: '12px',
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover', backgroundMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', backgroundMarker)]: 1,
+    },
+    transition: `opacity ${cssVar.motionDurationFast}`,
+  },
+  compactBackground: {
+    height: '80px',
+  },
+  emptyBackgroundActions: {
+    position: 'absolute',
+    insetBlock: 0,
+    insetInline: 0,
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover', backgroundMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', backgroundMarker)]: 1,
+    },
+    transition: `opacity ${cssVar.motionDurationFast}`,
+  },
+  emptyBackgroundHint: {
+    color: cssVar.colorTextSecondary,
+  },
+  generationFeedback: {
+    position: 'absolute',
+    zIndex: 3,
+    insetBlock: 0,
+    insetInline: 0,
+    padding: '16px',
+    color: cssVar.colorText,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent)`,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(12px)',
+  },
+  generationHint: {
+    fontSize: '13px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  generationActions: {
+    marginBlockStart: '4px',
+  },
+  generationTitle: {
+    fontWeight: 500,
+  },
+  generatedPreview: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  studioBadge: {
+    position: 'absolute',
+    zIndex: 5,
+    insetBlockEnd: '-6px',
+    insetInlineEnd: '-6px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover', avatarEntryMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', avatarEntryMarker)]: 1,
+    },
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+    transition: `opacity ${cssVar.motionDurationFast}`,
+  },
+  visuallyHiddenInput: {
+    pointerEvents: 'none',
+    position: 'fixed',
+    overflow: 'hidden',
+    width: '1px',
+    height: '1px',
+    opacity: 0,
+  },
+  scrim: {
+    position: 'absolute',
+    insetBlock: 0,
+    insetInline: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'linear-gradient(to bottom, transparent 45%, rgb(0 0 0 / 16%))',
+  },
+});
 
 interface AgentProfileArtworkProps {
   agentId: string;
@@ -370,23 +364,30 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
     return (
       <div style={{ paddingBlockEnd: 36, position: 'relative' }}>
         <div
-          className={`${styles.background} ${!backgroundUrl && !backgroundGenerationActive ? styles.compactBackground : ''} agent-background`}
-          style={{ backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined }}
+          {...sx(
+            [
+              styles.background,
+              !backgroundUrl && !backgroundGenerationActive && styles.compactBackground,
+              backgroundMarker,
+            ],
+            undefined,
+            { backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined },
+          )}
         >
-          {backgroundUrl ? <div className={styles.scrim} /> : null}
+          {backgroundUrl ? <div {...stylex.props(styles.scrim)} /> : null}
           {generating === 'background' ? (
-            <Center className={styles.generationFeedback}>
+            <Center className={stylex.props(styles.generationFeedback).className}>
               <Flexbox align={'center'} gap={10}>
                 <Spin size="large" variant="network" />
                 <Flexbox align={'center'} gap={4}>
-                  <Text className={styles.generationTitle}>
+                  <Text className={stylex.props(styles.generationTitle).className}>
                     {t('settingAgent.artwork.background.generating')}
                   </Text>
-                  <Text className={styles.generationHint}>
+                  <Text className={stylex.props(styles.generationHint).className}>
                     {t('settingAgent.artwork.generatingHint')}
                   </Text>
                   <Button
-                    className={styles.generationActions}
+                    className={stylex.props(styles.generationActions).className}
                     size={'small'}
                     type={'fill'}
                     onClick={() => void cancelAgentArtworkGeneration(agentId)}
@@ -397,7 +398,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
               </Flexbox>
             </Center>
           ) : generationError === 'background' ? (
-            <Center className={styles.generationFeedback}>
+            <Center className={stylex.props(styles.generationFeedback).className}>
               <Flexbox align={'center'} gap={10}>
                 <Text>{t('settingAgent.artwork.generateFailed')}</Text>
                 <Button
@@ -411,9 +412,9 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             </Center>
           ) : null}
           {!backgroundUrl && canEdit && !backgroundGenerationActive ? (
-            <Center className={styles.emptyBackgroundActions}>
+            <Center className={stylex.props(styles.emptyBackgroundActions).className}>
               <Flexbox align={'center'} gap={8}>
-                <Text className={styles.emptyBackgroundHint}>
+                <Text className={stylex.props(styles.emptyBackgroundHint).className}>
                   {t('settingAgent.artwork.background.emptyHint')}
                 </Text>
                 <Flexbox horizontal gap={8}>
@@ -451,7 +452,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           {canEdit && !backgroundGenerationActive ? (
             <Flexbox
               horizontal
-              className={styles.backgroundActions}
+              className={stylex.props(styles.backgroundActions).className}
               gap={4}
               style={{ display: backgroundUrl ? undefined : 'none' }}
             >
@@ -471,7 +472,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             </Flexbox>
           ) : null}
         </div>
-        <div className={`${styles.avatar} agent-avatar-entry`}>
+        <div {...stylex.props(styles.avatar, avatarEntryMarker)}>
           {/* Uploading an image lives in the studio, so the picker keeps only
               emoji plus the studio launcher tab; the launcher tab is ordered
               first and auto-selected on open, preserving the old generate-tab
@@ -511,7 +512,10 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                 ),
                 render: () => (
                   <Flexbox gap={16} padding={20} width={348}>
-                    <Center className={styles.generatedPreview} height={156}>
+                    <Center
+                      className={stylex.props(styles.generatedPreview).className}
+                      height={156}
+                    >
                       <AgentAvatar
                         agentId={agentId}
                         avatar={avatar}
@@ -544,7 +548,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             }}
           />
           {generating === 'avatar' ? (
-            <Center className={styles.avatarGenerating}>
+            <Center className={stylex.props(styles.avatarGenerating).className}>
               <Spin size="middle" variant="network" />
             </Center>
           ) : null}
@@ -552,7 +556,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
           {canEdit ? (
             <Tooltip title={t('settingAgent.artwork.studio.open')}>
               <ActionIcon
-                className={styles.studioBadge}
+                className={stylex.props(styles.studioBadge).className}
                 icon={WandSparkles}
                 size={'small'}
                 onClick={() => openAgentArtworkStudio(agentId)}
@@ -563,7 +567,7 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
         <input
           accept="image/*"
           aria-label={t('settingAgent.artwork.background.upload')}
-          className={styles.visuallyHiddenInput}
+          {...stylex.props(styles.visuallyHiddenInput)}
           id={backgroundInputId}
           ref={backgroundInputRef}
           tabIndex={-1}

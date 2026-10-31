@@ -1,15 +1,6 @@
 'use client';
 
-import {
-  ActionIcon,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  Popover,
-  Select,
-  Switch,
-  Tabs,
-} from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Popover, Select, Switch, Tabs } from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import {
   ArrowDownWideNarrow,
@@ -23,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
+import styles from './ListConfig.module.css';
 import type { AgentGroupBy, AgentListViewOptions, AgentOrderBy } from './listViewOptions';
 
 type ViewMode = 'card' | 'list';
@@ -35,18 +27,6 @@ interface ListConfigProps {
   showAuthor?: boolean;
   viewMode: ViewMode;
 }
-
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    form: css`
-      label,
-      label * {
-        font-size: 13px !important;
-        color: ${cssVar.colorTextSecondary} !important;
-      }
-    `,
-  };
-});
 
 const ListConfig = memo<ListConfigProps>(
   ({ options, setOptions, setViewMode, showAuthor, viewMode }) => {

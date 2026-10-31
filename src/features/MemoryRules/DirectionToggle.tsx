@@ -1,7 +1,9 @@
 'use client';
 
 import type { ExpertiseRuleDirection } from '@lobechat/types';
-import { cx, Icon, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BanIcon, CircleDashedIcon, type LucideIcon, SparklesIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,7 +36,7 @@ const DirectionToggle = ({ disabled, onChange, value }: DirectionToggleProps) =>
   return (
     <Tooltip title={hint}>
       <span
-        className={cx(
+        {...stylex.props(
           styles.modeBtn,
           value === 'positive' && styles.directionPositive,
           value === 'negative' && styles.directionNegative,
@@ -45,7 +47,17 @@ const DirectionToggle = ({ disabled, onChange, value }: DirectionToggleProps) =>
           if (!disabled) onChange(value === 'positive' ? 'negative' : 'positive');
         }}
       >
-        <Icon icon={DIRECTION_ICON[key]} size={13} />
+        <Icon
+          icon={DIRECTION_ICON[key]}
+          size={13}
+          color={
+            value === 'positive'
+              ? cssVar.colorSuccess
+              : value === 'negative'
+                ? cssVar.colorError
+                : undefined
+          }
+        />
         {value ? t(`rules.direction.${value}`) : '—'}
       </span>
     </Tooltip>

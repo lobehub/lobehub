@@ -1,0 +1,4 @@
+/* The action is a caller-supplied node, so StyleX cannot reach it. */
+.rowAction > * {
+  min-inline-size: 72px;
+}

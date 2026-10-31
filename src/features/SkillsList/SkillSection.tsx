@@ -1,4 +1,6 @@
-import { Accordion, Center, createStaticStyles, Flexbox, Spin, Text } from '@lobehub/ui';
+import { Accordion, Center, Flexbox, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, useState } from 'react';
 
 import AsyncError from '@/components/AsyncError';
@@ -32,24 +34,12 @@ export interface SkillSectionProps {
   sectionHeader?: SkillSectionHeader;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  count: css`
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  empty: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  flatHeader: css`
-    padding-inline: 4px;
-  `,
-  label: css`
-    font-size: 12px;
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  count: { fontSize: '12px', fontVariantNumeric: 'tabular-nums', color: cssVar.colorTextTertiary },
+  empty: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  flatHeader: { paddingInline: '4px' },
+  label: { fontSize: '12px', fontWeight: 500 },
+});
 
 const ITEM_KEY = 'skill-section';
 
@@ -60,10 +50,10 @@ interface HeaderRowProps {
 
 const HeaderRow = memo<HeaderRowProps>(({ count, title }) => (
   <Flexbox horizontal align={'center'} gap={6}>
-    <Text className={styles.label} type={'secondary'}>
+    <Text className={stylex.props(styles.label).className} type={'secondary'}>
       {title}
     </Text>
-    {typeof count === 'number' && count > 0 && <span className={styles.count}>{count}</span>}
+    {typeof count === 'number' && count > 0 && <span {...stylex.props(styles.count)}>{count}</span>}
   </Flexbox>
 ));
 
@@ -97,7 +87,7 @@ const Body = memo<BodyProps>(({ children, emptyText, error, isEmpty, isLoading, 
   if (isEmpty) {
     return (
       <Center paddingBlock={8}>
-        <Text className={styles.empty}>{emptyText}</Text>
+        <Text className={stylex.props(styles.empty).className}>{emptyText}</Text>
       </Center>
     );
   }
@@ -130,7 +120,7 @@ const SkillSection = memo<SkillSectionProps>(
     if (!collapsible) {
       return (
         <Flexbox gap={4}>
-          <div className={styles.flatHeader}>
+          <div {...stylex.props(styles.flatHeader)}>
             <HeaderRow count={count} title={title} />
           </div>
           {body}

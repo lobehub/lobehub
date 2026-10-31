@@ -6,9 +6,6 @@ import {
   Avatar,
   Button,
   Center,
-  createStaticStyles,
-  cssVar,
-  cx,
   DropdownMenu,
   Empty,
   Flexbox,
@@ -19,6 +16,8 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
@@ -71,34 +70,25 @@ interface GroupHeaderProps {
 
 // Linear-style group header: a full-width subtle bar with chevron +
 // identity (color dot / avatar) + name + count.
-const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
-  bar: css`
-    cursor: pointer;
-    user-select: none;
-
-    width: 100%;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    transition: background 0.15s;
-  `,
-  // Alternating tints (mirrors Linear's group striping).
-  barEven: css`
-    background: ${cssVar.colorFillQuaternary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  barOdd: css`
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+const groupHeaderStyles = stylex.create({
+  bar: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    width: '100%',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    transition: 'background 0.15s',
+  },
+  barEven: {
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  barOdd: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+});
 
 const GroupHeader = memo<GroupHeaderProps>(
   ({ avatar, collapsed, color, count, index, label, onToggle }) => (
@@ -106,10 +96,12 @@ const GroupHeader = memo<GroupHeaderProps>(
       horizontal
       align={'center'}
       gap={8}
-      className={cx(
-        groupHeaderStyles.bar,
-        index % 2 === 0 ? groupHeaderStyles.barEven : groupHeaderStyles.barOdd,
-      )}
+      className={
+        stylex.props(
+          groupHeaderStyles.bar,
+          index % 2 === 0 ? groupHeaderStyles.barEven : groupHeaderStyles.barOdd,
+        ).className
+      }
       onClick={onToggle}
     >
       <Icon

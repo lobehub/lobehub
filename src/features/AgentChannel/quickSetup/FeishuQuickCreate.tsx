@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Button,
-  CopyButton,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  QRCode,
-  Spin,
-  Text,
-} from '@lobehub/ui';
+import { Button, CopyButton, Flexbox, Icon, QRCode, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ExternalLinkIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,21 +17,23 @@ export type { FeishuCreatedApp } from './useCreatedAppSave';
 
 const QR_SIZE = 148;
 
-const styles = createStaticStyles(({ css }) => ({
-  qrSlot: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: ${QR_SIZE + 16}px;
-    height: ${QR_SIZE + 16}px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: #fff;
-  `,
-}));
+const styles = stylex.create({
+  qrSlot: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // QR_SIZE + 16
+    width: '164px',
+    height: '164px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: '#fff',
+    backgroundImage: 'none',
+  },
+});
 
 interface FeishuQuickCreateProps {
   appPreset?: { avatar?: string; desc?: string; name?: string };
@@ -153,7 +147,7 @@ const FeishuQuickCreate = memo<FeishuQuickCreateProps>(
         gap={20}
         wrap={'wrap'}
       >
-        <div className={styles.qrSlot}>
+        <div {...stylex.props(styles.qrSlot)}>
           {beginning || !session ? (
             failure ? null : (
               <Spin />

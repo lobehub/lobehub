@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import { sx } from '@/styles/sx';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { useDetailContext } from '../DetailProvider';
@@ -46,7 +47,7 @@ const Prompts = memo<PromptsProps>(({ mode, activeKey = [], setActiveKey }) => {
                   {
                     dataIndex: 'name',
                     render: (_, record) => (
-                      <span className={styles.code} style={{ color: cssVar.gold }}>
+                      <span {...sx([styles.code], undefined, { color: cssVar.gold })}>
                         {record.name}
                       </span>
                     ),

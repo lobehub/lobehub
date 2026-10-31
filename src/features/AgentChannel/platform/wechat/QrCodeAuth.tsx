@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Alert,
-  Button,
-  type ButtonProps,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  QRCode,
-  Spin,
-  Text,
-} from '@lobehub/ui';
+import { Alert, Button, type ButtonProps, Flexbox, Icon, QRCode, Spin, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { InfoIcon, QrCode, RefreshCw } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,40 +13,27 @@ const QR_CODE_SIZE = 188;
 const QR_POLL_INTERVAL_MS = 2000;
 const QR_SLOT_SIZE = 240;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  auth: css`
-    align-items: center;
-    width: 100%;
-  `,
-  error: css`
-    align-items: center;
-    width: 100%;
-  `,
-  qrSlot: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: ${QR_SLOT_SIZE}px;
-    height: ${QR_SLOT_SIZE}px;
-    padding: 9px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  status: css`
-    min-height: 20px;
-    font-size: 13px;
-    text-align: center;
-  `,
-  tips: css`
-    max-width: 480px;
-    font-size: 13px;
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({
+  auth: { alignItems: 'center', width: '100%' },
+  error: { alignItems: 'center', width: '100%' },
+  qrSlot: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: `${QR_SLOT_SIZE}px`,
+    height: `${QR_SLOT_SIZE}px`,
+    padding: '9px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  status: { minHeight: '20px', fontSize: '13px', textAlign: 'center' },
+  tips: { maxWidth: '480px', fontSize: '13px', textAlign: 'center' },
+});
 
 interface WechatCredentials {
   botId: string;
@@ -157,8 +136,8 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
         : '';
 
     return (
-      <Flexbox className={styles.auth} gap={12}>
-        <div className={styles.qrSlot}>
+      <Flexbox className={stylex.props(styles.auth).className} gap={12}>
+        <div {...stylex.props(styles.qrSlot)}>
           {state.stage === 'idle' && (
             <Button
               disabled={disabled}
@@ -172,7 +151,7 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
           {state.stage === 'loading' && <Spin size="large" />}
           {state.stage === 'ready' && <QRCode size={QR_CODE_SIZE} value={state.imageUrl} />}
           {state.stage === 'error' && (
-            <Flexbox className={styles.error} gap={12}>
+            <Flexbox className={stylex.props(styles.error).className} gap={12}>
               <Alert showIcon message={state.message} type="warning" />
               <Button
                 disabled={disabled}
@@ -186,12 +165,12 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
           )}
         </div>
 
-        <Text className={styles.status} type="secondary">
+        <Text className={stylex.props(styles.status).className} type="secondary">
           {statusText}
         </Text>
 
         {showTips && (
-          <Text className={styles.tips} type="secondary">
+          <Text className={stylex.props(styles.tips).className} type="secondary">
             <Icon icon={InfoIcon} style={{ marginInlineEnd: 4 }} />
             {t('channel.wechatTips')}
           </Text>

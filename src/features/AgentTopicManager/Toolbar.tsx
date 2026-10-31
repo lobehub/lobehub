@@ -3,8 +3,6 @@
 import {
   ActionIcon,
   confirmModal,
-  createStaticStyles,
-  cssVar,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
@@ -14,6 +12,8 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Archive,
   CalendarRange,
@@ -52,110 +52,113 @@ import type {
 const CONTROL_HEIGHT = 32;
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
 
-const styles = createStaticStyles(({ css }) => ({
-  addPill: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    height: ${CONTROL_HEIGHT}px;
-    padding-inline: 12px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${CONTROL_HEIGHT / 2}px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    transition: all 0.15s;
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-      color: ${cssVar.colorText};
-    }
-  `,
-  chip: css`
-    display: inline-flex;
-    align-items: stretch;
-
-    height: ${CONTROL_HEIGHT}px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${CONTROL_HEIGHT / 2}px;
-
-    background: ${cssVar.colorFillTertiary};
-
-    transition: border-color 0.15s;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  chipClose: css`
-    all: unset;
-
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-
-    padding-inline: 8px 12px;
-    border-start-end-radius: ${CONTROL_HEIGHT / 2}px;
-    border-end-end-radius: ${CONTROL_HEIGHT / 2}px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  chipMain: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 0;
-    padding-inline: 12px 6px;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-  `,
-  chipValue: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  divider: css`
-    width: 1px;
-    height: 16px;
-    margin-inline: 4px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  sortPill: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    height: ${CONTROL_HEIGHT}px;
-    padding-inline: 12px;
-    border-radius: ${CONTROL_HEIGHT / 2}px;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+// Control height is 32px, so a pill's radius is 16px.
+const styles = stylex.create({
+  addPill: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    height: '32px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: {
+      'default': cssVar.colorBorder,
+      ':hover': cssVar.colorPrimary,
+    },
+    borderRadius: '16px',
+    fontSize: '13px',
+    color: {
+      'default': cssVar.colorTextSecondary,
+      ':hover': cssVar.colorText,
+    },
+    transition: 'all 0.15s',
+  },
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'stretch',
+    height: '32px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: {
+      'default': cssVar.colorBorderSecondary,
+      ':hover': cssVar.colorBorder,
+    },
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+    transition: 'border-color 0.15s',
+  },
+  // Reset of the native button (the stylesheet had `all: unset`).
+  chipClose: {
+    cursor: 'pointer',
+    boxSizing: 'content-box',
+    display: 'inline-flex',
+    alignItems: 'center',
+    margin: 0,
+    paddingBlock: 0,
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '12px',
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderStartEndRadius: '16px',
+    borderEndEndRadius: '16px',
+    outlineStyle: 'none',
+    appearance: 'none',
+    font: 'inherit',
+    color: {
+      'default': cssVar.colorTextTertiary,
+      ':hover': cssVar.colorText,
+    },
+    textAlign: 'inherit',
+    backgroundColor: {
+      'default': 'transparent',
+      ':hover': cssVar.colorFillSecondary,
+    },
+    backgroundImage: 'none',
+  },
+  chipMain: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: 0,
+    paddingInlineStart: '12px',
+    paddingInlineEnd: '6px',
+    fontSize: '13px',
+    color: cssVar.colorText,
+  },
+  chipValue: {
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+  divider: {
+    width: '1px',
+    height: '16px',
+    marginInline: '4px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  sortPill: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    height: '32px',
+    paddingInline: '12px',
+    borderRadius: '16px',
+    fontSize: '13px',
+    color: cssVar.colorText,
+    backgroundColor: {
+      'default': cssVar.colorFillTertiary,
+      ':hover': cssVar.colorFillSecondary,
+    },
+    backgroundImage: 'none',
+  },
+});
 
 const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'all', labelKey: 'management.filters.status.all' },
@@ -201,18 +204,18 @@ interface FilterChipProps {
 
 const FilterChip = memo<FilterChipProps>(({ icon, iconNode, label, value, items, onClear }) => {
   return (
-    <span className={styles.chip}>
+    <span {...stylex.props(styles.chip)}>
       <DropdownMenu items={items}>
-        <span className={styles.chipMain}>
+        <span {...stylex.props(styles.chipMain)}>
           {iconNode ?? (icon && <Icon icon={icon} size={12} />)}
           <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>{label}:</Text>
-          <span className={styles.chipValue}>{value}</span>
+          <span {...stylex.props(styles.chipValue)}>{value}</span>
           <Icon icon={ChevronDown} size={10} />
         </span>
       </DropdownMenu>
       <button
         aria-label={`Clear ${label}`}
-        className={styles.chipClose}
+        {...stylex.props(styles.chipClose)}
         type="button"
         onClick={(e) => {
           e.stopPropagation();
@@ -516,7 +519,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
         onChange={(key) => setStatus(key as StatusFilter)}
       />
 
-      <span className={styles.divider} />
+      <span {...stylex.props(styles.divider)} />
 
       {triggerApplied && (
         <FilterChip
@@ -557,7 +560,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
 
       {addFilterItems.length > 0 && (
         <DropdownMenu items={addFilterItems}>
-          <span className={styles.addPill}>
+          <span {...stylex.props(styles.addPill)}>
             <Icon icon={Plus} size={12} />
             {t('management.filters.add', {
               defaultValue: anyFilterApplied ? 'Add filter' : 'Filter',
@@ -593,10 +596,10 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions 
         onChange={(key) => setViewMode(key as 'card' | 'list')}
       />
 
-      <span className={styles.divider} />
+      <span {...stylex.props(styles.divider)} />
 
       <DropdownMenu items={sortItems}>
-        <span className={styles.sortPill}>
+        <span {...stylex.props(styles.sortPill)}>
           <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
             {t('management.sort.label')}:
           </Text>

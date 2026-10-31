@@ -2,7 +2,9 @@
 
 import { type SkillResourceTreeNode } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Avatar, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { unzip } from 'fflate';
 import { DotIcon, ExternalLinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -19,46 +21,33 @@ import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 import { type DiscoverSkillDetail as DiscoverSkillDetailType } from '@/types/discover';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  description: css`
-    overflow: hidden;
-
-    margin: 0;
-
-    font-size: 13px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  divider: css`
-    flex-shrink: 0;
-    width: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  left: css`
-    overflow-y: auto;
-    flex-shrink: 0;
-    width: 240px;
-    padding: 8px;
-  `,
-  meta: css`
-    flex-shrink: 0;
-    padding: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  name: css`
-    font-size: 16px;
-    font-weight: 500;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-  right: css`
-    container-type: size;
-    overflow: auto;
-    flex: 1;
-  `,
-}));
+const styles = stylex.create({
+  description: {
+    overflow: 'hidden',
+    margin: '0',
+    fontSize: '13px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  divider: {
+    flexShrink: 0,
+    width: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  left: { overflowY: 'auto', flexShrink: 0, width: '240px', padding: '8px' },
+  meta: {
+    flexShrink: 0,
+    padding: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  name: { fontSize: '16px', fontWeight: 500, lineHeight: 1.4, color: cssVar.colorText },
+  right: { containerType: 'size', overflow: 'auto', flex: '1' },
+});
 
 interface MarketSkillDetailProps {
   identifier: string;
@@ -196,13 +185,18 @@ const MarketSkillDetail = memo<MarketSkillDetailProps>(({ identifier }) => {
 
   return (
     <Flexbox style={{ height: '100%', overflow: 'hidden' }}>
-      <div className={styles.meta}>
+      <div {...stylex.props(styles.meta)}>
         <Flexbox horizontal align={'center'} gap={12}>
           <Avatar avatar={icon || name} shape={'square'} size={40} style={{ flex: 'none' }} />
           <Flexbox flex={1} gap={4} style={{ overflow: 'hidden' }}>
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-              <Flexbox horizontal align={'center'} className={styles.description} gap={4}>
-                <span className={styles.name}>{name}</span>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.description).className}
+                gap={4}
+              >
+                <span {...stylex.props(styles.name)}>{name}</span>
                 {version && (
                   <>
                     <Icon icon={DotIcon} />
@@ -230,20 +224,20 @@ const MarketSkillDetail = memo<MarketSkillDetailProps>(({ identifier }) => {
                 )}
               </Flexbox>
             </Flexbox>
-            {description && <p className={styles.description}>{description}</p>}
+            {description && <p {...stylex.props(styles.description)}>{description}</p>}
           </Flexbox>
         </Flexbox>
       </div>
       <Flexbox horizontal style={{ flex: 1, overflow: 'hidden' }}>
-        <div className={styles.left}>
+        <div {...stylex.props(styles.left)}>
           <FileTree
             resourceTree={resourceTree}
             selectedFile={selectedFile}
             onSelectFile={setSelectedFile}
           />
         </div>
-        <div className={styles.divider} />
-        <div className={styles.right} key={selectedFile}>
+        <div {...stylex.props(styles.divider)} />
+        <div {...stylex.props(styles.right)} key={selectedFile}>
           <ContentViewer
             contentMap={contentMap}
             selectedFile={selectedFile}

@@ -1,5 +1,7 @@
-import { Button, createStaticStyles, Flexbox, Markdown } from '@lobehub/ui';
+import { Button, Flexbox, Markdown } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import * as m from 'motion/react-m';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +10,8 @@ import ItemRender from '@/components/JSONSchemaConfig/ItemRender';
 import { transformPluginSettings } from '@/features/PluginSettings';
 import { useToolStore } from '@/store/tool';
 
+import moduleStyles from './MCPConfigForm.module.css';
+
 interface MCPConfigFormProps {
   configSchema: any;
   identifier: string;
@@ -15,30 +19,28 @@ interface MCPConfigFormProps {
   onSubmit?: (config: Record<string, any>) => Promise<void>;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    margin-block-start: ${cssVar.marginXS};
-    padding: ${cssVar.padding};
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    background-color: ${cssVar.colorBgContainer};
-  `,
-  footer: css`
-    display: flex;
-    gap: ${cssVar.marginXS};
-    justify-content: flex-end;
-
-    margin-block-start: ${cssVar.margin};
-    padding-block-start: ${cssVar.paddingXS};
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  markdown: css`
-    p {
-      color: ${cssVar.colorTextDescription};
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    marginBlockStart: cssVar.marginXS,
+    padding: cssVar.padding,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  footer: {
+    display: 'flex',
+    gap: cssVar.marginXS,
+    justifyContent: 'flex-end',
+    marginBlockStart: cssVar.margin,
+    paddingBlockStart: cssVar.paddingXS,
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCancel }) => {
   const { t } = useTranslation(['plugin', 'common']);
@@ -73,7 +75,7 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
   return (
     <m.div
       animate={{ y: 0 }}
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       initial={{ y: 8 }}
       transition={{ delay: 0.1, duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
     >
@@ -114,7 +116,7 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
                 />
               ),
               desc: item.desc && (
-                <Markdown className={styles.markdown} variant={'chat'}>
+                <Markdown className={moduleStyles.markdown} variant={'chat'}>
                   {item.desc as string}
                 </Markdown>
               ),
@@ -128,7 +130,7 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
 
       <m.div
         animate={{ opacity: 1, y: 0 }}
-        className={styles.footer}
+        className={stylex.props(styles.footer).className}
         initial={{ opacity: 0, y: 4 }}
         transition={{ delay: 0.25, duration: 0.2 }}
       >

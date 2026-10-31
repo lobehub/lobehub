@@ -1,0 +1,28 @@
+/* The code lines are rendered inside @lobehub/ui's Highlighter, so StyleX cannot reach them. */
+.codeWrapper pre {
+  margin: 0;
+}
+
+.codeWrapper code {
+  counter-reset: line;
+}
+
+.codeWrapper :global(.line) {
+  width: 100% !important;
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+}
+
+.codeWrapper :global(.line)::before {
+  content: counter(line);
+  counter-increment: line;
+  user-select: none;
+
+  display: inline-block;
+
+  width: 4ch;
+  margin-inline-end: 2ch;
+
+  color: var(--lobe-color-text-quaternary);
+  text-align: end;
+}

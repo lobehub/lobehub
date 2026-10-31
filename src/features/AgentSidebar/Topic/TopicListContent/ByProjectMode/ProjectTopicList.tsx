@@ -13,6 +13,7 @@ import {
   Icon,
   Text,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { LaptopIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -39,6 +40,7 @@ import { type ChatTopic, type GroupedTopic } from '@/types/topic';
 import TopicItem from '../../List/Item';
 import { formatTimeGroupId } from '../ByTimeMode/timeGroupTitle';
 import { indicatorStyles, useCollapsedIndicators } from './CollapsedIndicators';
+import { accordionHeaderMarker } from './markers.stylex';
 import {
   DEVICE_SUB_GROUP_PREFIX,
   groupProjectTopics,
@@ -104,7 +106,9 @@ const SubGroupItem = memo<SubGroupItemProps>(
 
     return (
       <AccordionItem value={group.id}>
-        <AccordionHeader className={'accordion-header'}>
+        <AccordionHeader
+          className={cx('accordion-header', stylex.props(accordionHeaderMarker).className)}
+        >
           {/* Same icon column and gap as the project row, so the section
               title lines up with the project name and the topics below. */}
           <AccordionTrigger style={{ paddingBlock: 2, paddingInline: 4 }}>
@@ -129,7 +133,7 @@ const SubGroupItem = memo<SubGroupItemProps>(
               <Flexbox horizontal align={'center'} gap={4}>
                 {indicators}
                 {startDirectoryId && (
-                  <span className={indicatorStyles.hoverActions}>
+                  <span {...stylex.props(indicatorStyles.hoverActions)}>
                     <ActionIcon
                       icon={PlusIcon}
                       size={'small'}

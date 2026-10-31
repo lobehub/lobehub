@@ -1,226 +1,198 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+
+import { hoverHostMarker } from './markers.stylex';
 
 /**
  * One sheet, Linear-style: a sticky header row, one hairline per row, group rows that run the
  * full width, and hover-only controls. The grid is shared by the header row and every rule row
  * so the columns line up without a table element.
  */
-export const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    display: flex;
-    flex: 1;
-  `,
-  cellId: css`
-    padding-block-start: 2px;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  chevron: css`
-    display: inline-flex;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 0.15s;
-  `,
-  chevronOpen: css`
-    transform: rotate(90deg);
-  `,
-  directionNegative: css`
-    color: ${cssVar.colorTextSecondary};
-
-    & svg {
-      color: ${cssVar.colorError};
-    }
-  `,
-  directionPositive: css`
-    color: ${cssVar.colorTextSecondary};
-
-    & svg {
-      color: ${cssVar.colorSuccess};
-    }
-  `,
-  divider: css`
-    padding-block: 22px 6px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: 22px 40px minmax(220px, 2fr) 56px 56px 64px 64px 28px;
-    column-gap: 8px;
-    align-items: start;
-  `,
-  hover: css`
-    opacity: 0;
-    transition: opacity 0.15s;
-  `,
-  modeBlock: css`
-    color: ${cssVar.colorPrimary};
-  `,
-  modeBtn: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-size: 12px;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  modeRemind: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  muted: css`
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  ownerCount: css`
-    font-size: 12px;
-    font-weight: 400;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  row: css`
-    cursor: pointer;
-
-    width: 100%;
-    padding-block: 10px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 13px;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  rowActive: css`
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowArchived: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowHover: css`
-    &:hover [data-hover] {
-      opacity: 1;
-    }
-  `,
-  section: css`
-    cursor: pointer;
-    user-select: none;
-
-    position: relative;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    height: 34px;
-    margin-block-start: 10px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:hover [data-hover] {
-      opacity: 1;
-    }
-
-    &:hover [data-line] {
-      margin-inline-end: 64px;
-    }
-  `,
-  sectionActions: css`
-    position: absolute;
-    inset-block-start: 50%;
-    inset-inline-end: 8px;
-    transform: translateY(-50%);
-  `,
-  sectionCollapsed: css`
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  sectionCount: css`
-    font-size: 12px;
-    font-weight: 400;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sectionLine: css`
-    flex: 1;
-    height: 1px;
-    margin-inline: 4px -8px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  sectionScope: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sectionTitle: css`
-    font-size: 13px;
-    font-weight: 600;
-  `,
-  sortHeader: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 2px;
-    align-items: center;
-
-    width: fit-content;
-    padding: 0;
-    border: 0;
-
-    font: inherit;
-    color: inherit;
-
-    background: none;
-
-    &:focus-visible {
-      border-radius: ${cssVar.borderRadiusSM};
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 2px;
-    }
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  sortHeaderActive: css`
-    color: ${cssVar.colorText};
-  `,
-  thead: css`
-    position: sticky;
-    z-index: 1;
-    inset-block-start: 0;
-
-    padding-block: 6px 8px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorder};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  title: css`
-    font-weight: 500;
-    text-wrap: pretty;
-  `,
-}));
+export const styles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    display: 'flex',
+    flex: '1',
+  },
+  cellId: {
+    paddingBlockStart: '2px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  chevron: {
+    display: 'inline-flex',
+    color: cssVar.colorTextTertiary,
+    transition: 'transform 0.15s',
+  },
+  chevronOpen: {
+    transform: 'rotate(90deg)',
+  },
+  directionNegative: {
+    color: cssVar.colorTextSecondary,
+  },
+  directionPositive: {
+    color: cssVar.colorTextSecondary,
+  },
+  divider: {
+    paddingBlockStart: '22px',
+    paddingBlockEnd: '6px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: '22px 40px minmax(220px, 2fr) 56px 56px 64px 64px 28px',
+    columnGap: '8px',
+    alignItems: 'start',
+  },
+  // Shown while the enclosing row or heading (hoverHostMarker) is hovered.
+  hover: {
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover', hoverHostMarker)]: 1,
+    },
+    transition: 'opacity 0.15s',
+  },
+  modeBlock: {
+    color: cssVar.colorPrimary,
+  },
+  modeBtn: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadiusSM,
+    fontSize: '12px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  modeRemind: {
+    color: cssVar.colorTextTertiary,
+  },
+  muted: {
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+  },
+  ownerCount: {
+    fontSize: '12px',
+    fontWeight: 400,
+    color: cssVar.colorTextTertiary,
+  },
+  row: {
+    cursor: 'pointer',
+    width: '100%',
+    paddingBlock: '10px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontSize: '13px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  rowArchived: {
+    color: cssVar.colorTextTertiary,
+  },
+  section: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    position: 'relative',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    height: '34px',
+    marginBlockStart: '10px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  sectionActions: {
+    position: 'absolute',
+    insetBlockStart: '50%',
+    insetInlineEnd: '8px',
+    transform: 'translateY(-50%)',
+  },
+  sectionCollapsed: {
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  sectionCount: {
+    fontSize: '12px',
+    fontWeight: 400,
+    color: cssVar.colorTextTertiary,
+  },
+  sectionLine: {
+    flex: '1',
+    height: '1px',
+    marginInlineStart: '4px',
+    marginInlineEnd: {
+      default: '-8px',
+      [stylex.when.ancestor(':hover', hoverHostMarker)]: '64px',
+    },
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  sectionScope: {
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  sectionTitle: {
+    fontSize: '13px',
+    fontWeight: 600,
+  },
+  sortHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '2px',
+    alignItems: 'center',
+    width: 'fit-content',
+    padding: 0,
+    borderWidth: 0,
+    borderRadius: { 'default': null, ':focus-visible': cssVar.borderRadiusSM },
+    font: 'inherit',
+    color: { 'default': 'inherit', ':hover': cssVar.colorText },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  sortHeaderActive: {
+    color: cssVar.colorText,
+  },
+  thead: {
+    position: 'sticky',
+    zIndex: 1,
+    insetBlockStart: 0,
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '8px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  title: {
+    fontWeight: 500,
+    textWrap: 'pretty',
+  },
+});

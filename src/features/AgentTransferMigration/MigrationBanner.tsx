@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Spin, Text, Tooltip } from '@lobehub/ui';
+import { Flexbox, Spin, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -89,27 +91,23 @@ export const TopicMigrationPlaceholder = memo<MigrationBannerProps>(
 
 TopicMigrationPlaceholder.displayName = 'TopicMigrationPlaceholder';
 
-const chipStyles = createStaticStyles(({ css }) => ({
-  chip: css`
-    pointer-events: auto;
-    cursor: default;
-
-    padding-block: 3px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 20px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    white-space: nowrap;
-
-    /* Solid surface under the translucent fill: the chip also renders as a
-       floating overlay on top of chat content, where a bare alpha fill would
-       let the text underneath bleed through. */
-    background-color: ${cssVar.colorBgElevated};
-    background-image: linear-gradient(${cssVar.colorFillTertiary}, ${cssVar.colorFillTertiary});
-  `,
-}));
+const chipStyles = stylex.create({
+  chip: {
+    pointerEvents: 'auto',
+    cursor: 'default',
+    paddingBlock: '3px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '20px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: `linear-gradient(${cssVar.colorFillTertiary}, ${cssVar.colorFillTertiary})`,
+  },
+});
 
 /**
  * Compact migration chip for the chat header's center slot: spinner +
@@ -125,7 +123,12 @@ export const AgentMigrationBadge = memo<MigrationTarget>(({ agentId, groupId }) 
 
   return (
     <Tooltip title={t('transferMigration.agentBanner.desc')}>
-      <Flexbox horizontal align={'center'} className={chipStyles.chip} gap={6}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(chipStyles.chip).className}
+        gap={6}
+      >
         <Spin size={12} style={{ color: cssVar.colorWarning }} />
         <span>
           {t(

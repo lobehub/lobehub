@@ -1,11 +1,17 @@
 import { EMPTY_ARRAY } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { ContextMenuTrigger, type DropdownItem, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cx, Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, FileIcon, FolderIcon, type LucideIcon } from 'lucide-react';
 import type React from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
+
+import { sx } from '@/styles/sx';
+
+import { skillRowMarker } from './markers.stylex';
 
 export interface SkillListItem {
   description?: string;
@@ -63,125 +69,100 @@ interface SkillsListProps {
   onSkillDragStart?: (item: SkillListItem, event: React.DragEvent) => void;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chevron: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
-  `,
-  chevronExpanded: css`
-    transform: rotate(90deg);
-  `,
-  childItem: css`
-    cursor: pointer;
-
-    height: 26px;
-    padding-inline-end: 8px;
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  childItemIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  description: css`
-    max-width: 320px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  item: css`
-    cursor: pointer;
-
-    height: 28px;
-    padding-inline: 4px 8px;
-    border-radius: 6px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    /* Swap the file count for the row actions while hovering the row. */
-    &:hover .skill-row-actions {
-      display: flex;
-    }
-
-    &:hover .skill-row-count {
-      display: none;
-    }
-  `,
-  itemCount: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowAction: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  rowActionDanger: css`
-    &:hover {
-      color: ${cssVar.colorError};
-      background: ${cssVar.colorErrorBg};
-    }
-  `,
-  rowActionDisabled: css`
-    cursor: not-allowed;
-    color: ${cssVar.colorTextQuaternary};
-
-    &:hover {
-      color: ${cssVar.colorTextQuaternary};
-      background: transparent;
-    }
-  `,
-  rowActions: css`
-    display: none;
-    flex: none;
-    gap: 2px;
-    align-items: center;
-  `,
-  itemIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  treeChevronSlot: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 14px;
-    height: 14px;
-  `,
-}));
+const styles = stylex.create({
+  chevron: {
+    flexShrink: 0,
+    color: cssVar.colorTextTertiary,
+    transition: `transform ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut}`,
+  },
+  chevronExpanded: {
+    transform: 'rotate(90deg)',
+  },
+  childItem: {
+    cursor: 'pointer',
+    height: '26px',
+    paddingInlineEnd: '8px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  childItemIcon: {
+    flexShrink: 0,
+    color: cssVar.colorTextTertiary,
+  },
+  description: {
+    maxWidth: '320px',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+  },
+  item: {
+    cursor: 'pointer',
+    height: '28px',
+    paddingInlineStart: '4px',
+    paddingInlineEnd: '8px',
+    borderRadius: '6px',
+    fontSize: '13px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  // Swap the file count for the row actions while hovering the row.
+  itemCount: {
+    display: { default: null, [stylex.when.ancestor(':hover', skillRowMarker)]: 'none' },
+    flexShrink: 0,
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+  rowAction: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: 'all 0.2s',
+  },
+  rowActionDanger: {
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorError },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorErrorBg },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActionDisabled: {
+    cursor: 'not-allowed',
+    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorTextQuaternary },
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActions: {
+    display: {
+      default: 'none',
+      [stylex.when.ancestor(':hover', skillRowMarker)]: 'flex',
+    },
+    flex: 'none',
+    gap: '2px',
+    alignItems: 'center',
+  },
+  itemIcon: {
+    flexShrink: 0,
+    color: cssVar.colorTextTertiary,
+  },
+  treeChevronSlot: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '14px',
+    height: '14px',
+  },
+});
 
 interface TreeNode {
   children: TreeNode[];
@@ -245,19 +226,23 @@ const TreeRow = memo<TreeRowProps>(({ depth, expanded, node, onOpenFile, onToggl
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.childItem}
+          className={stylex.props(styles.childItem).className}
           gap={6}
           style={{ paddingInlineStart }}
           onClick={() => onToggleFolder(node.path)}
         >
-          <span className={styles.treeChevronSlot}>
+          <span {...stylex.props(styles.treeChevronSlot)}>
             <Icon
-              className={`${styles.chevron} ${isOpen ? styles.chevronExpanded : ''}`}
+              className={stylex.props(styles.chevron, isOpen && styles.chevronExpanded).className}
               icon={ChevronRightIcon}
               size={12}
             />
           </span>
-          <Icon className={styles.childItemIcon} icon={FolderIcon} size={12} />
+          <Icon
+            className={stylex.props(styles.childItemIcon).className}
+            icon={FolderIcon}
+            size={12}
+          />
           <Text ellipsis style={{ color: 'inherit', flex: 1, fontSize: 12, minWidth: 0 }}>
             {node.name}
           </Text>
@@ -281,14 +266,14 @@ const TreeRow = memo<TreeRowProps>(({ depth, expanded, node, onOpenFile, onToggl
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.childItem}
+      className={stylex.props(styles.childItem).className}
       gap={6}
       style={{ paddingInlineStart }}
       title={node.path}
       onClick={() => onOpenFile(node.path)}
     >
-      <span className={styles.treeChevronSlot} />
-      <Icon className={styles.childItemIcon} icon={FileIcon} size={12} />
+      <span {...stylex.props(styles.treeChevronSlot)} />
+      <Icon className={stylex.props(styles.childItemIcon).className} icon={FileIcon} size={12} />
       <Text ellipsis style={{ color: 'inherit', flex: 1, fontSize: 12, minWidth: 0 }}>
         {node.name}
       </Text>
@@ -376,7 +361,7 @@ const SkillRow = memo<SkillRowProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.item}
+        className={stylex.props(styles.item, skillRowMarker).className}
         draggable={!!onSkillDragStart}
         gap={6}
         onDragStart={onSkillDragStart ? (event) => onSkillDragStart(item, event) : undefined}
@@ -392,7 +377,7 @@ const SkillRow = memo<SkillRowProps>(
             }}
           >
             <Icon
-              className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
+              className={stylex.props(styles.chevron, expanded && styles.chevronExpanded).className}
               icon={ChevronRightIcon}
               size={14}
             />
@@ -400,11 +385,11 @@ const SkillRow = memo<SkillRowProps>(
         ) : reserveChevronSlot ? (
           <span style={{ flexShrink: 0, height: 20, width: 20 }} />
         ) : null}
-        <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
+        <Icon className={stylex.props(styles.itemIcon).className} icon={SkillsIcon} size={14} />
         {item.description ? (
           <Tooltip
             placement={'left'}
-            title={<span className={styles.description}>{item.description}</span>}
+            title={<span {...stylex.props(styles.description)}>{item.description}</span>}
           >
             {nameNode}
           </Tooltip>
@@ -412,15 +397,15 @@ const SkillRow = memo<SkillRowProps>(
           nameNode
         )}
         {typeof item.fileCount === 'number' && item.fileCount > 0 && (
-          <span className={cx('skill-row-count', styles.itemCount)}>{item.fileCount}</span>
+          <span {...sx([styles.itemCount], 'skill-row-count')}>{item.fileCount}</span>
         )}
         {hasActions && (
-          <div className={cx('skill-row-actions', styles.rowActions)} draggable={false}>
+          <div {...sx([styles.rowActions], 'skill-row-actions')} draggable={false}>
             {actions.map((action) => (
               <Tooltip key={action.key} title={action.tooltip ?? action.label}>
                 <div
                   role={'button'}
-                  className={cx(
+                  {...stylex.props(
                     styles.rowAction,
                     action.danger && !action.disabled && styles.rowActionDanger,
                     action.disabled && styles.rowActionDisabled,

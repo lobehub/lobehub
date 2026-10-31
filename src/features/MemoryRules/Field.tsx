@@ -1,47 +1,34 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PencilIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    margin: 0;
-    font-size: 13.5px;
-    line-height: 1.75;
-    white-space: pre-wrap;
-  `,
-  edit: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  head: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    margin-block: 22px 6px;
-
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-    letter-spacing: 0.02em;
-  `,
-  muted: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  body: { margin: '0', fontSize: '13.5px', lineHeight: 1.75, whiteSpace: 'pre-wrap' },
+  edit: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  head: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBlockStart: '22px',
+    marginBlockEnd: '6px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: cssVar.colorTextTertiary,
+    letterSpacing: '0.02em',
+  },
+});
 
 interface FieldProps {
   editable?: boolean;
@@ -65,11 +52,11 @@ const Field = ({ editable, label, muted, onSave, placeholder, value }: FieldProp
 
   return (
     <div>
-      <div className={styles.head}>
+      <div {...stylex.props(styles.head)}>
         <span>{label}</span>
         {editable && !editing && (
           <span
-            className={styles.edit}
+            {...stylex.props(styles.edit)}
             onClick={() => {
               setDraft(value ?? '');
               setEditing(true);
@@ -106,7 +93,7 @@ const Field = ({ editable, label, muted, onSave, placeholder, value }: FieldProp
         </Flexbox>
       ) : (
         <p
-          className={styles.body}
+          className={stylex.props(styles.body).className}
           style={muted || !value ? { color: cssVar.colorTextTertiary } : undefined}
         >
           {value || placeholder}

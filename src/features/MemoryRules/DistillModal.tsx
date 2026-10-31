@@ -6,9 +6,6 @@ import {
   Button,
   Checkbox,
   createModal,
-  createStaticStyles,
-  cssVar,
-  cx,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -20,6 +17,8 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   ArrowLeftIcon,
@@ -52,98 +51,87 @@ import { shinyTextStyles } from '@/styles';
 import { composeStyles } from './GroupModal';
 import { useRecentPages, useTopics } from './useDistillSources';
 
-const styles = createStaticStyles(({ css }) => ({
-  candidate: css`
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-
-    padding-block: 12px;
-    padding-inline: 4px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  candidateOff: css`
-    opacity: 0.55;
-  `,
-  chip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 6px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  duplicate: css`
-    font-size: 12px;
-    color: ${cssVar.colorWarningText};
-  `,
-  option: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  optionActive: css`
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  optionMeta: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  optionTitle: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  options: css`
-    overflow-y: auto;
-    max-height: 280px;
-  `,
-  quote: css`
-    margin-block: 4px 0;
-    padding-inline-start: 10px;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  titleInput: css`
-    padding-inline: 0;
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  candidate: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'flex-start',
+    paddingBlock: '12px',
+    paddingInline: '4px',
+  },
+  // Every candidate after the first is separated from the one above.
+  candidateSeparated: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  candidateOff: {
+    opacity: 0.55,
+  },
+  chip: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  duplicate: {
+    fontSize: '12px',
+    color: cssVar.colorWarningText,
+  },
+  option: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  optionActive: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: 'none',
+  },
+  optionMeta: {
+    flex: 'none',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  optionTitle: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  options: {
+    overflowY: 'auto',
+    maxHeight: '280px',
+  },
+  quote: {
+    marginBlockStart: '4px',
+    marginBlockEnd: 0,
+    paddingInlineStart: '10px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorder,
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+  },
+  titleInput: {
+    paddingInline: 0,
+    fontWeight: 500,
+  },
+});
 
 type SourceTab = 'document' | 'file' | 'text' | 'topic';
 
@@ -327,20 +315,20 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
   const optionRow = (key: string, title: string, meta: string | undefined, onPick: () => void) => (
     <div
       key={key}
-      className={cx(
+      {...stylex.props(
         styles.option,
         picked?.source && 'id' in picked.source && picked.source.id === key && styles.optionActive,
       )}
       onClick={onPick}
     >
-      <span className={styles.optionTitle}>{title || t('rules.distill.untitled')}</span>
-      {meta && <span className={styles.optionMeta}>{meta}</span>}
+      <span {...stylex.props(styles.optionTitle)}>{title || t('rules.distill.untitled')}</span>
+      {meta && <span {...stylex.props(styles.optionMeta)}>{meta}</span>}
     </div>
   );
 
   return (
     <Flexbox>
-      <Flexbox className={composeStyles.head} gap={10}>
+      <Flexbox className={stylex.props(composeStyles.head).className} gap={10}>
         {step === 'review' && (
           <Flexbox horizontal align={'center'} gap={8}>
             <ActionIcon
@@ -354,7 +342,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
             </Text>
           </Flexbox>
         )}
-        <div className={composeStyles.titleStatic}>
+        <div {...stylex.props(composeStyles.titleStatic)}>
           {step === 'review' && result
             ? t('rules.distill.reviewTitle', {
                 count: result.candidates.length,
@@ -377,11 +365,15 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
             />
           </>
         )}
-        <ActionIcon className={composeStyles.close} icon={XIcon} onClick={() => close()} />
+        <ActionIcon
+          className={stylex.props(composeStyles.close).className}
+          icon={XIcon}
+          onClick={() => close()}
+        />
       </Flexbox>
 
       {step === 'pick' && (
-        <Flexbox className={composeStyles.body} gap={10}>
+        <Flexbox className={stylex.props(composeStyles.body).className} gap={10}>
           {tab === 'text' &&
             (picked ? (
               <Flexbox horizontal align={'center'} gap={8}>
@@ -424,7 +416,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
               </>
             ))}
           {tab === 'document' && (
-            <div className={styles.options}>
+            <div {...stylex.props(styles.options)}>
               {recentPages.error ? (
                 loadFailed(recentPages.retry)
               ) : !pages ? (
@@ -470,7 +462,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
                 value={keywords}
                 onChange={(e) => setKeywords(e.target.value)}
               />
-              <div className={styles.options}>
+              <div {...stylex.props(styles.options)}>
                 {topicList.error ? (
                   loadFailed(topicList.retry)
                 ) : !topics ? (
@@ -491,8 +483,8 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
       )}
 
       {step === 'reading' && (
-        <Flexbox className={composeStyles.body} gap={10}>
-          <GeneratingBorder generating className={composeStyles.inputShell}>
+        <Flexbox className={stylex.props(composeStyles.body).className} gap={10}>
+          <GeneratingBorder generating className={stylex.props(composeStyles.inputShell).className}>
             <Flexbox gap={6} padding={16}>
               <Text weight={500}>{source?.name}</Text>
               <Flexbox horizontal align={'center'} gap={8}>
@@ -505,7 +497,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
       )}
 
       {step === 'review' && result && (
-        <Flexbox className={composeStyles.body}>
+        <Flexbox className={stylex.props(composeStyles.body).className}>
           {result.material.truncated && (
             <Text fontSize={12} type={'warning'}>
               {t('rules.distill.truncated')}
@@ -519,7 +511,11 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
               const duplicate = titleOf(candidate.duplicateOf);
               return (
                 <div
-                  className={cx(styles.candidate, !draft.keep && styles.candidateOff)}
+                  {...stylex.props(
+                    styles.candidate,
+                    index > 0 && styles.candidateSeparated,
+                    !draft.keep && styles.candidateOff,
+                  )}
                   key={index}
                 >
                   <Checkbox
@@ -532,16 +528,18 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
                       <Text weight={500}>{duplicate}</Text>
                     ) : (
                       <Input
-                        className={styles.titleInput}
+                        className={stylex.props(styles.titleInput).className}
                         value={draft.title}
                         variant={'borderless'}
                         onChange={(e) => patch(index, { title: e.target.value })}
                       />
                     )}
                     {duplicate && (
-                      <span className={styles.duplicate}>{t('rules.distill.duplicate')}</span>
+                      <span {...stylex.props(styles.duplicate)}>
+                        {t('rules.distill.duplicate')}
+                      </span>
                     )}
-                    {candidate.quote && <p className={styles.quote}>{candidate.quote}</p>}
+                    {candidate.quote && <p {...stylex.props(styles.quote)}>{candidate.quote}</p>}
                     {!duplicate && (
                       <Flexbox horizontal align={'center'} gap={4}>
                         <DropdownMenu
@@ -564,7 +562,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
                               : []),
                           ]}
                         >
-                          <span className={styles.chip}>
+                          <span {...stylex.props(styles.chip)}>
                             <Icon
                               icon={draft.groupId === 'new' ? FolderPlusIcon : FolderIcon}
                               size={12}
@@ -574,7 +572,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
                           </span>
                         </DropdownMenu>
                         <span
-                          className={styles.chip}
+                          {...stylex.props(styles.chip)}
                           onClick={() =>
                             patch(index, {
                               enforcement: draft.enforcement === 'block' ? 'remind' : 'block',
@@ -604,7 +602,7 @@ const DistillContent = ({ canOpenGroup, groups, onDone }: DistillContentProps) =
       <Flexbox
         horizontal
         align={'center'}
-        className={composeStyles.footer}
+        className={stylex.props(composeStyles.footer).className}
         gap={8}
         justify={'flex-end'}
       >

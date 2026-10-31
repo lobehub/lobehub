@@ -4,7 +4,9 @@ import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const'
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
 import { ContextMenuTrigger, type DropdownItem, Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, createStaticStyles, cssVar, cx, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
@@ -14,6 +16,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
+import { identityMarker } from './markers.stylex';
 import SidebarItemAvatar from './SidebarItemAvatar';
 
 /** Fixed action-column width (sidebar-eye toggle + "…" menu) so rows stay aligned. */
@@ -21,94 +24,68 @@ export const ACTION_COL_WIDTH = 64;
 
 /** Author avatar slot — reserved even when the author is unknown. */
 const AUTHOR_COL_WIDTH = 20;
-
-/** Name and role column widths, shared by every row so the columns line up. */
 export const NAME_COL_WIDTH = 240;
 export const ROLE_COL_WIDTH = 200;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  /**
-   * Fills the rest of the identity link and truncates to one line. Its minimum
-   * makes the name and role columns give up width first on mid-size screens;
-   * only a row too narrow for all three drops it.
-   */
-  description: css`
-    flex: 1 1 0;
-    min-width: 180px;
-    color: ${cssVar.colorTextTertiary};
-
-    @container agent-row (width < 600px) {
-      display: none;
-    }
-  `,
-  // The link spans the identity columns (name, role, description) but not the
-  // whole row — a management list is for scanning and acting, and a full-row
-  // link turns clicks on the author / timestamp / action columns into a
-  // navigation.
-  identity: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: 1;
-    gap: 12px;
-    align-items: center;
-
-    min-width: 0;
-
-    color: inherit;
-
-    &:hover .agent-row-title {
-      text-decoration: underline;
-    }
-  `,
-  name: css`
-    flex: 0 1 ${NAME_COL_WIDTH}px;
-    min-width: 0;
-
-    /* Without the description, name and role share the space 3:2. */
-    @container agent-row (width < 600px) {
-      flex: 3 1 0;
-    }
-  `,
-  /** Reserved even when empty so every row's description starts at the same x. */
-  role: css`
-    flex: 0 1 ${ROLE_COL_WIDTH}px;
-    min-width: 0;
-    color: ${cssVar.colorTextSecondary};
-
-    @container agent-row (width < 600px) {
-      flex: 2 1 0;
-    }
-  `,
-  row: css`
-    container: agent-row / inline-size;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: inherit;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  /**
-   * Reserved width, right-aligned: "3 天前" and "2026-07-22" differ by ~30px,
-   * and a content-sized column puts the author avatar and the label pills at a
-   * different x on every row. `min-width` (not `width`) so an unusually long
-   * relative string — en's "a few seconds ago" — grows instead of truncating.
-   */
-  updatedAt: css`
-    flex: none;
-
-    min-width: 88px;
-
-    color: ${cssVar.colorTextQuaternary};
-    text-align: end;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  description: {
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0',
+    minWidth: '180px',
+    color: cssVar.colorTextTertiary,
+    display: { 'default': null, '@container agent-row (width < 600px)': 'none' },
+  },
+  name: {
+    flex: { 'default': `0 1 ${NAME_COL_WIDTH}px`, '@container agent-row (width < 600px)': '3 1 0' },
+    minWidth: 0,
+  },
+  role: {
+    flex: { 'default': `0 1 ${ROLE_COL_WIDTH}px`, '@container agent-row (width < 600px)': '2 1 0' },
+    minWidth: 0,
+    color: cssVar.colorTextSecondary,
+  },
+  // The link spans the name column (not the whole row) — a management list
+  // is for scanning and acting, and a full-row link turns clicks on the
+  // author / timestamp / action columns into a navigation. The name column
+  // stays a generous target, including the space right of a short title.
+  identity: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: '1',
+    gap: '12px',
+    alignItems: 'center',
+    minWidth: '0',
+    color: 'inherit',
+  },
+  row: {
+    containerName: 'agent-row',
+    containerType: 'inline-size',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    color: 'inherit',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  title: {
+    textDecorationLine: {
+      default: null,
+      [stylex.when.ancestor(':hover', identityMarker)]: 'underline',
+    },
+  },
+  // Reserved width, right-aligned: "3 天前" and "2026-07-22" differ by ~30px,
+  // and a content-sized column puts the author avatar and the label pills at a
+  // different x on every row. `min-width` (not `width`) so an unusually long
+  // relative string — en's "a few seconds ago" — grows instead of truncating.
+  updatedAt: {
+    flex: 'none',
+    minWidth: '88px',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'end',
+    whiteSpace: 'nowrap',
+  },
+});
 
 /** < 7 days → relative time; older → plain date (mirrors TopicSelector). */
 export const formatUpdatedAt = (updatedAt: Date | number | string) =>
@@ -170,26 +147,34 @@ const AgentRow = memo<AgentRowProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.row}
+          className={stylex.props(styles.row).className}
           gap={12}
           ref={setAnchor}
           onPointerEnter={activateMenu}
         >
           <WorkspaceLink
             aria-label={displayTitle}
-            className={styles.identity}
+            className={stylex.props(styles.identity, identityMarker).className}
             to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           >
             <SidebarItemAvatar item={item} size={28} />
             {/* Three single-line columns: who the agent is, the role it plays,
               and what it is responsible for. */}
-            <Text ellipsis className={cx('agent-row-title', styles.name)} weight={500}>
+            <Text
+              ellipsis
+              className={stylex.props(styles.title, styles.name).className}
+              weight={500}
+            >
               {displayTitle}
             </Text>
-            <Text ellipsis className={styles.role} title={role}>
+            <Text ellipsis className={stylex.props(styles.role).className} title={role}>
               {role}
             </Text>
-            <Text ellipsis className={styles.description} title={description ?? undefined}>
+            <Text
+              ellipsis
+              className={stylex.props(styles.description).className}
+              title={description ?? undefined}
+            >
               {description}
             </Text>
           </WorkspaceLink>
@@ -216,7 +201,7 @@ const AgentRow = memo<AgentRowProps>(
               </Flexbox>
             )}
             <Text
-              className={styles.updatedAt}
+              className={stylex.props(styles.updatedAt).className}
               fontSize={12}
               title={updatedAt ? dayjs(updatedAt).format('YYYY-MM-DD HH:mm') : undefined}
             >

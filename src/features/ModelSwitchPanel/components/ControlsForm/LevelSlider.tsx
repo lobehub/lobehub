@@ -1,52 +1,35 @@
-import { createStaticStyles, cx, Flexbox, Slider } from '@lobehub/ui';
+import { Flexbox, Slider } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  label: css`
-    cursor: pointer;
-
-    padding: 0;
-    border: none;
-
-    font: inherit;
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-    overflow-wrap: anywhere;
-
-    background: transparent;
-
-    transition: color 0.2s ease;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    &:focus-visible {
-      border-radius: 6px;
-      outline: 1px solid ${cssVar.colorBorder};
-      outline-offset: 2px;
-    }
-  `,
-  labels: css`
-    display: grid;
-    gap: 8px;
-    width: 100%;
-  `,
-  root: css`
-    width: 100%;
-  `,
-  selectedLabel: css`
-    color: ${cssVar.colorText};
-  `,
-  slider: css`
-    width: 100%;
-    padding-inline: 6px;
-  `,
-}));
+const styles = stylex.create({
+  label: {
+    cursor: 'pointer',
+    padding: '0',
+    borderStyle: 'none',
+    font: 'inherit',
+    fontSize: '12px',
+    lineHeight: '16px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    textAlign: 'center',
+    overflowWrap: 'anywhere',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: 'color 0.2s ease',
+    borderRadius: { 'default': null, ':focus-visible': '6px' },
+    outlineWidth: { 'default': null, ':focus-visible': '1px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  labels: { display: 'grid', gap: '8px', width: '100%' },
+  root: { width: '100%' },
+  selectedLabel: { color: cssVar.colorText },
+  slider: { width: '100%', paddingInline: '6px' },
+});
 
 export type LevelSliderMark = ReactNode | { label?: ReactNode; style?: CSSProperties };
 
@@ -165,7 +148,7 @@ function LevelSlider<T extends string = string>({
 
   return (
     <Flexbox
-      className={styles.root}
+      className={stylex.props(styles.root).className}
       gap={8}
       style={{
         ...restStyle,
@@ -173,7 +156,7 @@ function LevelSlider<T extends string = string>({
         width: '100%',
       }}
     >
-      <div className={styles.slider}>
+      <div {...stylex.props(styles.slider)}>
         <Slider
           disabled={disabled}
           max={levels.length - 1}
@@ -183,7 +166,7 @@ function LevelSlider<T extends string = string>({
           onChange={handleChange}
         />
       </div>
-      <div className={styles.labels} style={{ gridTemplateColumns }}>
+      <div className={stylex.props(styles.labels).className} style={{ gridTemplateColumns }}>
         {options.map((option, index) => {
           const selected = index === sliderValue;
           const isFirst = index === 0;
@@ -193,7 +176,7 @@ function LevelSlider<T extends string = string>({
           return (
             <button
               aria-current={selected ? 'true' : undefined}
-              className={cx(styles.label, selected && styles.selectedLabel)}
+              className={stylex.props(styles.label, selected && styles.selectedLabel).className}
               disabled={disabled}
               key={option.value}
               style={{ textAlign, ...option.style }}

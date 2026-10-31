@@ -10,26 +10,25 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { createStaticStyles, cssVar, Input, TextArea } from '@lobehub/ui';
+import { Input, TextArea } from '@lobehub/ui';
 import { Form, type FormFieldProps, type FormInstance } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  editorWrapper: css`
-    min-height: 200px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 8px;
-  `,
-  wrapper: css`
-    max-width: 798px;
-    margin-inline: auto;
-    padding-block: 0;
-    padding-inline: 24px;
-  `,
-}));
+const styles = stylex.create({
+  editorWrapper: {
+    minHeight: '200px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '8px',
+  },
+  wrapper: { maxWidth: '798px', marginInline: 'auto', paddingBlock: '0', paddingInline: '24px' },
+});
 
 const PLUGINS = [
   ReactListPlugin,
@@ -114,7 +113,7 @@ const SkillEditForm = memo<SkillEditFormProps>(({ name, disabled, form, initialV
     {
       children: (
         <div
-          className={styles.editorWrapper}
+          className={stylex.props(styles.editorWrapper).className}
           style={{ pointerEvents: disabled ? 'none' : undefined }}
         >
           <Editor
@@ -136,7 +135,7 @@ const SkillEditForm = memo<SkillEditFormProps>(({ name, disabled, form, initialV
   ];
 
   return (
-    <div className={styles.wrapper}>
+    <div {...stylex.props(styles.wrapper)}>
       <Form
         form={form}
         gap={0}

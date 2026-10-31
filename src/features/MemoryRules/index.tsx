@@ -1,6 +1,7 @@
 'use client';
 
-import { Block, Button, cx, Flexbox, Icon, SortableList, Text, toast } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, SortableList, Text, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowDownIcon, ArrowUpIcon, FileSearchIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,7 @@ import NavHeader from '@/features/NavHeader';
 import { SelfLearningLabOff, useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { expertiseService, type RuleItem, type UpdateRuleInput } from '@/services/expertise';
+import { sx } from '@/styles/sx';
 
 import { createComposeRuleModal } from './ComposeModal';
 import DetailPanel from './DetailPanel';
@@ -293,7 +295,7 @@ const MemoryRules = () => {
               disabled: true,
               key: 'gate',
               label: (
-                <span className={styles.muted} style={{ display: 'block', maxWidth: 280 }}>
+                <span {...sx([styles.muted], undefined, { display: 'block', maxWidth: 280 })}>
                   {t('rules.group.gate', { gate: group.domain.domainFilter })}
                 </span>
               ),
@@ -310,7 +312,7 @@ const MemoryRules = () => {
           onWrite={() => compose(group.domain.id)}
         />
         {isCollapsed ? null : items.length === 0 ? (
-          <div className={styles.muted} style={{ padding: '10px 8px' }}>
+          <div {...sx([styles.muted], undefined, { padding: '10px 8px' })}>
             {t('rules.group.empty')}
           </div>
         ) : (
@@ -342,7 +344,7 @@ const MemoryRules = () => {
     <Flexbox height={'100%'} width={'100%'}>
       <NavHeader />
       <Flexbox horizontal flex={1} height={'100%'} width={'100%'}>
-        <Flexbox className={styles.body}>
+        <Flexbox className={stylex.props(styles.body).className}>
           {/* Full width: with direction, effect, check and count columns the sheet needs the
               room, and a centred reading column only squeezed the rule text. */}
           <WideScreenContainer fullWidth gap={18} paddingBlock={'24px 96px'} paddingInline={32}>
@@ -424,7 +426,7 @@ const MemoryRules = () => {
                   </Flexbox>
                 )}
                 {!mineOnboarding && (
-                  <div className={cx(styles.grid, styles.thead)}>
+                  <div {...stylex.props(styles.grid, styles.thead)}>
                     <span />
                     <span>{t('rules.columns.code')}</span>
                     <span>{t('rules.columns.rule')}</span>
@@ -435,7 +437,7 @@ const MemoryRules = () => {
                       aria-pressed={runsSort !== null}
                       title={t(`rules.columns.runsSort.${runsSort ?? 'off'}`)}
                       type={'button'}
-                      className={cx(
+                      {...stylex.props(
                         styles.sortHeader,
                         runsSort !== null && styles.sortHeaderActive,
                       )}
@@ -464,7 +466,7 @@ const MemoryRules = () => {
                 )}
                 {partArchived.length > 0 && (
                   <>
-                    <div className={styles.divider}>
+                    <div {...stylex.props(styles.divider)}>
                       {t('rules.archived.group', { count: partArchived.length })}
                     </div>
                     <SortableList

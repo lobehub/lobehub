@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, SkeletonText, Tag, Text } from '@lobehub/ui';
+import { Flexbox, SkeletonText, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -10,56 +12,40 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { previewSections } from '../helpers';
 import { useExpertiseLesson } from '../hooks';
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    /*
-     * A row near the fold leaves less room below it than the card wants. base-ui publishes the
-     * space it actually has as --available-height; without this the card runs past the viewport
-     * and its evidence and click hint become unreachable.
-     */
-    overflow-y: auto;
-    width: 380px;
-    max-width: min(380px, calc(100vw - 32px));
-
-    /* less the popup's own chrome, which sits outside this element */
-
-    /*
-     * The card prefers the space below the row but flips above when that runs out, so this
-     * tracks whichever side Base UI actually chose rather than assuming one of them.
-     */
-    max-height: calc(var(--available-height, 100dvh) - 16px);
-  `,
-  section: css`
-    display: grid;
-    grid-template-columns: 56px minmax(0, 1fr);
-    gap: 12px;
-    align-items: baseline;
-  `,
-  separator: css`
-    flex: none;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  retry: css`
-    cursor: pointer;
-    align-self: flex-start;
-    border: 0;
-    background: none;
-  `,
-  open: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  title: css`
-    text-wrap: balance;
-  `,
-}));
+const styles = stylex.create({
+  root: {
+    overflowY: 'auto',
+    width: '380px',
+    maxWidth: 'min(380px, calc(100vw - 32px))',
+    maxHeight: 'calc(var(--available-height, 100dvh) - 16px)',
+  },
+  section: {
+    display: 'grid',
+    gridTemplateColumns: '56px minmax(0, 1fr)',
+    gap: '12px',
+    alignItems: 'baseline',
+  },
+  separator: {
+    flex: 'none',
+    height: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  retry: {
+    cursor: 'pointer',
+    alignSelf: 'flex-start',
+    borderStyle: 'none',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  open: {
+    flex: 'none',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+  },
+  title: { textWrap: 'balance' },
+});
 
 /** Kept low so the card fits beside the row it describes; the rest is one line away. */
 const MAX_EVIDENCE = 2;
@@ -90,7 +76,7 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
   const evidence = data?.hits.slice(0, MAX_EVIDENCE) ?? [];
 
   return (
-    <Flexbox className={styles.root} gap={10} padding={4}>
+    <Flexbox className={stylex.props(styles.root).className} gap={10} padding={4}>
       <Flexbox gap={6}>
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           <Text fontSize={12} type={'secondary'} weight={600}>
@@ -98,7 +84,7 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
           </Text>
           {/* The row underneath is no longer under the pointer once it moves in here. */}
           <Link
-            className={styles.open}
+            className={stylex.props(styles.open).className}
             to={lessonPath}
             onClick={(event) => {
               event.preventDefault();
@@ -108,7 +94,12 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
             {t('preview.open')}
           </Link>
         </Flexbox>
-        <Text className={styles.title} fontSize={15} lineHeight={1.45} weight={600}>
+        <Text
+          className={stylex.props(styles.title).className}
+          fontSize={15}
+          lineHeight={1.45}
+          weight={600}
+        >
           {title}
         </Text>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
@@ -132,7 +123,7 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
       {!!error && !data && (
         <Text
           as={'button'}
-          className={styles.retry}
+          className={stylex.props(styles.retry).className}
           fontSize={12}
           type={'info'}
           onClick={() => void mutate()}
@@ -143,10 +134,10 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
 
       {sections.length > 0 && (
         <>
-          <div className={styles.separator} />
+          <div {...stylex.props(styles.separator)} />
           <Flexbox gap={8}>
             {sections.map(({ label, ...section }) => (
-              <div className={styles.section} key={section.key}>
+              <div {...stylex.props(styles.section)} key={section.key}>
                 <Text fontSize={12} type={'secondary'} weight={600}>
                   {label ? t(label) : section.key}
                 </Text>
@@ -161,7 +152,7 @@ const LessonPreview = memo<LessonPreviewProps>(({ code, layer, lessonId, lessonP
 
       {evidence.length > 0 && (
         <>
-          <div className={styles.separator} />
+          <div {...stylex.props(styles.separator)} />
           <Flexbox gap={6}>
             <Text fontSize={12} type={'secondary'} weight={600}>
               {t('rules.detail.examples')}

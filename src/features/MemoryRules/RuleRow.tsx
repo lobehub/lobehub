@@ -1,8 +1,9 @@
 'use client';
 
 import type { ExpertiseEnforcement, ExpertiseRuleDirection } from '@lobechat/types';
-import { cx, Flexbox, SortableList } from '@lobehub/ui';
+import { Flexbox, SortableList } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, Tag, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +12,7 @@ import type { RuleItem } from '@/services/expertise';
 
 import DirectionToggle from './DirectionToggle';
 import EnforcementToggle from './EnforcementToggle';
+import { hoverHostMarker } from './markers.stylex';
 import { styles } from './styles';
 
 interface RuleRowProps {
@@ -57,22 +59,22 @@ const RuleRow = ({
   return (
     <SortableList.Item id={rule.id} style={{ padding: 0, width: '100%' }} variant={'borderless'}>
       <div
-        className={cx(
+        {...stylex.props(
           styles.grid,
           styles.row,
-          styles.rowHover,
           active && styles.rowActive,
           archived && styles.rowArchived,
+          hoverHostMarker,
         )}
         onClick={onSelect}
       >
-        <span data-hover className={styles.hover} onClick={(e) => e.stopPropagation()}>
+        <span data-hover {...stylex.props(styles.hover)} onClick={(e) => e.stopPropagation()}>
           {!archived && draggable && <SortableList.DragHandle size={'small'} />}
         </span>
-        <span className={styles.cellId}>{code}</span>
+        <span {...stylex.props(styles.cellId)}>{code}</span>
         <div style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'baseline'} gap={6} wrap={'wrap'}>
-            <span className={styles.title}>{rule.title}</span>
+            <span {...stylex.props(styles.title)}>{rule.title}</span>
             {authored && (
               <Tag size={'small'}>
                 {t(taughtToAgent ? 'rules.tag.taught' : 'rules.tag.authored')}
@@ -84,7 +86,7 @@ const RuleRow = ({
               </Tooltip>
             )}
             {archived && (
-              <span className={styles.muted}>
+              <span {...stylex.props(styles.muted)}>
                 {t('rules.archived.at', {
                   time: dayjs(rule.retiredAt ?? undefined).format('YYYY-MM-DD'),
                 })}
@@ -96,7 +98,7 @@ const RuleRow = ({
         </div>
         <DirectionToggle disabled={archived} value={rule.direction} onChange={onDirection} />
         <EnforcementToggle disabled={archived} value={rule.enforcement} onChange={onEnforcement} />
-        <span className={styles.muted}>{t(`rules.method.${rule.compilability}`)}</span>
+        <span {...stylex.props(styles.muted)}>{t(`rules.method.${rule.compilability}`)}</span>
         <Tooltip
           title={
             rule.hitRunCount
@@ -104,11 +106,11 @@ const RuleRow = ({
               : t('rules.runs.none')
           }
         >
-          <span className={styles.muted}>
+          <span {...stylex.props(styles.muted)}>
             {rule.hitRunCount ? t('rules.runs.count', { count: rule.hitRunCount }) : '—'}
           </span>
         </Tooltip>
-        <span data-hover className={styles.hover} onClick={(e) => e.stopPropagation()}>
+        <span data-hover {...stylex.props(styles.hover)} onClick={(e) => e.stopPropagation()}>
           <DropdownMenu items={menu}>
             <ActionIcon icon={MoreHorizontalIcon} size={'small'} />
           </DropdownMenu>

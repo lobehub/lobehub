@@ -1,149 +1,150 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+
+import { rowMarker } from './markers.stylex';
 
 /**
  * 整页只有一种强调色，只标一件事：它做错的地方。
  * 「对 / 已养成 / 用上了」是默认态，不发信号；成长曲线用 success 色，和错点分开。
  */
-export const portraitStyles = createStaticStyles(({ css }) => ({
-  accent: css`
-    color: ${cssVar.colorWarning} !important;
-  `,
-  bar: css`
-    overflow: hidden;
-    display: flex;
-
-    width: 100%;
-    height: 5px;
-    border-radius: 3px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  profileCounts: css`
-    min-width: 0;
-    text-align: end;
-    white-space: nowrap;
-  `,
-  profileKey: css`
-    flex: none;
-    width: 32px;
-    font-family: ${cssVar.fontFamilyCode};
-    white-space: nowrap;
-  `,
-  profileProgress: css`
-    width: 100%;
-    min-width: 120px;
-  `,
-  profileRow: css`
-    display: grid;
-    grid-template-columns: minmax(220px, 1.15fr) minmax(180px, 1fr) 84px minmax(220px, auto);
-    gap: 20px;
-    align-items: center;
-
-    padding-block: 14px;
-    padding-inline: 18px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    @media (width <= 1100px) {
-      grid-template-columns: minmax(200px, 1fr) minmax(140px, 1fr) 84px;
-
-      & > :last-child {
-        grid-column: 2 / -1;
-        text-align: start;
-      }
-    }
-  `,
-  profileTitle: css`
-    padding-block: 14px 10px;
-    padding-inline: 18px;
-    font-size: 12px;
-  `,
-  dot: css`
-    display: inline-block;
-
-    box-sizing: border-box;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-  `,
-  dotBad: css`
-    background: ${cssVar.colorWarning};
-  `,
-  dotNone: css`
-    border: 1px solid ${cssVar.colorBorder};
-    background: transparent;
-  `,
-  dotOk: css`
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  groupHead: css`
-    padding-block: 8px;
-    padding-inline: 14px;
-    border: 0;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font: inherit;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  previewTarget: css`
-    cursor: pointer;
-    text-align: start;
-
-    &:focus-visible {
-      border-radius: 4px;
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 2px;
-    }
-  `,
-  viewAll: css`
-    font-size: 12.5px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  row: css`
-    padding-block: 10px;
-    padding-inline: 14px;
-    border: 0;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font: inherit;
-
-    &:last-child {
-      border-block-end: none;
-    }
-
-    .teach {
-      opacity: 0;
-      transition: opacity 0.15s;
-    }
-
-    &:hover,
-    &:focus-within {
-      background: ${cssVar.colorFillQuaternary};
-
-      .teach {
-        opacity: 1;
-      }
-    }
-  `,
-  segBad: css`
-    background: ${cssVar.colorWarning};
-  `,
-  segOk: css`
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  segShaky: css`
-    opacity: 0.55;
-    background: ${cssVar.colorWarning};
-  `,
-  sentence: css`
-    font-size: 22px;
-    font-weight: 700;
-    line-height: 1.4;
-    text-wrap: balance;
-  `,
-}));
+export const portraitStyles = stylex.create({
+  accent: {
+    color: cssVar.colorWarning,
+  },
+  bar: {
+    overflow: 'hidden',
+    display: 'flex',
+    width: '100%',
+    height: '5px',
+    borderRadius: '3px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  profileCounts: {
+    minWidth: '0',
+    textAlign: { 'default': 'end', '@media (width <= 1100px)': 'start' },
+    whiteSpace: 'nowrap',
+    gridColumnStart: { 'default': null, '@media (width <= 1100px)': '2' },
+    gridColumnEnd: { 'default': null, '@media (width <= 1100px)': '-1' },
+  },
+  profileKey: {
+    flex: 'none',
+    width: '32px',
+    fontFamily: cssVar.fontFamilyCode,
+    whiteSpace: 'nowrap',
+  },
+  profileProgress: {
+    width: '100%',
+    minWidth: '120px',
+  },
+  profileRow: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'minmax(220px, 1.15fr) minmax(180px, 1fr) 84px minmax(220px, auto)',
+      '@media (width <= 1100px)': 'minmax(200px, 1fr) minmax(140px, 1fr) 84px',
+    },
+    gap: '20px',
+    alignItems: 'center',
+    paddingBlock: '14px',
+    paddingInline: '18px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  profileTitle: {
+    paddingBlockStart: '14px',
+    paddingBlockEnd: '10px',
+    paddingInline: '18px',
+    fontSize: '12px',
+  },
+  dot: {
+    display: 'inline-block',
+    boxSizing: 'border-box',
+    width: '7px',
+    height: '7px',
+    borderRadius: '50%',
+  },
+  dotBad: {
+    backgroundColor: cssVar.colorWarning,
+    backgroundImage: 'none',
+  },
+  dotNone: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  dotOk: {
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+  groupHead: {
+    paddingBlock: '8px',
+    paddingInline: '14px',
+    borderWidth: 0,
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    font: 'inherit',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  previewTarget: {
+    cursor: 'pointer',
+    textAlign: 'start',
+    borderRadius: { 'default': null, ':focus-visible': '4px' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  viewAll: {
+    fontSize: '12.5px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+  },
+  row: {
+    paddingBlock: '10px',
+    paddingInline: '14px',
+    borderWidth: 0,
+    borderBlockEndWidth: { 'default': '1px', ':last-child': null },
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    font: 'inherit',
+    backgroundColor: {
+      'default': null,
+      ':hover': cssVar.colorFillQuaternary,
+      ':focus-within': cssVar.colorFillQuaternary,
+    },
+    backgroundImage: { 'default': null, ':hover': 'none', ':focus-within': 'none' },
+  },
+  // The teach button shows while its row (rowMarker) is hovered or holds focus.
+  teach: {
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover', rowMarker)]: 1,
+      [stylex.when.ancestor(':focus-within', rowMarker)]: 1,
+    },
+    transition: 'opacity 0.15s',
+  },
+  segBad: {
+    backgroundColor: cssVar.colorWarning,
+    backgroundImage: 'none',
+  },
+  segOk: {
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+  segShaky: {
+    opacity: 0.55,
+    backgroundColor: cssVar.colorWarning,
+    backgroundImage: 'none',
+  },
+  sentence: {
+    fontSize: '22px',
+    fontWeight: 700,
+    lineHeight: 1.4,
+    textWrap: 'balance',
+  },
+});

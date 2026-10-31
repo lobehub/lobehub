@@ -1,6 +1,7 @@
 'use client';
 
 import { Block, Button, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -64,7 +65,7 @@ const TaughtList = memo<{ habits: ExpertiseHabit[] }>(({ habits }) => {
                 {h.title}
               </Text>
               <Text
-                className={bad ? styles.accent : undefined}
+                className={bad ? stylex.props(styles.accent).className : undefined}
                 fontSize={12.5}
                 type={bad ? undefined : 'secondary'}
                 weight={bad ? 600 : undefined}

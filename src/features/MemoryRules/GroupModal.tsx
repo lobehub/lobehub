@@ -4,8 +4,6 @@ import {
   ActionIcon,
   Button,
   createModal,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Input,
@@ -15,6 +13,8 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeftIcon, PencilLineIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,84 +23,89 @@ import GeneratingBorder from '@/components/GeneratingBorder';
 import { expertiseService, type RuleGroup } from '@/services/expertise';
 import { shinyTextStyles } from '@/styles';
 
-export const composeStyles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    max-height: min(70vh, 640px);
-    padding-block: 4px 20px;
-    padding-inline: 20px;
-  `,
-  close: css`
-    position: absolute;
-    inset-block-start: 14px;
-    inset-inline-end: 14px;
-  `,
-  describe: css`
-    resize: none;
-
-    width: 100%;
-    min-height: 150px;
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: none;
-
-    font: inherit;
-    font-size: 14px;
-    line-height: 1.7;
-    color: inherit;
-
-    background: transparent;
-    outline: none;
-  `,
-  footer: css`
-    padding-block: 10px;
-    padding-inline: 20px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  head: css`
-    position: relative;
-    padding-block: 16px 8px;
-    padding-inline: 20px;
-  `,
-  inputShell: css`
-    overflow: hidden;
-    background: ${cssVar.colorBgElevated};
-  `,
-  label: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  status: css`
-    min-height: 32px;
-    padding-block: 4px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    box-sizing: border-box;
-    width: 100%;
-    padding-block: 4px 8px;
-    padding-inline-end: 40px;
-    border: none;
-
-    font-family: inherit;
-    font-size: 20px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: inherit;
-
-    background: transparent;
-    outline: none;
-  `,
-  titleStatic: css`
-    padding-block: 4px 8px;
-    padding-inline-end: 40px;
-
-    font-size: 20px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-}));
+export const composeStyles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    maxHeight: 'min(70vh, 640px)',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '20px',
+    paddingInline: '20px',
+  },
+  close: {
+    position: 'absolute',
+    insetBlockStart: '14px',
+    insetInlineEnd: '14px',
+  },
+  describe: {
+    resize: 'none',
+    width: '100%',
+    minHeight: '150px',
+    paddingBlock: '14px',
+    paddingInline: '16px',
+    borderWidth: 0,
+    borderStyle: 'none',
+    font: 'inherit',
+    fontSize: '14px',
+    lineHeight: 1.7,
+    color: 'inherit',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outlineStyle: 'none',
+  },
+  footer: {
+    paddingBlock: '10px',
+    paddingInline: '20px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  head: {
+    position: 'relative',
+    paddingBlockStart: '16px',
+    paddingBlockEnd: '8px',
+    paddingInline: '20px',
+  },
+  inputShell: {
+    overflow: 'hidden',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  label: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  status: {
+    minHeight: '32px',
+    paddingBlock: '4px',
+    color: cssVar.colorTextSecondary,
+  },
+  title: {
+    boxSizing: 'border-box',
+    width: '100%',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '8px',
+    paddingInlineEnd: '40px',
+    borderWidth: 0,
+    borderStyle: 'none',
+    fontFamily: 'inherit',
+    fontSize: '20px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    color: 'inherit',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outlineStyle: 'none',
+  },
+  titleStatic: {
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '8px',
+    paddingInlineEnd: '40px',
+    fontSize: '20px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+  },
+});
 
 export interface CreatedGroup {
   gate: string;
@@ -187,7 +192,7 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
         }
       }}
     >
-      <Flexbox className={composeStyles.head} gap={6}>
+      <Flexbox className={stylex.props(composeStyles.head).className} gap={6}>
         {step === 'review' && !group && (
           <Flexbox horizontal align={'center'} gap={8}>
             <ActionIcon
@@ -201,18 +206,18 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
             </Text>
           </Flexbox>
         )}
-        <div className={composeStyles.titleStatic}>
+        <div {...stylex.props(composeStyles.titleStatic)}>
           {t(group ? 'rules.group.renameTitle' : 'rules.group.newTitle')}
         </div>
         {step !== 'review' && (
           <>
             <GeneratingBorder
-              className={composeStyles.inputShell}
+              className={stylex.props(composeStyles.inputShell).className}
               generating={step === 'preparing'}
             >
               <textarea
                 autoFocus
-                className={composeStyles.describe}
+                {...stylex.props(composeStyles.describe)}
                 disabled={step === 'preparing'}
                 placeholder={t('rules.group.describePlaceholder')}
                 value={brief}
@@ -220,24 +225,33 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
               />
             </GeneratingBorder>
             {step === 'preparing' && (
-              <Flexbox horizontal align={'center'} className={composeStyles.status} gap={8}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(composeStyles.status).className}
+                gap={8}
+              >
                 <Spin size={'small'} variant={'network'} />
                 <span className={shinyTextStyles.shinyText}>{t('rules.group.generating')}</span>
               </Flexbox>
             )}
           </>
         )}
-        <ActionIcon className={composeStyles.close} icon={XIcon} onClick={() => close()} />
+        <ActionIcon
+          className={stylex.props(composeStyles.close).className}
+          icon={XIcon}
+          onClick={() => close()}
+        />
       </Flexbox>
 
       {step === 'review' && (
-        <Flexbox className={composeStyles.body} gap={16}>
+        <Flexbox className={stylex.props(composeStyles.body).className} gap={16}>
           <Flexbox gap={6}>
-            <span className={composeStyles.label}>{t('rules.group.nameLabel')}</span>
+            <span {...stylex.props(composeStyles.label)}>{t('rules.group.nameLabel')}</span>
             <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} />
           </Flexbox>
           <Flexbox gap={6}>
-            <span className={composeStyles.label}>{t('rules.group.gateLabel')}</span>
+            <span {...stylex.props(composeStyles.label)}>{t('rules.group.gateLabel')}</span>
             <TextArea
               autoSize={{ maxRows: 6, minRows: 2 }}
               placeholder={t('rules.group.gatePlaceholder')}
@@ -246,7 +260,7 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
             />
           </Flexbox>
           <Flexbox gap={6}>
-            <span className={composeStyles.label}>{t('rules.group.outOfScopeLabel')}</span>
+            <span {...stylex.props(composeStyles.label)}>{t('rules.group.outOfScopeLabel')}</span>
             <TextArea
               autoSize={{ maxRows: 4, minRows: 1 }}
               placeholder={t('rules.group.outOfScopePlaceholder')}
@@ -257,7 +271,12 @@ const GroupContent = ({ group, onDone }: GroupContentProps) => {
         </Flexbox>
       )}
 
-      <Flexbox horizontal align={'center'} className={composeStyles.footer} justify={'flex-end'}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(composeStyles.footer).className}
+        justify={'flex-end'}
+      >
         <Flexbox horizontal align={'center'} gap={4}>
           {step === 'describe' && (
             <Button

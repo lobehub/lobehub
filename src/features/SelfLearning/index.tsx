@@ -7,7 +7,6 @@ import {
   Button,
   Center,
   confirmModal,
-  createStaticStyles,
   DropdownMenu,
   Empty,
   Flexbox,
@@ -15,6 +14,7 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { DnaIcon, HistoryIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -43,12 +43,7 @@ import TeachBox from './Portrait/TeachBox';
 import { useHistoryWarmup } from './Portrait/useHistoryWarmup';
 import WarmupCard from './Portrait/WarmupCard';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    display: flex;
-  `,
-}));
+const styles = stylex.create({ body: { overflowY: 'auto', display: 'flex' } });
 
 /**
  * 成长画像 —— 自进化的 L0，也是单方向时的全部。
@@ -276,7 +271,7 @@ const SelfLearning = memo(() => {
           ) : null
         }
       />
-      <Flexbox className={styles.body} flex={1} width={'100%'}>
+      <Flexbox className={stylex.props(styles.body).className} flex={1} width={'100%'}>
         <WideScreenContainer>
           <AsyncBoundary
             data={data}
@@ -303,7 +298,9 @@ const SelfLearning = memo(() => {
           >
             <Flexbox gap={20} paddingBlock={'22px 64px'}>
               <Flexbox gap={4}>
-                <Text className={portraitStyles.sentence}>{sentence.headline}</Text>
+                <Text className={stylex.props(portraitStyles.sentence).className}>
+                  {sentence.headline}
+                </Text>
                 <Text type={'secondary'}>{subline}</Text>
               </Flexbox>
 

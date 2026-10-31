@@ -1,17 +1,19 @@
-import { createStaticStyles, Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { Button, Select, type SelectProps, Switch, Tag, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ModelIcon } from '@/components/LobeIcons';
-import { ModelItemRender, ProviderItemRender, TAG_CLASSNAME } from '@/components/ModelSelect';
+import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { sx } from '@/styles/sx';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
+import moduleStyles from './index.module.css';
 import { resolveEnableTargetProviderId, resolveStaleModelState } from './resolveStaleModelState';
-
-const prefixCls = 'ant';
 
 /**
  * Marks the stale-status Tag so the popup can hide it — inside the open list the
@@ -38,39 +40,17 @@ const ITEM_INDICATOR_CLASSNAME = 'lobe-model-select-item-indicator';
  */
 const STALE_ACTION_VALUE = '__lobe_model_select_stale_action__';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  popup: css`
-    width: max(360px, var(--anchor-width));
-
-    &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
-      padding-inline-start: 12px;
-    }
-
-    /* !important: the Tag's own class rule wins the cascade over this
-     * descendant selector, so a plain display: none never applies. */
-    .${STALE_TAG_CLASSNAME} {
-      display: none !important;
-    }
-
-    .${STALE_OPTION_CLASSNAME} .${ITEM_INDICATOR_CLASSNAME} {
-      display: none;
-    }
-  `,
-  select: css`
-    /* The base-ui Select applies className to the trigger root while the popup is
-     * portaled away, so scoping directly under this class hides the popup-only
-     * ability tags from the closed trigger without touching the list. */
-    .${TAG_CLASSNAME} {
-      display: none;
-    }
-  `,
-  staleHint: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextTertiary};
-    white-space: normal;
-  `,
-}));
+const styles = stylex.create({
+  popup: {
+    width: 'max(360px, var(--anchor-width))',
+  },
+  staleHint: {
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextTertiary,
+    whiteSpace: 'normal',
+  },
+});
 
 interface ModelOption {
   abilities?: Record<string, boolean>;
@@ -322,7 +302,7 @@ const ModelSelect = memo<ModelSelectProps>(
             )}
           </Flexbox>
           {withPopupExtras && (
-            <span className={styles.staleHint}>
+            <span {...stylex.props(styles.staleHint)}>
               {t(`ModelSelect.staleModel.${status}.hint`, { successorName })}
             </span>
           )}
@@ -374,7 +354,7 @@ const ModelSelect = memo<ModelSelectProps>(
       <TooltipGroup>
         <Select
           allowClear={allowClear}
-          className={styles.select}
+          className={moduleStyles.select}
           classNames={{ itemIndicator: ITEM_INDICATOR_CLASSNAME }}
           defaultValue={value ? `${value.provider}/${value.model}` : null}
           disabled={disabled}
@@ -382,7 +362,7 @@ const ModelSelect = memo<ModelSelectProps>(
           loading={loading || enabling}
           options={finalOptions}
           placeholder={placeholder}
-          popupClassName={styles.popup}
+          popupClassName={sx([styles.popup], moduleStyles.popup).className}
           popupMatchSelectWidth={popupWidth === undefined ? false : popupWidth}
           size={size}
           value={value ? `${value.provider}/${value.model}` : null}

@@ -1,0 +1,4 @@
+/* The paragraphs are rendered inside @lobehub/ui's Markdown, so StyleX cannot reach them. */
+.markdown p {
+  color: var(--lobe-color-text-description);
+}

@@ -1,5 +1,7 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LucideImage } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import { memo, useMemo } from 'react';
@@ -7,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useBusinessModelPricing } from '@/business/client/hooks/useBusinessModelPricing';
 import { useBusinessModelRating } from '@/business/client/hooks/useBusinessModelRating';
+import { sx } from '@/styles/sx';
 
 import { getPrice } from '../../hooks/useModelDetailPanel';
 import { formatPriceMultiplier, getInputPriceMultiplier } from '../../utils';
@@ -19,32 +22,29 @@ import {
   useMetaColumns,
 } from './metaColumns';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  bar: css`
-    overflow: hidden;
-    flex: none;
-
-    width: ${RATING_COLUMN_WIDTH}px;
-    height: 4px;
-    border-radius: 2px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  barFill: css`
-    height: 100%;
-    border-radius: 2px;
-  `,
-  price: css`
-    flex: none;
-
-    width: ${PRICE_COLUMN_WIDTH}px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    text-align: end;
-  `,
-}));
+// Column widths (RATING_COLUMN_WIDTH, PRICE_COLUMN_WIDTH) are shared constants, so they go
+// on the elements inline rather than into the stylesheet.
+const styles = stylex.create({
+  bar: {
+    overflow: 'hidden',
+    flex: 'none',
+    height: '4px',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: '2px',
+  },
+  price: {
+    flex: 'none',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'end',
+  },
+});
 
 interface ModelRowMetaProps {
   model: AiModelForSelect;
@@ -122,13 +122,12 @@ export const ModelRowMeta = memo<ModelRowMetaProps>(({ model, provider }) => {
                 score: Math.round(score),
               })}
             >
-              <div className={styles.bar}>
+              <div {...sx([styles.bar], undefined, { width: RATING_COLUMN_WIDTH })}>
                 <div
-                  className={styles.barFill}
-                  style={{
+                  {...sx([styles.barFill], undefined, {
                     background: RATING_COLORS[key],
                     width: `${Math.min(100, Math.max(0, score))}%`,
-                  }}
+                  })}
                 />
               </div>
             </Tooltip>
@@ -139,7 +138,7 @@ export const ModelRowMeta = memo<ModelRowMetaProps>(({ model, provider }) => {
           <div style={{ flex: 'none', width: PRICE_COLUMN_WIDTH }} />
         ) : (
           <Tooltip title={priceTooltip}>
-            <div className={styles.price}>
+            <div {...sx([styles.price], undefined, { width: PRICE_COLUMN_WIDTH })}>
               {multiplier === 0
                 ? t('ModelSwitchPanel.free')
                 : `${formatPriceMultiplier(multiplier)}x`}

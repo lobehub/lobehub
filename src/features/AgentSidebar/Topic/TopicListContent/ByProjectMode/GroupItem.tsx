@@ -16,6 +16,7 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import {
   Archive,
@@ -60,6 +61,7 @@ import { useTopicListScope } from '../../TopicListScope';
 import { getMergedPullRequestTopics } from '../../utils/mergedPullRequestTopics';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 import { indicatorStyles, useCollapsedIndicators } from './CollapsedIndicators';
+import { accordionHeaderMarker } from './markers.stylex';
 import ProjectTopicList from './ProjectTopicList';
 
 const PROJECT_GROUP_PREFIX = 'project:';
@@ -279,7 +281,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const action = (
     <Flexbox horizontal align={'center'} gap={4}>
       {indicators}
-      <span className={indicatorStyles.hoverActions}>
+      <span {...stylex.props(indicatorStyles.hoverActions)}>
         <DropdownMenu items={subGroupMenuItems}>
           <ActionIcon
             icon={ListFilter}
@@ -324,7 +326,9 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
 
   return (
     <AccordionItem value={id}>
-      <AccordionHeader className={'accordion-header'}>
+      <AccordionHeader
+        className={cx('accordion-header', stylex.props(accordionHeaderMarker).className)}
+      >
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: 4 }}>
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
             <Center flex="none" height={24} width={28}>

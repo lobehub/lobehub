@@ -11,6 +11,7 @@ import {
   Flexbox,
   menuSharedStyles,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
@@ -19,9 +20,13 @@ import { useTranslation } from 'react-i18next';
 import { ProviderItemRender } from '@/components/ModelSelect';
 import type { PricingMode } from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import ModelDetailPanel from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
-import { styles as modelSwitchPanelStyles } from '@/features/ModelSwitchPanel/styles';
+import {
+  descendantStyles,
+  styles as modelSwitchPanelStyles,
+} from '@/features/ModelSwitchPanel/styles';
 import type { ListItem } from '@/features/ModelSwitchPanel/types';
 import { menuKey } from '@/features/ModelSwitchPanel/utils';
+import { sx } from '@/styles/sx';
 import type { EnabledProviderWithModels } from '@/types/index';
 
 interface GenerationMultipleProvidersItemProps {
@@ -47,8 +52,11 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
       <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
         <DropdownMenuSubmenuRoot open={subOpen} onOpenChange={setSubOpen}>
           <DropdownMenuSubmenuTrigger
-            className={cx(menuSharedStyles.item, isActive && modelSwitchPanelStyles.menuItemActive)}
             style={{ paddingBlock: 8, paddingInline: 8 }}
+            className={cx(
+              menuSharedStyles.item,
+              isActive && stylex.props(modelSwitchPanelStyles.menuItemActive).className,
+            )}
             onClick={() => {
               setSubOpen(false);
               onModelChange(item.data.model.id, (activeProvider ?? item.data.providers[0]).id);
@@ -64,10 +72,12 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
           <DropdownMenuPortal>
             <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
               <DropdownMenuPopup
-                className={cx(
-                  modelSwitchPanelStyles.detailPopup,
-                  modelSwitchPanelStyles.dropdownMenu,
-                )}
+                className={
+                  sx(
+                    [modelSwitchPanelStyles.detailPopup, modelSwitchPanelStyles.dropdownMenu],
+                    descendantStyles.dropdownMenu,
+                  ).className
+                }
               >
                 <ModelDetailPanel
                   enabledList={enabledList}
@@ -85,7 +95,7 @@ const GenerationMultipleProvidersItem = memo<GenerationMultipleProvidersItemProp
                     return (
                       <Flexbox
                         horizontal
-                        className={modelSwitchPanelStyles.menuItem}
+                        className={stylex.props(modelSwitchPanelStyles.menuItem).className}
                         key={pKey}
                         onClick={() => {
                           onModelChange(item.data.model.id, p.id);

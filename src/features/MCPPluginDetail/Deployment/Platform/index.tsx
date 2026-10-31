@@ -1,18 +1,10 @@
 import { type ConnectionConfig } from '@lobehub/market-types';
-import { Block, createStaticStyles, cx, Highlighter } from '@lobehub/ui';
+import { Block, cx, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { genServerConfig } from '@/features/MCP/utils';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    lite: css`
-      pre {
-        padding: 12px !important;
-      }
-    `,
-  };
-});
+import styles from './index.module.css';
 
 interface PlatformProps {
   connection?: ConnectionConfig;

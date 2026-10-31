@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Archive, ArchiveRestore, FolderInput, Pin, Trash2, X } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,36 +17,36 @@ import MoveToAgentButton from './MoveToAgentButton';
 import { useTopicsViewStore } from './store';
 import { areAllTopicsArchived } from './utils';
 
-const styles = createStaticStyles(({ css }) => ({
-  bar: css`
-    pointer-events: auto;
-
-    padding-block: 8px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  divider: css`
-    width: 1px;
-    height: 16px;
-    margin-inline: 2px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  overlay: css`
-    pointer-events: none;
-
-    position: fixed;
-    z-index: 1000;
-    inset-block-end: 24px;
-    inset-inline: 0;
-
-    display: flex;
-    justify-content: center;
-  `,
-}));
+const styles = stylex.create({
+  bar: {
+    pointerEvents: 'auto',
+    paddingBlock: '8px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  divider: {
+    width: '1px',
+    height: '16px',
+    marginInline: '2px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  overlay: {
+    pointerEvents: 'none',
+    position: 'fixed',
+    zIndex: 1000,
+    insetBlockEnd: '24px',
+    insetInline: '0',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+});
 
 interface BulkActionBarProps {
   topics: ChatTopic[];
@@ -107,8 +109,8 @@ const BulkActionBar = memo<BulkActionBarProps>(({ topics }) => {
   if (selectedIds.length === 0) return null;
 
   return (
-    <div className={styles.overlay}>
-      <Flexbox horizontal align={'center'} className={styles.bar} gap={4}>
+    <div {...stylex.props(styles.overlay)}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.bar).className} gap={4}>
         <Text style={{ marginInlineEnd: 8 }} weight={500}>
           {t('management.bulk.selectedCount', { count: selectedIds.length })}
         </Text>
@@ -150,7 +152,7 @@ const BulkActionBar = memo<BulkActionBarProps>(({ topics }) => {
           title={t('management.bulk.delete')}
           onClick={handleBatchDelete}
         />
-        <span className={styles.divider} />
+        <span {...stylex.props(styles.divider)} />
         <ActionIcon
           icon={X}
           size={'small'}

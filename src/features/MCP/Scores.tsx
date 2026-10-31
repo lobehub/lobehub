@@ -1,15 +1,8 @@
 'use client';
 
-import {
-  Center,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  stopPropagation,
-  Tooltip,
-} from '@lobehub/ui';
+import { Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleDashedIcon, HammerIcon, LayersIcon, MessageSquareQuoteIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo } from 'react';
@@ -19,66 +12,75 @@ import urlJoin from 'url-join';
 import { Link } from '@/libs/router';
 import { McpNavKey } from '@/types/discover';
 
-import {
-  calculateScore,
-  calculateScoreFlags,
-  createScoreItems,
-  getGradeStyleClass,
-} from './calculateScore';
+import { calculateScore, calculateScoreFlags, createScoreItems } from './calculateScore';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    active: css`
-      background: ${cssVar.colorSuccessBgHover};
-    `,
-    disable: css`
-      color: ${cssVar.colorTextDescription};
-    `,
-    extraTag: css`
-      padding-block: 4px;
-      padding-inline: 10px 12px;
-      border-radius: 16px;
-
-      color: ${cssVar.colorTextSecondary};
-
-      background: ${cssVar.colorFillTertiary};
-    `,
-    extraTagActive: css`
-      &:hover {
-        color: ${cssVar.colorText};
-      }
-    `,
-    gradeA: css`
-      color: ${cssVar.colorSuccess};
-      background: ${cssVar.colorSuccessBg};
-    `,
-    gradeB: css`
-      color: ${cssVar.colorWarning};
-      background: ${cssVar.colorWarningBg};
-    `,
-    gradeF: css`
-      color: ${cssVar.colorError};
-      background: ${cssVar.colorErrorBg};
-    `,
-    gradeIcon: css`
-      flex: none;
-
-      width: 22px;
-      height: 22px;
-      border: 1.5px solid;
-      border-radius: 50%;
-
-      font-size: 12px;
-      font-weight: 600;
-    `,
-    tag: css`
-      padding-block: 4px;
-      padding-inline: 8px 12px;
-      border-radius: 16px;
-      background: ${cssVar.colorFillTertiary};
-    `,
-  };
+const styles = stylex.create({
+  disable: {
+    color: cssVar.colorTextDescription,
+  },
+  extraTag: {
+    paddingBlock: '4px',
+    paddingInlineStart: '10px',
+    paddingInlineEnd: '12px',
+    borderRadius: '16px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  extraTagActive: {
+    color: { 'default': null, ':hover': cssVar.colorText },
+  },
+  gradeA: {
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
+  gradeB: {
+    color: cssVar.colorWarning,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+  gradeF: {
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  gradeIcon: {
+    flex: 'none',
+    width: '22px',
+    height: '22px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderRadius: '50%',
+    fontSize: '12px',
+    fontWeight: 600,
+  },
+  tag: {
+    paddingBlock: '4px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '12px',
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
 });
+
+const gradeStyle = (grade: string) => {
+  switch (grade) {
+    case 'a': {
+      return styles.gradeA;
+    }
+    case 'b': {
+      return styles.gradeB;
+    }
+    case 'f': {
+      return styles.gradeF;
+    }
+    default: {
+      return styles.disable;
+    }
+  }
+};
 
 interface ScoresProps {
   deploymentOptions?: Array<{
@@ -159,14 +161,14 @@ const Scores = memo<ScoresProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={cx(styles.tag, getGradeStyleClass(grade, styles))}
+          className={stylex.props(styles.tag, gradeStyle(grade)).className}
           gap={8}
           style={{
             paddingLeft: 4,
           }}
         >
           <Center
-            className={styles.gradeIcon}
+            className={stylex.props(styles.gradeIcon).className}
             style={{
               borderColor:
                 grade === 'a'
@@ -192,7 +194,7 @@ const Scores = memo<ScoresProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.tag}
+          className={stylex.props(styles.tag).className}
           gap={8}
           style={{
             color: cssVar.colorTextDescription,
@@ -228,7 +230,12 @@ const Scores = memo<ScoresProps>(
               url: urlJoin('/community/mcp', identifier),
             })}
           >
-            <Flexbox horizontal align={'center'} className={styles.extraTag} gap={16}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(styles.extraTag).className}
+              gap={16}
+            >
               {showToolts && (
                 <Tooltip
                   title={[
@@ -236,7 +243,12 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.tools.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    className={stylex.props(styles.extraTagActive).className}
+                    gap={8}
+                  >
                     <Icon icon={HammerIcon} size={14} />
                     {toolsCount}
                   </Flexbox>
@@ -249,7 +261,12 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.prompts.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    className={stylex.props(styles.extraTagActive).className}
+                    gap={8}
+                  >
                     <Icon icon={MessageSquareQuoteIcon} size={14} />
                     {promptsCount}
                   </Flexbox>
@@ -262,7 +279,12 @@ const Scores = memo<ScoresProps>(
                     t('mcp.details.schema.resources.desc'),
                   ].join(': ')}
                 >
-                  <Flexbox horizontal align={'center'} className={styles.extraTagActive} gap={8}>
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    className={stylex.props(styles.extraTagActive).className}
+                    gap={8}
+                  >
                     <Icon icon={LayersIcon} size={14} />
                     {resourcesCount}
                   </Flexbox>

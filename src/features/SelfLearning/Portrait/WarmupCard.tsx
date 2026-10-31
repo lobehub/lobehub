@@ -1,15 +1,8 @@
 'use client';
 
-import {
-  Block,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  keyframes,
-  Text,
-} from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { DnaIcon, HistoryIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,39 +10,36 @@ import { useTranslation } from 'react-i18next';
 import type { useHistoryWarmup } from './useHistoryWarmup';
 
 /** 从左往右填满再淡出、循环 —— 读起来是「在进行」，不会被读成「从右边开始的进度条」。 */
-const fill = keyframes`
-  0% { width: 0; opacity: 1; }
-  80% { width: 100%; opacity: 1; }
-  100% { width: 100%; opacity: 0; }
-`;
+const fill = stylex.keyframes({
+  '0%': { width: 0, opacity: 1 },
+  '80%': { width: '100%', opacity: 1 },
+  '100%': { width: '100%', opacity: 0 },
+});
 
-const styles = createStaticStyles(({ css }) => ({
-  track: css`
-    position: relative;
-
-    overflow: hidden;
-
-    width: 160px;
-    height: 6px;
-    border-radius: 3px;
-
-    background: ${cssVar.colorFillSecondary};
-
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset-block: 0;
-      inset-inline-start: 0;
-
-      border-radius: 3px;
-
-      background: ${cssVar.colorSuccess};
-
-      animation: ${fill} 1.8s ease-in-out infinite;
-    }
-  `,
-}));
+const styles = stylex.create({
+  track: {
+    'position': 'relative',
+    'overflow': 'hidden',
+    'width': '160px',
+    'height': '6px',
+    'borderRadius': '3px',
+    'backgroundColor': cssVar.colorFillSecondary,
+    'backgroundImage': 'none',
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      insetBlock: 0,
+      insetInlineStart: 0,
+      borderRadius: '3px',
+      backgroundColor: cssVar.colorSuccess,
+      backgroundImage: 'none',
+      animationName: fill,
+      animationDuration: '1.8s',
+      animationTimingFunction: 'ease-in-out',
+      animationIterationCount: 'infinite',
+    },
+  },
+});
 
 interface WarmupCardProps {
   candidateCount?: number;
@@ -102,7 +92,7 @@ const WarmupCard = memo<WarmupCardProps>(({ candidateCount, domainTitles, warmup
               {t('warmup.start', { count: candidateCount })}
             </Button>
           )}
-          {warmup.phase === 'running' && <div className={styles.track} />}
+          {warmup.phase === 'running' && <div {...stylex.props(styles.track)} />}
           {warmup.phase === 'done' && (
             <Button onClick={warmup.dismiss}>{t('warmup.dismiss')}</Button>
           )}

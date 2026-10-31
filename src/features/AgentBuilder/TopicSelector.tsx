@@ -1,5 +1,7 @@
 import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { ActionIcon, createStaticStyles, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -11,21 +13,20 @@ import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  time: css`
-    margin-inline-start: 6px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  title: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  time: {
+    marginInlineStart: '6px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  title: {
+    overflow: 'hidden',
+    fontSize: '14px',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface TopicSelectorProps {
   agentId: string;
@@ -64,8 +65,8 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
           key: topic.id,
           label: (
             <Flexbox horizontal align="center" gap={4} justify="space-between" width="100%">
-              <span className={styles.title}>{topic.title}</span>
-              <span className={styles.time}>{displayTime}</span>
+              <span {...stylex.props(styles.title)}>{topic.title}</span>
+              <span {...stylex.props(styles.time)}>{displayTime}</span>
             </Flexbox>
           ),
           onCheckedChange: (checked) => {
@@ -77,7 +78,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
           type: 'checkbox',
         };
       }),
-    [topics, switchTopic, styles, activeTopicId],
+    [topics, switchTopic, activeTopicId],
   );
   const isEmpty = !topics || topics.length === 0;
 
@@ -87,7 +88,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
       styles={{ right: { flex: 'none' } }}
       left={
         activeTopic?.title ? (
-          <span className={styles.title} title={activeTopic.title}>
+          <span {...stylex.props(styles.title)} title={activeTopic.title}>
             {activeTopic.title}
           </span>
         ) : undefined

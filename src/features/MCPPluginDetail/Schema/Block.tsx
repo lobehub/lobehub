@@ -1,7 +1,10 @@
 import { Flexbox, Tabs, Tag } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { styles } from './style';
 import { ModeType } from './types';
@@ -22,7 +25,7 @@ const Block = memo<BlockProps>(({ title, count, desc, children, mode, setMode, i
     <Flexbox gap={12}>
       <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
         <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
-          <h2 className={styles.sectionTitle} id={id}>
+          <h2 {...stylex.props(styles.sectionTitle)} id={id}>
             {title}
           </h2>
           <Tag>{count}</Tag>
@@ -43,9 +46,7 @@ const Block = memo<BlockProps>(({ title, count, desc, children, mode, setMode, i
           onChange={(key) => setMode?.(key as ModeType)}
         />
       </Flexbox>
-      <p className={styles.sectionDesc} style={{ marginTop: -6 }}>
-        {desc}
-      </p>
+      <p {...sx([styles.sectionDesc], undefined, { marginTop: -6 })}>{desc}</p>
       {children}
     </Flexbox>
   );

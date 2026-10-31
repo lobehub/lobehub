@@ -1,8 +1,10 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Tabs, type TabsItem, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BookOpenIcon,
   BotIcon,
@@ -23,29 +25,20 @@ import { McpNavKey } from '@/types/discover';
 
 import { useDetailContext } from './DetailProvider';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    link: css`
-      color: ${cssVar.colorTextDescription};
-
-      &:hover {
-        color: ${cssVar.colorInfo};
-      }
-    `,
-    nav: css`
-      border-block-end: 1px solid ${cssVar.colorBorder};
-    `,
-    tabs: css`
-      scrollbar-width: none;
-      overflow-x: auto;
-      flex: 1;
-      min-width: 0;
-
-      &::-webkit-scrollbar {
-        display: none;
-      }
-    `,
-  };
+const styles = stylex.create({
+  link: { color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorInfo } },
+  nav: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+  },
+  tabs: {
+    'scrollbarWidth': 'none',
+    'overflowX': 'auto',
+    'flex': '1',
+    'minWidth': '0',
+    '::-webkit-scrollbar': { display: 'none' },
+  },
 });
 
 interface NavProps {
@@ -78,7 +71,7 @@ const Nav = memo<NavProps>(
     const nav = (
       <Tabs
         activeKey={activeTab}
-        className={styles.tabs}
+        className={stylex.props(styles.tabs).className}
         variant="square"
         items={
           [
@@ -178,7 +171,12 @@ const Nav = memo<NavProps>(
     return mobile ? (
       nav
     ) : (
-      <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.nav).className}
+        justify={'space-between'}
+      >
         {nav}
         {!inModal && (
           <Flexbox
@@ -187,16 +185,26 @@ const Nav = memo<NavProps>(
             gap={12}
             style={{ marginInlineStart: 12, whiteSpace: 'nowrap' }}
           >
-            <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
+            <a
+              {...stylex.props(styles.link)}
+              href={SOCIAL_URL.discord}
+              rel="noreferrer"
+              target="_blank"
+            >
               {t('mcp.details.nav.needHelp')}
             </a>
             {github?.url && (
               <>
-                <a className={styles.link} href={github.url} rel="noreferrer" target="_blank">
+                <a
+                  {...stylex.props(styles.link)}
+                  href={github.url}
+                  rel="noreferrer"
+                  target="_blank"
+                >
                   {t('mcp.details.nav.viewSourceCode')}
                 </a>
                 <a
-                  className={styles.link}
+                  {...stylex.props(styles.link)}
                   href={urlJoin(github.url, 'issues')}
                   rel="noreferrer"
                   target="_blank"

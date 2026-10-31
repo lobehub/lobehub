@@ -7,10 +7,13 @@ import {
   stopPropagation,
   TooltipGroup,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useState } from 'react';
 
+import { sx } from '@/styles/sx';
+
 import { PanelContent } from './components/PanelContent';
-import { styles } from './styles';
+import { descendantStyles, styles } from './styles';
 import { type ModelSwitchPanelProps } from './types';
 
 const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
@@ -42,12 +45,18 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     return (
       <TooltipGroup>
         <DropdownMenuRoot open={isOpen} onOpenChange={handleOpenChange}>
-          <DropdownMenuTrigger className={styles.trigger} openOnHover={openOnHover}>
+          <DropdownMenuTrigger
+            className={sx([styles.trigger], descendantStyles.trigger).className}
+            openOnHover={openOnHover}
+          >
             {children}
           </DropdownMenuTrigger>
           <DropdownMenuPortal>
             <DropdownMenuPositioner hoverTrigger={openOnHover} placement={placement}>
-              <DropdownMenuPopup className={styles.container} onKeyDown={stopPropagation}>
+              <DropdownMenuPopup
+                className={stylex.props(styles.container).className}
+                onKeyDown={stopPropagation}
+              >
                 <PanelContent
                   ModelItemComponent={ModelItemComponent}
                   enabledList={enabledList}

@@ -2,7 +2,9 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
-import { Block, Checkbox, createStaticStyles, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleDollarSign, FolderIcon, GitBranchIcon, MessageSquare, Pin, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,86 +16,47 @@ import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
+import moduleStyles from './TopicCard.module.css';
 import { getProjectInfo } from './utils';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    cursor: pointer;
-
-    position: relative;
-
-    display: flex;
-    flex-direction: column;
-
-    /* min-height keeps short cards consistent without forcing tall empty
-       whitespace — preview + footer can still grow the card naturally. */
-    min-height: 140px;
-    padding: 14px;
-
-    transition:
-      transform 0.18s,
-      box-shadow 0.18s,
-      border-color 0.18s;
-
-    &:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgb(0 0 0 / 6%);
-    }
-  `,
-  cardSelected: css`
-    border-color: ${cssVar.colorPrimary};
-    box-shadow: 0 0 0 1px ${cssVar.colorPrimary};
-  `,
-  checkbox: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 10px;
-    inset-inline-end: 10px;
-  `,
-  checkboxBox: css`
-    border-color: ${cssVar.colorBorder};
-  `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  `,
-  footer: css`
-    /* push to bottom so cards with short content keep the stats row anchored */
-    margin-block-start: auto;
-    padding-block-start: 10px;
-    border-block-start: 1px solid ${cssVar.colorSplit};
-  `,
-  projectLabel: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  /* Long folder / branch names must truncate inside the card instead of
-     overflowing its border. */
-  projectTag: css`
-    align-self: flex-start;
-    min-width: 0;
-    max-width: 100%;
-
-    > :first-child {
-      flex-shrink: 0;
-    }
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    flex: 1;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-  `,
-  /* Reserve space for the absolutely positioned checkbox (18px + gap)
-     so long titles don't run underneath it. */
-  titleRow: css`
-    padding-inline-end: 28px;
-  `,
-}));
+const styles = stylex.create({
+  projectLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  card: {
+    cursor: 'pointer',
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: '140px',
+    padding: '14px',
+    transition: 'transform 0.18s,\n      box-shadow 0.18s,\n      border-color 0.18s',
+    transform: { 'default': null, ':hover': 'translateY(-1px)' },
+    boxShadow: { 'default': null, ':hover': '0 4px 12px rgb(0 0 0 / 6%)' },
+  },
+  cardSelected: { borderColor: cssVar.colorPrimary, boxShadow: `0 0 0 1px ${cssVar.colorPrimary}` },
+  checkbox: { position: 'absolute', zIndex: 1, insetBlockStart: '10px', insetInlineEnd: '10px' },
+  checkboxBox: { borderColor: cssVar.colorBorder },
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+  },
+  footer: {
+    marginBlockStart: 'auto',
+    paddingBlockStart: '10px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorSplit,
+  },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    flex: '1',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+  },
+  titleRow: { paddingInlineEnd: '28px' },
+});
 
 interface TopicCardProps {
   agentId: string;
@@ -148,21 +111,31 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
 
   return (
     <Block
-      className={[styles.card, selected && styles.cardSelected].filter(Boolean).join(' ')}
       gap={8}
       variant={'outlined'}
+      className={[
+        stylex.props(styles.card).className,
+        stylex.props(selected && styles.cardSelected).className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onClick={handleClick}
     >
-      <div className={styles.checkbox} onClick={stopPropagation}>
+      <div {...stylex.props(styles.checkbox)} onClick={stopPropagation}>
         <Checkbox
           checked={selected}
-          classNames={{ checkbox: styles.checkboxBox }}
+          classNames={{ checkbox: stylex.props(styles.checkboxBox).className }}
           size={18}
           onChange={handleCheckboxChange}
         />
       </div>
 
-      <Flexbox horizontal align={'center'} className={styles.titleRow} gap={6}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.titleRow).className}
+        gap={6}
+      >
         {topic.favorite && (
           <Icon icon={Pin} size={13} style={{ color: cssVar.colorTextTertiary, flexShrink: 0 }} />
         )}
@@ -173,13 +146,17 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
             style={{ flexShrink: 0 }}
           />
         )}
-        <Text className={styles.title} fontSize={14} weight={600}>
+        <Text className={stylex.props(styles.title).className} fontSize={14} weight={600}>
           {topic.title || t('defaultTitle')}
         </Text>
       </Flexbox>
 
       {preview && (
-        <Text className={styles.description} fontSize={12} type={'secondary'}>
+        <Text
+          className={stylex.props(styles.description).className}
+          fontSize={12}
+          type={'secondary'}
+        >
           {preview}
         </Text>
       )}
@@ -187,27 +164,32 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       {project && (
         <Flexbox gap={4}>
           <Tag
-            className={styles.projectTag}
+            className={moduleStyles.projectTag}
             icon={<Icon icon={FolderIcon} size={11} />}
             size={'small'}
             title={project.path}
           >
-            <span className={styles.projectLabel}>{project.path}</span>
+            <span className={stylex.props(styles.projectLabel).className}>{project.path}</span>
           </Tag>
           {project.branch && (
             <Tag
-              className={styles.projectTag}
+              className={moduleStyles.projectTag}
               icon={<Icon icon={GitBranchIcon} size={11} />}
               size={'small'}
               title={project.branch}
             >
-              <span className={styles.projectLabel}>{project.branch}</span>
+              <span className={stylex.props(styles.projectLabel).className}>{project.branch}</span>
             </Tag>
           )}
         </Flexbox>
       )}
 
-      <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.footer).className}
+        justify={'space-between'}
+      >
         <Flexbox
           horizontal
           align={'center'}

@@ -1,0 +1,14 @@
+/*
+ * Grid strokes are re-colored with the alpha-based fill token: the library
+ * draws them with colorBorderSecondary, which equals colorBgElevated in the
+ * dark theme (both neutral scale[2]), so they vanish on elevated surfaces.
+ * Note the concentric rings render as `path` (class
+ * recharts-polar-grid-concentric-polygon) and `circle` in circle grid mode —
+ * there is no `polygon` element inside the grid group. The chart DOM belongs
+ * to @lobehub/charts, so StyleX cannot reach it.
+ */
+.radar :global(.recharts-polar-grid) line,
+.radar :global(.recharts-polar-grid) path,
+.radar :global(.recharts-polar-grid) circle {
+  stroke: var(--lobe-color-fill-secondary);
+}

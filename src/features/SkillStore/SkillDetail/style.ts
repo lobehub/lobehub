@@ -1,43 +1,49 @@
-import { createStaticStyles, responsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const agentListStyles = createStaticStyles(({ css }) => ({
-  item: css`
-    width: calc(50% - 6px);
+const styles = stylex.create({
+  item: {
+    width: { default: 'calc(50% - 6px)', [media.sm]: '100%' },
+  },
+  list: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '12px',
+    paddingBlockEnd: '16px',
+  },
+  container: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+  },
+  description: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  title: {
+    overflow: 'hidden',
+    fontSize: '14px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
-    ${responsive.sm} {
-      width: 100%;
-    }
-  `,
-  list: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding-block-end: 16px;
-  `,
-}));
+// Consumers hand these to `className` props of other components, so they are exported as
+// compiled class names.
+export const agentListStyles = {
+  item: stylex.props(styles.item).className,
+  list: stylex.props(styles.list).className,
+};
 
-export const itemStyles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    position: relative;
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-  `,
-  description: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  title: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+export const itemStyles = {
+  container: stylex.props(styles.container).className,
+  description: stylex.props(styles.description).className,
+  title: stylex.props(styles.title).className,
+};

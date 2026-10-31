@@ -1,0 +1,4 @@
+/* The <pre> is rendered inside @lobehub/ui's Highlighter, so StyleX cannot reach it. */
+.lite pre {
+  padding: 12px !important;
+}

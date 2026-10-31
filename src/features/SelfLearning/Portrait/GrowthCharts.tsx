@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,47 +10,41 @@ import type { ExpertiseDomainItem } from '@/services/expertise';
 
 import { earlyPassRate, passRateSeries, recentPassRate, zeroViolationStreak } from '../helpers';
 
-const styles = createStaticStyles(({ css }) => ({
-  chart: css`
-    flex: 1;
-    min-width: 0;
-
-    .axis {
-      font-size: 10px;
-      fill: ${cssVar.colorTextQuaternary};
-    }
-
-    .grid {
-      stroke: ${cssVar.colorBorderSecondary};
-    }
-
-    .line {
-      fill: none;
-      stroke: ${cssVar.colorSuccess};
-      stroke-width: 1.75;
-    }
-
-    .area {
-      fill: ${cssVar.colorSuccess};
-      fill-opacity: 0.08;
-    }
-
-    .pt {
-      fill: ${cssVar.colorSuccess};
-    }
-
-    .ref {
-      stroke: ${cssVar.colorSuccess};
-      stroke-dasharray: 3 3;
-      stroke-opacity: 0.45;
-    }
-
-    .refLabel {
-      font-size: 10px;
-      fill: ${cssVar.colorSuccess};
-    }
-  `,
-}));
+// The svg parts carry their own styles, so nothing here depends on descendant selectors.
+const styles = stylex.create({
+  chart: {
+    flex: '1',
+    minWidth: '0',
+  },
+  axis: {
+    fontSize: '10px',
+    fill: cssVar.colorTextQuaternary,
+  },
+  grid: {
+    stroke: cssVar.colorBorderSecondary,
+  },
+  line: {
+    fill: 'none',
+    stroke: cssVar.colorSuccess,
+    strokeWidth: 1.75,
+  },
+  area: {
+    fill: cssVar.colorSuccess,
+    fillOpacity: 0.08,
+  },
+  pt: {
+    fill: cssVar.colorSuccess,
+  },
+  ref: {
+    stroke: cssVar.colorSuccess,
+    strokeDasharray: '3 3',
+    strokeOpacity: 0.45,
+  },
+  refLabel: {
+    fontSize: '10px',
+    fill: cssVar.colorSuccess,
+  },
+});
 
 const W = 380;
 const H = 96;
@@ -134,7 +130,7 @@ const GrowthCharts = memo<GrowthChartsProps>(({ domains }) => {
   return (
     <Block padding={'12px 14px'} variant={'outlined'}>
       <Flexbox horizontal gap={24}>
-        <Flexbox className={styles.chart} gap={4}>
+        <Flexbox className={stylex.props(styles.chart).className} gap={4}>
           <Flexbox horizontal align={'baseline'} gap={8}>
             <Text fontSize={12} type={'secondary'}>
               {t('charts.learned')}
@@ -149,31 +145,37 @@ const GrowthCharts = memo<GrowthChartsProps>(({ domains }) => {
           <svg height={H} viewBox={`0 0 ${W} ${H}`} width={'100%'}>
             {[0, 0.5, 1].map((f) => (
               <g key={f}>
-                <line className={'grid'} x1={L} x2={W - R} y1={yc(cmax * f)} y2={yc(cmax * f)} />
-                <text className={'axis'} x={W - R + 4} y={yc(cmax * f) + 3}>
+                <line
+                  {...stylex.props(styles.grid)}
+                  x1={L}
+                  x2={W - R}
+                  y1={yc(cmax * f)}
+                  y2={yc(cmax * f)}
+                />
+                <text {...stylex.props(styles.axis)} x={W - R + 4} y={yc(cmax * f) + 3}>
                   {Math.round(cmax * f)}
                 </text>
               </g>
             ))}
             <polygon
-              className={'area'}
+              {...stylex.props(styles.area)}
               points={`${x(0, n)},${yc(0)} ${cum.map((p, i) => `${x(i, n)},${yc(p.n)}`).join(' ')} ${x(n - 1, n)},${yc(0)}`}
             />
             <polyline
-              className={'line'}
+              {...stylex.props(styles.line)}
               points={cum.map((p, i) => `${x(i, n)},${yc(p.n)}`).join(' ')}
             />
-            <circle className={'pt'} cx={x(n - 1, n)} cy={yc(cum.at(-1)!.n)} r={2.5} />
-            <text className={'axis'} x={L} y={H - 3}>
+            <circle {...stylex.props(styles.pt)} cx={x(n - 1, n)} cy={yc(cum.at(-1)!.n)} r={2.5} />
+            <text {...stylex.props(styles.axis)} x={L} y={H - 3}>
               {t('charts.run1')}
             </text>
-            <text className={'axis'} textAnchor={'end'} x={W - R} y={H - 3}>
+            <text {...stylex.props(styles.axis)} textAnchor={'end'} x={W - R} y={H - 3}>
               {t('charts.runN', { n: cum.at(-1)!.run })}
             </text>
           </svg>
         </Flexbox>
 
-        <Flexbox className={styles.chart} gap={4}>
+        <Flexbox className={stylex.props(styles.chart).className} gap={4}>
           <Flexbox horizontal align={'baseline'} gap={8} wrap={'wrap'}>
             <Text fontSize={12} type={'secondary'}>
               {t('charts.passRate')}
@@ -193,38 +195,38 @@ const GrowthCharts = memo<GrowthChartsProps>(({ domains }) => {
           <svg height={H} viewBox={`0 0 ${W} ${H}`} width={'100%'}>
             {[0, 0.5, 1].map((f) => (
               <g key={f}>
-                <line className={'grid'} x1={L} x2={W - R} y1={yr(f)} y2={yr(f)} />
-                <text className={'axis'} x={W - R + 4} y={yr(f) + 3}>
+                <line {...stylex.props(styles.grid)} x1={L} x2={W - R} y1={yr(f)} y2={yr(f)} />
+                <text {...stylex.props(styles.axis)} x={W - R + 4} y={yr(f) + 3}>
                   {Math.round(f * 100)}%
                 </text>
               </g>
             ))}
-            <line className={'ref'} x1={L} x2={W - R} y1={yr(0.9)} y2={yr(0.9)} />
-            <text className={'refLabel'} x={L + 2} y={yr(0.9) - 3}>
+            <line {...stylex.props(styles.ref)} x1={L} x2={W - R} y1={yr(0.9)} y2={yr(0.9)} />
+            <text {...stylex.props(styles.refLabel)} x={L + 2} y={yr(0.9) - 3}>
               {t('charts.refLine')}
             </text>
             {rate.length > 0 && (
               <>
                 <polygon
-                  className={'area'}
+                  {...stylex.props(styles.area)}
                   points={`${x(0, rate.length)},${yr(0)} ${rate.map((p, i) => `${x(i, rate.length)},${yr(p.rate)}`).join(' ')} ${x(rate.length - 1, rate.length)},${yr(0)}`}
                 />
                 <polyline
-                  className={'line'}
+                  {...stylex.props(styles.line)}
                   points={rate.map((p, i) => `${x(i, rate.length)},${yr(p.rate)}`).join(' ')}
                 />
                 <circle
-                  className={'pt'}
+                  {...stylex.props(styles.pt)}
                   cx={x(rate.length - 1, rate.length)}
                   cy={yr(rate.at(-1)!.rate)}
                   r={2.5}
                 />
               </>
             )}
-            <text className={'axis'} x={L} y={H - 3}>
+            <text {...stylex.props(styles.axis)} x={L} y={H - 3}>
               {t('charts.run1')}
             </text>
-            <text className={'axis'} textAnchor={'end'} x={W - R} y={H - 3}>
+            <text {...stylex.props(styles.axis)} textAnchor={'end'} x={W - R} y={H - 3}>
               {t('charts.runN', { n: cum.at(-1)!.run })}
             </text>
           </svg>

@@ -6,14 +6,14 @@ import {
   Block,
   confirmModal,
   createModal,
-  createStaticStyles,
-  cssVar,
   DropdownMenu,
   Flexbox,
   Icon,
   Tag,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t as translate } from 'i18next';
 import { DownloadIcon, Loader2, MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
@@ -30,23 +30,17 @@ import { itemStyles } from '../style';
 
 const MarketSkillDetail = lazy(() => import('../MarketSkills/MarketSkillDetail'));
 
-const styles = createStaticStyles(({ css }) => ({
-  title: css`
-    cursor: pointer;
-
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  title: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    fontSize: '14px',
+    fontWeight: 500,
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorPrimary },
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const openMarketSkillDetailModal = (identifier: string) =>
   createModal({
@@ -174,7 +168,10 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
         <Avatar avatar={icon || name} shape={'square'} size={40} style={{ flex: 'none' }} />
         <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
           <Flexbox horizontal align="center" gap={8}>
-            <span className={styles.title} onClick={() => openMarketSkillDetailModal(identifier)}>
+            <span
+              {...stylex.props(styles.title)}
+              onClick={() => openMarketSkillDetailModal(identifier)}
+            >
               {name}
             </span>
             <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />

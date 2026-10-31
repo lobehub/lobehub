@@ -1,13 +1,15 @@
 'use client';
 
-import { cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, MoreHorizontalIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { RuleGroup } from '@/services/expertise';
 
 import { useScopeLabel } from './labels';
+import { hoverHostMarker } from './markers.stylex';
 import { styles } from './styles';
 
 interface GroupSectionProps {
@@ -32,22 +34,25 @@ const GroupSection = ({ collapsed, count, group, menu, onToggle, onWrite }: Grou
     group.scopes.every((scope) => scope.kind === 'agent' && scope.id === owner.agent.id);
 
   return (
-    <div className={cx(styles.section, collapsed && styles.sectionCollapsed)} onClick={onToggle}>
-      <span className={cx(styles.chevron, !collapsed && styles.chevronOpen)}>
+    <div
+      {...stylex.props(styles.section, collapsed && styles.sectionCollapsed, hoverHostMarker)}
+      onClick={onToggle}
+    >
+      <span {...stylex.props(styles.chevron, !collapsed && styles.chevronOpen)}>
         <Icon icon={ChevronRightIcon} size={14} />
       </span>
-      <span className={styles.sectionTitle}>{group.domain.title}</span>
-      <span className={styles.sectionCount}>{count}</span>
+      <span {...stylex.props(styles.sectionTitle)}>{group.domain.title}</span>
+      <span {...stylex.props(styles.sectionCount)}>{count}</span>
       {/* Under an agent's heading, "applies to that agent" only repeats the heading. */}
       {!onlyItsAgent && (
-        <span className={styles.sectionScope}>
+        <span {...stylex.props(styles.sectionScope)}>
           {t('rules.group.scope', { scopes: scopeLabel(group.scopes) })}
         </span>
       )}
-      {!collapsed && <span data-line className={styles.sectionLine} />}
+      {!collapsed && <span data-line {...stylex.props(styles.sectionLine)} />}
       <span
         data-hover
-        className={cx(styles.hover, styles.sectionActions)}
+        {...stylex.props(styles.hover, styles.sectionActions)}
         onClick={(e) => e.stopPropagation()}
       >
         <Flexbox horizontal gap={2}>

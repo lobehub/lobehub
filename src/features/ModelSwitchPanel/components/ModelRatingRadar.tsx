@@ -1,8 +1,10 @@
 import { RadarChart } from '@lobehub/charts';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import type { ModelRating, ModelRatingSource } from 'model-bank';
 import type { FC } from 'react';
 import { memo } from 'react';
+
+import moduleStyles from './ModelRatingRadar.module.css';
 
 /** display order around the hexagon, starting from the top vertex, clockwise */
 export const RATING_DIMENSION_ORDER = [
@@ -36,23 +38,8 @@ export interface RadarDimensionDatum {
   tooltip?: string;
 }
 
-export const radarStyles = createStaticStyles(({ css, cssVar }) => ({
-  /**
-   * Grid strokes are re-colored with the alpha-based fill token: the library
-   * draws them with colorBorderSecondary, which equals colorBgElevated in the
-   * dark theme (both neutral scale[2]), so they vanish on elevated surfaces.
-   * Note the concentric rings render as `path` (class
-   * recharts-polar-grid-concentric-polygon) and `circle` in circle grid mode —
-   * there is no `polygon` element inside the grid group.
-   */
-  radar: css`
-    .recharts-polar-grid line,
-    .recharts-polar-grid path,
-    .recharts-polar-grid circle {
-      stroke: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+/** Class names of the radar's chart DOM overrides (see ModelRatingRadar.module.css). */
+export const radarStyles = moduleStyles;
 
 interface ModelRatingRadarProps {
   dimensions: RadarDimensionDatum[];

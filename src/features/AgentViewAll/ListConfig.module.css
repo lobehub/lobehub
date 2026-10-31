@@ -1,0 +1,6 @@
+/* The labels are rendered inside @lobehub/ui's Form, so StyleX cannot reach them. */
+.form label,
+.form label * {
+  font-size: 13px !important;
+  color: var(--lobe-color-text-secondary) !important;
+}

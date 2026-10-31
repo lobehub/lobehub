@@ -1,0 +1,24 @@
+/*
+ * The popup and the option rows are rendered by @lobehub/ui's Select, so StyleX cannot
+ * reach them. The global class names are the ones set in index.tsx and ModelSelect.
+ */
+.popup:global(.ant-select-dropdown) :global(.ant-select-item-option-grouped) {
+  padding-inline-start: 12px;
+}
+
+/* !important: the Tag's own class rule wins the cascade over this
+ * descendant selector, so a plain display: none never applies. */
+.popup :global(.lobe-model-select-stale-tag) {
+  display: none !important;
+}
+
+.popup :global(.lobe-model-select-stale-option) :global(.lobe-model-select-item-indicator) {
+  display: none;
+}
+
+/* The base-ui Select applies className to the trigger root while the popup is
+ * portaled away, so scoping directly under this class hides the popup-only
+ * ability tags from the closed trigger without touching the list. */
+.select :global(.lobe-model-info-tags) {
+  display: none;
+}

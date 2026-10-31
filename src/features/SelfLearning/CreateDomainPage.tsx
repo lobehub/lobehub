@@ -3,8 +3,6 @@
 import {
   ActionIcon,
   Button,
-  createStaticStyles,
-  cssVar,
   Divider,
   Flexbox,
   Icon,
@@ -15,6 +13,8 @@ import {
   TextArea,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   AnchorIcon,
   ArrowLeftIcon,
@@ -39,6 +39,7 @@ import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
 import { shinyTextStyles } from '@/styles';
+import { sx } from '@/styles/sx';
 
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
 import { useCreateDomainDraft } from './useCreateDomainDraft';
@@ -53,140 +54,122 @@ const emptyAdjustments: Record<AdjustmentTarget, string> = {
   rationale: '',
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    display: flex;
-  `,
-  content: css`
-    width: 100%;
-    max-width: 960px;
-    padding-block: 16px 96px;
-  `,
-  footer: css`
-    position: sticky;
-    z-index: 2;
-    inset-block-end: 0;
+const generationRoll = stylex.keyframes({
+  '0%': { transform: 'translateY(0)' },
+  '20%': { transform: 'translateY(0)' },
+  '25%': { transform: 'translateY(-22px)' },
+  '45%': { transform: 'translateY(-22px)' },
+  '50%': { transform: 'translateY(-44px)' },
+  '70%': { transform: 'translateY(-44px)' },
+  '75%': { transform: 'translateY(-66px)' },
+  '95%': { transform: 'translateY(-66px)' },
+  '100%': { transform: 'translateY(-88px)' },
+});
 
-    padding-block: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  head: css`
-    padding-block-end: 24px;
-  `,
-  generatingStatus: css`
-    min-height: 36px;
-    padding-block: 6px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  generatingTextItem: css`
-    display: flex;
-    align-items: center;
-
-    height: 22px;
-
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 22px;
-    white-space: nowrap;
-  `,
-  generatingTextTrack: css`
-    animation: self-learning-generation-roll 16s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-
-    @keyframes self-learning-generation-roll {
-      0%,
-      20% {
-        transform: translateY(0);
-      }
-
-      25%,
-      45% {
-        transform: translateY(-22px);
-      }
-
-      50%,
-      70% {
-        transform: translateY(-44px);
-      }
-
-      75%,
-      95% {
-        transform: translateY(-66px);
-      }
-
-      100% {
-        transform: translateY(-88px);
-      }
-    }
-  `,
-  generatingTextViewport: css`
-    overflow: hidden;
-    height: 22px;
-  `,
-  itemRow: css`
-    display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) 28px;
-    gap: 8px;
-    align-items: start;
-
-    padding-block: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  reviewSection: css`
-    padding-block: 20px;
-
-    &:first-child {
-      padding-block: 0 4px;
-    }
-  `,
-  rationale: css`
-    margin: 0;
-    padding-inline: 0;
-
-    font-size: 16px;
-    line-height: 1.75;
-    color: ${cssVar.colorText};
-  `,
-  seq: css`
-    padding-block-start: 8px;
-    font-size: 14px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  title: css`
-    box-sizing: border-box;
-    width: 100%;
-    padding-block: 4px 8px;
-    padding-inline-end: 0;
-    border: none;
-
-    font-family: inherit;
-    font-size: 28px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: inherit;
-
-    background: transparent;
-    outline: none;
-  `,
-  titleStatic: css`
-    padding-block: 4px 8px;
-
-    font-size: 28px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    display: 'flex',
+  },
+  content: {
+    width: '100%',
+    maxWidth: '960px',
+    paddingBlockStart: '16px',
+    paddingBlockEnd: '96px',
+  },
+  footer: {
+    position: 'sticky',
+    zIndex: 2,
+    insetBlockEnd: 0,
+    paddingBlock: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  head: {
+    paddingBlockEnd: '24px',
+  },
+  generatingStatus: {
+    minHeight: '36px',
+    paddingBlock: '6px',
+    color: cssVar.colorTextSecondary,
+  },
+  generatingTextItem: {
+    display: 'flex',
+    alignItems: 'center',
+    height: '22px',
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: '22px',
+    whiteSpace: 'nowrap',
+  },
+  generatingTextTrack: {
+    animationName: {
+      'default': generationRoll,
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    animationDuration: '16s',
+    animationTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    animationIterationCount: 'infinite',
+  },
+  generatingTextViewport: {
+    overflow: 'hidden',
+    height: '22px',
+  },
+  itemRow: {
+    display: 'grid',
+    gridTemplateColumns: '32px minmax(0, 1fr) 28px',
+    gap: '8px',
+    alignItems: 'start',
+    paddingBlock: '8px',
+    borderBlockEndWidth: { 'default': '1px', ':last-child': null },
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  reviewSection: {
+    paddingBlockStart: { 'default': '20px', ':first-child': 0 },
+    paddingBlockEnd: { 'default': '20px', ':first-child': '4px' },
+  },
+  rationale: {
+    margin: 0,
+    paddingInline: 0,
+    fontSize: '16px',
+    lineHeight: 1.75,
+    color: cssVar.colorText,
+  },
+  seq: {
+    paddingBlockStart: '8px',
+    fontSize: '14px',
+    color: cssVar.colorTextTertiary,
+  },
+  title: {
+    boxSizing: 'border-box',
+    width: '100%',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '8px',
+    paddingInlineEnd: 0,
+    borderWidth: 0,
+    borderStyle: 'none',
+    fontFamily: 'inherit',
+    fontSize: '28px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    color: 'inherit',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outlineStyle: 'none',
+  },
+  titleStatic: {
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '8px',
+    fontSize: '28px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+  },
+});
 
 export const formatRemainingTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
@@ -417,10 +400,10 @@ const CreateDomainPage = memo(() => {
           ) : null
         }
       />
-      <Flexbox className={styles.body} flex={1} width={'100%'}>
+      <Flexbox className={stylex.props(styles.body).className} flex={1} width={'100%'}>
         <WideScreenContainer minWidth={960}>
-          <Flexbox className={styles.content} onKeyDown={onKeyDown}>
-            <Flexbox horizontal className={styles.head}>
+          <Flexbox className={stylex.props(styles.content).className} onKeyDown={onKeyDown}>
+            <Flexbox horizontal className={stylex.props(styles.head).className}>
               <Flexbox flex={1} gap={6}>
                 {step === 'review' && (
                   <Flexbox horizontal>
@@ -436,14 +419,14 @@ const CreateDomainPage = memo(() => {
                 )}
                 {step === 'review' && draft ? (
                   <input
-                    className={styles.title}
+                    {...stylex.props(styles.title)}
                     maxLength={80}
                     placeholder={t('create.field.title')}
                     value={draft.title}
                     onChange={(e) => patch({ title: e.target.value })}
                   />
                 ) : (
-                  <div className={styles.titleStatic}>{t('create.modalTitle')}</div>
+                  <div {...stylex.props(styles.titleStatic)}>{t('create.modalTitle')}</div>
                 )}
                 {step !== 'review' && (
                   <>
@@ -465,7 +448,7 @@ const CreateDomainPage = memo(() => {
                       <Flexbox
                         horizontal
                         align={'center'}
-                        className={styles.generatingStatus}
+                        className={stylex.props(styles.generatingStatus).className}
                         gap={10}
                         justify={'space-between'}
                       >
@@ -473,13 +456,13 @@ const CreateDomainPage = memo(() => {
                           <Spin size="small" variant="network" />
                           <div
                             aria-label={t('create.generating')}
-                            className={styles.generatingTextViewport}
+                            {...stylex.props(styles.generatingTextViewport)}
                             role={'status'}
                           >
-                            <div aria-hidden className={styles.generatingTextTrack}>
+                            <div aria-hidden {...stylex.props(styles.generatingTextTrack)}>
                               {generatingMessages.map((message, index) => (
                                 <div
-                                  className={`${styles.generatingTextItem} ${shinyTextStyles.shinyText}`}
+                                  {...sx([styles.generatingTextItem], shinyTextStyles.shinyText)}
                                   key={index}
                                 >
                                   {message}
@@ -514,8 +497,8 @@ const CreateDomainPage = memo(() => {
             </Flexbox>
 
             {step === 'review' && draft && (
-              <Flexbox className={styles.body}>
-                <Flexbox className={styles.reviewSection} gap={10}>
+              <Flexbox className={stylex.props(styles.body).className}>
+                <Flexbox className={stylex.props(styles.reviewSection).className} gap={10}>
                   <Text fontSize={13} weight={600}>
                     {t('create.field.brief')}
                   </Text>
@@ -537,7 +520,7 @@ const CreateDomainPage = memo(() => {
                   </Flexbox>
                 </Flexbox>
                 <Divider />
-                <Flexbox className={styles.reviewSection} gap={12}>
+                <Flexbox className={stylex.props(styles.reviewSection).className} gap={12}>
                   <Flexbox horizontal align={'flex-start'} gap={8} justify={'space-between'}>
                     <Text fontSize={14} type={'secondary'}>
                       {t('create.reviewHelp')}
@@ -546,7 +529,7 @@ const CreateDomainPage = memo(() => {
                   </Flexbox>
                   <TextArea
                     autoSize={{ maxRows: 8, minRows: 2 }}
-                    className={styles.rationale}
+                    className={stylex.props(styles.rationale).className}
                     // An in-flight adjustment answers from the draft as it was when the
                     // request left, so edits made meanwhile would be silently overwritten
                     // when the response merges back.
@@ -558,7 +541,7 @@ const CreateDomainPage = memo(() => {
                   />
                 </Flexbox>
 
-                <Flexbox className={styles.reviewSection} gap={10}>
+                <Flexbox className={stylex.props(styles.reviewSection).className} gap={10}>
                   <Flexbox horizontal align={'center'} justify={'space-between'}>
                     <Text fontSize={13} weight={600}>
                       {t('create.field.domainFilter')}
@@ -572,7 +555,7 @@ const CreateDomainPage = memo(() => {
                     onChange={(e) => patch({ domainFilter: e.target.value })}
                   />
                 </Flexbox>
-                <Flexbox className={styles.reviewSection} gap={10}>
+                <Flexbox className={stylex.props(styles.reviewSection).className} gap={10}>
                   <Flexbox horizontal align={'center'} justify={'space-between'}>
                     <Text fontSize={13} weight={600}>
                       {t('create.field.outOfScope')}
@@ -588,7 +571,7 @@ const CreateDomainPage = memo(() => {
                   />
                 </Flexbox>
 
-                <Flexbox className={styles.reviewSection} gap={10}>
+                <Flexbox className={stylex.props(styles.reviewSection).className} gap={10}>
                   <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
                     <Flexbox horizontal align={'center'} gap={8}>
                       <Icon color={cssVar.colorTextTertiary} icon={AnchorIcon} size={16} />
@@ -629,8 +612,8 @@ const CreateDomainPage = memo(() => {
                     </Text>
                   )}
                   {draft.canonEntries.map((entry, i) => (
-                    <div className={styles.itemRow} key={i}>
-                      <span className={styles.seq}>E{i + 1}</span>
+                    <div {...stylex.props(styles.itemRow)} key={i}>
+                      <span {...stylex.props(styles.seq)}>E{i + 1}</span>
                       <Flexbox gap={4}>
                         <Flexbox horizontal gap={8}>
                           <Input
@@ -690,7 +673,7 @@ const CreateDomainPage = memo(() => {
                     </div>
                   ))}
                 </Flexbox>
-                <Flexbox className={styles.reviewSection} gap={10}>
+                <Flexbox className={stylex.props(styles.reviewSection).className} gap={10}>
                   <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
                     <Flexbox horizontal align={'center'} gap={8}>
                       <Icon color={cssVar.colorTextTertiary} icon={LayersIcon} size={16} />
@@ -732,8 +715,8 @@ const CreateDomainPage = memo(() => {
                     </Text>
                   )}
                   {draft.layers.map((layer, i) => (
-                    <div className={styles.itemRow} key={i}>
-                      <span className={styles.seq}>L{i + 1}</span>
+                    <div {...stylex.props(styles.itemRow)} key={i}>
+                      <span {...stylex.props(styles.seq)}>L{i + 1}</span>
                       <Flexbox gap={4}>
                         <Input
                           placeholder={t('create.anchor.layerTitle')}
@@ -778,7 +761,12 @@ const CreateDomainPage = memo(() => {
             )}
 
             {step === 'review' && (
-              <Flexbox horizontal align={'center'} className={styles.footer} justify={'end'}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.footer).className}
+                justify={'end'}
+              >
                 <Flexbox horizontal align={'center'} gap={4}>
                   <Button
                     disabled={!!refiningTarget || !canCreate}

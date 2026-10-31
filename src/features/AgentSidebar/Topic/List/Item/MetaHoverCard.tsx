@@ -1,5 +1,7 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
-import { createStaticStyles, cssVar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { Clock } from 'lucide-react';
 import { GitBranchIcon, GitForkIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -16,76 +18,48 @@ import {
   PR_STATE_VISUAL,
 } from './metaCardData';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-
-    width: 300px;
-    max-width: calc(100vw - 48px);
-  `,
-  header: css`
-    display: flex;
-    gap: 12px;
-    align-items: baseline;
-    justify-content: space-between;
-  `,
-  headerTime: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  headerTitle: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 20px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  row: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-
-    font-size: 13px;
-    line-height: 18px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  rowIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowText: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  prLink: css`
-    cursor: pointer;
-
-    margin-inline: -6px;
-    padding-block: 2px;
-    padding-inline: 6px;
-    border-radius: 6px;
-
-    color: inherit;
-    text-decoration: none;
-
-    /* antd's global a:hover outranks the color:inherit above, so without this the
-       row would turn link-blue; hovering should read as emphasis instead. */
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    width: '300px',
+    maxWidth: 'calc(100vw - 48px)',
+  },
+  header: { display: 'flex', gap: '12px', alignItems: 'baseline', justifyContent: 'space-between' },
+  headerTime: { flex: 'none', fontSize: '12px', color: cssVar.colorTextTertiary },
+  headerTitle: {
+    overflow: 'hidden',
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: '20px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  row: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    minWidth: '0',
+    fontSize: '13px',
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+  },
+  rowIcon: { flex: 'none', color: cssVar.colorTextTertiary },
+  rowText: { overflow: 'hidden', minWidth: '0', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  prLink: {
+    cursor: 'pointer',
+    marginInline: '-6px',
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '6px',
+    color: { 'default': 'inherit', ':hover': cssVar.colorText },
+    textDecoration: 'none',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface DetailRowProps {
   children: ReactNode;
@@ -95,14 +69,14 @@ interface DetailRowProps {
 }
 
 const DetailRow = memo<DetailRowProps>(({ icon, iconColor, title, children }) => (
-  <div className={styles.row}>
+  <div {...stylex.props(styles.row)}>
     <Icon
-      className={styles.rowIcon}
+      className={stylex.props(styles.rowIcon).className}
       icon={icon}
       size={15}
       style={iconColor ? { color: iconColor } : undefined}
     />
-    <span className={styles.rowText} title={title}>
+    <span {...stylex.props(styles.rowText)} title={title}>
       {children}
     </span>
   </div>
@@ -140,16 +114,16 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
   const ci = pullRequest ? getCiVisual(pullRequest.ciStatus) : undefined;
 
   return (
-    <div className={styles.card}>
-      <div className={styles.header}>
-        <span className={styles.headerTitle}>{title}</span>
-        {time !== undefined && <span className={styles.headerTime}>{time}</span>}
+    <div {...stylex.props(styles.card)}>
+      <div {...stylex.props(styles.header)}>
+        <span {...stylex.props(styles.headerTitle)}>{title}</span>
+        {time !== undefined && <span {...stylex.props(styles.headerTime)}>{time}</span>}
       </div>
 
       {repoName && (
-        <div className={styles.row}>
+        <div {...stylex.props(styles.row)}>
           <DirIcon repoType={repoType} size={15} />
-          <span className={styles.rowText} title={repoName}>
+          <span {...stylex.props(styles.rowText)} title={repoName}>
             {repoName}
           </span>
         </div>
@@ -177,12 +151,12 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
           const prInner = (
             <>
               <Icon
-                className={styles.rowIcon}
+                className={stylex.props(styles.rowIcon).className}
                 icon={prVisual.icon}
                 size={15}
                 style={{ color: prVisual.color }}
               />
-              <span className={styles.rowText} title={prTitleAttr}>
+              <span {...stylex.props(styles.rowText)} title={prTitleAttr}>
                 <span style={{ color: prVisual.color, fontWeight: 500 }}>
                   {t(prVisual.labelKey)}
                 </span>
@@ -199,7 +173,7 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
           // system browser; older snapshots without a url stay a plain row.
           return pullRequest.url ? (
             <a
-              className={`${styles.row} ${styles.prLink}`}
+              {...stylex.props(styles.row, styles.prLink)}
               href={pullRequest.url}
               rel={'noreferrer'}
               target={'_blank'}
@@ -207,7 +181,7 @@ const MetaHoverCard = memo<MetaHoverCardProps>(({ metadata, title, time, topicId
               {prInner}
             </a>
           ) : (
-            <div className={styles.row}>{prInner}</div>
+            <div {...stylex.props(styles.row)}>{prInner}</div>
           );
         })()}
 

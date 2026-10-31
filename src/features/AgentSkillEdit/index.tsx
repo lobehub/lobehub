@@ -3,16 +3,10 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
-import {
-  Alert,
-  Button,
-  confirmModal,
-  createStaticStyles,
-  Drawer,
-  Flexbox,
-  toast,
-} from '@lobehub/ui';
+import { Alert, Button, confirmModal, Drawer, Flexbox, toast } from '@lobehub/ui';
 import { useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,24 +18,16 @@ import { useToolStore } from '@/store/tool';
 
 import SkillEditForm, { type SkillEditFormValues } from './SkillEditForm';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  divider: css`
-    flex-shrink: 0;
-    width: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  left: css`
-    overflow-y: auto;
-    flex-shrink: 0;
-    width: 240px;
-    padding: 8px;
-  `,
-  right: css`
-    container-type: size;
-    overflow: auto;
-    flex: 1;
-  `,
-}));
+const styles = stylex.create({
+  divider: {
+    flexShrink: 0,
+    width: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  left: { overflowY: 'auto', flexShrink: 0, width: '240px', padding: '8px' },
+  right: { containerType: 'size', overflow: 'auto', flex: '1' },
+});
 
 const buildContentMap = (nodes: SkillResourceTreeNode[]): Record<string, string> => {
   const map: Record<string, string> = {};
@@ -175,15 +161,15 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
             e.stopPropagation();
           }}
         >
-          <div className={styles.left}>
+          <div {...stylex.props(styles.left)}>
             <FileTree
               resourceTree={resourceTree}
               selectedFile={selectedFile}
               onSelectFile={setSelectedFile}
             />
           </div>
-          <div className={styles.divider} />
-          <div className={styles.right}>
+          <div {...stylex.props(styles.divider)} />
+          <div {...stylex.props(styles.right)}>
             <div
               style={{
                 display: selectedFile === 'SKILL.md' ? undefined : 'none',

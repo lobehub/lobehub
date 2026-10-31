@@ -1,7 +1,8 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Breadcrumb, createStaticStyles, Icon, Text } from '@lobehub/ui';
+import { Breadcrumb, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,14 +13,9 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
 import { useAgentRoutePath } from './useAgentRoutePath';
 
-const styles = createStaticStyles(({ css }) => ({
-  breadcrumb: css`
-    a {
-      display: flex;
-      align-items: center;
-    }
-  `,
-}));
+const styles = stylex.create({
+  link: { display: 'flex', alignItems: 'center' },
+});
 
 interface AgentBreadcrumbProps {
   agentId: string;
@@ -53,12 +49,11 @@ const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title
 
   return (
     <Breadcrumb
-      className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} size={14} />}
       items={[
         {
           title: (
-            <Link to={agentHomePath}>
+            <Link {...stylex.props(styles.link)} to={agentHomePath}>
               {/* Viewport-capped so the section crumb keeps its line on a phone. */}
               <Text
                 ellipsis

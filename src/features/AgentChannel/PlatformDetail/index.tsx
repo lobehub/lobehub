@@ -1,18 +1,10 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import {
-  ActionIcon,
-  Alert,
-  Button,
-  confirmModal,
-  createStaticStyles,
-  Drawer,
-  Flexbox,
-  Icon,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, Alert, Button, confirmModal, Drawer, Flexbox, Icon, toast } from '@lobehub/ui';
 import { useForm, useWatch } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ExternalLink, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -68,82 +60,62 @@ import { getSchemaFields, groupSettingsFields, REPLY_KEYS } from './settingsGrou
 import { useFoldPreviewOnRecords } from './useFoldPreviewOnRecords';
 import { useNarrowLayout } from './useNarrowLayout';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  content: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-
-    width: 100%;
-    padding-inline: 24px;
-  `,
-  // The page is one split from the top: the bot's header, tabs and form on the
-  // left, the chat preview fixed on the right behind a divider. Below this
-  // width there is no room for two columns, so the preview folds into a button
-  // that opens it from the right.
-  layout: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
-    flex: 1;
-    gap: 0;
-    align-items: stretch;
-
-    width: 100%;
-
-    &[data-preview='closed'],
-    &[data-narrow='true'] {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  `,
-  primary: css`
-    display: flex;
-    grid-column: 1;
-    grid-row: 1;
-    flex-direction: column;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 16px 24px;
-    padding-inline-end: 32px;
-
-    &[data-preview='closed'],
-    &[data-narrow='true'] {
-      padding-inline-end: 0;
-    }
-  `,
-  hero: css`
-    width: 100%;
-    max-width: 1024px;
-    padding-block-end: 16px;
-  `,
-  tabs: css`
-    width: 100%;
-    max-width: 1024px;
-  `,
-  quickView: css`
-    grid-column: 2;
-    grid-row: 1;
-    padding-inline-start: 32px;
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  quickViewSticky: css`
-    position: sticky;
-    inset-block-start: 0;
-    padding-block-start: 24px;
-  `,
-  main: css`
-    position: relative;
-
-    display: flex;
-    flex: 1 0 auto;
-    flex-direction: column;
-
-    width: 100%;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  content: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '100%',
+    paddingInline: '24px',
+  },
+  layout: {
+    display: 'grid',
+    flex: '1',
+    gap: 0,
+    alignItems: 'stretch',
+    width: '100%',
+    gridTemplateColumns: {
+      'default': 'minmax(0, 1fr) 360px',
+      ':is([data-preview="closed"], [data-narrow="true"])': 'minmax(0, 1fr)',
+    },
+  },
+  primary: {
+    display: 'flex',
+    gridColumn: '1',
+    gridRow: '1',
+    flexDirection: 'column',
+    alignItems: 'center',
+    minWidth: 0,
+    paddingBlockStart: '16px',
+    paddingBlockEnd: '24px',
+    paddingInlineEnd: {
+      'default': '32px',
+      ':is([data-preview="closed"], [data-narrow="true"])': 0,
+    },
+  },
+  hero: { width: '100%', maxWidth: '1024px', paddingBlockEnd: '16px' },
+  tabs: { width: '100%', maxWidth: '1024px' },
+  quickView: {
+    gridColumn: '2',
+    gridRow: '1',
+    paddingInlineStart: '32px',
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+  },
+  quickViewSticky: { position: 'sticky', insetBlockStart: 0, paddingBlockStart: '24px' },
+  main: {
+    position: 'relative',
+    display: 'flex',
+    flexGrow: '1',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    flexDirection: 'column',
+    width: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const omitUndefinedValues = <T extends Record<string, unknown>>(record: T) =>
   Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)) as T;
@@ -955,8 +927,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
 
     return (
       <ChannelPostSaveContext value={postSaveRegistry}>
-        <main className={styles.main}>
-          <div className={styles.content}>
+        <main {...stylex.props(styles.main)}>
+          <div {...stylex.props(styles.content)}>
             {paidFeatureBlocked && (
               <Alert
                 showIcon
@@ -985,16 +957,16 @@ const PlatformDetail = memo<PlatformDetailProps>(
               />
             )}
             <div
-              className={styles.layout}
+              className={stylex.props(styles.layout).className}
               data-narrow={narrow}
               data-preview={previewInline ? 'open' : 'closed'}
             >
               <div
-                className={styles.primary}
+                className={stylex.props(styles.primary).className}
                 data-narrow={narrow}
                 data-preview={previewInline ? 'open' : 'closed'}
               >
-                <div className={styles.hero}>
+                <div className={stylex.props(styles.hero).className}>
                   <ChannelHero
                     applicationId={currentConfig?.applicationId}
                     botName={agentName}
@@ -1012,7 +984,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
                     }
                   />
                 </div>
-                <div className={styles.tabs}>
+                <div className={stylex.props(styles.tabs).className}>
                   <ChannelTabBar
                     active={activeTab}
                     issues={tabIssues}
@@ -1077,8 +1049,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
                 />
               </div>
               {previewInline && (
-                <aside className={styles.quickView}>
-                  <div className={styles.quickViewSticky}>
+                <aside className={stylex.props(styles.quickView).className}>
+                  <div className={stylex.props(styles.quickViewSticky).className}>
                     <QuickView
                       botAvatar={{ agentId, avatar: agentAvatar, background: agentBackground }}
                       botName={agentName}

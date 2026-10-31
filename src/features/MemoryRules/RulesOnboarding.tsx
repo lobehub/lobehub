@@ -1,155 +1,156 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
+import { Button, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BotIcon, ClipboardCheckIcon, FileSearchIcon, PlusIcon, ScaleIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { sx } from '@/styles/sx';
 
-const styles = createStaticStyles(({ css }) => ({
-  actions: css`
-    margin-block: 24px 32px;
-  `,
-  description: css`
-    margin: 0;
-    line-height: 1.7;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  hero: css`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+import moduleStyles from './RulesOnboarding.module.css';
 
-    max-inline-size: 460px;
-
-    text-align: center;
-  `,
-  heroIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    inline-size: 56px;
-    block-size: 56px;
-    margin-block-end: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 14px;
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  inline: css`
-    padding-block: 40px;
-  `,
-  list: css`
-    inline-size: 100%;
-    max-inline-size: 640px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  listTitle: css`
-    inline-size: 100%;
-    max-inline-size: 640px;
-    margin-block-end: 8px;
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-  `,
-  row: css`
-    display: flex;
-    gap: 14px;
-    align-items: center;
-
-    padding-block: 16px;
-    padding-inline: 20px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  rowAction: css`
-    flex: none;
-
-    > * {
-      min-inline-size: 72px;
-    }
-  `,
-  rowCopy: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-
-    min-inline-size: 0;
-  `,
-  rowDescription: css`
-    overflow: hidden;
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  rowIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    inline-size: 36px;
-    block-size: 36px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  rowMeta: css`
-    flex: none;
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowTitle: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  shell: css`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding-block: 72px 48px;
-  `,
-  title: css`
-    margin-block: 0 8px;
-    margin-inline: 0;
-
-    font-size: 18px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    marginBlockStart: '24px',
+    marginBlockEnd: '32px',
+  },
+  description: {
+    margin: 0,
+    lineHeight: 1.7,
+    color: cssVar.colorTextSecondary,
+  },
+  hero: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    maxInlineSize: '460px',
+    textAlign: 'center',
+  },
+  heroIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    inlineSize: '56px',
+    blockSize: '56px',
+    marginBlockEnd: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '14px',
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  inline: {
+    paddingBlock: '40px',
+  },
+  list: {
+    inlineSize: '100%',
+    maxInlineSize: '640px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  listTitle: {
+    inlineSize: '100%',
+    maxInlineSize: '640px',
+    marginBlockEnd: '8px',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+  },
+  row: {
+    display: 'flex',
+    gap: '14px',
+    alignItems: 'center',
+    paddingBlock: '16px',
+    paddingInline: '20px',
+  },
+  // Every row after the first is separated from the one above.
+  rowSeparated: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  rowAction: {
+    flex: 'none',
+  },
+  rowCopy: {
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    gap: '2px',
+    minInlineSize: 0,
+  },
+  rowDescription: {
+    overflow: 'hidden',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rowIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    inlineSize: '36px',
+    blockSize: '36px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  rowMeta: {
+    flex: 'none',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  rowTitle: {
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+  shell: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    paddingBlockStart: '72px',
+    paddingBlockEnd: '48px',
+  },
+  title: {
+    marginBlockStart: 0,
+    marginBlockEnd: '8px',
+    marginInline: 0,
+    fontSize: '18px',
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+});
 
 interface RowProps {
   action?: ReactNode;
   description: ReactNode;
   icon: typeof ScaleIcon;
   meta?: ReactNode;
+  /** Draws the divider above the row (every row but the first). */
+  separated?: boolean;
   title: string;
 }
 
-const Row = ({ action, description, icon, meta, title }: RowProps) => (
-  <div className={styles.row}>
-    <span className={styles.rowIcon}>
+const Row = ({ action, description, icon, meta, separated, title }: RowProps) => (
+  <div {...stylex.props(styles.row, separated && styles.rowSeparated)}>
+    <span {...stylex.props(styles.rowIcon)}>
       <Icon icon={icon} size={18} />
     </span>
-    <span className={styles.rowCopy}>
-      <span className={styles.rowTitle}>{title}</span>
-      <span className={styles.rowDescription}>{description}</span>
+    <span {...stylex.props(styles.rowCopy)}>
+      <span {...stylex.props(styles.rowTitle)}>{title}</span>
+      <span {...stylex.props(styles.rowDescription)}>{description}</span>
     </span>
-    {meta && <span className={styles.rowMeta}>{meta}</span>}
-    {action && <span className={styles.rowAction}>{action}</span>}
+    {meta && <span {...stylex.props(styles.rowMeta)}>{meta}</span>}
+    {action && <span {...sx([styles.rowAction], moduleStyles.rowAction)}>{action}</span>}
   </div>
 );
 
@@ -190,27 +191,27 @@ const RulesOnboarding = ({
   const navigate = useWorkspaceAwareNavigate();
 
   return (
-    <div className={cx(styles.shell, inline && styles.inline)}>
-      <div className={styles.hero}>
-        <div className={styles.heroIcon}>
+    <div {...stylex.props(styles.shell, inline && styles.inline)}>
+      <div {...stylex.props(styles.hero)}>
+        <div {...stylex.props(styles.heroIcon)}>
           <Icon icon={ScaleIcon} size={24} />
         </div>
-        <h2 className={styles.title}>{t('rules.onboarding.title')}</h2>
-        <p className={styles.description}>
+        <h2 {...stylex.props(styles.title)}>{t('rules.onboarding.title')}</h2>
+        <p {...stylex.props(styles.description)}>
           {t('rules.onboarding.description')}
           <br />
           {t('rules.onboarding.descriptionGrow')}
         </p>
       </div>
 
-      <div className={styles.actions}>
+      <div {...stylex.props(styles.actions)}>
         <Button icon={<Icon icon={PlusIcon} />} type={'primary'} onClick={onWrite}>
           {t('rules.onboarding.write')}
         </Button>
       </div>
 
-      <div className={styles.listTitle}>{t('rules.onboarding.listTitle')}</div>
-      <div className={styles.list}>
+      <div {...stylex.props(styles.listTitle)}>{t('rules.onboarding.listTitle')}</div>
+      <div {...stylex.props(styles.list)}>
         <Row
           action={<Button onClick={onDistill}>{t('rules.onboarding.distill.action')}</Button>}
           description={t('rules.onboarding.distill.description')}
@@ -218,6 +219,7 @@ const RulesOnboarding = ({
           title={t('rules.onboarding.distill.title')}
         />
         <Row
+          separated
           description={t('rules.onboarding.reject.description')}
           icon={ClipboardCheckIcon}
           meta={backlogRounds ? t('rules.onboarding.backlog', { count: backlogRounds }) : undefined}
@@ -230,6 +232,7 @@ const RulesOnboarding = ({
         />
         {agents && (
           <Row
+            separated
             action={<Button onClick={agents.onOpen}>{t('rules.onboarding.agents.action')}</Button>}
             icon={BotIcon}
             title={t('rules.onboarding.agents.title')}

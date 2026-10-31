@@ -1,16 +1,10 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import {
-  ActionIcon,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  Popover,
-  Skeleton,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BookOpen, FileText, Settings, SquareTerminal } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,33 +26,33 @@ import {
   useAgentProfileDetail,
 } from './useAgentProfileDetail';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  footer: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  section: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
-  sectionTitle: css`
-    margin-block-end: 8px;
-    font-size: 11px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  statItem: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-  trigger: css`
-    border-radius: ${cssVar.borderRadius};
-
-    &[data-popup-open] {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  section: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+  },
+  sectionTitle: {
+    marginBlockEnd: '8px',
+    fontSize: '11px',
+    fontWeight: 600,
+    color: cssVar.colorTextTertiary,
+  },
+  statItem: {
+    color: cssVar.colorTextSecondary,
+  },
+  trigger: {
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':is([data-popup-open])': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':is([data-popup-open])': 'none' },
+  },
+});
 
 interface AgentProfilePopupProps extends PropsWithChildren {
   /** Prefilled data for instant render; fetched data overrides once loaded. */
@@ -148,8 +142,8 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const modelSection =
       canConfigure && groupId && !isExternal ? (
         merged.model && (
-          <Flexbox className={styles.section} gap={4}>
-            <div className={styles.sectionTitle}>{t('groupSidebar.agentProfile.model')}</div>
+          <Flexbox className={stylex.props(styles.section).className} gap={4}>
+            <div {...stylex.props(styles.sectionTitle)}>{t('groupSidebar.agentProfile.model')}</div>
             <ModelSelect
               loading={loading}
               value={{ model: merged.model, provider: merged.provider ?? undefined }}
@@ -158,14 +152,30 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
           </Flexbox>
         )
       ) : footerLoading && !isExternal ? (
-        <Flexbox horizontal align={'center'} className={styles.footer} gap={14}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.footer).className}
+          gap={14}
+        >
           <Skeleton height={16} width={90} />
           <Skeleton height={16} width={60} />
         </Flexbox>
       ) : isExternal || (canConfigure && (merged.model || hasStats)) ? (
-        <Flexbox horizontal align={'center'} className={styles.footer} gap={14} wrap={'wrap'}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.footer).className}
+          gap={14}
+          wrap={'wrap'}
+        >
           {isExternal ? (
-            <Flexbox horizontal align={'center'} className={styles.statItem} gap={6}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(styles.statItem).className}
+              gap={6}
+            >
               <Icon icon={SquareTerminal} size={14} />
               <Text fontSize={12} type={'secondary'}>
                 {t('agentProfile.runtime', { name: runtimeLabel })}
@@ -173,7 +183,12 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
             </Flexbox>
           ) : (
             merged.model && (
-              <Flexbox horizontal align={'center'} className={styles.statItem} gap={6}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.statItem).className}
+                gap={6}
+              >
                 <ModelIcon model={merged.model} size={14} />
                 <Text fontSize={12} type={'secondary'}>
                   {merged.model}
@@ -182,7 +197,12 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
             )
           )}
           {canConfigure && pluginCount > 0 && (
-            <Flexbox horizontal align={'center'} className={styles.statItem} gap={4}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(styles.statItem).className}
+              gap={4}
+            >
               <Icon icon={SkillsIcon} size={13} />
               <Text fontSize={12} type={'secondary'}>
                 {t('agentProfile.skills', { count: pluginCount })}
@@ -190,7 +210,12 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
             </Flexbox>
           )}
           {canConfigure && knowledgeCount > 0 && (
-            <Flexbox horizontal align={'center'} className={styles.statItem} gap={4}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(styles.statItem).className}
+              gap={4}
+            >
               <Icon icon={BookOpen} size={13} />
               <Text fontSize={12} type={'secondary'}>
                 {t('agentProfile.knowledgeBases', { count: knowledgeCount })}
@@ -198,7 +223,12 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
             </Flexbox>
           )}
           {canConfigure && fileCount > 0 && (
-            <Flexbox horizontal align={'center'} className={styles.statItem} gap={4}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(styles.statItem).className}
+              gap={4}
+            >
               <Icon icon={FileText} size={13} />
               <Text fontSize={12} type={'secondary'}>
                 {t('agentProfile.files', { count: fileCount })}
@@ -240,12 +270,14 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     return (
       <Popover
-        classNames={trigger === 'click' ? { trigger: styles.trigger } : undefined}
         content={content}
         nativeButton={false}
         open={open}
         placement={trigger === 'hover' ? 'top' : 'right'}
         trigger={trigger}
+        classNames={
+          trigger === 'click' ? { trigger: stylex.props(styles.trigger).className } : undefined
+        }
         styles={{
           content: { borderRadius: 12, overflow: 'hidden', padding: 0 },
         }}

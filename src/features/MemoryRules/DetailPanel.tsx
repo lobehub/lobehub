@@ -5,7 +5,7 @@ import {
   type ExpertiseEnforcement,
   type ExpertiseReasonKind,
 } from '@lobechat/types';
-import { Block, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -16,6 +16,8 @@ import {
   Text,
   TextArea,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   ActivityIcon,
@@ -53,139 +55,111 @@ import {
   useScopeLabel,
 } from './labels';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow-y: auto;
-    flex: 1;
-    padding-block: 4px 24px;
-    padding-inline: 28px;
-  `,
-  foot: css`
-    flex: none;
-    padding-block: 12px;
-    padding-inline: 28px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  head: css`
-    flex: none;
-    padding-block: 24px 0;
-    padding-inline: 28px;
-  `,
-  heading: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    margin-block: 22px 6px;
-
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-    letter-spacing: 0.02em;
-  `,
-  kicker: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  link: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-decoration: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  muted: css`
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  properties: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-
-    margin-block-start: 16px;
-    padding-block-end: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  property: css`
-    width: 100%;
-    min-height: 30px;
-    padding-block: 5px;
-    padding-inline: 8px 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 13px;
-  `,
-  propertyLabel: css`
-    flex: none;
-    width: 44px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  propertyStatic: css`
-    background: transparent;
-  `,
-  quote: css`
-    margin-block: 6px 0;
-    padding-block: 6px;
-    padding-inline: 12px 0;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  source: css`
-    padding-block: 10px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  title: css`
-    font-size: 20px;
-    font-weight: 600;
-    line-height: 1.35;
-    text-wrap: pretty;
-  `,
-  titleInput: css`
-    box-sizing: border-box;
-    width: 100%;
-    padding: 0;
-    border: none;
-
-    font-family: inherit;
-    font-size: 20px;
-    font-weight: 600;
-    line-height: 1.35;
-    color: inherit;
-
-    background: transparent;
-    outline: none;
-  `,
-  warning: css`
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorWarningText};
-
-    background: ${cssVar.colorWarningBg};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflowY: 'auto',
+    flex: '1',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '24px',
+    paddingInline: '28px',
+  },
+  foot: {
+    flex: 'none',
+    paddingBlock: '12px',
+    paddingInline: '28px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  head: { flex: 'none', paddingBlockStart: '24px', paddingBlockEnd: '0', paddingInline: '28px' },
+  heading: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBlockStart: '22px',
+    marginBlockEnd: '6px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: cssVar.colorTextTertiary,
+    letterSpacing: '0.02em',
+  },
+  kicker: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', color: cssVar.colorTextSecondary },
+  link: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    textDecoration: 'none',
+  },
+  muted: { fontSize: '12px', lineHeight: 1.6, color: cssVar.colorTextSecondary },
+  properties: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    marginBlockStart: '16px',
+    paddingBlockEnd: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  property: {
+    width: '100%',
+    minHeight: '30px',
+    paddingBlock: '5px',
+    paddingInlineStart: '8px',
+    paddingInlineEnd: '10px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '13px',
+  },
+  propertyLabel: { flex: 'none', width: '44px', fontSize: '12px', color: cssVar.colorTextTertiary },
+  propertyStatic: { backgroundColor: 'transparent', backgroundImage: 'none' },
+  quote: {
+    marginBlockStart: '6px',
+    marginBlockEnd: '0',
+    paddingBlock: '6px',
+    paddingInlineStart: '12px',
+    paddingInlineEnd: '0',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorder,
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+  },
+  source: {
+    paddingBlock: '10px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  title: { fontSize: '20px', fontWeight: 600, lineHeight: 1.35, textWrap: 'pretty' },
+  titleInput: {
+    boxSizing: 'border-box',
+    width: '100%',
+    padding: '0',
+    borderStyle: 'none',
+    fontFamily: 'inherit',
+    fontSize: '20px',
+    fontWeight: 600,
+    lineHeight: 1.35,
+    color: 'inherit',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    outlineStyle: 'none',
+  },
+  warning: {
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorWarningText,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+});
 
 interface PropertyProps {
   children: ReactNode;
@@ -204,12 +178,12 @@ const Property = ({ children, icon, label, menu }: PropertyProps) => {
     <Block
       horizontal
       align={'center'}
-      className={cx(styles.property, !menu && styles.propertyStatic)}
+      className={stylex.props(styles.property, !menu && styles.propertyStatic).className}
       clickable={Boolean(menu)}
       gap={8}
       variant={'borderless'}
     >
-      <span className={styles.propertyLabel}>{label}</span>
+      <span {...stylex.props(styles.propertyLabel)}>{label}</span>
       <Icon color={cssVar.colorTextSecondary} icon={icon} size={14} />
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         {children}
@@ -313,17 +287,17 @@ const RuleDocument = ({
 
   return (
     <Flexbox height={'100%'} width={'100%'}>
-      <div className={styles.head}>
+      <div {...stylex.props(styles.head)}>
         <Flexbox horizontal align={'flex-start'} gap={8}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className={styles.kicker}>
+            <div {...stylex.props(styles.kicker)}>
               {code} · {group?.domain.title}
               {rule.tags?.length ? ` · ${rule.tags.join(' / ')}` : ''}
             </div>
             {titleEditing ? (
               <input
                 autoFocus
-                className={styles.titleInput}
+                {...stylex.props(styles.titleInput)}
                 value={titleDraft}
                 onBlur={() => void commitTitle()}
                 onChange={(e) => setTitleDraft(e.target.value)}
@@ -333,7 +307,7 @@ const RuleDocument = ({
                 }}
               />
             ) : (
-              <div className={styles.title}>{rule.title}</div>
+              <div {...stylex.props(styles.title)}>{rule.title}</div>
             )}
           </div>
           {!archived && !titleEditing && (
@@ -349,7 +323,7 @@ const RuleDocument = ({
           </DropdownMenu>
         </Flexbox>
 
-        <div className={styles.properties}>
+        <div {...stylex.props(styles.properties)}>
           <Property
             icon={rule.enforcement === 'block' ? ShieldCheckIcon : BellIcon}
             label={t('rules.meta.enforcement')}
@@ -375,7 +349,7 @@ const RuleDocument = ({
                   : 'rules.enforcement.remind',
               )}
             </Text>
-            <span className={styles.muted}>
+            <span {...stylex.props(styles.muted)}>
               {t(
                 rule.enforcement === 'block'
                   ? 'rules.enforcement.blockDesc'
@@ -397,7 +371,7 @@ const RuleDocument = ({
             }
           >
             <Text weight={500}>{t(`rules.direction.${rule.direction ?? 'unset'}`)}</Text>
-            <span className={styles.muted}>
+            <span {...stylex.props(styles.muted)}>
               {t(`rules.direction.${rule.direction ?? 'unset'}Desc`)}
             </span>
           </Property>
@@ -435,11 +409,11 @@ const RuleDocument = ({
                 for those would claim something nobody stated. */}
             <Text weight={500}>{t(`rules.reason.${rule.reasonKind ?? 'unset'}`)}</Text>
             {rule.reasonSource && (
-              <span className={styles.muted}>{t(`rules.reason.${rule.reasonSource}`)}</span>
+              <span {...stylex.props(styles.muted)}>{t(`rules.reason.${rule.reasonSource}`)}</span>
             )}
           </Property>
           {rule.enforcement === 'block' && rule.reasonKind === 'taste' && (
-            <div className={styles.warning}>{t('rules.enforcement.tasteWarning')}</div>
+            <div {...stylex.props(styles.warning)}>{t('rules.enforcement.tasteWarning')}</div>
           )}
           <Property icon={TargetIcon} label={t('rules.meta.scope')}>
             <span>{group ? scopeLabel(group.scopes) : ''}</span>
@@ -450,7 +424,7 @@ const RuleDocument = ({
                 ? t('rules.runs.detail', { hits: rule.hitCount, runs: rule.hitRunCount })
                 : t('rules.runs.none')}
               {rule.falsePositiveCount > 0 && (
-                <span className={styles.muted}>
+                <span {...stylex.props(styles.muted)}>
                   {' · '}
                   {t('rules.runs.overruled', { count: rule.falsePositiveCount })}
                 </span>
@@ -467,20 +441,20 @@ const RuleDocument = ({
                 : ''}
             </span>
             {Boolean(rule.generalizedFromIds?.length) && (
-              <span className={styles.muted}>
+              <span {...stylex.props(styles.muted)}>
                 {t('rules.origin.generalizedFrom', {
                   titles: rule.generalizedFromIds!.map(titleOf).join('」「'),
                 })}
               </span>
             )}
             {rule.specificity === 'over-specific' && (
-              <span className={styles.muted}>{t('rules.origin.overSpecific')}</span>
+              <span {...stylex.props(styles.muted)}>{t('rules.origin.overSpecific')}</span>
             )}
             {rule.specificity === 'one-off' && (
-              <span className={styles.muted}>{t('rules.origin.oneOff')}</span>
+              <span {...stylex.props(styles.muted)}>{t('rules.origin.oneOff')}</span>
             )}
             {archived && (
-              <span className={styles.muted}>
+              <span {...stylex.props(styles.muted)}>
                 {t('rules.archived.at', {
                   time: dayjs(rule.retiredAt ?? undefined).format('YYYY-MM-DD'),
                 })}
@@ -494,7 +468,7 @@ const RuleDocument = ({
         </div>
       </div>
 
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         <Field
           editable={!archived}
           label={t('rules.field.why')}
@@ -522,7 +496,7 @@ const RuleDocument = ({
           placeholder={t('rules.field.checkPending')}
         />
 
-        <div className={styles.heading}>
+        <div {...stylex.props(styles.heading)}>
           <span>{t('rules.sources.title')}</span>
         </div>
         {/* "No sources" is only said once the list has actually come back empty; loading and a
@@ -531,14 +505,14 @@ const RuleDocument = ({
           <SkeletonText rows={2} />
         ) : sourcesError && !sources ? (
           <Flexbox horizontal align={'center'} gap={8}>
-            <span className={styles.muted}>{t('rules.sources.loadFailed')}</span>
+            <span {...stylex.props(styles.muted)}>{t('rules.sources.loadFailed')}</span>
             <Button size={'small'} type={'link'} onClick={() => void retrySources()}>
               {t('rules.sources.retry')}
             </Button>
           </Flexbox>
         ) : sources?.length ? (
           sources.map((source) => (
-            <div className={styles.source} key={source.id}>
+            <div {...stylex.props(styles.source)} key={source.id}>
               <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
                 <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
                   <Tag size={'small'}>
@@ -556,7 +530,7 @@ const RuleDocument = ({
                 </Flexbox>
                 {!source.fromAcceptance && source.topicId && source.topicAgentId && (
                   <a
-                    className={styles.link}
+                    {...stylex.props(styles.link)}
                     href={buildWorkspaceAwarePath(
                       `/agent/${source.topicAgentId}/${source.topicId}${
                         source.messageId ? `?locate=${source.messageId}` : ''
@@ -575,7 +549,7 @@ const RuleDocument = ({
                 {/* A document or file it was read from opens where the reviewer keeps it. */}
                 {source.documentId && (
                   <a
-                    className={styles.link}
+                    {...stylex.props(styles.link)}
                     href={buildWorkspaceAwarePath(
                       source.documentFileId
                         ? docsFilePath(source.documentFileId)
@@ -593,7 +567,7 @@ const RuleDocument = ({
                 )}
                 {source.acceptanceId && (
                   <a
-                    className={styles.link}
+                    {...stylex.props(styles.link)}
                     href={`/acceptance/${source.acceptanceId}`}
                     rel={'noreferrer'}
                     target={'_blank'}
@@ -604,9 +578,9 @@ const RuleDocument = ({
                 )}
               </Flexbox>
               {(source.reviewerComment || source.example) && (
-                <p className={styles.quote}>{source.reviewerComment || source.example}</p>
+                <p {...stylex.props(styles.quote)}>{source.reviewerComment || source.example}</p>
               )}
-              <div className={styles.muted}>
+              <div {...stylex.props(styles.muted)}>
                 {dayjs(source.createdAt).format('YYYY-MM-DD')}
                 {source.roundIndex
                   ? ` · ${t('rules.sources.round', { index: source.roundIndex })}`
@@ -618,7 +592,7 @@ const RuleDocument = ({
             </div>
           ))
         ) : (
-          <p className={styles.muted}>
+          <p {...stylex.props(styles.muted)}>
             {t(
               taught
                 ? 'rules.sources.taughtEmpty'
@@ -631,7 +605,7 @@ const RuleDocument = ({
 
         {Boolean(revisions?.length) && (
           <>
-            <div className={styles.heading}>
+            <div {...stylex.props(styles.heading)}>
               <span>{t('rules.revisions.title')}</span>
             </div>
             {revisions!.map((revision) => (
@@ -642,11 +616,11 @@ const RuleDocument = ({
                     : revision.feedback}
                 </Text>
                 {revision.prevTitle && (
-                  <div className={styles.muted}>
+                  <div {...stylex.props(styles.muted)}>
                     {t('rules.revisions.prevTitle', { title: revision.prevTitle })}
                   </div>
                 )}
-                <div className={styles.muted}>
+                <div {...stylex.props(styles.muted)}>
                   {t(revisionAuthorKey(revision))}
                   {' · '}
                   {dayjs(revision.createdAt).format('YYYY-MM-DD')}
@@ -658,7 +632,12 @@ const RuleDocument = ({
       </div>
 
       {!archived && (
-        <Flexbox horizontal align={'flex-end'} className={styles.foot} gap={8}>
+        <Flexbox
+          horizontal
+          align={'flex-end'}
+          className={stylex.props(styles.foot).className}
+          gap={8}
+        >
           <TextArea
             autoSize={{ maxRows: 4, minRows: 1 }}
             disabled={busy}

@@ -1,7 +1,9 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeftIcon } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,37 +22,25 @@ import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirecto
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  backLink: css`
-    display: flex;
-    gap: 2px;
-    align-items: center;
-
-    width: fit-content;
-    padding-block: 3px;
-    padding-inline: 4px 6px;
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-decoration: none;
-
-    background: transparent;
-
-    transition:
-      color 150ms ease,
-      background 150ms ease;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  body: css`
-    overflow-y: auto;
-    height: 100%;
-  `,
-}));
+const styles = stylex.create({
+  backLink: {
+    display: 'flex',
+    gap: '2px',
+    alignItems: 'center',
+    width: 'fit-content',
+    paddingBlock: '3px',
+    paddingInlineStart: '4px',
+    paddingInlineEnd: '6px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    textDecoration: 'none',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'color 150ms ease,\n      background 150ms ease',
+  },
+  body: { overflowY: 'auto', height: '100%' },
+});
 
 const AgentDocumentSidebarContent = memo(() => {
   const { t } = useTranslation('chat');
@@ -97,7 +87,7 @@ const AgentDocumentSidebarContent = memo(() => {
       justify={'space-between'}
       padding={'8px 6px'}
     >
-      <a className={styles.backLink} href={agentPath} onClick={handleBack}>
+      <a {...stylex.props(styles.backLink)} href={agentPath} onClick={handleBack}>
         <Icon icon={ChevronLeftIcon} size={14} />
         {t('agentDocument.backToAgent', { name: agentTitle })}
       </a>
@@ -106,7 +96,7 @@ const AgentDocumentSidebarContent = memo(() => {
   );
 
   const body = (
-    <Flexbox className={styles.body} width={'100%'}>
+    <Flexbox className={stylex.props(styles.body).className} width={'100%'}>
       <AgentDocumentsGroup
         activeFilter="documents"
         deviceId={remoteDeviceId}

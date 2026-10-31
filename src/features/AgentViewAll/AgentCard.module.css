@@ -1,0 +1,259 @@
+.card {
+position: relative;
+
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  padding-block: 52px 16px;
+  padding-inline: 12px;
+
+  text-align: center;
+
+  transition:
+    transform 0.18s,
+    box-shadow 0.18s,
+    border-color 0.18s;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--lobe-box-shadow-tertiary);
+  }
+}
+
+.cover {
+--cover-ink: color-mix(in srgb, var(--lobe-color-bg-container) 30%, transparent);
+  --cover-line: color-mix(in srgb, var(--lobe-color-bg-container) 22%, transparent);
+  --cover-faint: color-mix(in srgb, var(--lobe-color-bg-container) 15%, transparent);
+
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+
+  height: 80px;
+
+  /* Neutral until an avatar image has been sampled. */
+  background-color: color-mix(
+    in srgb,
+    var(--agent-cover, var(--lobe-color-fill)) 72%,
+    var(--lobe-color-bg-container)
+  );
+  background-image: radial-gradient(var(--cover-ink) 1px, transparent 1.5px);
+  background-size: 10px 10px;
+
+  /* The sampled color fades in over the neutral band. */
+  transition: background-color 0.3s;
+
+  /* An uploaded profile cover replaces both the tint and the texture. */
+  &[data-cover-image] {
+    background-position: center;
+    background-size: cover;
+  }
+
+  &[data-pattern='grid'] {
+    background-image:
+      linear-gradient(var(--cover-faint) 1px, transparent 1px),
+      linear-gradient(90deg, var(--cover-faint) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+
+  &[data-pattern='stripes'] {
+    background-image: repeating-linear-gradient(
+      45deg,
+      var(--cover-line) 0 1px,
+      transparent 1px 8px
+    );
+    background-size: auto;
+  }
+
+  &[data-pattern='crosshatch'] {
+    background-image:
+      repeating-linear-gradient(45deg, var(--cover-line) 0 1px, transparent 1px 10px),
+      repeating-linear-gradient(-45deg, var(--cover-line) 0 1px, transparent 1px 10px);
+    background-size: auto;
+  }
+
+  /* Concentric arcs from the top-right corner, away from the avatar. */
+  &[data-pattern='rings'] {
+    background-image: repeating-radial-gradient(
+      circle at 100% 0,
+      var(--cover-line) 0 1px,
+      transparent 1px 10px
+    );
+    background-size: auto;
+  }
+
+  &[data-pattern='stagger'] {
+    background-image:
+      radial-gradient(var(--cover-ink) 1.5px, transparent 2px),
+      radial-gradient(var(--cover-ink) 1.5px, transparent 2px);
+    background-position:
+      0 0,
+      8px 8px;
+    background-size: 16px 16px;
+  }
+
+  &[data-pattern='lines'] {
+    background-image: repeating-linear-gradient(
+      0deg,
+      var(--cover-faint) 0 1px,
+      transparent 1px 8px
+    );
+    background-size: auto;
+  }
+
+  &[data-pattern='scales'] {
+    background-image: radial-gradient(
+      circle at 50% 0,
+      transparent 6px,
+      var(--cover-line) 6px 7px,
+      transparent 7px
+    );
+    background-size: 14px 8px;
+  }
+}
+
+.avatarRing {
+position: relative;
+
+  overflow: hidden;
+  display: inline-flex;
+
+  border: 3px solid var(--lobe-color-bg-container);
+  border-radius: 50%;
+
+  /* Neutral face plate for emoji avatars without a background color;
+     images and colored avatars paint over it. The fill is translucent, so it
+     sits on an opaque card-color base: a cover image would show through it. */
+  background:
+    linear-gradient(var(--lobe-color-fill-tertiary), var(--lobe-color-fill-tertiary)),
+    var(--lobe-color-bg-container);
+  background-clip: padding-box;
+}
+
+.avatarRingGroup {
+border-radius: var(--lobe-border-radius-lg);
+}
+
+.avatarPlain {
+& img:global(.lobe-fluent-emoji) {
+    transform: scale(0.72);
+  }
+}
+
+.name {
+width: 100%;
+  margin-block-start: 8px;
+
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.roleRow {
+display: flex;
+  justify-content: center;
+
+  width: 100%;
+  height: 22px;
+  margin-block-start: 4px;
+}
+
+.role {
+overflow: hidden;
+
+  max-width: 100%;
+  padding-inline: 8px;
+  border-radius: 999px;
+
+  font-size: 12px;
+  line-height: 22px;
+  color: var(--lobe-color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  background: var(--lobe-color-fill-tertiary);
+}
+
+.description {
+overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+
+  width: 100%;
+  height: 36px;
+  margin-block-start: 8px;
+
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--lobe-color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.owner {
+display: flex;
+  gap: 6px;
+  align-items: center;
+  align-self: stretch;
+
+  min-width: 0;
+  margin-block-start: auto;
+  padding-block-start: 12px;
+
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--lobe-color-text-tertiary);
+}
+
+.ownerName {
+overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grid {
+display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: 12px;
+
+  width: 100%;
+  min-width: 0;
+}
+
+.actions {
+position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+
+  border-radius: var(--lobe-border-radius-sm);
+
+  opacity: 0;
+  background: color-mix(in srgb, var(--lobe-color-bg-container) 85%, transparent);
+
+  transition: opacity 0.15s;
+
+  @media (hover: none) {
+    opacity: 1;
+  }
+}
+
+.link {
+display: block;
+  min-width: 0;
+  height: 100%;
+  color: inherit;
+}
+
+.wrapper {
+position: relative;
+  min-width: 0;
+  height: 100%;
+
+  &:hover > [data-card-actions],
+  &:focus-within > [data-card-actions] {
+    opacity: 1;
+  }
+}

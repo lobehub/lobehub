@@ -4,13 +4,14 @@ import {
   AccordionPanel,
   AccordionRoot,
   AccordionTrigger,
-  createStaticStyles,
   Flexbox,
   Icon,
   Tag,
   Text,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowDownToDot, ArrowUpFromDot, CircleFadingArrowUp } from 'lucide-react';
 import type { FC } from 'react';
 import { memo } from 'react';
@@ -32,66 +33,58 @@ import ModelRatingRadar, {
 
 export type { PricingMode } from '../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionText: css`
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  container: css`
-    padding-block-end: 8px;
-  `,
-  description: css`
-    margin: 0;
-    padding-block: 8px;
-    padding-inline: 8px;
-
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  `,
-  radarClickable: css`
-    cursor: pointer;
-    border-radius: 8px;
-    transition: background 0.2s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  ratingScoreLink: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    font-weight: 600;
-    color: ${cssVar.colorText};
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-  row: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  originalPriceText: css`
-    color: ${cssVar.colorTextTertiary};
-    text-decoration: line-through;
-  `,
-  priceValue: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: baseline;
-  `,
-  titleText: css`
-    font-size: 14px;
-    font-weight: 400;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  actionText: {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+  container: {
+    paddingBlockEnd: '8px',
+  },
+  description: {
+    margin: 0,
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    lineHeight: 1.5,
+    overflowWrap: 'anywhere',
+    whiteSpace: 'pre-wrap',
+  },
+  radarClickable: {
+    cursor: 'pointer',
+    borderRadius: '8px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: `background 0.2s ${cssVar.motionEaseInOut}`,
+  },
+  ratingScoreLink: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    fontWeight: 600,
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorPrimary },
+  },
+  row: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  originalPriceText: {
+    color: cssVar.colorTextTertiary,
+    textDecoration: 'line-through',
+  },
+  priceValue: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'baseline',
+  },
+  titleText: {
+    fontSize: '14px',
+    fontWeight: 400,
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 interface PriceValueProps {
   prefix?: string;
@@ -100,9 +93,9 @@ interface PriceValueProps {
 }
 
 const PriceValue: FC<PriceValueProps> = ({ price, prefix = '', suffix = '' }) => (
-  <span className={styles.priceValue}>
+  <span {...stylex.props(styles.priceValue)}>
     {price.original && (
-      <span className={styles.originalPriceText}>
+      <span data-testid={'original-price'} {...stylex.props(styles.originalPriceText)}>
         {prefix}
         {price.original}
       </span>
@@ -189,9 +182,15 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
       : undefined;
 
     return (
-      <Flexbox className={styles.container}>
+      <Flexbox className={stylex.props(styles.container).className}>
         {description && (
-          <Text as={'p'} className={styles.description} fontSize={12} type={'secondary'}>
+          <Text
+            as={'p'}
+            className={stylex.props(styles.description).className}
+            data-testid={'model-description'}
+            fontSize={12}
+            type={'secondary'}
+          >
             {description}
           </Text>
         )}
@@ -218,7 +217,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                           width: 3,
                         }}
                       />
-                      <span className={styles.titleText}>
+                      <span {...stylex.props(styles.titleText)}>
                         {t('ModelSwitchPanel.detail.rating')}
                       </span>
                     </Flexbox>
@@ -229,7 +228,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                     {ratedDimensions.length >= RADAR_MIN_DIMENSIONS ? (
                       <Tooltip title={t('ModelSwitchPanel.detail.rating.clickHint')}>
                         <div
-                          className={styles.radarClickable}
+                          {...stylex.props(styles.radarClickable)}
                           role={'button'}
                           tabIndex={0}
                           onClick={() => {
@@ -245,7 +244,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                           <Flexbox
                             horizontal
                             align={'center'}
-                            className={styles.row}
+                            className={stylex.props(styles.row).className}
                             justify={'space-between'}
                             key={dimension.key}
                           >
@@ -253,7 +252,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                             <Tooltip title={dimension.tooltip}>
                               {dimension.sourceUrl ? (
                                 <a
-                                  className={styles.ratingScoreLink}
+                                  {...stylex.props(styles.ratingScoreLink)}
                                   href={dimension.sourceUrl}
                                   rel={'noreferrer'}
                                   target={'_blank'}
@@ -261,7 +260,9 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                                   {dimension.score}
                                 </a>
                               ) : (
-                                <span className={styles.ratingScoreLink}>{dimension.score}</span>
+                                <span {...stylex.props(styles.ratingScoreLink)}>
+                                  {dimension.score}
+                                </span>
                               )}
                             </Tooltip>
                           </Flexbox>
@@ -287,9 +288,11 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                         width: 3,
                       }}
                     />
-                    <span className={styles.titleText}>{t('ModelSwitchPanel.detail.context')}</span>
+                    <span {...stylex.props(styles.titleText)}>
+                      {t('ModelSwitchPanel.detail.context')}
+                    </span>
                   </Flexbox>
-                  <span className={styles.actionText}>{contextWindowLabel}</span>
+                  <span {...stylex.props(styles.actionText)}>{contextWindowLabel}</span>
                 </AccordionHeader>
               </AccordionItem>
             )}
@@ -309,7 +312,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                           width: 3,
                         }}
                       />
-                      <span className={styles.titleText}>
+                      <span {...stylex.props(styles.titleText)}>
                         {t('ModelSwitchPanel.detail.abilities')}
                       </span>
                     </Flexbox>
@@ -334,7 +337,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                       <Flexbox
                         horizontal
                         align={'center'}
-                        className={styles.row}
+                        className={stylex.props(styles.row).className}
                         justify={'space-between'}
                         key={ability.key}
                       >
@@ -371,16 +374,21 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                           width: 3,
                         }}
                       />
-                      <span className={styles.titleText}>
+                      <span {...stylex.props(styles.titleText)}>
                         {t('ModelSwitchPanel.detail.pricing')}
                       </span>
                     </Flexbox>
                   </AccordionTrigger>
                   {!isPricingExpanded &&
                     (approximatePriceLabel ? (
-                      <span className={styles.actionText}>{approximatePriceLabel}</span>
+                      <span {...stylex.props(styles.actionText)}>{approximatePriceLabel}</span>
                     ) : (
-                      <Flexbox horizontal align={'center'} className={styles.actionText} gap={8}>
+                      <Flexbox
+                        horizontal
+                        align={'center'}
+                        className={stylex.props(styles.actionText).className}
+                        gap={8}
+                      >
                         {hasCachedInputPricing && (
                           <Tooltip
                             title={getPricingTooltip(
@@ -412,14 +420,20 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                 <AccordionPanel>
                   <Flexbox gap={8}>
                     {approximatePriceLabel && (
-                      <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
+                      <Flexbox
+                        className={stylex.props(styles.row).className}
+                        style={{ fontWeight: 500 }}
+                      >
                         {approximatePriceLabel}
                       </Flexbox>
                     )}
                     {pricingGroups.map(({ group, units }) => (
                       <Flexbox gap={4} key={group}>
                         {pricingGroups.length > 1 && (
-                          <Flexbox className={styles.row} style={{ fontWeight: 500 }}>
+                          <Flexbox
+                            className={stylex.props(styles.row).className}
+                            style={{ fontWeight: 500 }}
+                          >
                             {t(`ModelSwitchPanel.detail.pricing.group.${group}` as any)}
                           </Flexbox>
                         )}
@@ -427,7 +441,7 @@ const ModelDetailPanel: FC<ModelDetailPanelProps> = memo(
                           <Flexbox
                             horizontal
                             align={'center'}
-                            className={styles.row}
+                            className={stylex.props(styles.row).className}
                             justify={'space-between'}
                             key={unit.name}
                           >
