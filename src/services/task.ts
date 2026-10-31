@@ -134,8 +134,11 @@ class TaskService {
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.create.mutate(params);
 
-  updateVisibility = async (id: string, visibility: 'private' | 'public') =>
-    lambdaClient.task.updateVisibility.mutate({ id, visibility });
+  updateVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+    options?: { takeOwnership?: boolean },
+  ) => lambdaClient.task.updateVisibility.mutate({ id, visibility, ...options });
 
   update = async (
     id: string,

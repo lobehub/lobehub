@@ -13,7 +13,6 @@ import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
 import Link from '@/components/Link';
-import { genFontFamily, genFontFamilyCode } from '@/const/font';
 import { LOBE_THEME_NEUTRAL_COLOR, LOBE_THEME_PRIMARY_COLOR } from '@/const/theme';
 import { getUILocaleAndResources } from '@/libs/getUILocaleAndResources';
 import type { UILocaleResources } from '@/libs/getUILocaleAndResources.utils';
@@ -25,6 +24,9 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
+import { resolveLang } from '@/utils/client/switchLang';
+
+import { resolveFontFamilyOverride } from './fontFamilyOverride';
 
 import moduleStyles from './AppTheme.module.css';
 
@@ -69,22 +71,15 @@ const AppTheme = memo<AppThemeProps>(
       preferenceSelectors.fontFamily(s),
       preferenceSelectors.terminalFontFamily(s),
     ]);
-    const fontFamily = useMemo(
+    const { fontFamily, fontFamilyCode } = useMemo(
       () =>
-        genFontFamily({
+        resolveFontFamilyOverride({
           customFontFamily,
-          locale: resolveUILocale(language).normalizedLocale,
+          locale: resolveLang(language),
           userFontFamily,
+          userFontFamilyCode,
         }),
-      [customFontFamily, language, userFontFamily],
-    );
-    const fontFamilyCode = useMemo(
-      () =>
-        genFontFamilyCode({
-          locale: resolveUILocale(language).normalizedLocale,
-          userFontFamily: userFontFamilyCode,
-        }),
-      [language, userFontFamilyCode],
+      [customFontFamily, language, userFontFamily, userFontFamilyCode],
     );
     const [uiResources, setUIResources] = useState<UILocaleResources>();
     const [uiLocale, setUILocale] = useState(() => resolveUILocale(language).uiLocale);
@@ -120,8 +115,10 @@ const AppTheme = memo<AppThemeProps>(
 
     useEffect(() => {
       const { style } = document.documentElement;
-      style.setProperty('--lobe-font-family', fontFamily);
-      style.setProperty('--lobe-font-family-code', fontFamilyCode);
+      if (fontFamily) style.setProperty('--lobe-font-family', fontFamily);
+      else style.removeProperty('--lobe-font-family');
+      if (fontFamilyCode) style.setProperty('--lobe-font-family-code', fontFamilyCode);
+      else style.removeProperty('--lobe-font-family-code');
     }, [fontFamily, fontFamilyCode]);
 
     useEffect(() => {

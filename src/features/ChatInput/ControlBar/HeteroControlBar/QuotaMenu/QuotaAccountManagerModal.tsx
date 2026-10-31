@@ -38,6 +38,7 @@ import {
   useAgentQuotaStore,
 } from '@/store/agentQuota';
 import { useElectronStore } from '@/store/electron';
+import { electronGatewaySelectors } from '@/store/electron/selectors';
 
 import radioGroupStyles from './QuotaAccountManagerModal.module.css';
 
@@ -108,7 +109,8 @@ interface QuotaAccountManagerProps {
   /**
    * Bound execution device the agent runs on. A remote device's logins live
    * on that machine, not on the desktop showing this modal, so local sign-in
-   * state says nothing about which accounts it can run there.
+   * state says nothing about which accounts it can run there. The Manual pick
+   * is made for this device (this desktop when unset).
    */
   deviceId?: string;
 }
@@ -118,8 +120,10 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   const [
     useFetchQuotaAccounts,
     useFetchQuotaBindings,
+    useFetchQuotaDeviceAccount,
     bindQuotaAccount,
     renameQuotaAccount,
+    setQuotaDeviceAccount,
     switchQuotaAccount,
     unbindQuotaAccount,
     useFetchClaudeLocalAccounts,
@@ -128,8 +132,10 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   ] = useAgentQuotaStore((s) => [
     s.useFetchQuotaAccounts,
     s.useFetchQuotaBindings,
+    s.useFetchQuotaDeviceAccount,
     s.bindQuotaAccount,
     s.renameQuotaAccount,
+    s.setQuotaDeviceAccount,
     s.switchQuotaAccount,
     s.unbindQuotaAccount,
     s.useFetchClaudeLocalAccounts,
@@ -142,8 +148,35 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   // Only the desktop runs Claude Code locally, so only it has logins to show —
   // and only when this agent runs here: in-process, or through the gateway on
   // this desktop's own device row, which spawns on the same logins.
-  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
+  const [currentDeviceId, useFetchGatewayStableDeviceId] = useElectronStore((s) => [
+    s.gatewayDeviceInfo?.deviceId,
+    s.useFetchGatewayStableDeviceId,
+  ]);
+  // The cached id may still be the install's fallback before the gateway
+  // connects; resolving corrects it, so the pick lands on this machine's row.
+  // Until it settles a write could not tell this device from "no device" and
+  // would fall back to the agent-wide pin, so the controls wait for it.
+  const needsLocalDevice = isDesktop && !deviceId;
+  useFetchGatewayStableDeviceId(needsLocalDevice);
+  const stableDeviceId = useElectronStore(electronGatewaySelectors.gatewayStableDeviceId);
+  // The replica entry is `undefined` until this device is resolved (or hydrated).
+  const localDeviceSettled = !needsLocalDevice || stableDeviceId !== undefined;
+  // Resolved to no id (the IPC lookup failed): this is still a desktop picking
+  // for itself, not the web's agent-wide case, so it shows but cannot write.
+  const localDeviceMissing = needsLocalDevice && stableDeviceId === null;
   const managesLocalLogins = isDesktop && (!deviceId || deviceId === currentDeviceId);
+  // A login lives on one machine, so the Manual pick belongs to one device.
+  // The web without a bound device has none and keeps the agent-wide pin.
+  // Never the cached `gatewayDeviceInfo` id: before the gateway connects that
+  // is the install's fallback UUID, not the row the server knows this machine by.
+  const targetDeviceId = deviceId ?? (isDesktop ? (stableDeviceId ?? undefined) : undefined);
+  useFetchQuotaDeviceAccount(agentId, targetDeviceId);
+  const deviceAccount = useAgentQuotaStore(
+    agentQuotaSelectors.deviceAccount(agentId, targetDeviceId),
+  );
+  const deviceAccountConfirmed = useAgentQuotaStore(
+    agentQuotaSelectors.isDeviceAccountConfirmed(scope, agentId, targetDeviceId),
+  );
   useFetchClaudeLocalAccounts(managesLocalLogins);
   const localAccounts = useAgentQuotaStore((s) => s.claudeLocalAccounts);
   const loginPending = useAgentQuotaStore((s) => s.claudeLoginPending);
@@ -169,14 +202,21 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   // Until this agent's bindings are on screen, every row would read as "off"
   // and Auto as routing to nobody: keep the mode and per-account controls
   // disabled and show no routing hint instead of acting on that guess.
-  const bindingsLoaded = loadedBindings !== undefined;
+  const bindingsLoaded =
+    localDeviceSettled &&
+    loadedBindings !== undefined &&
+    (!targetDeviceId || deviceAccount !== undefined);
   // A hydrated row may be outdated (changed in another tab or on another
   // device): show it, but take writes only once the server confirmed it, so a
   // change is computed against the bindings the server actually holds.
   const bindingsConfirmed = useAgentQuotaStore(
     agentQuotaSelectors.isBindingsConfirmed(scope, agentId),
   );
-  const canEditBindings = bindingsLoaded && bindingsConfirmed;
+  const canEditBindings =
+    !localDeviceMissing &&
+    bindingsLoaded &&
+    bindingsConfirmed &&
+    (!targetDeviceId || deviceAccountConfirmed);
   const readingsMap = useAgentQuotaStore((s) => s.quotaReadingsMap);
   const weeklyById = useMemo(
     () =>
@@ -224,7 +264,18 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
     [localAccounts, managesLocalLogins],
   );
 
-  const pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
+  // A legacy agent-wide pin only counts here while this device can run it: a
+  // pin picked on another machine leaves this one balancing (as runs do).
+  const agentPinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
+  const agentPinned = accounts.find((a) => a.id === agentPinnedId);
+  const devicePinnedId = deviceAccount?.accountId ?? undefined;
+  const pinnedId = targetDeviceId
+    ? devicePinnedId && inRotation(devicePinnedId)
+      ? devicePinnedId
+      : agentPinned && signedInHere(agentPinned)
+        ? agentPinned.id
+        : undefined
+    : agentPinnedId;
   const current = pinnedId ?? AUTO;
   const selected = pending ?? current;
   const dirty = pending !== null && pending !== current;
@@ -254,16 +305,40 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
       run(async () => {
         const value = pending;
         if (value === null) return;
-        if (value === AUTO) {
+        // Never turn this desktop's pick into an agent-wide one.
+        if (needsLocalDevice && !targetDeviceId) return;
+        if (value !== AUTO && !bindings.some((b) => b.accountId === value)) {
+          await bindQuotaAccount(agentId, value, 'pool');
+        }
+        if (targetDeviceId) {
+          await setQuotaDeviceAccount(agentId, targetDeviceId, value === AUTO ? null : value);
+        } else if (value === AUTO) {
           if (pinnedId) await bindQuotaAccount(agentId, pinnedId, 'pool');
         } else {
-          if (!bindings.some((b) => b.accountId === value)) {
-            await bindQuotaAccount(agentId, value, 'pool');
-          }
           await switchQuotaAccount(agentId, value);
         }
-      }).then(() => setPending(null)),
-    [agentId, bindQuotaAccount, bindings, pending, pinnedId, run, switchQuotaAccount],
+      })
+        .then(() => setPending(null))
+        .catch((error: { data?: { code?: string } }) => {
+          toast.error(
+            error?.data?.code === 'PRECONDITION_FAILED'
+              ? t('heteroAgent.claudeQuota.manage.notSignedInOnDevice')
+              : t('heteroAgent.claudeQuota.manage.switchFailed'),
+          );
+        }),
+    [
+      agentId,
+      bindQuotaAccount,
+      bindings,
+      needsLocalDevice,
+      pending,
+      pinnedId,
+      run,
+      setQuotaDeviceAccount,
+      switchQuotaAccount,
+      t,
+      targetDeviceId,
+    ],
   );
 
   const setRotation = useCallback(

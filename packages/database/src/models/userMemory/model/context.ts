@@ -1,13 +1,14 @@
 import type {
   MemorySourceType,
+  UserMemoryActivityWithoutVectors,
   UserMemoryContextWithoutVectors,
   UserMemoryExperienceWithoutVectors,
+  UserMemoryInsert,
   UserMemoryPreferenceWithoutVectors,
   UserMemoryWithoutVectors,
 } from '@lobechat/types';
 
 import type { FtsSearchCandidateSource } from '../../../repositories/ftsSearch';
-import type { userMemories, UserMemoryActivitiesWithoutVectors } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import type { TopicModel } from '../../topic';
 import type { buildUserMemoryWhere } from '../where';
@@ -31,7 +32,7 @@ export interface UserMemoryModelContext {
       status?: string | null;
       tags?: string[] | null;
     },
-  ) => typeof userMemories.$inferInsert;
+  ) => UserMemoryInsert;
   readonly db: LobeChatDatabase;
   extractSourceMetadata: (metadata?: Record<string, unknown> | null) => {
     sourceId?: string;
@@ -42,7 +43,7 @@ export interface UserMemoryModelContext {
   memoryWhere: (
     table: Parameters<typeof buildUserMemoryWhere>[2],
   ) => ReturnType<typeof buildUserMemoryWhere>;
-  searchActivities: (params: SearchLayerParams) => Promise<UserMemoryActivitiesWithoutVectors[]>;
+  searchActivities: (params: SearchLayerParams) => Promise<UserMemoryActivityWithoutVectors[]>;
   searchContexts: (params: SearchLayerParams) => Promise<UserMemoryContextWithoutVectors[]>;
   searchExperiences: (params: SearchLayerParams) => Promise<UserMemoryExperienceWithoutVectors[]>;
   searchPreferences: (params: SearchLayerParams) => Promise<UserMemoryPreferenceWithoutVectors[]>;

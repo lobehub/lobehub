@@ -51,7 +51,7 @@ export function Composer({
   /** Where unsent input is kept; see {@link useComposerDraft}. */
   draftKey: string;
   members: ChannelPublicMember[];
-  placeholder?: string;
+  placeholder: string;
   onSend: (
     content: string,
     mentions: string[],
@@ -160,6 +160,7 @@ export function Composer({
                   aria-label={t('attachments.upload')}
                   disabled={busy || !canUpload}
                   icon={Paperclip}
+                  size={{ blockSize: 28, size: 16 }}
                   title={reason || t('attachments.upload')}
                 />
               </Upload>
@@ -167,11 +168,11 @@ export function Composer({
             <div {...stylex.props(styles.composerEditor)}>
               <Editor
                 autoFocus
-                aria-label={placeholder || t('composer')}
+                aria-label={placeholder}
                 content=""
                 editable={!busy}
                 editor={editor}
-                placeholder={placeholder || t('composer')}
+                placeholder={placeholder}
                 plugins={plugins}
                 slashPlacement="top"
                 type="text"
@@ -230,10 +231,13 @@ export function Composer({
               />
             </div>
             {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
+            {/* An empty composer keeps Send as a quiet icon, like an IM; it fills once there is a draft. */}
             <SendButton
               aria-label={t('send')}
               disabled={busy || !hasDraft || attachments.blocked}
               loading={busy}
+              size={28}
+              type={hasDraft ? 'primary' : 'text'}
               onSend={() => void send()}
             />
           </div>

@@ -9,9 +9,15 @@ import { memo, type ReactNode } from 'react';
 
 import { sx } from '@/styles/sx';
 
+// The compiler supports registered custom-property keyframes; its public
+// CSSProperties type does not yet include them. Keep that extension local.
+type SweepFrame = stylex.CSSProperties & {
+  '--lobe-generating-border-angle': `${number}deg`;
+};
+
 const sweep = stylex.keyframes({
-  from: { '--lobe-generating-border-angle': '0deg' },
-  to: { '--lobe-generating-border-angle': '360deg' },
+  from: { '--lobe-generating-border-angle': '0deg' } as SweepFrame,
+  to: { '--lobe-generating-border-angle': '360deg' } as SweepFrame,
 });
 
 const styles = stylex.create({

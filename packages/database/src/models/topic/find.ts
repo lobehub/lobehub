@@ -28,6 +28,7 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { searchableMessage } from '../../utils/searchableMessage';
 import { notChannelTopic } from '../../utils/topicVisibility';
+import { nonNull } from '../utils/rows';
 import type { TopicModelContext } from './context';
 import type { TopicKeywordScope } from './types';
 
@@ -177,8 +178,10 @@ export const findRunInitiators = async (
     )
     .orderBy(agentOperations.topicId, desc(agentOperations.startedAt));
 
-  /* v8 ignore next -- unreachable: the null-topicId fallback; `inArray(agentOperations.topicId, …)` never matches a NULL topic_id */
-  return new Map(rows.flatMap((row) => (row.topicId ? [[row.topicId, row.userId]] : [])));
+  // `inArray(agentOperations.topicId, …)` never matches a NULL topic_id.
+  return new Map(
+    rows.map((row) => [nonNull(row.topicId, 'agent_operations.topic_id'), row.userId]),
+  );
 };
 
 /**
@@ -431,9 +434,7 @@ export const queryRecent = async (ctx: TopicModelContext, limit: number = 12) =>
   return result.map((item) => ({
     ...item,
     type: item.groupId ? ('group' as const) : ('agent' as const),
-    /* v8 ignore start -- unreachable: the `new Date(…)` arm; `mapWith(topics.updatedAt)` decodes the timestamptz cell into a Date, whichever driver returns it */
     updatedAt: item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt),
-    /* v8 ignore stop */
   }));
 };
 

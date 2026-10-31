@@ -60,10 +60,3 @@ export const userMemoriesPreferences = pgTable(
     index('user_memories_preferences_applies_to_entity_id_index').on(table.appliesToEntityId),
   ],
 );
-
-export type UserMemoryPreference = typeof userMemoriesPreferences.$inferSelect;
-export type UserMemoryPreferencesWithoutVectors = Omit<
-  UserMemoryPreference,
-  'conclusionDirectivesVector'
->;
-export type NewUserMemoryPreference = typeof userMemoriesPreferences.$inferInsert;

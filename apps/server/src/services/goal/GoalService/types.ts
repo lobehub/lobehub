@@ -51,6 +51,7 @@ import type {
   setTaskModel,
   stopFencedTasks,
   updateRequirement,
+  updateTitle,
 } from './editing';
 import type {
   close,
@@ -271,6 +272,7 @@ export interface GoalServiceContext {
   tickOnce: Bound<typeof tickOnce>;
   transitionStatus: Bound<typeof transitionStatus>;
   updateRequirement: Bound<typeof updateRequirement>;
+  updateTitle: Bound<typeof updateTitle>;
   readonly userId: string;
   waitForDevice: Bound<typeof waitForDevice>;
   waitForQuotaReset: Bound<typeof waitForQuotaReset>;
