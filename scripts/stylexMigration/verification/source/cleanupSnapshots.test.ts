@@ -16,6 +16,13 @@ const setup = async () => {
   await writeFile(path.join(output, 'base-source/component.ts'), 'export const x = 1;');
   await writeFile(path.join(output, 'base-source/.stylex-dependencies/pnpm-lock.yaml'), 'lock');
   await writeFile(path.join(output, 'snapshot.json.gz'), 'raw-evidence');
+  await mkdir(path.join(output, 'base-source/.stylex-dependencies/.stylex-tools'), {
+    recursive: true,
+  });
+  await writeFile(
+    path.join(output, 'base-source/.stylex-dependencies/.stylex-tools/restore.log'),
+    'pnpm failure details',
+  );
   return output;
 };
 
@@ -40,6 +47,15 @@ describe('owned verification source lifecycle', () => {
     ).toBe('lock');
     await expect(readFile(path.join(output, 'base-source/component.ts'))).rejects.toThrow();
     expect((await cleanupSourceSnapshots(output)).removed).toEqual([]);
+    expect(
+      await readFile(
+        path.join(
+          output,
+          'source-metadata/base-source/.stylex-dependencies/.stylex-tools/restore.log',
+        ),
+        'utf8',
+      ),
+    ).toBe('pnpm failure details');
   });
 
   it('refuses symlinked source directories without touching their targets', async () => {

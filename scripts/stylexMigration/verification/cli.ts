@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import { fixtureIds, getStyleFixture } from './fixtures/fixtureRegistry';
 import { exitCode } from './gate/gate';
 import { runPreflight } from './pipeline/preflight';
+import { armRunWatchdog } from './pipeline/runWatchdog';
 import { fingerprintSources, writeJson } from './reporting/report';
 import { recordSourceCleanup } from './source/cleanupSnapshots';
 import { resolvePullRequest } from './source/pullRequest';
@@ -116,14 +117,14 @@ const main = async () => {
   const output = await mkdtemp(path.join(parent, `${selfTest ? 'self-test' : 'run'}-`));
   console.log(`Evidence: ${output}`);
   // Bounded process watchdog also covers page.evaluate calls without protocol timeouts.
-  const watchdog = setTimeout(
-    () => {
-      console.error('ERROR: VERIFICATION_TIME_BUDGET_EXCEEDED');
-      process.exit(3);
-    },
-    values['restore-dependencies'] ? 900_000 : 120_000,
-  );
-  watchdog.unref();
+  let cleanupPromise: Promise<void> | undefined;
+  const cleanup = () =>
+    (cleanupPromise ??=
+      selfTest || values['keep-sources'] ? Promise.resolve() : recordSourceCleanup(output));
+  const stopWatchdog = armRunWatchdog({
+    cleanup,
+    durationMs: values['restore-dependencies'] ? 900_000 : 120_000,
+  });
   try {
     if (selfTest) {
       const { runSelfTest } = await import('./selfTest');
@@ -200,8 +201,8 @@ const main = async () => {
     });
     process.exitCode = 3;
   } finally {
-    clearTimeout(watchdog);
-    if (!selfTest && !values['keep-sources']) await recordSourceCleanup(output);
+    stopWatchdog();
+    await cleanup();
   }
 };
 
