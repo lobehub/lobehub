@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -20,7 +20,7 @@ describe('model discovery working directory', () => {
   ).map(({ type }) => type) as ListHeterogeneousAgentModelsParams['type'][];
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), 'hetero-model-cwd-'));
+    root = await realpath(await mkdtemp(path.join(tmpdir(), 'hetero-model-cwd-')));
     project = path.join(root, 'project');
     await mkdir(project);
     await writeFile(path.join(root, 'file'), 'not a directory');
@@ -43,6 +43,7 @@ if (['codex', 'droid', 'trae'].includes(engine)) {
   });
 } else {
   const outputs = {
+    antigravity: model + '  Fixture',
     codebuddy: '--model <model> Currently supported: (' + model + ')',
     cursor: model + ' - Fixture',
     devin: JSON.stringify({ families: [{ variants: [{ model_uid: model }] }] }),

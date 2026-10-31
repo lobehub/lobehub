@@ -12,7 +12,7 @@ describe('Antigravity process input', () => {
     expect(JSON.parse(input.stdin)).toEqual({ event: 'user', message: { content: prompt } });
   });
 
-  it('resumes the exact conversation while retaining user model and permission settings', () => {
+  it('resumes the exact conversation in YOLO mode while retaining user model settings', () => {
     expect(
       buildAntigravityArgs({
         extraArgs: ['--model', 'custom-model', '--effort', 'high'],
@@ -23,6 +23,7 @@ describe('Antigravity process input', () => {
       'stream-json',
       '--output-format',
       'stream-json',
+      '--dangerously-skip-permissions',
       '--conversation',
       'conv-1',
       '--model',
@@ -30,7 +31,7 @@ describe('Antigravity process input', () => {
       '--effort',
       'high',
     ]);
-    expect(buildAntigravityArgs({})).not.toContain('--dangerously-skip-permissions');
+    expect(buildAntigravityArgs({})).toContain('--dangerously-skip-permissions');
   });
 
   it.each([

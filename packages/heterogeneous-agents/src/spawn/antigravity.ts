@@ -4,6 +4,7 @@ export const ANTIGRAVITY_BASE_ARGS = [
   'stream-json',
   '--output-format',
   'stream-json',
+  '--dangerously-skip-permissions',
 ] as const;
 
 interface AntigravitySpawnArgsOptions {
@@ -37,8 +38,6 @@ export const buildAntigravityArgs = ({
     );
   }
 
-  // Keep agy's cached credentials and permission policy. The user's explicit
-  // permission flags can be supplied through extraArgs; never enable bypass here.
   return [
     ...ANTIGRAVITY_BASE_ARGS,
     ...(resumeSessionId ? ['--conversation', resumeSessionId] : []),

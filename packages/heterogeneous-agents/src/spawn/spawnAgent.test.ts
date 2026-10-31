@@ -1172,6 +1172,7 @@ describe('spawnAgent', () => {
       'stream-json',
       '--output-format',
       'stream-json',
+      '--dangerously-skip-permissions',
       '--conversation',
       'agy-session',
     ]);
@@ -1185,7 +1186,6 @@ describe('spawnAgent', () => {
     ).toHaveLength(1);
     expect(events.some((event) => event.type === 'error')).toBe(false);
   });
-
   it('spawns Qoder with its stream-json protocol, permission mode, and resume id', async () => {
     const fake = createFakeProc({ stdoutChunks: [ccInit] });
     nextFakeProc = fake.proc;

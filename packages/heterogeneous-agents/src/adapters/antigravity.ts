@@ -44,7 +44,8 @@ const stringifyOutput = (value: unknown): string =>
 /**
  * Native agy NDJSON protocol, not the Gemini/Claude stream-json protocol.
  * https://antigravity.google/docs/cli/headless/
- * One process receives one user message; --conversation resumes the next turn.
+ * LobeHub uses one process per turn and --conversation to resume. The native
+ * protocol also supports multiple turns while stdin remains open.
  */
 export class AntigravityAdapter implements AgentEventAdapter {
   sessionId?: string;

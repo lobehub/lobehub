@@ -262,9 +262,7 @@ const buildExtraArgs = (
                 ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
                 : []),
             ]
-          : options.type === 'claude-code' ||
-              options.type === 'codebuddy' ||
-              options.type === 'grok-build'
+          : ['antigravity', 'claude-code', 'codebuddy', 'grok-build'].includes(options.type)
             ? [
                 ...(options.model ? ['--model', options.model] : []),
                 ...(options.effort ? ['--effort', options.effort] : []),

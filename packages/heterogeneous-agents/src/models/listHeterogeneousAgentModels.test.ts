@@ -65,6 +65,38 @@ describe('heterogeneous agent model discovery', () => {
     vi.resetModules();
   });
 
+  it('queries the configured Antigravity binary for its native model catalog', async () => {
+    resolveExecFile('gemini-4-argon-high  Gemini 4 Argon (High)');
+    const { listHeterogeneousAgentModels } = await importModule();
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/agy',
+        cwd: '/repo',
+        env: { CUSTOM_ENV: 'value' },
+        type: 'antigravity',
+      }),
+    ).resolves.toMatchObject({
+      status: 'success',
+      models: [
+        { id: 'gemini-4-argon-high', label: 'Gemini 4 Argon (High)', providerId: 'antigravity' },
+      ],
+    });
+    expect(execFileMock).toHaveBeenCalledWith(
+      '/custom/agy',
+      ['models'],
+      expect.objectContaining({ cwd: '/repo', env: { CUSTOM_ENV: 'value' }, timeout: 15_000 }),
+      expect.any(Function),
+    );
+  });
+
+  it('reports a stalled Antigravity model query as a retryable catalog timeout', async () => {
+    rejectExecFile(Object.assign(new Error('timed out'), { killed: true }));
+    const { listHeterogeneousAgentModels } = await importModule();
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/agy', type: 'antigravity' }),
+    ).resolves.toMatchObject({ status: 'error', error: { code: 'timeout' } });
+  });
+
   it('loads Pi provider extensions with the same discovery policy as the configured run', async () => {
     resolveExecFile('custom  fixture-model  4K  512  no  no');
     const { listHeterogeneousAgentModels } = await importModule();
