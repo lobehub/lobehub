@@ -17,6 +17,7 @@ import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
 import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
+import { showsReplyQuote } from './replyQuote';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
 import type { ChannelReplyTarget } from './useReplyTarget';
@@ -119,7 +120,7 @@ export const ChannelMessage = ({
           <CollapsibleContent key={message.id}>
             <Flexbox gap={8}>
               {!isRoot &&
-                message.replyToId &&
+                showsReplyQuote(message) &&
                 (message.replyTo ? (
                   <Button
                     aria-label={t('reply.viewOriginal')}
