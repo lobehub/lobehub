@@ -1,6 +1,9 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import type { ButtonProps } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BadgeCheck,
   CircleAlert,
@@ -15,99 +18,85 @@ import {
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import { acceptanceContentLayout } from '../layout';
 
-const styles = createStaticStyles(({ css }) => ({
-  repairingArc: css`
-    transform-origin: center;
-    animation: acceptance-repairing-orbit 1.2s linear infinite;
+const orbit = stylex.keyframes({
+  to: { transform: 'rotate(360deg)' },
+});
 
-    @keyframes acceptance-repairing-orbit {
-      to {
-        transform: rotate(360deg);
-      }
-    }
+const completePop = stylex.keyframes({
+  '0%': { opacity: 0, transform: 'scale(0.5)' },
+  '55%': { transform: 'scale(1)' },
+  '100%': { opacity: 1, transform: 'scale(1)' },
+});
 
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-  /* Floats over the scrolling checklist — the decision stays reachable
-     however deep the review goes. */
-  bar: css`
-    position: sticky;
-    z-index: 20;
-    inset-block-end: 16px;
+const reducedMotion = '@media (prefers-reduced-motion: reduce)';
+const phone = '@media (width <= 767px)';
+const narrow = '@media (width <= 480px)';
 
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
+// The page's text measure, from the shared layout constants StyleX cannot read.
+const barMaxWidth = acceptanceContentLayout.maxWidth - 2 * acceptanceContentLayout.paddingInline;
 
-    width: 100%;
-    max-width: ${acceptanceContentLayout.maxWidth - 2 * acceptanceContentLayout.paddingInline}px;
-    margin-inline: auto;
-    padding-block: 12px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    @media (width <= 767px) {
-      inset-block-end: max(8px, env(safe-area-inset-bottom));
-      padding: 12px;
-    }
-  `,
-  summary: css`
-    flex: 1;
-    min-width: 160px;
-  `,
-  actions: css`
-    flex: none;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-
-    > button {
-      flex: none;
-    }
-
-    @media (width <= 480px) {
-      width: 100%;
-
-      > button {
-        flex: 1;
-      }
-    }
-  `,
+const styles = stylex.create({
+  repairingArc: {
+    transformOrigin: 'center',
+    animationName: { default: orbit, [reducedMotion]: 'none' },
+    animationDuration: '1.2s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+  // Floats over the scrolling checklist — the decision stays reachable
+  // however deep the review goes.
+  bar: {
+    position: 'sticky',
+    zIndex: 20,
+    insetBlockEnd: { default: '16px', [phone]: 'max(8px, env(safe-area-inset-bottom))' },
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '12px',
+    alignItems: 'center',
+    width: '100%',
+    marginInline: 'auto',
+    paddingBlock: '12px',
+    paddingInline: { default: '16px', [phone]: '12px' },
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+  },
+  summary: {
+    flex: '1',
+    minWidth: '160px',
+  },
+  actions: {
+    flex: 'none',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    width: { default: null, [narrow]: '100%' },
+  },
+  // The bar's own buttons (the old `.actions > button`).
+  actionButton: {
+    flex: { default: 'none', [narrow]: '1' },
+  },
   // The completion mark springs in the instant review finishes — the felt beat
   // the abrupt ring→disc swap never had, landing at the decision bar where the
   // user's next action (accept / send back) already is, not behind a filter.
-  completePop: css`
-    @keyframes acceptance-decision-complete-pop {
-      0% {
-        transform: scale(0.5);
-        opacity: 0;
-      }
+  completePop: {
+    animationName: { default: completePop, [reducedMotion]: 'none' },
+    animationDuration: '0.2s',
+    animationTimingFunction: 'ease-out',
+    animationFillMode: 'both',
+  },
+});
 
-      55% {
-        transform: scale(1);
-      }
-
-      100% {
-        transform: scale(1);
-        opacity: 1;
-      }
-    }
-
-    animation: acceptance-decision-complete-pop 0.2s ease-out both;
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-}));
+const ActionButton = (props: ButtonProps) => (
+  <Button {...props} {...stylex.props(styles.actionButton)} />
+);
 
 type BarState = 'accepted' | 'live' | 'rejected' | 'settled';
 
@@ -139,7 +128,7 @@ const RepairingMark = memo(() => {
           strokeWidth={stroke}
         />
         <circle
-          className={styles.repairingArc}
+          {...stylex.props(styles.repairingArc)}
           cx={size / 2}
           cy={size / 2}
           fill={'none'}
@@ -330,8 +319,8 @@ const DecisionBar = memo<DecisionBarProps>(
     }, [reviewComplete]);
 
     return (
-      <div className={styles.bar}>
-        <Flexbox horizontal align={'center'} className={styles.summary} gap={8}>
+      <div {...sx([styles.bar], undefined, { maxWidth: barMaxWidth })}>
+        <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.summary)}>
           {state === 'live' && repairing ? (
             <RepairingMark />
           ) : stateMeta ? (
@@ -346,19 +335,17 @@ const DecisionBar = memo<DecisionBarProps>(
           ) : allConfirmed ? (
             // Every check signed off — the same clean badge the accepted state carries.
             <Icon
-              className={justCompleted ? styles.completePop : undefined}
               color={cssVar.colorSuccess}
               icon={BadgeCheck}
               size={22}
-              style={{ flex: 'none' }}
+              {...sx([justCompleted && styles.completePop], undefined, { flex: 'none' })}
             />
           ) : settledNeedsFix ? (
             <Icon
-              className={justCompleted ? styles.completePop : undefined}
               color={cssVar.colorWarning}
               icon={CircleAlert}
               size={22}
-              style={{ flex: 'none' }}
+              {...sx([justCompleted && styles.completePop], undefined, { flex: 'none' })}
             />
           ) : (
             <ProgressRing done={decidedCount} total={totalCount} />
@@ -410,19 +397,19 @@ const DecisionBar = memo<DecisionBarProps>(
           // Not this viewer's call: the decision they are waiting on stays in
           // view, disabled, so the bar says who decides instead of vanishing.
           state === 'settled' && (
-            <Flexbox horizontal className={styles.actions} gap={8}>
-              <Button disabled title={readOnlyReason} type={'text'}>
+            <Flexbox horizontal gap={8} {...stylex.props(styles.actions)}>
+              <ActionButton disabled title={readOnlyReason} type={'text'}>
                 {t('acceptance.bar.rejectComment')}
-              </Button>
-              <Button disabled title={readOnlyReason} type={'fill'}>
+              </ActionButton>
+              <ActionButton disabled title={readOnlyReason} type={'fill'}>
                 {t('acceptance.actions.accept')}
-              </Button>
+              </ActionButton>
             </Flexbox>
           )
         ) : rejectOnlyReason ? (
           // Granted reject access only: sending back is theirs, accepting is not.
           state === 'settled' && (
-            <Flexbox horizontal className={styles.actions} gap={8}>
+            <Flexbox horizontal gap={8} {...stylex.props(styles.actions)}>
               <Button disabled={pending} type={'fill'} onClick={onRejectComment}>
                 {t('acceptance.bar.rejectComment')}
               </Button>
@@ -432,14 +419,14 @@ const DecisionBar = memo<DecisionBarProps>(
             </Flexbox>
           )
         ) : (
-          <Flexbox horizontal className={styles.actions} gap={8}>
+          <Flexbox horizontal gap={8} {...stylex.props(styles.actions)}>
             {/* A dispatched send-back (repairing) keeps the copy entry alive —
             the reviewer may still hand the prompt to another agent. Embedded,
             the composer beside it already receives the draft. */}
             {state === 'live' && hasFeedback && !embedded && (
-              <Button disabled={pending} type={'fill'} onClick={onCopyReview}>
+              <ActionButton disabled={pending} type={'fill'} onClick={onCopyReview}>
                 {t('acceptance.bar.copyReview')}
-              </Button>
+              </ActionButton>
             )}
 
             {(state === 'settled' || state === 'rejected') &&
@@ -449,41 +436,41 @@ const DecisionBar = memo<DecisionBarProps>(
                 <>
                   {/* Last words before the repair leaves — a global note the next
                   round reads, for what the queued per-check feedback missed. */}
-                  <Button
+                  <ActionButton
                     disabled={pending}
                     icon={<Icon icon={MessageSquarePlus} />}
                     type={'fill'}
                     onClick={onAddComment}
                   >
                     {t('acceptance.bar.addComment')}
-                  </Button>
+                  </ActionButton>
                   {/* One commit action per host: standalone copies the repair
                   prompt; embedded drafts it into the composer beside the bar. */}
                   {(!embedded || rerunAvailable) && (
-                    <Button
+                    <ActionButton
                       disabled={pending}
                       loading={embedded && rerunPending}
                       type={'primary'}
                       onClick={embedded ? onRerun : onCopyReview}
                     >
                       {t(embedded ? 'acceptance.bar.rerun' : 'acceptance.bar.copyReview')}
-                    </Button>
+                    </ActionButton>
                   )}
                 </>
               ) : (
                 // Clean review — accept carries primary weight only once every
                 // check is signed off; before that it stays a quiet option.
                 <>
-                  <Button disabled={pending} type={'text'} onClick={onRejectComment}>
+                  <ActionButton disabled={pending} type={'text'} onClick={onRejectComment}>
                     {t('acceptance.bar.rejectComment')}
-                  </Button>
-                  <Button
+                  </ActionButton>
+                  <ActionButton
                     disabled={pending}
                     type={allConfirmed ? 'primary' : 'fill'}
                     onClick={onAccept}
                   >
                     {t('acceptance.actions.accept')}
-                  </Button>
+                  </ActionButton>
                 </>
               ))}
           </Flexbox>

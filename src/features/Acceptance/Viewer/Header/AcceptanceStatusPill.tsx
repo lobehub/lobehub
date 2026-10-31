@@ -1,34 +1,31 @@
 'use client';
 
 import type { DropdownItem } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, DropdownMenu, Icon } from '@lobehub/ui';
+import { DropdownMenu, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { resolveAcceptanceVerdictMeta } from '../verdict';
 
-const styles = createStaticStyles(({ css }) => ({
-  pill: css`
-    display: inline-flex;
-    gap: 5px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 99px;
-
-    font-size: 12px;
-    font-weight: 500;
-  `,
-  interactive: css`
-    cursor: pointer;
-    transition: filter ${cssVar.motionDurationMid};
-
-    &:hover {
-      filter: brightness(1.08);
-    }
-  `,
-}));
+const styles = stylex.create({
+  pill: {
+    display: 'inline-flex',
+    gap: '5px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '99px',
+    fontSize: '12px',
+    fontWeight: 500,
+  },
+  interactive: {
+    cursor: 'pointer',
+    transition: `filter ${cssVar.motionDurationMid}`,
+    filter: { 'default': null, ':hover': 'brightness(1.08)' },
+  },
+});
 
 interface AcceptanceStatusPillProps {
   menu?: DropdownItem[];
@@ -42,8 +39,12 @@ const AcceptanceStatusPill = ({ menu, pending, size = 13, status }: AcceptanceSt
   const verdictMeta = resolveAcceptanceVerdictMeta(status, t);
   const pill = (
     <span
-      className={menu ? cx(styles.pill, styles.interactive) : styles.pill}
       title={menu ? t('acceptance.workspace.actions.status') : undefined}
+      className={
+        menu
+          ? stylex.props(styles.pill, styles.interactive).className
+          : stylex.props(styles.pill).className
+      }
       style={{
         background: verdictMeta.bg,
         color: verdictMeta.color,

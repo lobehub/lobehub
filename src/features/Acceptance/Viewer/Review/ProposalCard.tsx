@@ -1,60 +1,47 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CheckProposal } from './proposal';
 
-const styles = createStaticStyles(({ css }) => ({
-  /* Dashed and untinted: a proposal is a suggestion sitting next to real
-     verdicts, so it must read as provisional rather than as another state the
-     check has already reached. A solid tinted panel competed with the check's
-     own status colour for the same glance. */
-  card: css`
-    padding-block: 8px;
-    padding-inline: 10px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  head: css`
-    cursor: pointer;
-    user-select: none;
-  `,
-  /* The collapsed line carries the whole claim, so the reviewer can skip the
-     proposal without opening it. */
-  preview: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  /* Quieter than `secondary` — these are provenance labels, not content. */
-  muted: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  regionIndex: css`
-    flex: none;
-
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 16px;
-    color: #fff;
-    text-align: center;
-
-    background: ${cssVar.colorError};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  head: { cursor: 'pointer', userSelect: 'none' },
+  preview: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    fontSize: '12px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  muted: { fontSize: '11px', color: cssVar.colorTextQuaternary },
+  regionIndex: {
+    flex: 'none',
+    width: '16px',
+    height: '16px',
+    borderRadius: '50%',
+    fontSize: '10px',
+    fontWeight: 600,
+    lineHeight: '16px',
+    color: '#fff',
+    textAlign: 'center',
+    backgroundColor: cssVar.colorError,
+    backgroundImage: 'none',
+  },
+});
 
 interface ProposalCardProps {
   onAdjudicate: (adjudication: 'misidentified' | 'not-an-issue') => Promise<void> | void;
@@ -99,11 +86,11 @@ const ProposalCard = memo<ProposalCardProps>(
     const regions = proposal.annotations ?? [];
 
     return (
-      <Flexbox className={styles.card} gap={open ? 8 : 0}>
+      <Flexbox className={stylex.props(styles.card).className} gap={open ? 8 : 0}>
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.head}
+          className={stylex.props(styles.head).className}
           gap={6}
           onClick={() => onToggle(!open)}
         >
@@ -116,13 +103,15 @@ const ProposalCard = memo<ProposalCardProps>(
               card is open. Collapsed, the row's job is the finding itself —
               a model id there just pushes the summary out of view. */}
           {open && (
-            <span className={styles.muted}>
+            <span {...stylex.props(styles.muted)}>
               {proposal.provider}/{proposal.model}
             </span>
           )}
-          {!open && proposal.comment && <span className={styles.preview}>{proposal.comment}</span>}
+          {!open && proposal.comment && (
+            <span {...stylex.props(styles.preview)}>{proposal.comment}</span>
+          )}
           {!open && regions.length > 0 && (
-            <span className={styles.muted}>
+            <span {...stylex.props(styles.muted)}>
               {t('acceptance.proposal.regionCount', { count: regions.length })}
             </span>
           )}
@@ -135,7 +124,10 @@ const ProposalCard = memo<ProposalCardProps>(
             {/* Numbers match the badges now drawn on the evidence image below. */}
             {regions.map((region, index) => (
               <Flexbox horizontal align={'flex-start'} gap={6} key={index}>
-                <span className={styles.regionIndex} style={{ marginBlockStart: 2 }}>
+                <span
+                  className={stylex.props(styles.regionIndex).className}
+                  style={{ marginBlockStart: 2 }}
+                >
                   {index + 1}
                 </span>
                 <Text fontSize={12} type={'secondary'}>

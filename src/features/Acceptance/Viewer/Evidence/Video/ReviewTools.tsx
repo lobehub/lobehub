@@ -1,45 +1,42 @@
 'use client';
 
-import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Flag, MessageSquareText, Repeat, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { VideoLoop } from './RangeLane';
 import { formatVideoTime } from './videoTime';
 
-const local = createStaticStyles(({ css }) => ({
-  kbd: css`
-    display: inline-block;
-
-    min-width: 16px;
-    margin-inline: 1px;
-    padding-inline: 4px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 10px;
-    line-height: 16px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-variant-numeric: tabular-nums;
-  `,
-  tools: css`
-    flex: none;
-
-    min-height: 40px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    font-size: 12px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const local = stylex.create({
+  kbd: {
+    display: 'inline-block',
+    minWidth: '16px',
+    marginInline: '1px',
+    paddingInline: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '10px',
+    lineHeight: '16px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontVariantNumeric: 'tabular-nums' },
+  tools: {
+    flex: 'none',
+    minHeight: '40px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    fontSize: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface ReviewToolsProps {
   loop: boolean;
@@ -64,11 +61,11 @@ export const ReviewTools = ({
   const { t } = useTranslation('verify');
 
   return (
-    <Flexbox horizontal align={'center'} className={local.tools} gap={8}>
+    <Flexbox horizontal align={'center'} className={stylex.props(local.tools).className} gap={8}>
       {range ? (
         <>
           <Icon icon={Repeat} size={14} />
-          <span className={local.mono}>
+          <span {...stylex.props(local.mono)}>
             {formatVideoTime(range.start)} – {formatVideoTime(range.end)}
           </span>
           <Text fontSize={12} type={'secondary'}>
@@ -91,14 +88,14 @@ export const ReviewTools = ({
       ) : (
         <>
           <Text fontSize={12} type={'secondary'}>
-            <span className={local.kbd}>Space</span> {t('acceptance.video.play')} ·{' '}
-            <span className={local.kbd}>,</span>
-            <span className={local.kbd}>.</span> {t('acceptance.video.keysFrame')} ·{' '}
-            <span className={local.kbd}>J</span>
-            <span className={local.kbd}>L</span> {t('acceptance.video.speed')} ·{' '}
-            <span className={local.kbd}>M</span> {t('acceptance.video.markFrame')} ·{' '}
-            <span className={local.kbd}>I</span>
-            <span className={local.kbd}>O</span> {t('acceptance.video.keysRange')}
+            <span {...stylex.props(local.kbd)}>Space</span> {t('acceptance.video.play')} ·{' '}
+            <span {...stylex.props(local.kbd)}>,</span>
+            <span {...stylex.props(local.kbd)}>.</span> {t('acceptance.video.keysFrame')} ·{' '}
+            <span {...stylex.props(local.kbd)}>J</span>
+            <span {...stylex.props(local.kbd)}>L</span> {t('acceptance.video.speed')} ·{' '}
+            <span {...stylex.props(local.kbd)}>M</span> {t('acceptance.video.markFrame')} ·{' '}
+            <span {...stylex.props(local.kbd)}>I</span>
+            <span {...stylex.props(local.kbd)}>O</span> {t('acceptance.video.keysRange')}
           </Text>
           <div style={{ flex: 1 }} />
           <Button disabled={!ready} icon={Flag} size={'small'} onClick={onMarkFrame}>

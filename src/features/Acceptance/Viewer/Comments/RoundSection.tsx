@@ -1,67 +1,66 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
 
+import { roundHeaderMarker } from '../markers.stylex';
 import type { DiscussionSection } from './discussionRounds';
 
-const styles = createStaticStyles(({ css }) => ({
-  chevron: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-    transition: transform ${cssVar.motionDurationFast};
-  `,
-  chevronOpen: css`
-    transform: rotate(90deg);
-  `,
-  header: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    width: 100%;
-    min-height: 32px;
-    padding: 0;
-    border: none;
-
-    font: inherit;
-    color: ${cssVar.colorText};
-    text-align: start;
-
-    background: none;
-
-    &:hover .round-section-rule {
-      background: ${cssVar.colorBorder};
-    }
-  `,
-  label: css`
-    flex: none;
-    font-size: 12px;
-    font-weight: 600;
-  `,
-  meta: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rule: css`
-    flex: 1;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-    transition: background ${cssVar.motionDurationFast};
-  `,
-  sentBack: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorWarningText};
-  `,
-}));
+const styles = stylex.create({
+  chevron: {
+    flex: 'none',
+    color: cssVar.colorTextQuaternary,
+    transition: `transform ${cssVar.motionDurationFast}`,
+  },
+  chevronOpen: {
+    transform: 'rotate(90deg)',
+  },
+  header: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: '32px',
+    padding: 0,
+    borderStyle: 'none',
+    font: 'inherit',
+    color: cssVar.colorText,
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  label: {
+    flex: 'none',
+    fontSize: '12px',
+    fontWeight: 600,
+  },
+  meta: {
+    flex: 'none',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  rule: {
+    flex: '1',
+    height: '1px',
+    backgroundColor: {
+      default: cssVar.colorBorderSecondary,
+      [stylex.when.ancestor(':hover', roundHeaderMarker)]: cssVar.colorBorder,
+    },
+    transition: `background-color ${cssVar.motionDurationFast}`,
+  },
+  sentBack: {
+    flex: 'none',
+    fontSize: '12px',
+    color: cssVar.colorWarningText,
+  },
+});
 
 const SectionTime = ({ at }: { at: Date }) => {
   const time = useActivityTime(at);
@@ -84,20 +83,25 @@ const RoundSection = memo<RoundSectionProps>(({ children, onToggle, open, sectio
 
   return (
     <section aria-label={label}>
-      <button aria-expanded={open} className={styles.header} type={'button'} onClick={onToggle}>
+      <button
+        aria-expanded={open}
+        type={'button'}
+        {...stylex.props(styles.header, roundHeaderMarker)}
+        onClick={onToggle}
+      >
         <Icon
-          className={cx(styles.chevron, open && styles.chevronOpen)}
           icon={ChevronRight}
           size={14}
+          {...stylex.props(styles.chevron, open && styles.chevronOpen)}
         />
-        <span className={styles.label}>{label}</span>
+        <span {...stylex.props(styles.label)}>{label}</span>
         {section.sentBack && (
-          <span className={styles.sentBack}>
+          <span {...stylex.props(styles.sentBack)}>
             {t('acceptance.workspace.groups.status.rejected')}
           </span>
         )}
-        <span className={cx(styles.rule, 'round-section-rule')} />
-        <span className={styles.meta}>
+        <span {...stylex.props(styles.rule)} />
+        <span {...stylex.props(styles.meta)}>
           {t('acceptance.comments.sectionMessages', { count: section.messageCount })}
           {section.landedAt && (
             <>

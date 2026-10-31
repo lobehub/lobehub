@@ -1,15 +1,8 @@
 'use client';
 
 import { isDraftVerifyRun } from '@lobechat/const/verify';
-import {
-  ActionIcon,
-  createStaticStyles,
-  Flexbox,
-  Select,
-  Text,
-  toast,
-  useResponsive,
-} from '@lobehub/ui';
+import { ActionIcon, Flexbox, Select, Text, toast, useResponsive } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -43,27 +36,15 @@ import {
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import { collectGroupFeedback } from './readPresentation';
 
-const styles = createStaticStyles(({ css }) => ({
-  filters: css`
-    @media (width <= 767px) {
-      width: 100%;
-    }
-  `,
-  filterSelect: css`
-    width: 118px;
-
-    @media (width <= 767px) {
-      flex: 1;
-      width: 0;
-      min-width: 0;
-    }
-  `,
-  toolbarHeading: css`
-    @media (width <= 767px) {
-      flex-basis: 100%;
-    }
-  `,
-}));
+const styles = stylex.create({
+  filters: { width: { 'default': null, '@media (width <= 767px)': '100%' } },
+  filterSelect: {
+    width: { 'default': '118px', '@media (width <= 767px)': '0' },
+    flex: { 'default': null, '@media (width <= 767px)': '1' },
+    minWidth: { 'default': null, '@media (width <= 767px)': '0' },
+  },
+  toolbarHeading: { flexBasis: { 'default': null, '@media (width <= 767px)': '100%' } },
+});
 
 interface AcceptanceCheckInventoryProps {
   children?: ReactNode;
@@ -238,16 +219,27 @@ const AcceptanceCheckInventory = ({
   return (
     <>
       <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-        <Flexbox horizontal align={'center'} className={styles.toolbarHeading} flex={1} gap={8}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.toolbarHeading).className}
+          flex={1}
+          gap={8}
+        >
           <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
             {t('acceptance.checks.title')}
           </Text>
           <Flexbox flex={1} />
           {toolbar}
         </Flexbox>
-        <Flexbox horizontal align={'center'} className={styles.filters} gap={8}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.filters).className}
+          gap={8}
+        >
           <Select
-            className={styles.filterSelect}
+            className={stylex.props(styles.filterSelect).className}
             value={filter}
             variant={'filled'}
             options={[
@@ -273,7 +265,7 @@ const AcceptanceCheckInventory = ({
           />
           {data.rounds.length > 1 && (
             <Select
-              className={styles.filterSelect}
+              className={stylex.props(styles.filterSelect).className}
               value={roundFilter === null ? 'all' : String(roundFilter)}
               variant={'filled'}
               options={[

@@ -1,4 +1,6 @@
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Handle, Position, useNodeId } from '@xyflow/react';
 import {
   CheckCircle2,
@@ -18,63 +20,53 @@ import { FlowAnchorContext } from './flowAnchor';
 import type { FlowGraphData } from './flowGraph';
 import { flowStateBackground, flowStateColor } from './FlowNode';
 
-const styles = createStaticStyles(({ css }) => ({
-  group: css`
-    overflow: hidden;
-
-    width: 100%;
-    height: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  header: css`
-    height: 36px;
-    padding-inline: 16px;
-    background: transparent;
-  `,
-  collapsed: css`
-    cursor: pointer;
-    height: 100%;
-    padding-block: 12px;
-    padding-inline: 12px;
-  `,
-  glyph: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.4;
-  `,
-  summary: css`
-    font-size: 11px;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  handle: css`
-    width: 1px;
-    min-width: 0;
-    height: 1px;
-    min-height: 0;
-    border: 0;
-
-    opacity: 0;
-  `,
-}));
+const styles = stylex.create({
+  group: {
+    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  header: {
+    height: '36px',
+    paddingInline: '16px',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  collapsed: { cursor: 'pointer', height: '100%', paddingBlock: '12px', paddingInline: '12px' },
+  glyph: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: cssVar.borderRadius,
+  },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    fontSize: '13px',
+    fontWeight: 500,
+    lineHeight: 1.4,
+  },
+  summary: { fontSize: '11px', lineHeight: '16px', color: cssVar.colorTextTertiary },
+  handle: {
+    width: '1px',
+    minWidth: '0',
+    height: '1px',
+    minHeight: '0',
+    borderStyle: 'none',
+    opacity: 0,
+  },
+});
 
 export function FlowGroup({ data }: { data: FlowGraphData }) {
   const { t } = useTranslation('verify');
@@ -100,20 +92,25 @@ export function FlowGroup({ data }: { data: FlowGraphData }) {
               : CircleDashed;
   return (
     <>
-      <Handle className={styles.handle} id="in" position={Position.Left} type="target" />
-      <div className={styles.group}>
+      <Handle
+        className={stylex.props(styles.handle).className}
+        id="in"
+        position={Position.Left}
+        type="target"
+      />
+      <div {...stylex.props(styles.group)}>
         {data.collapsed ? (
           <Flexbox
             horizontal
             align="flex-start"
-            className={styles.collapsed}
+            className={stylex.props(styles.collapsed).className}
             gap={10}
             role="button"
             onClick={toggle}
           >
             <div
               aria-label={t(`flow.state.${data.state ?? 'pending'}`)}
-              className={styles.glyph}
+              className={stylex.props(styles.glyph).className}
               role="img"
               style={{
                 background: flowStateBackground(data.state),
@@ -123,8 +120,8 @@ export function FlowGroup({ data }: { data: FlowGraphData }) {
               <Icon icon={statusIcon} size={24} />
             </div>
             <Flexbox flex={1} gap={3} style={{ minWidth: 0 }}>
-              <span className={styles.title}>{data.title}</span>
-              <span className={styles.summary}>
+              <span {...stylex.props(styles.title)}>{data.title}</span>
+              <span {...stylex.props(styles.summary)}>
                 {`${data.passed}/${data.total} · ${t(`flow.state.${data.state ?? 'pending'}`)}`}
                 {Boolean(data.reviewed) &&
                   ` · ${t('flow.groupReviewed', { count: data.reviewed })}`}
@@ -159,7 +156,12 @@ export function FlowGroup({ data }: { data: FlowGraphData }) {
             </Flexbox>
           </Flexbox>
         ) : (
-          <Flexbox horizontal align="center" className={styles.header} gap={8}>
+          <Flexbox
+            horizontal
+            align="center"
+            className={stylex.props(styles.header).className}
+            gap={8}
+          >
             {data.onToggle && (
               <Button
                 aria-label={t('flow.collapseGroup', { title: data.title })}
@@ -200,18 +202,33 @@ export function FlowGroup({ data }: { data: FlowGraphData }) {
           </Flexbox>
         )}
       </div>
-      <Handle className={styles.handle} id="stack-in" position={Position.Top} type="target" />
-      <Handle className={styles.handle} id="stack-out" position={Position.Bottom} type="source" />
-      <Handle className={styles.handle} id="out" position={Position.Right} type="source" />
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
+        id="stack-in"
+        position={Position.Top}
+        type="target"
+      />
+      <Handle
+        className={stylex.props(styles.handle).className}
+        id="stack-out"
+        position={Position.Bottom}
+        type="source"
+      />
+      <Handle
+        className={stylex.props(styles.handle).className}
+        id="out"
+        position={Position.Right}
+        type="source"
+      />
+      <Handle
+        className={stylex.props(styles.handle).className}
         id="return-in"
         position={Position.Bottom}
         style={{ left: '35%' }}
         type="target"
       />
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
         id="return-out"
         position={Position.Bottom}
         style={{ left: '65%' }}

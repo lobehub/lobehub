@@ -1,9 +1,13 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Trash2 } from 'lucide-react';
 import { memo } from 'react';
+
+import { sx } from '@/styles/sx';
 
 import type { EvidenceOverlay } from './overlay';
 import { useAnnotationGesture } from './useAnnotationGesture';
@@ -18,125 +22,105 @@ import { useAnnotationGesture } from './useAnnotationGesture';
 
 type Rect = AcceptanceReviewAnnotation['rect'];
 
-const styles = createStaticStyles(({ css }) => ({
-  badge: css`
-    position: absolute;
-    inset-block-start: -9px;
-    inset-inline-start: -9px;
+const coarse = '@media (pointer: coarse)';
 
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorTextLightSolid};
-
-    background: ${cssVar.colorError};
-  `,
-  /* Delete mirrors the index badge on the opposite corner — the same pink
-     disc, so which region the action removes reads at a glance. Touch keeps
-     it: a phone reviewer who mis-drags a box has no keyboard escape, and the
-     only other way out used to be leaving the image entirely. */
-  badgeDelete: css`
-    cursor: pointer;
-
-    position: absolute;
-    inset-block-start: -9px;
-    inset-inline-end: -9px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-    border: none;
-    border-radius: 50%;
-
-    color: ${cssVar.colorTextLightSolid};
-
-    background: ${cssVar.colorError};
-
-    &:hover {
-      filter: brightness(1.15);
-    }
-
-    @media (pointer: coarse) {
-      inset-block-start: -12px;
-      inset-inline-end: -12px;
-      width: 24px;
-      height: 24px;
-    }
-  `,
-  canvas: css`
-    cursor: crosshair;
-    user-select: none;
-  `,
-  /* Drawn regions are draggable as a whole; the corner handle resizes. */
-  editableRect: css`
-    pointer-events: auto;
-    cursor: move;
-  `,
-  frame: css`
-    position: relative;
-
-    overflow: hidden;
-    display: inline-block;
-
-    /* Shrink-wrap the image exactly — a stretched frame skews every rect. */
-    align-self: flex-start;
-
-    width: fit-content;
-    max-width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  image: css`
-    display: block;
-    max-width: 100%;
-  `,
-  rect: css`
-    position: absolute;
-    border: 2px solid ${cssVar.colorError};
-    border-radius: 4px;
-
-    /*
-     * Two rings instead of one: the dark outside separates the box from a white
-     * screenshot, the light inside separates it from a dark one. The evidence
-     * image can be either, and neither the hue nor the reader's theme can tell
-     * us which — so the box carries its own contrast.
-     */
-    box-shadow:
-      0 0 0 1px rgb(0 0 0 / 45%),
-      inset 0 0 0 1px rgb(255 255 255 / 45%);
-  `,
-  resizeHandle: css`
-    cursor: nwse-resize;
-
-    position: absolute;
-    inset-block-end: -6px;
-    inset-inline-end: -6px;
-
-    width: 12px;
-    height: 12px;
-    border: 2px solid ${cssVar.colorError};
-    border-radius: 50%;
-
-    background: ${cssVar.colorBgContainer};
-
-    &::after {
-      content: '';
-      position: absolute;
-      inset: -16px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    position: 'absolute',
+    insetBlockStart: '-9px',
+    insetInlineStart: '-9px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    borderRadius: '50%',
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorTextLightSolid,
+    backgroundColor: cssVar.colorError,
+  },
+  // Delete mirrors the index badge on the opposite corner — the same pink
+  // disc, so which region the action removes reads at a glance. Touch keeps
+  // it: a phone reviewer who mis-drags a box has no keyboard escape, and the
+  // only other way out used to be leaving the image entirely.
+  badgeDelete: {
+    cursor: 'pointer',
+    position: 'absolute',
+    insetBlockStart: { default: '-9px', [coarse]: '-12px' },
+    insetInlineEnd: { default: '-9px', [coarse]: '-12px' },
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: { default: '18px', [coarse]: '24px' },
+    height: { default: '18px', [coarse]: '24px' },
+    borderStyle: 'none',
+    borderRadius: '50%',
+    color: cssVar.colorTextLightSolid,
+    backgroundColor: cssVar.colorError,
+    filter: { 'default': null, ':hover': 'brightness(1.15)' },
+  },
+  canvas: {
+    cursor: 'crosshair',
+    userSelect: 'none',
+  },
+  // Drawn regions are draggable as a whole; the corner handle resizes.
+  editableRect: {
+    pointerEvents: 'auto',
+    cursor: 'move',
+  },
+  frame: {
+    position: 'relative',
+    overflow: 'hidden',
+    display: 'inline-block',
+    // Shrink-wrap the image exactly — a stretched frame skews every rect.
+    alignSelf: 'flex-start',
+    width: 'fit-content',
+    maxWidth: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  image: {
+    display: 'block',
+    maxWidth: '100%',
+  },
+  rect: {
+    position: 'absolute',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorError,
+    borderRadius: '4px',
+    // Two rings instead of one: the dark outside separates the box from a white
+    // screenshot, the light inside separates it from a dark one. The evidence
+    // image can be either, and neither the hue nor the reader's theme can tell
+    // us which — so the box carries its own contrast.
+    boxShadow: '0 0 0 1px rgb(0 0 0 / 45%), inset 0 0 0 1px rgb(255 255 255 / 45%)',
+  },
+  resizeHandle: {
+    'cursor': 'nwse-resize',
+    'position': 'absolute',
+    'insetBlockEnd': '-6px',
+    'insetInlineEnd': '-6px',
+    'width': '12px',
+    'height': '12px',
+    'borderWidth': '2px',
+    'borderStyle': 'solid',
+    'borderColor': cssVar.colorError,
+    'borderRadius': '50%',
+    'backgroundColor': cssVar.colorBgContainer,
+    '::after': {
+      content: '""',
+      position: 'absolute',
+      insetBlockStart: '-16px',
+      insetBlockEnd: '-16px',
+      insetInlineStart: '-16px',
+      insetInlineEnd: '-16px',
+    },
+  },
+});
 
 const rectStyle = (rect: Rect) => ({
   height: `${rect.height * 100}%`,
@@ -169,21 +153,21 @@ export const AnnotatedImage = memo<AnnotatedImageProps>(
 
     return (
       <Flexbox gap={6} style={{ maxWidth: '100%', width: 'fit-content' }}>
-        <div className={styles.frame}>
-          <img alt={''} className={styles.image} src={src} style={imageStyle} onLoad={onLoad} />
+        <div {...stylex.props(styles.frame)}>
+          <img alt={''} src={src} onLoad={onLoad} {...sx([styles.image], undefined, imageStyle)} />
           {annotations.map((annotation, index) => (
             <div
-              className={styles.rect}
               key={index}
-              style={{
+              {...sx([styles.rect], undefined, {
                 ...rectStyle(annotation.rect),
                 borderColor: annotation.color ?? cssVar.colorError,
-              }}
+              })}
             >
               {numbered && (
                 <span
-                  className={styles.badge}
-                  style={{ background: annotation.color ?? cssVar.colorError }}
+                  {...sx([styles.badge], undefined, {
+                    background: annotation.color ?? cssVar.colorError,
+                  })}
                 >
                   {annotation.label ?? index + 1}
                 </span>
@@ -247,37 +231,45 @@ export const AnnotationCanvas = memo<AnnotationCanvasProps>(
 
     return (
       <div
-        className={`${styles.frame} ${styles.canvas}`}
-        // With an explicit zoomed width the frame must OUTGROW its host —
-        // capping at 100% would clip the image instead of letting the host
-        // viewport scroll/pan over it.
-        style={{
-          maxWidth: imageWidth ? 'none' : undefined,
-          touchAction: drawing ? 'none' : 'pan-x pan-y',
-          cursor: drawing ? 'crosshair' : 'auto',
-        }}
         {...handlers}
+        {...sx(
+          [styles.frame, styles.canvas],
+          undefined,
+          // With an explicit zoomed width the frame must OUTGROW its host —
+          // capping at 100% would clip the image instead of letting the host
+          // viewport scroll/pan over it.
+          {
+            maxWidth: imageWidth ? 'none' : undefined,
+            touchAction: drawing ? 'none' : 'pan-x pan-y',
+            cursor: drawing ? 'crosshair' : 'auto',
+          },
+        )}
       >
         <img
           alt={''}
-          className={styles.image}
           draggable={false}
           ref={imageRef}
           src={src}
           // Zoomed width comes from the host (viewport × zoom); the frame
           // shrink-wraps the image, so overlays track exactly.
-          style={imageWidth ? { maxWidth: 'none', width: imageWidth } : undefined}
+          {...sx(
+            [styles.image],
+            undefined,
+            imageWidth ? { maxWidth: 'none', width: imageWidth } : undefined,
+          )}
         />
         {annotations.map((annotation, index) => (
           <div
-            className={`${styles.rect} ${styles.editableRect}`}
             key={index}
-            style={{ ...rectStyle(annotation.rect), pointerEvents: drawing ? 'auto' : 'none' }}
+            {...sx([styles.rect, styles.editableRect], undefined, {
+              ...rectStyle(annotation.rect),
+              pointerEvents: drawing ? 'auto' : 'none',
+            })}
             onPointerDown={(event) => startEdit(event, index, annotation.rect, 'move')}
           >
-            <span className={styles.badge}>{index + 1}</span>
+            <span {...stylex.props(styles.badge)}>{index + 1}</span>
             <button
-              className={styles.badgeDelete}
+              {...stylex.props(styles.badgeDelete)}
               type={'button'}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
@@ -288,12 +280,12 @@ export const AnnotationCanvas = memo<AnnotationCanvasProps>(
               <Icon icon={Trash2} size={11} />
             </button>
             <span
-              className={styles.resizeHandle}
+              {...stylex.props(styles.resizeHandle)}
               onPointerDown={(event) => startEdit(event, index, annotation.rect, 'resize')}
             />
           </div>
         ))}
-        {draft && <div className={styles.rect} style={rectStyle(draft)} />}
+        {draft && <div {...sx([styles.rect], undefined, rectStyle(draft))} />}
       </div>
     );
   },

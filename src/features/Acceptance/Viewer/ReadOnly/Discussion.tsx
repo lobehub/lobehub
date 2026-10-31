@@ -1,9 +1,11 @@
 import type { AcceptanceCommentItem } from '@lobechat/types';
 import { Avatar, Button, Empty, Flexbox, Spin, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { BadgeCheck, GitCommitHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
+import { sx } from '@/styles/sx';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import AccessRequestEntry from '../Comments/AccessRequestEntry';
@@ -30,10 +32,17 @@ export const ReadComment = ({
 
   return (
     <Flexbox
-      className={styles.box}
-      style={{ marginInlineStart: threaded && comment.parentCommentId ? 24 : 0 }}
+      {...sx([styles.box], undefined, {
+        marginInlineStart: threaded && comment.parentCommentId ? 24 : 0,
+      })}
     >
-      <Flexbox horizontal align={'center'} className={styles.boxHeader} gap={8} wrap={'wrap'}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        gap={8}
+        wrap={'wrap'}
+        {...stylex.props(styles.boxHeader)}
+      >
         <Avatar avatar={comment.author.avatar || name.slice(0, 1)} size={20} />
         <Text weight={600}>{nameOverride ?? name}</Text>
         <Text fontSize={12} title={time.title} type={'secondary'}>
@@ -41,7 +50,7 @@ export const ReadComment = ({
         </Text>
         {comment.resolvedAt && <Text fontSize={12}>{t('acceptance.comments.resolved')}</Text>}
       </Flexbox>
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         <CommentContent comment={comment} />
         {comment.reactions.length > 0 && (
           <Flexbox horizontal gap={8} style={{ paddingBlockStart: 8 }} wrap={'wrap'}>

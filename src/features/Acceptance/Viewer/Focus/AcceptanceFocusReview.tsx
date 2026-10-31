@@ -1,18 +1,14 @@
 'use client';
 
 import type { AcceptanceChecklistItem } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Text,
-  useResponsive,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import {
   type AcceptanceCheck,
@@ -20,94 +16,71 @@ import {
   type ProposalDismissInput,
 } from '../Checks/types';
 import AcceptanceStatusPill from '../Header/AcceptanceStatusPill';
-import { acceptanceFocusedLayout, acceptanceScrollLayout } from '../layout';
+import moduleStyles from './AcceptanceFocusReview.module.css';
 import { FocusCheckHeading } from './FocusCheckHeading';
 import { FocusedCheckDetails } from './FocusedCheckDetails';
 import { FocusOutline } from './FocusOutline';
 
-const styles = createStaticStyles(({ css }) => ({
-  mobileNavigation: css`
-    position: sticky;
-    z-index: 2;
-    inset-block-start: -16px;
+const compact = '@media (width <= 900px)';
+const phone = '@media (width <= 767px)';
 
-    flex: none;
-
-    padding-block: 8px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  countBadge: css`
-    padding-block: 1px;
-    padding-inline: 7px;
-    border-radius: 99px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  layout: css`
-    display: grid;
-    grid-template-columns: 320px minmax(0, 1fr);
-
-    @media (width > 900px) {
-      flex: 1;
-      min-height: 0;
-    }
-
-    @media (width <= 900px) {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto minmax(0, 1fr);
-      flex: 1;
-      min-height: 0;
-    }
-  `,
-  outline: css`
-    position: sticky;
-    inset-block-start: 0;
-
-    padding: 8px;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-
-    @media (width <= 900px) {
-      position: static;
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-      border-inline-end: 0;
-    }
-  `,
-  outlineList: css`
-    overflow: ${acceptanceScrollLayout.paneOverflow};
-
-    > * {
-      flex-shrink: 0;
-    }
-
-    @media (width <= 767px) {
-      overflow: auto;
-      max-height: 40dvh;
-    }
-  `,
-  main: css`
-    overflow: ${acceptanceScrollLayout.paneOverflow};
-    min-width: 0;
-    padding-block: ${acceptanceFocusedLayout.contentPaddingBlock};
-    padding-inline: 32px;
-
-    @media (width <= 767px) {
-      overflow: auto;
-      min-height: 0;
-      padding: 16px;
-    }
-  `,
-  content: css`
-    flex: none;
-    width: min(880px, 100%);
-    margin-inline: auto;
-  `,
-}));
+// `overflow` and the content's block padding repeat acceptanceScrollLayout.paneOverflow
+// ('visible') and acceptanceFocusedLayout.contentPaddingBlock ('32px 24px') from
+// ../layout: StyleX cannot read constants from another module.
+const styles = stylex.create({
+  mobileNavigation: {
+    position: 'sticky',
+    zIndex: 2,
+    insetBlockStart: '-16px',
+    flex: 'none',
+    paddingBlock: '8px',
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  countBadge: {
+    paddingBlock: '1px',
+    paddingInline: '7px',
+    borderRadius: '99px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+  },
+  layout: {
+    display: 'grid',
+    gridTemplateColumns: { default: '320px minmax(0, 1fr)', [compact]: '1fr' },
+    gridTemplateRows: { default: null, [compact]: 'auto minmax(0, 1fr)' },
+    flex: '1',
+    minHeight: 0,
+  },
+  outline: {
+    position: { default: 'sticky', [compact]: 'static' },
+    insetBlockStart: 0,
+    padding: '8px',
+    borderInlineEndWidth: { default: '1px', [compact]: 0 },
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndWidth: { default: null, [compact]: '1px' },
+    borderBlockEndStyle: { default: null, [compact]: 'solid' },
+    borderBlockEndColor: { default: null, [compact]: cssVar.colorBorderSecondary },
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  outlineList: {
+    overflow: { default: 'visible', [phone]: 'auto' },
+    maxHeight: { default: null, [phone]: '40dvh' },
+  },
+  main: {
+    overflow: { default: 'visible', [phone]: 'auto' },
+    minWidth: 0,
+    minHeight: { default: null, [phone]: 0 },
+    paddingBlockStart: { default: '32px', [phone]: '16px' },
+    paddingBlockEnd: { default: '24px', [phone]: '16px' },
+    paddingInline: { default: '32px', [phone]: '16px' },
+  },
+  content: {
+    flex: 'none',
+    width: 'min(880px, 100%)',
+    marginInline: 'auto',
+  },
+});
 
 interface AcceptanceFocusReviewProps {
   canReview: boolean;
@@ -152,8 +125,8 @@ const AcceptanceFocusReview = ({
   const currentIndex = orderedChecks.findIndex((check) => check.id === focusedCheck.id);
 
   return (
-    <div className={styles.layout}>
-      <Flexbox className={styles.outline}>
+    <div {...stylex.props(styles.layout)}>
+      <Flexbox {...stylex.props(styles.outline)}>
         {/* The phone top line is a breadcrumb, not a nav bar: it introduces the
             check and hands off to the outline. The row below it already owns
             44px targets for stepping between checks, so stacking another
@@ -215,7 +188,9 @@ const AcceptanceFocusReview = ({
               <Text strong style={{ fontSize: 13 }}>
                 {t('acceptance.checks.title')}
               </Text>
-              <span className={styles.countBadge}>{checks.length + standingChecks.length}</span>
+              <span {...stylex.props(styles.countBadge)}>
+                {checks.length + standingChecks.length}
+              </span>
               <Flexbox flex={1} />
               {onAddChecks && (
                 <Button
@@ -231,7 +206,7 @@ const AcceptanceFocusReview = ({
           )}
         </Flexbox>
         {(md || outlineOpen) && (
-          <Flexbox className={styles.outlineList} flex={1}>
+          <Flexbox flex={1} {...sx([styles.outlineList], moduleStyles.outlineList)}>
             <FocusOutline
               checks={orderedChecks}
               focusedCheckId={focusedCheck.id}
@@ -246,9 +221,9 @@ const AcceptanceFocusReview = ({
         )}
       </Flexbox>
 
-      <Flexbox className={styles.main} key={focusedCheck.id}>
+      <Flexbox key={focusedCheck.id} {...stylex.props(styles.main)}>
         {!md && (
-          <Flexbox horizontal align={'center'} className={styles.mobileNavigation} gap={8}>
+          <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.mobileNavigation)}>
             <Button
               aria-label={t('acceptance.focus.previous')}
               disabled={currentIndex <= 0}
@@ -268,7 +243,7 @@ const AcceptanceFocusReview = ({
             />
           </Flexbox>
         )}
-        <Flexbox className={styles.content} gap={16}>
+        <Flexbox gap={16} {...stylex.props(styles.content)}>
           <FocusCheckHeading
             check={focusedCheck}
             showVerdictDescription={md}

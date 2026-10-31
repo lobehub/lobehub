@@ -7,7 +7,6 @@ import type {
   VerifyEvidenceChapter,
 } from '@lobechat/types';
 import {
-  cx,
   Flexbox,
   useVideo,
   useVideoPlayer,
@@ -15,14 +14,19 @@ import {
   Video,
   type VideoPlayer,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FloatingCommentAction, { FLOATING_ACTION_HOST } from '../FloatingCommentAction';
+import { sx } from '@/styles/sx';
+
+import { floatingActionHostMarker } from '../../markers.stylex';
+import FloatingCommentAction from '../FloatingCommentAction';
 import { noteKeyOf, toClaimMarkers, toNoteMarkers, toSections } from './chapters';
 import { readStoredRate, storeRate } from './playbackRate';
 import { styles } from './styles';
+import moduleStyles from './styles.module.css';
 import { useVideoRegionGesture } from './useVideoRegionGesture';
 import { DraftRegion, type FrameRegion, FrameRegions } from './VideoChrome';
 import { VideoClaimList } from './VideoClaimList';
@@ -80,12 +84,12 @@ const CommentSurface = ({
   const gesture = useVideoRegionGesture(player, onRegion);
   if (!ready) return null;
   return (
-    <div className={cx(styles.overlay, styles.drawable)} onPointerDown={gesture.onPointerDown}>
+    <div {...stylex.props(styles.overlay, styles.drawable)} onPointerDown={gesture.onPointerDown}>
       <FrameRegions active={active} regions={regions} />
       {gesture.draft ? (
         <DraftRegion rect={gesture.draft} />
       ) : (
-        <div className={styles.hint}>
+        <div {...stylex.props(styles.hint)}>
           {t(
             paused
               ? 'acceptance.comments.video.hintPaused'
@@ -177,18 +181,17 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
         {/* The host takes the player's width, so the comment action floats right
             beside a narrow recording instead of at the far edge of the column. */}
         <div
-          {...{ [FLOATING_ACTION_HOST]: '' }}
           data-acceptance-video-host
-          style={{
+          {...sx([floatingActionHostMarker], undefined, {
             maxWidth: frameMaxHeight
               ? `max(${MIN_PLAYER_WIDTH}px, calc(${frameMaxHeight} * ${aspect}))`
               : `min(100%, ${Math.max(MIN_PLAYER_WIDTH, frameWidth)}px)`,
             position: 'relative',
             width: '100%',
-          }}
+          })}
         >
           <Video.Root
-            className={cx(styles.player, styles.compactControls)}
+            className={`${moduleStyles.player} ${moduleStyles.compactControls}`}
             defaultPlaybackRate={defaultRate}
             markers={markers}
             maxHeight={frameMaxHeight ? undefined : MAX_HEIGHT}
@@ -211,8 +214,8 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
               if (key !== undefined) onMarkClick?.(key);
             }}
           >
-            <div data-acceptance-video-stage className={styles.stage}>
-              <Video.Frame className={styles.frame}>
+            <div data-acceptance-video-stage {...stylex.props(styles.stage)}>
+              <Video.Frame className={moduleStyles.frame}>
                 {onRegion ? (
                   <CommentSurface
                     active={activeMark}

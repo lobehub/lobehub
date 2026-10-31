@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
+import { Flexbox, Highlighter, Markdown } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo, useState } from 'react';
 
 import Loading from '@/components/Loading/CircleLoading';
@@ -15,27 +17,24 @@ import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 const SKILL_INDEX = 'SKILL.md';
 const MARKDOWN_FILE = /\.mdx?$/i;
 
-const styles = createStaticStyles(({ css }) => ({
-  // Kept open, the tree stays beside the file being read while it scrolls.
-  tree: css`
-    position: sticky;
-    inset-block-start: 0;
-
-    overflow-y: auto;
-    flex: none;
-    align-self: flex-start;
-
-    width: 240px;
-    max-height: 480px;
-    padding-block: 4px;
-    padding-inline: 0 8px;
-    border-inline-end: 1px solid ${cssVar.colorBorder};
-  `,
-  viewer: css`
-    flex: 1;
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  tree: {
+    position: 'sticky',
+    insetBlockStart: '0',
+    overflowY: 'auto',
+    flex: 'none',
+    alignSelf: 'flex-start',
+    width: '240px',
+    maxHeight: '480px',
+    paddingBlock: '4px',
+    paddingInlineStart: '0',
+    paddingInlineEnd: '8px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorder,
+  },
+  viewer: { flex: '1', minWidth: '0' },
+});
 
 interface SkillDirectoryProps {
   /** `SKILL.md` as the dossier froze it, read when the skill itself can't be. */
@@ -76,7 +75,7 @@ const SkillDirectory = memo<SkillDirectoryProps>(
     return (
       <Flexbox horizontal gap={20}>
         {filesOpen && (
-          <div className={styles.tree}>
+          <div {...stylex.props(styles.tree)}>
             <FileTree
               resourceTree={resourceTree}
               rootFile={{ label: SKILL_INDEX, path: SKILL_INDEX }}
@@ -85,7 +84,7 @@ const SkillDirectory = memo<SkillDirectoryProps>(
             />
           </div>
         )}
-        <div className={styles.viewer}>
+        <div {...stylex.props(styles.viewer)}>
           {/* Flush with the section, no frame of their own: documents as prose, the rest as code. */}
           {MARKDOWN_FILE.test(shown) ? (
             <Markdown fontSize={14} key={shown} variant={'chat'}>

@@ -1,9 +1,13 @@
-import { createStaticStyles, cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
 import { frostedModalStyles } from './modals';
+import moduleStyles from './rejectModalShell.module.css';
 
 export const CHECK_REJECT_MODAL_SIZE = { height: '98dvh', width: '98vw' } as const;
 export const TEXT_REJECT_MODAL_WIDTH = 'min(560px, calc(100vw - 32px))';
+
+// The module CSS repeats CHECK_REJECT_MODAL_SIZE (98vw x 98dvh) in `.modalPopupMedia`.
+const phone = '@media (width <= 767px)';
 
 /**
  * The modal chrome, not its contents. These classes ride on the popup element
@@ -11,65 +15,26 @@ export const TEXT_REJECT_MODAL_WIDTH = 'min(560px, calc(100vw - 32px))';
  * answer for both breakpoints in one node, unlike the body, which mounts one
  * presentation or the other.
  */
-const styles = createStaticStyles(({ css }) => ({
-  mobileClose: css`
-    @media (width <= 767px) {
-      inset-block-start: max(4px, env(safe-area-inset-top));
-      inset-inline-end: 4px;
-      width: 44px;
-      height: 44px;
-    }
-  `,
-  mobileContent: css`
-    @media (width <= 767px) {
-      padding-block: 0 max(12px, env(safe-area-inset-bottom));
-      padding-inline: 12px;
-    }
-  `,
-  mobileHeader: css`
-    @media (width <= 767px) {
-      min-height: 56px;
-      padding-block: max(12px, env(safe-area-inset-top)) 12px;
-      padding-inline: 12px 52px;
-    }
-  `,
-  mobilePopup: css`
-    @media (width <= 767px) {
-      max-width: 100vw !important;
-
-      > div {
-        width: 100vw;
-        max-width: 100vw;
-        height: 100dvh;
-        max-height: 100dvh;
-        padding: 0;
-        border-radius: 0;
-      }
-    }
-  `,
-  modalPopup: css`
-    > div {
-      display: flex;
-      flex-direction: column;
-    }
-  `,
-  modalPopupMedia: css`
-    > div {
-      width: ${CHECK_REJECT_MODAL_SIZE.width};
-      max-width: ${CHECK_REJECT_MODAL_SIZE.width};
-      height: ${CHECK_REJECT_MODAL_SIZE.height};
-
-      @media (width <= 767px) {
-        width: 100vw;
-        max-width: 100vw;
-        height: 100dvh;
-        max-height: 100dvh;
-        padding: 0;
-        border-radius: 0;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  mobileClose: {
+    insetBlockStart: { default: null, [phone]: 'max(4px, env(safe-area-inset-top))' },
+    insetInlineEnd: { default: null, [phone]: '4px' },
+    width: { default: null, [phone]: '44px' },
+    height: { default: null, [phone]: '44px' },
+  },
+  mobileContent: {
+    paddingBlockStart: { default: null, [phone]: 0 },
+    paddingBlockEnd: { default: null, [phone]: 'max(12px, env(safe-area-inset-bottom))' },
+    paddingInline: { default: null, [phone]: '12px' },
+  },
+  mobileHeader: {
+    minHeight: { default: null, [phone]: '56px' },
+    paddingBlockStart: { default: null, [phone]: 'max(12px, env(safe-area-inset-top))' },
+    paddingBlockEnd: { default: null, [phone]: '12px' },
+    paddingInlineStart: { default: null, [phone]: '12px' },
+    paddingInlineEnd: { default: null, [phone]: '52px' },
+  },
+});
 
 /** Evidence earns a near-fullscreen stage; a text-only reject stays a dialog. */
 export const checkRejectModalSize = (evidenceCount: number) =>
@@ -81,10 +46,16 @@ export const checkRejectModalShell = (evidenceCount: number) => {
   const modalSize = checkRejectModalSize(evidenceCount);
   return {
     classNames: {
-      close: styles.mobileClose,
-      content: styles.mobileContent,
-      header: styles.mobileHeader,
-      popup: cx(styles.modalPopup, styles.mobilePopup, evidenceCount > 0 && styles.modalPopupMedia),
+      close: stylex.props(styles.mobileClose).className,
+      content: stylex.props(styles.mobileContent).className,
+      header: stylex.props(styles.mobileHeader).className,
+      popup: [
+        moduleStyles.modalPopup,
+        moduleStyles.mobilePopup,
+        evidenceCount > 0 && moduleStyles.modalPopupMedia,
+      ]
+        .filter(Boolean)
+        .join(' '),
     },
     styles: {
       ...frostedModalStyles,

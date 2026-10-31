@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Background,
   Controls,
@@ -13,8 +15,10 @@ import { useEffect, useRef } from 'react';
 
 import { observeWidth } from '@/features/AgentGoals/ProcessControl/Graph/useFitViewOnResize';
 import { useSingleton } from '@/hooks/useSingleton';
+import { sx } from '@/styles/sx';
 
 import { FlowAnchorContext } from './flowAnchor';
+import moduleStyles from './FlowCanvas.module.css';
 import { FlowEdge } from './FlowEdge';
 import type { FlowGraphData } from './flowGraph';
 import { getSelectedFlowNodeId, panNodeIntoView } from './flowViewport';
@@ -22,29 +26,18 @@ import { getSelectedFlowNodeId, panNodeIntoView } from './flowViewport';
 const edgeTypes = { transition: FlowEdge };
 
 const fitOptions = { maxZoom: 1, minZoom: 0.65, padding: 0.08 };
-const styles = createStaticStyles(({ css }) => ({
-  canvas: css`
-    overflow: hidden;
-    flex: none;
-
-    width: 100%;
-    min-width: 0;
-    height: clamp(520px, calc(100dvh - 400px), 900px);
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: transparent;
-
-    .react-flow__edgelabel-renderer {
-      z-index: 5;
-    }
-
-    .react-flow__controls-button {
-      border-color: ${cssVar.colorBorderSecondary};
-      background: ${cssVar.colorBgContainer};
-      fill: ${cssVar.colorTextSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  canvas: {
+    overflow: 'hidden',
+    flex: 'none',
+    width: '100%',
+    minWidth: 0,
+    height: 'clamp(520px, calc(100dvh - 400px), 900px)',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+});
 
 export function FlowCanvas({
   fullscreen = false,
@@ -125,9 +118,12 @@ export function FlowCanvas({
     // anchor channel has to sit above the canvas to reach a group's toggle.
     <FlowAnchorContext value={anchor}>
       <Flexbox
-        className={styles.canvas}
         ref={ref}
-        style={fullscreen ? { flex: 1, height: '100%', minHeight: 0 } : undefined}
+        {...sx(
+          [styles.canvas],
+          moduleStyles.canvas,
+          fullscreen ? { flex: 1, height: '100%', minHeight: 0 } : undefined,
+        )}
       >
         <ReactFlow
           fitView

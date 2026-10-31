@@ -1,0 +1,41 @@
+/*
+ * The reject modal's popup is owned by `createModal`; its inner panel is the
+ * popup's direct child `div`, which StyleX cannot target. `!important` is kept
+ * from the original rule: it has to outrank the modal's own width cap.
+ */
+.modalPopup > div {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (width <= 767px) {
+  .mobilePopup {
+    max-width: 100vw !important;
+  }
+
+  .mobilePopup > div {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 0;
+    border-radius: 0;
+  }
+}
+
+.modalPopupMedia > div {
+  width: 98vw;
+  max-width: 98vw;
+  height: 98dvh;
+}
+
+@media (width <= 767px) {
+  .modalPopupMedia > div {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 0;
+    border-radius: 0;
+  }
+}

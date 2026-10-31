@@ -1,7 +1,6 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, TextArea, toast } from '@lobehub/ui';
-import type { CSSProperties } from 'react';
+import { Button, Flexbox, TextArea, toast } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,19 +9,6 @@ import {
   AttachmentUploadButton,
   useFeedbackAttachments,
 } from '../Evidence/attachments';
-
-/**
- * `autoSize` writes its own inline height onto the textarea, so a floor has to
- * reach the element itself — a `style` on the component lands on the wrapper.
- */
-const styles = createStaticStyles(({ css }) => ({
-  tall: css`
-    & textarea {
-      /* The control ships its own min-height; this floor has to outrank it. */
-      min-height: var(--acceptance-composer-min-height) !important;
-    }
-  `,
-}));
 
 /** Room for a couple of screenshots without turning a remark into an album. */
 const MAX_COMMENT_ATTACHMENTS = 4;
@@ -83,20 +69,15 @@ const CommentComposer = memo<CommentComposerProps>(
     };
 
     return (
-      <Flexbox
-        className={minHeight ? styles.tall : undefined}
-        gap={8}
-        style={
-          minHeight
-            ? ({ '--acceptance-composer-min-height': `${minHeight}px` } as CSSProperties)
-            : undefined
-        }
-      >
+      <Flexbox gap={8}>
         <TextArea
           autoFocus={autoFocus}
           autoSize={{ maxRows: 20, minRows: compact ? 1 : 2 }}
           placeholder={placeholder}
+          // The control ships its own min-height; the floor goes on the textarea
+          // itself, where an inline style outranks it.
           style={borderless ? { paddingInline: 0 } : undefined}
+          styles={minHeight ? { input: { minHeight } } : undefined}
           value={value}
           variant={borderless ? 'borderless' : undefined}
           onChange={(event) => setValue(event.target.value)}

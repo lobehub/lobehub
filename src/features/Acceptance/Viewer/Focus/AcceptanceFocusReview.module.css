@@ -1,0 +1,4 @@
+/* The outline rows are NavItems rendered by FocusOutline; they must not shrink inside the list. */
+.outlineList > * {
+  flex-shrink: 0;
+}

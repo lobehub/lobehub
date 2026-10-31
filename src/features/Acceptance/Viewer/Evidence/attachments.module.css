@@ -1,0 +1,18 @@
+/* The thumbnail <img> is rendered inside @lobehub/ui's Image, so StyleX cannot reach it. */
+.thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbLarge img {
+  cursor: zoom-in;
+
+  width: auto;
+  max-width: min(100%, 360px);
+  height: auto;
+  max-height: 220px;
+
+  object-fit: contain;
+}

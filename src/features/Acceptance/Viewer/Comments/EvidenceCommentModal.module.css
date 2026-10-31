@@ -1,0 +1,33 @@
+/*
+ * A review surface, not a dialog: the evidence needs the room to be circled precisely.
+ * The popup is owned by `createModal`; its inner panel is the popup's direct child
+ * `div`, which StyleX cannot target. `!important` is kept from the original rules.
+ */
+.popup > div {
+  display: flex;
+  flex-direction: column;
+
+  width: min(1180px, calc(100vw - 48px));
+  max-width: min(1180px, calc(100vw - 48px));
+  height: min(860px, calc(100dvh - 48px));
+}
+
+@media (width <= 767px) {
+  .popup {
+    align-items: stretch;
+    justify-content: stretch;
+
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh;
+  }
+
+  .popup > div {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 0;
+    border-radius: 0;
+  }
+}

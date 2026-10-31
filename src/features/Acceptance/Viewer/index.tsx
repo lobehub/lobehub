@@ -1,8 +1,12 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useParams } from 'react-router';
+
+import { sx } from '@/styles/sx';
 
 import { extractUuid } from '../utils';
 import { AcceptanceOverview } from './AcceptanceOverview';
@@ -11,43 +15,35 @@ import CollaboratorConversationRail from './Conversation/CollaboratorConversatio
 import { FlowPanelHostContext } from './Flow/FlowPanelHost';
 import AcceptanceFocusWorkspace from './Focus/AcceptanceFocusWorkspace';
 import AcceptanceLedgerRail from './History/AcceptanceLedgerRail';
-import { acceptanceScrollLayout } from './layout';
 
-const styles = createStaticStyles(({ css }) => ({
-  contentFrame: css`
-    overflow: ${acceptanceScrollLayout.frameOverflow};
-  `,
-  flowPanel: css`
-    flex: none;
-    width: min(440px, 42%);
-    height: 100%;
-    min-height: 0;
+const phone = '@media (width <= 767px)';
 
-    &:empty {
-      display: none;
-    }
+// `overflow` repeats acceptanceScrollLayout.frameOverflow ('auto') from ./layout:
+// StyleX cannot read constants from another module.
+const styles = stylex.create({
+  contentFrame: {
+    overflow: 'auto',
+  },
+  flowPanel: {
+    flex: 'none',
+    width: { default: 'min(440px, 42%)', [phone]: '100%' },
+    height: { default: '100%', [phone]: '50%' },
+    minHeight: 0,
+    display: { 'default': null, ':empty': 'none' },
+    borderBlockStartWidth: { default: null, [phone]: '1px' },
+    borderBlockStartStyle: { default: null, [phone]: 'solid' },
+    borderBlockStartColor: { default: null, [phone]: cssVar.colorBorderSecondary },
+  },
+  page: {
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
+    height: '100%',
+    backgroundColor: cssVar.colorBgContainer,
+    flexDirection: { default: null, [phone]: 'column' },
+  },
+});
 
-    @media (width <= 767px) {
-      width: 100%;
-      height: 50%;
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  page: css`
-    position: relative;
-
-    overflow: hidden;
-
-    width: 100%;
-    height: 100%;
-
-    background: ${cssVar.colorBgContainer};
-
-    @media (width <= 767px) {
-      flex-direction: column;
-    }
-  `,
-}));
 interface AcceptancePageProps {
   acceptanceId?: string;
   onDraftToComposer?: (text: string) => boolean;
@@ -69,13 +65,13 @@ const AcceptancePage = ({
     <AcceptanceScope acceptanceId={acceptanceId} embedded={embedded}>
       <AcceptanceBundleGate>
         <FlowPanelHostContext value={flowPanelHost}>
-          <Flexbox horizontal className={styles.page}>
+          <Flexbox horizontal {...stylex.props(styles.page)}>
             <Flexbox
               horizontal
               flex={1}
               style={{ minHeight: 0, minWidth: 0, position: 'relative' }}
             >
-              <Flexbox className={styles.contentFrame} flex={1} style={{ minWidth: 0 }}>
+              <Flexbox flex={1} {...sx([styles.contentFrame], undefined, { minWidth: 0 })}>
                 <Flexbox
                   flex={focused ? 1 : undefined}
                   gap={16}
@@ -88,7 +84,7 @@ const AcceptancePage = ({
               <AcceptanceLedgerRail />
               {!embedded && <CollaboratorConversationRail />}
             </Flexbox>
-            <div className={styles.flowPanel} ref={setFlowPanelHostContext} />
+            <div ref={setFlowPanelHostContext} {...stylex.props(styles.flowPanel)} />
           </Flexbox>
         </FlowPanelHostContext>
       </AcceptanceBundleGate>

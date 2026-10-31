@@ -1,7 +1,9 @@
 'use client';
 
 import { isFullFrameRect } from '@lobechat/const/verify';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Flag, Repeat } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,48 +12,37 @@ import { RegionNoteRow } from '../RegionNotes';
 import { ClaimLabel } from './ClaimLabel';
 import { formatVideoTime, frameOf } from './videoTime';
 
-const styles = createStaticStyles(({ css }) => ({
-  stamp: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border: none;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorErrorText};
-
-    background: ${cssVar.colorErrorBg};
-
-    &:hover {
-      background: ${cssVar.colorErrorBgHover};
-    }
-  `,
-  active: css`
-    box-shadow: 0 0 0 1px ${cssVar.colorError};
-  `,
-  quote: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  stamp: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderStyle: 'none',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorErrorText,
+    backgroundColor: { 'default': cssVar.colorErrorBg, ':hover': cssVar.colorErrorBgHover },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  active: { boxShadow: `0 0 0 1px ${cssVar.colorError}` },
+  quote: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 interface VideoNotesProps {
   activeNoteKey?: number;
@@ -98,7 +89,7 @@ export const VideoNotes = ({
           <Flexbox gap={6}>
             <Flexbox horizontal align={'center'} gap={6}>
               <button
-                className={cx(styles.stamp, note.key === activeNoteKey && styles.active)}
+                {...stylex.props(styles.stamp, note.key === activeNoteKey && styles.active)}
                 type={'button'}
                 onClick={() => onFocusNote(note)}
               >
@@ -110,7 +101,7 @@ export const VideoNotes = ({
               <span style={{ color: cssVar.colorTextTertiary, fontSize: 11 }}>{detail}</span>
             </Flexbox>
             {note.disputes && (
-              <div className={styles.quote}>
+              <div {...stylex.props(styles.quote)}>
                 <ClaimLabel kind={note.disputes.kind} />
                 <div>{note.disputes.note}</div>
               </div>

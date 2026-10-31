@@ -1,0 +1,41 @@
+/*
+ * Selectors that reach into @lobehub/ui's Video DOM (`[data-video-controls]`,
+ * `.lobe-video__frame`, `.lobe-video__frame-number`), which StyleX cannot target. `.frame` lives here too: the fullscreen rule below overrides its
+ * max-width, and a StyleX longhand would outrank that override.
+ */
+.frame {
+  max-width: var(--acceptance-video-frame-width);
+}
+
+.player:fullscreen {
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+}
+
+.player:fullscreen > [data-video-controls] {
+  flex: none;
+}
+
+.player:fullscreen > [data-acceptance-video-stage] {
+  container-type: size;
+  flex: 1;
+  align-items: center;
+
+  min-width: 0;
+  min-height: 0;
+}
+
+.player:fullscreen > [data-acceptance-video-stage] > :global(.lobe-video__frame) {
+  flex: none;
+  width: min(100cqw, calc(100cqh * var(--acceptance-video-aspect)));
+  max-width: none;
+  height: min(100cqh, calc(100cqw / var(--acceptance-video-aspect)));
+}
+
+/* Keep stepping and fullscreen visible on a phone; the frame is also named on its comment card. */
+@media (width <= 767px) {
+  .compactControls :global(.lobe-video__frame-number) {
+    display: none;
+  }
+}

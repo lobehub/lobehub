@@ -6,7 +6,6 @@ import {
   ActionIcon,
   Avatar,
   confirmModal,
-  cx,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -14,6 +13,7 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -154,16 +154,16 @@ const CommentCard = memo<CommentCardProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={variant === 'boxed' ? styles.boxHeader : undefined}
           gap={8}
           wrap={'wrap'}
+          {...stylex.props(variant === 'boxed' && styles.boxHeader)}
         >
           {variant === 'plain' && <CommentAvatar comment={comment} size={18} />}
           {variant === 'feed' && <CommentAvatar comment={comment} size={TIMELINE_NODE} />}
           <Text
-            className={nameOverride ? styles.headline : styles.authorName}
             fontSize={13}
             weight={600}
+            {...stylex.props(nameOverride ? styles.headline : styles.authorName)}
           >
             {name}
           </Text>
@@ -182,7 +182,7 @@ const CommentCard = memo<CommentCardProps>(
              * want is the link to paste somewhere else.
              */
             <button
-              className={cx(styles.meta, styles.timeLink)}
+              {...stylex.props(styles.meta, styles.timeLink)}
               title={t('acceptance.comments.copyLinkHint', { time: time.title })}
               type={'button'}
               onClick={(event) => {
@@ -193,13 +193,13 @@ const CommentCard = memo<CommentCardProps>(
               {nameOverride ? time.text : t('acceptance.comments.commented', { time: time.text })}
             </button>
           ) : (
-            <span className={styles.meta} title={time.title}>
+            <span {...stylex.props(styles.meta)} title={time.title}>
               {nameOverride ? time.text : t('acceptance.comments.commented', { time: time.text })}
             </span>
           )}
           {badges}
           {menuItems.length > 0 && (
-            <div data-comment-actions className={styles.rowActions}>
+            <div {...stylex.props(styles.rowActions)}>
               <DropdownMenu
                 items={menuItems}
                 placement={'bottomRight'}
@@ -216,13 +216,13 @@ const CommentCard = memo<CommentCardProps>(
           )}
         </Flexbox>
         <div
-          className={
+          {...stylex.props(
             variant === 'boxed'
               ? styles.body
               : variant === 'feed'
                 ? styles.feedBody
-                : styles.panelBody
-          }
+                : styles.panelBody,
+          )}
         >
           <CommentContent comment={comment} />
           {onReact && (

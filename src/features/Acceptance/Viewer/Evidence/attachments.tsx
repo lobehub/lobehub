@@ -1,115 +1,75 @@
 'use client';
 
 import type { AcceptanceAttachment } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Image,
-  Spin,
-  toast,
-  Upload,
-  useResponsive,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Image, Spin, toast, Upload, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ImagePlus, X } from 'lucide-react';
 import { type ClipboardEvent, memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
+import { sx } from '@/styles/sx';
+
+import moduleStyles from './attachments.module.css';
 
 /** 10MB — a screenshot, not a video; keeps the reject payload light. */
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 
-const styles = createStaticStyles(({ css }) => ({
-  flushUpload: css`
-    display: contents;
-  `,
-  remove: css`
-    cursor: pointer;
+const coarseOrCompact = '@media (pointer: coarse), (width <= 767px)';
 
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 0;
-    inset-inline-end: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: none;
-    border-radius: 50%;
-
-    color: #fff;
-
-    opacity: 1;
-    background: ${cssVar.colorError};
-
-    transition: opacity 0.15s;
-
-    @media (pointer: coarse), (width <= 767px) {
-      width: 44px;
-      height: 44px;
-    }
-  `,
-  thumb: css`
-    position: relative;
-
-    overflow: hidden;
-
-    width: 56px;
-    height: 56px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover .acceptance-attach-remove {
-      opacity: 1;
-    }
-
-    img {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-  `,
-  /**
-   * A screenshot posted INTO a remark is the remark's evidence, not a chip on a
-   * draft: at 56px "here is what I see instead" is unreadable, so in a comment
-   * the picture is shown at a size a reader can judge without opening it.
-   */
-  thumbLarge: css`
-    width: auto;
-    max-width: min(100%, 360px);
-    height: auto;
-    max-height: 220px;
-
-    img {
-      cursor: zoom-in;
-
-      width: auto;
-      max-width: min(100%, 360px);
-      height: auto;
-      max-height: 220px;
-
-      object-fit: contain;
-    }
-  `,
-  thumbLoading: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  flushUpload: {
+    display: 'contents',
+  },
+  remove: {
+    cursor: 'pointer',
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: 0,
+    insetInlineEnd: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: { default: '28px', [coarseOrCompact]: '44px' },
+    height: { default: '28px', [coarseOrCompact]: '44px' },
+    padding: 0,
+    borderStyle: 'none',
+    borderRadius: '50%',
+    color: '#fff',
+    opacity: 1,
+    backgroundColor: cssVar.colorError,
+    backgroundImage: 'none',
+    transition: 'opacity 0.15s',
+  },
+  thumb: {
+    position: 'relative',
+    overflow: 'hidden',
+    width: '56px',
+    height: '56px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  // A screenshot posted INTO a remark is the remark's evidence, not a chip on a
+  // draft: at 56px "here is what I see instead" is unreadable, so in a comment
+  // the picture is shown at a size a reader can judge without opening it.
+  thumbLarge: {
+    width: 'auto',
+    maxWidth: 'min(100%, 360px)',
+    height: 'auto',
+    maxHeight: '220px',
+  },
+  thumbLoading: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 /** An attachment the user just uploaded this session — id + a live preview URL. */
 export interface PendingAttachment {
@@ -216,13 +176,13 @@ export const AttachmentStrip = memo<AttachmentStripProps>(
     return (
       <Flexbox horizontal gap={8} wrap={'wrap'}>
         {attachments.map((attachment) => (
-          <div className={styles.thumb} key={attachment.id}>
+          <div key={attachment.id} {...sx([styles.thumb], moduleStyles.thumb)}>
             <Image alt={attachment.name ?? ''} preview={false} src={attachment.url} />
             {!disabled && (
               <button
                 aria-label={t('acceptance.review.removeAttachment')}
-                className={cx('acceptance-attach-remove', styles.remove)}
                 type={'button'}
+                {...stylex.props(styles.remove)}
                 onClick={() => onRemove(attachment.id)}
               >
                 <Icon icon={X} size={12} />
@@ -231,7 +191,7 @@ export const AttachmentStrip = memo<AttachmentStripProps>(
           </div>
         ))}
         {uploading && (
-          <div className={cx(styles.thumb, styles.thumbLoading)}>
+          <div {...sx([styles.thumb, styles.thumbLoading], moduleStyles.thumb)}>
             <Spin size="small" />
           </div>
         )}
@@ -256,7 +216,7 @@ export const AttachmentUploadButton = memo<AttachmentUploadButtonProps>(({ disab
     <Upload
       multiple
       accept={'image/*'}
-      className={styles.flushUpload}
+      {...stylex.props(styles.flushUpload)}
       disabled={disabled}
       onFiles={onFiles}
     >
@@ -299,8 +259,13 @@ export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments, size
     >
       {usable.map((attachment) => (
         <div
-          className={cx(styles.thumb, size === 'comment' && styles.thumbLarge)}
           key={attachment.id}
+          {...sx(
+            [styles.thumb, size === 'comment' && styles.thumbLarge],
+            size === 'comment'
+              ? `${moduleStyles.thumb} ${moduleStyles.thumbLarge}`
+              : moduleStyles.thumb,
+          )}
         >
           <Image alt={attachment.name ?? ''} src={attachment.url!} />
         </div>

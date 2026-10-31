@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, Button, createStaticStyles, cssVar, Text, TextArea } from '@lobehub/ui';
+import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeft, ChevronRight, NotebookPen, PencilLine, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,93 +13,88 @@ import { AttachmentStrip, AttachmentUploadButton } from './attachments';
 import { EvidenceStage } from './EvidenceStage';
 import { MobileRegionNotes } from './RegionNotes';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-
-    min-width: 0;
-    min-height: 0;
-  `,
-  /** The one scroll on the page — image on top, the notes it earns below it. */
-  scroll: css`
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 8px;
-
-    min-height: 0;
-    padding-block-end: 12px;
-  `,
-  /** The image is what the reviewer came to look at, so it takes every pixel
-      the rows below it do not need. When the notes open underneath, it yields
-      down to a floor that still leaves room to circle on, then the page scrolls. */
-  stage: css`
-    display: flex;
-    flex: 1 1 auto;
-    min-height: 40dvh;
-  `,
-  /** One full-width control under the image: the image arrows at the two
-      edges where a thumb lands, the zoom (minus, percentage, plus) between
-      them. Two fingers set the zoom too; the buttons show where it landed. */
-  switcher: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-
-    width: 100%;
-    min-height: 44px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  zoom: css`
-    display: flex;
-    flex: 1;
-    gap: 4px;
-    align-items: center;
-    justify-content: center;
-  `,
-  /** Two equal thumb-sized buttons: what to do next with the image, and where
-      the written note goes. */
-  actions: css`
-    display: flex;
-    flex: none;
-    gap: 8px;
-
-    > button {
-      flex: 1;
-      min-height: 44px;
-    }
-  `,
-  editor: css`
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    gap: 16px;
-
-    padding-block-start: 4px;
-
-    textarea {
-      font-size: 16px;
-    }
-  `,
-  footer: css`
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    gap: 8px;
-
-    padding-block-start: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    > button {
-      min-height: 44px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    minWidth: 0,
+    minHeight: 0,
+  },
+  // The one scroll on the page — image on top, the notes it earns below it.
+  scroll: {
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    gap: '8px',
+    minHeight: 0,
+    paddingBlockEnd: '12px',
+  },
+  // The image is what the reviewer came to look at, so it takes every pixel
+  // the rows below it do not need. When the notes open underneath, it yields
+  // down to a floor that still leaves room to circle on, then the page scrolls.
+  stage: {
+    display: 'flex',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minHeight: '40dvh',
+  },
+  // One full-width control under the image: the image arrows at the two
+  // edges where a thumb lands, the zoom (minus, percentage, plus) between
+  // them. Two fingers set the zoom too; the buttons show where it landed.
+  switcher: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: '44px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  zoom: {
+    display: 'flex',
+    flex: '1',
+    gap: '4px',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Two equal thumb-sized buttons: what to do next with the image, and where
+  // the written note goes.
+  actions: {
+    display: 'flex',
+    flex: 'none',
+    gap: '8px',
+  },
+  actionButton: {
+    flex: '1',
+    minHeight: '44px',
+  },
+  editor: {
+    display: 'flex',
+    flex: 'none',
+    flexDirection: 'column',
+    gap: '16px',
+    paddingBlockStart: '4px',
+  },
+  footer: {
+    display: 'flex',
+    flex: 'none',
+    flexDirection: 'column',
+    gap: '8px',
+    paddingBlockStart: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  footerButton: {
+    minHeight: '44px',
+  },
+});
 
 /**
  * Phone review on one page: look at the image, circle what is wrong, and write
@@ -162,11 +159,11 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
   );
 
   return (
-    <div className={styles.body}>
-      <div className={styles.scroll}>
+    <div {...stylex.props(styles.body)}>
+      <div {...stylex.props(styles.scroll)}>
         {activeEvidence && (
           <>
-            <div className={styles.stage}>
+            <div {...stylex.props(styles.stage)}>
               <EvidenceStage
                 touch
                 annotations={activeAnnotations}
@@ -184,7 +181,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 edges, the zoom in the middle. No hint text — the phone shows,
                 it does not explain. The percentage is what a pinch landed on;
                 the buttons step from there to the next notch. */}
-            <div className={styles.switcher}>
+            <div {...stylex.props(styles.switcher)}>
               <ActionIcon
                 aria-label={t('acceptance.review.previousImage')}
                 disabled={activeIndex <= 0}
@@ -192,7 +189,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                 size={{ blockSize: 44, size: 20 }}
                 onClick={() => model.selectEvidence(activeIndex - 1)}
               />
-              <div className={styles.zoom}>
+              <div {...stylex.props(styles.zoom)}>
                 <ActionIcon
                   aria-label={t('acceptance.review.zoomOut')}
                   disabled={zoom <= ZOOM_STEPS[0]}
@@ -228,22 +225,27 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
         {drawing ? (
           // Marking mode: the circled comments are the whole story below the
           // image — each new box lands here, ready for its note.
-          <div className={styles.editor}>{regionNotes}</div>
+          <div {...stylex.props(styles.editor)}>{regionNotes}</div>
         ) : (
           <>
             {/* Two buttons side by side: one enters marking mode, the other
                 discloses the written note below. The open state is a light
                 fill, not the primary slab — it marks which panel is open, it
                 is not the page's action. */}
-            <div className={styles.actions}>
+            <div {...stylex.props(styles.actions)}>
               {activeEvidence && (
-                <Button icon={PencilLine} onClick={() => model.advance('toggle-draw')}>
+                <Button
+                  icon={PencilLine}
+                  {...stylex.props(styles.actionButton)}
+                  onClick={() => model.advance('toggle-draw')}
+                >
                   {t('acceptance.review.drawRegion')}
                 </Button>
               )}
               <Button
                 aria-expanded={supplementExpanded}
                 icon={NotebookPen}
+                {...stylex.props(styles.actionButton)}
                 type={supplementExpanded ? 'fill' : 'default'}
                 onClick={() => setSupplementExpanded((open) => !open)}
               >
@@ -253,7 +255,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
               </Button>
             </div>
             {(hasRegionContent || supplementExpanded) && (
-              <div className={styles.editor}>
+              <div {...stylex.props(styles.editor)}>
                 {hasRegionContent && regionNotes}
                 {supplementExpanded && (
                   <>
@@ -263,6 +265,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                       autoSize={{ maxRows: 10, minRows: 4 }}
                       placeholder={t('acceptance.review.rejectPlaceholder')}
                       style={{ fontSize: 16 }}
+                      styles={{ input: { fontSize: 16 } }}
                       value={comment}
                       onChange={(event) => model.setComment(event.target.value)}
                       onPaste={handlePaste}
@@ -284,11 +287,15 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
           </>
         )}
       </div>
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         {drawing ? (
           // Done closes marking mode; the boxes and their notes stay. The
           // submit only comes back once the reviewer is out of the mode.
-          <Button type={'primary'} onClick={() => model.advance('toggle-draw')}>
+          <Button
+            type={'primary'}
+            {...stylex.props(styles.footerButton)}
+            onClick={() => model.advance('toggle-draw')}
+          >
             {t('acceptance.review.confirmRegions')}
           </Button>
         ) : (
@@ -302,6 +309,7 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
               disabled={!canSubmit}
               loading={loading}
               type={'primary'}
+              {...stylex.props(styles.footerButton)}
               onClick={model.submitReject}
             >
               {t('acceptance.review.confirmReject')}

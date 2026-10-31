@@ -6,7 +6,6 @@ import {
   Button,
   copyToClipboard,
   cssVar,
-  cx,
   Flexbox,
   Icon,
   Tag,
@@ -15,6 +14,7 @@ import {
   Tooltip,
   useResponsive,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   AudioLines,
@@ -35,6 +35,8 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import { hasRenderableEvidence, readVisualizationManifest } from '../../Report/visualization';
 import { VisualizationDeltaBadge, VisualizationRenderer } from '../../Report/VisualizationRenderer';
 import { checkDisplayTitle } from '../../utils';
@@ -48,6 +50,7 @@ import {
 } from '../Evidence/evidence';
 import { EvidenceList } from '../Evidence/EvidenceList';
 import type { EvidenceOverlayMap } from '../Evidence/overlay';
+import { rowHeaderMarker } from '../markers.stylex';
 import { openCheckRejectModal } from '../Review/CheckRejectModal';
 import type { CheckProposal } from '../Review/proposal';
 import { classifyProposalEdit } from '../Review/proposal';
@@ -317,17 +320,17 @@ export const AcceptanceCheckRow = memo<{
     );
 
     return (
-      <Flexbox className={detailMode ? undefined : styles.row} data-check-row={check.id}>
+      <Flexbox data-check-row={check.id} {...stylex.props(detailMode ? undefined : styles.row)}>
         {!detailMode && (
           <Flexbox
             horizontal
             align={'flex-start'}
             aria-expanded={ariaExpanded}
-            className={styles.rowHeader}
             data-expanded={open ? '' : undefined}
             gap={10}
             role={'button'}
             tabIndex={0}
+            {...stylex.props(styles.rowHeader, !open && styles.rowHeaderCollapsed, rowHeaderMarker)}
             onClick={activate}
             onKeyDown={(event) => {
               if (
@@ -348,7 +351,7 @@ export const AcceptanceCheckRow = memo<{
               title={seqCopied ? t('acceptance.checks.copied') : t('acceptance.checks.copySeq')}
             >
               <span
-                className={cx(styles.seqChip, styles.seqChipClickable)}
+                {...stylex.props(styles.seqChip, styles.seqChipClickable)}
                 onClick={(event) => {
                   event.stopPropagation();
                   void copyToClipboard(`C${check.seq}`);
@@ -362,15 +365,16 @@ export const AcceptanceCheckRow = memo<{
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.rowTitle}
+              {...sx([styles.rowTitle], undefined, { minWidth: 0 })}
               flex={1}
               gap={8}
-              style={{ minWidth: 0 }}
               wrap={open ? 'wrap' : 'nowrap'}
             >
               <Text
-                className={open || !desktop ? undefined : styles.titleEllipsis}
-                style={{ fontSize: desktop ? 13 : 14, minWidth: 0 }}
+                {...sx([open || !desktop ? null : styles.titleEllipsis], undefined, {
+                  fontSize: desktop ? 13 : 14,
+                  minWidth: 0,
+                })}
               >
                 {title}
               </Text>
@@ -387,11 +391,14 @@ export const AcceptanceCheckRow = memo<{
                 <Flexbox
                   horizontal
                   align={'center'}
-                  className={cx(styles.rowActions, 'acceptance-row-actions')}
                   // A running accept/ignore spinner stays visible after the pointer leaves.
                   data-busy={accepting || ignoring ? '' : undefined}
                   gap={2}
-                  style={{ flex: 'none' }}
+                  {...sx(
+                    [styles.rowActions, !(accepting || ignoring) && styles.rowActionsIdle],
+                    undefined,
+                    { flex: 'none' },
+                  )}
                 >
                   <ActionIcon
                     disabled={reviewPending && !accepting}
@@ -422,12 +429,7 @@ export const AcceptanceCheckRow = memo<{
                 </Flexbox>
               )}
             </Flexbox>
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={cx(styles.rowMeta, 'acceptance-row-meta')}
-              gap={6}
-            >
+            <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.rowMeta)}>
               {/* An accept on a NON-passed verdict can't merge into the head icon
               (the failed/uncertain mark must stay visible) — mark it here. */}
               {reviewState === 'accepted' && check.state !== 'passed' && (
@@ -489,7 +491,7 @@ export const AcceptanceCheckRow = memo<{
                     .join(' · ')}
                 >
                   <span
-                    className={cx(styles.chip, styles.chipClickable)}
+                    {...stylex.props(styles.chip, styles.chipClickable)}
                     onClick={(event) => {
                       event.stopPropagation();
                       onRound(check.introducedAtRound);
@@ -502,7 +504,7 @@ export const AcceptanceCheckRow = memo<{
               {onRound && check.resultRound !== undefined && check.resultRound !== null && (
                 <Tooltip title={t('acceptance.checks.finalRoundHint')}>
                   <span
-                    className={cx(styles.chip, styles.chipClickable)}
+                    {...stylex.props(styles.chip, styles.chipClickable)}
                     onClick={(event) => {
                       event.stopPropagation();
                       onRound(check.resultRound!);
@@ -513,7 +515,7 @@ export const AcceptanceCheckRow = memo<{
                 </Tooltip>
               )}
             </Flexbox>
-            <Flexbox align={'center'} className={styles.rowChevron} height={22}>
+            <Flexbox align={'center'} height={22} {...stylex.props(styles.rowChevron)}>
               <Icon
                 color={cssVar.colorTextQuaternary}
                 icon={ChevronRight}
@@ -588,7 +590,7 @@ export const AcceptanceCheckRow = memo<{
               onReviewEvidence={canReview ? (id) => openReject(undefined, id) : undefined}
             />
             {staleThreads.length > 0 && (
-              <Flexbox className={styles.staleRegions} gap={10}>
+              <Flexbox gap={10} {...stylex.props(styles.staleRegions)}>
                 <Text fontSize={12} type={'secondary'}>
                   {t('acceptance.comments.historicalRegions', { count: staleThreads.length })}
                 </Text>
@@ -764,7 +766,7 @@ export const AcceptanceCheckRow = memo<{
             )}
             {hasHistory && (
               <span
-                className={styles.historyToggle}
+                {...stylex.props(styles.historyToggle)}
                 onClick={() => setHistoryOpen((open) => !open)}
               >
                 <Icon

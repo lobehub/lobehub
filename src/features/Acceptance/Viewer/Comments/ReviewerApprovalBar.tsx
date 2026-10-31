@@ -1,15 +1,8 @@
 'use client';
 
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Text,
-  TextArea,
-  toast,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text, TextArea, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BadgeCheck } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { memo, useState } from 'react';
@@ -23,20 +16,19 @@ import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { canReviewAcceptance } from '../visibility';
 import { useAcceptanceComments } from './hooks';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  description: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: '14px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  description: { fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 /**
  * The reviewer's counterpart of the decision bar. A teammate who can review
@@ -107,7 +99,7 @@ const ReviewerApprovalBar = memo(() => {
     );
 
   return (
-    <Flexbox className={styles.card} gap={10}>
+    <Flexbox className={stylex.props(styles.card).className} gap={10}>
       <Flexbox horizontal align={'center'} gap={8}>
         <Icon
           color={approvedCurrentRound ? cssVar.colorSuccess : undefined}
@@ -122,7 +114,7 @@ const ReviewerApprovalBar = memo(() => {
             : t('acceptance.comments.approve')}
         </Text>
       </Flexbox>
-      <span className={styles.description}>
+      <span {...stylex.props(styles.description)}>
         {approvedCurrentRound
           ? t('acceptance.comments.withdrawDescription')
           : t('acceptance.comments.approveDescription')}

@@ -1,13 +1,15 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Image, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Image, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, MessageSquare, X } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useOptionalAcceptanceScope } from '../AcceptanceScope';
 import { commentAnchorId } from '../Comments/anchor';
-import { FLOATING_ACTION_HOST } from './FloatingCommentAction';
+import { floatingActionHostMarker } from '../markers.stylex';
 import { type EvidenceOverlay, overlayColor } from './overlay';
 import {
   annotationInSlice,
@@ -18,227 +20,125 @@ import {
 } from './screenshotSlices';
 import { useImageThreads } from './useImageThreads';
 
-const styles = createStaticStyles(({ css }) => ({
-  badge: css`
-    position: absolute;
-    inset-block-start: -9px;
-    inset-inline-start: -9px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorTextLightSolid};
-  `,
-  frame: css`
-    position: relative;
-
-    overflow: hidden;
-    flex: none;
-
-    max-width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  frameFlat: css`
-    border: none;
-    border-radius: 0;
-  `,
-  /**
-   * The clickable note slot, pinned to the region's OUTER right edge: the box
-   * marks where the concern is, this marker is how you read it. Kept on the
-   * right so it never covers the numbered badge on the opposite corner.
-   */
-  marker: css`
-    pointer-events: auto;
-    cursor: pointer;
-
-    position: absolute;
-    inset-block-start: -10px;
-    inset-inline-end: -10px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    /* A circle, not a pill: the face inside is round, and a rounded rectangle
-       hugging it reads as a squashed oval. Same 18px as the numbered badge on
-       the opposite corner, so the two corners of one box match. */
-    width: 18px;
-    height: 18px;
-    border: none;
-    border-radius: 50%;
-
-    font-size: 10px;
-    font-weight: 600;
-    line-height: 1;
-    color: ${cssVar.colorTextLightSolid};
-
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    &:hover {
-      filter: brightness(1.12);
-    }
-  `,
-  markerActive: css`
-    outline: 2px solid ${cssVar.colorTextLightSolid};
-  `,
-  /**
-   * The opened note FLOATS rather than taking a column of its own: reserving
-   * layout for it shoved the evidence narrower the moment anyone opened a note,
-   * and closing it snapped the image back.
-   *
-   * Where it floats depends on the room beside the reading column. Given a wide
-   * enough window it sits in the margin, clear of the screenshot — the note is
-   * about the picture, so covering the picture with it is the one thing it must
-   * not do. Below that it falls back to hugging the image's right edge, which
-   * still beats pushing the evidence around.
-   */
-  note: css`
-    position: absolute;
-    z-index: 5;
-    inset-inline-end: 12px;
-
-    width: min(280px, 76%);
-    padding: 12px;
-
-    /* Room for the close control, so it never lands on the author's name. */
-    padding-inline-end: 32px;
-
-    /* No frame: an elevated surface is the whole affordance, the way Figma's
-       comments read. A 1px box around content that already sits in a box is
-       what made the earlier rounds look like wireframes. */
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-
-    /* 920px reading column + 240px note + gaps — the point where the margin
-       can hold the note without the page growing a horizontal scrollbar. */
-    @media (width >= 1440px) {
-      inset-inline: calc(100% + 12px) auto;
-      width: 240px;
-    }
-  `,
-  /** Sits in the gutter the note reserves for it, clear of the panel's text. */
-  noteClose: css`
-    cursor: pointer;
-
-    position: absolute;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    border: none;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: none;
-
-    transition: all ${cssVar.motionDurationFast};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  noteFallbackHead: css`
-    padding-block-end: 4px;
-  `,
-  /**
-   * The collapsed pin: while a note is shut there has to be something in the
-   * margin saying it exists, or the only way to find a remark is to hunt for
-   * the marker on the box it points at.
-   */
-  pin: css`
-    cursor: pointer;
-
-    position: absolute;
-    z-index: 4;
-    inset-inline-end: -14px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border: none;
-    border-radius: 50% 50% 50% 2px;
-
-    color: ${cssVar.colorTextLightSolid};
-
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    &:hover {
-      filter: brightness(1.12);
-    }
-
-    @media (width >= 1440px) {
-      inset-inline: calc(100% + 12px) auto;
-    }
-  `,
-  /** The avatar fills the pin; the pin's own colour stays visible as its rim. */
-  pinFace: css`
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    object-fit: cover;
-  `,
-  pinInitial: css`
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
-  `,
-  /** Positioning context for the floating note; the frame itself clips. */
-  stage: css`
-    position: relative;
-  `,
-  noteBody: css`
-    font-size: 13px;
-    line-height: 1.6;
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  `,
-  rect: css`
-    pointer-events: none;
-
-    position: absolute;
-
-    border: 2px solid ${cssVar.colorError};
-    border-radius: ${cssVar.borderRadiusXS};
-
-    /*
-     * Two rings instead of one: the dark outside separates the box from a white
-     * screenshot, the light inside separates it from a dark one. The evidence
-     * image can be either, and neither the hue nor the reader's theme can tell
-     * us which — so the box carries its own contrast.
-     */
-    box-shadow:
-      0 0 0 1px rgb(0 0 0 / 45%),
-      inset 0 0 0 1px rgb(255 255 255 / 45%);
-  `,
-  swatch: css`
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    position: 'absolute',
+    insetBlockStart: '-9px',
+    insetInlineStart: '-9px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    borderRadius: '50%',
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorTextLightSolid,
+  },
+  frame: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: 'none',
+    maxWidth: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  frameFlat: { borderStyle: 'none', borderRadius: '0' },
+  marker: {
+    pointerEvents: 'auto',
+    cursor: 'pointer',
+    position: 'absolute',
+    insetBlockStart: '-10px',
+    insetInlineEnd: '-10px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    borderStyle: 'none',
+    borderRadius: '50%',
+    fontSize: '10px',
+    fontWeight: 600,
+    lineHeight: 1,
+    color: cssVar.colorTextLightSolid,
+    boxShadow: cssVar.boxShadowTertiary,
+    filter: { 'default': null, ':hover': 'brightness(1.12)' },
+  },
+  markerActive: {
+    outlineWidth: '2px',
+    outlineStyle: 'solid',
+    outlineColor: cssVar.colorTextLightSolid,
+  },
+  note: {
+    position: 'absolute',
+    zIndex: 5,
+    insetInlineEnd: { 'default': '12px', '@media (width >= 1440px)': 'auto' },
+    width: { 'default': 'min(280px, 76%)', '@media (width >= 1440px)': '240px' },
+    padding: '12px',
+    paddingInlineEnd: '32px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+    insetInlineStart: { 'default': null, '@media (width >= 1440px)': 'calc(100% + 12px)' },
+  },
+  noteClose: {
+    cursor: 'pointer',
+    position: 'absolute',
+    insetBlockStart: '8px',
+    insetInlineEnd: '8px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    padding: '0',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: `all ${cssVar.motionDurationFast}`,
+  },
+  noteFallbackHead: { paddingBlockEnd: '4px' },
+  pin: {
+    cursor: 'pointer',
+    position: 'absolute',
+    zIndex: 4,
+    insetInlineEnd: { 'default': '-14px', '@media (width >= 1440px)': 'auto' },
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderStyle: 'none',
+    borderTopLeftRadius: '50%',
+    borderTopRightRadius: '50%',
+    borderBottomRightRadius: '50%',
+    borderBottomLeftRadius: '2px',
+    color: cssVar.colorTextLightSolid,
+    boxShadow: cssVar.boxShadowTertiary,
+    filter: { 'default': null, ':hover': 'brightness(1.12)' },
+    insetInlineStart: { 'default': null, '@media (width >= 1440px)': 'calc(100% + 12px)' },
+  },
+  pinFace: { width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' },
+  pinInitial: { fontSize: '11px', fontWeight: 600, lineHeight: 1 },
+  stage: { position: 'relative' },
+  noteBody: { fontSize: '13px', lineHeight: 1.6, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' },
+  rect: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorError,
+    borderRadius: cssVar.borderRadiusXS,
+    boxShadow: '0 0 0 1px rgb(0 0 0 / 45%),\n      inset 0 0 0 1px rgb(255 255 255 / 45%)',
+  },
+  swatch: { flex: 'none', width: '8px', height: '8px', borderRadius: '50%' },
+});
 
 interface OverlayRectProps {
   annotation: EvidenceOverlay;
@@ -259,7 +159,7 @@ const OverlayRect = memo<OverlayRectProps>(
     const label = annotation.label ?? index + 1;
     return (
       <div
-        className={styles.rect}
+        className={stylex.props(styles.rect).className}
         style={{
           borderColor: color,
           height: `${rect.height * 100}%`,
@@ -269,13 +169,13 @@ const OverlayRect = memo<OverlayRectProps>(
         }}
       >
         {numbered && (
-          <span className={styles.badge} style={{ background: color }}>
+          <span className={stylex.props(styles.badge).className} style={{ background: color }}>
             {label}
           </span>
         )}
         {annotation.comment && (
           <button
-            className={cx(styles.marker, opened && styles.markerActive)}
+            className={stylex.props(styles.marker, opened && styles.markerActive).className}
             style={{ background: color }}
             title={annotation.authorName}
             type={'button'}
@@ -310,7 +210,7 @@ const AnnotationFace = memo<{ name?: string; size?: number; src?: string | null 
       return (
         <img
           alt={name ?? ''}
-          className={styles.pinFace}
+          className={stylex.props(styles.pinFace).className}
           src={src}
           style={{ height: size, width: size }}
         />
@@ -318,7 +218,10 @@ const AnnotationFace = memo<{ name?: string; size?: number; src?: string | null 
     const initial = name?.trim().slice(0, 1);
     if (initial)
       return (
-        <span className={styles.pinInitial} style={{ fontSize: size < 16 ? 9 : 11 }}>
+        <span
+          className={stylex.props(styles.pinInitial).className}
+          style={{ fontSize: size < 16 ? 9 : 11 }}
+        >
           {initial.toUpperCase()}
         </span>
       );
@@ -367,7 +270,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
     // hangs off the bottom of the image.
     const note = opened && (
       <div
-        className={styles.note}
+        className={stylex.props(styles.note).className}
         id={opened.threadId ? commentAnchorId(opened.threadId) : undefined}
         style={{ insetBlockStart: `${Math.min(Math.max(opened.rect.y, 0), 0.62) * 100}%` }}
       >
@@ -378,7 +281,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
          * is looking.
          */}
         <button
-          className={styles.noteClose}
+          {...stylex.props(styles.noteClose)}
           title={t('acceptance.comments.collapseThread')}
           type={'button'}
           onClick={close}
@@ -387,9 +290,14 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
         </button>
         {opened.panel ?? (
           <Flexbox gap={4}>
-            <Flexbox horizontal align={'center'} className={styles.noteFallbackHead} gap={6}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(styles.noteFallbackHead).className}
+              gap={6}
+            >
               <span
-                className={styles.swatch}
+                className={stylex.props(styles.swatch).className}
                 style={{ background: opened.color ?? cssVar.colorError }}
               />
               <Text fontSize={12} type={'secondary'}>
@@ -397,7 +305,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
                 {opened.authorName}
               </Text>
             </Flexbox>
-            <div className={styles.noteBody}>{opened.comment}</div>
+            <div {...stylex.props(styles.noteBody)}>{opened.comment}</div>
           </Flexbox>
         )}
       </div>
@@ -408,7 +316,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
       annotations?.map((annotation, index) =>
         annotation.comment ? (
           <button
-            className={styles.pin}
+            className={stylex.props(styles.pin).className}
             key={index}
             title={annotation.authorName}
             type={'button'}
@@ -429,7 +337,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
 
     const shell = (width: string | number, body: ReactNode) => (
       <Flexbox gap={4} style={{ maxWidth: '100%', width }}>
-        <div className={styles.stage} {...(action ? { [FLOATING_ACTION_HOST]: '' } : {})}>
+        <div {...stylex.props(styles.stage, action ? floatingActionHostMarker : null)}>
           {body}
           {pins}
           {note}
@@ -443,7 +351,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
       return shell(
         '100%',
         <div
-          className={cx(styles.frame, flat && styles.frameFlat)}
+          className={stylex.props(styles.frame, flat && styles.frameFlat).className}
           style={{ maxWidth: '100%', width: '100%' }}
         >
           <Image
@@ -474,7 +382,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
 
             return (
               <div
-                className={cx(styles.frame, flat && styles.frameFlat)}
+                className={stylex.props(styles.frame, flat && styles.frameFlat).className}
                 key={slice.index}
                 style={{
                   aspectRatio: `${natural.width} / ${slice.height}`,
@@ -524,7 +432,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
     return shell(
       portrait ? screenshotTileWidth(natural.width) : '100%',
       <div
-        className={cx(styles.frame, flat && styles.frameFlat)}
+        className={stylex.props(styles.frame, flat && styles.frameFlat).className}
         style={{
           aspectRatio: `${natural.width} / ${natural.height}`,
           maxWidth: '100%',

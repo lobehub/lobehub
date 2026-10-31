@@ -1,17 +1,9 @@
 'use client';
 
 import type { AcceptanceCommentTime, AcceptanceReviewAnnotation } from '@lobechat/types';
-import {
-  createModal,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Text,
-  toast,
-  useModalContext,
-} from '@lobehub/ui';
+import { createModal, Flexbox, Icon, Text, toast, useModalContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { Film } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -37,129 +29,90 @@ import {
   readEvidenceCommentDraft,
   saveEvidenceCommentDraft,
 } from './evidenceCommentDraft';
+import moduleStyles from './EvidenceCommentModal.module.css';
 import { readVideoCommentDrafts } from './videoCommentDraft';
 import { VideoCommentEditor } from './VideoCommentEditor';
 
 const MODAL_WIDTH = 'min(1180px, calc(100vw - 48px))';
 
-const styles = createStaticStyles(({ css }) => ({
-  /** A review surface, not a dialog: the evidence needs the room to be circled precisely. */
-  popup: css`
-    > div {
-      display: flex;
-      flex-direction: column;
+// The popup's chrome lives in EvidenceCommentModal.module.css, which repeats MODAL_WIDTH.
+const phone = '@media (width <= 767px)';
 
-      width: ${MODAL_WIDTH};
-      max-width: ${MODAL_WIDTH};
-      height: min(860px, calc(100dvh - 48px));
-    }
-
-    @media (width <= 767px) {
-      align-items: stretch;
-      justify-content: stretch;
-
-      width: 100vw !important;
-      max-width: 100vw !important;
-      height: 100dvh;
-
-      > div {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        height: 100dvh;
-        max-height: 100dvh;
-        padding: 0;
-        border-radius: 0;
-      }
-    }
-  `,
-  header: css`
-    @media (width <= 767px) {
-      min-height: 56px;
-      padding-block: max(12px, env(safe-area-inset-top)) 12px;
-      padding-inline: 12px 52px;
-    }
-  `,
-  close: css`
-    @media (width <= 767px) {
-      inset-block-start: max(4px, env(safe-area-inset-top));
-      inset-inline-end: 4px;
-      width: 44px;
-      height: 44px;
-    }
-  `,
-  strip: css`
-    overflow-x: auto;
-    flex: none;
-    gap: 8px;
-  `,
-  thumb: css`
-    cursor: pointer;
-
-    position: relative;
-
-    overflow: hidden;
-    flex: none;
-
-    width: 72px;
-    height: 44px;
-    padding: 0;
-    border: 2px solid transparent;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillTertiary};
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.5;
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-
-    img {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-  `,
-  thumbActive: css`
-    border-color: ${cssVar.colorPrimary};
-  `,
-  /** A video has no poster to thumbnail without decoding it — an icon tile says what it is. */
-  videoThumb: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 100%;
-    height: 100%;
-
-    color: #fff;
-
-    background: #000;
-  `,
-  /** Unsent drafts on another piece of evidence: sending here leaves them where they are. */
-  draftCount: css`
-    position: absolute;
-    inset-block-start: 2px;
-    inset-inline-end: 2px;
-
-    min-width: 16px;
-    height: 16px;
-    padding-inline: 4px;
-    border-radius: 8px;
-
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 16px;
-    color: ${cssVar.colorBgContainer};
-
-    background: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  header: {
+    minHeight: { default: null, [phone]: '56px' },
+    paddingBlockStart: { default: null, [phone]: 'max(12px, env(safe-area-inset-top))' },
+    paddingBlockEnd: { default: null, [phone]: '12px' },
+    paddingInlineStart: { default: null, [phone]: '12px' },
+    paddingInlineEnd: { default: null, [phone]: '52px' },
+  },
+  close: {
+    insetBlockStart: { default: null, [phone]: 'max(4px, env(safe-area-inset-top))' },
+    insetInlineEnd: { default: null, [phone]: '4px' },
+    width: { default: null, [phone]: '44px' },
+    height: { default: null, [phone]: '44px' },
+  },
+  strip: {
+    overflowX: 'auto',
+    flex: 'none',
+    gap: '8px',
+  },
+  thumb: {
+    cursor: { 'default': 'pointer', ':disabled': 'not-allowed' },
+    position: 'relative',
+    overflow: 'hidden',
+    flex: 'none',
+    width: '72px',
+    height: '44px',
+    padding: 0,
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+    opacity: { 'default': null, ':disabled': 0.5 },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  thumbImage: {
+    display: 'block',
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  thumbActive: {
+    borderColor: cssVar.colorPrimary,
+  },
+  // A video has no poster to thumbnail without decoding it — an icon tile says what it is.
+  videoThumb: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+    color: '#fff',
+    backgroundColor: '#000',
+    backgroundImage: 'none',
+  },
+  // Unsent drafts on another piece of evidence: sending here leaves them where they are.
+  draftCount: {
+    position: 'absolute',
+    insetBlockStart: '2px',
+    insetInlineEnd: '2px',
+    minWidth: '16px',
+    height: '16px',
+    paddingInline: '4px',
+    borderRadius: '8px',
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: '16px',
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorText,
+  },
+});
 
 export interface EvidenceCommentValue {
   clientId: string;
@@ -323,7 +276,7 @@ const EvidenceCommentContent = (options: EvidenceCommentModalProps) => {
   if (!active || !userId) return null;
 
   const strip = media.length > 1 && (
-    <Flexbox horizontal className={styles.strip}>
+    <Flexbox horizontal {...stylex.props(styles.strip)}>
       {media.map((item, index) => {
         const count = draftCount(userId, options.acceptanceId, item);
         const label = t('acceptance.comments.evidenceNumber', { index: index + 1 });
@@ -331,23 +284,23 @@ const EvidenceCommentContent = (options: EvidenceCommentModalProps) => {
           <button
             aria-label={label}
             aria-pressed={item.id === active.id}
-            className={cx(styles.thumb, item.id === active.id && styles.thumbActive)}
             disabled={pending}
             key={item.id}
             type={'button'}
+            {...stylex.props(styles.thumb, item.id === active.id && styles.thumbActive)}
             title={
               count > 0 ? `${label} · ${t('acceptance.comments.evidenceDrafts', { count })}` : label
             }
             onClick={() => setActiveId(item.id)}
           >
             {item.type === 'video' ? (
-              <span className={styles.videoThumb}>
+              <span {...stylex.props(styles.videoThumb)}>
                 <Icon icon={Film} size={18} />
               </span>
             ) : (
-              <img alt={''} src={item.fileUrl!} />
+              <img alt={''} src={item.fileUrl!} {...stylex.props(styles.thumbImage)} />
             )}
-            {count > 0 && <span className={styles.draftCount}>{count}</span>}
+            {count > 0 && <span {...stylex.props(styles.draftCount)}>{count}</span>}
           </button>
         );
       })}
@@ -374,7 +327,11 @@ const EvidenceCommentContent = (options: EvidenceCommentModalProps) => {
 export const openEvidenceCommentModal = (options: EvidenceCommentModalProps) =>
   createModal({
     content: <EvidenceCommentContent {...options} />,
-    classNames: { close: styles.close, header: styles.header, popup: styles.popup },
+    classNames: {
+      close: stylex.props(styles.close).className,
+      header: stylex.props(styles.header).className,
+      popup: moduleStyles.popup,
+    },
     footer: null,
     maskClosable: true,
     styles: {
