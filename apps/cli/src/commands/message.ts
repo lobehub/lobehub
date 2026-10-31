@@ -15,6 +15,7 @@ import { log } from '../utils/logger';
 import type { TimeWindow } from '../utils/timeWindow';
 import { parseTimeWindow, TIME_POINT_HELP } from '../utils/timeWindow';
 import { registerMessageReplyCommand } from './message/reply';
+import { registerMessageSendCommand } from './message/send';
 import { resolveUrlBuilder, resourcePath, withUrls } from './resourceUrl';
 
 interface MessageSearchOptions {
@@ -406,7 +407,7 @@ export function registerMessageCommand(program: Command) {
   message
     .command('create')
     .description(
-      "Write a message row without running anything: no agent sees or answers it. To have another conversation's agent act on a message, use 'lh topic send'",
+      "Write a message row without running anything: no agent sees or answers it. To have an agent act on a message, use 'lh message send' or 'lh topic send'",
     )
     .requiredOption('-r, --role <role>', 'Message role (user, assistant, system)')
     .requiredOption('-c, --content <content>', 'Message content')
@@ -624,4 +625,5 @@ export function registerMessageCommand(program: Command) {
     });
 
   registerMessageReplyCommand(message);
+  registerMessageSendCommand(message);
 }

@@ -297,7 +297,7 @@ describe('TopicByAgentGroupItem', () => {
     );
   });
 
-  it('goes straight into a conversation-only topic for an agent fixed to a non-device target', async () => {
+  it('opens a conversation-only draft for an agent fixed to a non-device target', () => {
     subGroupModes[GROUP_ID] = 'byDevice';
     directories[0] = { ...directories[0], ...runnable('ins-mac') };
     directories[1] = { ...directories[1], ...runnable('ins-linux') };
@@ -308,27 +308,30 @@ describe('TopicByAgentGroupItem', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'sidebar.newConversation' }));
 
-    expect(startProjectTopicDraft).not.toHaveBeenCalled();
-    await expect
-      .poll(() => navigate.mock.calls.at(-1)?.[0])
-      .toBe('/project/project-1/topic/tpc_new');
+    expect(startProjectTopicDraft).toHaveBeenCalledWith({
+      agentId: 'agt_acc_merge_alpha',
+      directoryId: undefined,
+      navigate,
+      projectId: 'project-1',
+    });
+    expect(createProjectTopic).not.toHaveBeenCalled();
   });
 
-  /** @example Review feedback: "new topic" must go straight into the agent, never through the work-location modal. */
-  it('opens a conversation-only topic of this agent when the project has no runnable directory', async () => {
+  /** @example User report: the project "+" left an empty "未命名话题" row behind before anything was sent. */
+  it('opens a blank conversation-only draft when the project has no runnable directory', () => {
+    // ROOT CAUSE: the draft could only be staged on a directory, so a project
+    // without a runnable one fell back to creating an untitled topic up front.
     renderGroup();
 
     fireEvent.click(screen.getByRole('button', { name: 'sidebar.newConversation' }));
 
-    expect(startProjectTopicDraft).not.toHaveBeenCalled();
-    expect(createProjectTopic).toHaveBeenCalledWith({
+    expect(startProjectTopicDraft).toHaveBeenCalledWith({
       agentId: 'agt_acc_merge_alpha',
+      directoryId: undefined,
+      navigate,
       projectId: 'project-1',
-      title: 'directories.untitled',
     });
-    await expect
-      .poll(() => navigate.mock.calls.at(-1)?.[0])
-      .toBe('/project/project-1/topic/tpc_new');
+    expect(createProjectTopic).not.toHaveBeenCalled();
   });
 
   /** @example User report: the project sidebar hid devices that had no topics yet. */

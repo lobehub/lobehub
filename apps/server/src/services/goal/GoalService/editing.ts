@@ -1,9 +1,11 @@
 import type { GoalEdgeKind, GoalItem } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
+import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 
 import { TaskService } from '../../task';
 import { GoalAssignmentService } from '../assignment';
@@ -60,6 +62,38 @@ export const updateRequirement = async (
   const goal = await ctx.goalModel.update(goalId, { requirement });
   if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
   return goal;
+};
+
+/**
+ * Rename the goal. Only the label changes: the requirement and the Tasks already
+ * dispatched keep their own text. The map's root question and the management
+ * topic were named after the goal, so they follow unless someone renamed them.
+ */
+export const updateTitle = async (ctx: GoalServiceContext, goalId: string, title: string) => {
+  // The goal row is locked so concurrent renames apply to all three in the same order.
+  return ctx.db.transaction(async (tx) => {
+    const goalModel = new GoalModel(tx, ctx.userId, ctx.workspaceId);
+    const previous = await goalModel.findByIdForUpdate(goalId);
+    if (!previous) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    const goal = await goalModel.update(goalId, { title });
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    if (previous.title === title) return goal;
+
+    await new GoalGraphModel(tx, ctx.userId, ctx.workspaceId).renameProblemNode(
+      goalId,
+      previous.title,
+      title,
+    );
+
+    const topicId = goal.config?.managerState?.topicId;
+    if (topicId) {
+      const topicModel = new TopicModel(tx, ctx.userId, ctx.workspaceId);
+      const topic = await topicModel.findById(topicId);
+      if (topic?.title === `Goal management: ${previous.title}`)
+        await topicModel.update(topicId, { title: `Goal management: ${title}` });
+    }
+    return goal;
+  });
 };
 
 /**

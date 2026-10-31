@@ -185,7 +185,7 @@ describe('AgentQuotaService.selectForAgent', () => {
     );
   });
 
-  it('balances only across accounts the caller can run, but still returns a pin', async () => {
+  it('balances only across accounts the caller can run, skipping a pin it cannot run', async () => {
     const bindings = new AgentAccountBindingModel(serverDB, userId);
     await serverDB.insert(agents).values([{ id: 'agent-3', slug: 'agent-3', title: 'A3', userId }]);
     const local = await service.ingestSnapshot({
@@ -216,14 +216,20 @@ describe('AgentQuotaService.selectForAgent', () => {
       }),
     ).toBeNull();
 
-    // A pinned account the caller cannot run is still the answer.
+    // An agent-wide pin the caller cannot run was picked on another machine:
+    // balance across what it can run instead. Where it can run, it still holds.
     await bindings.upsert({
       accountId: remote.id,
       agentId: 'agent-3',
       role: QuotaBindingRole.pinned,
     });
     expect(await service.selectForAgent('agent-3', onlyLocal)).toMatchObject({
+      accountId: local.id,
+      reason: 'balanced',
+    });
+    expect(await service.selectForAgent('agent-3', onlyRemote)).toMatchObject({
       accountId: remote.id,
+      pinScope: 'agent',
       reason: 'pinned',
     });
   });
