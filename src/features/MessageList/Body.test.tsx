@@ -7,7 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Body from './Body';
 
-const home = vi.hoisted(() => ({ isInit: false, items: [] as unknown[] }));
+const home = vi.hoisted(() => ({
+  error: undefined as unknown,
+  isInit: false,
+  items: [] as unknown[],
+  mutate: () => {},
+}));
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -15,7 +20,12 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
   useActiveWorkspaceSlug: () => null,
 }));
 vi.mock('@/hooks/useActiveLocation', () => ({ useActiveLocation: () => ({ pathname: '/' }) }));
-vi.mock('@/hooks/useFetchAgentList', () => ({ useFetchAgentList: () => {} }));
+vi.mock('@/hooks/useFetchAgentList', () => ({
+  useFetchAgentList: () => ({ error: home.error, mutate: home.mutate }),
+}));
+vi.mock('@/components/AsyncError', () => ({
+  default: () => createElement('div', {}, 'Agents failed'),
+}));
 vi.mock('@/features/AgentRoute/useResolvedAgentRouteId', () => ({
   resolveInboxAgentRouteId: (id: string) => id,
 }));
@@ -52,6 +62,7 @@ vi.mock('./AgentConversation', () => ({
 vi.mock('./GroupConversation', () => ({ default: () => null }));
 
 beforeEach(() => {
+  home.error = undefined;
   home.isInit = false;
   home.items = [];
 });
@@ -63,6 +74,17 @@ describe('MessageList Body', () => {
     expect(screen.getByText('Lobe AI row')).toBeInTheDocument();
     expect(screen.getByText('Channels')).toBeInTheDocument();
     expect(screen.getByText('Loading agents')).toBeInTheDocument();
+  });
+
+  it('replaces the agent skeleton with an error, keeping Lobe AI and Channels', () => {
+    home.error = new Error('network');
+
+    render(createElement(Body));
+
+    expect(screen.getByText('Agents failed')).toBeInTheDocument();
+    expect(screen.queryByText('Loading agents')).not.toBeInTheDocument();
+    expect(screen.getByText('Lobe AI row')).toBeInTheDocument();
+    expect(screen.getByText('Channels')).toBeInTheDocument();
   });
 
   it('drops the agent skeleton once the list arrives', () => {

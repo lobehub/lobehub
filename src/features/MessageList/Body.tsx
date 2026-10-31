@@ -8,6 +8,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AsyncError from '@/components/AsyncError';
 import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import ChannelList from '@/features/Channels/ChannelList';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
@@ -59,7 +60,7 @@ ConversationItem.displayName = 'ConversationItem';
 
 const Body = memo(() => {
   const { t } = useTranslation('common');
-  useFetchAgentList();
+  const { error: agentsError, mutate: retryAgents } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   useHomeStore((s) => s.useFetchAllRecents)(true);
 
@@ -107,7 +108,11 @@ const Body = memo(() => {
         ),
       )}
       {agentsLoading ? (
-        <SkeletonList paddingBlock={8} />
+        agentsError ? (
+          <AsyncError error={agentsError} variant="inline" onRetry={() => void retryAgents()} />
+        ) : (
+          <SkeletonList paddingBlock={8} />
+        )
       ) : (
         entries.length === 0 && (
           <div {...stylex.props(styles.empty)}>

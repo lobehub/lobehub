@@ -20,6 +20,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AsyncError from '@/components/AsyncError';
 import Avatar from '@/components/Avatar';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import AgentGroupAvatar from '@/features/AgentGroupAvatar';
@@ -91,7 +92,7 @@ Contact.displayName = 'Contact';
 const Body = memo(() => {
   const { t } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
-  useFetchAgentList();
+  const { error, mutate } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const activeRouteId = useActiveRouteId();
@@ -105,7 +106,12 @@ const Body = memo(() => {
     };
   }, [items, tChat]);
 
-  if (!isInit && items.length === 0) return <SkeletonList paddingBlock={8} />;
+  if (!isInit && items.length === 0)
+    return error ? (
+      <AsyncError error={error} variant="inline" onRetry={() => void mutate()} />
+    ) : (
+      <SkeletonList paddingBlock={8} />
+    );
 
   const sections = [
     // Groups first: there are few, and they would sink below every agent.
@@ -155,6 +161,8 @@ const Body = memo(() => {
 });
 
 Body.displayName = 'ContactListBody';
+
+export { Body as ContactListBody };
 
 const Header = memo(() => {
   const { t } = useTranslation('common');
