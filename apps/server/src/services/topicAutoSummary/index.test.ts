@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   generateObject: vi.fn(),
   isTopicAnalysisEnabled: vi.fn(),
   saveTopicAnalysis: vi.fn(),
+  snapshotTopicUsage: vi.fn(),
   getUserSettings: vi.fn(),
   resolveSystemAgentModelConfig: vi.fn(),
   updateSummaryIfCurrent: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/business/server/topicAnalysis', () => ({
 vi.mock('@/database/models/topicAnalysis', () => ({
   TopicAnalysisModel: class {
     save = mocks.saveTopicAnalysis;
+    snapshotTopicUsage = mocks.snapshotTopicUsage;
   },
 }));
 vi.mock('@/database/models/topicSummary', () => ({
@@ -184,11 +186,13 @@ describe('TopicAutoSummaryService', () => {
       provider: 'deepseek',
       taxonomyVersion: 'v1',
     };
+    const usage = { toolCalls: 2, totalTokens: 1000, userMessages: 1 };
 
     beforeEach(() => {
       mocks.isTopicAnalysisEnabled.mockReturnValue(true);
       mocks.analyzeTopic.mockResolvedValue(analysis);
       mocks.saveTopicAnalysis.mockResolvedValue({ id: 'row-1' });
+      mocks.snapshotTopicUsage.mockResolvedValue(usage);
     });
 
     it('does nothing when the deployment has no topic analysis', async () => {
@@ -224,7 +228,9 @@ describe('TopicAutoSummaryService', () => {
         lastMessageUpdatedAt: new Date('2026-07-31T10:00:00Z'),
         result: analysis,
         topicId: 'topic-1',
+        usage,
       });
+      expect(mocks.snapshotTopicUsage).toHaveBeenCalledWith('topic-1');
       expect(mocks.generateObject).not.toHaveBeenCalled();
     });
 

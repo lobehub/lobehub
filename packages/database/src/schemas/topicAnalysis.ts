@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
-import { index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { timestamps, timestamptz } from './_helpers';
+import { amountNumeric, timestamps, timestamptz } from './_helpers';
 import { topics } from './topic';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -32,8 +32,24 @@ export const topicAnalyses = pgTable(
     outcome: text('outcome'),
     labels: jsonb('labels').$type<Record<string, unknown>>(),
 
+    /** Model and provider that produced this analysis. */
     model: text('model'),
     provider: text('provider'),
+
+    // ---- The topic's own consumption when it was analyzed ----
+    // A snapshot, not a join: reports group cost and effort by category without
+    // the topic's running totals drifting after the analysis. NULL = not measured.
+    topicModel: text('topic_model'),
+    topicProvider: text('topic_provider'),
+    totalTokens: integer('total_tokens'),
+    totalInputTokens: integer('total_input_tokens'),
+    totalOutputTokens: integer('total_output_tokens'),
+    totalCost: amountNumeric('total_cost'),
+    llmCalls: integer('llm_calls'),
+    toolCalls: integer('tool_calls'),
+    userMessages: integer('user_messages'),
+    assistantMessages: integer('assistant_messages'),
+
     /** Newest message the analysis saw; a later message means the result is out of date. */
     lastMessageId: text('last_message_id'),
     lastMessageUpdatedAt: timestamptz('last_message_updated_at'),

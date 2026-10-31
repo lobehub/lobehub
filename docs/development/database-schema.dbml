@@ -4463,6 +4463,16 @@ table topic_analyses {
   labels jsonb
   model text
   provider text
+  topic_model text
+  topic_provider text
+  total_tokens integer
+  total_input_tokens integer
+  total_output_tokens integer
+  total_cost "numeric(20, 6)"
+  llm_calls integer
+  tool_calls integer
+  user_messages integer
+  assistant_messages integer
   last_message_id text
   last_message_updated_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]

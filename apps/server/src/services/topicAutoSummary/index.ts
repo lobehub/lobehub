@@ -160,11 +160,13 @@ export class TopicAutoSummaryService {
       return { analyzed: false, reason: 'invalid-output' };
     }
 
-    const saved = await new TopicAnalysisModel(this.db, this.userId, this.workspaceId).save({
+    const analysisModel = new TopicAnalysisModel(this.db, this.userId, this.workspaceId);
+    const saved = await analysisModel.save({
       lastMessageId: latest.id,
       lastMessageUpdatedAt: latest.updatedAt,
       result,
       topicId,
+      usage: await analysisModel.snapshotTopicUsage(topicId),
     });
     return saved ? { analyzed: true } : { analyzed: false, reason: 'stale' };
   };
