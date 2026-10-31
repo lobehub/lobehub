@@ -19,6 +19,8 @@ import type { EvalBatchReport, EvalReport, EvalSetStatus } from '../types/eval.t
 import { EvalResourceService } from './eval-resource.service';
 
 export class EvalLifecycleService extends BaseService {
+  protected readonly serviceName = 'EvalLifecycleService';
+
   private reportContext(db: LobeChatDatabase) {
     const resources = new EvalResourceService(db, this.userId, this.workspaceId);
     return {

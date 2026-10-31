@@ -15,6 +15,8 @@ import type {
 } from '../types/permission.type';
 
 export class PermissionService extends BaseService {
+  protected readonly serviceName = 'PermissionService';
+
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
   }

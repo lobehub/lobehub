@@ -27,6 +27,8 @@ import type {
  * User service implementation class
  */
 export class UserService extends BaseService {
+  protected readonly serviceName = 'UserService';
+
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
   }

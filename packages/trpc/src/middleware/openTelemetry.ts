@@ -59,7 +59,9 @@ const finalizeSpanWithError = (span: Span, error: unknown) => {
 
   if (error instanceof Error) {
     span.recordException(error);
-    span.setAttribute(ATTR_ERROR_TYPE, error.constructor.name);
+    // Production server bundles mangle class names, so `constructor.name` would
+    // report a minified identifier; `error.name` is set explicitly by error classes.
+    span.setAttribute(ATTR_ERROR_TYPE, error.name);
     span.setAttribute(ATTR_EXCEPTION_MESSAGE, error.message);
     span.setAttribute(ATTR_EXCEPTION_STACKTRACE, error.stack || '');
   }

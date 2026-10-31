@@ -49,6 +49,8 @@ const matches = (row: object, input: object) =>
   );
 
 export class EvalResourceService extends BaseService {
+  protected readonly serviceName = 'EvalResourceService';
+
   private writeError(error: unknown): never {
     const details = error as { code?: string; cause?: { code?: string } };
     const code = details?.code ?? details?.cause?.code;

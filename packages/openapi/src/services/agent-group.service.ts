@@ -19,6 +19,8 @@ import type {
  * Handles business logic related to agent group categories
  */
 export class AgentGroupService extends BaseService {
+  protected readonly serviceName = 'AgentGroupService';
+
   private sessionGroupModel: SessionGroupModel;
 
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {

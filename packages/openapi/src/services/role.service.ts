@@ -19,6 +19,8 @@ import type {
 } from '../types/role.type';
 
 export class RoleService extends BaseService {
+  protected readonly serviceName = 'RoleService';
+
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     super(db, userId, workspaceId);
   }
