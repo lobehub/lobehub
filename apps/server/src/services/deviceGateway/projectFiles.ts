@@ -351,8 +351,8 @@ export async function listProjectSkills(
  * Claude Code's auto memory (`~/.claude/projects/<key>/memory`) for a project
  * on a remote device via the `listClaudeCodeMemory` device RPC — the workspace
  * panel's Memory tab in device mode. Returns `undefined` when the gateway is
- * unconfigured, the device is offline, or the call fails (including a client
- * too old to know the method).
+ * unconfigured, the device is offline, or the call fails. A client too old to
+ * know the method rejects so the UI can distinguish an upgrade from a retry.
  */
 export async function listClaudeCodeMemory(
   getClient: DeviceClientGetter,
@@ -378,12 +378,21 @@ export async function listClaudeCodeMemory(
 
     if (!result.success || !result.data) {
       log('listClaudeCodeMemory: failed for deviceId=%s — %s', deviceId, result.error);
+      if (result.error?.includes('Unknown device RPC method: listClaudeCodeMemory')) {
+        throw new Error(result.error);
+      }
       return undefined;
     }
 
     return result.data;
   } catch (error) {
     log('listClaudeCodeMemory: error for deviceId=%s — %O', deviceId, error);
+    if (
+      error instanceof Error &&
+      error.message.includes('Unknown device RPC method: listClaudeCodeMemory')
+    ) {
+      throw error;
+    }
     return undefined;
   }
 }
