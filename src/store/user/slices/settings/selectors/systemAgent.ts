@@ -22,6 +22,14 @@ const promptRewrite = (s: UserStore) => currentSystemAgent(s).promptRewrite;
 const historyCompress = (s: UserStore) => currentSystemAgent(s).historyCompress;
 const generationTopic = (s: UserStore) => currentSystemAgent(s).generationTopic;
 const inputCompletion = (s: UserStore) => currentSystemAgent(s).inputCompletion;
+/**
+ * The deployment's input-completion model, ignoring the user's own choice.
+ * `inputCompletion` is a personal preference that also applies inside a
+ * workspace, but providers and their keys are scoped per workspace, so the
+ * personal pick may have no credentials there; this is what it falls back to.
+ */
+const defaultInputCompletion = (s: UserStore) =>
+  merge(DEFAULT_SYSTEM_AGENT_CONFIG, s.defaultSettings.systemAgent).inputCompletion;
 const followUpAction = (s: UserStore) => currentSystemAgent(s).followUpAction;
 const goal = (s: UserStore) => currentSystemAgent(s).goal;
 const expertise = (s: UserStore) => currentSystemAgent(s).expertise;
@@ -29,6 +37,7 @@ const expertise = (s: UserStore) => currentSystemAgent(s).expertise;
 export const systemAgentSelectors = {
   agentMeta,
   asr,
+  defaultInputCompletion,
   expertise,
   followUpAction,
   generationTopic,
