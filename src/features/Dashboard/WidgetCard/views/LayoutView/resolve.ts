@@ -7,7 +7,11 @@ import type {
   WidgetLayoutValue,
   WidgetOutput,
 } from '@lobechat/types';
-import { WIDGET_LAYOUT_COLORS, WIDGET_LAYOUT_SURFACES } from '@lobechat/types';
+import {
+  WIDGET_LAYOUT_COLORS,
+  WIDGET_LAYOUT_LIMITS,
+  WIDGET_LAYOUT_SURFACES,
+} from '@lobechat/types';
 import { cssVar } from '@lobehub/ui';
 import dayjs from 'dayjs';
 
@@ -201,7 +205,7 @@ export const resolveSurface = (
 };
 
 /** Most points a sparkline draws; a card is a few hundred pixels wide at most. */
-export const LAYOUT_SERIES_MAX_POINTS = 240;
+export const LAYOUT_SERIES_MAX_POINTS = WIDGET_LAYOUT_LIMITS.seriesPoints;
 
 /**
  * The array at `path`, as numbers — read from `key` when the items are

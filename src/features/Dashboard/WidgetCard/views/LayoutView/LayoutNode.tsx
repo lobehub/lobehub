@@ -423,7 +423,10 @@ const LayoutNodeBody = ({
       );
     }
     case 'dots': {
-      const total = Math.min(Math.max(0, Math.round(resolveNumber(node.total, scope) ?? 0)), 400);
+      const total = Math.min(
+        Math.max(0, Math.round(resolveNumber(node.total, scope) ?? 0)),
+        WIDGET_LAYOUT_LIMITS.dots,
+      );
       const filled = Math.round(resolveNumber(node.value, scope) ?? 0);
       const color = resolveColor(node.color, scope);
       return (

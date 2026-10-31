@@ -180,6 +180,19 @@ const literalIssues = (n: WidgetLayoutNode): string | undefined => {
 };
 
 /**
+ * Elements a node draws by itself: a `dots` node one per dot (its literal
+ * total, else the renderer's cap), a bar sparkline one per bar, the rest one.
+ */
+const elementCost = (n: WidgetLayoutNode): number => {
+  if (n.type === 'dots') {
+    const total = typeof n.total === 'number' ? Math.max(0, Math.ceil(n.total)) : Infinity;
+    return 1 + Math.min(total, WIDGET_LAYOUT_LIMITS.dots);
+  }
+  if (n.type === 'sparkline' && n.kind === 'bar') return 1 + WIDGET_LAYOUT_LIMITS.seriesPoints;
+  return 1;
+};
+
+/**
  * Beyond its shape, a layout must stay small once drawn: a repeat multiplies
  * its template by its item count, so templates are weighed by `limit` (the
  * renderer's cap when unset), and a repeat may not sit inside another — nested
@@ -196,7 +209,7 @@ export const widgetLayoutSchema = node.superRefine((root, ctx) => {
     inRepeat = false,
   ) => {
     count += 1;
-    expanded += weight;
+    expanded += weight * elementCost(n);
     if (n.type === 'repeat' && inRepeat) {
       ctx.addIssue({
         code: 'custom',
@@ -227,10 +240,10 @@ export const widgetLayoutSchema = node.superRefine((root, ctx) => {
     );
   };
   walk(root, 1, []);
-  if (expanded > WIDGET_LAYOUT_LIMITS.expandedNodes) {
+  if (expanded > WIDGET_LAYOUT_LIMITS.elements) {
     ctx.addIssue({
       code: 'custom',
-      message: `layout draws up to ${expanded} nodes once repeats expand; the limit is ${WIDGET_LAYOUT_LIMITS.expandedNodes} — lower repeat limits or simplify their templates`,
+      message: `layout draws up to ${expanded} elements once repeats, dots and bars expand; the limit is ${WIDGET_LAYOUT_LIMITS.elements} — lower repeat limits, dot totals or simplify the templates`,
     });
   }
   if (count > WIDGET_LAYOUT_LIMITS.nodes) {

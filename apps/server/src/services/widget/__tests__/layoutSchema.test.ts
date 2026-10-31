@@ -64,7 +64,7 @@ describe('widgetLayoutSchema', () => {
   });
 
   it('rejects a layout whose repeats expand past the drawn-node limit', () => {
-    const row = { children: Array.from({ length: 30 }, () => text('x')), type: 'stack' };
+    const row = { children: Array.from({ length: 60 }, () => text('x')), type: 'stack' };
     const repeat = (limit?: number) => ({
       items: 'data.items',
       limit,
@@ -75,7 +75,33 @@ describe('widgetLayoutSchema', () => {
     expect(widgetLayoutSchema.safeParse(repeat(10)).success).toBe(true);
     const result = widgetLayoutSchema.safeParse(repeat());
     expect(result.success).toBe(false);
-    expect(JSON.stringify(result.error?.issues)).toContain('once repeats expand');
+    expect(JSON.stringify(result.error?.issues)).toContain('once repeats');
+  });
+
+  it('counts each dot and bar a node draws, so a small tree cannot fan out into many elements', () => {
+    const dots = (total: unknown) => ({ total, type: 'dots', value: 1 });
+    const repeat = (template: unknown, limit = 48) => ({
+      items: 'data.items',
+      limit,
+      template,
+      type: 'repeat',
+    });
+
+    // a year of dots on its own fits
+    expect(widgetLayoutSchema.safeParse(dots(365)).success).toBe(true);
+    // 19 bound dot grids repeated 48 times would draw ~365k dots
+    const fanOut = repeat({
+      children: Array.from({ length: 19 }, () => dots({ bind: 'item' })),
+      type: 'stack',
+    });
+    const result = widgetLayoutSchema.safeParse(fanOut);
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('dots and bars');
+    // bar sparklines are weighed by their bars too
+    expect(
+      widgetLayoutSchema.safeParse(repeat({ kind: 'bar', type: 'sparkline', values: 'item.v' }, 12))
+        .success,
+    ).toBe(false);
   });
 
   it('rejects a layout with more nodes than the limit', () => {

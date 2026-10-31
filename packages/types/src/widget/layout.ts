@@ -308,8 +308,15 @@ export type WidgetLayoutNodeType = WidgetLayoutNode['type'];
 /** Bounds every stored layout stays within. */
 export const WIDGET_LAYOUT_LIMITS = {
   depth: 12,
-  /** Nodes drawn once every repeat expands to its limit; repeats never nest. */
-  expandedNodes: 1000,
+  /** Most dots one `dots` node draws. */
+  dots: 400,
+  /**
+   * Elements one card may draw: every node once, a `dots` node per dot, a bar
+   * sparkline per bar, all multiplied by the enclosing repeat's limit.
+   */
+  elements: 2000,
   nodes: 200,
   repeat: 48,
+  /** Most points a sparkline draws; longer arrays are sampled down. */
+  seriesPoints: 240,
 } as const;
