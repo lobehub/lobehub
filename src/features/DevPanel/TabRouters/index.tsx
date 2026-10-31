@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
@@ -12,106 +14,84 @@ import { useElectronStore } from '@/store/electron';
 
 import { type TabRouterRow, useTabRouterDebug } from './useTabRouterDebug';
 
-const styles = createStaticStyles(({ css }) => ({
-  cell: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  capInput: css`
-    inline-size: 48px;
-    margin-inline-start: 4px;
-    padding-block: 0;
-    padding-inline: 4px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 4px;
-
-    font: inherit;
-    color: ${cssVar.colorText};
-
-    background: transparent;
-  `,
-  cold: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  drift: css`
-    color: ${cssVar.colorWarning};
-  `,
-  empty: css`
-    padding: 24px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  head: css`
-    position: sticky;
-    z-index: 1;
-    inset-block-start: 0;
-
-    color: ${cssVar.colorTextQuaternary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  legend: css`
-    flex-shrink: 0;
-
-    padding-block: 8px 12px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 10px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  muted: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  next: css`
-    color: ${cssVar.colorError};
-  `,
-  ok: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  row: css`
-    cursor: pointer;
-
-    display: grid;
-    grid-template-columns: 24px 96px 68px 1fr 1fr 44px 76px 52px;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 5px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-feature-settings: 'tnum';
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  rowActive: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  rows: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  summary: css`
-    flex-shrink: 0;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  cell: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  capInput: {
+    inlineSize: '48px',
+    marginInlineStart: '4px',
+    paddingBlock: '0',
+    paddingInline: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '4px',
+    font: 'inherit',
+    color: cssVar.colorText,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  cold: { color: cssVar.colorTextQuaternary },
+  drift: { color: cssVar.colorWarning },
+  empty: {
+    padding: '24px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  head: {
+    position: 'sticky',
+    zIndex: 1,
+    insetBlockStart: '0',
+    color: cssVar.colorTextQuaternary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  legend: {
+    flexShrink: 0,
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '12px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '10px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextQuaternary,
+  },
+  muted: { color: cssVar.colorTextTertiary },
+  next: { color: cssVar.colorError },
+  ok: { color: cssVar.colorSuccess },
+  row: {
+    cursor: 'pointer',
+    display: 'grid',
+    gridTemplateColumns: '24px 96px 68px 1fr 1fr 44px 76px 52px',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '5px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontFeatureSettings: "'tnum'",
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActive: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+  rows: { overflow: 'auto', flex: '1', minHeight: '0' },
+  summary: {
+    flexShrink: 0,
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 const formatAge = (timestamp: number): string => {
   const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
@@ -128,38 +108,38 @@ const Row = memo<{ index: number; nextEvicted: boolean; row: TabRouterRow }>(
 
     return (
       <div
-        className={cx(styles.row, row.active && styles.rowActive)}
+        {...stylex.props(styles.row, row.active && styles.rowActive)}
         role={'button'}
         tabIndex={0}
         onClick={() => activateTab(row.id)}
         onKeyDown={(e) => e.key === 'Enter' && activateTab(row.id)}
       >
-        <span className={styles.muted}>{index + 1}</span>
-        <span className={cx(styles.cell, styles.muted)} title={row.id}>
+        <span {...stylex.props(styles.muted)}>{index + 1}</span>
+        <span {...stylex.props(styles.cell, styles.muted)} title={row.id}>
           {row.id}
         </span>
-        <span className={row.live ? styles.ok : styles.cold}>
+        <span {...stylex.props(row.live ? styles.ok : styles.cold)}>
           {state}
           {row.live !== row.shouldBeLive && '!'}
         </span>
         <span
-          className={styles.cell}
+          {...stylex.props(styles.cell)}
           title={row.title ? `${row.title} — ${row.storeUrl}` : row.storeUrl}
         >
           {row.storeUrl}
         </span>
         <span
-          className={cx(styles.cell, row.drift ? styles.drift : styles.muted)}
+          {...stylex.props(styles.cell, row.drift ? styles.drift : styles.muted)}
           title={row.routerUrl ?? 'router disposed'}
         >
           {row.live ? (row.drift ? row.routerUrl : '=') : '—'}
         </span>
-        <span className={styles.muted}>
+        <span {...stylex.props(styles.muted)}>
           {row.canGoBack ? '◀' : '·'}
           {row.canGoForward ? '▶' : '·'}
         </span>
-        <span className={styles.muted}>{formatAge(row.lastVisited)}</span>
-        <span className={nextEvicted ? styles.next : styles.muted}>
+        <span {...stylex.props(styles.muted)}>{formatAge(row.lastVisited)}</span>
+        <span {...stylex.props(nextEvicted ? styles.next : styles.muted)}>
           #{row.rank}
           {nextEvicted && '↓'}
         </span>
@@ -181,16 +161,16 @@ const TabRouters = memo(() => {
       : null;
 
   return (
-    <Flexbox className={devDockPanelStyles.root}>
-      <div className={styles.summary}>
+    <Flexbox className={stylex.props(devDockPanelStyles.root).className}>
+      <div {...stylex.props(styles.summary)}>
         scope <b>{scopeKey}</b> · tabs <b>{rows.length}</b> · live routers{' '}
-        <b className={liveCount > cap ? styles.drift : undefined}>
+        <b {...stylex.props(liveCount > cap ? styles.drift : undefined)}>
           {liveCount}/{cap}
         </b>{' '}
         · cap
         <input
           aria-label={'Live tab router cap'}
-          className={styles.capInput}
+          {...stylex.props(styles.capInput)}
           min={1}
           step={1}
           title={`Default ${DEFAULT_LIVE_TAB_ROUTER_CAP}`}
@@ -199,14 +179,14 @@ const TabRouters = memo(() => {
           onChange={(e) => setCap(e.target.valueAsNumber)}
         />
         {orphanIds.length > 0 && (
-          <span className={styles.drift}> · orphan routers {orphanIds.join(', ')}</span>
+          <span {...stylex.props(styles.drift)}> · orphan routers {orphanIds.join(', ')}</span>
         )}
       </div>
       {rows.length === 0 ? (
-        <div className={styles.empty}>No tabs in this scope.</div>
+        <div {...stylex.props(styles.empty)}>No tabs in this scope.</div>
       ) : (
-        <div className={styles.rows}>
-          <div className={cx(styles.row, styles.head)}>
+        <div {...stylex.props(styles.rows)}>
+          <div {...stylex.props(styles.row, styles.head)}>
             <span>#</span>
             <span>tab id</span>
             <span>state</span>
@@ -221,7 +201,7 @@ const TabRouters = memo(() => {
           ))}
         </div>
       )}
-      <div className={styles.legend}>
+      <div {...stylex.props(styles.legend)}>
         ACTIVE / LIVE = keep-alive router in memory, COLD = disposed (next activation cold-starts).
         `!` marks a router whose liveness disagrees with the LRU plan. Router url shows `=` when it
         matches the store url, or the diverging location when a hidden tab navigated. `lru` is the

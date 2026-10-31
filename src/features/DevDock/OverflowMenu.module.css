@@ -1,0 +1,13 @@
+.popup {
+  min-width: 224px;
+}
+
+.popup .pin {
+  opacity: 0;
+}
+
+.popup [role^='menuitem']:hover .pin,
+.popup .pin:focus-visible,
+.popup .pin[data-pinned='true'] {
+  opacity: 1;
+}

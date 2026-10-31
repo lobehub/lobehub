@@ -1,61 +1,55 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Maximize2, Minimize2, XIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+
+import { sx } from '@/styles/sx';
 
 import { BAR_HEIGHT, BAR_OVERLAP } from './const';
 import PanelErrorBoundary from './PanelErrorBoundary';
 import { type DevDockPanelItem, getItemComponent, useDevDockItems } from './registry';
 import { MIN_PANEL_HEIGHT, useDevDockStore } from './store';
 
-const styles = createStaticStyles(({ css }) => ({
-  content: css`
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-    min-height: 0;
-  `,
-  header: css`
-    flex-shrink: 0;
-
-    height: 30px;
-    padding-inline: 10px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  host: css`
-    position: relative;
-
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-
-    width: 100%;
-    margin-block-end: ${BAR_OVERLAP}px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  resizeHandle: css`
-    touch-action: none;
-    cursor: row-resize;
-
-    position: absolute;
-    z-index: 1;
-    inset-block-start: -3px;
-    inset-inline: 0;
-
-    height: 6px;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  content: { overflow: 'hidden', flex: '1', minWidth: 0, minHeight: 0 },
+  header: {
+    flexShrink: 0,
+    height: '30px',
+    paddingInline: '10px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontSize: '11px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  host: (marginBlockEnd: string) => ({
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    width: '100%',
+    marginBlockEnd,
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  }),
+  resizeHandle: {
+    touchAction: 'none',
+    cursor: 'row-resize',
+    position: 'absolute',
+    zIndex: 1,
+    insetBlockStart: '-3px',
+    insetInline: 0,
+    height: '6px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+  },
+});
 
 const PanelHost = memo(() => {
   const expanded = useDevDockStore((s) => s.expanded);
@@ -117,9 +111,14 @@ const PanelHost = memo(() => {
   const height = maximized ? `calc(100dvh - ${BAR_HEIGHT}px)` : `${dragHeight ?? panelHeight}px`;
 
   return (
-    <section className={styles.host} style={{ height }}>
-      {!maximized && <div className={styles.resizeHandle} onPointerDown={handleDragStart} />}
-      <Flexbox horizontal align={'center'} className={styles.header} gap={6}>
+    <section {...sx([styles.host(`${BAR_OVERLAP}px`)], undefined, { height })}>
+      {!maximized && <div {...stylex.props(styles.resizeHandle)} onPointerDown={handleDragStart} />}
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={6}
+      >
         <Icon size={12} />
         <span>{item.label}</span>
         <span style={{ flex: 1 }} />
@@ -136,7 +135,7 @@ const PanelHost = memo(() => {
           onClick={() => togglePanel(item.id)}
         />
       </Flexbox>
-      <div className={styles.content}>
+      <div {...stylex.props(styles.content)}>
         <PanelErrorBoundary key={item.id}>
           <Suspense fallback={null}>
             <Content />

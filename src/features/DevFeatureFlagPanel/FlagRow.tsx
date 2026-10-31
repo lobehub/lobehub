@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Segmented, Text } from '@lobehub/ui';
+import { Flexbox, Segmented, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { snakeCase } from 'es-toolkit/compat';
 import { memo, useMemo } from 'react';
 
@@ -9,47 +11,38 @@ import { type FeatureFlagKey } from '@/store/serverConfig/slices/featureFlagOver
 
 type SegmentedValue = 'true' | 'false' | 'inherit';
 
-const styles = createStaticStyles(({ css }) => ({
-  control: css`
-    flex: none;
-  `,
-  meta: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 10px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  name: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  row: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    border-inline-start: 2px solid transparent;
-
-    transition: background 120ms ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowOverridden: css`
-    border-inline-start-color: ${cssVar.colorWarning};
-    background: ${cssVar.colorWarningBg};
-
-    &:hover {
-      background: ${cssVar.colorWarningBgHover};
-    }
-  `,
-}));
+const styles = stylex.create({
+  control: { flex: 'none' },
+  meta: { fontFamily: cssVar.fontFamilyCode, fontSize: '10px', color: cssVar.colorTextDescription },
+  name: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+  row: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: 'transparent',
+    transition: 'background 120ms ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowOverridden: {
+    borderInlineStartColor: cssVar.colorWarning,
+    backgroundColor: { 'default': cssVar.colorWarningBg, ':hover': cssVar.colorWarningBgHover },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+});
 
 const segmentOptions = [
   { label: 'true', value: 'true' as const },
@@ -85,15 +78,15 @@ const FlagRow = memo<FlagRowProps>(({ flagKey }) => {
   };
 
   return (
-    <div className={cx(styles.row, isOverridden && styles.rowOverridden)}>
+    <div {...stylex.props(styles.row, isOverridden && styles.rowOverridden)}>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-        <Text ellipsis className={styles.name}>
+        <Text ellipsis className={stylex.props(styles.name).className}>
           {snakeCase(flagKey as string)}
         </Text>
-        <span className={styles.meta}>server: {String(original)}</span>
+        <span {...stylex.props(styles.meta)}>server: {String(original)}</span>
       </Flexbox>
       <Segmented
-        className={styles.control}
+        className={stylex.props(styles.control).className}
         options={segmentOptions}
         size={'small'}
         value={value}

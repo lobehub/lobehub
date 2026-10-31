@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,30 +11,20 @@ import type { SerializedMessengerPlatformDefinition } from '@/server/services/me
 
 import { type MessengerPlatform, PlatformAvatar } from './constants';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Match the agent channel list's card weight: an outlined Block on
-  // colorBgContainer with a soft secondary border (the Block variant supplies
-  // both), rounded a step larger so it reads as the same surface as 消息频道.
-  card: css`
-    cursor: pointer;
-    padding: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-    transition: border-color 0.2s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorPrimaryBorderHover};
-    }
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-
-    @media (width <= 720px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    cursor: 'pointer',
+    padding: '16px',
+    borderRadius: cssVar.borderRadiusLG,
+    transition: 'border-color 0.2s ease',
+    borderColor: { 'default': null, ':hover': cssVar.colorPrimaryBorderHover },
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: { 'default': 'repeat(2, 1fr)', '@media (width <= 720px)': '1fr' },
+    gap: '12px',
+  },
+});
 
 interface IntegrationListProps {
   onSelect: (platform: MessengerPlatform) => void;
@@ -43,10 +35,10 @@ const IntegrationList = memo<IntegrationListProps>(({ onSelect, platforms }) => 
   const { t } = useTranslation('messenger');
 
   return (
-    <div className={styles.grid}>
+    <div {...stylex.props(styles.grid)}>
       {platforms.map((platform) => (
         <Block
-          className={styles.card}
+          className={stylex.props(styles.card).className}
           key={platform.id}
           variant={'outlined'}
           onClick={() => onSelect(platform.id)}

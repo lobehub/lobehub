@@ -1,4 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
@@ -9,11 +10,11 @@ export default function BackgroundActivityPanel() {
   const { activities, sampledAt } = useActivities();
   const processes = activities.reduce((sum, row) => sum + row.processes.length, 0);
   return (
-    <Flexbox className={devDockPanelStyles.root}>
+    <Flexbox className={stylex.props(devDockPanelStyles.root).className}>
       <Flexbox flex={1} style={{ minHeight: 0, overflow: 'auto' }}>
         <ActivityTable />
       </Flexbox>
-      <div className={devDockPanelStyles.statusBar}>
+      <div {...stylex.props(devDockPanelStyles.statusBar)}>
         <span>
           {processes} proc · {formatMemory(activities.reduce((sum, row) => sum + row.memoryMB, 0))}{' '}
           · {formatCpu(sumCpu(activities))} cpu

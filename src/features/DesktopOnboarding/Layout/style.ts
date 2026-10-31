@@ -1,42 +1,39 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-import { isMacOSWithLargeWindowBorders } from '@/utils/platform';
+export const styles = stylex.create({
+  contentContainer: { overflow: 'auto' },
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
   // Inner container - dark mode
-  innerContainerDark: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${
-      !isMacOSWithLargeWindowBorders()
-        ? cssVar.borderRadius
-        : `${cssVar.borderRadius} 12px ${cssVar.borderRadius} 12px`
-    };
-
-    background: ${cssVar.colorBgContainer};
-  `,
+  innerContainerDark: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
 
   // Inner container - light mode
-  innerContainerLight: css`
-    position: relative;
+  innerContainerLight: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
 
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${
-      !isMacOSWithLargeWindowBorders()
-        ? cssVar.borderRadius
-        : `${cssVar.borderRadius} 12px ${cssVar.borderRadius} 12px`
-    };
-
-    background: ${cssVar.colorBgContainer};
-  `,
+  // macOS windows with large corner radii round the diagonal corners further
+  innerContainerLargeWindowBorders: {
+    borderTopRightRadius: '12px',
+    borderBottomLeftRadius: '12px',
+  },
 
   // Outer container
-  outerContainer: css`
-    position: relative;
-  `,
-}));
+  outerContainer: { position: 'relative' },
+});

@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text, toast } from '@lobehub/ui';
+import { Block, Button, Flexbox, Icon, Select, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,94 +25,77 @@ import {
   resolvePersonalScopeLabel,
 } from '../../scopeOptions';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  bubble: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 64px;
-    height: 64px;
-    border-radius: 14px;
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow:
-      0 1px 2px rgb(0 0 0 / 6%),
-      0 4px 12px rgb(0 0 0 / 4%);
-  `,
-  card: css`
-    width: 100%;
-    max-width: 440px;
-  `,
-  chainBubble: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border-radius: 999px;
-
-    color: ${cssVar.colorBgContainer};
-
-    background: ${cssVar.colorTextBase};
-  `,
-  iconRow: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: center;
-
-    margin-block-end: 8px;
-  `,
-  infoRow: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 10px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  infoValue: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  successBubble: css`
-    color: #fff;
-    background: #22c55e;
-  `,
-  warningBlock: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-color: ${cssVar.colorWarningBorder};
-    background: ${cssVar.colorWarningBg};
-  `,
-  warningIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorWarning};
-  `,
-}));
+export const styles = stylex.create({
+  bubble: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '64px',
+    height: '64px',
+    borderRadius: '14px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: '0 1px 2px rgb(0 0 0 / 6%), 0 4px 12px rgb(0 0 0 / 4%)',
+  },
+  card: { width: '100%', maxWidth: '440px' },
+  chainBubble: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '999px',
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorTextBase,
+    backgroundImage: 'none',
+  },
+  iconRow: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBlockEnd: '8px',
+  },
+  infoRow: {
+    display: 'flex',
+    gap: '16px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '10px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  infoValue: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  successBubble: { color: '#fff', backgroundColor: '#22c55e', backgroundImage: 'none' },
+  warningBlock: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderColor: cssVar.colorWarningBorder,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+  warningIcon: { flexShrink: 0, color: cssVar.colorWarning },
+});
 
 const ChainBubble = () => (
-  <div className={styles.chainBubble}>
+  <div {...stylex.props(styles.chainBubble)}>
     <Icon icon={LinkIcon} size={16} />
   </div>
 );
 
 const PlatformBubble = ({ platform }: { platform: MessengerPlatform }) => (
-  <div className={styles.bubble}>
+  <div {...stylex.props(styles.bubble)}>
     <PlatformBrandIcon platform={platform} size={platform === 'telegram' ? 36 : 32} />
   </div>
 );
 
 export const IconRow = memo<{ platform: MessengerPlatform }>(({ platform }) => (
-  <div className={styles.iconRow}>
-    <div className={styles.bubble}>
+  <div {...stylex.props(styles.iconRow)}>
+    <div {...stylex.props(styles.bubble)}>
       <ProductLogo size={36} type="3d" />
     </div>
     <ChainBubble />
@@ -236,7 +221,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     };
 
     return (
-      <Flexbox align="center" className={styles.card} gap={32}>
+      <Flexbox align="center" className={stylex.props(styles.card).className} gap={32}>
         <IconRow platform={platform} />
 
         <Heading title={t('verify.confirm.title')} />
@@ -244,9 +229,9 @@ export const ConfirmCard = memo<ConfirmCardProps>(
         <Block padding={4} style={{ width: '100%' }} variant={'outlined'}>
           <Flexbox paddingInline={16}>
             {infoRows.map((row) => (
-              <div className={styles.infoRow} key={row.label}>
+              <div {...stylex.props(styles.infoRow)} key={row.label}>
                 <Text type="secondary">{row.label}</Text>
-                <Text strong className={styles.infoValue} title={row.value}>
+                <Text strong className={stylex.props(styles.infoValue).className} title={row.value}>
                   {row.value}
                 </Text>
               </div>
@@ -255,9 +240,17 @@ export const ConfirmCard = memo<ConfirmCardProps>(
         </Block>
 
         {blockingNotice && (
-          <Block className={styles.warningBlock} style={{ width: '100%' }} variant={'outlined'}>
+          <Block
+            className={stylex.props(styles.warningBlock).className}
+            style={{ width: '100%' }}
+            variant={'outlined'}
+          >
             <Flexbox horizontal gap={12}>
-              <Icon className={styles.warningIcon} icon={AlertTriangleIcon} size={20} />
+              <Icon
+                className={stylex.props(styles.warningIcon).className}
+                icon={AlertTriangleIcon}
+                size={20}
+              />
               <Flexbox gap={8} style={{ flex: 1 }}>
                 <Text strong>{blockingNotice.title}</Text>
                 <Text style={{ fontSize: 13 }} type="secondary">
@@ -334,9 +327,9 @@ export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platform, platf
   const { t } = useTranslation('messenger');
 
   return (
-    <Flexbox align="center" className={styles.card} gap={24}>
-      <div className={styles.iconRow}>
-        <div className={`${styles.bubble} ${styles.successBubble}`}>
+    <Flexbox align="center" className={stylex.props(styles.card).className} gap={24}>
+      <div {...stylex.props(styles.iconRow)}>
+        <div {...stylex.props(styles.bubble, styles.successBubble)}>
           <Icon icon={CheckCircle2Icon} size={32} />
         </div>
       </div>

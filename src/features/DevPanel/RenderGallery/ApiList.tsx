@@ -1,100 +1,75 @@
 'use client';
 
-import { createStaticStyles, cx, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useRef } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
 import type { ApiEntry } from './useDevtoolsEntries';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  column: css`
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-
-    width: 240px;
-    height: 100%;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  dot: css`
-    flex-shrink: 0;
-
-    width: 5px;
-    height: 5px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  dotActive: css`
-    background: ${cssVar.colorPrimary};
-  `,
-  item: css`
-    cursor: pointer;
-
-    overflow: hidden;
-    flex-shrink: 0;
-    gap: 8px;
-    align-items: center;
-
-    height: 30px;
-    padding-inline: 12px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    transition:
-      background 0.15s,
-      color 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  itemActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  /** Namespace prefix of an mcp__ name — muted, and the part that elides. */
-  labelHead: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    color: ${cssVar.colorTextQuaternary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  labelRow: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    align-items: baseline;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-  `,
-  /** Trailing action segment — always kept visible. */
-  labelTail: css`
-    flex-shrink: 0;
-    white-space: nowrap;
-  `,
-  list: css`
-    overflow: auto;
-    flex: 1;
-    gap: 2px;
-
-    min-height: 0;
-    padding-block: 4px;
-  `,
-}));
+const styles = stylex.create({
+  column: {
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    width: '240px',
+    height: '100%',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  dot: {
+    flexShrink: 0,
+    width: '5px',
+    height: '5px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+  dotActive: { backgroundColor: cssVar.colorPrimary, backgroundImage: 'none' },
+  item: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    flexShrink: 0,
+    gap: '8px',
+    alignItems: 'center',
+    height: '30px',
+    paddingInline: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    transition: 'background 0.15s,\n      color 0.15s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  itemActive: {
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  labelHead: {
+    overflow: 'hidden',
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: 'auto',
+    color: cssVar.colorTextQuaternary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  labelRow: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    alignItems: 'baseline',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+  },
+  labelTail: { flexShrink: 0, whiteSpace: 'nowrap' },
+  list: { overflow: 'auto', flex: '1', gap: '2px', minHeight: '0', paddingBlock: '4px' },
+});
 
 /**
  * Split a name at its last `__` so the long `mcp__<server>__` namespace can
@@ -133,29 +108,29 @@ const ApiList = memo<ApiListProps>(({ apis, activeApiName, onSelect }) => {
   }, [activeApiName]);
 
   return (
-    <aside className={styles.column}>
-      <div className={devDockPanelStyles.paneHeader}>
+    <aside {...stylex.props(styles.column)}>
+      <div {...stylex.props(devDockPanelStyles.paneHeader)}>
         <Text fontSize={12} type={'secondary'} weight={600}>
           APIs · {apis.length}
         </Text>
       </div>
-      <Flexbox className={styles.list} ref={listRef}>
+      <Flexbox className={stylex.props(styles.list).className} ref={listRef}>
         {apis.map((api) => {
           const active = api.apiName === activeApiName;
           const { head, tail } = splitName(api.apiName);
           return (
             <Flexbox
               horizontal
-              className={cx(styles.item, active && styles.itemActive)}
+              className={stylex.props(styles.item, active && styles.itemActive).className}
               data-api={api.apiName}
               key={api.apiName}
               title={api.apiName}
               onClick={() => onSelect(api.apiName)}
             >
-              <span className={cx(styles.dot, api.render && styles.dotActive)} />
-              <span className={styles.labelRow}>
-                {head && <span className={styles.labelHead}>{head}</span>}
-                <span className={styles.labelTail}>{tail}</span>
+              <span {...stylex.props(styles.dot, api.render && styles.dotActive)} />
+              <span {...stylex.props(styles.labelRow)}>
+                {head && <span {...stylex.props(styles.labelHead)}>{head}</span>}
+                <span {...stylex.props(styles.labelTail)}>{tail}</span>
               </span>
             </Flexbox>
           );

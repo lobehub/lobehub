@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,7 +10,7 @@ import { useElectronStore } from '@/store/electron';
 
 import { useResolvedPages } from './hooks/useResolvedPages';
 import Section from './Section';
-import { useStyles } from './styles';
+import { styles } from './styles';
 
 interface RecentlyViewedProps {
   onClose: () => void;
@@ -18,7 +19,6 @@ interface RecentlyViewedProps {
 const RecentlyViewed = memo<RecentlyViewedProps>(({ onClose }) => {
   const { t } = useTranslation('electron');
   const location = useActiveLocation();
-  const styles = useStyles;
 
   const loadPinnedPages = useElectronStore((s) => s.loadPinnedPages);
 
@@ -32,16 +32,18 @@ const RecentlyViewed = memo<RecentlyViewedProps>(({ onClose }) => {
 
   if (isEmpty) {
     return (
-      <div className={styles.container}>
-        <div className={styles.empty}>{t('navigation.noPages')}</div>
+      <div {...stylex.props(styles.container)}>
+        <div {...stylex.props(styles.empty)}>{t('navigation.noPages')}</div>
       </div>
     );
   }
 
   return (
-    <Flexbox className={styles.container}>
+    <Flexbox className={stylex.props(styles.container).className}>
       <Section isPinned items={pinnedPages} title={t('navigation.pinned')} onClose={onClose} />
-      {pinnedPages.length > 0 && recentPages.length > 0 && <div className={styles.divider} />}
+      {pinnedPages.length > 0 && recentPages.length > 0 && (
+        <div {...stylex.props(styles.divider)} />
+      )}
       <Section
         isPinned={false}
         items={recentPages}

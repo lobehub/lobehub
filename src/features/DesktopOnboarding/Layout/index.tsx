@@ -1,34 +1,38 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { Center, css, cx, Divider, Flexbox, Text } from '@lobehub/ui';
+import { Center, Divider, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC, type PropsWithChildren } from 'react';
 
 import SimpleTitleBar from '@/features/Electron/titlebar/SimpleTitleBar';
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useIsDark } from '@/hooks/useIsDark';
+import { isMacOSWithLargeWindowBorders } from '@/utils/platform';
 
 import { styles } from './style';
 
-const contentContainer = css`
-  overflow: auto;
-`;
 const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
   return (
     <Flexbox height={'100%'} width={'100%'}>
       <SimpleTitleBar />
       <Flexbox
-        className={styles.outerContainer}
+        className={stylex.props(styles.outerContainer).className}
         height={`calc(100% - ${TITLE_BAR_HEIGHT}px)`}
         style={{ paddingBottom: 8, paddingInline: 8 }}
         width={'100%'}
       >
         <Flexbox
-          className={cx(isDarkMode ? styles.innerContainerDark : styles.innerContainerLight)}
           height={'100%'}
           width={'100%'}
+          className={
+            stylex.props(
+              isDarkMode ? styles.innerContainerDark : styles.innerContainerLight,
+              isMacOSWithLargeWindowBorders() && styles.innerContainerLargeWindowBorders,
+            ).className
+          }
         >
           <Flexbox
             horizontal
@@ -45,7 +49,12 @@ const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
               <ThemeButton placement={'bottomRight'} size={18} />
             </Flexbox>
           </Flexbox>
-          <Flexbox align={'center'} className={cx(contentContainer)} height={'100%'} width={'100%'}>
+          <Flexbox
+            align={'center'}
+            className={stylex.props(styles.contentContainer).className}
+            height={'100%'}
+            width={'100%'}
+          >
             {children}
           </Flexbox>
           <Center padding={24}>

@@ -1,39 +1,35 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 50%;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  /**
-   * The connector, as its own element in the icon's column rather than a border
-   * on the content beside it. A border there began below the icon row and ended
-   * with the content, so every heading left a gap the width of its own icon and
-   * the rail arrived in pieces. Stretched to fill what the content leaves over,
-   * it meets the next section's icon exactly.
-   */
-  line: css`
-    flex: 1;
-    width: 1px;
-    margin-block: 4px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  icon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '50%',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  line: {
+    flex: '1',
+    width: '1px',
+    marginBlock: '4px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 interface PanelSectionProps {
   children: ReactNode;
@@ -62,10 +58,10 @@ interface PanelSectionProps {
 const PanelSection = memo<PanelSectionProps>(({ children, desc, icon, last, notice, title }) => (
   <Flexbox horizontal align={'stretch'} gap={12}>
     <Flexbox align={'center'} style={{ flex: 'none' }}>
-      <span className={styles.icon}>
+      <span {...stylex.props(styles.icon)}>
         <Icon icon={icon} size={15} />
       </span>
-      {!last && <div className={styles.line} />}
+      {!last && <div {...stylex.props(styles.line)} />}
     </Flexbox>
 
     <Flexbox flex={1} gap={12} paddingBlock={'4px 24px'} style={{ minWidth: 0 }}>

@@ -1,0 +1,4 @@
+/* The Highlighter renders its own <pre>; doubled class keeps the padding above its base rule. */
+.errorDetails.errorDetails pre {
+  padding: 12px;
+}

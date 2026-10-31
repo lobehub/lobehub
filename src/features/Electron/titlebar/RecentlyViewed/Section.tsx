@@ -1,10 +1,11 @@
 'use client';
 
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { type ResolvedTab } from '../TabBar/hooks/useResolvedTabs';
 import PageItem from './PageItem';
-import { useStyles } from './styles';
+import { styles } from './styles';
 
 interface SectionProps {
   isPinned: boolean;
@@ -14,13 +15,11 @@ interface SectionProps {
 }
 
 const Section = memo<SectionProps>(({ title, items, isPinned, onClose }) => {
-  const styles = useStyles;
-
   if (items.length === 0) return null;
 
   return (
     <>
-      <div className={styles.title}>{title}</div>
+      <div {...stylex.props(styles.title)}>{title}</div>
       {items.map((item) => (
         <PageItem isPinned={isPinned} item={item} key={item.tab.id} onClose={onClose} />
       ))}

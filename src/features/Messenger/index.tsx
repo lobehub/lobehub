@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Skeleton, Text, toast } from '@lobehub/ui';
+import { Button, Flexbox, Skeleton, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -35,21 +37,19 @@ const VALID_PLATFORMS: ReadonlySet<MessengerPlatform> = new Set([
 const isMessengerPlatform = (value: string | undefined): value is MessengerPlatform =>
   !!value && VALID_PLATFORMS.has(value as MessengerPlatform);
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  emptyState: css`
-    padding-block: 48px;
-    padding-inline: 24px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  page: css`
-    overflow-y: auto;
-    flex: 1;
-  `,
-}));
+const styles = stylex.create({
+  emptyState: {
+    paddingBlock: '48px',
+    paddingInline: '24px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  page: { overflowY: 'auto', flex: '1' },
+});
 
 const MessengerSettings = memo(() => {
   const { t, ready } = useTranslation('messenger');
@@ -126,7 +126,7 @@ const MessengerSettings = memo(() => {
   const selectedMeta = platforms.find((p) => p.id === selected);
 
   return (
-    <div className={styles.page}>
+    <div {...stylex.props(styles.page)}>
       <Flexbox gap={20}>
         {selected && !selectedMeta && platformsSWR.isLoading ? (
           <MessengerPlatformDetailSkeleton platform={selected} />
@@ -150,7 +150,9 @@ const MessengerSettings = memo(() => {
               isLoading={platformsSWR.isLoading}
               loading={<Skeleton.Text rows={3} />}
               empty={
-                <div className={styles.emptyState}>{t('messenger.noPlatformsConfigured')}</div>
+                <div {...stylex.props(styles.emptyState)}>
+                  {t('messenger.noPlatformsConfigured')}
+                </div>
               }
               onRetry={() => platformsSWR.mutate()}
             >

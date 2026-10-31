@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Icon, Skeleton, Text, toast } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeftIcon, BookOpenIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,45 +17,33 @@ import Connections from './Connections';
 import { LINEAR_INTEGRATION } from './definition';
 import { buildLinearInstallHref } from './installHref';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  back: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  docs: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  hero: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 56px;
-    height: 56px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  back: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  docs: {
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  hero: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '56px',
+    height: '56px',
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 const KNOWN_ERRORS = new Set([
   'access_denied',
@@ -111,13 +101,13 @@ const LinearIntegration = memo<LinearIntegrationProps>(({ onBack }) => {
 
   return (
     <Flexbox gap={24}>
-      <span className={styles.back} onClick={onBack}>
+      <span {...stylex.props(styles.back)} onClick={onBack}>
         <Icon icon={ArrowLeftIcon} size="small" />
         <Text type="secondary">{t('overview.title')}</Text>
       </span>
 
       <Flexbox horizontal align="center" gap={16}>
-        <span className={styles.hero}>
+        <span {...stylex.props(styles.hero)}>
           <BrandIcon size={32} />
         </span>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
@@ -127,7 +117,7 @@ const LinearIntegration = memo<LinearIntegrationProps>(({ onBack }) => {
           <Text type="secondary">{t('linear.tagline')}</Text>
         </Flexbox>
         <a
-          className={styles.docs}
+          {...stylex.props(styles.docs)}
           href={LINEAR_INTEGRATION.docsUrl}
           rel="noreferrer"
           target="_blank"

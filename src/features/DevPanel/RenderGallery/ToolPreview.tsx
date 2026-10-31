@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useMemo, useState } from 'react';
 
 import {
@@ -13,58 +15,58 @@ import { ToolBodySlot, ToolInspectorSlot } from './toolSurfaces';
 import type { ApiEntry } from './useDevtoolsEntries';
 import { toApiAnchor } from './useDevtoolsEntries';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    scroll-margin-block-start: 16px;
-    overflow: hidden;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorBgContainer};
-  `,
-  cardBody: css`
-    gap: 0;
-  `,
-  cardHeader: css`
-    gap: 6px;
-    padding: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  code: css`
-    overflow: auto;
-
-    max-height: 320px;
-    margin: 0;
-    padding: 12px;
-
-    font-size: 12px;
-    line-height: 1.55;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  fixture: css`
-    padding: 12px;
-  `,
-  fixtureSummary: css`
-    cursor: pointer;
-    user-select: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  previewShell: css`
-    padding: 12px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  previewSection: css`
-    gap: 8px;
-    padding: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  sectionLabel: css`
-    gap: 8px;
-    align-items: center;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    scrollMarginBlockStart: '16px',
+    overflow: 'hidden',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  cardBody: { gap: '0' },
+  cardHeader: {
+    gap: '6px',
+    padding: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  code: {
+    overflow: 'auto',
+    maxHeight: '320px',
+    margin: '0',
+    padding: '12px',
+    fontSize: '12px',
+    lineHeight: 1.55,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  fixture: { padding: '12px' },
+  fixtureSummary: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  previewShell: {
+    padding: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  previewSection: {
+    gap: '8px',
+    padding: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  sectionLabel: { gap: '8px', alignItems: 'center' },
+});
 
 interface ToolPreviewProps {
   api: ApiEntry;
@@ -83,8 +85,8 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
   const derived = useMemo(() => deriveFixtureProps(activeVariant, mode), [activeVariant, mode]);
 
   return (
-    <Flexbox className={styles.card} id={toApiAnchor(api.apiName)}>
-      <Flexbox className={styles.cardHeader}>
+    <Flexbox className={stylex.props(styles.card).className} id={toApiAnchor(api.apiName)}>
+      <Flexbox className={stylex.props(styles.cardHeader).className}>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
           <Text fontSize={18} weight={600}>
             {api.apiName}
@@ -109,14 +111,14 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
         )}
       </Flexbox>
 
-      <Flexbox className={styles.cardBody}>
-        <Flexbox className={styles.previewSection}>
-          <Flexbox horizontal className={styles.sectionLabel}>
+      <Flexbox className={stylex.props(styles.cardBody).className}>
+        <Flexbox className={stylex.props(styles.previewSection).className}>
+          <Flexbox horizontal className={stylex.props(styles.sectionLabel).className}>
             <Text fontSize={12} type={'secondary'} weight={600}>
               Inspector
             </Text>
           </Flexbox>
-          <div className={styles.previewShell}>
+          <div {...stylex.props(styles.previewShell)}>
             <ToolInspectorSlot
               api={api}
               derived={derived}
@@ -126,14 +128,14 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
           </div>
         </Flexbox>
 
-        <Flexbox className={styles.previewSection}>
-          <Flexbox horizontal className={styles.sectionLabel}>
+        <Flexbox className={stylex.props(styles.previewSection).className}>
+          <Flexbox horizontal className={stylex.props(styles.sectionLabel).className}>
             <Text fontSize={12} type={'secondary'} weight={600}>
               Body
             </Text>
             <Tag>{bodyKindForMode(mode)}</Tag>
           </Flexbox>
-          <div className={styles.previewShell}>
+          <div {...stylex.props(styles.previewShell)}>
             <ToolBodySlot
               api={api}
               derived={derived}
@@ -144,9 +146,9 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
           </div>
         </Flexbox>
 
-        <details className={styles.fixture}>
-          <summary className={styles.fixtureSummary}>Fixture payload</summary>
-          <pre className={styles.code}>
+        <details {...stylex.props(styles.fixture)}>
+          <summary {...stylex.props(styles.fixtureSummary)}>Fixture payload</summary>
+          <pre {...stylex.props(styles.code)}>
             {JSON.stringify(
               {
                 args: derived.args,

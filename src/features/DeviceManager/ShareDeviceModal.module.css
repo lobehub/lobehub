@@ -1,0 +1,8 @@
+/* The trigger wraps the selected label in an inline valueText span, so the
+   row can't stretch and right-aligned hints collapse next to the label —
+   flex the wrapper so the trigger lays out like the dropdown options. */
+.selectValue > span {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}

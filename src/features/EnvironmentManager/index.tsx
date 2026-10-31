@@ -1,16 +1,9 @@
 'use client';
 
 import type { EnvironmentVisibility } from '@lobechat/types';
-import {
-  Button,
-  Center,
-  createStaticStyles,
-  cssVar,
-  Empty,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { Button, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ContainerIcon, PlusIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,39 +16,29 @@ import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
 import { type CreatedEnvironment, useEnvironments } from './useEnvironmentData';
 
-const styles = createStaticStyles(({ css }) => ({
-  detailCol: css`
-    align-self: stretch;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  /**
-   * One frame around the list, on the page's own surface. A settings group
-   * would nest a card inside a card and inset every row by its own padding,
-   * which left each row's hover and selection background floating in a gutter
-   * instead of filling the panel.
-   */
-  listCol: css`
-    overflow: hidden;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  listScroll: css`
-    overflow-y: auto;
-
-    /* Cap the list so a long shelf of environments stays scrollable rather than
-       pushing the page down past the panel sitting beside it. */
-    max-height: 480px;
-  `,
-}));
+const styles = stylex.create({
+  detailCol: {
+    alignSelf: 'stretch',
+    minWidth: '0',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  listCol: {
+    overflow: 'hidden',
+    minWidth: '0',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  listScroll: { overflowY: 'auto', maxHeight: '480px' },
+});
 
 /** What the list occupies before it knows its length — the skeleton's own rows. */
 const LIST_MIN_HEIGHT = 4 * 72;
@@ -181,7 +164,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         // Inside the same frame the rows land in, sized to the skeleton's
         // rows: loading, empty and loaded are one surface whose contents
         // change, not three surfaces of three different heights.
-        <Flexbox className={styles.listCol}>
+        <Flexbox className={stylex.props(styles.listCol).className}>
           <Center style={{ minHeight: LIST_MIN_HEIGHT }} width={'100%'}>
             <Empty
               description={t('environments.desc')}
@@ -204,7 +187,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         </Flexbox>
       }
       loading={
-        <Flexbox className={styles.listCol}>
+        <Flexbox className={stylex.props(styles.listCol).className}>
           <Flexbox padding={4}>
             <ListSkeleton />
           </Flexbox>
@@ -213,8 +196,8 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       onRetry={refresh}
     >
       <Flexbox horizontal align={'flex-start'} gap={16} wrap={'wrap'}>
-        <Flexbox className={styles.listCol} flex={'1 1 320px'}>
-          <Flexbox className={styles.listScroll} gap={2} padding={4}>
+        <Flexbox className={stylex.props(styles.listCol).className} flex={'1 1 320px'}>
+          <Flexbox className={stylex.props(styles.listScroll).className} gap={2} padding={4}>
             {environments.map((environment) => (
               <EnvironmentItem
                 environment={environment}
@@ -228,7 +211,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
         {/* Keep enough space to identify environments and read their details.
             When both columns no longer fit, wrap the detail below the list. */}
         {selected && (
-          <Flexbox className={styles.detailCol} flex={'2 1 480px'}>
+          <Flexbox className={stylex.props(styles.detailCol).className} flex={'2 1 480px'}>
             {/* Keyed on the environment so the form's draft state resets when
                   the selection changes — a description typed for one
                   environment must not survive into another. */}

@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,36 +11,20 @@ import { type IntegrationId, INTEGRATIONS, UPCOMING_INTEGRATIONS } from './regis
 import { useGithubIntegration } from './useGithubIntegration';
 import { useLinearIntegration } from './useLinearIntegration';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  list: css`
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-  `,
-  sectionLabel: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  strip: css`
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-
-    @media (width <= 720px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  upcoming: css`
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-
-    @media (width <= 720px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-}));
+const styles = stylex.create({
+  list: { display: 'grid', gridTemplateColumns: '1fr', gap: '10px' },
+  sectionLabel: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextTertiary },
+  strip: {
+    display: 'grid',
+    gridTemplateColumns: { 'default': 'repeat(3, 1fr)', '@media (width <= 720px)': '1fr' },
+    gap: '10px',
+  },
+  upcoming: {
+    display: 'grid',
+    gridTemplateColumns: { 'default': 'repeat(2, 1fr)', '@media (width <= 720px)': '1fr' },
+    gap: '8px',
+  },
+});
 
 interface OverviewProps {
   onOpen: (id: IntegrationId) => void;
@@ -65,8 +51,8 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
     <Flexbox gap={24}>
       {enabled.length > 0 ? (
         <Flexbox gap={10}>
-          <span className={styles.sectionLabel}>{t('overview.enabled')}</span>
-          <div className={styles.strip}>
+          <span {...stylex.props(styles.sectionLabel)}>{t('overview.enabled')}</span>
+          <div {...stylex.props(styles.strip)}>
             {enabled.map((item) => (
               <IntegrationCard compact enabled integration={item} key={item.id} onOpen={onOpen} />
             ))}
@@ -75,8 +61,8 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
       ) : null}
 
       <Flexbox gap={10}>
-        <span className={styles.sectionLabel}>{t('overview.all')}</span>
-        <div className={styles.list}>
+        <span {...stylex.props(styles.sectionLabel)}>{t('overview.all')}</span>
+        <div {...stylex.props(styles.list)}>
           {INTEGRATIONS.map((item) => (
             <IntegrationCard
               enabled={enabledById[item.id]}
@@ -89,8 +75,8 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
       </Flexbox>
 
       <Flexbox gap={10}>
-        <span className={styles.sectionLabel}>{t('overview.comingSoon')}</span>
-        <div className={styles.upcoming}>
+        <span {...stylex.props(styles.sectionLabel)}>{t('overview.comingSoon')}</span>
+        <div {...stylex.props(styles.upcoming)}>
           {UPCOMING_INTEGRATIONS.map((item) => (
             <IntegrationCard upcoming integration={item} key={item.id} />
           ))}

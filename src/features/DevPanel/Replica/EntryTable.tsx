@@ -1,11 +1,13 @@
 'use client';
 
 import { Button, Input } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { RefreshCw } from 'lucide-react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
 import { inspectorStyles as styles } from '../inspectorStyles';
+import tableStyles from '../inspectorTable.module.css';
 import { describeReplicaValue, type ReplicaEntryRow } from './model';
 import { MAX_RENDERED_ENTRIES } from './useReplicaInspector';
 
@@ -52,21 +54,21 @@ const EntryTable = ({
   title,
   totalCount,
 }: EntryTableProps) => (
-  <main className={styles.tablePane}>
-    <div className={devDockPanelStyles.toolbar}>
-      <span className={styles.tableName} title={title}>
+  <main {...stylex.props(styles.tablePane)}>
+    <div {...stylex.props(devDockPanelStyles.toolbar)}>
+      <span {...stylex.props(styles.tableName)} title={title}>
         {title}
       </span>
       <Input
         allowClear
-        className={styles.toolbarSearch}
+        className={stylex.props(styles.toolbarSearch).className}
         placeholder={'Search key, query, source…'}
         size={'small'}
         style={{ flex: 1 }}
         value={search}
         onChange={(event) => onSearchChange(event.target.value)}
       />
-      <span className={styles.toolbarMeta}>{totalCount} entries · live</span>
+      <span {...stylex.props(styles.toolbarMeta)}>{totalCount} entries · live</span>
       <Button
         disabled={!onRevalidate}
         icon={RefreshCw}
@@ -78,8 +80,8 @@ const EntryTable = ({
         Revalidate
       </Button>
     </div>
-    <div className={styles.tableScroll}>
-      <table className={styles.table} style={{ minWidth: '100%', width: TABLE_WIDTH }}>
+    <div {...stylex.props(styles.tableScroll)}>
+      <table className={tableStyles.table} style={{ minWidth: '100%', width: TABLE_WIDTH }}>
         <colgroup>
           {COLUMNS.map(({ label, width }) => (
             <col key={label} style={{ width }} />
@@ -102,7 +104,7 @@ const EntryTable = ({
               <tr
                 aria-label={row.key}
                 aria-selected={active}
-                className={active ? styles.rowActive : undefined}
+                {...stylex.props(active ? styles.rowActive : undefined)}
                 key={row.key}
                 tabIndex={0}
                 onClick={() => onSelect(row.key)}
@@ -124,12 +126,12 @@ const EntryTable = ({
         </tbody>
       </table>
       {rows.length === 0 && (
-        <div className={styles.tableEmpty}>
+        <div {...stylex.props(styles.tableEmpty)}>
           {search ? `No entries match “${search}”.` : 'This replica holds no entries.'}
         </div>
       )}
     </div>
-    <div className={devDockPanelStyles.statusBar}>
+    <div {...stylex.props(devDockPanelStyles.statusBar)}>
       <span>{matchingCount === 0 ? '0 entries' : `1–${rows.length} of ${matchingCount}`}</span>
       {matchingCount > MAX_RENDERED_ENTRIES && (
         <span>Refine the search to inspect later entries.</span>

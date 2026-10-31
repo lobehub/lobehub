@@ -1,0 +1,4 @@
+/* Dim the label, badge and button text together when the whole header is hovered. */
+.groupHeader:hover span {
+  color: var(--lobe-color-text);
+}

@@ -1,6 +1,7 @@
 'use client';
 
-import { Button, cx, Switch, TextArea } from '@lobehub/ui';
+import { Button, Switch, TextArea } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Pencil, RefreshCw, Trash2 } from 'lucide-react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
@@ -32,12 +33,12 @@ const preview = (value: unknown): string => {
 };
 
 const Field = ({ label, type, value }: { label: string; type?: string; value: string }) => (
-  <div className={styles.detailField}>
-    <div className={styles.detailLabel}>
+  <div {...stylex.props(styles.detailField)}>
+    <div {...stylex.props(styles.detailLabel)}>
       <span>{label}</span>
-      {type && <span className={styles.detailType}>{type}</span>}
+      {type && <span {...stylex.props(styles.detailType)}>{type}</span>}
     </div>
-    <pre className={styles.detailValue}>{value}</pre>
+    <pre {...stylex.props(styles.detailValue)}>{value}</pre>
   </div>
 );
 
@@ -47,12 +48,12 @@ const EntryDetails = ({ entry, onPin, row }: EntryDetailsProps) => {
   return (
     <aside
       aria-label={'Selected entry details'}
-      className={cx(styles.detailsPane, devDockPanelStyles.paneDividerStart)}
+      {...stylex.props(styles.detailsPane, devDockPanelStyles.paneDividerStart)}
     >
-      <div className={devDockPanelStyles.paneHeader}>Entry</div>
+      <div {...stylex.props(devDockPanelStyles.paneHeader)}>Entry</div>
       {entry && row ? (
         <>
-          <div className={replicaStyles.actions}>
+          <div {...stylex.props(replicaStyles.actions)}>
             <Button
               disabled={editor.isEditing}
               icon={Pencil}
@@ -86,11 +87,11 @@ const EntryDetails = ({ entry, onPin, row }: EntryDetailsProps) => {
             </Button>
           </div>
           {editor.isEditing ? (
-            <div className={replicaStyles.editor}>
+            <div {...stylex.props(replicaStyles.editor)}>
               <TextArea
                 resize
                 aria-label={`Edit ${row.key} as JSON`}
-                className={replicaStyles.editorInput}
+                className={stylex.props(replicaStyles.editorInput).className}
                 spellCheck={false}
                 value={editor.draft ?? ''}
                 onChange={(event) => editor.setDraft(event.target.value)}
@@ -99,9 +100,11 @@ const EntryDetails = ({ entry, onPin, row }: EntryDetailsProps) => {
                   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) editor.apply();
                 }}
               />
-              {editor.error && <div className={replicaStyles.editorError}>{editor.error}</div>}
-              <div className={replicaStyles.editorFooter}>
-                <label className={replicaStyles.persistToggle}>
+              {editor.error && (
+                <div {...stylex.props(replicaStyles.editorError)}>{editor.error}</div>
+              )}
+              <div {...stylex.props(replicaStyles.editorFooter)}>
+                <label {...stylex.props(replicaStyles.persistToggle)}>
                   <Switch checked={editor.persist} size={'small'} onChange={editor.setPersist} />
                   Persist
                 </label>
@@ -116,7 +119,7 @@ const EntryDetails = ({ entry, onPin, row }: EntryDetailsProps) => {
               </div>
             </div>
           ) : (
-            <div className={styles.detailFields}>
+            <div {...stylex.props(styles.detailFields)}>
               {editor.error && <Field label={'error'} value={editor.error} />}
               <Field label={'key'} value={row.key} />
               <Field label={'source'} value={row.source} />
@@ -133,7 +136,7 @@ const EntryDetails = ({ entry, onPin, row }: EntryDetailsProps) => {
           )}
         </>
       ) : (
-        <div className={styles.empty}>Select an entry to inspect it.</div>
+        <div {...stylex.props(styles.empty)}>Select an entry to inspect it.</div>
       )}
     </aside>
   );

@@ -1,7 +1,9 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { ActionIcon, createStaticStyles, Flexbox, Popover, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Popover, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeft, ArrowRight, Clock } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,25 +44,19 @@ const useNavPanelWidth = () => {
   return useGlobalStore(navPanelSelector);
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  clock: css`
-    &[data-popup-open] {
-      border-radius: ${cssVar.borderRadiusSM};
-      background-color: ${cssVar.colorFillTertiary};
-    }
-  `,
-  root: css`
-    transition: width 0.2s ${cssVar.motionEaseOut};
-
-    &[data-resizing] {
-      transition: none;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  clock: {
+    borderRadius: { 'default': null, '[data-popup-open]': cssVar.borderRadiusSM },
+    backgroundColor: { 'default': null, '[data-popup-open]': cssVar.colorFillTertiary },
+  },
+  root: {
+    transition: {
+      'default': `width 0.2s ${cssVar.motionEaseOut}`,
+      '@media (prefers-reduced-motion: reduce)': 'none',
+      '[data-resizing]': 'none',
+    },
+  },
+});
 
 const NavigationBar = memo(() => {
   useTrayMenuSync();
@@ -144,7 +140,7 @@ const NavigationBar = memo(() => {
     <Flexbox
       horizontal
       align="center"
-      className={styles.root}
+      className={stylex.props(styles.root).className}
       data-resizing={navPanelResizing || undefined}
       data-width={leftPanelWidth}
       gap={8}
@@ -175,7 +171,7 @@ const NavigationBar = memo(() => {
           trigger="click"
           onOpenChange={setHistoryOpen}
         >
-          <div className={styles.clock}>
+          <div {...stylex.props(styles.clock)}>
             <Tooltip open={historyOpen ? false : undefined} title={tooltipContent}>
               <ActionIcon icon={Clock} size="small" />
             </Tooltip>

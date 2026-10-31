@@ -1,39 +1,26 @@
-import { Avatar, createStaticStyles, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Avatar, Flexbox, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
 import WorkspaceAvatar from '@/components/WorkspaceAvatar';
 
+import scopeStyles from './scopeOptions.module.css';
+
 export const PERSONAL_SCOPE = 'personal';
 
-const styles = createStaticStyles(({ css }) => ({
-  personalTag: css`
-    cursor: default;
-    flex: none;
-    margin-block: 0;
-    margin-inline: auto 0;
-  `,
-  scopeName: css`
-    flex: 0 1 auto;
-    min-width: 0;
-  `,
-  scopeOption: css`
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
-  `,
-  scopeTitle: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  scopeValue: css`
-    > span {
-      display: flex;
-      width: 100%;
-      min-width: 0;
-    }
-  `,
-}));
+const styles = stylex.create({
+  personalTag: {
+    cursor: 'default',
+    flex: 'none',
+    marginBlock: 0,
+    marginInlineStart: 'auto',
+    marginInlineEnd: '0',
+  },
+  scopeName: { flexGrow: '0', flexShrink: '1', flexBasis: 'auto', minWidth: 0 },
+  scopeOption: { flexGrow: '1', flexShrink: '1', flexBasis: 'auto', width: '100%', minWidth: 0 },
+  scopeTitle: { flex: '1', minWidth: 0 },
+});
 
-export const messengerScopeSelectClassNames = { value: styles.scopeValue };
+export const messengerScopeSelectClassNames = { value: scopeStyles.scopeValue };
 
 interface ResolvePersonalScopeLabelParams {
   fallbackLabel: string;
@@ -69,19 +56,24 @@ const renderScopeOption = ({
   label: string;
   personalTagLabel?: string;
 }) => (
-  <Flexbox horizontal align="center" className={styles.scopeOption} gap={8}>
+  <Flexbox horizontal align="center" className={stylex.props(styles.scopeOption).className} gap={8}>
     {isPersonal ? (
       <Avatar avatar={avatar || label} shape="square" size={20} />
     ) : (
       <WorkspaceAvatar avatar={avatar} name={label} size={20} />
     )}
-    <Flexbox horizontal align="center" className={styles.scopeTitle} gap={6}>
-      <Text ellipsis className={styles.scopeName}>
+    <Flexbox
+      horizontal
+      align="center"
+      className={stylex.props(styles.scopeTitle).className}
+      gap={6}
+    >
+      <Text ellipsis className={stylex.props(styles.scopeName).className}>
         {label}
       </Text>
     </Flexbox>
     {isPersonal && personalTagLabel && (
-      <Tag className={styles.personalTag} variant="filled">
+      <Tag className={stylex.props(styles.personalTag).className} variant="filled">
         {personalTagLabel}
       </Tag>
     )}

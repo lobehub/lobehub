@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Spin } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useMemo, useState } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
@@ -59,8 +60,8 @@ const LocalDatabasePanel = () => {
 
   if (error) {
     return (
-      <div className={devDockPanelStyles.root}>
-        <div className={styles.error}>
+      <div {...stylex.props(devDockPanelStyles.root)}>
+        <div {...stylex.props(styles.error)}>
           <span>Could not read the local database: {error}</span>
           <Button size={'small'} onClick={() => void refresh()}>
             Retry
@@ -72,8 +73,8 @@ const LocalDatabasePanel = () => {
 
   if (isLoading && collections.length === 0) {
     return (
-      <div className={devDockPanelStyles.root}>
-        <div className={styles.empty}>
+      <div {...stylex.props(devDockPanelStyles.root)}>
+        <div {...stylex.props(styles.empty)}>
           <Spin />
         </div>
       </div>
@@ -81,8 +82,8 @@ const LocalDatabasePanel = () => {
   }
 
   return (
-    <div className={devDockPanelStyles.root}>
-      <div className={styles.workspace}>
+    <div {...stylex.props(devDockPanelStyles.root)}>
+      <div {...stylex.props(styles.workspace)}>
         <CollectionList
           collections={collections}
           resources={resources}

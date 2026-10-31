@@ -1,9 +1,11 @@
 'use client';
 
 import type { MemoryDumpNode, MemoryDumpProcess } from '@lobechat/electron-client-ipc';
-import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
+
+import { sx } from '@/styles/sx';
 
 import { formatCompactSize } from '../memoryFormat';
 import { styles } from './styles';
@@ -33,7 +35,7 @@ const NodeRow = memo<{
   return (
     <Fragment>
       <div
-        className={cx(styles.row, styles.mono, hasChildren && styles.rowClickable)}
+        {...stylex.props(styles.row, styles.mono, hasChildren && styles.rowClickable)}
         onClick={hasChildren ? () => toggle(path) : undefined}
       >
         <span
@@ -48,11 +50,11 @@ const NodeRow = memo<{
           ) : (
             <span style={{ width: 11 }} />
           )}
-          <span className={depth === 0 ? undefined : styles.muted}>{node.name}</span>
+          <span {...stylex.props(depth === 0 ? undefined : styles.muted)}>{node.name}</span>
         </span>
         <span style={{ textAlign: 'end' }}>{formatCompactSize(node.sizeBytes)}</span>
-        <span className={styles.bar} title={`${percent.toFixed(1)}% of tracked`}>
-          <span className={styles.barFill} style={{ width: `${Math.min(100, percent)}%` }} />
+        <span {...stylex.props(styles.bar)} title={`${percent.toFixed(1)}% of tracked`}>
+          <span {...sx([styles.barFill], undefined, { width: `${Math.min(100, percent)}%` })} />
         </span>
       </div>
       {open &&
@@ -88,12 +90,12 @@ const DumpTree = memo<{ process: MemoryDumpProcess }>(({ process }) => {
 
   return (
     <Fragment>
-      <div className={cx(styles.row, styles.mono)}>
+      <div {...stylex.props(styles.row, styles.mono)}>
         <span>
-          {process.name} <span className={styles.muted}>pid {process.pid}</span>
+          {process.name} <span {...stylex.props(styles.muted)}>pid {process.pid}</span>
         </span>
         <span style={{ textAlign: 'end' }}>{formatCompactSize(total)}</span>
-        <span className={styles.muted}>
+        <span {...stylex.props(styles.muted)}>
           {process.privateFootprintBytes === null
             ? 'tracked'
             : `footprint ${formatCompactSize(process.privateFootprintBytes)}`}
@@ -111,7 +113,7 @@ const DumpTree = memo<{ process: MemoryDumpProcess }>(({ process }) => {
         />
       ))}
       {counts.length > 0 && (
-        <div className={cx(styles.caption, styles.mono)}>
+        <div {...stylex.props(styles.caption, styles.mono)}>
           {counts.map((key) => `${key} ${process.objectCounts[key].toLocaleString()}`).join(' · ')}
         </div>
       )}

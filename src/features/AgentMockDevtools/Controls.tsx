@@ -1,6 +1,10 @@
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, toast } from '@lobehub/ui';
+import { ActionIcon, Flexbox, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Pause, Play, Repeat, RotateCcw, SkipForward, Square } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+
+import { sx } from '@/styles/sx';
 
 import { CaseTrigger } from './CaseTrigger';
 import { useAgentMockPlayer } from './hooks/useAgentMockPlayer';
@@ -8,74 +12,68 @@ import { useAgentMockReplayTarget } from './hooks/useAgentMockReplayTarget';
 import { useMockCases } from './hooks/useMockCases';
 import { useAgentMockStore } from './store/agentMockStore';
 
-const styles = createStaticStyles(({ css }) => ({
-  actions: css`
-    flex-shrink: 0;
-    height: 40px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  controls: css`
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-  `,
-  counter: css`
-    font-size: 11px;
-    font-feature-settings: 'tnum';
-    color: ${cssVar.colorTextSecondary};
-  `,
-  progress: css`
-    touch-action: none;
-    cursor: pointer;
-
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:hover .agent-mock-progress-track {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  progressFill: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block: 0;
-    inset-inline-start: 0;
-
-    height: 100%;
-    border-radius: inherit;
-
-    background: ${cssVar.colorText};
-
-    transition: width 0.16s linear;
-  `,
-  progressTrack: css`
-    position: relative;
-
-    overflow: hidden;
-    flex: 1;
-
-    height: 4px;
-    border-radius: 2px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressTrackScrubbing: css`
-    background: ${cssVar.colorFillTertiary} !important;
-  `,
-  selection: css`
-    flex-shrink: 0;
-    height: 44px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    flexShrink: 0,
+    height: '40px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  controls: { display: 'flex', flexDirection: 'column', flexShrink: 0 },
+  counter: {
+    fontSize: '11px',
+    fontFeatureSettings: "'tnum'",
+    color: cssVar.colorTextSecondary,
+  },
+  progress: {
+    touchAction: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    height: '28px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  progressFill: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlock: 0,
+    insetInlineStart: 0,
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: cssVar.colorText,
+    backgroundImage: 'none',
+    transitionProperty: 'width',
+    transitionDuration: '0.16s',
+    transitionTimingFunction: 'linear',
+  },
+  progressTrack: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: '1',
+    height: '4px',
+    borderRadius: '2px',
+    backgroundColor: {
+      default: cssVar.colorFillSecondary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorFillTertiary,
+    },
+    backgroundImage: 'none',
+  },
+  progressTrackScrubbing: { backgroundColor: cssVar.colorFillTertiary },
+  selection: {
+    flexShrink: 0,
+    height: '44px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 export const Controls = memo(() => {
   const selectedCaseId = useAgentMockStore((s) => s.selectedCaseId);
@@ -171,11 +169,16 @@ export const Controls = memo(() => {
     : 0;
 
   return (
-    <div className={styles.controls}>
-      <Flexbox horizontal align={'center'} className={styles.selection} gap={8}>
+    <div {...stylex.props(styles.controls)}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.selection).className}
+        gap={8}
+      >
         <CaseTrigger placement={'topLeft'} />
         <span style={{ flex: 1 }} />
-        <span className={styles.counter}>
+        <span {...stylex.props(styles.counter)}>
           {playback ? `${playback.currentEventIndex}/${playback.totalEvents}` : '—'}
         </span>
       </Flexbox>
@@ -183,21 +186,22 @@ export const Controls = memo(() => {
         aria-valuemax={playback?.totalEvents ?? 0}
         aria-valuemin={0}
         aria-valuenow={playback?.currentEventIndex ?? 0}
-        className={styles.progress}
+        {...stylex.props(styles.progress, stylex.defaultMarker())}
         ref={progressRef}
         role={'slider'}
         tabIndex={0}
         onPointerDown={handleScrubStart}
       >
-        <div
-          className={`agent-mock-progress-track ${styles.progressTrack} ${
-            scrubbing ? styles.progressTrackScrubbing : ''
-          }`}
-        >
-          <div className={styles.progressFill} style={{ width: `${pct}%` }} />
+        <div {...stylex.props(styles.progressTrack, scrubbing && styles.progressTrackScrubbing)}>
+          <div {...sx([styles.progressFill], undefined, { width: `${pct}%` })} />
         </div>
       </div>
-      <Flexbox horizontal align={'center'} className={styles.actions} gap={4}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.actions).className}
+        gap={4}
+      >
         <ActionIcon
           disabled={disabled}
           icon={running ? Pause : Play}
@@ -236,7 +240,9 @@ export const Controls = memo(() => {
           onClick={stop}
         />
         <span style={{ flex: 1 }} />
-        <span className={styles.counter}>{selected ? selected.name : 'No case selected'}</span>
+        <span {...stylex.props(styles.counter)}>
+          {selected ? selected.name : 'No case selected'}
+        </span>
       </Flexbox>
     </div>
   );

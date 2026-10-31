@@ -1,4 +1,6 @@
-import { createStaticStyles, Tooltip } from '@lobehub/ui';
+import { Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BanIcon, CheckIcon, HandIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,79 +8,55 @@ import { useTranslation } from 'react-i18next';
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  btn: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-
-    color: ${cssVar.colorTextQuaternary};
-
-    transition:
-      color 0.15s,
-      background 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  btnActive: css`
-    color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-      background: ${cssVar.colorPrimaryBgHover};
-    }
-  `,
-  description: css`
-    overflow: hidden;
-
-    font-size: 11px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  nameCell: css`
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-  `,
-  row: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  toolName: css`
-    overflow: hidden;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  btn: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: '6px',
+    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorText },
+    transition: 'color 0.15s,\n      background 0.15s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  btnActive: {
+    color: { 'default': cssVar.colorPrimary, ':hover': cssVar.colorPrimary },
+    backgroundColor: { 'default': cssVar.colorPrimaryBg, ':hover': cssVar.colorPrimaryBgHover },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  description: {
+    overflow: 'hidden',
+    fontSize: '11px',
+    lineHeight: 1.4,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  nameCell: { overflow: 'hidden', flex: '1', minWidth: '0' },
+  row: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  toolName: {
+    overflow: 'hidden',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface ToolPermissionRowProps {
   /** Read-only mode — the caller lacks the manage permission for this connector. */
@@ -90,7 +68,9 @@ interface ToolPermissionRowProps {
 const ToolPermissionRow = memo<ToolPermissionRowProps>(({ disabled, tool, onPermissionChange }) => {
   const { t } = useTranslation('tool');
   const btnClass = (permission: ConnectorToolPermission) =>
-    tool.permission === permission ? `${styles.btn} ${styles.btnActive}` : styles.btn;
+    tool.permission === permission
+      ? stylex.props(styles.btn, styles.btnActive).className
+      : stylex.props(styles.btn).className;
 
   const handleChange = (permission: ConnectorToolPermission) => {
     if (disabled) return;
@@ -98,12 +78,12 @@ const ToolPermissionRow = memo<ToolPermissionRowProps>(({ disabled, tool, onPerm
   };
 
   return (
-    <div className={styles.row}>
-      <div className={styles.nameCell}>
-        <div className={styles.toolName}>{tool.toolName}</div>
+    <div {...stylex.props(styles.row)}>
+      <div {...stylex.props(styles.nameCell)}>
+        <div {...stylex.props(styles.toolName)}>{tool.toolName}</div>
         {tool.description && (
           <Tooltip mouseEnterDelay={0.5} title={tool.description}>
-            <div className={styles.description}>{tool.description}</div>
+            <div {...stylex.props(styles.description)}>{tool.description}</div>
           </Tooltip>
         )}
       </div>

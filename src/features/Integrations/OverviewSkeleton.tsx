@@ -1,38 +1,29 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Block, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import { SkeletonBar } from '@/components/Skeleton';
 
 import { INTEGRATIONS, UPCOMING_INTEGRATIONS } from './registry';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Card chrome mirrors `IntegrationCard` (filled block, LG radius, 14/16 padding).
-  card: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  list: css`
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-  `,
-  upcoming: css`
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-
-    @media (width <= 720px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  upcomingCard: css`
-    padding-block: 10px;
-    padding-inline: 14px;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: '14px',
+    paddingInline: '16px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  list: { display: 'grid', gridTemplateColumns: '1fr', gap: '10px' },
+  upcoming: {
+    display: 'grid',
+    gridTemplateColumns: { 'default': 'repeat(2, 1fr)', '@media (width <= 720px)': '1fr' },
+    gap: '8px',
+  },
+  upcomingCard: { paddingBlock: '10px', paddingInline: '14px' },
+});
 
 /** Section label line (12px text, ~20px line box). */
 const Label = ({ width }: { width: number }) => (
@@ -42,7 +33,10 @@ const Label = ({ width }: { width: number }) => (
 );
 
 const CardSkeleton = ({ upcoming }: { upcoming?: boolean }) => (
-  <Block className={cx(styles.card, upcoming && styles.upcomingCard)} variant={'filled'}>
+  <Block
+    className={stylex.props(styles.card, upcoming && styles.upcomingCard).className}
+    variant={'filled'}
+  >
     <Flexbox horizontal align={'center'} gap={14}>
       <SkeletonBar
         height={upcoming ? 32 : 40}
@@ -73,7 +67,7 @@ const OverviewSkeleton = () => (
   <Flexbox aria-busy gap={24}>
     <Flexbox gap={10}>
       <Label width={40} />
-      <div className={styles.list}>
+      <div {...stylex.props(styles.list)}>
         {Array.from({ length: Math.max(INTEGRATIONS.length, 1) }).map((_, index) => (
           <CardSkeleton key={index} />
         ))}
@@ -81,7 +75,7 @@ const OverviewSkeleton = () => (
     </Flexbox>
     <Flexbox gap={10}>
       <Label width={72} />
-      <div className={styles.upcoming}>
+      <div {...stylex.props(styles.upcoming)}>
         {UPCOMING_INTEGRATIONS.map((item) => (
           <CardSkeleton upcoming key={item.id} />
         ))}

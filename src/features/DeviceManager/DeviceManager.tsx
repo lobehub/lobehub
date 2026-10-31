@@ -2,7 +2,9 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronRightIcon,
   FolderCogIcon,
@@ -26,106 +28,101 @@ import DeviceGrid from './DeviceGrid';
 import { getDeviceListBoundary } from './deviceListBoundary';
 import { DeviceGridSkeleton } from './Skeleton';
 
-const styles = createStaticStyles(({ css }) => ({
-  // ─── Onboarding empty state ───
-  badge: css`
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorPrimary};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-  capabilityCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  capabilityIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  emptyCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  emptyHero: css`
-    padding-block: 40px;
-    padding-inline: 32px;
-    text-align: center;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  heroIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 56px;
-    height: 56px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  option: css`
-    cursor: pointer;
-    padding: 20px;
-    background: ${cssVar.colorBgContainer};
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  optionGrid: css`
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  optionIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    color: cssVar.colorPrimary,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+  capabilityCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  capabilityIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  emptyCard: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  emptyHero: {
+    paddingBlock: '40px',
+    paddingInline: '32px',
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  heroIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '56px',
+    height: '56px',
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  option: {
+    cursor: 'pointer',
+    padding: '20px',
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: {
+      'default': 'background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  optionGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  optionIcon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40px',
+    height: '40px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface ConnectOptionProps {
   badge?: string;
@@ -139,7 +136,7 @@ const ConnectOption = memo<ConnectOptionProps>(({ icon, title, desc, badge, onCl
   <Flexbox
     horizontal
     align={'flex-start'}
-    className={styles.option}
+    className={stylex.props(styles.option).className}
     gap={16}
     role={'button'}
     tabIndex={0}
@@ -151,13 +148,13 @@ const ConnectOption = memo<ConnectOptionProps>(({ icon, title, desc, badge, onCl
       }
     }}
   >
-    <span className={styles.optionIcon}>
+    <span {...stylex.props(styles.optionIcon)}>
       <Icon icon={icon} size={20} />
     </span>
     <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
       <Flexbox horizontal align={'center'} gap={8}>
         <Text weight={500}>{title}</Text>
-        {badge && <span className={styles.badge}>{badge}</span>}
+        {badge && <span {...stylex.props(styles.badge)}>{badge}</span>}
       </Flexbox>
       <Text color={cssVar.colorTextTertiary} fontSize={12}>
         {desc}
@@ -193,8 +190,13 @@ const Capabilities = memo(() => {
       </Text>
       <Flexbox horizontal gap={16}>
         {items.map((cap) => (
-          <Flexbox className={styles.capabilityCard} flex={1} gap={12} key={cap.title}>
-            <span className={styles.capabilityIcon}>
+          <Flexbox
+            className={stylex.props(styles.capabilityCard).className}
+            flex={1}
+            gap={12}
+            key={cap.title}
+          >
+            <span {...stylex.props(styles.capabilityIcon)}>
               <Icon icon={cap.icon} size={18} />
             </span>
             <Flexbox gap={4}>
@@ -276,9 +278,9 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
   const isPrivatePool = isWorkspace && visibility === 'private';
   const emptyState = (
     <Flexbox gap={32}>
-      <Flexbox className={styles.emptyCard}>
-        <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
-          <span className={styles.heroIcon}>
+      <Flexbox className={stylex.props(styles.emptyCard).className}>
+        <Flexbox align={'center'} className={stylex.props(styles.emptyHero).className} gap={12}>
+          <span {...stylex.props(styles.heroIcon)}>
             <Icon icon={isWorkspace && !isPrivatePool ? ServerIcon : MonitorDownIcon} size={28} />
           </span>
           <Text fontSize={18} weight={600}>
@@ -300,7 +302,7 @@ const DeviceManager = memo<DeviceManagerProps>((props) => {
         </Flexbox>
 
         {!isWorkspace && (
-          <div className={styles.optionGrid}>
+          <div {...stylex.props(styles.optionGrid)}>
             <ConnectOption
               badge={t('devices.empty.methodDesktop.badge')}
               desc={t('devices.empty.methodDesktop.desc')}

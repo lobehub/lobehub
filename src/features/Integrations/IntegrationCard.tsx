@@ -1,72 +1,61 @@
 'use client';
 
-import { Block, createStaticStyles, cx, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type KeyboardEvent, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { IntegrationDefinition, UpcomingIntegration } from './registry';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-
-    transition:
-      background 0.2s ease,
-      border-color 0.2s ease;
-  `,
-  compact: css`
-    padding-block: 12px;
-  `,
-  dot: css`
-    display: inline-block;
-    flex: none;
-
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorSuccess};
-  `,
-  icon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  openable: css`
-    cursor: pointer;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorderHover};
-      outline-offset: 2px;
-    }
-  `,
-  upcoming: css`
-    color: ${cssVar.colorTextTertiary};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  upcomingCard: css`
-    padding-block: 10px;
-    padding-inline: 14px;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: '14px',
+    paddingInline: '16px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    transition: 'background 0.2s ease,\n      border-color 0.2s ease',
+  },
+  compact: { paddingBlock: '12px' },
+  dot: {
+    display: 'inline-block',
+    flex: 'none',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+  },
+  icon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40px',
+    height: '40px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  openable: {
+    cursor: 'pointer',
+    borderColor: { 'default': null, ':hover': cssVar.colorBorder },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorderHover },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  upcoming: {
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  upcomingCard: { paddingBlock: '10px', paddingInline: '14px' },
+});
 
 type CardIntegration = IntegrationDefinition | UpcomingIntegration;
 
@@ -105,12 +94,14 @@ const IntegrationCard = memo<IntegrationCardProps>(
         // focus and answer Enter / Space the way a real button does.
         tabIndex={openable ? 0 : undefined}
         variant={'filled'}
-        className={cx(
-          styles.card,
-          compact && styles.compact,
-          upcoming && styles.upcomingCard,
-          openable && styles.openable,
-        )}
+        className={
+          stylex.props(
+            styles.card,
+            compact && styles.compact,
+            upcoming && styles.upcomingCard,
+            openable && styles.openable,
+          ).className
+        }
         onClick={openable ? open : undefined}
         onKeyDown={
           openable
@@ -124,7 +115,7 @@ const IntegrationCard = memo<IntegrationCardProps>(
       >
         <Flexbox horizontal align="center" gap={14}>
           <span
-            className={cx(styles.icon, upcoming && styles.upcoming)}
+            className={stylex.props(styles.icon, upcoming && styles.upcoming).className}
             style={upcoming ? { height: 32, width: 32 } : undefined}
           >
             <Icon size={upcoming ? 18 : 24} />
@@ -140,7 +131,7 @@ const IntegrationCard = memo<IntegrationCardProps>(
             )}
           </Flexbox>
           <Flexbox horizontal align="center" gap={6} style={{ flex: 'none' }}>
-            {enabled && !upcoming ? <span className={styles.dot} /> : null}
+            {enabled && !upcoming ? <span {...stylex.props(styles.dot)} /> : null}
             <Text style={{ fontSize: 13 }} type="secondary">
               {statusLabel}
             </Text>

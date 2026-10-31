@@ -1,74 +1,59 @@
 'use client';
 
 import type { ScmInstallationItem } from '@lobechat/database/schemas';
-import {
-  Avatar,
-  Block,
-  Button,
-  createStaticStyles,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Text,
-} from '@lobehub/ui';
+import { Avatar, Block, Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding-block: 2px;
-    padding-inline: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  dot: css`
-    display: inline-block;
-    flex: none;
-
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorSuccess};
-  `,
-  dotMuted: css`
-    background: ${cssVar.colorWarning};
-  `,
-  emptyState: css`
-    padding-block: 24px;
-    padding-inline: 20px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  row: css`
-    padding-block: 10px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  status: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: '2px',
+    paddingInline: '16px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  dot: {
+    display: 'inline-block',
+    flex: 'none',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+  },
+  dotMuted: { backgroundColor: cssVar.colorWarning, backgroundImage: 'none' },
+  emptyState: {
+    paddingBlock: '24px',
+    paddingInline: '20px',
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  row: {
+    paddingBlock: '10px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  status: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusSM,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 /** Where GitHub lets the user change repositories or uninstall this installation. */
 const manageUrl = (item: ScmInstallationItem) =>
@@ -118,9 +103,9 @@ const Connections = memo<ConnectionsProps>(({ configured, installHref, installat
       )}
 
       {installations.length === 0 ? (
-        <div className={styles.emptyState}>{t('github.connections.empty')}</div>
+        <div {...stylex.props(styles.emptyState)}>{t('github.connections.empty')}</div>
       ) : (
-        <Block className={styles.card} variant={'filled'}>
+        <Block className={stylex.props(styles.card).className} variant={'filled'}>
           {installations.map((item) => {
             const repositories =
               item.repositorySelection === 'all'
@@ -142,7 +127,13 @@ const Connections = memo<ConnectionsProps>(({ configured, installHref, installat
                 : `${kind} · ${repositories} · ${t('github.connections.connectedOn', { date })}`;
             const suspended = Boolean(item.suspendedAt);
             return (
-              <Flexbox horizontal align="center" className={styles.row} gap={12} key={item.id}>
+              <Flexbox
+                horizontal
+                align="center"
+                className={stylex.props(styles.row).className}
+                gap={12}
+                key={item.id}
+              >
                 <Avatar
                   avatar={item.metadata.accountAvatarUrl ?? undefined}
                   size={36}
@@ -164,8 +155,8 @@ const Connections = memo<ConnectionsProps>(({ configured, installHref, installat
                     },
                   ]}
                 >
-                  <span className={styles.status}>
-                    <span className={`${styles.dot} ${suspended ? styles.dotMuted : ''}`} />
+                  <span {...stylex.props(styles.status)}>
+                    <span {...stylex.props(styles.dot, suspended && styles.dotMuted)} />
                     <Text>
                       {suspended
                         ? t('github.connections.status.suspended')

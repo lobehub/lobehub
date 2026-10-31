@@ -2,16 +2,9 @@
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName, type DeviceBoundAgentItem } from '@lobechat/types';
-import {
-  ActionIcon,
-  Avatar,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRightIcon, LockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,28 +20,19 @@ import { RunUserAvatar } from './RunningUsers';
 /** Runs start and finish on their own, so keep the list close to live while the page is open. */
 const REFRESH_INTERVAL_MS = 15_000;
 
-const styles = createStaticStyles(({ css }) => ({
-  agentRow: css`
-    cursor: pointer;
-
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background ${cssVar.motionDurationFast};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  list: css`
-    padding: 6px;
-  `,
-  placeholder: css`
-    padding-block: 14px;
-    padding-inline: 16px;
-  `,
-}));
+const styles = stylex.create({
+  agentRow: {
+    cursor: 'pointer',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    transition: `background ${cssVar.motionDurationFast}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  list: { padding: '6px' },
+  placeholder: { paddingBlock: '14px', paddingInline: '16px' },
+});
 
 /**
  * One request backs both cards; SWR dedupes the second caller, so the running
@@ -62,7 +46,7 @@ export const useDeviceActivity = (deviceId: string) =>
   );
 
 const Placeholder = ({ children }: { children: string }) => (
-  <Text className={styles.placeholder} fontSize={13} type={'secondary'}>
+  <Text className={stylex.props(styles.placeholder).className} fontSize={13} type={'secondary'}>
     {children}
   </Text>
 );
@@ -110,7 +94,7 @@ export const RunningTopicList = memo<{ deviceId: string }>(({ deviceId }) => {
     return <Placeholder>{t('devices.activity.runningTopics.empty')}</Placeholder>;
 
   return (
-    <Flexbox className={styles.list}>
+    <Flexbox className={stylex.props(styles.list).className}>
       {topics.map((topic) => (
         <TopicRow
           action={<OpenTopicButton topic={topic} />}
@@ -133,7 +117,13 @@ const BoundAgentRow = memo<{ agent: DeviceBoundAgentItem }>(({ agent }) => {
   const open = () => navigate(AGENT_CHAT_URL(agent.id));
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.agentRow} gap={10} onClick={open}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.agentRow).className}
+      gap={10}
+      onClick={open}
+    >
       <Avatar
         avatar={agent.avatar ?? undefined}
         background={agent.backgroundColor ?? undefined}
@@ -180,7 +170,7 @@ export const BoundAgentList = memo<{ deviceId: string }>(({ deviceId }) => {
     return <Placeholder>{t('devices.activity.boundAgents.empty')}</Placeholder>;
 
   return (
-    <Flexbox className={styles.list}>
+    <Flexbox className={stylex.props(styles.list).className}>
       {agents.map((agent) => (
         <BoundAgentRow agent={agent} key={agent.id} />
       ))}

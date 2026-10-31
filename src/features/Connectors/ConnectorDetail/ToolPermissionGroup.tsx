@@ -1,54 +1,52 @@
-import { Button, createStaticStyles, DropdownMenu } from '@lobehub/ui';
+import { Button, DropdownMenu } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronRightIcon, MoreHorizontalIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
+import { sx } from '@/styles/sx';
 
+import moduleStyles from './ToolPermissionGroup.module.css';
 import ToolPermissionRow from './ToolPermissionRow';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  badge: css`
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  groupHeader: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 0;
-
-    &:hover span {
-      color: ${cssVar.colorText};
-    }
-  `,
-  groupLabel: css`
-    display: flex;
-    flex: 1;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: {
+      default: cssVar.colorTextSecondary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorText,
+    },
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  groupHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '10px',
+    paddingInline: 0,
+  },
+  groupLabel: {
+    display: 'flex',
+    flex: '1',
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+});
 
 interface ToolPermissionGroupProps {
   /** Read-only mode — the caller lacks the manage permission for this connector. */
@@ -88,11 +86,14 @@ const ToolPermissionGroup = memo<ToolPermissionGroupProps>(
 
     return (
       <div>
-        <div className={styles.groupHeader} onClick={() => setExpanded((e) => !e)}>
-          <div className={styles.groupLabel}>
+        <div
+          {...sx([styles.groupHeader, stylex.defaultMarker()], moduleStyles.groupHeader)}
+          onClick={() => setExpanded((e) => !e)}
+        >
+          <div {...stylex.props(styles.groupLabel)}>
             {expanded ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />}
             {label}
-            <span className={styles.badge}>{tools.length}</span>
+            <span {...stylex.props(styles.badge)}>{tools.length}</span>
           </div>
 
           {!disabled && (

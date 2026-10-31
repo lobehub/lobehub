@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, Wrench } from 'lucide-react';
 import { Fragment, memo } from 'react';
 
@@ -15,109 +17,80 @@ import {
 } from './registry';
 import { useDevDockStore } from './store';
 
-const styles = createStaticStyles(({ css }) => ({
-  bar: css`
-    flex-shrink: 0;
-
-    width: 100%;
-    height: ${BAR_HEIGHT}px;
-    margin-block-start: -${BAR_OVERLAP}px;
-    padding-inline: 8px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
-  center: css`
-    display: flex;
-    flex: 1;
-    align-items: center;
-    min-width: 0;
-  `,
-  divider: css`
-    flex-shrink: 0;
-    width: 1px;
-    height: 12px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  iconButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  pill: css`
-    cursor: pointer;
-
-    position: fixed;
-    z-index: ${DOCK_Z_INDEX};
-    inset-block-end: 0;
-    inset-inline-start: 16px;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    height: 18px;
-    padding-inline: 8px;
-    border: none;
-    border-start-start-radius: 6px;
-    border-start-end-radius: 6px;
-
-    font-size: 10px;
-    color: ${cssVar.colorBgContainer};
-
-    background: ${cssVar.colorText};
-
-    &:hover {
-      opacity: 0.85;
-    }
-  `,
-  tab: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 4px;
-    align-items: center;
-
-    height: 20px;
-    padding-inline: 6px;
-    border: none;
-    border-radius: 4px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  tabActive: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  bar: (height: string, marginBlockStart: string) => ({
+    flexShrink: 0,
+    width: '100%',
+    height,
+    marginBlockStart,
+    paddingInline: '8px',
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+  }),
+  center: { display: 'flex', flex: '1', alignItems: 'center', minWidth: 0 },
+  divider: {
+    flexShrink: 0,
+    width: '1px',
+    height: '12px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  iconButton: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderStyle: 'none',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  pill: (zIndex: number) => ({
+    cursor: 'pointer',
+    position: 'fixed',
+    zIndex,
+    insetBlockEnd: 0,
+    insetInlineStart: '16px',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    height: '18px',
+    paddingInline: '8px',
+    borderStyle: 'none',
+    borderStartStartRadius: '6px',
+    borderStartEndRadius: '6px',
+    fontSize: '10px',
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorText,
+    backgroundImage: 'none',
+    opacity: { 'default': null, ':hover': 0.85 },
+  }),
+  tab: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flexShrink: 0,
+    gap: '4px',
+    alignItems: 'center',
+    height: '20px',
+    paddingInline: '6px',
+    borderStyle: 'none',
+    borderRadius: '4px',
+    fontSize: '11px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  tabActive: {
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+  },
+});
 
 const PanelTab = memo<{ item: DevDockPanelItem }>(({ item }) => {
   const active = useDevDockStore((s) => s.activePanelId === item.id);
@@ -126,7 +99,7 @@ const PanelTab = memo<{ item: DevDockPanelItem }>(({ item }) => {
   const Badge = item.badge;
   return (
     <button
-      className={cx(styles.tab, active && styles.tabActive)}
+      {...stylex.props(styles.tab, active && styles.tabActive)}
       type={'button'}
       onClick={() => togglePanel(item.id)}
     >
@@ -168,7 +141,7 @@ const Bar = memo(() => {
   if (!expanded)
     return (
       <button
-        className={styles.pill}
+        {...stylex.props(styles.pill(DOCK_Z_INDEX))}
         title={'Open DevDock'}
         type={'button'}
         onClick={() => setExpanded(true)}
@@ -181,9 +154,14 @@ const Bar = memo(() => {
   const { center, right, tabs } = selectBarLayout(items, pinOverrides, activePanelId);
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.bar} gap={3}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      gap={3}
+      {...stylex.props(styles.bar(`${BAR_HEIGHT}px`, `-${BAR_OVERLAP}px`))}
+    >
       <button
-        className={styles.iconButton}
+        {...stylex.props(styles.iconButton)}
         title={'Collapse DevDock'}
         type={'button'}
         onClick={() => setExpanded(false)}
@@ -196,7 +174,7 @@ const Bar = memo(() => {
         ))}
       </Flexbox>
       {center ? (
-        <div className={styles.center}>
+        <div {...stylex.props(styles.center)}>
           <WidgetSlot item={center} />
         </div>
       ) : (
@@ -207,12 +185,12 @@ const Bar = memo(() => {
         const needsDivider = index > 0 && item.type === 'readout' && previous?.type === 'readout';
         return (
           <Fragment key={item.id}>
-            {needsDivider && <span className={styles.divider} />}
+            {needsDivider && <span {...stylex.props(styles.divider)} />}
             <PinnedItem item={item} />
           </Fragment>
         );
       })}
-      {right.length > 0 && <span className={styles.divider} />}
+      {right.length > 0 && <span {...stylex.props(styles.divider)} />}
       <OverflowMenu />
     </Flexbox>
   );

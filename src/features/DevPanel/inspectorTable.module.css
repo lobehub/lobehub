@@ -1,0 +1,54 @@
+/* Table chrome for the DevPanel inspectors. The rules target the cells and
+   rows the table renders, so they stay selector-based. */
+.table {
+  table-layout: fixed;
+  border-spacing: 0;
+  border-collapse: separate;
+}
+
+.table th,
+.table td {
+  overflow: hidden;
+
+  height: 32px;
+  padding-inline: 8px;
+  border-block-end: 1px solid var(--lobe-color-border-secondary);
+  border-inline-end: 1px solid var(--lobe-color-border-secondary);
+
+  font-family: var(--lobe-font-family-code);
+  font-size: var(--lobe-font-size-sm);
+  color: var(--lobe-color-text-secondary);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table th {
+  position: sticky;
+  z-index: 1;
+  inset-block-start: 0;
+
+  font-family: var(--lobe-font-family);
+  font-weight: 600;
+  color: var(--lobe-color-text);
+
+  background: var(--lobe-color-bg-container);
+}
+
+.table th:last-child,
+.table td:last-child {
+  border-inline-end: 0;
+}
+
+.table tbody tr {
+  cursor: pointer;
+  outline: none;
+}
+
+.table tbody tr:hover {
+  background: var(--lobe-color-fill-quaternary);
+}
+
+.table tbody tr:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--lobe-color-primary);
+}

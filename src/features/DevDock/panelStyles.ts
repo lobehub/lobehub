@@ -1,79 +1,92 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const devDockPanelStyles = createStaticStyles(({ css }) => ({
-  flatSection: css`
-    flex-shrink: 0;
-    padding: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  paneDividerEnd: css`
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  paneDividerStart: css`
-    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  paneHeader: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-
-    height: 36px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  paneSearch: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: stretch;
-
-    height: 44px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  root: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-  `,
-  searchInput: css`
-    flex: 1;
-
-    height: 100%;
-    border: 0 !important;
-    border-radius: 0 !important;
-
-    background: transparent !important;
-    box-shadow: none !important;
-  `,
-  statusBar: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: space-between;
-
-    height: 28px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  toolbar: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 8px;
-    align-items: center;
-
-    height: 44px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+export const devDockPanelStyles = stylex.create({
+  flatSection: {
+    flexShrink: 0,
+    padding: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  paneDividerEnd: {
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+  },
+  paneDividerStart: {
+    borderInlineStartWidth: '1px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorderSecondary,
+  },
+  paneHeader: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    height: '36px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  paneSearch: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'stretch',
+    height: '44px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  root: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    height: '100%',
+    minHeight: 0,
+  },
+  searchInput: {
+    flex: '1',
+    height: '100%',
+    borderBlockStartWidth: 0,
+    borderBlockEndWidth: 0,
+    borderInlineStartWidth: 0,
+    borderInlineEndWidth: 0,
+    borderStartStartRadius: 0,
+    borderStartEndRadius: 0,
+    borderEndStartRadius: 0,
+    borderEndEndRadius: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    boxShadow: 'none',
+  },
+  statusBar: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: '28px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  toolbar: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: '8px',
+    alignItems: 'center',
+    height: '44px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});

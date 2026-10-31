@@ -1,17 +1,8 @@
 'use client';
 
-import {
-  Alert,
-  Block,
-  Button,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  QRCode,
-  Spin,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Alert, Block, Button, Flexbox, Icon, QRCode, Spin, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ExternalLinkIcon, InfoIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,44 +26,35 @@ const QR_POLL_INTERVAL_MS = 2000;
 const QR_SIZE = 220;
 const QR_SLOT_SIZE = 240;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  error: css`
-    align-items: center;
-    width: 100%;
-  `,
-  qrSlot: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: ${QR_SLOT_SIZE}px;
-    height: ${QR_SLOT_SIZE}px;
-    padding: 9px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  setup: css`
-    align-items: center;
-
-    padding-block: 32px;
-    padding-inline: 20px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  status: css`
-    min-height: 20px;
-    font-size: ${cssVar.fontSize};
-    text-align: center;
-  `,
-  tips: css`
-    max-width: 480px;
-    font-size: ${cssVar.fontSize};
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({
+  error: { alignItems: 'center', width: '100%' },
+  qrSlot: (size: string) => ({
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: size,
+    height: size,
+    padding: '9px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  }),
+  setup: {
+    alignItems: 'center',
+    paddingBlock: '32px',
+    paddingInline: '20px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+  },
+  status: { minHeight: '20px', fontSize: cssVar.fontSize, textAlign: 'center' },
+  tips: { maxWidth: '480px', fontSize: cssVar.fontSize, textAlign: 'center' },
+});
 
 type QrState =
   | { stage: 'idle' }
@@ -172,9 +154,9 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
       : undefined;
 
   return (
-    <Block className={styles.setup}>
+    <Block className={stylex.props(styles.setup).className}>
       <Flexbox align="center" gap={12}>
-        <div className={styles.qrSlot}>
+        <div {...stylex.props(styles.qrSlot(`${QR_SLOT_SIZE}px`))}>
           {state.stage === 'idle' && (
             <Button
               disabled={disabled}
@@ -197,7 +179,7 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
             />
           )}
           {state.stage === 'error' && (
-            <Flexbox className={styles.error} gap={12}>
+            <Flexbox className={stylex.props(styles.error).className} gap={12}>
               <Alert showIcon message={state.message} type="warning" />
               <Button
                 disabled={disabled}
@@ -212,12 +194,12 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
         </div>
 
         {state.stage === 'ready' && (
-          <Text className={styles.status} type="secondary">
+          <Text className={stylex.props(styles.status).className} type="secondary">
             {status}
           </Text>
         )}
 
-        <Text className={styles.tips} type="secondary">
+        <Text className={stylex.props(styles.tips).className} type="secondary">
           <Icon icon={InfoIcon} style={{ marginInlineEnd: 4 }} />
           {t('messenger.wechat.qr.tip')}
         </Text>

@@ -1,7 +1,9 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowRightIcon, LockIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,54 +12,27 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 
 import { useGithubRepositories } from './useGithubRepositories';
 
-const styles = createStaticStyles(({ css }) => ({
-  field: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 6px;
-
-    min-width: 0;
-  `,
-  label: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  guide: css`
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    padding-block: 12px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  guideText: css`
-    flex: 1;
-    min-width: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  option: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    min-width: 0;
-  `,
-  optionName: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  private: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  field: { display: 'flex', flex: '1', flexDirection: 'column', gap: '6px', minWidth: '0' },
+  label: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextSecondary },
+  guide: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    paddingBlock: '12px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  guideText: { flex: '1', minWidth: '0', fontSize: '12px', color: cssVar.colorTextSecondary },
+  option: { display: 'flex', gap: '6px', alignItems: 'center', minWidth: '0' },
+  optionName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  private: { flex: 'none', color: cssVar.colorTextQuaternary },
+});
 
 export interface GithubRepositorySelection {
   defaultBranch?: string;
@@ -144,8 +119,8 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
           : undefined;
 
   const guideContent = guide && (
-    <div className={styles.guide} role={state === 'error' ? 'alert' : undefined}>
-      <span className={styles.guideText}>{guide.text}</span>
+    <div {...stylex.props(styles.guide)} role={state === 'error' ? 'alert' : undefined}>
+      <span {...stylex.props(styles.guideText)}>{guide.text}</span>
       <Button
         loading={guide.action === 'retry' && isValidating}
         size={'small'}
@@ -168,7 +143,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
       <Flexbox gap={6}>
         <Flexbox horizontal align={'center'} gap={6}>
           <Github size={13} />
-          <span className={styles.label}>{t('environments.github.label')}</span>
+          <span {...stylex.props(styles.label)}>{t('environments.github.label')}</span>
         </Flexbox>
         {guideContent}
       </Flexbox>
@@ -178,7 +153,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
     <Flexbox gap={8}>
       <Flexbox horizontal align={'center'} gap={6}>
         <Github size={13} />
-        <span className={styles.label}>{t('environments.github.label')}</span>
+        <span {...stylex.props(styles.label)}>{t('environments.github.label')}</span>
         <Text fontSize={11} type={'secondary'}>
           {t('environments.github.optional')}
         </Text>
@@ -186,7 +161,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
 
       {guideContent}
       <Flexbox horizontal gap={8}>
-        <div className={styles.field}>
+        <div {...stylex.props(styles.field)}>
           <Text fontSize={11} type={'secondary'}>
             {t('environments.github.organization')}
           </Text>
@@ -207,7 +182,7 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
           />
         </div>
 
-        <div className={styles.field}>
+        <div {...stylex.props(styles.field)}>
           <Text fontSize={11} type={'secondary'}>
             {t('environments.github.repository')}
           </Text>
@@ -218,10 +193,14 @@ const GithubRepositoryPicker = memo<GithubRepositoryPickerProps>(({ onChange, on
             value={value?.repository ?? null}
             options={owned.map((repository) => ({
               label: (
-                <span className={styles.option}>
-                  <span className={styles.optionName}>{repository.name}</span>
+                <span {...stylex.props(styles.option)}>
+                  <span {...stylex.props(styles.optionName)}>{repository.name}</span>
                   {repository.isPrivate && (
-                    <Icon className={styles.private} icon={LockIcon} size={12} />
+                    <Icon
+                      className={stylex.props(styles.private).className}
+                      icon={LockIcon}
+                      size={12}
+                    />
                   )}
                 </span>
               ),

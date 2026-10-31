@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Popover } from '@lobehub/ui';
+import { Popover } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 
 import { DOCK_Z_INDEX } from '../const';
@@ -10,24 +12,21 @@ import MemoryPopover from './MemoryPopover';
 import { isMemorySamplingSupported, useMemorySamples } from './memorySamples';
 import { isMemoryHigh } from './metricUtils';
 
-const styles = createStaticStyles(({ css }) => ({
-  active: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  high: css`
-    color: ${cssVar.colorError};
-  `,
-  mid: css`
-    color: ${cssVar.colorWarning};
-  `,
-  text: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-feature-settings: 'tnum';
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  active: {
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  high: { color: { 'default': cssVar.colorError, ':hover': cssVar.colorText } },
+  mid: { color: { 'default': cssVar.colorWarning, ':hover': cssVar.colorText } },
+  text: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontFeatureSettings: "'tnum'",
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+  },
+});
 
 const MemoryWidget = memo(() => {
   const samples = useMemorySamples();
@@ -53,7 +52,7 @@ const MemoryWidget = memo(() => {
     >
       <button
         type={'button'}
-        className={cx(
+        {...stylex.props(
           barButtonStyles.button,
           styles.text,
           high ? styles.high : percent >= 70 ? styles.mid : undefined,

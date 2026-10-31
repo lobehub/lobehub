@@ -4,8 +4,6 @@ import type { DeviceListItem } from '@lobechat/types';
 import {
   ActionIcon,
   confirmModal,
-  createStaticStyles,
-  cssVar,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -13,6 +11,8 @@ import {
   Text,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useInViewport } from 'ahooks';
 import {
   EyeOffIcon,
@@ -40,85 +40,61 @@ import { useCanEditDevice } from './useCanEditDevice';
 import { useDeviceActivityText } from './useDeviceActivityText';
 import { useDeviceCardMutations } from './useDeviceCardMutations';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    padding-block: 20px 16px;
-    padding-inline: 20px;
-  `,
-  card: css`
-    cursor: pointer;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: border-color 0.15s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 1px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  // Code-font value that truncates rather than wrapping, so a deep path or a
-  // long hostname keeps the info grid at one line per field.
-  code: css`
-    overflow: hidden;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  footer: css`
-    margin-block-start: auto;
-    padding-block: 12px;
-    padding-inline: 20px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  iconTile: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  infoGrid: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 16px;
-  `,
-  // Presence dot leading the footer's status text, so "online" reads as one
-  // unit in the corner rather than a badge on the icon plus a label below.
-  presence: css`
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  `,
-}));
+const styles = stylex.create({
+  body: { paddingBlockStart: '20px', paddingBlockEnd: '16px', paddingInline: '20px' },
+  card: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: '0',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: {
+      'default': 'border-color 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  code: {
+    overflow: 'hidden',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  footer: {
+    marginBlockStart: 'auto',
+    paddingBlock: '12px',
+    paddingInline: '20px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  iconTile: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  infoGrid: { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '16px' },
+  presence: { flex: 'none', width: '8px', height: '8px', borderRadius: '50%' },
+});
 
 interface DeviceCardProps {
   device: DeviceListItem;
@@ -240,7 +216,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
 
   return (
     <div
-      className={styles.card}
+      {...stylex.props(styles.card)}
       ref={cardRef}
       role={'link'}
       tabIndex={0}
@@ -254,9 +230,9 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
         }
       }}
     >
-      <Flexbox className={styles.body} gap={20}>
+      <Flexbox className={stylex.props(styles.body).className} gap={20}>
         <Flexbox horizontal align={'flex-start'} gap={16}>
-          <div className={styles.iconTile}>{getDeviceIcon(device.platform, 22)}</div>
+          <div {...stylex.props(styles.iconTile)}>{getDeviceIcon(device.platform, 22)}</div>
 
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Text ellipsis fontSize={16} weight={600}>
@@ -327,12 +303,12 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
           </Flexbox>
         </Flexbox>
 
-        <div className={styles.infoGrid}>
+        <div {...stylex.props(styles.infoGrid)}>
           <Flexbox gap={4} style={{ minWidth: 0 }}>
             <Text fontSize={13} type={'secondary'}>
               {t('devices.card.hostname')}
             </Text>
-            <span className={styles.code} title={device.hostname ?? undefined}>
+            <span {...stylex.props(styles.code)} title={device.hostname ?? undefined}>
               {device.hostname || '—'}
             </span>
           </Flexbox>
@@ -360,10 +336,15 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
         )}
       </Flexbox>
 
-      <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.footer).className}
+        gap={8}
+      >
         <span
           aria-hidden
-          className={styles.presence}
+          className={stylex.props(styles.presence).className}
           style={{ background: online ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
         />
         <Text ellipsis fontSize={13} style={{ minWidth: 0 }} type={'secondary'}>

@@ -6,63 +6,59 @@ import {
   Block,
   Button,
   confirmModal,
-  createStaticStyles,
   DropdownMenu,
   Flexbox,
   Icon,
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { linearService } from '@/services/linear';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  dot: css`
-    display: inline-block;
-    flex: none;
-
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorSuccess};
-  `,
-  emptyState: css`
-    padding-block: 24px;
-    padding-inline: 20px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  status: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  dot: {
+    display: 'inline-block',
+    flex: 'none',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+  },
+  emptyState: {
+    paddingBlock: '24px',
+    paddingInline: '20px',
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  status: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusSM,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface ConnectionsProps {
   /** False when the deployment has no Linear OAuth application; connecting is impossible. */
@@ -128,7 +124,7 @@ const Connections = memo<ConnectionsProps>(
         )}
 
         {connections.length === 0 ? (
-          <div className={styles.emptyState}>{t('linear.connections.empty')}</div>
+          <div {...stylex.props(styles.emptyState)}>{t('linear.connections.empty')}</div>
         ) : (
           connections.map((connection) => {
             const date = new Date(connection.createdAt).toLocaleDateString();
@@ -137,7 +133,11 @@ const Connections = memo<ConnectionsProps>(
                 ? t('linear.connections.enabledBy', { date, name: connection.actorName })
                 : t('linear.connections.connectedAs', { date, name: connection.actorName });
             return (
-              <Block className={styles.card} key={connection.id} variant={'filled'}>
+              <Block
+                className={stylex.props(styles.card).className}
+                key={connection.id}
+                variant={'filled'}
+              >
                 <Flexbox horizontal align="center" gap={12}>
                   <Avatar
                     avatar={connection.metadata.organizationLogoUrl ?? undefined}
@@ -171,8 +171,8 @@ const Connections = memo<ConnectionsProps>(
                       },
                     ]}
                   >
-                    <span className={styles.status}>
-                      <span className={styles.dot} />
+                    <span {...stylex.props(styles.status)}>
+                      <span {...stylex.props(styles.dot)} />
                       <Text>{t('linear.connections.status.connected')}</Text>
                       <Icon icon={ChevronDownIcon} size="small" />
                     </span>

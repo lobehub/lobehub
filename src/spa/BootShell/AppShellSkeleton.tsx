@@ -139,14 +139,19 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
           />
         )}
         <Flexbox
-          className={containerStyles.outerContainer}
           height={'100%'}
           padding={8}
           style={getOuterCssVariables({ expand: showLeftPanel })}
           width={'100%'}
+          className={
+            stylex.props(
+              containerStyles.outerContainer,
+              isDesktop && containerStyles.outerContainerDesktop,
+            ).className
+          }
         >
           <Flexbox
-            className={containerStyles.innerContainer}
+            className={stylex.props(containerStyles.innerContainer).className}
             height={'100%'}
             style={getInnerCssVariables({ isDark })}
             width={'100%'}

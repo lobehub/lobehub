@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Icon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { BriefcaseIcon, LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -136,7 +137,7 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
         );
       })}
       {allInstallsUnlinked && !hasLinks && (
-        <div className={styles.emptyRow}>{t('messenger.detail.connections.linkHint')}</div>
+        <div {...stylex.props(styles.emptyRow)}>{t('messenger.detail.connections.linkHint')}</div>
       )}
     </DetailLayout>
   );

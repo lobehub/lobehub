@@ -1,6 +1,7 @@
 'use client';
 
-import { cx, Input } from '@lobehub/ui';
+import { Input } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Boxes } from 'lucide-react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
@@ -26,13 +27,13 @@ const ResourceList = ({
 }: ResourceListProps) => (
   <aside
     aria-label={'Replica resources'}
-    className={cx(styles.sidePane, devDockPanelStyles.paneDividerEnd)}
+    {...stylex.props(styles.sidePane, devDockPanelStyles.paneDividerEnd)}
   >
-    <div className={devDockPanelStyles.paneHeader}>Resources</div>
-    <div className={devDockPanelStyles.paneSearch}>
+    <div {...stylex.props(devDockPanelStyles.paneHeader)}>Resources</div>
+    <div {...stylex.props(devDockPanelStyles.paneSearch)}>
       <Input
         allowClear
-        className={devDockPanelStyles.searchInput}
+        className={stylex.props(devDockPanelStyles.searchInput).className}
         placeholder={'Search resources…'}
         size={'small'}
         value={search}
@@ -40,9 +41,9 @@ const ResourceList = ({
         onChange={(event) => onSearchChange(event.target.value)}
       />
     </div>
-    <div className={styles.list}>
+    <div {...stylex.props(styles.list)}>
       {resources.length === 0 ? (
-        <div className={styles.empty}>
+        <div {...stylex.props(styles.empty)}>
           {search ? 'No resources match.' : 'No replica has been created yet.'}
         </div>
       ) : (
@@ -53,22 +54,22 @@ const ResourceList = ({
             return (
               <button
                 aria-pressed={active}
-                className={cx(styles.listItem, active && styles.listItemActive)}
+                {...stylex.props(styles.listItem, active && styles.listItemActive)}
                 key={namespace}
                 title={`${namespace}${persisted ? '' : ' · memory only'}${paged ? ' · paged' : ''}`}
                 type={'button'}
                 onClick={() => onSelect(namespace)}
               >
-                <Boxes className={styles.listIcon} size={14} />
-                <span className={styles.listName}>{name}</span>
-                <span className={replicaStyles.resourceMeta}>
+                <Boxes className={stylex.props(styles.listIcon).className} size={14} />
+                <span {...stylex.props(styles.listName)}>{name}</span>
+                <span {...stylex.props(replicaStyles.resourceMeta)}>
                   {pendingCount > 0 && (
-                    <span className={cx(replicaStyles.badge, replicaStyles.badgePending)}>
+                    <span {...stylex.props(replicaStyles.badge, replicaStyles.badgePending)}>
                       {pendingCount}↺
                     </span>
                   )}
-                  <span className={replicaStyles.badge}>v{version}</span>
-                  <span className={styles.listCount}>{entryCount}</span>
+                  <span {...stylex.props(replicaStyles.badge)}>v{version}</span>
+                  <span {...stylex.props(styles.listCount)}>{entryCount}</span>
                 </span>
               </button>
             );

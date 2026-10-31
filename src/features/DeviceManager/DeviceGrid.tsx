@@ -1,34 +1,26 @@
-import { createStaticStyles, cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
+import { sx } from '@/styles/sx';
+
+const styles = stylex.create({
   // Cards carry their own frame, so the grid sits bare in its host. The page
   // is full width, so columns step by the host's own width — one on a phone,
   // then two, three and four — keeping every card at least ~270px wide.
-  grid: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-    min-width: 0;
-
-    @container device-grid (min-width: 560px) {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    @container device-grid (min-width: 880px) {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    @container device-grid (min-width: 1200px) {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-  `,
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'minmax(0, 1fr)',
+      '@container device-grid (min-width: 560px)': 'repeat(2, minmax(0, 1fr))',
+      '@container device-grid (min-width: 880px)': 'repeat(3, minmax(0, 1fr))',
+      '@container device-grid (min-width: 1200px)': 'repeat(4, minmax(0, 1fr))',
+    },
+    gap: '16px',
+    minWidth: 0,
+  },
   // Query container for the grid's column steps (a grid can't query itself).
-  host: css`
-    container: device-grid / inline-size;
-    min-width: 0;
-  `,
-}));
+  host: { containerName: 'device-grid', containerType: 'inline-size', minWidth: 0 },
+});
 
 interface DeviceGridProps {
   children: ReactNode;
@@ -40,8 +32,8 @@ interface DeviceGridProps {
  * loading → loaded swap keeps every card in place.
  */
 const DeviceGrid = ({ children, className }: DeviceGridProps) => (
-  <div className={styles.host}>
-    <div className={cx(styles.grid, className)}>{children}</div>
+  <div {...stylex.props(styles.host)}>
+    <div {...sx([styles.grid], className)}>{children}</div>
   </div>
 );
 

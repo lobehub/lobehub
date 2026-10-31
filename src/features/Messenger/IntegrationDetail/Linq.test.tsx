@@ -15,10 +15,6 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       ...(await importOriginal<object>()),
       QRCode: ({ value }: { value: string }) => <span data-value={value} role="img" />,
     }),
-    async (importOriginal) => ({
-      ...((await importOriginal()) as Record<string, unknown>),
-      createStaticStyles: () => ({ code: 'code', qrSlot: 'qrSlot', setup: 'setup', tips: 'tips' }),
-    }),
   ];
   const merged: Record<string, unknown> = { ...actual };
   for (const factory of factories) {

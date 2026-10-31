@@ -1,7 +1,9 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Button, Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import { CONNECTABLE_PROVIDERS } from '@/features/ConnectAgent/providers';
@@ -11,14 +13,15 @@ import { deviceService } from '@/services/device';
 import FieldLabel from '../FieldLabel';
 import { partitionScan } from './partitionScan';
 
-const styles = createStaticStyles(({ css }) => ({
-  row: css`
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  row: {
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * The agent runtimes installed on the device (Claude Code, Codex, …), probed
@@ -81,7 +84,13 @@ const AgentRuntimes = ({ device }: { device: DeviceListItem }) => {
         </Text>
       ) : (
         installed.map(({ provider, version }) => (
-          <Flexbox horizontal align={'center'} className={styles.row} gap={10} key={provider.type}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.row).className}
+            gap={10}
+            key={provider.type}
+          >
             <provider.brand.Avatar size={24} />
             <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
               {provider.title}

@@ -1,0 +1,7 @@
+/* The Select trigger wraps the selected label in an inline value span; flex it so the
+   scope row can fill the trigger and push its tag to the end. */
+.scopeValue > span {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}

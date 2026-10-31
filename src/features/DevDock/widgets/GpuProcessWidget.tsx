@@ -1,24 +1,21 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useAppProcessMetrics } from './appProcessMetrics';
 
-const styles = createStaticStyles(({ css }) => ({
-  high: css`
-    color: ${cssVar.colorError};
-  `,
-  mid: css`
-    color: ${cssVar.colorWarning};
-  `,
-  text: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-feature-settings: 'tnum';
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  high: { color: cssVar.colorError },
+  mid: { color: cssVar.colorWarning },
+  text: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontFeatureSettings: "'tnum'",
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const GpuProcessWidget = memo(() => {
   const gpu = useAppProcessMetrics()?.gpu;
@@ -27,7 +24,7 @@ const GpuProcessWidget = memo(() => {
 
   return (
     <span
-      className={cx(
+      {...stylex.props(
         styles.text,
         gpu.cpuPercent >= 100 ? styles.high : gpu.cpuPercent >= 50 ? styles.mid : undefined,
       )}

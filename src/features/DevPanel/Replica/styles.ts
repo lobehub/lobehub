@@ -1,68 +1,61 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const replicaStyles = createStaticStyles(({ css }) => ({
-  actions: css`
-    display: flex;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  badge: css`
-    padding-inline: 4px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusXS};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 10px;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  badgePending: css`
-    border-color: ${cssVar.colorWarningBorder};
-    color: ${cssVar.colorWarning};
-  `,
-  editor: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 8px;
-
-    min-height: 0;
-    padding: 12px;
-  `,
-  editorFooter: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  editorError: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorError};
-    overflow-wrap: anywhere;
-  `,
-  editorInput: css`
-    flex: 1;
-    min-height: 200px;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-  `,
-  persistToggle: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-  `,
-  resourceMeta: css`
-    display: flex;
-    flex-shrink: 0;
-    gap: 4px;
-  `,
-}));
+export const replicaStyles = stylex.create({
+  actions: {
+    display: 'flex',
+    flexShrink: 0,
+    flexWrap: 'wrap',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  badge: {
+    paddingInline: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusXS,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '10px',
+    lineHeight: '16px',
+    color: cssVar.colorTextTertiary,
+  },
+  badgePending: {
+    borderColor: cssVar.colorWarningBorder,
+    color: cssVar.colorWarning,
+  },
+  editor: {
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    gap: '8px',
+    minHeight: 0,
+    padding: '12px',
+  },
+  editorError: {
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorError,
+    overflowWrap: 'anywhere',
+  },
+  editorFooter: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextTertiary,
+  },
+  editorInput: {
+    flex: '1',
+    minHeight: '200px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+  },
+  persistToggle: { display: 'flex', gap: '6px', alignItems: 'center' },
+  resourceMeta: { display: 'flex', flexShrink: 0, gap: '4px' },
+});

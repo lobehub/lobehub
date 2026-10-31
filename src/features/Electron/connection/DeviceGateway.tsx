@@ -1,5 +1,7 @@
 import { type GatewayConnectionErrorCode, useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { ActionIcon, Button, createStaticStyles, Flexbox, Popover, Switch } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Popover, Switch } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { HardDrive, SettingsIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,51 +24,43 @@ const ERROR_MESSAGE_KEYS = {
   not_signed_in: 'gateway.error.notSignedIn',
 } as const satisfies Record<GatewayConnectionErrorCode, string>;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  errorDot: css`
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline-end: 0;
-
-    width: 8px;
-    height: 8px;
-    border: 1.5px solid ${cssVar.colorBgContainer};
-    border-radius: 50%;
-
-    background: ${cssVar.colorError};
-  `,
-  errorHint: css`
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorError};
-  `,
-  greenDot: css`
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline-end: 0;
-
-    width: 8px;
-    height: 8px;
-    border: 1.5px solid ${cssVar.colorBgContainer};
-    border-radius: 50%;
-
-    background: #52c41a;
-  `,
-  popoverContent: css`
-    width: 250px;
-  `,
-  scopeHint: css`
-    font-size: 11px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextDescription};
-    white-space: nowrap;
-  `,
-  statusTitle: css`
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  errorDot: {
+    position: 'absolute',
+    insetBlockEnd: '0',
+    insetInlineEnd: '0',
+    width: '8px',
+    height: '8px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorError,
+    backgroundImage: 'none',
+  },
+  errorHint: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorError },
+  greenDot: {
+    position: 'absolute',
+    insetBlockEnd: '0',
+    insetInlineEnd: '0',
+    width: '8px',
+    height: '8px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '50%',
+    backgroundColor: '#52c41a',
+    backgroundImage: 'none',
+  },
+  popoverContent: { width: '250px' },
+  scopeHint: {
+    fontSize: '11px',
+    lineHeight: 1.4,
+    color: cssVar.colorTextDescription,
+    whiteSpace: 'nowrap',
+  },
+  statusTitle: { fontSize: '13px', fontWeight: 500, color: cssVar.colorText },
+});
 
 interface DeviceGatewayProps {
   workspaceScoped: boolean;
@@ -148,9 +142,9 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ workspaceScoped }) => {
         : t(isConnected ? 'gateway.statusConnected' : 'gateway.statusDisconnected');
 
   const popoverContent = (
-    <Flexbox className={styles.popoverContent} gap={4}>
+    <Flexbox className={stylex.props(styles.popoverContent).className} gap={4}>
       <Flexbox horizontal align="center" justify="space-between">
-        <span className={styles.statusTitle}>{t('gateway.title')}</span>
+        <span {...stylex.props(styles.statusTitle)}>{t('gateway.title')}</span>
         <Flexbox horizontal align="center" gap={6}>
           <ActionIcon
             aria-label={t('gateway.manageDevices')}
@@ -170,10 +164,10 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ workspaceScoped }) => {
           )}
         </Flexbox>
       </Flexbox>
-      <span className={styles.scopeHint}>{connectionHint}</span>
+      <span {...stylex.props(styles.scopeHint)}>{connectionHint}</span>
       {failure && (
         <Flexbox align="flex-start" gap={4}>
-          <span className={styles.errorHint} title={failure.detail}>
+          <span {...stylex.props(styles.errorHint)} title={failure.detail}>
             {t(ERROR_MESSAGE_KEYS[failure.code])}
           </span>
           <Flexbox horizontal gap={4}>
@@ -207,9 +201,9 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ workspaceScoped }) => {
           tooltipProps={{ placement: 'bottomRight' }}
         />
         {scopeConnected ? (
-          <div className={styles.greenDot} />
+          <div {...stylex.props(styles.greenDot)} />
         ) : (
-          failure && <div className={styles.errorDot} />
+          failure && <div {...stylex.props(styles.errorDot)} />
         )}
       </div>
     </Popover>

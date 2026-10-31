@@ -1,44 +1,42 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useState } from 'react';
 
 import { externalLinkHref, truncateUrl } from './utils';
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    pointer-events: none;
-
-    position: fixed;
-    z-index: 1500;
-    inset-block-end: 0;
-    inset-inline-start: 0;
-
-    overflow: hidden;
-
-    max-width: 60vw;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-    border-start-end-radius: ${cssVar.borderRadiusSM};
-
-    font-size: 12px;
-    line-height: 18px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    opacity: 0;
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    transition: opacity 120ms ease;
-  `,
-  visible: css`
-    opacity: 1;
-  `,
-}));
+const styles = stylex.create({
+  root: {
+    pointerEvents: 'none',
+    position: 'fixed',
+    zIndex: 1500,
+    insetBlockEnd: '0',
+    insetInlineStart: '0',
+    overflow: 'hidden',
+    maxWidth: '60vw',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+    borderStartEndRadius: cssVar.borderRadiusSM,
+    fontSize: '12px',
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    opacity: 0,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+    transition: 'opacity 120ms ease',
+  },
+  visible: { opacity: 1 },
+});
 
 const LinkHoverStatus = memo(() => {
   const [url, setUrl] = useState('');
@@ -66,7 +64,7 @@ const LinkHoverStatus = memo(() => {
   }, []);
 
   return (
-    <div aria-hidden className={cx(styles.root, visible && styles.visible)}>
+    <div aria-hidden {...stylex.props(styles.root, visible && styles.visible)}>
       {truncateUrl(url)}
     </div>
   );

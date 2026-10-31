@@ -2,7 +2,9 @@
 
 import { LOADING_FLAT } from '@lobechat/const';
 import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
-import { createStaticStyles, Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
 import {
@@ -17,19 +19,17 @@ import { DEVTOOLS_AGENT_ID } from './fixtures';
 import { deriveFixtureProps, type LifecycleMode } from './lifecycleMode';
 import type { ApiEntry } from './useDevtoolsEntries';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  empty: css`
-    padding-block: 48px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  thread: css`
-    width: 100%;
-    padding-block: 8px 48px;
-    padding-inline: 12px;
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  empty: { paddingBlock: '48px', color: cssVar.colorTextTertiary, textAlign: 'center' },
+  thread: {
+    width: '100%',
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '48px',
+    paddingInline: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const coerceContent = (value: unknown): string => {
   if (value === null || value === undefined) return '';
@@ -126,7 +126,7 @@ const InnerList = memo(() => {
   const ids = useConversationStore(dataSelectors.displayMessageIds);
   return (
     <MessageActionProvider withSingletonActionsBar={false}>
-      <div className={styles.thread}>
+      <div {...stylex.props(styles.thread)}>
         {ids.map((id, index) => (
           <MessageItem
             disableEditing
@@ -165,7 +165,11 @@ const MessageList = memo<MessageListProps>(({ apis, mode }) => {
   );
 
   if (messages.length === 0) {
-    return <Text className={styles.empty}>No renderable APIs in this toolset.</Text>;
+    return (
+      <Text className={stylex.props(styles.empty).className}>
+        No renderable APIs in this toolset.
+      </Text>
+    );
   }
 
   return (

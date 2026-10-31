@@ -1,33 +1,33 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-import { isDesktop } from '@/const/version';
-
-export const styles = createStaticStyles(({ css, cssVar }) => ({
+export const styles = stylex.create({
   // Inner container
-  innerContainer: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid var(--container-border-color, ${cssVar.colorBorder});
-    border-radius: var(--container-border-radius, ${cssVar.borderRadius});
-    border-end-end-radius: var(
+  innerContainer: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: `var(--container-border-color, ${cssVar.colorBorder})`,
+    borderRadius: `var(--container-border-radius, ${cssVar.borderRadius})`,
+    borderEndEndRadius: `var(
       --container-border-bottom-right-radius,
       var(--container-border-radius, ${cssVar.borderRadius})
-    );
-
-    background: ${cssVar.colorBgContainer};
-  `,
+    )`,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
 
   // Outer container
-  outerContainer: css`
-    position: relative;
+  outerContainer: {
+    position: 'relative',
+    overflow: 'hidden',
+    paddingBlockStart: 'var(--container-padding-top, 8px)',
+    paddingInlineStart: 'var(--container-padding-left, 8px)',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
 
-    overflow: hidden;
-
-    padding-block-start: var(--container-padding-top, 8px);
-    padding-inline-start: var(--container-padding-left, 8px);
-
-    background: ${isDesktop ? 'transparent' : cssVar.colorBgLayout};
-  `,
-}));
+  // Desktop shell paints the window background behind the container
+  outerContainerDesktop: { backgroundColor: 'transparent' },
+});

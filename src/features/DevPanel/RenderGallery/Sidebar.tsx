@@ -1,31 +1,28 @@
 'use client';
 
 import { type DropdownItem, List, type ListItem, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  menu: css`
-    padding-block: 4px;
-  `,
-  sidebar: css`
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-
-    width: 260px;
-    height: 100%;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  scroll: css`
-    overflow: auto;
-    flex: 1;
-  `,
-}));
+const styles = stylex.create({
+  menu: { paddingBlock: '4px' },
+  sidebar: {
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    width: '260px',
+    height: '100%',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  scroll: { overflow: 'auto', flex: '1' },
+});
 
 interface SidebarProps {
   items: DropdownItem[];
@@ -43,16 +40,16 @@ const Sidebar = memo<SidebarProps>(({ items, selectedKey, onSelect }) => {
   );
 
   return (
-    <aside className={styles.sidebar}>
-      <div className={devDockPanelStyles.paneHeader}>
+    <aside {...stylex.props(styles.sidebar)}>
+      <div {...stylex.props(devDockPanelStyles.paneHeader)}>
         <Text fontSize={13} type={'secondary'} weight={600}>
           Builtin Tool Renders
         </Text>
       </div>
-      <div className={styles.scroll}>
+      <div {...stylex.props(styles.scroll)}>
         <List
           activeKey={selectedKey ?? null}
-          className={styles.menu}
+          className={stylex.props(styles.menu).className}
           items={listItems}
           onClick={({ key }) => onSelect(String(key))}
         />

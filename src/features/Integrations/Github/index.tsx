@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Avatar,
-  Block,
-  confirmModal,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  Skeleton,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Avatar, Block, confirmModal, Flexbox, Icon, Skeleton, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowLeftIcon, BookOpenIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,55 +19,35 @@ import Connections from './Connections';
 import { GITHUB_INTEGRATION } from './definition';
 import { buildGithubInstallHref } from './installHref';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  back: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  docs: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  hero: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 56px;
-    height: 56px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  infoBar: css`
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  infoLabel: css`
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  back: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  docs: {
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  hero: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '56px',
+    height: '56px',
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  infoBar: { paddingBlock: '10px', paddingInline: '16px', borderRadius: cssVar.borderRadiusLG },
+  infoLabel: { fontSize: '11px', fontWeight: 500, color: cssVar.colorTextTertiary },
+});
 
 const KNOWN_ERRORS = new Set([
   'exchange_failed',
@@ -161,13 +133,13 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
 
   return (
     <Flexbox gap={24}>
-      <span className={styles.back} onClick={onBack}>
+      <span {...stylex.props(styles.back)} onClick={onBack}>
         <Icon icon={ArrowLeftIcon} size="small" />
         <Text type="secondary">{t('overview.title')}</Text>
       </span>
 
       <Flexbox horizontal align="center" gap={16}>
-        <span className={styles.hero}>
+        <span {...stylex.props(styles.hero)}>
           <BrandIcon size={32} />
         </span>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
@@ -177,7 +149,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
           <Text type="secondary">{t('github.tagline')}</Text>
         </Flexbox>
         <a
-          className={styles.docs}
+          {...stylex.props(styles.docs)}
           href={GITHUB_INTEGRATION.docsUrl}
           rel="noreferrer"
           target="_blank"
@@ -190,7 +162,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
       </Flexbox>
 
       {scope === 'workspace' && !data.isInitialLoading ? (
-        <Block className={styles.infoBar} variant={'filled'}>
+        <Block className={stylex.props(styles.infoBar).className} variant={'filled'}>
           <Flexbox horizontal align="center" gap={32} wrap="wrap">
             {first ? (
               <Flexbox horizontal align="center" gap={10}>
@@ -200,7 +172,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
                   title={first.installedByExternalLogin ?? first.accountLogin}
                 />
                 <Flexbox gap={1}>
-                  <span className={styles.infoLabel}>{t('github.info.enabledBy')}</span>
+                  <span {...stylex.props(styles.infoLabel)}>{t('github.info.enabledBy')}</span>
                   <Text style={{ fontSize: 13 }}>
                     {first.installedByExternalLogin ?? first.accountLogin} ·{' '}
                     {new Date(first.createdAt).toLocaleDateString()}
@@ -209,7 +181,7 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
               </Flexbox>
             ) : (
               <Flexbox gap={1}>
-                <span className={styles.infoLabel}>{t('github.info.status')}</span>
+                <span {...stylex.props(styles.infoLabel)}>{t('github.info.status')}</span>
                 <Text style={{ fontSize: 13 }}>
                   {config?.enabled ? t('github.info.notConnected') : t('github.info.notConfigured')}
                 </Text>

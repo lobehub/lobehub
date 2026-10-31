@@ -1,0 +1,177 @@
+/*
+ * Tab chrome. These rules key off `[data-tier]` and reach the title and close button
+ * inside the tab, so they stay selector-based and in one cascade: the state classes
+ * below settle equal specificity by source order (tabPinned < tabSplitVisible <
+ * tabDragging < tabActive).
+ *
+ * Sizes mirror ./tabLayout: TAB_HEIGHT 26, TAB_INLINE_INSET 8.
+ */
+.tab {
+  cursor: default;
+  user-select: none;
+
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+  align-items: center;
+
+  height: 26px;
+
+  /* The start is the resting value only; TabItem overrides it with a sprung inset so the
+     avatar can travel to the middle of a tab that has shrunk to icon width. */
+  padding-inline: 8px 6px;
+  border-radius: var(--lobe-border-radius);
+
+  font-size: 12px;
+
+  background-color: transparent;
+
+  transition:
+    background-color 0.15s var(--lobe-motion-ease-in-out),
+    box-shadow 0.15s var(--lobe-motion-ease-in-out);
+}
+
+.tab:hover {
+  background-color: var(--lobe-color-fill-quaternary);
+}
+
+/* Nothing here may touch layout. The tier is resolved from the target width, so this
+   rule lands a whole spring before the box reaches it: centring the avatar from here
+   applied while the tab was still 200px wide and threw it into the middle of a box it
+   had not begun to shrink into — a jump to the right before the travel left. The
+   avatar still centres at this tier, but through the sprung inset in TabItem, which
+   arrives with the width instead of ahead of it. The title likewise only fades:
+   collapsing its width clipped the fade away in the frame it started. */
+.tab[data-tier='icon'] [data-tab-title] {
+  opacity: 0;
+}
+
+/* The button and the room for it are one rule on purpose: reserving the footprint
+   full-time cost the title 17px it almost never needed, and revealing the button
+   without the reservation would run the title's fade straight under it. Sharing a
+   selector makes the second state unreachable. Both sides ease over the same 0.15s,
+   so the gap opens exactly as the glyph arrives.
+
+   Below the compact tier neither appears: the tab cannot spare the button's 20px —
+   the title would be cut to a couple of glyphs — and at icon width the avatar is the
+   only identity signal left. Pinned tabs are always at icon width, so they fall out
+   too. The button stays mounted at every tier and fades; unmounting it made it vanish
+   mid-pin.
+
+   :has() carries the keyboard path — the button is focusable at these tiers, so
+   without it a tabbing user would land on something invisible.
+
+   Reservation is 20px button + 3px inset - the tab's own 6px end padding. Margin
+   rather than padding: the mask applies to the padding box, so padding would put the
+   gradient inside the reservation instead of at the text's edge. */
+.tab[data-closable][data-tier='full']:hover [data-tab-close],
+.tab[data-closable][data-tier='compact']:hover [data-tab-close],
+.tab[data-closable][data-tier='full']:has([data-tab-close]:focus-visible) [data-tab-close],
+.tab[data-closable][data-tier='compact']:has([data-tab-close]:focus-visible) [data-tab-close] {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.tab[data-closable][data-tier='full']:hover [data-tab-title],
+.tab[data-closable][data-tier='compact']:hover [data-tab-title],
+.tab[data-closable][data-tier='full']:has([data-tab-close]:focus-visible) [data-tab-title],
+.tab[data-closable][data-tier='compact']:has([data-tab-close]:focus-visible) [data-tab-title] {
+  margin-inline-end: 17px;
+}
+
+/* A pinned tab renders at icon width, which is pixel-identical to an unpinned tab
+   squeezed by a crowded strip — the surface is what tells the two apart. Declared
+   ahead of `tabActive` so that an active pinned tab still reads as active:
+   equal specificity is settled by source order. */
+.tabPinned {
+  background-color: var(--lobe-color-fill-quaternary);
+}
+
+.tabPinned:hover {
+  background-color: var(--lobe-color-fill-tertiary);
+}
+
+.tabSplitVisible::after {
+  content: '';
+
+  position: absolute;
+  inset-block-end: 1px;
+  inset-inline: 8px;
+
+  height: 1px;
+  border-radius: 1px;
+
+  opacity: 0.65;
+  background: var(--lobe-color-primary);
+}
+
+.tabDragging {
+  cursor: grabbing;
+  background-color: var(--lobe-color-bg-elevated);
+  box-shadow: var(--lobe-box-shadow-secondary);
+}
+
+/* The active tab floats above the titlebar rather than merging into the content card.
+   An attached (Chrome-style) treatment was built and tried on the real desktop app and
+   rejected: the seam it produced read worse than the separation it replaced. */
+.tabActive {
+  background-color: var(--lobe-color-bg-elevated);
+  box-shadow: var(--lobe-box-shadow-tertiary);
+}
+
+.tabActive:hover {
+  background-color: var(--lobe-color-bg-elevated);
+}
+
+html:global(.desktop)[data-theme='dark'] .tabActive {
+  background-color: var(--lobe-color-fill-secondary);
+  box-shadow: inset 0 0 0 1px var(--lobe-color-border-secondary);
+}
+
+html:global(.desktop)[data-theme='dark'] .tabActive:hover {
+  background-color: var(--lobe-color-fill-secondary);
+}
+
+.tabTitle {
+  overflow: hidden;
+  flex: 1;
+
+  min-width: 0;
+
+  font-size: 12px;
+  color: var(--lobe-color-text);
+  white-space: nowrap;
+
+  transition:
+    margin-inline-end 0.15s var(--lobe-motion-ease-in-out),
+    opacity 0.12s var(--lobe-motion-ease-in-out);
+
+  /* The one physical direction left in this file — mask-image has no logical form, and
+     nothing in the app sets dir="rtl". max(60%, …) caps the ramp at 40% of the box:
+     a narrow tab leaves the title barely 22px to live in, and a flat 20px ramp would
+     swallow the whole word rather than trailing it off. */
+  mask-image: linear-gradient(to right, #000 max(60%, calc(100% - 20px)), transparent);
+}
+
+.closeIcon {
+  pointer-events: none;
+
+  position: absolute;
+  inset-inline-end: 3px;
+
+  flex-shrink: 0;
+
+  color: var(--lobe-color-text-tertiary);
+
+  opacity: 0;
+
+  transition: opacity 0.15s var(--lobe-motion-ease-in-out);
+}
+
+.closeIcon:hover {
+  color: var(--lobe-color-text);
+}

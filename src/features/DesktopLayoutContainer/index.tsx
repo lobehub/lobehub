@@ -1,7 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC, type PropsWithChildren } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 
+import { isDesktop } from '@/const/version';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -38,14 +40,16 @@ const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
 
   return (
     <Flexbox
-      className={styles.outerContainer}
       height={'100%'}
       padding={8}
       style={outerCssVariables}
       width={'100%'}
+      className={
+        stylex.props(styles.outerContainer, isDesktop && styles.outerContainerDesktop).className
+      }
     >
       <Flexbox
-        className={styles.innerContainer}
+        className={stylex.props(styles.innerContainer).className}
         height={'100%'}
         ref={innerContainerRef}
         style={innerCssVariables}

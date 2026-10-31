@@ -1,7 +1,9 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   CableIcon,
@@ -30,54 +32,41 @@ import { latestUsageView } from './DeviceHealth/viewState';
 import { buildDeviceHoverSummary } from './deviceHoverSummary';
 import { getDeviceIcon } from './getDeviceIcon';
 
-const styles = createStaticStyles(({ css }) => ({
-  code: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  container: css`
-    width: 300px;
-    padding-block: 4px 8px;
-  `,
-  row: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  sectionBar: css`
-    flex-shrink: 0;
-    width: 3px;
-    height: 14px;
-    border-radius: 2px;
-  `,
-  sectionTitle: css`
-    padding-block: 6px;
-    padding-inline: 8px;
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  usage: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-  `,
-  value: css`
-    overflow: hidden;
-    min-width: 0;
-    color: ${cssVar.colorText};
-    text-align: end;
-  `,
-}));
+const styles = stylex.create({
+  code: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  container: { width: '300px', paddingBlockStart: '4px', paddingBlockEnd: '8px' },
+  row: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  sectionBar: { flexShrink: 0, width: '3px', height: '14px', borderRadius: '2px' },
+  sectionTitle: {
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    fontSize: '13px',
+    color: cssVar.colorTextSecondary,
+  },
+  usage: { paddingBlock: '4px', paddingInline: '8px' },
+  value: { overflow: 'hidden', minWidth: '0', color: cssVar.colorText, textAlign: 'end' },
+});
 
 const Section = ({ color, title }: { color: string; title: string }) => (
-  <Flexbox horizontal align={'center'} className={styles.sectionTitle} gap={8}>
-    <div className={styles.sectionBar} style={{ background: color }} />
+  <Flexbox
+    horizontal
+    align={'center'}
+    className={stylex.props(styles.sectionTitle).className}
+    gap={8}
+  >
+    <div className={stylex.props(styles.sectionBar).className} style={{ background: color }} />
     <span>{title}</span>
   </Flexbox>
 );
@@ -91,12 +80,24 @@ const InfoRow = ({
   icon: LucideIcon;
   label: string;
 }) => (
-  <Flexbox horizontal align={'center'} className={styles.row} gap={16} justify={'space-between'}>
+  <Flexbox
+    horizontal
+    align={'center'}
+    className={stylex.props(styles.row).className}
+    gap={16}
+    justify={'space-between'}
+  >
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
       <Icon icon={icon} size={13} />
       <span>{label}</span>
     </Flexbox>
-    <Flexbox horizontal align={'center'} className={styles.value} gap={6} justify={'flex-end'}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.value).className}
+      gap={6}
+      justify={'flex-end'}
+    >
       {children ?? <Text type={'secondary'}>—</Text>}
     </Flexbox>
   </Flexbox>
@@ -123,7 +124,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
   const { online } = summary;
 
   return (
-    <Flexbox className={styles.container}>
+    <Flexbox className={stylex.props(styles.container).className}>
       <Section color={cssVar.colorSuccess} title={t('devices.detail.runtime')} />
       <InfoRow icon={PowerIcon} label={t('devices.detail.status')}>
         <span
@@ -157,7 +158,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
         </InfoRow>
       )}
       {online && (
-        <div className={styles.usage}>
+        <div className={stylex.props(styles.usage).className}>
           {usage.loading ? (
             <UsageMeterGroup loading>
               <UsageMeterSkeleton />
@@ -205,14 +206,14 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       )}
       <InfoRow icon={ServerIcon} label={t('devices.card.hostname')}>
         {summary.hostname ? (
-          <span className={styles.code} title={summary.hostname}>
+          <span {...stylex.props(styles.code)} title={summary.hostname}>
             {summary.hostname}
           </span>
         ) : undefined}
       </InfoRow>
       <InfoRow icon={FolderIcon} label={t('devices.card.workingDir')}>
         {summary.workingDir ? (
-          <span className={styles.code} title={summary.workingDir}>
+          <span {...stylex.props(styles.code)} title={summary.workingDir}>
             {summary.workingDir}
           </span>
         ) : undefined}

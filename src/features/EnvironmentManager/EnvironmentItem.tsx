@@ -4,9 +4,6 @@ import { Github } from '@lobehub/icons';
 import {
   Button,
   confirmModal,
-  createStaticStyles,
-  cssVar,
-  cx,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -14,6 +11,8 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { EyeOffIcon, GlobeIcon, MoreHorizontalIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
@@ -28,83 +27,67 @@ import { useCanEditEnvironment } from './useCanEditEnvironment';
 import { useConfirmRemoveEnvironment } from './useConfirmRemoveEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
-const styles = createStaticStyles(({ css }) => ({
-  /**
-   * The counts. They shrink last: a long repository path gives way first
-   * (its shrink weight is far higher), but with the panel open the list is a
-   * third of the frame and even the facts alone can outrun it, so they
-   * truncate rather than run under the avatar and the menu.
-   */
-  facts: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    min-width: 0;
-
-    font-size: ${cssVar.fontSizeSM};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  iconTile: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  metaDivider: css`
-    flex: none;
-    width: 1px;
-    height: 10px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  repository: css`
-    overflow: hidden;
-    flex: 0 1000 auto;
-
-    min-width: 0;
-
-    font-size: ${cssVar.fontSizeSM};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  row: css`
-    cursor: pointer;
-
-    padding-block: 12px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -1px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      transition: none;
-    }
-  `,
-  rowActive: css`
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  facts: {
+    overflow: 'hidden',
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: 'auto',
+    minWidth: '0',
+    fontSize: cssVar.fontSizeSM,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  iconTile: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  metaDivider: {
+    flex: 'none',
+    width: '1px',
+    height: '10px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  repository: {
+    overflow: 'hidden',
+    flexGrow: 0,
+    flexShrink: 1000,
+    flexBasis: 'auto',
+    minWidth: '0',
+    fontSize: cssVar.fontSizeSM,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '12px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    transition: {
+      'default': 'background 0.15s ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-1px' },
+  },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+});
 
 interface EnvironmentItemProps {
   environment: SandboxEnvironment;
@@ -193,7 +176,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.row, selected && styles.rowActive)}
+      className={stylex.props(styles.row, selected && styles.rowActive).className}
       gap={16}
       role={'button'}
       tabIndex={0}
@@ -206,7 +189,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
         }
       }}
     >
-      <div className={styles.iconTile}>
+      <div className={stylex.props(styles.iconTile).className}>
         <Github size={20} />
       </div>
 
@@ -242,13 +225,13 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
                 that can afford to. */}
           {repository && (
             <>
-              <Text className={styles.repository} type={'secondary'}>
+              <Text className={stylex.props(styles.repository).className} type={'secondary'}>
                 {repository}
               </Text>
-              <span className={styles.metaDivider} />
+              <span className={stylex.props(styles.metaDivider).className} />
             </>
           )}
-          <Text className={styles.facts} type={'secondary'}>
+          <Text className={stylex.props(styles.facts).className} type={'secondary'}>
             {t('environments.meta.createdAt', {
               time: dayjs(environment.createdAt).fromNow(),
             })}

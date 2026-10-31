@@ -1,62 +1,53 @@
 'use client';
 
 import { isRecord } from '@lobechat/utils/object';
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-  TextArea,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Input, Text, TextArea, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BracesIcon, CheckIcon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { sx } from '@/styles/sx';
 
 import { describeError } from './errorMessage';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   /** Railway's variables list: a framed block with a rule between rows. */
-  list: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  row: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    word-break: break-all;
-  `,
+  list: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  row: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontSize: '13px', wordBreak: 'break-all' },
   /**
    * Dashed, the way Railway frames "no variables": the outline says a list
    * belongs here, and the dashes say it has not been filled in, without the
    * weight a solid box would give an absence.
    */
-  empty: css`
-    padding-block: 32px;
-    padding-inline: 16px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  editor: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-  `,
-}));
+  empty: {
+    paddingBlock: '32px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  editor: { fontFamily: cssVar.fontFamilyCode, fontSize: cssVar.fontSizeSM },
+});
 
 type Entry = [string, string];
 
@@ -145,7 +136,12 @@ const EnvRow = memo<{
 
   if (draft) {
     return (
-      <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.row, stylex.defaultMarker()).className}
+        gap={8}
+      >
         <Input
           autoFocus
           placeholder={'NODE_ENV'}
@@ -188,14 +184,17 @@ const EnvRow = memo<{
   }
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
-      <span className={styles.mono} style={{ flex: 1 }}>
-        {entry[0]}
-      </span>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.row, stylex.defaultMarker()).className}
+      gap={8}
+    >
+      <span {...sx([styles.mono], undefined, { flex: 1 })}>{entry[0]}</span>
       {/* Shown, not starred out: the hint above says these are stored in the
           clear and copied into every instance, and a mask would promise a
           secrecy the storage does not keep. */}
-      <span className={styles.mono} style={{ color: cssVar.colorTextSecondary, flex: 1 }}>
+      <span {...sx([styles.mono], undefined, { color: cssVar.colorTextSecondary, flex: 1 })}>
         {entry[1]}
       </span>
       <ActionIcon
@@ -331,7 +330,7 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
           <TextArea
             autoFocus
             aria-label={t('environments.form.rawEditor')}
-            classNames={{ input: styles.editor }}
+            classNames={{ input: stylex.props(styles.editor).className }}
             placeholder={'{\n  "NODE_ENV": "production"\n}'}
             rows={Math.min(16, Math.max(6, raw.split('\n').length + 1))}
             value={raw}
@@ -342,7 +341,7 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
           </Text>
         </Flexbox>
       ) : entries.length === 0 && !adding ? (
-        <Flexbox align={'center'} className={styles.empty} gap={4}>
+        <Flexbox align={'center'} className={stylex.props(styles.empty).className} gap={4}>
           <Text weight={500}>{t('environments.form.envEmpty')}</Text>
           <Flexbox horizontal align={'center'} gap={4}>
             <Text fontSize={12} type={'secondary'}>
@@ -354,9 +353,14 @@ const EnvironmentVariables = memo<EnvironmentVariablesProps>(({ entries, onSave 
           </Flexbox>
         </Flexbox>
       ) : (
-        <div className={styles.list}>
+        <div {...stylex.props(styles.list)}>
           {adding && (
-            <Flexbox horizontal align={'center'} className={styles.row} gap={8}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(styles.row, stylex.defaultMarker()).className}
+              gap={8}
+            >
               <Input
                 autoFocus
                 placeholder={'NODE_ENV'}

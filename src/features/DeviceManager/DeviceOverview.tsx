@@ -1,17 +1,9 @@
 'use client';
 
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
-import {
-  ActionIcon,
-  confirmModal,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Tag,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, confirmModal, Flexbox, Icon, Tag, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   ActivityIcon,
@@ -41,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import SkeletonBar from '@/components/Skeleton/Bar';
 import UserAvatar from '@/components/UserAvatar';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
+import { sx } from '@/styles/sx';
 import { formatSize } from '@/utils/format';
 
 import Connections from './Connections';
@@ -53,72 +46,72 @@ import { UsageBar } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
 import { getDeviceIcon, getPlatformLabel } from './getDeviceIcon';
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  cardBody: css`
-    padding: 16px;
-  `,
-  cardHeader: css`
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  code: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 13px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  cardBody: { padding: '16px' },
+  cardHeader: {
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  code: {
+    overflow: 'hidden',
+    minWidth: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '13px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
   // Two info cards side by side, stacking once the column gets narrow. The
   // `min(100%, …)` floor lets a lone column shrink below it on a phone instead
   // of overflowing the padded settings container.
-  infoGrid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-    gap: 16px;
-  `,
-  row: css`
-    min-height: 48px;
-    padding-block: 10px;
-    padding-inline: 16px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  statGrid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-    gap: 16px;
-  `,
-  statusPill: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    font-size: 13px;
-    font-weight: 500;
-  `,
-}));
+  infoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
+    gap: '16px',
+  },
+  row: {
+    minHeight: '48px',
+    paddingBlock: '10px',
+    paddingInline: '16px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  statGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+    gap: '16px',
+  },
+  statusPill: {
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    fontSize: '13px',
+    fontWeight: 500,
+  },
+});
 
 interface DetailCardProps {
   children: ReactNode;
@@ -130,11 +123,11 @@ interface DetailCardProps {
 }
 
 const DetailCard = ({ children, extra, icon, padded = true, title }: DetailCardProps) => (
-  <section className={styles.card}>
+  <section {...stylex.props(styles.card)}>
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.cardHeader}
+      className={stylex.props(styles.cardHeader).className}
       distribution={'space-between'}
       gap={8}
     >
@@ -146,7 +139,7 @@ const DetailCard = ({ children, extra, icon, padded = true, title }: DetailCardP
       </Flexbox>
       {extra}
     </Flexbox>
-    {padded ? <div className={styles.cardBody}>{children}</div> : children}
+    {padded ? <div {...stylex.props(styles.cardBody)}>{children}</div> : children}
   </section>
 );
 
@@ -162,7 +155,7 @@ const InfoRow = ({
   <Flexbox
     horizontal
     align={'center'}
-    className={styles.row}
+    className={stylex.props(styles.row, stylex.defaultMarker()).className}
     distribution={'space-between'}
     gap={16}
   >
@@ -289,15 +282,14 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
 
   return (
     <Flexbox gap={16}>
-      <div className={styles.infoGrid}>
+      <div {...stylex.props(styles.infoGrid)}>
         <DetailCard icon={ActivityIcon} padded={false} title={t('devices.detail.runtime')}>
           <InfoRow icon={PowerIcon} label={t('devices.detail.status')}>
             <span
-              className={styles.statusPill}
-              style={{
+              {...sx([styles.statusPill], undefined, {
                 background: online ? cssVar.colorSuccessBg : cssVar.colorFillTertiary,
                 color: online ? cssVar.colorSuccess : cssVar.colorTextSecondary,
-              }}
+              })}
             >
               <span
                 style={{
@@ -343,7 +335,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
         <DetailCard icon={ServerCogIcon} padded={false} title={t('devices.detail.specs')}>
           <InfoRow icon={ServerIcon} label={t('devices.card.hostname')}>
             {device.hostname ? (
-              <span className={styles.code} title={device.hostname}>
+              <span {...stylex.props(styles.code)} title={device.hostname}>
                 {device.hostname}
               </span>
             ) : (
@@ -366,7 +358,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
           ) : null}
           <InfoRow icon={FolderIcon} label={t('devices.card.workingDir')}>
             {device.defaultCwd ? (
-              <span className={styles.code} title={device.defaultCwd}>
+              <span {...stylex.props(styles.code)} title={device.defaultCwd}>
                 {device.defaultCwd}
               </span>
             ) : (
@@ -378,7 +370,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
 
       {/* What the machine is doing for agents — the first thing to check
           before restarting, updating or unsharing it. */}
-      <div className={styles.infoGrid}>
+      <div {...stylex.props(styles.infoGrid)}>
         <DetailCard
           icon={PlayIcon}
           padded={false}
@@ -391,7 +383,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
         </DetailCard>
       </div>
 
-      <div className={styles.statGrid}>
+      <div {...stylex.props(styles.statGrid)}>
         <StatCard
           detail={cores ? t('devices.detail.cores', { count: cores }) : undefined}
           icon={CpuIcon}
@@ -449,7 +441,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.row}
+              className={stylex.props(styles.row, stylex.defaultMarker()).className}
               gap={8}
               key={share.workspaceId}
             >

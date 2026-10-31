@@ -1,11 +1,13 @@
 'use client';
 
 import { Button, Input } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { RefreshCw } from 'lucide-react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
 import { inspectorStyles as styles } from '../inspectorStyles';
+import tableStyles from '../inspectorTable.module.css';
 import {
   formatLocalDatabaseCellValue,
   type LocalDatabaseColumn,
@@ -54,22 +56,22 @@ const RecordTable = ({
   const rowRange = matchingCount === 0 ? '0 rows' : `1–${rows.length} of ${matchingCount} rows`;
 
   return (
-    <main className={styles.tablePane}>
-      <div className={devDockPanelStyles.toolbar}>
-        <span className={styles.tableName} title={title}>
+    <main {...stylex.props(styles.tablePane)}>
+      <div {...stylex.props(devDockPanelStyles.toolbar)}>
+        <span {...stylex.props(styles.tableName)} title={title}>
           {title}
         </span>
         <Input
           allowClear
-          className={styles.toolbarSearch}
+          className={stylex.props(styles.toolbarSearch).className}
           placeholder={'Search rows…'}
           size={'small'}
           style={{ flex: 1 }}
           value={rowSearch}
           onChange={(event) => onRowSearchChange(event.target.value)}
         />
-        <span className={styles.toolbarMeta}>{totalCount} rows</span>
-        <span className={styles.toolbarMeta}>read-only</span>
+        <span {...stylex.props(styles.toolbarMeta)}>{totalCount} rows</span>
+        <span {...stylex.props(styles.toolbarMeta)}>read-only</span>
         <Button
           icon={RefreshCw}
           loading={isLoading}
@@ -80,9 +82,9 @@ const RecordTable = ({
           Refresh
         </Button>
       </div>
-      <div className={styles.tableScroll}>
+      <div {...stylex.props(styles.tableScroll)}>
         <table
-          className={styles.table}
+          className={tableStyles.table}
           style={{ minWidth: '100%', width: Math.max(tableWidth, 640) }}
         >
           <colgroup>
@@ -107,7 +109,7 @@ const RecordTable = ({
                 <tr
                   aria-label={row.entry.key}
                   aria-selected={active}
-                  className={active ? styles.rowActive : undefined}
+                  {...stylex.props(active ? styles.rowActive : undefined)}
                   key={row.entry.key}
                   tabIndex={0}
                   onClick={() => onSelect(row.entry.key)}
@@ -134,12 +136,12 @@ const RecordTable = ({
           </tbody>
         </table>
         {rows.length === 0 && (
-          <div className={styles.tableEmpty}>
+          <div {...stylex.props(styles.tableEmpty)}>
             {rowSearch ? `No rows match “${rowSearch}”.` : 'This collection is empty.'}
           </div>
         )}
       </div>
-      <div className={devDockPanelStyles.statusBar}>
+      <div {...stylex.props(devDockPanelStyles.statusBar)}>
         <span>{rowRange}</span>
         {matchingCount > MAX_RENDERED_ROWS && <span>Refine the search to inspect later rows.</span>}
       </div>

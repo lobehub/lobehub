@@ -1,6 +1,7 @@
 'use client';
 
 import { type DropdownItem, DropdownMenu, Switch } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Component, memo, type PropsWithChildren, Suspense, useSyncExternalStore } from 'react';
 
 import {
@@ -77,7 +78,7 @@ export const PinnedSelect = memo<{ item: DevDockSelectItem }>(({ item }) => {
       placement={'topRight'}
       popupProps={{ style: { maxHeight: 360, minWidth: 180, overflow: 'auto' } }}
     >
-      <span className={barButtonStyles.button} title={item.label}>
+      <span {...stylex.props(barButtonStyles.button)} title={item.label}>
         <Icon size={11} />
         <span>{value}</span>
       </span>

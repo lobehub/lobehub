@@ -1,11 +1,16 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useEffect, useRef, useState } from 'react';
+
+import { sx } from '@/styles/sx';
 
 import ApiList from './ApiList';
 import { LIFECYCLE_MODE_LABEL, LIFECYCLE_MODES, type LifecycleMode } from './lifecycleMode';
 import MessageList from './MessageList';
+import moduleStyles from './ToolPage.module.css';
 import ToolPreview from './ToolPreview';
 import { toApiAnchor, type ToolsetEntry } from './useDevtoolsEntries';
 
@@ -20,72 +25,41 @@ const isLifecycleMode = (value: string | null): value is LifecycleMode =>
 const isGalleryView = (value: string | null): value is GalleryView =>
   value === 'api' || value === 'aggregate';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    width: 100%;
-  `,
-  content: css`
-    position: relative;
-    overflow: auto;
-    flex: 1;
-
-    /* keep a jumped-to card clear of the sticky lifecycle bar */
-    & [id^='api-'] {
-      scroll-margin-block-start: 80px;
-    }
-  `,
-  controlGroup: css`
-    gap: 8px;
-    align-items: center;
-    min-width: 0;
-  `,
+const styles = stylex.create({
+  body: { width: '100%' },
+  content: { position: 'relative', overflow: 'auto', flex: '1' },
+  controlGroup: { gap: '8px', alignItems: 'center', minWidth: 0 },
   /*
    * The label sits next to a Tabs whose root is `width: 100%`, so the tabs claim the
    * whole row and the label absorbs every pixel of shrink. With the app-wide
    * `overflow-wrap: anywhere`, its min-content width is one character, so it breaks
    * mid-word ("Vie / w"). Keep the guard on the label itself, not on the row.
    */
-  controlLabel: css`
-    flex-shrink: 0;
-    white-space: nowrap;
-  `,
-  /* Let the modes wrap onto a second row instead of overflowing a narrow panel. */
-  controlTabs: css`
-    min-width: 0;
-
-    [role='tablist'] {
-      flex-wrap: wrap;
-    }
-  `,
-  empty: css`
-    flex: 1;
-    gap: 6px;
-    align-items: center;
-    justify-content: center;
-
-    color: ${cssVar.colorTextTertiary};
-  `,
-  header: css`
-    gap: 8px;
-    padding: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  modeBar: css`
-    position: sticky;
-    z-index: 2;
-    inset-block-start: 0;
-
-    gap: 16px;
-    align-items: center;
-
-    min-height: 44px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+  controlLabel: { flexShrink: 0, whiteSpace: 'nowrap' },
+  controlTabs: { minWidth: 0 },
+  header: {
+    gap: '8px',
+    padding: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  modeBar: {
+    position: 'sticky',
+    zIndex: 2,
+    insetBlockStart: 0,
+    gap: '16px',
+    alignItems: 'center',
+    minHeight: '44px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface DevtoolsToolPageProps {
   toolset: ToolsetEntry;
@@ -186,9 +160,9 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
       {view === 'api' && (
         <ApiList activeApiName={activeApi} apis={toolset.apis} onSelect={handleSelect} />
       )}
-      <div className={styles.content} ref={scrollRef}>
-        <Flexbox className={styles.body}>
-          <Flexbox className={styles.header}>
+      <div {...sx([styles.content], moduleStyles.content)} ref={scrollRef}>
+        <Flexbox className={stylex.props(styles.body).className}>
+          <Flexbox className={stylex.props(styles.header).className}>
             <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
               <Text fontSize={22} weight={700}>
                 {toolset.toolsetName}
@@ -205,14 +179,19 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
             )}
           </Flexbox>
 
-          <Flexbox horizontal className={styles.modeBar} wrap={'wrap'}>
-            <Flexbox horizontal className={styles.controlGroup}>
-              <Text className={styles.controlLabel} fontSize={12} type={'secondary'} weight={600}>
+          <Flexbox horizontal className={stylex.props(styles.modeBar).className} wrap={'wrap'}>
+            <Flexbox horizontal className={stylex.props(styles.controlGroup).className}>
+              <Text
+                className={stylex.props(styles.controlLabel).className}
+                fontSize={12}
+                type={'secondary'}
+                weight={600}
+              >
                 View
               </Text>
               <Tabs
                 activeKey={view}
-                className={styles.controlTabs}
+                className={sx([styles.controlTabs], moduleStyles.controlTabs).className}
                 size={'small'}
                 items={[
                   { key: 'api', label: 'By API' },
@@ -221,13 +200,18 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
                 onChange={(key) => setView(key as GalleryView)}
               />
             </Flexbox>
-            <Flexbox horizontal className={styles.controlGroup}>
-              <Text className={styles.controlLabel} fontSize={12} type={'secondary'} weight={600}>
+            <Flexbox horizontal className={stylex.props(styles.controlGroup).className}>
+              <Text
+                className={stylex.props(styles.controlLabel).className}
+                fontSize={12}
+                type={'secondary'}
+                weight={600}
+              >
                 Lifecycle
               </Text>
               <Tabs
                 activeKey={mode}
-                className={styles.controlTabs}
+                className={sx([styles.controlTabs], moduleStyles.controlTabs).className}
                 size={'small'}
                 items={LIFECYCLE_MODES.map((value) => ({
                   key: value,

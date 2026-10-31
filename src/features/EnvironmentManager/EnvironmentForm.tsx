@@ -1,7 +1,9 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Text, toast } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FolderGit2Icon, InfoIcon, PencilIcon, TerminalIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,22 +19,22 @@ import PanelSection from './PanelSection';
 import TabPane from './TabPane';
 import type { SandboxEnvironment } from './useEnvironmentData';
 
-const styles = createStaticStyles(({ css }) => ({
-  /** The same box every other value sits in; here it holds a repository. */
-  box: css`
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    min-height: 36px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  box: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    minHeight: '36px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * Which part of the specification the form is showing. The panel splits it
@@ -252,7 +254,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
             the way Railway shows a service's source; the same picker the
             create dialog uses takes over while a different one is chosen. */}
         {selection && !pickingRepository ? (
-          <div className={styles.box}>
+          <div {...stylex.props(styles.box)}>
             <Github size={16} />
             <Text ellipsis style={{ flex: 1 }} weight={500}>
               {repositoryPath}

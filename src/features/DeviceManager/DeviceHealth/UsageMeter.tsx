@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import { type ReactNode, useRef } from 'react';
 
@@ -21,32 +23,17 @@ const SEGMENT_GAP = 1;
 export const segmentCount = (width: number) =>
   Math.max(0, Math.floor((width + SEGMENT_GAP) / (SEGMENT_WIDTH + SEGMENT_GAP)));
 
-const styles = createStaticStyles(({ css }) => ({
-  // Fills its track's width — a grid cell in the card meter, a full-width row
-  // in the detail stat card. No `flex: 1` — in a column flexbox that would
-  // zero the explicit height.
-  bar: css`
-    display: flex;
-    flex: none;
-    gap: ${SEGMENT_GAP}px;
-
-    width: 100%;
-    min-width: 0;
-  `,
-  // Label / bar / value columns shared by every meter in the group, so labels
-  // of different lengths (and locales) never wrap and the bars stay aligned.
-  group: css`
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr) 36px;
-    gap: 8px 12px;
-    align-items: center;
-  `,
-  segment: css`
-    flex: none;
-    width: ${SEGMENT_WIDTH}px;
-    border-radius: 1px;
-  `,
-}));
+const styles = stylex.create({
+  bar: { display: 'flex', flex: 'none', gap: `${SEGMENT_GAP}px`, width: '100%', minWidth: '0' },
+  group: {
+    display: 'grid',
+    gridTemplateColumns: 'max-content minmax(0, 1fr) 36px',
+    rowGap: '8px',
+    columnGap: '12px',
+    alignItems: 'center',
+  },
+  segment: { flex: 'none', width: `${SEGMENT_WIDTH}px`, borderRadius: '1px' },
+});
 
 /** Lit ticks for a reading: any non-zero usage lights at least one, so a running machine never reads as empty. */
 export const litSegments = (value: number | null | undefined, segments: number) => {
@@ -73,10 +60,10 @@ export const UsageBar = ({ height = 12, value }: UsageBarProps) => {
   const color = level ? USAGE_COLOR[level] : cssVar.colorFillSecondary;
 
   return (
-    <div aria-hidden className={styles.bar} ref={ref} style={{ height }}>
+    <div aria-hidden className={stylex.props(styles.bar).className} ref={ref} style={{ height }}>
       {Array.from({ length: segments }, (_, i) => (
         <span
-          className={styles.segment}
+          className={stylex.props(styles.segment).className}
           key={i}
           style={{ background: i < lit ? color : cssVar.colorFillSecondary }}
         />
@@ -97,7 +84,7 @@ export const UsageMeterGroup = ({
   children: ReactNode;
   loading?: boolean;
 }) => (
-  <div aria-busy={loading || undefined} className={styles.group}>
+  <div aria-busy={loading || undefined} {...stylex.props(styles.group)}>
     {children}
   </div>
 );

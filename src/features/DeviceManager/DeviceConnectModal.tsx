@@ -2,7 +2,9 @@
 
 import { DOWNLOAD_URL } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Tabs, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Tabs, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { DownloadIcon, MonitorDownIcon, ShieldCheckIcon, TerminalIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,35 +13,36 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import CommandLine from '@/components/CommandLine';
 import ImperativeModal from '@/components/ImperativeModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    margin-block-start: 4px;
-    padding-block-start: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  index: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 600;
-    color: ${cssVar.colorPrimary};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-  line: css`
-    flex: 1;
-    width: 1px;
-    margin-block-start: 4px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    marginBlockStart: '4px',
+    paddingBlockStart: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  index: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 600,
+    color: cssVar.colorPrimary,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+  line: {
+    flex: '1',
+    width: '1px',
+    marginBlockStart: '4px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 interface StepProps {
   children?: React.ReactNode;
@@ -52,8 +55,8 @@ interface StepProps {
 const Step = memo<StepProps>(({ index, title, desc, children, last }) => (
   <Flexbox horizontal gap={16}>
     <Flexbox align={'center'}>
-      <span className={styles.index}>{index}</span>
-      {!last && <span className={styles.line} />}
+      <span {...stylex.props(styles.index)}>{index}</span>
+      {!last && <span {...stylex.props(styles.line)} />}
     </Flexbox>
     <Flexbox flex={1} gap={4} style={{ paddingBlockEnd: last ? 0 : 24 }}>
       <Text weight={500}>{title}</Text>
@@ -202,7 +205,12 @@ const DeviceConnectModal = memo<DeviceConnectModalProps>(
             cliSteps
           )}
 
-          <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.footer).className}
+            gap={8}
+          >
             <Icon icon={ShieldCheckIcon} size={14} style={{ color: cssVar.colorTextTertiary }} />
             <Text color={cssVar.colorTextTertiary} fontSize={12}>
               {t('devices.connectWizard.footer')}

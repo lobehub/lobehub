@@ -1,31 +1,26 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LinkIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import type { ConnectorWithTools } from '@/store/tool/slices/connector';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  active: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  item: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    margin-block: 0;
-    margin-inline: 4px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-radius: 6px;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  active: { backgroundColor: cssVar.colorFillSecondary, backgroundImage: 'none' },
+  item: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    marginBlock: '0',
+    marginInline: '4px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderRadius: '6px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface ConnectorItemProps {
   active?: boolean;
@@ -34,7 +29,9 @@ interface ConnectorItemProps {
 }
 
 const ConnectorItem = memo<ConnectorItemProps>(({ connector, active, onClick }) => {
-  const itemClass = active ? `${styles.item} ${styles.active}` : styles.item;
+  const itemClass = active
+    ? stylex.props(styles.item, styles.active).className
+    : stylex.props(styles.item).className;
 
   return (
     <div className={itemClass} onClick={onClick}>

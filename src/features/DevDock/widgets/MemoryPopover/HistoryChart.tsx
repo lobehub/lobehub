@@ -3,6 +3,8 @@
 import { cssVar } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { sx } from '@/styles/sx';
+
 import { formatCompactSize } from '../memoryFormat';
 import { MAX_HISTORY, type MemorySample } from '../memorySamples';
 import { styles } from './styles';
@@ -59,7 +61,7 @@ const HistoryChart = memo<{ history: MemorySample[] }>(({ history }) => {
           />
         ))}
       </svg>
-      <div className={styles.caption} style={{ display: 'flex', gap: 12 }}>
+      <div {...sx([styles.caption], undefined, { display: 'flex', gap: 12 })}>
         {series.map((item) => (
           <span key={item.label} style={{ color: item.color }}>
             ● {item.label} {formatCompactSize(item.values.at(-1) ?? 0)}

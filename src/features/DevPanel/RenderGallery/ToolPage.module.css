@@ -1,0 +1,9 @@
+/* keep a jumped-to card clear of the sticky lifecycle bar */
+.content [id^='api-'] {
+  scroll-margin-block-start: 80px;
+}
+
+/* Let the modes wrap onto a second row instead of overflowing a narrow panel. */
+.controlTabs [role='tablist'] {
+  flex-wrap: wrap;
+}

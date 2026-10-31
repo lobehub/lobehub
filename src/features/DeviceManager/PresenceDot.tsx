@@ -1,16 +1,15 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-const styles = createStaticStyles(({ css }) => ({
-  dot: css`
-    display: inline-block;
-
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-
-    vertical-align: middle;
-  `,
-}));
+const styles = stylex.create({
+  dot: {
+    display: 'inline-block',
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    verticalAlign: 'middle',
+  },
+});
 
 interface PresenceDotProps {
   live: boolean;
@@ -25,7 +24,7 @@ interface PresenceDotProps {
  */
 const PresenceDot = ({ live, title }: PresenceDotProps) => (
   <span
-    className={styles.dot}
+    className={stylex.props(styles.dot).className}
     style={{ background: live ? cssVar.colorSuccess : cssVar.colorTextQuaternary }}
     title={title}
   />

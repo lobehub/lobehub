@@ -5,8 +5,6 @@ import {
   Button,
   confirmModal,
   createModal,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Select,
@@ -15,6 +13,8 @@ import {
   toast,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { CircleCheck, Lock, Users } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -27,33 +27,17 @@ import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 
 import { refreshDeviceList } from './const';
 import { getDeviceActionErrorMessage } from './deviceActionError';
+import selectStyles from './ShareDeviceModal.module.css';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    padding-block: 16px;
-    padding-inline: 24px;
-  `,
-  optionHint: css`
-    margin-inline-start: auto;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  optionRow: css`
-    width: 100%;
-    min-width: 0;
-    padding-block: 2px;
-  `,
-  /* The trigger wraps the selected label in an inline valueText span, so the
-     row can't stretch and right-aligned hints collapse next to the label —
-     flex the wrapper so the trigger lays out like the dropdown options. */
-  selectValue: css`
-    > span {
-      display: flex;
-      flex: 1;
-      min-width: 0;
-    }
-  `,
-}));
+const styles = stylex.create({
+  footer: { paddingBlock: '16px', paddingInline: '24px' },
+  optionHint: {
+    marginInlineStart: 'auto',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  optionRow: { width: '100%', minWidth: 0, paddingBlock: '2px' },
+});
 
 interface ShareDeviceContentProps {
   device: DeviceListItem;
@@ -100,7 +84,12 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
         return {
           disabled,
           label: (
-            <Flexbox horizontal align={'center'} className={styles.optionRow} gap={8}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={stylex.props(styles.optionRow).className}
+              gap={8}
+            >
               {renderWorkspaceLabel(workspace)}
               {shared && (
                 <Tag size={'small'} style={{ flex: 'none', margin: 0 }}>
@@ -108,7 +97,9 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
                 </Tag>
               )}
               {!shared && isViewer && (
-                <span className={styles.optionHint}>{tSetting('devices.share.viewerHint')}</span>
+                <span {...stylex.props(styles.optionHint)}>
+                  {tSetting('devices.share.viewerHint')}
+                </span>
               )}
             </Flexbox>
           ),
@@ -141,10 +132,15 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
         ] as const
       ).map((item) => ({
         label: (
-          <Flexbox horizontal align={'center'} className={styles.optionRow} gap={8}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.optionRow).className}
+            gap={8}
+          >
             <Icon icon={item.icon} size={14} />
             <Text style={{ fontSize: 13, fontWeight: 500 }}>{item.label}</Text>
-            <span className={styles.optionHint}>{item.desc}</span>
+            <span {...stylex.props(styles.optionHint)}>{item.desc}</span>
           </Flexbox>
         ),
         title: item.label,
@@ -252,7 +248,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
               </Text>
               <Select
                 showSearch
-                classNames={{ value: styles.selectValue }}
+                classNames={{ value: selectStyles.selectValue }}
                 options={targetOptions}
                 placeholder={tSetting('devices.share.selectPlaceholder')}
                 style={{ width: '100%' }}
@@ -266,7 +262,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
                 {tSetting('workspace.general.transferScope.title')}
               </Text>
               <Select
-                classNames={{ value: styles.selectValue }}
+                classNames={{ value: selectStyles.selectValue }}
                 options={visibilityOptions}
                 style={{ width: '100%' }}
                 value={visibility}
@@ -277,7 +273,12 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
         )}
       </Flexbox>
 
-      <Flexbox horizontal className={styles.footer} gap={8} justify={'space-between'}>
+      <Flexbox
+        horizontal
+        className={stylex.props(styles.footer).className}
+        gap={8}
+        justify={'space-between'}
+      >
         <Button disabled={sharing} onClick={close}>
           {tSetting('cancel', { ns: 'common' })}
         </Button>

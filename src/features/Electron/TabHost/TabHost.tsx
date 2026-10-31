@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Activity,
   type CSSProperties,
@@ -21,6 +22,7 @@ import { createTabRouter } from '@/spa/router/tabRouter';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
 import { useDisplayedTabStore } from './displayedTab';
 import { flushHiddenTabRestores } from './hiddenTabRestore';
@@ -56,45 +58,33 @@ const slotStyle: CSSProperties = {
 };
 const hiddenSlotStyle: CSSProperties = { ...slotStyle, display: 'none' };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  divider: css`
-    cursor: col-resize;
-
-    position: absolute;
-    z-index: 10;
-    inset-block: 0;
-    transform: translateX(-50%);
-
-    width: 8px;
-
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset-block: 0;
-      inset-inline-start: 50%;
-      transform: translateX(-50%);
-
-      width: 1px;
-
-      background: ${cssVar.colorBorderSecondary};
-
-      transition:
-        background 150ms ease,
-        width 150ms ease;
-    }
-
-    &:hover::after,
-    &:focus-visible::after {
-      width: 2px;
-      background: ${cssVar.colorPrimary};
-    }
-  `,
-  pane: css`
-    overflow: hidden;
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  divider: {
+    'cursor': 'col-resize',
+    'position': 'absolute',
+    'zIndex': 10,
+    'insetBlock': 0,
+    'transform': 'translateX(-50%)',
+    'width': '8px',
+    '::after': {
+      content: "''",
+      position: 'absolute',
+      insetBlock: 0,
+      insetInlineStart: '50%',
+      transform: 'translateX(-50%)',
+      width: { 'default': '1px', ':hover': '2px', ':focus-visible': '2px' },
+      backgroundColor: {
+        'default': cssVar.colorBorderSecondary,
+        ':hover': cssVar.colorPrimary,
+        ':focus-visible': cssVar.colorPrimary,
+      },
+      transitionProperty: 'background-color, width',
+      transitionDuration: '150ms',
+      transitionTimingFunction: 'ease',
+    },
+  },
+  pane: { overflow: 'hidden', minWidth: 0 },
+});
 
 interface TabPaneProps {
   children: ReactNode;
@@ -121,11 +111,10 @@ const TabPane = ({
 
   return (
     <div
-      className={styles.pane}
+      {...sx([styles.pane], undefined, style)}
       data-focused={isActive ? 'true' : undefined}
       data-pane={pane}
       ref={ref}
-      style={style}
       onFocusCapture={onFocusPane}
       onPointerDownCapture={onFocusPane}
     >
@@ -287,9 +276,8 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
           aria-valuemax={75}
           aria-valuemin={25}
           aria-valuenow={Math.round(effectiveSplitView.ratio * 100)}
-          className={styles.divider}
           role="separator"
-          style={{ left: `${effectiveSplitView.ratio * 100}%` }}
+          {...sx([styles.divider], undefined, { left: `${effectiveSplitView.ratio * 100}%` })}
           tabIndex={0}
           onDoubleClick={() => setSplitRatio(0.5)}
           onKeyDown={handleDividerKeyDown}

@@ -1,10 +1,14 @@
 'use client';
 
 import { type DropdownItem, DropdownMenu } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Ellipsis, Pin } from 'lucide-react';
 import { memo } from 'react';
 
+import { sx } from '@/styles/sx';
+
+import popupStyles from './OverflowMenu.module.css';
 import {
   type DevDockItem,
   type DevDockSelectItem,
@@ -13,88 +17,60 @@ import {
 } from './registry';
 import { useDevDockStore } from './store';
 
-const PIN_CLASS = 'devdock-pin';
-
-const styles = createStaticStyles(({ css }) => ({
-  pinButton: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextQuaternary};
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &[data-pinned='true'] {
-      color: ${cssVar.colorText};
-    }
-  `,
-  popup: css`
-    min-width: 224px;
-
-    .${PIN_CLASS} {
-      opacity: 0;
-    }
-
-    [role^='menuitem']:hover .${PIN_CLASS},
-    .${PIN_CLASS}:focus-visible,
-    .${PIN_CLASS}[data-pinned='true'] {
-      opacity: 1;
-    }
-  `,
-  submenuLabel: css`
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  trigger: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    &:hover,
-    &[data-popup-open] {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  valueHint: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 10px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  pinButton: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    padding: 0,
+    borderStyle: 'none',
+    borderRadius: '4px',
+    color: {
+      'default': cssVar.colorTextQuaternary,
+      ':hover': cssVar.colorText,
+      '[data-pinned="true"]': cssVar.colorText,
+    },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  submenuLabel: { display: 'inline-flex', gap: '8px', alignItems: 'center' },
+  trigger: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderStyle: 'none',
+    borderRadius: '4px',
+    color: {
+      'default': cssVar.colorTextTertiary,
+      ':hover': cssVar.colorText,
+      '[data-popup-open]': cssVar.colorText,
+    },
+    backgroundColor: {
+      'default': 'transparent',
+      ':hover': cssVar.colorFillTertiary,
+      '[data-popup-open]': cssVar.colorFillTertiary,
+    },
+    backgroundImage: 'none',
+  },
+  valueHint: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '10px',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const PinToggle = memo<{ item: DevDockItem }>(({ item }) => {
   const pinned = useDevDockStore((s) => isItemPinned(item, s.pinOverrides));
   const setPinned = useDevDockStore((s) => s.setPinned);
   return (
     <button
-      className={cx(PIN_CLASS, styles.pinButton)}
+      {...sx([styles.pinButton], popupStyles.pin)}
       data-pinned={pinned}
       title={pinned ? 'Unpin from bar' : 'Pin to bar'}
       type={'button'}
@@ -127,9 +103,9 @@ const buildSelectSubmenu = (item: DevDockSelectItem): DropdownItem => ({
   icon: item.icon,
   key: item.id,
   label: (
-    <span className={styles.submenuLabel}>
+    <span {...stylex.props(styles.submenuLabel)}>
       {item.label}
-      <span className={styles.valueHint}>{item.getValue()}</span>
+      <span {...stylex.props(styles.valueHint)}>{item.getValue()}</span>
       <PinToggle item={item} />
     </span>
   ),
@@ -218,9 +194,9 @@ const OverflowMenu = memo(() => {
     <DropdownMenu
       items={buildItems}
       placement={'topRight'}
-      popupProps={{ className: styles.popup }}
+      popupProps={{ className: popupStyles.popup }}
     >
-      <span className={styles.trigger} title={'More tools'}>
+      <span {...stylex.props(styles.trigger)} title={'More tools'}>
         <Ellipsis size={13} />
       </span>
     </DropdownMenu>

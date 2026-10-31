@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import { ActionIcon, cx, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Maximize2Icon, Minimize2Icon, MinusIcon, XIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,30 +12,21 @@ import { electronStylish } from '@/styles/electron';
 
 export const WINDOW_CONTROL_WIDTH = 112;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  closeButton: css`
-    border-radius: 8px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorBgBase};
-      background: ${cssVar.colorError};
-    }
-  `,
-  container: css`
-    width: ${WINDOW_CONTROL_WIDTH}px;
-    min-width: ${WINDOW_CONTROL_WIDTH}px;
-  `,
-  controlButton: css`
-    border-radius: 8px;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  closeButton: {
+    borderRadius: '8px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorBgBase },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorError },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  container: (width: string) => ({ width, minWidth: width }),
+  controlButton: {
+    borderRadius: '8px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 const WinControl = memo(() => {
   const { t } = useTranslation('electron');
@@ -85,18 +78,24 @@ const WinControl = memo(() => {
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.container, electronStylish.nodrag)}
       gap={4}
       justify={'flex-end'}
+      className={cx(
+        stylex.props(styles.container(`${WINDOW_CONTROL_WIDTH}px`)).className,
+        electronStylish.nodrag,
+      )}
     >
       {controls.map((control) => (
         <ActionIcon
-          className={control.key === 'close' ? styles.closeButton : styles.controlButton}
           icon={control.icon}
           key={control.key}
           size={{ blockSize: 28, size: 14 }}
           title={control.label}
           tooltipProps={{ placement: 'bottom' }}
+          className={
+            stylex.props(control.key === 'close' ? styles.closeButton : styles.controlButton)
+              .className
+          }
           onClick={control.onClick}
         />
       ))}

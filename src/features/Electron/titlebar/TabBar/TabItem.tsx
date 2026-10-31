@@ -2,6 +2,7 @@
 
 import { ContextMenuTrigger, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
 import { ActionIcon, cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { X } from 'lucide-react';
 import { type MotionValue, useMotionValue, useSpring, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -18,7 +19,8 @@ import { useTabPreview } from './hooks/useTabPreview';
 import { useTabRunning } from './hooks/useTabRunning';
 import { useTabUnread } from './hooks/useTabUnread';
 import { TAB_SPRING } from './motion';
-import { useStyles } from './styles';
+import { styles } from './styles';
+import tabStyles from './tab.module.css';
 import { isTabClosable } from './tabClose';
 import { buildTabContextMenuItems } from './tabContextMenu';
 import { rubberBand } from './tabDrag';
@@ -99,7 +101,6 @@ const TabItem = memo<TabItemProps>(
     onOpenInSplitView,
     onTogglePin,
   }) => {
-    const styles = useStyles;
     const { t } = useTranslation('electron');
     const id = item.tab.id;
     const { meta, tab } = item;
@@ -277,7 +278,7 @@ const TabItem = memo<TabItemProps>(
     const preview = useTabPreview(id, hovered);
 
     const indicator = (
-      <span className={styles.avatarWrapper}>
+      <span className={stylex.props(styles.avatarWrapper).className}>
         {meta.avatarSeed ? (
           <ProjectAvatar avatar={meta.avatar} name={meta.avatarSeed} size={16} />
         ) : meta.avatarKind === 'workspace' ? (
@@ -292,10 +293,16 @@ const TabItem = memo<TabItemProps>(
             size={16}
           />
         ) : (
-          meta.icon && <Icon className={styles.tabIcon} icon={meta.icon} size="small" />
+          meta.icon && (
+            <Icon
+              className={stylex.props(styles.tabIcon).className}
+              icon={meta.icon}
+              size="small"
+            />
+          )
         )}
-        {isRunning && <span aria-label={t('tab.running')} className={styles.runningDot} />}
-        {showUnreadDot && <span aria-label={t('tab.unread')} className={styles.unreadDot} />}
+        {isRunning && <span aria-label={t('tab.running')} {...stylex.props(styles.runningDot)} />}
+        {showUnreadDot && <span aria-label={t('tab.unread')} {...stylex.props(styles.unreadDot)} />}
       </span>
     );
 
@@ -308,11 +315,11 @@ const TabItem = memo<TabItemProps>(
         tabIndex={0}
         className={cx(
           electronStylish.nodrag,
-          styles.tab,
-          pinned && styles.tabPinned,
-          isSplitVisible && !isActive && styles.tabSplitVisible,
-          isActive && styles.tabActive,
-          isDragging && styles.tabDragging,
+          tabStyles.tab,
+          pinned && tabStyles.tabPinned,
+          isSplitVisible && !isActive && tabStyles.tabSplitVisible,
+          isActive && tabStyles.tabActive,
+          isDragging && tabStyles.tabDragging,
         )}
         style={{
           paddingInlineStart: inset,
@@ -327,12 +334,12 @@ const TabItem = memo<TabItemProps>(
         onPointerLeave={() => setHovered(false)}
       >
         {indicator}
-        <span data-tab-title className={styles.tabTitle}>
+        <span data-tab-title className={tabStyles.tabTitle}>
           {meta.title}
         </span>
         <ActionIcon
           data-tab-close
-          className={styles.closeIcon}
+          className={tabStyles.closeIcon}
           icon={X}
           inert={closeInert}
           size="small"
@@ -354,9 +361,9 @@ const TabItem = memo<TabItemProps>(
           disabled={isDragging || (tier === 'full' && !preview)}
           title={
             preview ? (
-              <span className={styles.previewCard}>
-                <img alt={meta.title} className={styles.previewImage} src={preview} />
-                <span className={styles.previewTitle}>{meta.title}</span>
+              <span {...stylex.props(styles.previewCard)}>
+                <img alt={meta.title} {...stylex.props(styles.previewImage)} src={preview} />
+                <span {...stylex.props(styles.previewTitle)}>{meta.title}</span>
               </span>
             ) : (
               meta.title

@@ -1,83 +1,59 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const useStyles = createStaticStyles(({ css, cssVar }) => ({
-  actionIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-    opacity: 0;
-    transition: opacity 0.2s ${cssVar.motionEaseOut};
-  `,
-  container: css`
-    overflow-y: auto;
-    width: 260px;
-    max-height: 320px;
-    padding: 4px;
-  `,
-  divider: css`
-    height: 1px;
-    margin-block: 4px;
-    background-color: ${cssVar.colorBorderSecondary};
-  `,
-  empty: css`
-    padding-block: 16px;
-    padding-inline: 12px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  icon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  item: css`
-    cursor: default;
-
-    overflow: hidden;
-    flex-shrink: 0;
-
-    padding-block: 3px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    transition: background-color 0.15s ${cssVar.motionEaseInOut};
-
-    &:hover {
-      background-color: ${cssVar.colorFillSecondary};
-    }
-
-    &:hover .actionIcon {
-      color: ${cssVar.colorText};
-      opacity: 1;
-    }
-  `,
-  itemActive: css`
-    background-color: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background-color: ${cssVar.colorFillSecondary};
-    }
-  `,
-  itemHovered: css`
-    background-color: ${cssVar.colorFillSecondary};
-  `,
-  itemTitle: css`
-    overflow: hidden;
-    flex: 1;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  title: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-    text-transform: capitalize;
-    letter-spacing: 0.5px;
-  `,
-}));
+export const styles = stylex.create({
+  actionIcon: {
+    flexShrink: 0,
+    color: {
+      default: cssVar.colorTextTertiary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorText,
+    },
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: `opacity 0.2s ${cssVar.motionEaseOut}`,
+  },
+  container: { overflowY: 'auto', width: '260px', maxHeight: '320px', padding: '4px' },
+  divider: {
+    height: '1px',
+    marginBlock: '4px',
+    backgroundColor: cssVar.colorBorderSecondary,
+  },
+  empty: {
+    paddingBlock: '16px',
+    paddingInline: '12px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  icon: { flexShrink: 0, color: cssVar.colorTextSecondary },
+  item: {
+    cursor: 'default',
+    overflow: 'hidden',
+    flexShrink: 0,
+    paddingBlock: '3px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusSM,
+    transition: `background-color 0.15s ${cssVar.motionEaseInOut}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+  },
+  itemActive: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+  },
+  itemHovered: { backgroundColor: cssVar.colorFillSecondary },
+  itemTitle: {
+    overflow: 'hidden',
+    flex: '1',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  title: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: cssVar.colorTextTertiary,
+    textTransform: 'capitalize',
+    letterSpacing: '0.5px',
+  },
+});

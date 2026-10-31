@@ -1,18 +1,11 @@
-import { Button, createStaticStyles, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
+import { Button, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
 import { Ban, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
-
-const styles = createStaticStyles(({ css }) => ({
-  errorDetails: css`
-    && pre {
-      padding: 12px;
-    }
-  `,
-}));
+import styles from './OverloadedState.module.css';
 
 const OverloadedState = ({
   autoRetry,

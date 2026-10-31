@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useState } from 'react';
 
 type PressureState = 'critical' | 'fair' | 'nominal' | 'serious';
@@ -23,24 +24,15 @@ type PressureObserverConstructor = new (
 const getPressureObserverCtor = (): PressureObserverConstructor | undefined =>
   (globalThis as { PressureObserver?: PressureObserverConstructor }).PressureObserver;
 
-const styles = createStaticStyles(({ css }) => ({
-  critical: css`
-    color: ${cssVar.colorError};
-  `,
-  serious: css`
-    color: ${cssVar.colorWarning};
-  `,
-  text: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
-
-const STATE_CLASS: Partial<Record<PressureState, string>> = {
-  critical: styles.critical,
-  serious: styles.serious,
-};
+const styles = stylex.create({
+  critical: { color: cssVar.colorError },
+  serious: { color: cssVar.colorWarning },
+  text: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 const CpuPressureWidget = memo(() => {
   const [state, setState] = useState<PressureState | null>(null);
@@ -65,7 +57,13 @@ const CpuPressureWidget = memo(() => {
   if (!state) return null;
 
   return (
-    <span className={cx(styles.text, STATE_CLASS[state])} title={'Compute Pressure (CPU)'}>
+    <span
+      {...stylex.props(
+        styles.text,
+        state === 'critical' ? styles.critical : state === 'serious' ? styles.serious : undefined,
+      )}
+      title={'Compute Pressure (CPU)'}
+    >
       CPU {state}
     </span>
   );

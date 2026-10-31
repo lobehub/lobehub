@@ -1,37 +1,39 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Icon, QRCode, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, QRCode, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildTelegramDeepLink, PlatformAvatar } from '../constants';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  qrIconOverlay: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 50%;
-    inset-inline-start: 50%;
-    transform: translate(-50%, -50%);
-
-    border: 3px solid ${cssVar.colorBgContainer};
-    border-radius: 50%;
-
-    line-height: 0;
-  `,
-  qrWrap: css`
-    position: relative;
-
-    padding: 14px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-}));
+const styles = stylex.create({
+  qrIconOverlay: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 1,
+    insetBlockStart: '50%',
+    insetInlineStart: '50%',
+    transform: 'translate(-50%, -50%)',
+    borderWidth: '3px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '50%',
+    lineHeight: 0,
+  },
+  qrWrap: {
+    position: 'relative',
+    padding: '14px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 interface TelegramLinkBodyProps {
   botUsername?: string;
@@ -57,9 +59,9 @@ const TelegramLinkBody = memo<TelegramLinkBodyProps>(({ botUsername, disabled, n
 
   return (
     <>
-      <div className={styles.qrWrap}>
+      <div {...stylex.props(styles.qrWrap)}>
         <QRCode bordered={false} size={200} value={deepLink} />
-        <div className={styles.qrIconOverlay}>
+        <div {...stylex.props(styles.qrIconOverlay)}>
           <PlatformAvatar platform="telegram" size={44} />
         </div>
       </div>

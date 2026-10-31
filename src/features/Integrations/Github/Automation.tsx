@@ -1,7 +1,9 @@
 'use client';
 
 import type { GithubIntegrationPreference } from '@lobechat/types';
-import { Block, createStaticStyles, Flexbox, Icon, Switch, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Switch, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CircleXIcon,
   GitMergeIcon,
@@ -16,35 +18,33 @@ import { useTranslation } from 'react-i18next';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    padding-block: 2px;
-    padding-inline: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  icon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  row: css`
-    padding-block: 12px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    paddingBlock: '2px',
+    paddingInline: '16px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  icon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  row: {
+    paddingBlock: '12px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+});
 
 type SwitchKey = keyof GithubIntegrationPreference;
 
@@ -103,14 +103,20 @@ const Automation = memo(() => {
             </Text>
             <Text type="secondary">{t(`github.${group.id}.description`)}</Text>
           </Flexbox>
-          <Block className={styles.card} variant={'filled'}>
+          <Block className={stylex.props(styles.card).className} variant={'filled'}>
             {group.keys.map((key) => {
               const checked = group.defaultOn.includes(key)
                 ? preference?.[key] !== false
                 : preference?.[key] === true;
               return (
-                <Flexbox horizontal align="center" className={styles.row} gap={14} key={key}>
-                  <span className={styles.icon}>
+                <Flexbox
+                  horizontal
+                  align="center"
+                  className={stylex.props(styles.row).className}
+                  gap={14}
+                  key={key}
+                >
+                  <span {...stylex.props(styles.icon)}>
                     <Icon icon={ICONS[key]} size={16} />
                   </span>
                   <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
