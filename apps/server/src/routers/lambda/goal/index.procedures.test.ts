@@ -77,6 +77,7 @@ function expected(): Array<
     ['tick', 'mutation', 13],
     ['updateRequirement', 'mutation', 13],
     ['updateSubscription', 'mutation', 13],
+    ['updateTitle', 'mutation', 13],
     ['wake', 'mutation', 13],
   ];
 }

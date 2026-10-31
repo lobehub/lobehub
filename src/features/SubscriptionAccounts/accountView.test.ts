@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveAccountView, matchesKeyword, sortAccounts } from './accountView';
+import { deriveAccountView, matchesKeyword, meterWindows, sortAccounts } from './accountView';
 
 const NOW = Date.UTC(2026, 9, 24, 12);
 const HOUR = 60 * 60 * 1000;
@@ -70,6 +70,22 @@ describe('deriveAccountView', () => {
       status: 'noData',
       weekly: undefined,
     });
+  });
+});
+
+describe('meterWindows', () => {
+  const window = { resetsAt: null, usedPercent: 0 };
+
+  it('keeps both placeholders before any reading', () => {
+    expect(meterWindows({})).toEqual(['session', 'weekly']);
+  });
+
+  it('draws no 5-hour meter for a plan without that limit (Claude Ultra)', () => {
+    expect(meterWindows({ weekly: window })).toEqual(['weekly']);
+  });
+
+  it('draws both meters when the plan reports both', () => {
+    expect(meterWindows({ session: window, weekly: window })).toEqual(['session', 'weekly']);
   });
 });
 

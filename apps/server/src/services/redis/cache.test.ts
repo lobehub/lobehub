@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { BaseRedisProvider } from '@/server/modules/Redis/types';
 
-import { claimRedisOnce, readThroughRedis } from './cache';
+import { claimRedisOnce, readThroughRedis, releaseRedisClaim } from './cache';
 
 const fakeRedis = (overrides: Partial<BaseRedisProvider> = {}) =>
   ({
@@ -100,5 +100,17 @@ describe('claimRedisOnce', () => {
 
     await expect(claimRedisOnce(redis, 'claim-fallback', 45_000)).resolves.toBe(true);
     await expect(claimRedisOnce(redis, 'claim-fallback', 45_000)).resolves.toBe(false);
+  });
+});
+
+describe('releaseRedisClaim', () => {
+  it('lets the next caller win a released claim, in Redis and in the local fallback', async () => {
+    const redis = fakeRedis({ del: vi.fn().mockResolvedValue(1) });
+    await releaseRedisClaim(redis, 'claim-release');
+    expect(redis.del).toHaveBeenCalledWith('claim-release');
+
+    await expect(claimRedisOnce(null, 'claim-release-local', 45_000)).resolves.toBe(true);
+    await releaseRedisClaim(null, 'claim-release-local');
+    await expect(claimRedisOnce(null, 'claim-release-local', 45_000)).resolves.toBe(true);
   });
 });

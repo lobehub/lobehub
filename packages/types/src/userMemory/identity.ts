@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { UserMemoryIdentity } from './rows';
 import type { BaseListItem, BaseListParams, BaseListResult } from './shared';
 
 export type IdentityType = 'personal' | 'professional' | 'demographic';
@@ -29,26 +30,26 @@ export interface IdentityListItem extends BaseListItem {
 
 export type IdentityListResult = BaseListResult<IdentityListItem>;
 
-export interface UserMemoryIdentity {
-  accessedAt: Date;
-  createdAt: Date;
-  description?: string | null;
-  descriptionVector?: number[] | null;
-  episodicDate?: Date | null;
-  id: string;
-  metadata?: Record<string, unknown> | null;
-  relationship?: string | null;
-  role?: string | null;
-  tags?: string[] | null;
-  type?: string | null;
-  updatedAt: Date;
-  userId?: string | null;
-  userMemoryId?: string | null;
-}
-
 export type UserMemoryIdentityWithoutVectors = Omit<UserMemoryIdentity, 'descriptionVector'>;
 
-export type UserMemoryIdentitiesListItem = UserMemoryIdentityWithoutVectors;
+/** The fields the list query selects; detail views use the full row. */
+export type UserMemoryIdentitiesListItem = Pick<
+  UserMemoryIdentity,
+  | 'accessedAt'
+  | 'capturedAt'
+  | 'createdAt'
+  | 'description'
+  | 'episodicDate'
+  | 'id'
+  | 'metadata'
+  | 'relationship'
+  | 'role'
+  | 'tags'
+  | 'type'
+  | 'updatedAt'
+  | 'userId'
+  | 'userMemoryId'
+>;
 
 export interface NewUserMemoryIdentity {
   description?: string;

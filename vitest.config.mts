@@ -68,9 +68,7 @@ const exclude = [
   '**/e2e/**',
   // Opt-in local verification tooling, not app/server CI unit tests.
   // Run with `bun run stylex:verify:test` instead.
-  '**/scripts/stylexMigration/experiment/**',
   '**/scripts/stylexMigration/verification/**',
-  '**/scripts/stylexMigration/sxArguments.test.ts',
 ];
 
 export default defineConfig({

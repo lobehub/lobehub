@@ -1,6 +1,0 @@
-/* StyleX cannot key off a descendant it does not own (the artifact body lives in
-   src/features/Portal), so the :has() rule stays in plain CSS. */
-.body:has(:global(.portal-artifact)) {
-  overflow: hidden;
-  padding-block-end: 12px;
-}

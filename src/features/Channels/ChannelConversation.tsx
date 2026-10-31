@@ -164,7 +164,9 @@ const Timeline = ({
                 draftKey={channelDraftKey(channelId, threadId)}
                 key={channelDraftKey(channelId, threadId)}
                 members={activeMembers}
-                placeholder={t(threadId ? 'threadComposer' : 'composer')}
+                placeholder={
+                  threadId ? t('threadComposer') : t('composer', { name: detail.channel.title })
+                }
                 onSend={async (content, mentions, requestKey, fileIds) => {
                   followLatest.current = true;
                   await channelActions.send({

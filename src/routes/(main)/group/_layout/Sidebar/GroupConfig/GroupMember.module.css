@@ -1,5 +1,0 @@
-/* The popup trigger attribute is injected by the popover onto the cloned child, which
-   StyleX cannot select. */
-.memberTrigger[data-popup-open] {
-  background-color: var(--lobe-color-fill-tertiary);
-}

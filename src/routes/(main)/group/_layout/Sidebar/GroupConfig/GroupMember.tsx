@@ -20,13 +20,12 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
-import { sx } from '@/styles/sx';
 
-import moduleStyles from './GroupMember.module.css';
 import GroupMemberItem from './GroupMemberItem';
 
 const styles = stylex.create({
   memberTrigger: {
+    backgroundColor: { 'default': null, ':is([data-popup-open])': cssVar.colorFillTertiary },
     borderRadius: cssVar.borderRadius,
     transition: `background 0.2s ${cssVar.motionEaseOut}`,
   },
@@ -113,12 +112,9 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
           groupMembers.map((item) => (
             <AgentProfilePopup agent={item} agentId={item.id} groupId={groupId} key={item.id}>
               <div
-                {...sx(
-                  [
-                    styles.memberTrigger,
-                    isProfileRoute && activeTab === item.id && styles.memberTriggerActive,
-                  ],
-                  moduleStyles.memberTrigger,
+                {...stylex.props(
+                  styles.memberTrigger,
+                  isProfileRoute && activeTab === item.id && styles.memberTriggerActive,
                 )}
                 onDoubleClick={() => handleMemberDoubleClick(item.id)}
               >

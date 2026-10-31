@@ -1,21 +1,8 @@
 'use client';
 
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import {
-  ActionIcon,
-  Block,
-  Center,
-  cx,
-  Flexbox,
-  Icon,
-  Input,
-  Spin,
-  stopPropagation,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
-import { ChevronDownIcon, FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
-import * as m from 'motion/react-m';
+import { Block, cx, Flexbox, Icon, Input, stopPropagation, toast, Tooltip } from '@lobehub/ui';
+import { FileText, FolderIcon, FolderOpenIcon, LockIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,12 +19,13 @@ import { libraryFolderPath } from '@/features/ResourceManager/utils/resourcePath
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { showContextMenu } from '@/libs/contextMenu';
 import type { TreeItem } from '@/store/tree';
-import { useTreeStore } from '@/store/tree';
+import { isExpandable, useTreeStore } from '@/store/tree';
 
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import FolderAddButton from './FolderAddButton';
 import HierarchyNodeMenuButton from './HierarchyNodeMenuButton';
+import HierarchyNodeToggle from './HierarchyNodeToggle';
 import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
 import { styles } from './styles';
 
@@ -290,10 +278,6 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     if (item.isFolder) {
       const isActive = isHierarchyNodeActive(item, selectedKey);
 
-      const handleToggle = () => {
-        onToggle(item.id);
-      };
-
       return (
         <Flexbox gap={2}>
           <Block
@@ -328,26 +312,12 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           >
             {flat ? (
               <div style={{ width: 20 }} />
-            ) : isLoading ? (
-              <Center flex={'none'} width={20}>
-                <Spin size={'small'} />
-              </Center>
             ) : (
-              <m.div
-                animate={{ rotate: isExpanded ? 0 : -90 }}
-                initial={false}
-                transition={{ duration: 0.2, ease: 'easeInOut' }}
-              >
-                <ActionIcon
-                  icon={ChevronDownIcon}
-                  size={'small'}
-                  style={{ width: 20 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggle();
-                  }}
-                />
-              </m.div>
+              <HierarchyNodeToggle
+                isExpanded={isExpanded}
+                isLoading={isLoading}
+                onToggle={() => onToggle(item.id)}
+              />
             )}
             <Flexbox
               horizontal
@@ -399,7 +369,8 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       );
     }
 
-    // Render as file
+    // Render as file. A document that holds other documents gets the folder's
+    // caret; the row itself still opens the document.
     const isActive = isHierarchyNodeActive(item, selectedKey);
     return (
       <Flexbox gap={2}>
@@ -426,7 +397,15 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             showContextMenu(menuItems());
           }}
         >
-          <div style={{ width: 20 }} />
+          {!flat && isExpandable(item) ? (
+            <HierarchyNodeToggle
+              isExpanded={isExpanded}
+              isLoading={isLoading}
+              onToggle={() => onToggle(item.id)}
+            />
+          ) : (
+            <div style={{ width: 20 }} />
+          )}
           <Flexbox
             horizontal
             align={'center'}

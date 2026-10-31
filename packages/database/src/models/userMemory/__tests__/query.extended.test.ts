@@ -1,3 +1,10 @@
+import type {
+  UserMemoryActivityInsert,
+  UserMemoryContextInsert,
+  UserMemoryExperienceInsert,
+  UserMemoryIdentityInsert,
+  UserMemoryPreferenceInsert,
+} from '@lobechat/types';
 // @vitest-environment node
 import { LayersEnum, RelationshipEnum, UserMemoryContextObjectType } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -113,7 +120,7 @@ const createActivityPair = async (opts: {
       type: opts.type ?? 'task',
       userId: owner,
       userMemoryId: memory.id,
-    } as typeof userMemoriesActivities.$inferInsert)
+    } as UserMemoryActivityInsert)
     .returning();
 
   return { activity, memory };
@@ -156,7 +163,7 @@ const createContextPair = async (opts: {
       type: opts.type ?? 'project',
       userId,
       userMemoryIds: [memory.id],
-    } as typeof userMemoriesContexts.$inferInsert)
+    } as UserMemoryContextInsert)
     .returning();
 
   return { context, memory };
@@ -198,7 +205,7 @@ const createExperiencePair = async (opts: {
       type: opts.type ?? 'lesson',
       userId,
       userMemoryId: memory.id,
-    } as typeof userMemoriesExperiences.$inferInsert)
+    } as UserMemoryExperienceInsert)
     .returning();
 
   return { experience, memory };
@@ -238,7 +245,7 @@ const createPreferencePair = async (opts: {
       type: opts.type ?? 'coding-style',
       userId,
       userMemoryId: memory.id,
-    } as typeof userMemoriesPreferences.$inferInsert)
+    } as UserMemoryPreferenceInsert)
     .returning();
 
   return { memory, preference };
@@ -283,7 +290,7 @@ const createIdentityPair = async (opts: {
       type: opts.type ?? 'personal',
       userId,
       userMemoryId: memory.id,
-    } as typeof userMemoriesIdentities.$inferInsert)
+    } as UserMemoryIdentityInsert)
     .returning();
 
   return { identity, memory };

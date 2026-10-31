@@ -32,6 +32,7 @@ import GoalAgentModelConfig from './GoalAgentModelConfig';
 import GoalChat from './GoalChat';
 import { GoalConversationContext } from './goalConversation';
 import GoalDetailActions from './GoalDetailActions';
+import GoalDetailTitle from './GoalDetailTitle';
 import GoalHeaderMetrics from './GoalHeaderMetrics';
 import { goalManagerConversation } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
@@ -124,6 +125,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const showLeftPanel = useGlobalStore(systemStatusSelectors.showLeftPanel);
   const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
   const collapsedRailRef = useRef(false);
+  const titleInputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (showPortal) {
@@ -232,6 +234,22 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
     else openPanel();
   };
 
+  // Deferred past the menu closing, which hands focus back to its trigger.
+  const focusTitleEditor = () => {
+    requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+  };
+
+  // Clipped like the workspace crumb, so a long title cannot push the header's
+  // actions off the bar.
+  const goalCrumb = (
+    <Text ellipsis color={'inherit'} style={{ maxWidth: 'min(320px, 45vw)' }} weight={500}>
+      {goal.title}
+    </Text>
+  );
+
   const paused = goal.status === 'paused';
   // Pace control exists only while the coordinator loop is actually moving (or
   // explicitly paused). A goal in review awaits the human, and a closed goal
@@ -251,7 +269,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 {agentId ? (
                   <AgentBreadcrumb
                     agentId={agentId}
-                    extraItems={[goal.title]}
+                    extraItems={[goalCrumb]}
                     // The goal title owns the last crumb, so this one is a way back
                     // to the agent's goal list rather than a label for this page.
                     title={<Link to={buildAgentPath('goals')}>{t('goalList.title')}</Link>}
@@ -267,7 +285,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                 />
                 {/* Not nested under the breadcrumb: an agent-less goal still has to
                   be deletable, and this menu is the only place that can do it. */}
-                <GoalDetailActions agentId={agentId} goalId={goal.id} projectId={goal.projectId} />
+                <GoalDetailActions
+                  agentId={agentId}
+                  goalId={goal.id}
+                  projectId={goal.projectId}
+                  onRename={focusTitleEditor}
+                />
               </Flexbox>
             }
             right={
@@ -291,9 +314,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
           <Flexbox flex={1} style={{ overflowY: 'auto' }}>
             <WideScreenContainer gap={20} paddingBlock={16}>
               <Flexbox className={styles.header} gap={8}>
-                <Text as={'h1'} fontSize={22} weight={600}>
-                  {goal.title}
-                </Text>
+                <GoalDetailTitle
+                  creatorUserId={goal.userId}
+                  goalId={goal.id}
+                  inputRef={titleInputRef}
+                  title={goal.title}
+                />
                 <GoalHeaderMetrics goalId={goalId} />
                 {/* Pause/resume above the requirement document — its reviewed
                   home. The status glyph keeps the "running" animation; this

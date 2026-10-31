@@ -802,6 +802,32 @@ export class GoalGraphModel {
 
   /** Rewrite a node's description — e.g. the planner replacing the seeded requirement blob with its own problem statement. */
   /** `confidence` travels with the description when the planner re-reads the problem. */
+  /** Follow a goal rename on the root question, while it still carries the goal's old title. */
+  renameProblemNode = async (goalId: string, from: string, to: string) =>
+    this.db.transaction(async (tx) => {
+      if (!(await this.ownedGoal(goalId, tx))) return undefined;
+      const [node] = await tx
+        .update(goalNodes)
+        .set({ title: to, updatedAt: new Date() })
+        .where(
+          and(
+            eq(goalNodes.goalId, goalId),
+            eq(goalNodes.kind, 'problem'),
+            eq(goalNodes.title, from),
+          ),
+        )
+        .returning();
+      if (!node) return undefined;
+      await this.appendEvent(tx, goalId, {
+        entityId: node.id,
+        entityType: 'node',
+        eventType: 'updated',
+        reason: 'Goal renamed',
+        taskId: node.taskId ?? undefined,
+      });
+      return node;
+    });
+
   updateNodeDescription = async (
     goalId: string,
     nodeId: string,
@@ -958,7 +984,6 @@ export class GoalGraphModel {
           and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
         )
         .returning();
-      /* v8 ignore next -- unreachable: ownedGoal() holds the goal row FOR UPDATE and every writer of a decision's status takes that lock first, so the pending row selected above is still pending */
       if (!decision) return undefined;
       await tx
         .update(goalNodes)
@@ -1038,7 +1063,6 @@ export class GoalGraphModel {
           and(eq(goalNodeDecisions.id, ownedDecision.id), eq(goalNodeDecisions.status, 'pending')),
         )
         .returning();
-      /* v8 ignore next -- unreachable: ownedGoal() holds the goal row FOR UPDATE and every writer of a decision's status takes that lock first, so the pending row selected above is still pending */
       if (!decision) return undefined;
       await tx
         .update(goalNodes)

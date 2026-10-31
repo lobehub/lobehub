@@ -435,25 +435,24 @@ export class ConversationLifecycleActionImpl {
     const boundTopic = context.topicId
       ? topicSelectors.getTopicById(context.topicId)(this.#get())
       : undefined;
-    // A blank conversation opened from a project group's "+" runs in the
-    // directory it staged; the gateway transport has the server bind the topic.
+    // A blank conversation opened from a project "+" runs in the directory (or
+    // just the project) it staged; the new topic is born bound to it.
     const pendingDirectory = this.#get().pendingNewTopicDirectory;
-    const stagedDirectoryId =
-      !context.topicId &&
-      !context.isolatedTopic &&
-      !context.groupId &&
-      !directMentionRoute &&
-      pendingDirectory?.agentId === ownerAgentId
-        ? pendingDirectory.projectWorkingDirectoryId
-        : undefined;
     const projectRun = await resolveProjectDirectoryRun({
       agencyConfig,
       boundDirectoryId: boundTopic?.projectWorkingDirectoryId,
       isGatewayMode,
-      stagedDirectoryId,
+      staged:
+        !context.topicId &&
+        !context.isolatedTopic &&
+        !context.groupId &&
+        !directMentionRoute &&
+        pendingDirectory?.agentId === ownerAgentId
+          ? pendingDirectory
+          : undefined,
     });
     ({ agencyConfig } = projectRun);
-    const { stagedDirectory } = projectRun;
+    const { newTopicProject, stagedDirectory, stagedProjectId } = projectRun;
     if (stagedDirectory) consumePendingTopicRepos(ownerAgentId); // a cloud repo pick conflicts
 
     // Legacy agents may only carry `model: '<cli-type>'`. Keep gateway routing
@@ -1087,10 +1086,7 @@ export class ConversationLifecycleActionImpl {
             id: mintedTopicId,
             ...newTopicModelSnapshot,
             // Shown under its project group from the first frame.
-            ...(stagedDirectory && {
-              projectId: stagedDirectory.projectId,
-              projectWorkingDirectoryId: stagedDirectory.id,
-            }),
+            ...newTopicProject,
             ...(operationContext.groupId ? {} : { sessionId: operationContext.agentId }),
             title: newTopicTitle,
           },
@@ -1376,7 +1372,7 @@ export class ConversationLifecycleActionImpl {
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
         // Adopting the minted topic consumed the staging; the topic never came
         // to be, so the blank conversation still belongs to that directory.
-        if (stagedDirectory) this.#get().setPendingNewTopicDirectory(pendingDirectory);
+        if (newTopicProject) this.#get().setPendingNewTopicDirectory(pendingDirectory);
       }
       this.#get().internal_dispatchTopic(
         { ...optimisticTopicScope, type: 'deleteTopic', id: optimisticTopic.id },
@@ -1449,6 +1445,7 @@ export class ConversationLifecycleActionImpl {
                   id: optimisticTopic?.id,
                   metadata: optimisticTopicMetadata,
                   ...newTopicModelSnapshot,
+                  projectId: stagedProjectId,
                   title: newTopicTitle,
                   topicMessageIds: messages.map((m) => m.id),
                 }
@@ -1809,7 +1806,7 @@ export class ConversationLifecycleActionImpl {
           clientOperations,
           replacesOperationId: replaceableGatewayOperationId,
           optimisticTopic,
-          projectWorkingDirectoryId: stagedDirectory?.id,
+          ...newTopicProject,
           // Forward @-mentioned tool ids so the server runtime enables them for
           // this run — the gateway/server path otherwise never sees the mention
           // selection (only the client runtime did). Omit when empty.
@@ -1998,6 +1995,7 @@ export class ConversationLifecycleActionImpl {
                 // ever write the cwd back (the server-side binding only exists
                 // on the gateway path).
                 metadata: optimisticTopicMetadata,
+                projectId: stagedProjectId,
                 topicMessageIds: forceNewTopicFromExisting ? [] : messages.map((m) => m.id),
                 title: newTopicTitle,
               }

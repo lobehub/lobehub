@@ -39,6 +39,7 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessage
   );
 
   const dropdownMenu = useThreadItemDropdownMenu({
+    deletable: !isSubagent,
     id,
     sourceMessageId,
     title,

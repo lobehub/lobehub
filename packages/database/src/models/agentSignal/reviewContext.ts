@@ -12,6 +12,7 @@ import {
   userMemories,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { visibleMemoryState } from '../../utils/memoryVisibility';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
 import { notTrashed } from '../../utils/softDelete';
 import { notChannelTopicRef } from '../../utils/topicVisibility';
@@ -144,7 +145,13 @@ export class AgentSignalReviewContextModel {
         updatedAt: userMemories.updatedAt,
       })
       .from(userMemories)
-      .where(and(eq(userMemories.userId, this.userId), notTrashed(userMemories.isDeleted)))
+      .where(
+        and(
+          eq(userMemories.userId, this.userId),
+          notTrashed(userMemories.isDeleted),
+          visibleMemoryState(userMemories.state),
+        ),
+      )
       .orderBy(desc(userMemories.updatedAt))
       .limit(options.limit);
   };
