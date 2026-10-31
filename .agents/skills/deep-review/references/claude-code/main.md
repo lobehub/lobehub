@@ -82,20 +82,24 @@ Render strictly per [`../report-template.md`](../report-template.md). Include th
 sources and workflow feedback, optional consolidation in the execution line, statistics, and the
 PR-mode merge verdict. Run the template's pre-send self-check.
 
-## Step 6 — Offer the safe batch
+## Step 6 — Fix directly
 
-When `Safe to fix now` is non-empty, use `AskUserQuestion`:
+Do not ask before fixing. Right after the report, apply every in-scope confirmed finding that the
+fix policy in [`../fix-policy.md`](../fix-policy.md) marks **fix now**: all P0/P1 except the
+high-risk ones that need a discussion, plus every quick P2. Order P0 → P1 → P2, blocking first.
+Legacy hand-off items are never touched.
 
-- Question: `"Safe to fix now" has N low-risk findings — apply them all in one pass?`
-- Options: `Fix all` / `Not now`; free text covers partial picks.
+For each fix: add the regression test where `need_test: true`, run the repo quality check on the
+changed files and the related tests, and record the outcome in the `Fixed this round` section.
+When a fix fails a check or turns out to be larger than expected, stop that item, leave the code
+green, and move it to `Needs decision` with the reason.
 
-Apply selected fixes and regression tests where `need_test: true`. Empty batch skips silently.
+## Step 7 — Walk the decisions
 
-## Step 7 — Walk remaining decisions
-
-Ask about confirmed `can_auto_fix: false` findings and `needsContext`, up to four questions per
-call. Order P0 → P1 → P2, blocking first. Exclude every legacy hand-off item. Skip low-likelihood,
-non-blocking items on repeat review unless the user asks.
+Use `AskUserQuestion` for what is left: the high-risk P0/P1 findings under `Needs decision`, the
+`needsContext` items, and the slow P2s only when the user asks. Up to four questions per call,
+P0 → P1 → P2, blocking first. Exclude every legacy hand-off item. Skip low-likelihood, non-blocking
+items on repeat review unless the user asks.
 
 ## Step 8 — Offer legacy hand-off issues
 
