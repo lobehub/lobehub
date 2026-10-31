@@ -1,10 +1,10 @@
-import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
 import { expect, it } from 'vitest';
 
 it('accepts compiled markers, custom properties, dynamic styles and nested conditions', () => {
-  const filename = path.resolve('scripts/stylexMigration/sx-arguments.contract.ts');
+  const filename = fileURLToPath(new URL('./sx-arguments.contract.ts', import.meta.url));
   const source = `
     import * as stylex from '@stylexjs/stylex';
     import { sx } from '../../src/styles/sx';
