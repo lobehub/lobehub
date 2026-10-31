@@ -12,7 +12,20 @@ import type {
   WidgetVisibility,
 } from '@lobechat/types';
 import { WIDGET_RUN_OUTPUT_STATUSES } from '@lobechat/types';
-import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, max, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  lte,
+  max,
+  sql,
+} from 'drizzle-orm';
 
 import { sha256Json } from '../repositories/ftsSearchDocument/fingerprint';
 import { agents } from '../schemas/agent';
@@ -209,11 +222,16 @@ export class WidgetModel {
       .orderBy(desc(widgets.updatedAt));
   }
 
-  /** Every widget of a project, including those an agent of the project also owns. */
+  /**
+   * Every widget of a project, including those an agent of the project also
+   * owns, each with its published version's view (how the card draws the
+   * output; null before the first publish).
+   */
   async listByProject(projectId: string) {
     return this.db
-      .select()
+      .select({ ...getTableColumns(widgets), publishedView: widgetVersions.view })
       .from(widgets)
+      .leftJoin(widgetVersions, eq(widgets.publishedVersionId, widgetVersions.id))
       .where(and(this.readable(), buildProjectWhere(widgets, projectId)))
       .orderBy(desc(widgets.updatedAt));
   }

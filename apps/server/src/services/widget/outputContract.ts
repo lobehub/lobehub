@@ -97,11 +97,19 @@ const tableSchema = z
     }
   });
 
+// Free-form: a layout binds to it by path. The byte limit above bounds its size.
+const dataSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+  meta: metaSchema,
+  type: z.literal('data'),
+});
+
 const outputSchema = z.discriminatedUnion('type', [
   statSchema,
   listSchema,
   seriesSchema,
   tableSchema,
+  dataSchema,
 ]);
 
 export type WidgetOutputErrorCode =
@@ -135,7 +143,7 @@ const extractJson = (stdout: string): unknown => {
 
 /**
  * Check a script's stdout against the widget output contract (stat / list /
- * series / table) and the version's declared output type.
+ * series / table / data) and the version's declared output type.
  *
  * `meta.complete === false` is accepted and reported as `partial`: the run
  * finishes with status `partial` — its output is shown, but callers must not

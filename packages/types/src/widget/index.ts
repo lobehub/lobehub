@@ -8,6 +8,10 @@
 // scheduling, versioning and rendering. Widgets are a standalone entity so any
 // host surface (a board, a goal, an agent page …) can mount the same widget.
 
+import type { WidgetLayoutNode, WidgetLayoutValue } from './layout';
+
+export * from './layout';
+
 export const WIDGET_VISIBILITIES = ['private', 'public'] as const;
 export type WidgetVisibility = (typeof WIDGET_VISIBILITIES)[number];
 
@@ -36,7 +40,7 @@ export interface WidgetLevelFilter {
 export const WIDGET_RUNTIMES = ['node', 'python', 'bash'] as const;
 export type WidgetRuntime = (typeof WIDGET_RUNTIMES)[number];
 
-export const WIDGET_OUTPUT_TYPES = ['stat', 'list', 'series', 'table'] as const;
+export const WIDGET_OUTPUT_TYPES = ['stat', 'list', 'series', 'table', 'data'] as const;
 export type WidgetOutputType = (typeof WIDGET_OUTPUT_TYPES)[number];
 
 export type WidgetTrend = 'up' | 'down' | 'flat';
@@ -116,9 +120,20 @@ export interface WidgetTableOutput {
   type: 'table';
 }
 
+/**
+ * Free-form data for a card drawn by `WidgetView.layout`, e.g. a forecast
+ * with the current reading, today's range and the next hours. The layout
+ * binds to it as `data.*`.
+ */
+export interface WidgetDataOutput {
+  data: Record<string, unknown>;
+  meta?: WidgetOutputMeta;
+  type: 'data';
+}
+
 /** The JSON document a widget script prints to stdout. */
 export type WidgetOutput =
-  WidgetStatOutput | WidgetListOutput | WidgetSeriesOutput | WidgetTableOutput;
+  WidgetStatOutput | WidgetListOutput | WidgetSeriesOutput | WidgetTableOutput | WidgetDataOutput;
 
 /** One secret or variable the script expects in its environment. */
 export interface WidgetEnvRequirement {
@@ -208,9 +223,16 @@ export interface WidgetView {
   chart?: 'line' | 'bar' | 'area';
   /** Column keys to show, in order, for table output. */
   columns?: string[];
+  /**
+   * Declarative card template. When set it replaces the built-in rendering of
+   * the output type; required to show a `data` output.
+   */
+  layout?: WidgetLayoutNode;
   /** Maximum list / table rows before truncation. */
   limit?: number;
   size?: 'sm' | 'md' | 'lg';
+  /** Card background, a `WidgetLayoutSurface` — may be bound to the data. */
+  surface?: WidgetLayoutValue;
 }
 
 // ── Versions ────────────────────────────────────────────

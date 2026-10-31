@@ -348,6 +348,43 @@ describe('DashboardModel', () => {
       expect((await model.listItems(dashboard.id)).map((r) => r.widget.id)).toEqual([w1.id]);
     });
 
+    it("lists each item with its widget's published view", async () => {
+      const model = new DashboardModel(serverDB, userId);
+      const dashboard = await model.create({ title: 'Weather' });
+      const widgets = new WidgetModel(serverDB, userId);
+      const weather = await widgets.create({ title: 'Weather' });
+      const draftOnly = await widgets.create({ title: 'Draft only' });
+      await model.addItem(dashboard.id, weather.id);
+      await model.addItem(dashboard.id, draftOnly.id);
+
+      const view = {
+        layout: { type: 'text' as const, value: { bind: 'data.temp' } },
+        surface: 'rain',
+      };
+      const version = await widgets.createVersion(weather.id, {
+        outputType: 'data',
+        runtime: 'node',
+        script: 'console.log("{}")',
+        sourceType: 'agent',
+        view,
+      });
+      await widgets.publishVersion(weather.id, version!.id);
+      await widgets.createVersion(draftOnly.id, {
+        outputType: 'stat',
+        runtime: 'node',
+        script: '1',
+        sourceType: 'agent',
+        view: { chart: 'bar' },
+      });
+
+      const listed = await model.listItems(dashboard.id);
+
+      expect(listed.map((r) => [r.widget.title, r.view])).toEqual([
+        ['Weather', view],
+        ['Draft only', null],
+      ]);
+    });
+
     it('refuses a new widget on a full board but still updates placed ones', async () => {
       const model = new DashboardModel(serverDB, userId);
       const dashboard = await model.create({ title: 'Full' });
