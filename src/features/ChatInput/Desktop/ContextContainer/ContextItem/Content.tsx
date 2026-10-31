@@ -1,52 +1,42 @@
-import { createStaticStyles, Image } from '@lobehub/ui';
+import { Image } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { type UploadFileItem } from '@/types/files/upload';
 
-const styles = createStaticStyles(({ css }) => ({
-  image: css`
-    width: 100%;
-    height: 100%;
-    margin-block: 0 !important;
-    border-radius: 2px;
-
-    box-shadow: none;
-
-    img {
-      width: 100%;
-      height: 100%;
-      border-radius: 2px;
-      object-fit: cover;
-    }
-  `,
-  imageRoot: css`
-    border-radius: 2px;
-  `,
-  video: css`
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
-    border-radius: 2px;
-  `,
-}));
+const styles = stylex.create({
+  image: { width: '100%', height: '100%', borderRadius: '2px', objectFit: 'cover' },
+  imageRoot: { borderRadius: '2px' },
+  imageWrapper: {
+    width: '100%',
+    height: '100%',
+    marginBlock: '0',
+    borderRadius: '2px',
+    boxShadow: 'none',
+  },
+  video: { overflow: 'hidden', width: '100%', height: '100%', borderRadius: '2px' },
+});
 
 const Content = memo<UploadFileItem>(({ file, previewUrl }) => {
   if (file.type.startsWith('image')) {
     return (
       <Image
         alt={file.name}
-        className={styles.imageRoot}
-        classNames={{ wrapper: styles.image }}
+        className={stylex.props(styles.imageRoot).className}
         height={20}
         src={previewUrl}
         width={20}
+        classNames={{
+          image: stylex.props(styles.image).className,
+          wrapper: stylex.props(styles.imageWrapper).className,
+        }}
       />
     );
   }
 
   if (file.type.startsWith('video')) {
-    return <video className={styles.video} src={previewUrl} />;
+    return <video {...stylex.props(styles.video)} src={previewUrl} />;
   }
 
   return <FileIcon fileName={file.name} fileType={file.type} size={16} />;

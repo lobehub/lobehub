@@ -1,0 +1,413 @@
+.bar {
+  width: 4px;
+  min-height: 4px;
+  border-radius: 9999px;
+
+  background: var(--lobe-color-primary);
+
+  transition: height 80ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}
+
+.cancelButton {
+  cursor: default;
+
+  position: relative;
+
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+
+  color: var(--lobe-color-text-secondary);
+
+  background: var(--lobe-color-fill-secondary);
+
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.cancelButton:focus-visible {
+  outline: 2px solid var(--lobe-color-primary);
+  outline-offset: 2px;
+}
+
+.cancelButton:hover {
+  color: var(--lobe-color-text);
+  background: var(--lobe-color-fill);
+}
+
+.cancelButton:active {
+  transform: scale(0.96);
+}
+
+@media (width <= 600px) {
+  .cancelButton::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cancelButton {
+    transition: none;
+  }
+}
+
+.container {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+
+  width: min(300px, calc(100vw - 112px));
+  min-width: min(220px, calc(100vw - 112px));
+  height: 32px;
+  padding-inline: 2px;
+
+  animation: voice-message-enter 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .container {
+    animation: none;
+  }
+}
+
+.error {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 50%;
+  inset-inline: 12px 44px;
+  transform: translateY(-50%);
+
+  overflow: hidden;
+
+  font-size: var(--lobe-font-size-sm);
+  line-height: 1.3;
+  color: var(--lobe-color-error);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill {
+  position: relative;
+
+  overflow: hidden;
+  flex: 1;
+
+  min-width: 0;
+  height: 100%;
+  border-radius: 9999px;
+
+  background: var(--lobe-color-fill-secondary);
+}
+
+.progress {
+  position: absolute;
+  z-index: 3;
+  inset-block-end: 0;
+  inset-inline: 6px;
+
+  overflow: hidden;
+
+  height: 2px;
+  border-radius: 1px;
+
+  background: var(--lobe-color-fill-secondary);
+}
+
+.progressValue {
+  height: 100%;
+  border-radius: inherit;
+
+  opacity: 0.72;
+  background: var(--lobe-color-bg-container);
+
+  transition: width 120ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressValue {
+    transition: none;
+  }
+}
+
+.sendArrow {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 50%;
+  inset-inline-end: 2px;
+  transform: translateY(-50%);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 28px;
+  height: 28px;
+
+  opacity: 1;
+
+  transition:
+    opacity 100ms ease,
+    transform 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sendArrow {
+    transition: none;
+  }
+}
+
+.sendDots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.sendDots > i {
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: currentcolor;
+}
+
+.sendButton {
+  cursor: default;
+
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+
+  overflow: hidden;
+
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+
+  color: var(--lobe-color-bg-container);
+
+  background: transparent;
+}
+
+.sendButton::before {
+  content: '';
+
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+
+  border-radius: inherit;
+
+  background: var(--lobe-color-primary);
+  clip-path: circle(14px at calc(100% - 16px) 50%);
+
+  transition: clip-path 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sendButton[data-error='true']::before {
+  background: var(--lobe-color-error);
+}
+
+.sendButton[data-expanded='true'] {
+  cursor: wait;
+  color: var(--lobe-color-text-secondary);
+  background: var(--lobe-color-bg-container);
+}
+
+.sendButton[data-expanded='true']::before {
+  background: var(--lobe-color-fill);
+}
+
+.sendButton[data-hover-expanded='true']::before,
+.sendButton:focus-visible::before,
+.sendButton[data-expanded='true']::before {
+  clip-path: circle(150% at calc(100% - 16px) 50%);
+}
+
+.sendButton[data-hover-expanded='true'] > span:first-child,
+.sendButton:focus-visible > span:first-child,
+.sendButton[data-expanded='true'] > span:first-child {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.sendButton[data-expanded='true'] > span:first-child {
+  gap: 8px;
+  padding-inline: 14px;
+  font-size: var(--lobe-font-size-sm);
+  font-weight: normal;
+}
+
+.sendButton[data-hover-expanded='true'] > span:last-child,
+.sendButton:focus-visible > span:last-child,
+.sendButton[data-expanded='true'] > span:last-child {
+  transform: translateY(-50%) translateX(6px);
+  opacity: 0;
+}
+
+.sendButton[data-expanded='true'] > span:first-child > span:last-child {
+  display: none;
+}
+
+.sendButton[data-expanded='true'] > span:first-child > span:nth-child(2) {
+  display: none;
+}
+
+.sendButton[data-expanded='true'] > span:first-child > span:first-child > i {
+  animation: voice-message-busy-dot 900ms ease-in-out infinite;
+}
+
+.sendButton[data-expanded='true'] > span:first-child > span:first-child > i:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.sendButton[data-expanded='true'] > span:first-child > span:first-child > i:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.sendButton[data-expanded='true'] > span:first-child > span:first-child > i:last-child {
+  display: none;
+}
+
+.sendButton:focus-visible {
+  outline: 2px solid var(--lobe-color-primary);
+  outline-offset: -3px;
+}
+
+.sendButton:disabled {
+  cursor: not-allowed;
+}
+
+.sendButton:disabled::before {
+  opacity: 0.45;
+}
+
+.sendButton[data-expanded='true']:disabled {
+  cursor: wait;
+}
+
+.sendButton[data-expanded='true']:disabled::before {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sendButton::before {
+    transition: none;
+  }
+
+  .sendButton[data-expanded='true'] > span:first-child > span:first-child > i {
+    animation: none;
+  }
+}
+
+.sendLabel {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  transform: translateY(4px);
+
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 0;
+  padding-inline: 10px;
+
+  font-size: var(--lobe-font-size);
+  font-weight: var(--lobe-font-weight-strong);
+  white-space: nowrap;
+
+  opacity: 0;
+
+  transition:
+    opacity 100ms ease,
+    transform 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sendLabel {
+    transition: none;
+  }
+}
+
+.sendText {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waveform {
+  pointer-events: none;
+
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.visuallyHidden {
+  position: absolute;
+
+  overflow: hidden;
+
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+
+  white-space: nowrap;
+
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+}
+
+@keyframes voice-message-enter {
+  from {
+    transform: translateX(8px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes voice-message-busy-dot {
+  0%,
+  60%,
+  100% {
+    transform: scale(0.72);
+    opacity: 0.38;
+  }
+
+  30% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

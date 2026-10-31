@@ -1,5 +1,4 @@
-import { createStaticStyles, TooltipGroup } from '@lobehub/ui';
-import { Select, type SelectProps } from '@lobehub/ui';
+import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
@@ -8,15 +7,7 @@ import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { type WorkingModel } from '@/types/agent';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css }) => ({
-  select: css`
-    &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
-      padding-inline-start: 12px;
-    }
-  `,
-}));
+import styles from './index.module.css';
 
 interface ModelOption {
   label: ReactNode;

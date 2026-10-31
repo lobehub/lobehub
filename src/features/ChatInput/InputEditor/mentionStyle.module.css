@@ -1,0 +1,19 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS-modules :global() */
+
+/*
+ * Override the default chip style from `@lobehub/editor`'s mention plugin so
+ * @-mentions render as plain colored text, matching the look of other inline
+ * tags (skills, tools, commands) in the chat UI.
+ * The outline and fill live on the Lexical decorator span (themed `mention`
+ * class), which wraps the inner `.editor_mention` span — so target the
+ * wrapper. The yellow `.selected` highlight is kept so a mention picked for
+ * deletion stays visible.
+ */
+.mentionPlain span:has(> :global(.editor_mention)),
+.mentionPlain :global(.editor_mention) {
+  border: none;
+}
+
+.mentionPlain span:has(> :global(.editor_mention)):not(:global(.selected)) {
+  background: none;
+}

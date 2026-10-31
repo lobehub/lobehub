@@ -4,19 +4,10 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
-import {
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Select,
-  SliderWithInput,
-  Spin,
-  Switch,
-  TextArea,
-} from '@lobehub/ui';
+import { Flexbox, Icon, Select, SliderWithInput, Spin, Switch, TextArea } from '@lobehub/ui';
 import { useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -66,199 +57,146 @@ interface SliderConfig {
   unlimitedInput?: boolean;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  advancedContent: css`
-    display: flex;
-    flex-direction: column;
-
-    .control-row {
-      border-block-start: 1px solid ${cssVar.colorSplit};
-    }
-
-    .control-row:first-child {
-      border-block-start: none;
-    }
-  `,
-  sectionHeader: css`
-    cursor: pointer;
-
-    width: calc(100% + 16px);
-    margin-inline: -8px;
-    padding-block: 12px;
-    padding-inline: 8px;
-    border: none;
-    border-radius: 10px;
-
-    font: inherit;
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-    text-align: start;
-
-    background: transparent;
-
-    transition: color 0.2s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-
-    &:hover .section-header-label {
-      color: ${cssVar.colorText};
-    }
-
-    &:focus-visible {
-      outline: 1px solid ${cssVar.colorBorder};
-      outline-offset: 2px;
-    }
-  `,
-  body: css`
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-
-    min-height: 0;
-    padding-block-end: 4px;
-    padding-inline: 12px;
-  `,
-  commonSection: css`
-    display: flex;
-    flex-direction: column;
-    padding-block: 0;
-  `,
-  divider: css`
-    height: 1px;
-    background: ${cssVar.colorSplit};
-  `,
-  hint: css`
-    font-size: 12px;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  form: css`
-    margin: 0;
-  `,
-  formSidebar: css`
-    display: flex;
-    flex: 1;
-
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-  `,
-  header: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 16px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-  headerLoading: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-    height: 18px;
-
-    color: ${cssVar.colorTextTertiary};
-  `,
-  headerTitle: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  label: css`
-    user-select: none;
-
-    min-width: 0;
-
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 20px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  labelMain: css`
-    flex-wrap: wrap;
-    min-width: 0;
-  `,
-  muted: css`
-    .control-label {
-      color: ${cssVar.colorTextTertiary};
-    }
-  `,
-  modelConfigSection: css`
-    padding-block: 12px;
-  `,
-  panel: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: min(384px, 100%);
-    max-height: 50vh;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  sidebarPanel: css`
-    width: 100%;
-    height: 100%;
-    max-height: none;
-    border: none;
-    border-radius: 0;
-
-    background: transparent;
-    box-shadow: none;
-  `,
-  rowControl: css`
-    width: 100%;
-  `,
-  rowRoot: css`
-    padding-block: 12px;
-  `,
-  tag: css`
-    user-select: none;
-
-    align-self: flex-start;
-
-    width: fit-content;
-    padding-block: 2px;
-    padding-inline: 7px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 10px;
-    font-weight: 500;
-    line-height: 1.2;
-    color: ${cssVar.colorTextQuaternary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  tooltipContent: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-width: 240px;
-  `,
-  slider: css`
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({
+  advancedContent: { display: 'flex', flexDirection: 'column' },
+  sectionHeader: {
+    cursor: 'pointer',
+    width: 'calc(100% + 16px)',
+    marginInline: '-8px',
+    paddingBlock: '12px',
+    paddingInline: '8px',
+    borderStyle: 'none',
+    borderRadius: '10px',
+    fontFamily: 'inherit',
+    fontStyle: 'inherit',
+    fontVariant: 'inherit',
+    lineHeight: 'inherit',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: 'color 0.2s ease',
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '1px' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  sectionHeaderLabel: {
+    color: {
+      default: cssVar.colorTextSecondary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorText,
+    },
+  },
+  body: {
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    display: 'flex',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    flexDirection: 'column',
+    minHeight: '0',
+    paddingBlockEnd: '4px',
+    paddingInline: '12px',
+  },
+  commonSection: { display: 'flex', flexDirection: 'column', paddingBlock: '0' },
+  divider: { height: '1px', backgroundColor: cssVar.colorSplit, backgroundImage: 'none' },
+  hint: { fontSize: '12px', lineHeight: '18px', color: cssVar.colorTextTertiary },
+  form: { margin: '0' },
+  formSidebar: { display: 'flex', flex: '1', width: '100%', height: '100%', minHeight: '0' },
+  header: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '16px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+    fontSize: '14px',
+    fontWeight: 600,
+    lineHeight: 1.4,
+    color: cssVar.colorText,
+  },
+  headerLoading: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    color: cssVar.colorTextTertiary,
+  },
+  headerTitle: {
+    overflow: 'hidden',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  label: {
+    userSelect: 'none',
+    minWidth: '0',
+    fontSize: '13px',
+    fontWeight: 500,
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+  },
+  labelMain: { flexWrap: 'wrap', minWidth: '0' },
+  labelMuted: { color: cssVar.colorTextTertiary },
+  modelConfigSection: { paddingBlock: '12px' },
+  panel: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: 'min(384px, 100%)',
+    maxHeight: '50vh',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  sidebarPanel: {
+    width: '100%',
+    height: '100%',
+    maxHeight: 'none',
+    borderStyle: 'none',
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    boxShadow: 'none',
+  },
+  rowControl: { width: '100%' },
+  rowRoot: { paddingBlock: '12px' },
+  // Rows inside the advanced list are divided from the previous row; the first has no rule.
+  rowSeparated: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: { 'default': 'solid', ':first-child': 'none' },
+    borderBlockStartColor: cssVar.colorSplit,
+  },
+  tag: {
+    userSelect: 'none',
+    alignSelf: 'flex-start',
+    width: 'fit-content',
+    paddingBlock: '2px',
+    paddingInline: '7px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '10px',
+    fontWeight: 500,
+    lineHeight: 1.2,
+    color: cssVar.colorTextQuaternary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  tooltipContent: { display: 'flex', flexDirection: 'column', gap: '6px', maxWidth: '240px' },
+  slider: { width: '100%' },
+});
 
 const PARAM_NAME_MAP: Record<ParamKey, string> = {
   frequency_penalty: 'params.frequency_penalty',
@@ -329,20 +267,30 @@ const setStoredOpen = (storageKey: string, open: boolean) => {
 };
 
 interface ControlLabelProps {
+  muted?: boolean;
   tag?: string;
   title: string;
   tooltip?: string;
 }
 
-const ControlLabel = memo<ControlLabelProps>(({ title, tooltip, tag }) => (
-  <Flexbox align={'flex-start'} className={cx(styles.label, 'control-label')} gap={6}>
-    <Flexbox horizontal align={'center'} className={styles.labelMain} gap={6}>
+const ControlLabel = memo<ControlLabelProps>(({ muted, title, tooltip, tag }) => (
+  <Flexbox
+    align={'flex-start'}
+    className={stylex.props(styles.label, muted && styles.labelMuted).className}
+    gap={6}
+  >
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.labelMain).className}
+      gap={6}
+    >
       {title}
       {tooltip && (
         <InfoTooltip
           title={
-            <div className={styles.tooltipContent}>
-              {tag && <span className={styles.tag}>{tag}</span>}
+            <div {...stylex.props(styles.tooltipContent)}>
+              {tag && <span {...stylex.props(styles.tag)}>{tag}</span>}
               <span>{tooltip}</span>
             </div>
           }
@@ -356,18 +304,31 @@ interface ControlRowProps {
   action?: ReactNode;
   children?: ReactNode;
   muted?: boolean;
+  /** Draw a rule above the row (none above the first sibling). */
+  separated?: boolean;
   tag?: string;
   title: string;
   tooltip?: string;
 }
 
-const ControlRow = ({ action, children, muted, tag, title, tooltip }: ControlRowProps) => (
-  <Flexbox className={cx('control-row', styles.rowRoot, muted && styles.muted)} gap={10}>
+const ControlRow = ({
+  action,
+  children,
+  muted,
+  separated,
+  tag,
+  title,
+  tooltip,
+}: ControlRowProps) => (
+  <Flexbox
+    className={stylex.props(styles.rowRoot, separated && styles.rowSeparated).className}
+    gap={10}
+  >
     <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-      <ControlLabel tag={tag} title={title} tooltip={tooltip} />
+      <ControlLabel muted={muted} tag={tag} title={title} tooltip={tooltip} />
       {action}
     </Flexbox>
-    {children && <div className={styles.rowControl}>{children}</div>}
+    {children && <div {...stylex.props(styles.rowControl)}>{children}</div>}
   </Flexbox>
 );
 
@@ -378,9 +339,14 @@ interface SectionHeaderProps {
 }
 
 const SectionHeader = memo<SectionHeaderProps>(({ onToggle, open, title }) => (
-  <button aria-expanded={open} className={styles.sectionHeader} type="button" onClick={onToggle}>
+  <button
+    aria-expanded={open}
+    type="button"
+    {...stylex.props(styles.sectionHeader, stylex.defaultMarker())}
+    onClick={onToggle}
+  >
     <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-      <span className={cx(styles.label, 'section-header-label')}>{title}</span>
+      <span {...stylex.props(styles.label, styles.sectionHeaderLabel)}>{title}</span>
       <Icon icon={open ? ChevronUp : ChevronDown} size={18} />
     </Flexbox>
   </button>
@@ -405,7 +371,7 @@ const SliderField = ({
 }: SliderFieldProps) => (
   <SliderWithInput
     changeOnWheel
-    className={styles.slider}
+    className={stylex.props(styles.slider).className}
     controls={false}
     disabled={disabled}
     gap={10}
@@ -725,18 +691,18 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   }, []);
 
   return (
-    <div className={cx(styles.form, variant === 'sidebar' && styles.formSidebar)}>
-      <div className={cx(styles.panel, variant === 'sidebar' && styles.sidebarPanel)}>
-        <div className={styles.header}>
-          <span className={styles.headerTitle}>{panelTitle}</span>
+    <div {...stylex.props(styles.form, variant === 'sidebar' && styles.formSidebar)}>
+      <div {...stylex.props(styles.panel, variant === 'sidebar' && styles.sidebarPanel)}>
+        <div {...stylex.props(styles.header)}>
+          <span {...stylex.props(styles.headerTitle)}>{panelTitle}</span>
           {updating && (
-            <div className={styles.headerLoading}>
+            <div {...stylex.props(styles.headerLoading)}>
               <Spin size="small" />
             </div>
           )}
         </div>
-        <div className={styles.body}>
-          <div className={styles.commonSection}>
+        <div {...stylex.props(styles.body)}>
+          <div {...stylex.props(styles.commonSection)}>
             <ControlRow
               tag="compression"
               title={t('settingModel.params.panel.contextCompression')}
@@ -840,7 +806,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
               }
             >
               {showFollowUpHint && (
-                <div className={styles.hint}>
+                <div {...stylex.props(styles.hint)}>
                   {t('settingChat.enableFollowUpChips.notConfiguredHint')}
                 </div>
               )}
@@ -892,14 +858,14 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
           </div>
           {hasModelConfig && (
             <>
-              <div className={styles.divider} />
+              <div {...stylex.props(styles.divider)} />
               <SectionHeader
                 open={modelConfigOpen}
                 title={t('ModelSwitchPanel.detail.config', { ns: 'components' })}
                 onToggle={handleModelConfigOpenChange}
               />
               {modelConfigOpen && (
-                <div className={styles.modelConfigSection}>
+                <div {...stylex.props(styles.modelConfigSection)}>
                   <ControlsForm
                     hideReasoningParams
                     disabled={!canCreate}
@@ -913,20 +879,21 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
           )}
           {!enableAgentMode && (
             <>
-              <div className={styles.divider} />
+              <div {...stylex.props(styles.divider)} />
               <SectionHeader
                 open={advancedOpen}
                 title={t('settingModel.params.panel.advanced')}
                 onToggle={handleAdvancedOpenChange}
               />
               {advancedOpen && (
-                <div className={styles.advancedContent}>
+                <div {...stylex.props(styles.advancedContent)}>
                   {PARAM_ORDER.filter((key) => !disabledParams?.includes(key)).map((key) => {
                     const meta = PARAM_CONFIG[key];
                     const enabled = enabledMap[key];
 
                     return (
                       <ControlRow
+                        separated
                         key={key}
                         muted={!enabled}
                         tag={meta.tag}
@@ -957,6 +924,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                     );
                   })}
                   <ControlRow
+                    separated
                     tag="max_tokens"
                     title={t('settingModel.params.panel.responseLength')}
                     tooltip={t('settingModel.maxTokens.desc')}
@@ -991,6 +959,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   </ControlRow>
                   {!hasReasoningExtendParams && (
                     <ControlRow
+                      separated
                       tag="reasoning_effort"
                       title={t('settingModel.reasoningEffort.title')}
                       tooltip={t('settingModel.reasoningEffort.desc')}

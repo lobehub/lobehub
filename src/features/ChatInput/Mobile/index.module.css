@@ -1,0 +1,9 @@
+.leftActions {
+  flex: none;
+  min-width: 0;
+}
+
+/* The action bar renders its own items; keep them from flex-shrinking. */
+.leftActions > * {
+  flex: none !important;
+}

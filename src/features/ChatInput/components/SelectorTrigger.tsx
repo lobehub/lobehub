@@ -1,53 +1,50 @@
-import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ZapIcon } from 'lucide-react';
 import type { ComponentPropsWithRef } from 'react';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  label: css`
-    overflow: hidden;
+import { sx } from '@/styles/sx';
 
-    min-width: 0;
-    max-width: 200px;
-
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  secondary: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-    transition: color 0.2s;
-  `,
-  trigger: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: 0 1 auto;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 100%;
-    height: 28px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-
-      [data-secondary] {
-        color: ${cssVar.colorTextSecondary};
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  label: {
+    overflow: 'hidden',
+    minWidth: '0',
+    maxWidth: '200px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // Dims one step while the trigger (the default marker) is idle, and follows it on hover.
+  secondary: {
+    flex: 'none',
+    color: {
+      default: cssVar.colorTextTertiary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorTextSecondary,
+    },
+    transition: 'color 0.2s',
+  },
+  trigger: {
+    cursor: 'pointer',
+    display: 'flex',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    maxWidth: '100%',
+    height: '28px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 /**
  * The chip both composer model selectors open from — the heterogeneous one and
@@ -74,15 +71,15 @@ interface TriggerProps extends ComponentPropsWithRef<'div'> {
 }
 
 const SelectorTrigger = memo<TriggerProps>(
-  ({ ariaLabel, className, fast, secondaryText, text, ...rest }) => (
-    <div {...rest} aria-label={ariaLabel} className={cx(styles.trigger, className)}>
+  ({ ariaLabel, className, fast, secondaryText, style, text, ...rest }) => (
+    <div
+      {...rest}
+      aria-label={ariaLabel}
+      {...sx([styles.trigger, stylex.defaultMarker()], className, style)}
+    >
       {fast && <Icon icon={ZapIcon} size={12} />}
-      <span className={styles.label}>{text}</span>
-      {secondaryText && (
-        <span data-secondary className={styles.secondary}>
-          {secondaryText}
-        </span>
-      )}
+      <span {...stylex.props(styles.label)}>{text}</span>
+      {secondaryText && <span {...stylex.props(styles.secondary)}>{secondaryText}</span>}
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   ),

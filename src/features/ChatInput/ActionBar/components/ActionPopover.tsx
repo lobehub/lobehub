@@ -1,27 +1,15 @@
 'use client';
 
 import { type PopoverProps } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, Flexbox, Popover, Spin } from '@lobehub/ui';
+import { Flexbox, Popover, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { type ReactNode } from 'react';
 import { memo, Suspense } from 'react';
 
 import DebugNode from '@/components/DebugNode';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css }) => ({
-  popoverContent: css`
-    .${prefixCls}-form {
-      .${prefixCls}-form-item:first-child {
-        padding-block: 0 4px;
-      }
-      .${prefixCls}-form-item:last-child {
-        padding-block: 4px 0;
-      }
-    }
-  `,
-}));
+import styles from './ActionPopover.module.css';
 
 export interface ActionPopoverProps extends Omit<PopoverProps, 'title' | 'content' | 'children'> {
   children?: ReactNode;
@@ -56,7 +44,7 @@ const ActionPopover = memo<ActionPopoverProps>(
       typeof customClassNames === 'function' ? customClassNames : customClassNames;
     const contentClassName =
       typeof resolvedClassNames === 'object' && resolvedClassNames?.content
-        ? cx(styles.popoverContent, resolvedClassNames.content)
+        ? `${styles.popoverContent} ${resolvedClassNames.content}`
         : styles.popoverContent;
 
     // Properly handle styles (can be object or function)

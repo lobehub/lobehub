@@ -1,0 +1,20 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS-modules :global() */
+
+/* `.show-on-hover` is a shared class name: SendArea's expand button opts in with it. */
+.container :global(.show-on-hover) {
+  opacity: 0;
+}
+
+.container:hover :global(.show-on-hover) {
+  opacity: 1;
+}
+
+.leftActions {
+  flex: none;
+  min-width: 0;
+}
+
+/* The action bar renders its own items; keep them from flex-shrinking. */
+.leftActions > * {
+  flex: none !important;
+}

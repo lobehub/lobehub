@@ -1,0 +1,4 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS-modules :global() */
+.select:global(.ant-select-dropdown) :global(.ant-select-item-option-grouped) {
+  padding-inline-start: 12px;
+}

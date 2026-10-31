@@ -1,0 +1,8 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS-modules :global() */
+.popoverContent :global(.ant-form) :global(.ant-form-item):first-child {
+  padding-block: 0 4px;
+}
+
+.popoverContent :global(.ant-form) :global(.ant-form-item):last-child {
+  padding-block: 4px 0;
+}
