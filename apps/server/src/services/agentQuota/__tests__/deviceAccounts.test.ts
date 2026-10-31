@@ -132,6 +132,25 @@ describe('AgentQuotaService per-device account choice', () => {
     );
   });
 
+  it('leaves a legacy pin and every device untouched when the pick is refused', async () => {
+    const shared = await signedIn('acc-shared', deviceA);
+    const onlyA = await signedIn('acc-only-a', deviceA);
+    await bindings.upsert({ accountId: shared.id, agentId, role: QuotaBindingRole.pinned });
+    await bindings.upsert({ accountId: onlyA.id, agentId, role: QuotaBindingRole.pool });
+
+    // Device B holds no login for it: the choice is refused...
+    await expect(service.setDeviceAccount(agentId, deviceB, onlyA.id)).rejects.toBeInstanceOf(
+      AccountNotSignedInOnDeviceError,
+    );
+
+    // ...and the legacy pin was neither handed out nor demoted.
+    expect(await deviceBindings.listByAgent(agentId)).toEqual([]);
+    const pinned = (await bindings.listByAgent(agentId)).find(
+      (b) => b.role === QuotaBindingRole.pinned,
+    );
+    expect(pinned?.accountId).toBe(shared.id);
+  });
+
   it('ignores a pick whose account left the rotation', async () => {
     const onA = await signedIn('acc-a', deviceA);
     const other = await signedIn('acc-other', deviceA);

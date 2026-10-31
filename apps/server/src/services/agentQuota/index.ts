@@ -124,12 +124,16 @@ export class AgentQuotaService {
   private devices: DeviceModel;
   private logins: AgentProviderAccountLoginModel;
   private workspaceId?: string;
+  private db: LobeChatDatabase;
+  private userId: string;
   private snapshots: AgentQuotaSnapshotModel;
   private ledger: AgentQuotaUsageLedgerModel;
   private windows: AgentQuotaWindowModel;
   private calibrations: AgentQuotaCalibrationModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
     this.accounts = new AgentProviderAccountModel(db, userId, workspaceId);
     this.bindings = new AgentAccountBindingModel(db, userId, workspaceId);
     this.deviceBindings = new AgentDeviceAccountBindingModel(db, userId, workspaceId);
@@ -536,22 +540,22 @@ export class AgentQuotaService {
    * device neither moves the others nor stays overridden by the old pin.
    *
    * Throws `AccountNotSignedInOnDeviceError` when the device holds no recorded
-   * login for the account.
+   * login for the account. Retiring the legacy pin and the choice commit
+   * together, so a rejected choice leaves every device's routing as it was.
    */
   setDeviceAccount = async (
     agentId: string,
     deviceId: string,
     accountId: string | null,
   ): Promise<void> => {
-    await this.retireAgentPin(agentId);
-
-    if (!accountId) {
-      await this.deviceBindings.clear(agentId, deviceId);
-      return;
-    }
-
     try {
-      await this.deviceBindings.set(agentId, deviceId, accountId);
+      await this.db.transaction(async (tx) => {
+        const scoped = new AgentQuotaService(tx as LobeChatDatabase, this.userId, this.workspaceId);
+        await scoped.retireAgentPin(agentId);
+
+        if (accountId) await scoped.deviceBindings.set(agentId, deviceId, accountId);
+        else await scoped.deviceBindings.clear(agentId, deviceId);
+      });
     } catch (error) {
       if (isForeignKeyViolation(error)) throw new AccountNotSignedInOnDeviceError();
       throw error;
