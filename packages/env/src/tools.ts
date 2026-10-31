@@ -43,6 +43,39 @@ const multimodalImageFormatsEnv = z.preprocess(
     .default([...DEFAULT_MULTIMODAL_IMAGE_FORMATS]),
 );
 
+/**
+ * Zero-width characters (ZWSP/ZWNJ/ZWJ, word joiner, BOM) that ride along when a
+ * value is copied from a web page or chat app. They are invisible in `env`
+ * output but make an id like `searxng` stop matching.
+ */
+const INVISIBLE_CHARS = /[\u200B-\u200D\u2060\uFEFF]/g;
+
+/**
+ * Wrapping quotes survive in the value when Compose uses the list form
+ * (`- SEARCH_PROVIDERS='searxng'`) or `docker run --env-file`, which do not
+ * strip them the way a shell or dotenv would.
+ */
+const WRAPPING_QUOTES = /^["'`]+|["'`]+$/g;
+
+/**
+ * Comma-separated id list (full-width commas allowed), normalized to trimmed,
+ * lowercase ids. Only the format is normalized here: which ids are valid is
+ * owned by the consumer, and an unknown id must not fail env validation and
+ * take the whole server config down.
+ */
+const idListEnv = z.preprocess(
+  (value) =>
+    typeof value === 'string'
+      ? value
+          .replaceAll('，', ',')
+          .replaceAll(INVISIBLE_CHARS, '')
+          .split(',')
+          .map((id) => id.trim().replaceAll(WRAPPING_QUOTES, '').trim().toLowerCase())
+          .filter(Boolean)
+      : value,
+  z.array(z.string()).default([]),
+);
+
 export const getToolsConfig = () => {
   /**
    * Keep the visual-understanding variables as migration fallbacks while
@@ -70,10 +103,10 @@ export const getToolsConfig = () => {
     server: {
       CRAWL_CONCURRENCY: optionalNumberEnv(1, 10),
       CRAWLER_RETRY: optionalNumberEnv(0, 3),
-      CRAWLER_IMPLS: z.string().optional(),
+      CRAWLER_IMPLS: idListEnv,
       JINA_USE_CN_DOMAINS: z.enum(['true', 'false']).optional(),
       MULTIMODAL_UNDERSTANDING_IMAGE_FORMATS: multimodalImageFormatsEnv,
-      SEARCH_PROVIDERS: z.string().optional(),
+      SEARCH_PROVIDERS: idListEnv,
       SEARXNG_URL: z.string().url().optional(),
       /**
        * Length at which a function-call tool name is compressed to an opaque
