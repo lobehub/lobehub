@@ -347,6 +347,34 @@ describe('AgentQuotaService.listLatestReadings', () => {
     expect(load.rateLimitedUntil).toBeNull();
     expect(load.weeklyUtil).toBe(21);
   });
+
+  it('forgets the 5-hour limit once the plan stops reporting it (Max upgraded to Ultra)', async () => {
+    // The Max-era sample carried a session window; every Ultra sample after
+    // its reset carries none. Its row stays the newest in the session bucket.
+    await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [
+        { ...weeklyReading, capturedAt: now - 8 * HOUR },
+        {
+          capturedAt: now - 8 * HOUR,
+          limitType: 'session',
+          resetsAt: now - 6 * HOUR,
+          scopeKey: '',
+          utilization: 40,
+        },
+      ],
+    });
+    const account = await service.ingestSnapshot({
+      identity: { ...identity, planTier: 'ultra' },
+      provider: 'claude-code',
+      readings: [weeklyReading],
+    });
+
+    const latest = await service.listLatestReadings(account.id);
+
+    expect(latest.map((r) => r.limitType)).toEqual(['weekly_all']);
+  });
 });
 
 describe('AgentQuotaService.recordUsage', () => {

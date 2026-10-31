@@ -5,6 +5,7 @@ import {
   type ClaudeCodeRoutedAccount,
   computeTurnCostUsd,
   currentUtilization,
+  dropRetiredLimits,
   isScopedWeeklyLimit,
   isSessionLimit,
   isWeeklyAllLimit,
@@ -313,21 +314,25 @@ export class AgentQuotaService {
    * The newest reading per limit bucket, as plain numbers. This is the display
    * read model: unlike `agent_quota_windows` it also carries limits the
    * provider reports without a `resets_at` (an untouched model-scoped weekly),
-   * which have no window to be projected into.
+   * which have no window to be projected into. A limit the plan has since
+   * dropped (a Max account upgraded to Ultra loses its 5-hour window) is left
+   * out, so neither the cards nor the load balancer keep reading it.
    */
   listLatestReadings = async (accountId: string): Promise<QuotaLimitReading[]> => {
     const rows = await this.snapshots.latestPerBucket(accountId);
 
-    return rows.map((row) => ({
-      ...readQuotaWindowMetadata(row.raw),
-      capturedAt: row.capturedAt.getTime(),
-      isActive: row.isActive ?? undefined,
-      limitType: row.limitType,
-      resetsAt: row.resetsAt?.getTime() ?? null,
-      scopeKey: row.scopeKey,
-      severity: row.severity ?? undefined,
-      utilization: row.utilization,
-    }));
+    return dropRetiredLimits(
+      rows.map((row) => ({
+        ...readQuotaWindowMetadata(row.raw),
+        capturedAt: row.capturedAt.getTime(),
+        isActive: row.isActive ?? undefined,
+        limitType: row.limitType,
+        resetsAt: row.resetsAt?.getTime() ?? null,
+        scopeKey: row.scopeKey,
+        severity: row.severity ?? undefined,
+        utilization: row.utilization,
+      })),
+    );
   };
 
   /**
