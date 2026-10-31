@@ -25,7 +25,6 @@ export const AUTOMATED_PROMPT_TOPIC_TRIGGERS = [
   'task',
   'task_manager',
 ];
-
 export const MESSAGE_KEYWORD_SEARCH_MAX_LIMIT = 100;
 
 /**
@@ -217,7 +216,13 @@ export class MessageKeywordSearchQueries extends MessageScope {
         ? undefined
         : or(
             ne(messages.role, 'user'),
-            isNull(topics.trigger),
+            // Acceptance verifier prompts ("Check to verify …") run without a
+            // trigger (it also feeds the run's origin, so it stays unset) but
+            // always under their task: a trigger-less topic with
+            // `metadata.taskId` is a verifier topic. In production every such
+            // topic is one (16,216 of 16,216 over 60 days); human chats about
+            // a task carry `trigger: 'chat'`.
+            and(isNull(topics.trigger), sql`${topics.metadata} ->> 'taskId' IS NULL`),
             notInArray(topics.trigger, AUTOMATED_PROMPT_TOPIC_TRIGGERS),
           ),
     ];
