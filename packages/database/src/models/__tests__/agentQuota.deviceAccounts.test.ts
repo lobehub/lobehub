@@ -110,6 +110,23 @@ describe('AgentDeviceAccountBindingModel', () => {
     expect(await choices.find(agentId, deviceA)).toBeNull();
   });
 
+  // Regression: handing a legacy pin down to a device replaced a choice made
+  // there by a concurrent first per-device write.
+  it('hands down a choice only where the device has none yet', async () => {
+    const logins = new AgentProviderAccountLoginModel(serverDB, userId);
+    const choices = new AgentDeviceAccountBindingModel(serverDB, userId);
+    await logins.record(accountId, deviceA);
+    await logins.record(otherAccountId, deviceA);
+    await logins.record(accountId, deviceB);
+    await choices.set(agentId, deviceA, otherAccountId);
+
+    await choices.setIfAbsent(agentId, deviceA, accountId);
+    await choices.setIfAbsent(agentId, deviceB, accountId);
+
+    expect((await choices.find(agentId, deviceA))?.accountId).toBe(otherAccountId);
+    expect((await choices.find(agentId, deviceB))?.accountId).toBe(accountId);
+  });
+
   it('rejects a choice the device holds no login for, and drops it with the login', async () => {
     const logins = new AgentProviderAccountLoginModel(serverDB, userId);
     const choices = new AgentDeviceAccountBindingModel(serverDB, userId);

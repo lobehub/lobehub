@@ -414,6 +414,24 @@ export class AgentDeviceAccountBindingModel {
     return row;
   };
 
+  /**
+   * Like `set`, but never replaces a choice the device already has: a pin
+   * handed down to a device must not overwrite a choice made there meanwhile.
+   */
+  setIfAbsent = async (agentId: string, deviceId: string, accountId: string) => {
+    await this.db
+      .insert(agentDeviceAccountBindings)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { accountId, agentId, deviceId },
+        ),
+      )
+      .onConflictDoNothing({
+        target: [agentDeviceAccountBindings.agentId, agentDeviceAccountBindings.deviceId],
+      });
+  };
+
   clear = async (agentId: string, deviceId: string) =>
     this.db
       .delete(agentDeviceAccountBindings)

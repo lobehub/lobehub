@@ -693,15 +693,14 @@ export class AgentQuotaService {
     );
     if (!pinned) return;
 
-    const [logins, chosen] = await Promise.all([
-      this.logins.listByAccount(pinned.accountId),
-      this.deviceBindings.listByAgent(agentId),
-    ]);
-    const decided = new Set(chosen.map((b) => b.deviceId));
+    // Insert-if-absent rather than reading the choices first: another device's
+    // first choice may commit concurrently, and the handed-down pin must not
+    // replace it.
+    const logins = await this.logins.listByAccount(pinned.accountId);
     await Promise.all(
-      logins
-        .filter((login) => !decided.has(login.deviceId))
-        .map((login) => this.deviceBindings.set(agentId, login.deviceId, pinned.accountId)),
+      logins.map((login) =>
+        this.deviceBindings.setIfAbsent(agentId, login.deviceId, pinned.accountId),
+      ),
     );
     await this.bindings.upsert({
       accountId: pinned.accountId,
