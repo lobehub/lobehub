@@ -10,11 +10,13 @@ import { createReplicaSlice, recordLens } from '@/libs/replica';
 import { documentService } from '@/services/document';
 import { pageActions } from '@/store/page';
 import type { StoreSetter } from '@/store/types';
-import { isSkillMarkdownDocument, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
+import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import type { DocumentStore } from '../../store';
 import { useDocumentStore } from '../../store';
+import { resolveDocumentContentFormat } from '../editor/contentFormat';
 import type { DocumentContentFormat, DocumentSourceType } from '../editor/initialState';
 import type { DocumentDetail } from './projection';
 import { documentDetailResource } from './projection';
@@ -80,6 +82,12 @@ export interface UseFetchDocumentResult {
   mutate: () => Promise<unknown>;
 }
 
+/** Result of `useFetchDocumentDetail`; `data` is read from the replica view. */
+export interface UseFetchDocumentDetailResult extends UseFetchDocumentResult {
+  /** The persisted row has been read (or there was none to read). */
+  isHydrated: boolean;
+}
+
 const detailLens = recordLens<DocumentStore, DocumentDetail>('documentDetailMap');
 
 type Setter = StoreSetter<DocumentStore>;
@@ -114,6 +122,16 @@ export class DocumentActionImpl {
         if ((this.#adoptions.get(id) ?? 0) !== adoptedBefore && current) return current;
         return this.#keepNewerDetail(id, { document });
       },
+      effects: {
+        // The server now denies this document (access revoked, session ended):
+        // the cached copy must stop rendering — on screen and after a reload.
+        // Transient failures keep it (stale-while-revalidate).
+        onError: (error, _id, { key, scope }) => {
+          if (!key) return;
+          if (isTrpcErrorCode(error, 'FORBIDDEN') || isTrpcErrorCode(error, 'UNAUTHORIZED'))
+            this.#detail.remove(key, scope);
+        },
+      },
       get,
       set,
       stateKey: 'documentDetailReplica',
@@ -124,6 +142,18 @@ export class DocumentActionImpl {
       view: { ...detailLens, clear: this.#clearDetailView },
     });
   }
+
+  /**
+   * Advance the adoption generation of `documentId` for a write confirmed under
+   * `scope`. A write that settles after an account / workspace switch is dropped
+   * by the replica, so it must not advance the guard either: a read of the same
+   * id already in flight under the new identity would otherwise discard its
+   * fresh response for the hydrated row.
+   */
+  #countAdoption = (documentId: string, scope: string): void => {
+    if (scope !== documentDetailResource.scope.get()) return;
+    this.#adoptions.set(documentId, (this.#adoptions.get(documentId) ?? 0) + 1);
+  };
 
   /**
    * Scope reset (account / workspace switch): drop the projection together with
@@ -137,11 +167,15 @@ export class DocumentActionImpl {
    * never flushed under the new one.
    */
   #clearDetailView = (state: DocumentStore): Partial<DocumentStore> => {
-    const derivedIds = Object.keys(state.documentDetailMap).filter((id) => state.documents[id]);
-    if (derivedIds.length === 0) return detailLens.clear(state);
+    // Every editor row, not only those whose detail entry is still in the map:
+    // a bounded replica evicts unmounted entries (`persist.maxEntries`) and the
+    // highlight editor creates its row directly (`addDocument`), yet each row
+    // still holds the previous identity's body.
+    const editorIds = Object.keys(state.documents);
+    if (editorIds.length === 0) return detailLens.clear(state);
 
     const documents = { ...state.documents };
-    for (const id of derivedIds) {
+    for (const id of editorIds) {
       this.#cleanupDebouncedSave(id);
       delete documents[id];
     }
@@ -358,7 +392,7 @@ export class DocumentActionImpl {
     if (currentActiveId && currentActiveId !== documentId) return;
 
     if (this.#get().documents[documentId]) {
-      this.#get().reconcileRemote(documentId, document);
+      this.#reconcileWhenSettled(documentId, document);
       if (sourceType === 'notebook' && topicId) {
         this.#rememberTopicDocument(topicId, documentId);
       }
@@ -371,7 +405,7 @@ export class DocumentActionImpl {
     this.#get().initDocumentWithEditor({
       autoSave,
       content: document.content,
-      contentFormat: isSkillMarkdownDocument(document) ? 'skillMarkdown' : 'markdown',
+      contentFormat: resolveDocumentContentFormat(document),
       documentId,
       editor,
       editorData: document.editorData,
@@ -386,6 +420,30 @@ export class DocumentActionImpl {
     if (sourceType === 'page') {
       pageActions.upsertDocument(document);
     }
+  };
+
+  /**
+   * Reconcile a read once no save of this document is in flight.
+   *
+   * A read that lands mid-save (e.g. a focus revalidation after a tab switch)
+   * may carry the row that save is writing, without the edits typed since:
+   * adopting it then would wipe them from the editor. It may also carry a newer
+   * writer's revision, so it is deferred rather than dropped: once the save
+   * settles, the newest row in the view is reconciled, and `reconcileRemote`
+   * ignores it unless it is newer than what the save confirmed.
+   */
+  #reconcileWhenSettled = (documentId: string, row: DocumentItem): void => {
+    const pending = this.#get().getPendingSave(documentId);
+    if (!pending) {
+      this.#get().reconcileRemote(documentId, row);
+      return;
+    }
+
+    const retry = () => {
+      const latest = this.#get().documentDetailMap[documentId]?.document;
+      if (latest) this.#reconcileWhenSettled(documentId, latest);
+    };
+    void pending.then(retry, retry);
   };
 
   /**
@@ -434,8 +492,18 @@ export class DocumentActionImpl {
           return;
         }
         // Only react to *this* entry changing; every other store write (typing
-        // in the editor included) is none of our business.
-        if (previous && previous.documentDetailMap[documentId] === next) return;
+        // in the editor included) is none of our business — except this
+        // document becoming active while still unadopted. `#adoptDocument`
+        // skips an entry while another document is active, and the caller
+        // (`DocumentIdMode`) only claims `activeDocumentId` in a passive effect,
+        // after this layout effect ran. An entry already in memory never writes
+        // again, so without this retry the editor stays on its skeleton until
+        // the document is reopened.
+        if (previous && previous.documentDetailMap[documentId] === next) {
+          const becameActive =
+            state.activeDocumentId === documentId && previous.activeDocumentId !== documentId;
+          if (!becameActive || state.documents[documentId]) return;
+        }
         // Entries are scope-owned by the engine; never adopt one that belongs to
         // another identity (this hook can stay mounted across an identity switch).
         const scope = state.documentDetailReplica?.scope;
@@ -458,6 +526,79 @@ export class DocumentActionImpl {
       mutate: sync.revalidate,
     };
   };
+
+  /**
+   * Read one document's server row without mounting an editor — the portal
+   * header / body switch, the agent-document breadcrumb, goal deliverables and
+   * the resource preview. It shares the editor's replica entry, so every view of
+   * a document paints from the same persisted projection on a reload and one
+   * network sync confirms them all.
+   *
+   * `isLoading` keeps SWR's meaning (no value and no error yet). Check
+   * `isHydrated` before showing a loading state: until the persisted row has
+   * been read, "no value" may only mean "not read yet".
+   */
+  useFetchDocumentDetail = (documentId: string | undefined): UseFetchDocumentDetailResult => {
+    const document = useDocumentStore((s) =>
+      documentId ? s.documentDetailMap[documentId]?.document : undefined,
+    );
+    const sync = this.#detail.useSync(documentId);
+
+    return {
+      data: document,
+      error: sync.error,
+      isHydrated: sync.isHydrated,
+      isLoading: !!documentId && document === undefined && sync.error == null,
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+    };
+  };
+
+  /**
+   * Start a server write (e.g. a highlight-editor save) of one document and
+   * return the commit that folds its confirmed result into the replica entry,
+   * so the views reading it — and the next reload — show the saved revision
+   * without a refetch. A read already in flight started before the write and
+   * is not allowed to replace it.
+   *
+   * The identity (user / workspace scope) is captured here, before the request:
+   * a write that settles after an account / workspace switch belongs to the
+   * previous identity, so the commit is a no-op instead of planting that
+   * document in the new scope's memory and IndexedDB partition.
+   */
+  beginDocumentDetailPatch = (documentId: string): ((patch: Partial<DocumentItem>) => void) => {
+    const scope = documentDetailResource.scope.get();
+    return (patch) => {
+      if (documentDetailResource.scope.get() !== scope) return;
+      const current = this.#get().documentDetailMap[documentId]?.document;
+      if (!current) return;
+      this.internal_adoptDocumentDetail(documentId, { ...current, ...patch }, scope);
+    };
+  };
+
+  /**
+   * Show `patch` on the document right away while `serverCall` runs. A failed
+   * call rolls back to the confirmed row plus any other write still in flight,
+   * so an older rejected rename never undoes a newer one.
+   */
+  optimisticDocumentDetail = <TResult>(
+    documentId: string,
+    patch: Partial<DocumentItem>,
+    serverCall: () => Promise<TResult>,
+  ): Promise<TResult> =>
+    this.#detail.optimistic(
+      documentId,
+      (detail) => (detail.document ? { document: { ...detail.document, ...patch } } : detail),
+      async () => {
+        const scope = documentDetailResource.scope.get();
+        const result = await serverCall();
+        // Confirmed: a read started before this write may return the pre-write
+        // row with the same `updatedAt`, so count it as an adoption (see
+        // `#adoptions`) — that read keeps the committed entry instead.
+        this.#countAdoption(documentId, scope);
+        return result;
+      },
+    );
 
   /**
    * Warm the replica for a document the user is about to open (hover prefetch),
@@ -492,7 +633,7 @@ export class DocumentActionImpl {
     document: DocumentItem | null,
     scope?: string,
   ): void => {
-    this.#adoptions.set(documentId, (this.#adoptions.get(documentId) ?? 0) + 1);
+    this.#countAdoption(documentId, scope ?? documentDetailResource.scope.get());
     this.#detail.replace(documentId, { document }, scope);
   };
 }

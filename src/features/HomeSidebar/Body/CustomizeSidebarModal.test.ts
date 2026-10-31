@@ -41,4 +41,10 @@ describe('CustomizeSidebarModal', () => {
       false,
     );
   });
+
+  it('offers Goals only while the goals lab is on', () => {
+    expect(getSortableSidebarItemIds(false).has('goals')).toBe(false);
+    expect(getSortableSidebarItemIds(false, { goalsEnabled: true }).has('goals')).toBe(true);
+    expect(getSortableSidebarItemIds(true, { goalsEnabled: true }).has('goals')).toBe(true);
+  });
 });

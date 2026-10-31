@@ -1,6 +1,6 @@
 ---
 name: source-layout
-description: 'Use for where a file lives, how it is named, where its tests go, and how to split a source or test file over 800 lines (拆分大文件, 目录结构, 文件命名).'
+description: 'Use for where a file lives, how it is named, where its tests go, and how to split a source or test file over 1200 lines (拆分大文件, 目录结构, 文件命名).'
 user-invocable: false
 ---
 
@@ -10,15 +10,15 @@ Top-level ownership (`src/features`, `src/routes`, `apps/server/src`, `packages`
 
 ## 1. Names
 
-| What                                                 | Form                  | Example                                        |
-| ---------------------------------------------------- | --------------------- | ---------------------------------------------- |
-| React component file / component directory           | PascalCase            | `PlanCard.tsx`, `ChatInput/ControlBar/`        |
-| Hook                                                 | `useXxx.ts(x)`        | `ChatInputNotice/useChatInputNotice.ts`        |
-| Other module                                         | camelCase or one word | `originLink.ts`, `recentDirs.ts`               |
-| Server class module                                  | the class name        | `services/agentRuntime/CompletionLifecycle.ts` |
-| Service, router, store, and other non-component dirs | camelCase             | `services/aiAgent/`, `store/chat/slices/`      |
-| Package directory                                    | kebab-case            | `packages/agent-runtime/`                      |
-| Files inside a package                               | camelCase             | `packages/database/src/models/`                |
+| What                                                 | Form                  | Example                                         |
+| ---------------------------------------------------- | --------------------- | ----------------------------------------------- |
+| React component file / component directory           | PascalCase            | `PlanCard.tsx`, `ChatInput/ControlBar/`         |
+| Hook                                                 | `useXxx.ts(x)`        | `ChatInputNotice/useChatInputNotice.ts`         |
+| Other module                                         | camelCase or one word | `originLink.ts`, `recentDirs.ts`                |
+| Server class module                                  | the class name        | `services/agentRuntime/StaleOperationReaper.ts` |
+| Service, router, store, and other non-component dirs | camelCase             | `services/aiAgent/`, `store/chat/slices/`       |
+| Package directory                                    | kebab-case            | `packages/agent-runtime/`                       |
+| Files inside a package                               | camelCase             | `packages/database/src/models/`                 |
 
 A package whose files are already kebab-case (`alint`, `openapi`, `builtin-skills`) keeps kebab-case internally. Shared per-directory modules are `constants.ts`, `types.ts`, `style.ts`, and `utils.ts`, not `const.ts`, `type.ts`, `styles.ts`, or `helpers.ts`. Create one only when two or more modules in that directory use it; a constant or type used by one module stays in that module.
 
@@ -36,10 +36,10 @@ One rule for every app and package:
 
 ## 3. File size
 
-Source and test files stay at or below 800 lines. Generated code (`*.gen.ts`, `generated/` directories) and the `locales/default/` tables are exempt:
+Source and test files stay at or below 1200 lines. Generated code (`*.gen.ts`, `generated/` directories) and the `locales/default/` tables are exempt:
 
-- A new file over 800 lines, or an existing file that crosses 800 lines in this change, is split in the same change. `bun run check`, the pre-commit hook, and the PR's File Size Gate job fail on both.
-- A file already over 800 lines must not grow, including for a bug fix: the change may only keep or reduce its line count. Before adding code, extract the cohesive part the change touches. Put a new test in a scenario test file under the limit (§2), splitting the old test file first when the test belongs to one of its scenarios. Because hundreds of legacy files are over the limit, these checks report their growth as an advisory (a warning annotation in CI) instead of failing; it is still a required fix.
+- A new file over 1200 lines, or an existing file that crosses 1200 lines in this change, is split in the same change. `bun run check`, the pre-commit hook, and the PR's File Size Gate job fail on both.
+- A file already over 1200 lines must not grow, including for a bug fix: the change may only keep or reduce its line count. Before adding code, extract the cohesive part the change touches into a sibling inside the file's own directory (`Foo.ts` becomes `Foo/index.ts`, §4), not into a neighboring file or another slice. Put a new test in a scenario test file under the limit (§2), splitting the old test file first when the test belongs to one of its scenarios. Because hundreds of legacy files are over the limit, these checks report their growth as an advisory (a warning annotation in CI) instead of failing; it is still a required fix.
 
 The limit says when to split, not where. Split on a real boundary (state, reuse, render update, sub-domain, pipeline stage), as `react` requires; never cut a file at an arbitrary line count. When a heavy feature is mounted by several hosts, use `compose-atoms` instead.
 
@@ -47,12 +47,12 @@ The limit says when to split, not where. Split on a real boundary (state, reuse,
 
 A split keeps the public import path: `Foo.tsx` becomes `Foo/index.tsx`, so `import Foo from './Foo'` keeps working and callers do not change. Commit the move (`mkdir -p Foo && git mv Foo.tsx Foo/index.tsx`) alone before extracting, so reviewers can read the extraction diff separately and Git keeps the rename while those commits stay intact (a squash merge folds them together). `split-large-file` has the full procedure.
 
-| Kind            | `index` keeps                                   | Siblings                                                                                                                   | Precedent                                |
-| --------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| React component | Public API, shared top-level state, composition | Child components (PascalCase), `useXxx.ts` for state transitions and side effects, pure logic modules with their own tests | `Conversation/Messages/GoalTaskCard/`    |
-| Server service  | The class and its orchestration methods         | Stage functions taking an explicit `deps` object (`pipeline/<stage>.ts`), sub-domain folders                               | `services/aiAgent/`, `services/comfyui/` |
-| tRPC router     | The merged router                               | One sub-router per sub-domain (`market/agent.ts` exports `agentRouter`)                                                    | `routers/lambda/market/`                 |
-| Zustand store   | —                                               | Follow `zustand`                                                                                                           | `src/store/page`                         |
+| Kind            | `index` keeps                                     | Siblings                                                                                                                   | Precedent                                         |
+| --------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| React component | Public API, shared top-level state, composition   | Child components (PascalCase), `useXxx.ts` for state transitions and side effects, pure logic modules with their own tests | `Conversation/Messages/GoalTaskCard/`             |
+| Server service  | The class and its orchestration methods           | Stage functions taking an explicit `deps` object (`pipeline/<stage>.ts`), sub-domain folders                               | `services/aiAgent/`, `services/comfyui/`          |
+| tRPC router     | The merged router                                 | One sub-router per sub-domain (`market/agent.ts` exports `agentRouter`)                                                    | `routers/lambda/market/`                          |
+| Zustand store   | The action class and its public method signatures | Logic modules exporting a function that takes one params object plus `get`; the class method delegates to it               | `agentRun/actions/entries/conversationLifecycle/` |
 
 - Prefer flat siblings. Add a sub-folder for a sub-area with several files of its own (`ChatInput/ControlBar/`).
 - Kind folders (`components/`, `hooks/`, `utils/`) follow who uses the code:

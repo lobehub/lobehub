@@ -1,5 +1,6 @@
 'use client';
 
+import { SparkAreaChart } from '@lobehub/charts';
 import {
   Button,
   createStaticStyles,
@@ -7,22 +8,25 @@ import {
   Flexbox,
   Icon,
   Skeleton,
-  Tag,
   Text,
   Tooltip,
+  useTheme,
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
-import { Check, Plus, Target } from 'lucide-react';
+import { Plus, Target } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { useChatStore } from '@/store/chat';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
+import { handleCardKeyDown } from './cardKeyboard';
 import { openDeclareMetricModal } from './DeclareMetricModal';
+import MetBadge from './MetBadge';
 import { buildNorthStarCards, formatMetricValue, type NorthStarCard } from './northStar';
 import { openRecordObservationModal } from './RecordObservationModal';
-import Sparkline from './Sparkline';
 
 /**
  * The goal's north-star strip: how far the *world* is from the declared
@@ -30,7 +34,8 @@ import Sparkline from './Sparkline';
  * which only say what the run cost. Clauses come from
  * `config.acceptance.metrics` — the same numbers the coordinator's measured
  * gate reads — so the strip and the acceptance verdict can never disagree
- * about what is being tracked.
+ * about what is being tracked. A card opens its clause's detail in the
+ * right-hand Portal: the full trend, the observation history and the actions.
  */
 
 const styles = createStaticStyles(({ css }) => ({
@@ -39,30 +44,53 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 236px;
     max-width: 340px;
-    padding-block: 10px;
-    padding-inline: 14px;
+    padding-block: 12px;
+    padding-inline: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
+
+    transition: border-color 0.2s;
+
+    &:hover {
+      border-color: ${cssVar.colorBorder};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
+    }
   `,
   metValue: css`
     color: ${cssVar.colorSuccess};
   `,
+  /*
+   * The chart has no dashed-series option. It names each series path after its
+   * category, so the target reference line is styled from here: a dashed stroke
+   * with no area under it.
+   */
+  spark: css`
+    & path[name='target'] {
+      stroke-dasharray: 3 3;
+    }
+
+    & path.recharts-area-area[name='target'] {
+      fill: none;
+    }
+  `,
   stale: css`
     color: ${cssVar.colorWarning};
-  `,
-  track: css`
-    overflow: hidden;
-    height: 4px;
-    border-radius: 2px;
-    background: ${cssVar.colorFillSecondary};
   `,
 }));
 
 const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string }>(
   ({ canEdit, card, goalId }) => {
     const { t } = useTranslation('chat');
+    const pushPortalView = useChatStore((s) => s.pushPortalView);
+    const openDetail = () =>
+      pushPortalView({ goalId, metricKey: card.key, type: PortalViewType.GoalNorthStar });
+    const theme = useTheme();
 
     const freshness =
       card.latestAt == null
@@ -70,32 +98,18 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
         : t('goalProcess.northStar.lastObserved', { time: dayjs(card.latestAt).fromNow() });
 
     return (
-      <Flexbox className={styles.card} gap={6}>
-        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
-          <Text ellipsis fontSize={12} type={'secondary'}>
-            {card.label}
-          </Text>
-          <Flexbox horizontal align={'center'} gap={4}>
-            {card.met && (
-              <Tag color={'success'} size={'small'}>
-                <Icon icon={Check} size={11} /> {t('goalProcess.northStar.met')}
-              </Tag>
-            )}
-            {/* Recording stays available after the target is met: the world
-                can regress, and a card whose only refresh path disappeared
-                would stay falsely met forever. */}
-            {canEdit && (
-              <Tooltip title={t('goalProcess.northStar.record.title')}>
-                <Button
-                  icon={<Icon icon={Plus} size={13} />}
-                  size={'small'}
-                  type={'text'}
-                  onClick={() => openRecordObservationModal(goalId, card.key, card.label)}
-                />
-              </Tooltip>
-            )}
-          </Flexbox>
-        </Flexbox>
+      <Flexbox
+        className={styles.card}
+        gap={6}
+        role={'button'}
+        style={{ cursor: 'pointer' }}
+        tabIndex={0}
+        onClick={openDetail}
+        onKeyDown={(event) => handleCardKeyDown(event, openDetail)}
+      >
+        <Text ellipsis fontSize={13} weight={600}>
+          {card.label}
+        </Text>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Flexbox horizontal align={'baseline'} gap={6}>
             <Text className={card.met ? styles.metValue : ''} fontSize={20} weight={700}>
@@ -106,22 +120,56 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
               {card.unit ? ` ${card.unit}` : ''}
             </Text>
           </Flexbox>
-          <Sparkline met={card.met} values={card.trend} />
+          {card.trend.length > 1 && (
+            <SparkAreaChart
+              autoMinValue
+              categories={['value', 'target']}
+              className={styles.spark}
+              // The chart ids its SVG gradient by the color string, so it needs a
+              // literal theme color: a `var(--…)` id breaks the `url(#…)` fill.
+              colors={[card.met ? theme.colorSuccess : theme.colorInfo, theme.colorTextQuaternary]}
+              data={card.trend.map((value, index) => ({ index, target: card.target, value }))}
+              height={24}
+              index={'index'}
+              showGradient={false}
+              width={84}
+            />
+          )}
         </Flexbox>
-        <div className={styles.track}>
-          <div
-            style={{
-              background: card.met ? cssVar.colorSuccess : cssVar.colorInfo,
-              borderRadius: 2,
-              height: '100%',
-              width: `${card.percent}%`,
-            }}
-          />
-        </div>
-        <Text className={card.stale ? styles.stale : ''} fontSize={11} type={'secondary'}>
-          {freshness}
-          {card.stale ? ` · ${t('goalProcess.northStar.staleWarning')}` : ''}
-        </Text>
+        {/* The verdict and its freshness read together under the number; the
+            action sits apart in the opposite corner, clear of the title. */}
+        <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+            {card.met && <MetBadge />}
+            <Text
+              ellipsis
+              className={card.stale ? styles.stale : ''}
+              fontSize={11}
+              type={'secondary'}
+            >
+              {freshness}
+              {card.stale ? ` · ${t('goalProcess.northStar.staleWarning')}` : ''}
+            </Text>
+          </Flexbox>
+          {/* Recording stays available after the target is met: the world
+              can regress, and a card whose only refresh path disappeared
+              would stay falsely met forever. */}
+          {canEdit && (
+            <Tooltip title={t('goalProcess.northStar.record.title')}>
+              <Button
+                aria-label={t('goalProcess.northStar.record.title')}
+                icon={<Icon icon={Plus} size={13} />}
+                size={'small'}
+                type={'text'}
+                onClick={(event) => {
+                  // Recording from the card must not also open the detail.
+                  event.stopPropagation();
+                  openRecordObservationModal(goalId, card.key, card.label);
+                }}
+              />
+            </Tooltip>
+          )}
+        </Flexbox>
       </Flexbox>
     );
   },
@@ -198,6 +246,7 @@ const NorthStarMetrics = memo<NorthStarMetricsProps>(({ canEdit, goalId }) => {
       {canEdit && (
         <Tooltip title={t('goalProcess.northStar.declare.title')}>
           <Button
+            aria-label={t('goalProcess.northStar.declare.title')}
             icon={<Icon icon={Plus} size={14} />}
             style={{ alignSelf: 'center' }}
             type={'text'}

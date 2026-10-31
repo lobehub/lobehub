@@ -249,6 +249,8 @@ export function defineConfig() {
     '/oidc/.well-known/openid-configuration',
     '/oidc/jwks',
     '/oidc/me',
+    // The review popup's last page: a code or a refusal for the opener, never a session read.
+    '/oidc/review/callback',
     // Interaction details for the consent/login page — must be reachable
     // before the user has a session, so it cannot be session-gated.
     '/oidc/interaction/(.*)',
@@ -256,12 +258,14 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
-    // standalone verification report viewer — the run id in the URL is the
-    // read-only capability for viewing the report without a signed-in session.
+    // retired standalone report links (/verify/:runId) — they now redirect to
+    // the run's acceptance round, and must stay reachable without a session:
+    // the run id is still the read capability, enforced by the run's own
+    // `visibility` in `verify.getRunAcceptanceRound`.
     '/verify/(.*)',
-    // acceptance decision page — same shape as /verify/:id: the id is the
-    // capability; the tRPC layer enforces the aggregate's `visibility` (a
-    // private aggregate 404s for anyone but the owner / workspace members).
+    // acceptance decision page — the id is the capability; the tRPC layer
+    // enforces the aggregate's `visibility` (a private aggregate 404s for
+    // anyone but the owner / workspace members).
     '/acceptance/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)
     // and the random_id token is the actual capability check; no need for

@@ -1,3 +1,4 @@
+export * from './ensure';
 export * from './errors';
 export * from './importer';
 export * from './parser';

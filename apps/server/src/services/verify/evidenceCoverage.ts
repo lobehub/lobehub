@@ -1,4 +1,8 @@
+import { readRequiredEvidence as readSpecs } from '@lobechat/const/verify';
 import type { RequiredEvidenceSpec, VerifyEvidenceType } from '@lobechat/types';
+import { type CoverageEvidence, coverageGaps } from '@lobechat/utils/verify/evidenceCoverage';
+
+export { coverageGaps, executionGapTypes } from '@lobechat/utils/verify/evidenceCoverage';
 
 /**
  * Read the (optional) evidence requirement a criterion declares on its config.
@@ -7,47 +11,11 @@ import type { RequiredEvidenceSpec, VerifyEvidenceType } from '@lobechat/types';
  */
 export const readRequiredEvidence = (
   config: Record<string, unknown> | undefined | null,
-): RequiredEvidenceSpec[] | undefined => {
-  const raw = config?.requiredEvidence;
-  return Array.isArray(raw) ? (raw as RequiredEvidenceSpec[]) : undefined;
-};
+): RequiredEvidenceSpec[] | undefined => readSpecs<RequiredEvidenceSpec>(config);
 
-/**
- * Same-medium types that also satisfy a declared requirement. The gate checks
- * that an artifact of the right medium exists; whether it proves the criterion
- * is the judge's call. Without this, a recording uploaded as `video` against a
- * `gif` requirement, or a CLI log uploaded as `text` against `transcript`,
- * failed every repair round on a label while the judge never saw the artifact.
- * A GIF is a run of screenshots, and judges receive it as a frame sheet (see
- * `renderGifFrameSheet`), so it also answers a `screenshot` requirement — a GIF
- * uploaded as `screenshot` is stored as `gif`, which otherwise failed the gate
- * on the very artifact it asked for. `dom_snapshot` and `audio` have no
- * substitute.
- */
-const SATISFIED_BY: Partial<Record<VerifyEvidenceType, VerifyEvidenceType[]>> = {
-  gif: ['video'],
-  markdown: ['text', 'transcript'],
-  screenshot: ['gif'],
-  text: ['markdown', 'transcript'],
-  transcript: ['text', 'markdown'],
-  video: ['gif'],
-};
-
-/**
- * Which required evidence types are still missing for a criterion — pure, so the
- * structural gate is unit-testable without a database. Returns `[]` when the
- * item declares no evidence requirement (nothing to gate on).
- */
-export const coverageGaps = (
-  required: RequiredEvidenceSpec[] | undefined,
-  evidence: { type: VerifyEvidenceType }[],
-): VerifyEvidenceType[] => {
-  if (!required?.length) return [];
-  const present = new Set(evidence.map((e) => e.type));
-  return [...new Set(required.map((r) => r.type))].filter(
-    (t) => !present.has(t) && !SATISFIED_BY[t]?.some((alt) => present.has(alt)),
-  );
-};
+/** The requirements the run itself must evidence — see {@link runEvidenceGaps}. */
+export const runEvidenceSpecs = (config: Record<string, unknown> | undefined | null) =>
+  readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence');
 
 /**
  * Run-evidence types a criterion still misses. `deliverable` / `task_artifacts`
@@ -59,9 +27,5 @@ export const coverageGaps = (
  */
 export const runEvidenceGaps = (
   config: Record<string, unknown> | undefined | null,
-  evidence: { type: VerifyEvidenceType }[],
-): VerifyEvidenceType[] =>
-  coverageGaps(
-    readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence'),
-    evidence,
-  );
+  evidence: CoverageEvidence[],
+): VerifyEvidenceType[] => coverageGaps(runEvidenceSpecs(config), evidence);

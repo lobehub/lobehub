@@ -1,15 +1,6 @@
-import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import {
-  ActionIcon,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  type IconProps,
-  Skeleton,
-} from '@lobehub/ui';
+import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon, Skeleton } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
@@ -22,13 +13,10 @@ import {
   GlobeIcon,
   MessageCircleIcon,
   PanelRightCloseIcon,
-  PanelsTopLeftIcon,
-  PinIcon,
-  PinOffIcon,
   PlusIcon,
+  SearchIcon,
   Settings2Icon,
   SquareTerminalIcon,
-  XIcon,
 } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
@@ -36,7 +24,6 @@ import {
   Activity,
   lazy,
   memo,
-  type ReactNode,
   Suspense,
   useCallback,
   useEffect,
@@ -45,9 +32,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
-import { useBusinessWorkingSidebarTabs } from '@/business/client/features/WorkingSidebarTabs';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
@@ -56,8 +41,6 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
-import { useSandboxMode } from '@/features/ChatInput/ControlBar/useSandboxMode';
-import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
@@ -68,40 +51,51 @@ import { getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
 import { useDeferredMount } from '@/hooks/useDeferredMount';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
+import { useFindInTopicHotkey } from '@/hooks/useHotkeys';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
-import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
-import { sandboxStorageService } from '@/services/sandboxStorage';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, portalThreadSelectors, topicSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import {
-  deviceSelectors,
-  useDeviceStore,
-  useFetchGitBranch,
-  useFetchGitLinkedPR,
-} from '@/store/device';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
-import Files from './Files';
+import DeferredSkeleton from './DeferredSkeleton';
+import DynamicTabPanes, { dynamicTabDescriptor } from './DynamicTabPanes';
+import {
+  BROWSER_TAB_KEY,
+  BROWSER_TAB_PREFIX,
+  type BrowserTabMetadata,
+  isBrowserTab,
+  isCanvasTab,
+  isDynamicTab,
+  type SidebarTabDescriptor,
+} from './dynamicTabs';
+import FilesPane from './Files/FilesPane';
+import { useFilesPaneLocation } from './Files/useFilesPaneLocation';
 import { sidebarWidthBudget } from './fitsBesidePortal';
-import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, OVERVIEW_PANEL_WIDTH } from './layout';
+import { CANVAS_MIN_WIDTH, MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, OVERVIEW_PANEL_WIDTH } from './layout';
 import Overview from './Overview';
 import { getStatusDeviceId } from './Overview/overviewData';
 import OverviewSlot from './OverviewSlot';
 import PullRequest from './PullRequest';
+import { useLinkedPullRequest } from './PullRequest/useLinkedPullRequest';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
+import { TopicSearchPane } from './Search';
+import { useExtraWorkingSidebarTabs } from './useExtraWorkingSidebarTabs';
+import { useRetainAfterHide } from './useRetainAfterHide';
+import { useSandboxFilesDirectory } from './useSandboxFilesDirectory';
+import { useTabContextMenuItems } from './useTabContextMenuItems';
 import WorkspaceTab from './WorkspaceTab';
 import WorksSection from './WorksSection';
 
 const ParamsSection = lazy(() => import('./ParamsSection'));
-const BrowserPane = lazy(() => import('./Browser'));
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -130,12 +124,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   add: css`
     flex-shrink: 0;
-  `,
-  favicon: css`
-    width: 14px;
-    height: 14px;
-    border-radius: 2px;
-    object-fit: contain;
   `,
   overviewBody: css`
     overflow-y: auto;
@@ -199,23 +187,8 @@ const PINNED_TABS_STORAGE_KEY = 'lobechat-working-sidebar-pinned-tabs-v1';
 const OVERVIEW_TRANSITION = { duration: 0.25, ease: [0.32, 0.72, 0, 1] } as const;
 // Two-pane Review (diff list + file-tree rail) is cramped below this.
 const TWO_PANE_MIN_WIDTH = 560;
-
-interface SidebarTabDescriptor {
-  icon: IconProps['icon'];
-  iconNode?: ReactNode;
-  key: string;
-  label: ReactNode;
-}
-
-interface BrowserTabMetadata {
-  faviconUrl?: string;
-  title: string;
-  url: string;
-}
-
-const BROWSER_TAB_KEY = 'browser';
-const BROWSER_TAB_PREFIX = 'browser:';
-const isBrowserTab = (tab: string) => tab === BROWSER_TAB_KEY || tab.startsWith(BROWSER_TAB_PREFIX);
+/** How long a collapsed panel keeps Review mounted for a quick reopen. */
+const REVIEW_RETAIN_MS = 30_000;
 
 interface AgentWorkingSidebarProps {
   /**
@@ -337,14 +310,23 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
     workspaceScoped,
   });
-  const repoType = useRepoType(workingDirectory, targetDeviceId);
+  const topicWorkingDirectoryConfig = useChatStore(
+    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
+  );
+  // A topic on its own worktree matches no device `workingDirs` entry (the
+  // device keeps one `activeWorktree` per repo), and a remote device can't be
+  // probed — so fall back to the repoType the topic persisted for that checkout,
+  // or Review disappears on web.
+  const deviceRepoType = useRepoType(workingDirectory, targetDeviceId);
+  const repoType =
+    deviceRepoType ??
+    (getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === workingDirectory
+      ? topicWorkingDirectoryConfig?.repoType
+      : undefined);
   // The SOURCE repo, not the checkout — same fallback chain as
   // WorkingDirectorySection: a persisted-worktree topic has no matching
   // `workingDirs` entry, and committing the worktree path as sourcePath would
   // rewrite the topic's repo source (see that component's comment).
-  const topicWorkingDirectoryConfig = useChatStore(
-    (s) => topicSelectors.currentTopicMetadata(s)?.workingDirectoryConfig,
-  );
   const topicDeviceId = useChatStore((s) => topicSelectors.currentTopicMetadata(s)?.boundDeviceId);
   const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const sourceWorkingDirectory = useMemo(() => {
@@ -380,59 +362,34 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   // Files/Review route a deviceId only for remote RPC; "This device" keeps Electron IPC.
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
   const isLocalExecution = effectiveTarget === 'local';
-  // A cloud-sandbox run keeps its files in the persistent workspace, so it has a
-  // tree to show too — read through the topic's warm session rather than a
-  // device. Only when the run actually persists: a throwaway box keeps nothing,
-  // and pointing the panel at the workspace would let another conversation's
-  // files read as this one's.
-  // Through the same hook the composer writes with, so the panel sees a choice
-  // the moment it is made. Before a conversation exists the choice is buffered
-  // on the agent rather than stored on a topic, and reading the topic's
-  // metadata directly meant the panel could not see it: the composer said
-  // "cloud sandbox, Lobehub Dev" while the panel showed nothing and explained
-  // nothing. A device's tree needs no conversation either.
-  const { selection: sandboxSelection } = useSandboxMode(activeAgentId ?? '');
-  const sandboxInstanceId = sandboxSelection.instanceId;
-  const isSandboxExecution =
-    effectiveTarget === 'sandbox' && sandboxSelection.mode === 'persistent';
-  const sandboxTopicId = isSandboxExecution ? (topicId ?? undefined) : undefined;
-  // Scoped to the bound instance's directory, or the workspace root when the
-  // run keeps files without one. The empty string IS the root here, which is
-  // why the tab's gate is the topic rather than a truthy path.
-  const { data: sandboxInstances } = useSWR(
-    isSandboxExecution && sandboxInstanceId ? ['sandbox-instance-dir', sandboxInstanceId] : null,
-    () => sandboxStorageService.getInstance({ id: sandboxInstanceId! }),
-  );
-  const sandboxDirectory = sandboxInstances?.workingDirectory ?? '';
-  // The empty string IS the workspace root, so an unresolved instance does not
-  // read as "no directory yet" — it reads as "the whole workspace", and the
-  // tree would list every instance's folder for as long as the lookup took.
-  const sandboxDirectoryKnown = !sandboxInstanceId || sandboxInstances !== undefined;
+  // A cloud-sandbox run that keeps files has a tree on the drive to show too.
+  const {
+    active: isSandboxExecution,
+    directory: sandboxDirectory,
+    directoryKnown: sandboxDirectoryKnown,
+    instanceId: sandboxInstanceId,
+    topicId: sandboxTopicId,
+  } = useSandboxFilesDirectory(activeAgentId ?? '', {
+    isSandboxTarget: effectiveTarget === 'sandbox',
+    topicId,
+  });
 
   const filesystemEnvironmentAvailable = isLocalExecution || isDeviceMode;
   const environmentWorkingDirectory = filesystemEnvironmentAvailable ? workingDirectory : undefined;
   const environmentRepoType = filesystemEnvironmentAvailable ? repoType : undefined;
-  // Files tab is an agent-mode affordance — in plain chat mode the working
-  // directory is irrelevant to the user, so hide the tab even when one resolves.
-  // Which directory the tree shows, and therefore whether there is a tree at
-  // all. Kept as one value rather than a pair of conditions: the sandbox's root
-  // is the empty string, so "has a directory" and "is truthy" part ways here,
-  // and the tab's availability has to follow the value it will render.
-  // A directory is only showable when something can actually read it: the
-  // sandbox through its workspace API, a device or this machine through the
-  // filesystem. A topic can carry a path persisted on a desktop the web client
-  // has no way to reach, and that path is not a tree — it is a string.
-  // An instance is what makes a sandbox tree addressable. Persistent mode with
-  // none picked is the workspace root, which the execution plane can only
-  // resolve through a conversation — so that one still waits for the topic.
-  const filesDirectory =
-    isSandboxExecution && (sandboxInstanceId || sandboxTopicId)
-      ? sandboxDirectoryKnown
-        ? sandboxDirectory
-        : undefined
-      : filesystemEnvironmentAvailable
-        ? workingDirectory
-        : undefined;
+  // Files is agent-mode only; the hook owns which directory (if any) is showable.
+  const { deviceId: filesDeviceId, directory: filesDirectory } = useFilesPaneLocation({
+    activeAgentId,
+    filesystemEnvironmentAvailable,
+    isSandboxExecution,
+    remoteDeviceId,
+    sandboxDirectory,
+    sandboxDirectoryKnown,
+    sandboxInstanceId,
+    sandboxTopicId,
+    topicId,
+    workingDirectory,
+  });
   const filesAvailable = !isChatMode && filesDirectory !== undefined;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const snapshotConfig =
@@ -443,24 +400,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const isGithub =
     repoType === 'github' || (!repoType && !!snapshotConfig?.git?.github?.pullRequest);
   const gitPath = filesystemEnvironmentAvailable && isGithub ? workingDirectory : undefined;
-  const { data: branchData } = useFetchGitBranch(remoteDeviceId, gitPath);
-  const { data: linkedPR, mutate: refreshPullRequest } = useFetchGitLinkedPR(
-    remoteDeviceId,
+  const {
+    pullRequest,
+    refresh: refreshPullRequest,
+    ...pullRequestLink // confirmed, confirmError, onRetryConfirm
+  } = useLinkedPullRequest({
+    available: filesystemEnvironmentAvailable && !!workingDirectory,
+    deviceId: remoteDeviceId,
     gitPath,
-    branchData?.branch,
     isGithub,
-  );
-  const snapshotPR =
-    !branchData || (snapshotConfig?.git?.branch === branchData.branch && !branchData.detached)
-      ? snapshotConfig?.git?.github?.pullRequest
-      : undefined;
-  // A settled empty lookup supersedes the snapshot; failures may keep displaying it.
-  const pullRequest =
-    filesystemEnvironmentAvailable && workingDirectory
-      ? linkedPR?.pullRequestStatus === 'ok'
-        ? linkedPR.pullRequest
-        : (linkedPR?.pullRequest ?? snapshotPR)
-      : undefined;
+    snapshot: snapshotConfig?.git,
+  });
   const paramsAvailable = !isHetero;
   // The in-app browser pages are renderer-retained Electron webviews — desktop only.
   const browserAvailable = isDesktop;
@@ -477,7 +427,12 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     {},
   );
 
-  const businessTabs = useBusinessWorkingSidebarTabs({ activeAgentId, topicId });
+  const extraTabs = useExtraWorkingSidebarTabs({
+    activeAgentId,
+    environmentWorkingDirectory,
+    remoteDeviceId,
+    topicId,
+  });
   const commentsAvailable = !!workspaceId && !!topicId;
   const currentCommentTopicId =
     currentPortalView?.type === PortalViewType.TopicComments ||
@@ -485,6 +440,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       ? currentPortalView.topicId
       : undefined;
   const isCurrentTopicComments = currentCommentTopicId === topicId;
+  const searchAvailable = !!topicId;
+  useFindInTopicHotkey(searchAvailable);
   const tabDescriptors = useMemo<SidebarTabDescriptor[]>(
     () => [
       { icon: SkillsIcon, key: 'skills', label: t('workingPanel.resources.filter.skills') },
@@ -501,6 +458,9 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             { icon: GlobeIcon, key: 'web', label: t('workingPanel.resources.filter.web') },
           ]),
       { icon: BoxesIcon, key: 'works', label: t('workingPanel.works.title') },
+      ...(searchAvailable
+        ? [{ icon: SearchIcon, key: 'search', label: t('workingPanel.search.title') }]
+        : []),
       ...(commentsAvailable
         ? [{ icon: MessageCircleIcon, key: 'comments', label: t('topicComment.title') }]
         : []),
@@ -531,21 +491,18 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             },
           ]
         : []),
-      ...businessTabs.map((tab) => ({
-        icon: PanelsTopLeftIcon,
-        key: tab.key,
-        label: tab.label,
-      })),
+      ...extraTabs,
     ],
     [
       browserAvailable,
-      businessTabs,
+      extraTabs,
       commentsAvailable,
       filesAvailable,
       isHetero,
       paramsAvailable,
       pullRequest,
       reviewAvailable,
+      searchAvailable,
       t,
     ],
   );
@@ -555,7 +512,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   );
   const availableTabsSignature = JSON.stringify(tabDescriptors.map((tab) => tab.key));
   const isAvailableTab = useCallback(
-    (tab: string) => availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)),
+    (tab: string) =>
+      availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)) || isCanvasTab(tab),
     [availableTabs, browserAvailable],
   );
   const openTabsContextKey = topicId
@@ -564,8 +522,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const pinnedTabsAgentKey = activeAgentId ?? 'default';
   const defaultOpenedTabs = useMemo(
     () =>
-      [filesAvailable ? 'files' : undefined, 'skills', isHetero ? undefined : 'documents'].filter(
-        (tab): tab is string => Boolean(tab) && isAvailableTab(tab!),
+      [filesAvailable && 'files', 'skills', isHetero ? 'claudeMemory' : 'documents'].filter(
+        (tab): tab is string => !!tab && isAvailableTab(tab),
       ),
     [filesAvailable, isAvailableTab, isHetero],
   );
@@ -588,7 +546,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const pinnedTabs = useMemo(
     () =>
       (pinnedTabsByAgent[pinnedTabsAgentKey] ?? []).filter(
-        (tab) => !isBrowserTab(tab) && isAvailableTab(tab),
+        (tab) => !isDynamicTab(tab) && isAvailableTab(tab),
       ),
     [isAvailableTab, pinnedTabsAgentKey, pinnedTabsByAgent],
   );
@@ -720,13 +678,12 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
 
   const pinTab = useCallback(
     (tab: string) => {
-      if (!availableTabs.has(tab) || isBrowserTab(tab)) return;
+      if (!availableTabs.has(tab) || isDynamicTab(tab)) return;
       updateOpenedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
       updatePinnedTabs((current) => (current.includes(tab) ? current : [...current, tab]));
     },
     [availableTabs, updateOpenedTabs, updatePinnedTabs],
   );
-
   const unpinTab = useCallback(
     (tab: string) => {
       // A tab restored only through its agent pin should remain open in the
@@ -736,7 +693,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     },
     [updateOpenedTabs, updatePinnedTabs],
   );
-
   const closeTabs = useCallback(
     (tabs: string[], fallbackTab = 'overview') => {
       const removableTabs = new Set(tabs.filter((tab) => !pinnedTabsSet.has(tab)));
@@ -769,72 +725,23 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const closeTab = useCallback((tab: string) => closeTabs([tab]), [closeTabs]);
 
   const displayedTabs = openedTabs
-    .map((tab): SidebarTabDescriptor | undefined => {
-      if (!isBrowserTab(tab)) return availableTabs.get(tab);
-      const metadata = browserTabMetadata[`${openTabsContextKey}:${tab}`];
-      const fallbackLabel = t('workingPanel.browser.title');
-      const label = metadata?.title?.trim() || fallbackLabel;
-      return {
-        icon: Globe2Icon,
-        iconNode: metadata?.faviconUrl ? (
-          <img alt="" className={styles.favicon} src={metadata.faviconUrl} />
-        ) : undefined,
-        key: tab,
-        label,
-      };
-    })
+    .map(
+      (tab) =>
+        dynamicTabDescriptor(
+          tab,
+          browserTabMetadata[`${openTabsContextKey}:${tab}`],
+          t('workingPanel.browser.title'),
+        ) ?? availableTabs.get(tab),
+    )
     .filter((tab): tab is SidebarTabDescriptor => Boolean(tab));
-  const createTabContextMenuItems = useCallback(
-    (tab: string, index: number): NativeContextMenuItem[] => {
-      const pinned = pinnedTabsSet.has(tab);
-      const leftTabs = openedTabs.slice(0, index);
-      const rightTabs = openedTabs.slice(index + 1);
-      const otherTabs = openedTabs.filter((item) => item !== tab);
-      const hasClosable = (tabs: string[]) => tabs.some((item) => !pinnedTabsSet.has(item));
-
-      return [
-        ...(!isBrowserTab(tab)
-          ? [
-              {
-                icon: pinned ? PinOffIcon : PinIcon,
-                key: pinned ? 'unpin' : 'pin',
-                label: t(pinned ? 'workingPanel.tabs.unpin' : 'workingPanel.tabs.pin'),
-                onClick: () => (pinned ? unpinTab(tab) : pinTab(tab)),
-                sfSymbol: (pinned ? 'pin.slash' : 'pin') satisfies SFSymbol,
-              } as NativeContextMenuItem,
-              { type: 'divider' as const },
-            ]
-          : []),
-        {
-          disabled: pinned,
-          icon: XIcon,
-          key: 'close',
-          label: t('workingPanel.tabs.close'),
-          onClick: () => closeTab(tab),
-        },
-        {
-          disabled: !hasClosable(otherTabs),
-          key: 'closeOthers',
-          label: t('workingPanel.tabs.closeOthers'),
-          onClick: () => closeTabs(otherTabs, tab),
-        },
-        { type: 'divider' },
-        {
-          disabled: !hasClosable(leftTabs),
-          key: 'closeLeft',
-          label: t('workingPanel.tabs.closeLeft'),
-          onClick: () => closeTabs(leftTabs, tab),
-        },
-        {
-          disabled: !hasClosable(rightTabs),
-          key: 'closeRight',
-          label: t('workingPanel.tabs.closeRight'),
-          onClick: () => closeTabs(rightTabs, tab),
-        },
-      ];
-    },
-    [closeTab, closeTabs, openedTabs, pinTab, pinnedTabsSet, t, unpinTab],
-  );
+  const createTabContextMenuItems = useTabContextMenuItems({
+    closeTab,
+    closeTabs,
+    openedTabs,
+    pinTab,
+    pinnedTabsSet,
+    unpinTab,
+  });
   const tabsRef = useRef<HTMLDivElement>(null);
   const pendingTabFocusRef = useRef<string | undefined>(undefined);
   const pendingTabFocusTimeoutRef = useRef<number | undefined>(undefined);
@@ -916,7 +823,12 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     false,
   );
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
-  const displayWidth = reviewTwoPane ? Math.max(storedWidth, TWO_PANE_MIN_WIDTH) : storedWidth;
+  const preferredMinWidth = reviewTwoPane
+    ? TWO_PANE_MIN_WIDTH
+    : isCanvasTab(activeTab)
+      ? CANVAS_MIN_WIDTH
+      : 0;
+  const displayWidth = Math.max(storedWidth, preferredMinWidth);
   // Yield the row to conversation + portal when the three no longer fit. A
   // stored width that merely outgrew the current row (the user dragged the
   // panel out, or resized the window down) renders clamped instead of
@@ -930,6 +842,8 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     portalWidth: portalOpen ? portalWidth : 0,
   });
   const fits = widthBudget >= minDisplayWidth;
+  const panelVisible = !!showRightPanel && fits;
+  const retainReview = useRetainAfterHide(panelVisible, REVIEW_RETAIN_MS);
   const overviewFits = widthBudget >= MIN_PANEL_WIDTH;
   const renderWidth = Math.min(displayWidth, Math.max(widthBudget, minDisplayWidth));
   // Also cap the drag range so releasing a drag can never persist a width that
@@ -971,6 +885,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     };
 
     const workspaceGroup = group('workspace', t('workingPanel.openMenu.workspace'), [
+      'search',
       'review',
       'pr',
       'files',
@@ -979,7 +894,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       'skills',
       'documents',
       'web',
-      ...businessTabs.map((tab) => tab.key),
+      ...extraTabs.map((tab) => tab.key),
     ]);
     const toolChildren = [itemOf('browser')].filter((item): item is DropdownItem => Boolean(item));
     if (terminalAvailable) {
@@ -1009,7 +924,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       );
   }, [
     availableTabs,
-    businessTabs,
+    extraTabs,
     openBrowserTab,
     openTab,
     openedTabs,
@@ -1070,7 +985,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
         defaultWidth={renderWidth}
         expand={Boolean(showRightPanel) && fits}
         maxWidth={maxPanelWidth}
-        minWidth={MIN_PANEL_WIDTH}
+        minWidth={Math.min(Math.max(MIN_PANEL_WIDTH, preferredMinWidth), maxPanelWidth)}
         style={!showRightPanel ? { visibility: 'hidden' } : undefined}
         width={renderWidth}
         onSizeChange={(size) => {
@@ -1135,7 +1050,20 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
             />
           </Flexbox>
           <Flexbox className={styles.body} width={'100%'}>
-            {!contentReady && <SkeletonList paddingBlock={8} paddingInline={8} rows={6} />}
+            {!contentReady && storedTab !== 'files' && activeTab !== 'files' && (
+              <DeferredSkeleton />
+            )}
+            <FilesPane
+              active={!!showRightPanel && activeTab === 'files'}
+              available={filesAvailable}
+              className={styles.pane}
+              contentReady={contentReady || (activeTab === 'files' && filesAvailable)}
+              deviceId={filesDeviceId}
+              directory={filesDirectory}
+              prefetch={activeTab === 'files' && (!showRightPanel || !contentReady)}
+              sandboxInstanceId={isSandboxExecution ? sandboxInstanceId : undefined}
+              sandboxTopicId={sandboxTopicId}
+            />
             {contentReady && (
               <>
                 {commentsAvailable && (
@@ -1146,6 +1074,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     <TopicCommentsSidebar />
                   </Flexbox>
                 )}
+                {!!topicId && (
+                  <Activity mode={showRightPanel && activeTab === 'search' ? 'visible' : 'hidden'}>
+                    <Flexbox className={styles.pane} style={{ overflow: 'hidden' }}>
+                      <TopicSearchPane
+                        active={!!showRightPanel && activeTab === 'search'}
+                        key={topicId}
+                        topicId={topicId}
+                      />
+                    </Flexbox>
+                  </Activity>
+                )}
                 {paramsAvailable && activeTab === 'params' && (
                   <Flexbox className={styles.pane}>
                     <Suspense
@@ -1155,23 +1094,30 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     </Suspense>
                   </Flexbox>
                 )}
-                {reviewAvailable && showRightPanel && fits && activeTab === 'review' && (
-                  <Flexbox className={styles.pane}>
-                    <Review
-                      active
-                      composerTarget={composerTarget}
-                      deviceId={remoteDeviceId}
-                      showTree={showReviewTree}
-                      workingDirectory={workingDirectory}
-                      onToggleTree={() => setShowReviewTree((v) => !v)}
-                    />
-                  </Flexbox>
+                {/* Switching tabs unmounts Review to release its diff DOM (#18984).
+                    Collapsing the panel hides it for REVIEW_RETAIN_MS first: remounting
+                    all diffs and the tree on a quick reopen stalls the open animation
+                    for ~200ms. */}
+                {reviewAvailable && activeTab === 'review' && retainReview && (
+                  <Activity mode={panelVisible ? 'visible' : 'hidden'}>
+                    <Flexbox className={styles.pane}>
+                      <Review
+                        active={panelVisible}
+                        composerTarget={composerTarget}
+                        deviceId={remoteDeviceId}
+                        showTree={showReviewTree}
+                        workingDirectory={workingDirectory}
+                        onToggleTree={() => setShowReviewTree((v) => !v)}
+                      />
+                    </Flexbox>
+                  </Activity>
                 )}
                 {pullRequest && workingDirectory && (
                   <Activity mode={showRightPanel && activeTab === 'pr' ? 'visible' : 'hidden'}>
                     <Flexbox className={styles.pane}>
                       <PullRequest
                         active={!!showRightPanel && activeTab === 'pr'}
+                        {...pullRequestLink}
                         deviceId={remoteDeviceId}
                         key={JSON.stringify([remoteDeviceId, workingDirectory, pullRequest.number])}
                         number={pullRequest.number}
@@ -1183,49 +1129,26 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                     </Flexbox>
                   </Activity>
                 )}
-                {filesAvailable && (
-                  <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>
-                    <Flexbox className={styles.pane}>
-                      <Files
-                        deviceId={remoteDeviceId}
-                        sandboxInstanceId={isSandboxExecution ? sandboxInstanceId : undefined}
-                        sandboxTopicId={sandboxTopicId}
-                        workingDirectory={filesDirectory}
-                      />
-                    </Flexbox>
-                  </Activity>
-                )}
-                {browserAvailable &&
-                  openedTabs.filter(isBrowserTab).map((tab) => {
-                    const sessionId =
-                      tab === BROWSER_TAB_KEY
-                        ? browserSessionId
-                        : `${browserSessionId}:tab:${tab.slice(BROWSER_TAB_PREFIX.length)}`;
-
-                    return (
-                      <Flexbox
-                        className={activeTab === tab ? styles.pane : styles.paneHidden}
-                        key={sessionId}
-                      >
-                        <BrowserPane
-                          agentId={activeAgentId}
-                          composerTarget={composerTarget}
-                          sessionId={sessionId}
-                          onMetadataChange={(metadata) => {
-                            const metadataKey = `${openTabsContextKey}:${tab}`;
-                            setBrowserTabMetadata((current) =>
-                              current[metadataKey]?.faviconUrl === metadata.faviconUrl &&
-                              current[metadataKey]?.title === metadata.title &&
-                              current[metadataKey]?.url === metadata.url
-                                ? current
-                                : { ...current, [metadataKey]: metadata },
-                            );
-                          }}
-                        />
-                      </Flexbox>
+                <DynamicTabPanes
+                  activeTab={activeTab}
+                  agentId={activeAgentId}
+                  browserAvailable={browserAvailable}
+                  browserSessionId={browserSessionId}
+                  composerTarget={composerTarget}
+                  openedTabs={openedTabs}
+                  visible={!!showRightPanel}
+                  onBrowserMetadataChange={(tab, metadata) => {
+                    const metadataKey = `${openTabsContextKey}:${tab}`;
+                    setBrowserTabMetadata((current) =>
+                      current[metadataKey]?.faviconUrl === metadata.faviconUrl &&
+                      current[metadataKey]?.title === metadata.title &&
+                      current[metadataKey]?.url === metadata.url
+                        ? current
+                        : { ...current, [metadataKey]: metadata },
                     );
-                  })}
-                {businessTabs.map((tab) => (
+                  }}
+                />
+                {extraTabs.map((tab) => (
                   <Flexbox
                     className={activeTab === tab.key ? styles.pane : styles.paneHidden}
                     key={tab.key}

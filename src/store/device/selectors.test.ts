@@ -14,7 +14,7 @@ const channel = (name: string | null) => ({
   platform: null,
 });
 
-const state = (devices: DeviceListItem[]) => ({ devices }) as DeviceState;
+const state = (devices: DeviceListItem[]) => ({ deviceListMap: { all: devices } }) as DeviceState;
 
 describe('canHostTerminal', () => {
   it('accepts a live CLI connection, including its suffixed variants', () => {

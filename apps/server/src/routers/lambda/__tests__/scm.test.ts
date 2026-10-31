@@ -7,7 +7,13 @@ import {
   ScmIdentityModel,
   ScmInstallationModel,
 } from '@/database/models/scm';
-import { scmWebhookDeliveries, users, workspaceMembers, workspaces } from '@/database/schemas';
+import {
+  scmWebhookDeliveries,
+  topics,
+  users,
+  workspaceMembers,
+  workspaces,
+} from '@/database/schemas';
 
 import { scmRouter } from '../scm';
 
@@ -15,9 +21,8 @@ const serverDB = await getTestDB();
 const userId = 'scm-router-user';
 const otherUserId = 'scm-router-user-2';
 
-vi.mock('@/envs/scm', () => ({
-  scmEnv: { ENABLED_GITHUB_APP: true, GITHUB_APP_SLUG: 'lobehub-dev' },
-}));
+const scmEnv = vi.hoisted(() => ({ ENABLED_GITHUB_APP: true, GITHUB_APP_SLUG: 'lobehub-dev' }));
+vi.mock('@/envs/scm', () => ({ scmEnv }));
 
 const mocks = vi.hoisted(() => ({ consumeClaim: vi.fn(), fetchInstallation: vi.fn() }));
 vi.mock('@/server/services/scm/oauth/stateStore', () => ({
@@ -138,6 +143,31 @@ describe('scmRouter', () => {
     expect((await ws.listChangeRequests({ limit: 10 })).map((r) => r.repoFullName)).toEqual([
       'c/shared',
     ]);
+  });
+
+  it('reports a wake target for the caller own open PR, and none without the GitHub App', async () => {
+    await serverDB.insert(topics).values({ id: 'scm-router-topic', title: 't', userId });
+    await ScmChangeRequestModel.upsert(serverDB, {
+      links: { topicId: 'scm-router-topic' },
+      number: 4,
+      provider: 'github',
+      repoFullName: 'a/wake',
+      state: 'open',
+      url: 'https://github.com/a/wake/pull/4',
+      userId,
+    });
+
+    expect(await caller({ userId }).hasWakeTarget({ topicId: 'scm-router-topic' })).toBe(true);
+    expect(
+      await caller({ userId: otherUserId }).hasWakeTarget({ topicId: 'scm-router-topic' }),
+    ).toBe(false);
+
+    scmEnv.ENABLED_GITHUB_APP = false;
+    try {
+      expect(await caller({ userId }).hasWakeTarget({ topicId: 'scm-router-topic' })).toBe(false);
+    } finally {
+      scmEnv.ENABLED_GITHUB_APP = true;
+    }
   });
 
   it('refuses a claim that is expired or was minted for someone else', async () => {

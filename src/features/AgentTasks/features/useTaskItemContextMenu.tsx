@@ -20,7 +20,6 @@ import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransfer
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
-import { useResourceManageableChecker } from '@/hooks/useResourceManageable';
 import { closeContextMenu } from '@/libs/contextMenu';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 import { useAgentStore } from '@/store/agent';
@@ -32,6 +31,7 @@ import { getArchiveErrorKey } from './archiveErrorKey';
 import { renderMenuExtra } from './menuExtra';
 import { PRIORITY_META } from './TaskPriorityTag';
 import { STATUS_META, USER_SELECTABLE_STATUSES } from './taskStatusMeta';
+import { useTaskArchiveGate } from './useTaskArchiveGate';
 import { useTaskStatusChange } from './useTaskStatusChange';
 
 const PRIORITY_LEVELS = [0, 1, 2, 3, 4];
@@ -50,9 +50,8 @@ export interface TaskContextMenuTarget {
   assigneeAgentId?: string | null;
   assigneeUserId?: string | null;
   automationMode?: string | null;
-  /** Archive follows the creator-or-owner rule the server enforces. */
-  createdByUserId?: string | null;
   heartbeatInterval?: number | null;
+  id: string;
   identifier: string;
   /** Only feeds the copied link's readable slug tail. */
   name?: string | null;
@@ -82,7 +81,7 @@ export const useTaskContextMenuActions = (
   const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
   const deleteTask = useTaskStore((s) => s.deleteTask);
   const archiveTask = useTaskStore((s) => s.archiveTask);
-  const checkManageable = useResourceManageableChecker();
+  const checkArchive = useTaskArchiveGate();
   const runTask = useTaskStore((s) => s.runTask);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
@@ -122,7 +121,7 @@ export const useTaskContextMenuActions = (
             domEvent.stopPropagation();
             if (!canEditTask) return;
             if (status === currentStatus) return;
-            void changeTaskStatus(task.identifier, status);
+            void changeTaskStatus(task.id, status);
           },
         } as ContextMenuItem;
       });
@@ -144,7 +143,7 @@ export const useTaskContextMenuActions = (
             domEvent.stopPropagation();
             if (!canEditTask) return;
             if (level === currentPriority) return;
-            await updateTask(task.identifier, { priority: level });
+            await updateTask(task.id, { priority: level });
             await refreshTaskList();
           },
         } as ContextMenuItem;
@@ -161,13 +160,17 @@ export const useTaskContextMenuActions = (
       // An archived task must be restored first; the runner refuses it.
       const canRunNow = RUN_NOW_STATUSES.has(currentStatus) && !task.archivedAt;
       const isArchived = !!task.archivedAt;
-      const canArchive = canEditTask && checkManageable(task.createdByUserId);
+      // Archived rows leave every list, so live work must stop first.
+      const { allowed: canArchive, reasonKey: archiveDeniedKey } = checkArchive({
+        archiveBlocked: !isArchived && isTaskArchiveBlocked(task),
+      });
       const archiveItems: NativeContextMenuItem[] =
         task.archivedAt === undefined
           ? []
           : [
               { type: 'divider' },
               {
+                desc: archiveDeniedKey && t(archiveDeniedKey),
                 disabled: !canArchive,
                 icon: <Icon icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon} />,
                 key: 'archive',
@@ -177,13 +180,8 @@ export const useTaskContextMenuActions = (
                 onClick: async ({ domEvent }: MenuInfo) => {
                   domEvent.stopPropagation();
                   if (!canArchive) return;
-                  // Archiving hides the task, so live work must stop first.
-                  if (!isArchived && isTaskArchiveBlocked(task)) {
-                    toast.info(t('taskList.contextMenu.archiveBlocked'));
-                    return;
-                  }
                   try {
-                    await archiveTask(task.identifier, !isArchived);
+                    await archiveTask(task.id, !isArchived);
                   } catch (error) {
                     toast.error(t(getArchiveErrorKey(error)));
                     return;
@@ -212,9 +210,9 @@ export const useTaskContextMenuActions = (
                   domEvent.stopPropagation();
                   if (!canEditTask) return;
                   if (!task.assigneeAgentId && !task.assigneeUserId && inboxAgentId) {
-                    await updateTask(task.identifier, { assigneeAgentId: inboxAgentId });
+                    await updateTask(task.id, { assigneeAgentId: inboxAgentId });
                   }
-                  await runTask(task.identifier);
+                  await runTask(task.id);
                 },
                 sfSymbol: 'play.fill',
               },
@@ -275,7 +273,7 @@ export const useTaskContextMenuActions = (
           onClick: ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
             if (!canEditTask) return;
-            triggerDelete(task.identifier);
+            triggerDelete(task.id);
           },
           sfSymbol: 'trash',
         },
@@ -318,7 +316,7 @@ export const useTaskContextMenuActions = (
           const nextLevel = PRIORITY_LEVELS[idx];
           if (nextLevel !== currentPriority) {
             void (async () => {
-              await updateTask(task.identifier, { priority: nextLevel });
+              await updateTask(task.id, { priority: nextLevel });
               await refreshTaskList();
             })();
           }
@@ -333,7 +331,7 @@ export const useTaskContextMenuActions = (
           event.stopPropagation();
           const nextStatus = USER_SELECTABLE_STATUSES[idx];
           if (nextStatus !== currentStatus) {
-            void changeTaskStatus(task.identifier, nextStatus);
+            void changeTaskStatus(task.id, nextStatus);
           }
           closeContextMenu();
           cleanup();
@@ -366,7 +364,7 @@ export const useTaskContextMenuActions = (
     refreshTaskList,
     deleteTask,
     archiveTask,
-    checkManageable,
+    checkArchive,
     runTask,
     inboxAgentId,
     routeScope,
@@ -378,7 +376,7 @@ export const useTaskItemContextMenu = (
   routeScope?: TaskItemRouteScope,
 ): TaskItemContextMenu => {
   const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions(routeScope);
-  const transferItems = useTaskTransferMenuItem(task.identifier) as ContextMenuItem[] | null;
+  const transferItems = useTaskTransferMenuItem(task.id) as ContextMenuItem[] | null;
   const items = useMemo(() => {
     const base = buildItems(task);
     if (!transferItems || transferItems.length === 0) return base;

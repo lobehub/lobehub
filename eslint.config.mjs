@@ -5,55 +5,26 @@ import { eslint } from '@lobehub/lint';
 import { restrictedImports } from '@lobehub/ui/eslint';
 import { flat as mdxFlat } from 'eslint-plugin-mdx';
 
+import {
+  browserBundleRestrictedImportPaths,
+  performanceRestrictedImportPaths,
+  performanceRestrictedImportPatterns,
+} from './eslint.bundleBoundaries.mjs';
 import { stylexMigrationConfig } from './scripts/stylexMigration/eslint.mjs';
 
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
-const baseRestrictedImportOptions = restrictedImports.rules['no-restricted-imports'][1];
-
-// Shared by every src/** no-restricted-imports block: flat config replaces a
-// rule per file instead of merging it, so a scoped override would otherwise
-// drop these.
-const performanceRestrictedImportPaths = [
-  {
-    allowTypeImports: true,
-    importNames: ['ModelIcon', 'ModelTag', 'ProviderCombine', 'ProviderIcon'],
-    message:
-      'These features statically import every brand icon (~3 MB). Import them from "@/components/LobeIcons", which mounts them through lazy().',
-    name: '@lobehub/icons',
-  },
-  {
-    allowTypeImports: true,
-    message:
-      'Import ProviderIcon / ProviderCombine from "@/components/LobeIcons", which mounts them through lazy().',
-    name: '@/libs/providerIcon',
-  },
-  {
-    allowTypeImports: true,
-    importNames: ['EmojiPicker'],
-    message:
-      'EmojiPicker carries the emoji-mart dataset. Use "@/components/EmojiPicker", which mounts it through lazy().',
-    name: '@lobehub/ui',
-  },
-  {
-    message:
-      'Import the imperative facade from "@/features/ShareModal" so the modal implementation stays outside initial chunks.',
-    name: '@/features/ShareModal/Modal',
-  },
-  {
-    allowTypeImports: true,
-    importNames: ['motion', 'm'],
-    message:
-      'The app runs under <LazyMotion features={domMax}>; `motion` bundles every feature again and `m` from the barrel drags it along. Use `import * as m from "motion/react-m"`.',
-    name: 'motion/react',
-  },
-  {
-    allowTypeImports: true,
-    message:
-      'Do not import the model-bank root barrel; it re-exports the full aiModels catalog (1.4 MB raw). Use a subpath such as "model-bank/aiModel", "model-bank/modelProvider", "model-bank/standardParameters" or "model-bank/utils".',
-    name: 'model-bank',
-  },
-];
+const baseRestrictedImportOptions = {
+  ...restrictedImports.rules['no-restricted-imports'][1],
+  patterns: [
+    ...(restrictedImports.rules['no-restricted-imports'][1].patterns ?? []),
+    {
+      regex: '^@modelcontextprotocol/(?:sdk)(/|$)',
+      message:
+        'Use the v2 @modelcontextprotocol/client, @modelcontextprotocol/server or @modelcontextprotocol/node packages.',
+    },
+  ],
+};
 
 // On desktop the shell — every NavPanelPortal sidebar, the titlebar, the command
 // menu — renders as a sibling of TabHost, so React context binds these hooks to
@@ -197,6 +168,29 @@ const redisAccessRestrictedSyntax = [
     selector: 'ImportExpression > Literal[value=/^@\\/server\\/modules\\/Redis(?:\\/|$)/]',
   },
 ];
+// Server output is source English. Translation catalogs and runtimes stay with the clients.
+const serverI18nMessage =
+  'Server code renders source English and must not load translation catalogs or i18n runtimes.';
+const serverI18nRestrictedImportPaths = [
+  { message: serverI18nMessage, name: 'i18next' },
+  { message: serverI18nMessage, name: 'react-i18next' },
+];
+const serverI18nRestrictedImportPatterns = [
+  {
+    group: [
+      '@/locales/*',
+      '!@/locales/resources',
+      '@lobechat/locales',
+      '@lobechat/locales/*',
+      '!@lobechat/locales/resources',
+      '@/libs/i18n',
+      '@/libs/i18n/*',
+      '**/locales/*/*.json',
+    ],
+    message: serverI18nMessage,
+  },
+];
+
 const legacyRawRedisClientConsumers = [
   'apps/server/src/services/home/index.ts',
   'apps/server/src/services/agent/index.ts',
@@ -215,11 +209,11 @@ const legacyRawRedisClientConsumers = [
   'apps/server/src/router-hono/agent/handlers/llmRelay.ts',
   'apps/server/src/router-hono/agent/handlers/toolResult.ts',
   'apps/server/src/router-hono/webhooks/handlers/github.ts',
-  'apps/server/src/routers/lambda/messenger.ts',
+  'apps/server/src/routers/lambda/messenger/wechat.ts',
   'apps/server/src/services/agentRuntime/opportunisticSweep.ts',
   'apps/server/src/services/agentSignal/store/adapters/redis/shared.ts',
   'apps/server/src/services/bot/BotCallbackService.ts',
-  'apps/server/src/services/bot/BotMessageRouter.ts',
+  'apps/server/src/services/bot/BotMessageRouter/index.ts',
   'apps/server/src/services/bot/deferredMessages.ts',
   'apps/server/src/services/bot/platforms/discord/chatComposition.ts',
   'apps/server/src/services/bot/platforms/feishu/chatComposition.ts',
@@ -232,7 +226,7 @@ const legacyRawRedisClientConsumers = [
   'apps/server/src/services/gateway/GatewayManager.ts',
   'apps/server/src/services/gateway/botConnectQueue.ts',
   'apps/server/src/services/gateway/runtimeStatus.ts',
-  'apps/server/src/services/messenger/MessengerRouter.ts',
+  'apps/server/src/services/messenger/MessengerRouter/index.ts',
   'apps/server/src/services/messenger/installations/wechat.ts',
   'apps/server/src/services/messenger/linkTokenStore.ts',
   'apps/server/src/services/messenger/oauth/stateStore.ts',
@@ -258,11 +252,13 @@ const createRestrictedImportRule = ({ paths = [], patterns, serverSide = false }
       ...(baseRestrictedImportOptions.paths ?? []),
       ...performanceRestrictedImportPaths,
       ...(serverSide ? [] : browserRuntimeRestrictedImportPaths),
+      ...(serverSide ? [] : browserBundleRestrictedImportPaths),
       ...paths,
     ],
     patterns: [
       ...(baseRestrictedImportOptions.patterns ?? []),
       ...runtimeRestrictedImportPatterns,
+      ...performanceRestrictedImportPatterns,
       ...(serverSide ? [] : browserRuntimeRestrictedImportPatterns),
       ...(patterns ?? []),
     ],
@@ -373,11 +369,17 @@ export default eslint(
       },
     },
   },
-  restrictedImports,
+  {
+    ...restrictedImports,
+    rules: {
+      ...restrictedImports.rules,
+      'no-restricted-imports': ['error', baseRestrictedImportOptions],
+    },
+  },
   // Performance import boundaries. These restrictions preserve real import()
   // seams instead of relying on component-level conditional rendering.
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'apps/share/src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule(),
     },
@@ -618,8 +620,10 @@ export default eslint(
           {
             message:
               'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+            // `hooks/useAgentModelSelection` reaches the store only through the
+            // editor-free `store/apiContext`; Home model switches share its path.
             regex:
-              '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
+              '^@/features/ChatInput(?:$|/(?!(?:hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
           },
         ],
       }),
@@ -706,6 +710,22 @@ export default eslint(
     },
   },
   {
+    files: ['apps/server/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          ...baseRestrictedImportOptions,
+          paths: [...(baseRestrictedImportOptions.paths ?? []), ...serverI18nRestrictedImportPaths],
+          patterns: [
+            ...(baseRestrictedImportOptions.patterns ?? []),
+            ...serverI18nRestrictedImportPatterns,
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Redis access boundary for server code (see `redisAccessRestrictedImportPaths`).
     files: ['apps/server/src/**/*.{ts,tsx}'],
     // Tests of the legacy consumers import the raw module to mock or seed it;
@@ -724,10 +744,12 @@ export default eslint(
           ...baseRestrictedImportOptions,
           paths: [
             ...(baseRestrictedImportOptions.paths ?? []),
+            ...serverI18nRestrictedImportPaths,
             ...redisAccessRestrictedImportPaths,
           ],
           patterns: [
             ...(baseRestrictedImportOptions.patterns ?? []),
+            ...serverI18nRestrictedImportPatterns,
             {
               group: ['@/server/modules/Redis/*'],
               message: 'Use domain methods in services/redis.',

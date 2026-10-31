@@ -65,6 +65,40 @@ export interface FrontierSelection {
  * before deciding, and exported so a trace keeps the whole ranking rather than
  * only the winner — "why not that node" is unanswerable from the winner alone.
  */
+/**
+ * Every unfinished Task that would wait forever once `rootIds` stop short of
+ * `resolved` — directly or through another such Task. A prerequisite only
+ * counts as met when it resolves, so these have to leave with the roots or
+ * the goal parks on `no_frontier`. The Goal acceptance is never among them:
+ * ending it ends the Goal, which belongs to its own gate.
+ */
+export const collectStrandedDependents = (
+  graph: GoalGraphSnapshot,
+  rootIds: Iterable<string>,
+): GoalGraphNode[] => {
+  const closed = new Set(rootIds);
+  const stranded: GoalGraphNode[] = [];
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const edge of graph.edges) {
+      if (edge.kind !== 'depends_on' || !closed.has(edge.targetNodeId)) continue;
+      if (closed.has(edge.sourceNodeId)) continue;
+      const node = graph.nodes.find((candidate) => candidate.id === edge.sourceNodeId);
+      if (
+        !node ||
+        node.kind !== 'task' ||
+        node.title === GOAL_ACCEPTANCE_TASK_TITLE ||
+        TERMINAL_NODE_STATUSES.has(node.status)
+      )
+        continue;
+      closed.add(node.id);
+      stranded.push(node);
+      grew = true;
+    }
+  }
+  return stranded;
+};
+
 export const selectFrontier = (graph: GoalGraphSnapshot): FrontierSelection => {
   const resolvedNodeIds = new Set(
     graph.nodes.filter((node) => node.status === 'resolved').map((node) => node.id),

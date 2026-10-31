@@ -3,6 +3,9 @@ export default {
   'workingDirectory.newFolderInvalidWindowsName':
     'Use a Windows folder name without reserved names (such as CON), special characters (< > : " / \\ | ? *), control characters, or a trailing space or period.',
   'workingDirectory.addFolderFailed': 'Could not add this folder. Please try again.',
+  'workingDirectory.useFolderFailed': 'Couldn’t use this folder.',
+  'workingDirectory.errorDetailHide': 'Hide details',
+  'workingDirectory.errorDetailShow': 'Show details',
   'workingDirectory.browseDescription': 'Choose a folder on the connected device.',
   'workingDirectory.browseFolders': 'Browse folders',
   'workingDirectory.enterPathManually': 'Enter path manually',
@@ -33,6 +36,7 @@ export default {
   'workingDirectory.agentDescription':
     'Default working directory for all conversations with this Agent',
   'workingDirectory.agentLevel': 'Agent Working Directory',
+  'workingDirectory.branchConfirming': 'Confirming the current branch…',
   'workingDirectory.branchInWorktree': 'In worktree {{name}}',
   'workingDirectory.branchSearchPlaceholder': 'Search branches',
   'workingDirectory.branchesEmpty': 'No local branches',
@@ -135,4 +139,43 @@ export default {
   'workingDirectory.worktreesEmpty': 'No worktrees found',
   'workingDirectory.worktreesHeading': 'Worktrees',
   'workingDirectory.worktreesNoMatch': 'No matching worktrees',
+  'workingDirectory.environment.label': 'Code environment',
+  'workingDirectory.environment.none': 'No environment',
+  'workingDirectory.drive.pickFailed': 'Could not switch to this folder. Try again.',
+  'workingDirectory.drive.title': 'Choose a folder on your drive',
+  'workingDirectory.drive.rootNotAllowed': 'The drive’s root can’t be a working folder',
+  'workingDirectory.drive.browseDescription': 'Choose a folder on your drive.',
+  'workingDirectory.drive.gitRepository': 'Git',
+  'workingDirectory.drive.pickFolderFirst': 'Choose a folder first',
+  'workingDirectory.drive.environmentBadge': 'Environment',
+  'workingDirectory.drive.state.building': 'Building',
+  'workingDirectory.drive.state.failed': 'Build failed',
+  'workingDirectory.drive.state.inUse': 'In use',
+  'workingDirectory.drive.inUseDesc': 'Another conversation is using this environment directory',
+  'workingDirectory.drive.buildingDesc':
+    'This environment directory is still building. It can be picked once the build finishes',
+  'workingDirectory.drive.privateBlocked': 'Private environment — a shared agent can’t use it',
+  'workingDirectory.drive.createCopy': 'Create copy',
+  'workingDirectory.drive.initializeWith': 'Initialize with',
+  'workingDirectory.drive.initializeHint':
+    'The folder is created at the drive root and set up from this environment: the repository is cloned and its setup runs.',
+  'workingDirectory.drive.rename': 'Rename',
+  'workingDirectory.drive.renameTitle': 'Rename folder',
+  'workingDirectory.drive.renameFailed': 'The folder couldn’t be renamed',
+  'workingDirectory.drive.delete': 'Delete',
+  'workingDirectory.drive.moreActions': 'More actions',
+  'workingDirectory.drive.deleteConfirmTitle': 'Delete “{{name}}”?',
+  'workingDirectory.drive.deleteConfirmContent':
+    'Everything in this folder is deleted from the drive, for everyone who can see it. Conversations working in it fall back to a temporary sandbox.',
+  'workingDirectory.drive.actionFailed': 'That didn’t work. Try again.',
+  'workingDirectory.drive.folderNotEmpty':
+    'This folder already has files in it. Only a new or empty folder can be initialized from an environment.',
+  'workingDirectory.drive.folderTaken': 'An environment directory with this name already exists.',
+  'workingDirectory.drive.foldersLoadFailed':
+    'Could not load this folder on your drive. Retry, or go back to the drive’s top level.',
+  'workingDirectory.drive.readOnly': 'Environment directories are read-only here.',
+  'workingDirectory.drive.drives.public': 'Public drive',
+  'workingDirectory.drive.drives.personal': 'Personal drive',
+  'workingDirectory.drive.rebuildInPersonal':
+    'Private environment folders ({{names}}) are hidden here. Their owners can rebuild them on their personal drives.',
 };

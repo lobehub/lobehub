@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { type ClientAllocatableEntity, entityIdPattern } from './entityId';
 import type { UIChatMessage } from './message';
 import type { MessageMetadata } from './message/common';
-import { ChatToolPayloadSchema, MessageMetadataSchema } from './message/common';
+import {
+  ChatToolPayloadSchema,
+  ClientMessageMetadataSchema,
+  omitServerOwnedMessageMetadata,
+} from './message/common';
 import type { ContextSelection, CreateMessageParams, PageSelection } from './message/ui/params';
 import { ContextSelectionSchema, PageSelectionSchema } from './message/ui/params';
 import type { OpenAIChatMessage } from './openai/chat';
@@ -100,6 +104,8 @@ export interface SendMessageServerParams {
     metadata?: ChatTopicMetadata;
     /** Pinned model snapshot for the new topic (top-level `topics.model` column). */
     model?: string;
+    /** Project the topic is born in, conversation-only (a project "+" with no directory). */
+    projectId?: string;
     provider?: string;
     title?: string;
     topicMessageIds?: string[];
@@ -119,6 +125,7 @@ export interface SendMessageServerParams {
     excludeStatuses?: string[];
     excludeTriggers?: string[];
     includeTriggers?: string[];
+    onlyMine?: boolean;
   };
   // if there is activeTopicId, then add topicId to message
   topicId?: string;
@@ -137,7 +144,7 @@ export const CreateThreadWithMessageSchema = z.object({
 
 const SendPreloadMessageSchema = z.object({
   content: z.string(),
-  metadata: MessageMetadataSchema.optional(),
+  metadata: ClientMessageMetadataSchema.optional(),
   plugin: z
     .object({
       apiName: z.string(),
@@ -172,7 +179,10 @@ export const AiSendMessageServerSchema = z.object({
   newAssistantMessage: z.object({
     agentId: z.string().optional(),
     id: clientEntityId('messages'),
-    metadata: z.record(z.string(), z.unknown()).optional(),
+    metadata: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .transform(omitServerOwnedMessageMetadata),
     model: z.string().optional(),
     provider: z.string().optional(),
   }),
@@ -182,6 +192,7 @@ export const AiSendMessageServerSchema = z.object({
       id: clientEntityId('topics'),
       metadata: z.custom<ChatTopicMetadata>().optional(),
       model: z.string().optional(),
+      projectId: z.string().optional(),
       provider: z.string().optional(),
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),
@@ -195,7 +206,7 @@ export const AiSendMessageServerSchema = z.object({
     editorData: z.record(z.string(), z.unknown()).optional(),
     files: z.array(z.string()).optional(),
     id: clientEntityId('messages'),
-    metadata: MessageMetadataSchema.optional(),
+    metadata: ClientMessageMetadataSchema.optional(),
     pageSelections: z.array(PageSelectionSchema).optional(),
     parentId: z.string().optional(),
   }),
@@ -206,6 +217,7 @@ export const AiSendMessageServerSchema = z.object({
       excludeStatuses: z.array(z.string()).optional(),
       excludeTriggers: z.array(z.string()).optional(),
       includeTriggers: z.array(z.string()).optional(),
+      onlyMine: z.boolean().optional(),
     })
     .optional(),
   topicPageSize: z.number().int().min(1).max(100).optional(),
@@ -267,6 +279,51 @@ export const StructureOutputSchema = z.object({
    */
   tracing: z.object({ tracingId: z.string().uuid().optional() }).catchall(z.unknown()).optional(),
 });
+
+/** Plain text or structured JSON, as a decision model accepts for `state`, `instructions` and criteria. */
+const DecisionContentSchema = z.union([
+  z.string(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+]);
+
+/** One typed question for a decision model; mirrors `DecisionQuestion` in `@lobechat/model-runtime`. */
+export const DecisionQuestionSchema = z.discriminatedUnion('type', [
+  z.object({
+    criteria: z.object({ false: DecisionContentSchema, true: DecisionContentSchema }).optional(),
+    instructions: DecisionContentSchema,
+    type: z.literal('boolean'),
+  }),
+  z.object({
+    criteria: z.record(z.string(), DecisionContentSchema.nullable()),
+    instructions: DecisionContentSchema,
+    type: z.literal('choice'),
+  }),
+  z.object({
+    criteria: z.array(DecisionContentSchema).min(1),
+    instructions: DecisionContentSchema,
+    type: z.literal('score'),
+  }),
+]);
+
+export const DecisionOutputSchema = z.object({
+  /** Free-form context forwarded to non-tracing hooks (e.g. billing), as on `outputJSON`. */
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  model: z.string(),
+  provider: z.string(),
+  /** Question name → question. The names come back as the keys of `answers`. */
+  questions: z
+    .record(z.string(), DecisionQuestionSchema)
+    .refine((questions) => Object.keys(questions).length > 0, {
+      message: 'A decision request needs at least one question',
+    }),
+  /** The content every question is evaluated against. */
+  state: DecisionContentSchema,
+  /** Structured tracing config, validated like `StructureOutputSchema.tracing`. */
+  tracing: z.object({ tracingId: z.string().uuid().optional() }).catchall(z.unknown()).optional(),
+});
+
+export type DecisionOutputParams = z.infer<typeof DecisionOutputSchema>;
 
 interface IStructureSchema {
   description?: string;

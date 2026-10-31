@@ -1,0 +1,298 @@
+/**
+ * Signals — facts the outside world produced, as an Oracle delivered them.
+ *
+ * An Oracle is whatever brings outside information into LobeHub: a mail
+ * provider's webhook today, other feeds later. A signal records only that
+ * something happened out there; what it means (a mail, an inbox item, a wake)
+ * is decided by whoever processes it.
+ */
+
+/** Processing lifecycle of one signal. */
+export const SIGNAL_STATUSES = ['pending', 'processed', 'ignored', 'failed'] as const;
+export type SignalStatus = (typeof SIGNAL_STATUSES)[number];
+
+/**
+ * Whether a signal of one type is worth a row in `signals`.
+ *
+ * - `always`: every delivery is stored (low volume, authenticated Oracles such as a mail webhook).
+ * - `on_decision`: stored only when a decision is recorded against it, so a feed that is mostly
+ *   noise (chat messages nobody woke the bot for) does not fill the table.
+ * - `never`: never stored. Per-step runtime events belong here: they fire several times per run
+ *   and already live in the runtime's own telemetry.
+ */
+export const SIGNAL_PERSISTENCE_POLICIES = ['always', 'on_decision', 'never'] as const;
+export type SignalPersistencePolicy = (typeof SIGNAL_PERSISTENCE_POLICIES)[number];
+
+/**
+ * What we know about a delivery, as opposed to what the source said (that is `payload`).
+ *
+ * `payload` is the event as the source delivered it and the retention sweep blanks it on a short
+ * clock; `metadata` is how it reached us and where it was addressed, and survives that sweep, so a
+ * row whose content has expired still says what it was. Never message content: anything that
+ * should expire with the payload belongs in the payload.
+ */
+export interface SignalMetadata {
+  /** Where the source addressed the event, e.g. `{ platform, applicationId, platformThreadId, messageId }`. */
+  address?: Record<string, string>;
+  /** The handler or endpoint that saw the event first, e.g. `onSubscribedMessage`. */
+  entryPoint?: string;
+  /** Source-specific extras that are not worth a typed field yet. */
+  extra?: Record<string, unknown>;
+}
+
+/** What a pipeline decided to do with one signal. */
+export const SIGNAL_DECISION_OUTCOMES = ['wake', 'skip', 'defer'] as const;
+export type SignalDecisionOutcome = (typeof SIGNAL_DECISION_OUTCOMES)[number];
+
+/** How a policy took part in a decision. `off` policies never run, so they are never recorded. */
+export type SignalDecisionVerdictMode = 'enforce' | 'shadow';
+
+/** One policy's opinion inside a decision, kept whether or not it took effect. */
+export interface SignalDecisionVerdict {
+  confidence: number;
+  latencyMs: number;
+  mode: SignalDecisionVerdictMode;
+  policyId: string;
+  reason: string;
+  verdict: 'abstain' | 'allow' | 'deny';
+  version: number;
+}
+
+/**
+ * What a decision needs beyond its indexed columns: the context it was made in, kept so the decision
+ * can be replayed and explained later.
+ *
+ * Anything that is filtered, grouped or joined on belongs in a column, not here. Never put message
+ * content here: it lives in `signals.payload`, which the retention sweep blanks on a clock of its
+ * own, and a copy here would outlive it.
+ */
+export interface SignalDecisionMetadata {
+  /** Revision of the pipeline's configuration in force when the decision was made. */
+  configRevision?: string;
+  /** Scenario-specific extras that are not worth a typed field yet. */
+  extra?: Record<string, unknown>;
+  /** Ids of the other signals folded into this one (debounced siblings of the same sender). */
+  mergedSourceIds?: string[];
+  /**
+   * The state the policies read, as the scenario declared it — enough to run the same policies
+   * again and get the same verdicts.
+   */
+  stateSnapshot?: Record<string, unknown>;
+}
+
+/** What a label needs beyond `label`, `source` and `confidence`. No message content, as above. */
+export interface SignalDecisionLabelMetadata {
+  /**
+   * The signal that proved the label, when another event did — e.g. the later manual mention
+   * that shows a `missed_wake`. A signal's `external_id`, not its row id.
+   */
+  evidenceExternalId?: string;
+  /** Scenario-specific extras that are not worth a typed field yet. */
+  extra?: Record<string, unknown>;
+  /** Short rationale from a judge model or a person. */
+  rationale?: string;
+  /** Machine-readable reason behind the label, e.g. a `BotNoReplyReason`. */
+  reason?: string;
+  /** Where the label was applied: `reaction`, `button`, `admin`, `job`, … */
+  surface?: string;
+}
+
+/**
+ * Judgement attached to a decision after the fact. Append-only; a later label never edits an earlier one.
+ *
+ * `cleared` is not a judgement: it withdraws the source's earlier label, so that source has no
+ * current opinion on the decision. Readers of the current label treat it as no label.
+ */
+export const SIGNAL_DECISION_LABELS = [
+  'false_wake',
+  'dup_wake',
+  'bad_reply',
+  'missed_wake',
+  'correct',
+  'cleared',
+] as const;
+export type SignalDecisionLabel = (typeof SIGNAL_DECISION_LABELS)[number];
+
+/** The label that withdraws a source's earlier one; see {@link SIGNAL_DECISION_LABELS}. */
+export const SIGNAL_DECISION_LABEL_CLEARED = 'cleared' satisfies SignalDecisionLabel;
+
+/** `signal_decision_labels.source` for a mark the bot's owner set in its settings. */
+export const BOT_WAKE_USER_LABEL_SOURCE = 'user';
+
+/** The labels a mark can be, a subset of {@link SIGNAL_DECISION_LABELS}. */
+export const BOT_WAKE_USER_LABELS = ['correct', 'false_wake', 'missed_wake'] as const;
+export type BotWakeUserLabel = (typeof BOT_WAKE_USER_LABELS)[number];
+
+/**
+ * What the owner can mark a wake decision as, by what the router did with it: a wake was right or
+ * should not have happened, a skip was right or should have woken, and a deferred message can be
+ * either.
+ */
+export const BOT_WAKE_USER_LABELS_BY_OUTCOME: Record<
+  SignalDecisionOutcome,
+  readonly BotWakeUserLabel[]
+> = {
+  defer: ['correct', 'false_wake', 'missed_wake'],
+  skip: ['correct', 'missed_wake'],
+  wake: ['correct', 'false_wake'],
+};
+
+/** Which model scored a wake decision: is the message for the bot, or within its duties. */
+export type BotWakeJudgeKind = 'addressed' | 'duty';
+
+/** The model score behind a wake decision, as the owner sees it next to the decision. */
+export interface BotWakeJudgeScore {
+  kind: BotWakeJudgeKind;
+  /** 0..1, as the judge returned it. */
+  score: number;
+  verdict: SignalDecisionVerdict['verdict'];
+}
+
+/** One bot wake decision as the bot's settings page lists it. */
+export interface BotWakeDecisionItem {
+  /** Where the message was addressed (`platform`, `platformThreadId`, `messageId`, …). */
+  address: Record<string, string> | null;
+  /** The agent's own silence label, when it woke and chose not to reply. */
+  agentLabel: { label: SignalDecisionLabel; reason?: string } | null;
+  createdAt: Date;
+  finalReason: string | null;
+  /** The bot woke on its own judgement, nobody addressed it. */
+  followup: boolean;
+  id: string;
+  /** The model score behind the decision; null when no model scored. */
+  judge: BotWakeJudgeScore | null;
+  outcome: SignalDecisionOutcome;
+  /** First 200 characters of the message; null once purged. */
+  text: string | null;
+  textPurged: boolean;
+  toTag: string | null;
+  /** The owner's current mark. */
+  userLabel: { createdAt: Date; label: SignalDecisionLabel; note?: string } | null;
+}
+
+export interface BotWakeDecisionPage {
+  items: BotWakeDecisionItem[];
+  /** Keyset position of the next page; absent on the last one. */
+  nextCursor?: { createdAt: string; id: string };
+}
+
+/** Counts of one bot's wake decisions over the last `days` days. */
+export interface BotWakeSummary {
+  days: number;
+  defer: number;
+  followupWakes: number;
+  /** Decisions the owner currently has a mark on. */
+  marked: number;
+  markedByLabel: Partial<Record<SignalDecisionLabel, number>>;
+  /** Wakes the agent stayed silent on (`false_wake` / `dup_wake` from its own label). */
+  silenced: number;
+  skip: number;
+  total: number;
+  wake: number;
+}
+
+/** The mark now in force after `labelWakeDecision`; null once it was taken back. */
+export type BotWakeUserMark = {
+  createdAt: Date;
+  label: BotWakeUserLabel;
+  note?: string;
+} | null;
+
+/**
+ * How a bot wake reached the agent.
+ *
+ * - `mention`: the user addressed the bot directly (@mention, DM, command). The bot always answers.
+ * - `followup`: the pipeline woke the bot on its own judgement (solo conversation, watch keyword,
+ *   a classifier). The agent may decide not to speak.
+ */
+export const BOT_WAKE_KINDS = ['mention', 'followup'] as const;
+export type BotWakeKind = (typeof BOT_WAKE_KINDS)[number];
+
+/**
+ * The token an agent ends its turn with to stay silent after a `followup` wake, optionally
+ * followed by `:<reason>` — e.g. `NO_REPLY:duplicate`. Anything else is a normal reply.
+ */
+export const BOT_NO_REPLY_TOKEN = 'NO_REPLY';
+
+/**
+ * The line an agent ends its reply with to step back from the conversation: people told it it is
+ * interfering. The line is not posted; whatever it wrote before it (a short acknowledgement) is.
+ * `NO_REPLY:stand_down` does the same in silence.
+ */
+export const BOT_STAND_DOWN_TOKEN = 'STAND_DOWN';
+
+/**
+ * How long a bot that stood down stays out of the conversation: only an @-mention, a reply to it,
+ * a DM or a command wakes it until then.
+ */
+export const BOT_STAND_DOWN_MINUTES = 30;
+
+/** Why a woken agent chose not to speak. */
+export const BOT_NO_REPLY_REASONS = [
+  'not_addressed',
+  'off_topic',
+  'nothing_to_add',
+  'duplicate',
+  'already_handled',
+  'stand_down',
+  'unspecified',
+  'empty_completion',
+] as const;
+export type BotNoReplyReason = (typeof BOT_NO_REPLY_REASONS)[number];
+/** A reason the agent itself can give in the token; `empty_completion` is only ever detected. */
+export type BotNoReplyClaimedReason = Exclude<BotNoReplyReason, 'empty_completion'>;
+
+/**
+ * The decision label each silence reason is written under. Staying silent means the wake was not
+ * worth an answer (`false_wake`), unless the same message had already been answered (`dup_wake`).
+ * Standing down is the one silence that acted on the message (it told the bot to back off), so
+ * that wake was `correct`.
+ */
+export const BOT_NO_REPLY_LABELS: Record<BotNoReplyReason, SignalDecisionLabel> = {
+  already_handled: 'dup_wake',
+  duplicate: 'dup_wake',
+  empty_completion: 'false_wake',
+  nothing_to_add: 'false_wake',
+  not_addressed: 'false_wake',
+  off_topic: 'false_wake',
+  stand_down: 'correct',
+  unspecified: 'false_wake',
+};
+
+/**
+ * `NO_REPLY`, `NO_REPLY:duplicate`, tolerating backticks (`\x60`) / brackets and a trailing period.
+ * Matched against trimmed text, so it needs no trailing whitespace of its own.
+ */
+const BOT_NO_REPLY_PATTERN = new RegExp(
+  String.raw`^[\s\x60[(]*${BOT_NO_REPLY_TOKEN}(?:\s*[:：]\s*([a-z_]+))?[\s\x60\])]*[.。]?$`,
+  'i',
+);
+
+const BOT_NO_REPLY_REASON_SET = new Set<string>(BOT_NO_REPLY_REASONS);
+
+/**
+ * Reads a text that consists only of the `NO_REPLY[:reason]` token and returns its reason.
+ *
+ * An unknown reason collapses to `unspecified`, and so does `empty_completion`: that one is
+ * detected by the server, never claimed by the agent. Returns `undefined` for any other text,
+ * including text that merely mentions the token.
+ */
+export const parseBotNoReplyToken = (
+  content?: string | null,
+): BotNoReplyClaimedReason | undefined => {
+  if (!content) return undefined;
+
+  const match = BOT_NO_REPLY_PATTERN.exec(content.trim());
+  if (!match) return undefined;
+
+  const raw = match[1]?.toLowerCase();
+
+  return raw && BOT_NO_REPLY_REASON_SET.has(raw) && raw !== 'empty_completion'
+    ? (raw as BotNoReplyClaimedReason)
+    : 'unspecified';
+};
+
+/** An agent run that finished by choosing silence. */
+export interface BotNoReplyResult {
+  reason: BotNoReplyReason;
+}

@@ -105,37 +105,27 @@ export interface LobeAgentConfig {
 +-------------------+--------------------------------------+------------------------------------------------------+
 ```
 
-**Client Service** 是前端代码，封装可复用的业务逻辑，通过 tRPC 客户端调用后端。例如 `src/services/session/index.ts`：
+**Client Service** 是前端代码，封装可复用的业务逻辑，通过 tRPC 客户端调用后端。Agent 配置更新的实现见 `src/services/agent.ts`：
 
 ```typescript
-export class SessionService {
-  updateSessionConfig = (id: string, config: PartialDeep<LobeAgentConfig>, signal?: AbortSignal) => {
-    return lambdaClient.session.updateSessionConfig.mutate({ id, value: config }, { signal });
+export class AgentService {
+  updateAgentConfig = async (
+    agentId: string,
+    config: PartialDeep<LobeAgentConfig>,
+    signal?: AbortSignal,
+    replaceWorkingDirDeviceIds: string[] = [],
+  ) => {
+    return lambdaClient.agent.updateAgentConfig.mutate(
+      { agentId, replaceWorkingDirDeviceIds, value: config },
+      { context: { showNotification: false }, signal },
+    );
   };
 }
 ```
 
-**tRPC Router** 是后端入口（`apps/server/src/routers/lambda/`），校验输入后调用 Server Service 处理业务逻辑：
+**tRPC Router** 是后端入口。`apps/server/src/routers/lambda/agent/config.ts` 中的 `agent.updateAgentConfig` 会校验输入，执行编辑权限和工作区策略检查，检查协作编辑锁，再调用 `ctx.agentService.updateAgentConfig`。
 
-```typescript
-export const sessionRouter = router({
-  updateSessionConfig: sessionProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        value: z.object({}).passthrough().partial(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const session = await ctx.sessionModel.findByIdOrSlug(input.id);
-      // ...
-      const mergedValue = merge(session.agent, input.value);
-      return ctx.sessionModel.updateConfig(session.agent.id, mergedValue);
-    }),
-});
-```
-
-对于本次需求，`updateSessionConfig` 只是简单 merge config，并没有细粒度到具体字段，因此各层都不需要修改。
+配置更新通过 agent service 使用 agent ID 完成。新增字段时应核对当前 agent service 和 model 的实现，不要新增基于 session 的配置更新路径。
 
 ## 四、前端实现
 

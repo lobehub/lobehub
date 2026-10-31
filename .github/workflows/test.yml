@@ -16,7 +16,6 @@ on:
       - '.github/workflows/sync*.y*ml'
       - '.github/workflows/auto-*.yml'
       - '.github/workflows/manual-*.yml'
-      - '.github/workflows/lighthouse.yml'
       - '.github/workflows/bundle-analyzer.yml'
   pull_request:
     paths-ignore:
@@ -30,7 +29,6 @@ on:
       - '.github/workflows/sync*.y*ml'
       - '.github/workflows/auto-*.yml'
       - '.github/workflows/manual-*.yml'
-      - '.github/workflows/lighthouse.yml'
       - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
@@ -47,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi @lobechat/replica'
+      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent @lobechat/builtin-tool-message model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents @lobechat/openapi'
 
     steps:
       - name: Checkout
@@ -68,6 +66,7 @@ jobs:
             .github/scripts/size-gate-comment.test.cjs \
             .github/scripts/pr-admission-check.test.cjs \
             .github/scripts/mergeAllowBuilds.test.mjs \
+            .github/scripts/desktopRelease*.test.mjs \
             .github/scripts/desktop-core-gate.test.mjs
 
       - name: Setup environment
@@ -79,6 +78,9 @@ jobs:
       - name: Install CLI deps
         run: pnpm install
         working-directory: apps/cli
+
+      - name: Verify hotfix operator CLI
+        run: node --test .github/scripts/hotfixWorkflow.test.mjs
 
       - name: Test CLI build configuration, bundle and model-facing docs
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
@@ -260,6 +262,14 @@ jobs:
       pull-requests: write
     env:
       ALINT_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      # Weekly release PRs (`release/weekly-*`, cut from canary) carry a whole cycle
+      # of canary changes that already ran alint on their own PRs, and so does a
+      # push to main. Re-linting them takes over an hour and spends provider tokens
+      # for nothing. Other release branches and `hotfix/*` start from main and get
+      # new or cherry-picked changes (and conflict resolutions) on the branch
+      # itself, so their PRs are the only place those changes get linted.
+      ALINT_SKIP_REASON: >-
+        ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/weekly-') && 'weekly release PR, whose changes were linted on their own PRs' || github.event_name == 'push' && github.ref == 'refs/heads/main' && 'push to main, whose changes were linted on their own PRs' || '' }}
 
     steps:
       - name: Checkout
@@ -308,10 +318,15 @@ jobs:
       # Findings are published as a separate "ALint" check (red when a rule at
       # `error` level fires) plus one summary comment on the PR, rewritten on
       # every push. This job itself never fails because of alint. Skipped when
-      # the provider secret is unavailable (forks). Runs here to reuse the root
+      # the provider secret is unavailable (forks) and for weekly release PRs and
+      # pushes to main (see ALINT_SKIP_REASON). Runs here to reuse the root
       # install instead of paying for another job.
+      - name: alint · report a skipped run
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON != '' }}
+        run: echo "::notice::ALint skipped for this ${ALINT_SKIP_REASON}"
+
       - name: alint · expose the diff against the base as dirty changes
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -328,7 +343,7 @@ jobs:
           git status --short | head -50
 
       - name: alint · restore cache
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
         continue-on-error: true
         uses: actions/cache@v4
         with:
@@ -341,7 +356,7 @@ jobs:
             alint-
 
       - name: alint · lint changed files
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -359,7 +374,7 @@ jobs:
           bun packages/alint/report.ts alint-output.json
 
       - name: alint · calibrate rule fixtures (when rules or fixtures changed)
-        if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
+        if: ${{ !cancelled() && env.ALINT_API_KEY != '' && env.ALINT_SKIP_REASON == '' }}
         continue-on-error: true
         run: |
           if git status --porcelain -- alint.config.toml packages/alint ':(glob)packages/*/alint/**' | grep -q .; then

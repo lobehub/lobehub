@@ -4,39 +4,16 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { Icon, Markdown } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+
 import { Check, ShieldCheck, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { SetTaskVerifyParams, SetTaskVerifyState } from '../../../types';
 import { TaskResultCard } from '../shared';
 
-const styles = stylex.create({
-  offBadge: {
-    display: 'inline-flex',
-    flexShrink: 0,
-    gap: '4px',
-    alignItems: 'center',
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    borderRadius: '999px',
-    fontSize: '12px',
-    color: cssVar.colorTextTertiary,
-    background: cssVar.colorFillTertiary,
-  },
-  onBadge: {
-    display: 'inline-flex',
-    flexShrink: 0,
-    gap: '4px',
-    alignItems: 'center',
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    borderRadius: '999px',
-    fontSize: '12px',
-    color: cssVar.colorSuccess,
-    background: cssVar.colorSuccessBg,
-  },
-});
+const styles = stylex.create({ offBadge: { display: "inline-flex", flexShrink: 0, gap: "4px", alignItems: "center", paddingBlock: "2px", paddingInline: "8px", borderRadius: "999px", fontSize: "12px", color: cssVar.colorTextTertiary, backgroundColor: cssVar.colorFillTertiary, backgroundImage: "none" }, onBadge: { display: "inline-flex", flexShrink: 0, gap: "4px", alignItems: "center", paddingBlock: "2px", paddingInline: "8px", borderRadius: "999px", fontSize: "12px", color: cssVar.colorSuccess, backgroundColor: cssVar.colorSuccessBg, backgroundImage: "none" } });
 
 export const SetTaskVerifyRender = memo<
   BuiltinRenderProps<SetTaskVerifyParams, SetTaskVerifyState>
@@ -64,6 +41,7 @@ export const SetTaskVerifyRender = memo<
       icon={ShieldCheck}
       iconColor={enabled === false ? cssVar.colorTextTertiary : cssVar.colorSuccess}
       identifier={identifier}
+      taskId={resolveTaskOpenTarget(pluginState, params)}
       title={t('builtins.lobe-task.apiName.setTaskVerify')}
     >
       {requirement ? (

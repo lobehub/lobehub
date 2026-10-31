@@ -1,6 +1,8 @@
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
+  AgentSenderMetadataSchema,
   CreateNewMessageParamsSchema,
+  omitServerOwnedMessageMetadata,
   UpdateMessageParamsSchema,
   UpdateMessagePluginSchema,
   UpdateMessageRAGParamsSchema,
@@ -14,7 +16,7 @@ import {
   cloudWorkspaceAuth,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { MessageModel } from '@/database/models/message';
+import { MESSAGE_KEYWORD_SEARCH_MAX_LIMIT, MessageModel } from '@/database/models/message';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { CompressionRepository } from '@/database/repositories/compression';
 import { TopicDoctorRepo } from '@/database/repositories/topicDoctor';
@@ -30,25 +32,20 @@ import {
   assertCanUseMessageTargets,
   assertCanUseTopicTargets,
   assertCanViewMessageTargets,
+  assertCanViewTopicTargets,
 } from './_helpers/conversationResourceGuard';
+import { getMessagesPageSizeSchema } from './_helpers/getMessagesPageSize';
+import { messagesByCursorInputSchema, readMessagesByCursor } from './_helpers/messagesByCursor';
 import { projectSharedTopicMessages } from './_helpers/projectSharedTopicMessages';
-import { resolveAgentIdFromSession, resolveContext } from './_helpers/resolveContext';
+import { resolveContext } from './_helpers/resolveContext';
 import {
   assertCreatorMessageTargets,
   assertCreatorTopicTargets,
 } from './_helpers/shareVisitorTargetGuard';
+import { readTopicPreviews, topicPreviewsInputSchema } from './_helpers/topicPreviews';
 import { basicContextSchema } from './_schema/context';
 
 const { logTiming, runTimedStage } = createTimingHelpers('lobe-server:chat:lobehub:timing');
-
-/**
- * Upper bound on rounds per `getMessagesByCursor` page. The scan itself is bounded
- * by `countBudget`; this only lets a caller ask for "as many whole rounds as the
- * budget holds" (the chat window) without an arbitrary value.
- */
-const MAX_CURSOR_ROUND_LIMIT = 1000;
-/** Upper bound on rows scanned per `getMessagesByCursor` page (the model's default cap). */
-const MAX_CURSOR_COUNT_BUDGET = 2000;
 
 /** Ctx slice consumed by the conversation General-access guards. */
 const guardCtx = (ctx: {
@@ -170,17 +167,21 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const operations: MessageBatchOperation[] = await Promise.all(
-        input.operations.map(async (operation): Promise<MessageBatchOperation> => {
-          if (
-            operation.type !== 'createMessage' ||
-            operation.message.agentId ||
-            !operation.message.sessionId
-          ) {
-            return operation as MessageBatchOperation;
-          }
-
-          const agentId = await resolveAgentIdFromSession(
-            operation.message.sessionId,
+        input.operations.map(async (rawOperation): Promise<MessageBatchOperation> => {
+          // Creates are passthrough, so a client could carry server-owned metadata.
+          const operation =
+            rawOperation.type === 'createMessage'
+              ? {
+                  ...rawOperation,
+                  message: {
+                    ...rawOperation.message,
+                    metadata: omitServerOwnedMessageMetadata(rawOperation.message.metadata),
+                  },
+                }
+              : rawOperation;
+          if (operation.type !== 'createMessage') return operation as MessageBatchOperation;
+          const resolved = await resolveContext(
+            { ...operation.message, agentId: operation.message.agentId ?? undefined },
             ctx.serverDB,
             ctx.userId,
             ctx.workspaceId ?? undefined,
@@ -190,7 +191,8 @@ export const messageRouter = router({
             ...operation,
             message: {
               ...operation.message,
-              agentId: agentId!,
+              agentId: resolved.agentId,
+              sessionId: resolved.sessionId,
             },
           } as MessageBatchOperation;
         }),
@@ -332,18 +334,13 @@ export const messageRouter = router({
     .use(withScopedPermission('message:create'))
     .input(CreateNewMessageParamsSchema)
     .mutation(async ({ input, ctx }) => {
-      // If there's no agentId but has sessionId, resolve agentId from sessionId
-      let agentId = input.agentId;
-      if (!agentId && input.sessionId) {
-        agentId = (await resolveAgentIdFromSession(
-          input.sessionId,
-          ctx.serverDB,
-          ctx.userId,
-          ctx.workspaceId ?? undefined,
-        ))!;
-      }
-
-      await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
+      const resolved = await resolveContext(
+        { ...input, agentId: input.agentId ?? undefined },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
       // The declared agent/group is client-supplied and can be omitted or
       // forged while still inserting into `topicId` — guard the topic's own
       // DB-resolved target as well.
@@ -354,8 +351,14 @@ export const messageRouter = router({
         await assertCreatorTopicTargets(guardCtx(ctx), [input.topicId]);
       }
 
-      // Create message with the resolved agentId
-      return ctx.messageService.createMessage({ ...input, agentId } as any);
+      // Create message with the resolved agentId. The input is passthrough, so
+      // server-owned metadata a client slipped in is dropped here.
+      return ctx.messageService.createMessage({
+        ...input,
+        agentId: resolved.agentId,
+        sessionId: resolved.sessionId,
+        metadata: omitServerOwnedMessageMetadata(input.metadata),
+      } as any);
     }),
 
   /**
@@ -417,6 +420,32 @@ export const messageRouter = router({
       return ctx.messageService.getToolResultPayloads(input.messageIds);
     }),
 
+  /**
+   * Where a message came from, for answering it: its conversation and, for a
+   * message another agent sent, that agent and its conversation
+   * (`metadata.agentSender`). Read by `lh message reply`.
+   */
+  getMessageOrigin: messageProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewMessageTargets(guardCtx(ctx), [input.id]);
+
+      const message = await ctx.messageModel.findById(input.id);
+      if (!message) return null;
+
+      const agentSender = AgentSenderMetadataSchema.safeParse(
+        (message.metadata as Record<string, unknown> | null)?.agentSender,
+      );
+      return {
+        agentId: message.agentId ?? null,
+        agentSender: agentSender.success ? agentSender.data : null,
+        id: message.id,
+        role: message.role,
+        threadId: message.threadId ?? null,
+        topicId: message.topicId ?? null,
+      };
+    }),
+
   getToolResultPayload: messageProcedure
     .input(z.object({ messageId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -453,7 +482,7 @@ export const messageRouter = router({
         // set, so already-deployed clients (no `file` descriptor) never receive
         // a `file` summary that would crash their works UI. New clients set it.
         includeFileWorks: z.boolean().optional(),
-        pageSize: z.number().optional(),
+        pageSize: getMessagesPageSizeSchema,
         /**
          * Hand back render-facing tool view models instead of the stored
          * payloads (`@lobechat/tool-view-model`). Opt-in per read: see the
@@ -528,9 +557,19 @@ export const messageRouter = router({
       const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
       const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
 
-      const messages = await messageModel.query(queryParams, {
-        postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
-      });
+      const resolved = await resolveContext(
+        { ...queryParams, agentId: queryParams.agentId ?? undefined },
+        ctx.serverDB,
+        ctx.userId,
+        wsId,
+      );
+      await assertCanUseConversationTargets(guardCtx({ ...ctx, userId: ctx.userId }), [resolved]);
+      const messages = await messageModel.query(
+        { ...queryParams, ...resolved },
+        {
+          postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
+        },
+      );
 
       // Only the caller knows whether this list is going to be rendered or fed
       // to a model: a run that executes in the browser assembles its context
@@ -544,99 +583,18 @@ export const messageRouter = router({
    * Round-boundary cursor pagination for a topic's mainline conversation. Used by
    * callers that only DISPLAY history (server-runtime / hetero); legacy client
    * mode keeps using `getMessages` (full fetch) because it resends the session.
-   * Omit `cursor` for the newest page; pass a prior `nextCursor` to load older.
+   * Omit `cursor` for the first page; pass a prior `nextCursor` to continue.
+   * `direction: 'forward'` pages from the first round (shared transcripts).
    */
   getMessagesByCursor: publicProcedure
     .use(cloudWorkspaceAuth)
     .use(serverDatabase)
-    .input(
-      z.object({
-        agentId: z.string().nullish(),
-        // Bounded at the API boundary: the model turns this into a row LIMIT, so
-        // an unbounded value would let any caller (incl. anonymous share
-        // visitors) force an arbitrarily large scan of a long topic.
-        countBudget: z.number().int().positive().max(MAX_CURSOR_COUNT_BUDGET).optional(),
-        // `createdAt` is cast to `::timestamptz` in SQL, so reject anything that
-        // isn't the UTC ISO timestamp `nextCursor` emits (up to microseconds)
-        // here — otherwise malformed input surfaces as a Postgres 500.
-        cursor: z.object({ createdAt: z.string().datetime(), id: z.string().min(1) }).nullish(),
-        groupId: z.string().nullish(),
-        // Same opt-in as `getMessages`: only clients that ship the `file` work
-        // descriptor ask for `file` work summaries.
-        includeFileWorks: z.boolean().optional(),
-        /** Same opt-in as `getMessages`: render-facing tool view models. */
-        projectToolPayloads: z.boolean().optional(),
-        roundLimit: z.number().int().positive().max(MAX_CURSOR_ROUND_LIMIT).optional(),
-        sessionId: z.string().nullish(),
-        skipWorks: z.boolean().optional(),
-        // Optional so share-link callers can page with only `topicShareId`; the
-        // share record supplies the authoritative topic. Required otherwise.
-        topicId: z.string().nullish(),
-        topicShareId: z.string().optional(),
-      }),
-    )
-    .query(async ({ input, ctx }) => {
-      const { projectToolPayloads, topicShareId, topicId, ...queryParams } = input;
+    .input(messagesByCursorInputSchema)
+    .query(({ ctx, input }) => readMessagesByCursor(ctx, input)),
 
-      // Public access via topicShareId
-      if (topicShareId) {
-        const share = await TopicShareModel.findByShareIdWithAccessCheck(
-          ctx.serverDB,
-          topicShareId,
-          ctx.userId ?? undefined,
-        );
-
-        // Same scoping as `getMessages`: workspace shares carry their workspaceId,
-        // and the classic share link is a creator topic (no visitor scope).
-        const shareWorkspaceId = share.workspaceId ?? undefined;
-        const messageModel = new MessageModel(ctx.serverDB, share.ownerId, shareWorkspaceId);
-        const fileService = new FileService(ctx.serverDB, share.ownerId, shareWorkspaceId);
-
-        const page = await messageModel.queryTopicMessagesByCursor(
-          // Force skipWorks: Work summaries join LIVE task/version state, so serving
-          // them here would leak post-share mutations to anonymous visitors.
-          { ...queryParams, skipWorks: true, topicId: share.topicId },
-          {
-            postProcessUrl: (path, file) =>
-              fileService.getFileAccessUrl({ id: file.id, url: path }),
-          },
-        );
-
-        return { ...page, messages: projectSharedTopicMessages(page.messages) };
-      }
-
-      // Authenticated access - require userId
-      if (!ctx.userId) {
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
-      }
-
-      if (!topicId) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'topicId is required' });
-      }
-
-      // Same General-access guard `getMessages` applies to a raw client topicId.
-      await assertCanUseTopicTargets(
-        guardCtx({ serverDB: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId }),
-        [topicId],
-      );
-
-      const wsId = ctx.workspaceId ?? undefined;
-      const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
-      const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
-
-      const page = await messageModel.queryTopicMessagesByCursor(
-        { ...queryParams, topicId },
-        {
-          postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
-        },
-      );
-
-      // Same rule as `getMessages`: only the caller knows whether this page is
-      // rendered or fed to a model, so projection is opt-in per read.
-      return projectToolPayloads
-        ? { ...page, messages: projectToolViewModels(page.messages) }
-        : page;
-    }),
+  getTopicPreviews: messageProcedure
+    .input(topicPreviewsInputSchema)
+    .query(({ ctx, input }) => readTopicPreviews(ctx, input)),
 
   rankModels: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.rankModels();
@@ -719,24 +677,21 @@ export const messageRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const { agentId, ...options } = input;
-      // Row-based guard via the topic when available; sweeps without a topic
-      // fall back to the declared agent target.
-      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
-      else
-        await assertCanUseConversationTargets(guardCtx(ctx), [{ agentId, groupId: input.groupId }]);
-      // Same visitor guard as `addFilesToMessage` above.
-      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
       const resolved = await resolveContext(
         { agentId, ...options },
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
       );
+      if (options.topicId) await assertCanUseTopicTargets(guardCtx(ctx), [options.topicId]);
+      await assertCanUseConversationTargets(guardCtx(ctx), [resolved]);
+      if (options.topicId) await assertCreatorTopicTargets(guardCtx(ctx), [options.topicId]);
 
       return ctx.messageModel.deleteMessagesBySession(
         resolved.sessionId,
         resolved.topicId,
         input.groupId,
+        { agentId: resolved.agentId ?? undefined },
       );
     }),
 
@@ -757,10 +712,44 @@ export const messageRouter = router({
       return ctx.messageModel.deleteMessagesBySession(null, input.topicId, input.groupId);
     }),
 
+  /** Find-in-topic: literal keyword matches across a topic's whole history. */
+  searchInTopic: messageProcedure
+    .input(z.object({ keyword: z.string().max(200), topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await assertCanViewTopicTargets(guardCtx(ctx), [input.topicId]);
+
+      return ctx.messageModel.searchInTopic(input);
+    }),
+
   searchMessages: messageSearchProcedure
     .input(z.object({ keywords: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.messageModel.queryByKeyword(input.keywords);
+    }),
+
+  /**
+   * Filtered, paginated history search for CLI and agent callers. Returns a
+   * lean projection (topic title, snippet) instead of full message rows, and
+   * hides system-written prompts of automation topics unless asked.
+   */
+  searchByKeyword: messageSearchProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        endDate: z.coerce.date().optional(),
+        exact: z.boolean().optional(),
+        includeAutomatedPrompts: z.boolean().optional(),
+        keywords: z.string(),
+        limit: z.number().int().min(1).max(MESSAGE_KEYWORD_SEARCH_MAX_LIMIT).optional(),
+        offset: z.number().int().min(0).optional(),
+        roles: z.array(z.string()).optional(),
+        startDate: z.coerce.date().optional(),
+        topicId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const { keywords, ...params } = input;
+      return ctx.messageModel.searchByKeyword({ ...params, keyword: keywords });
     }),
 
   update: messageProcedure
@@ -908,7 +897,7 @@ export const messageRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.messageService.updateMetadata(id, value, resolved);
+      return ctx.messageService.updateMetadata(id, omitServerOwnedMessageMetadata(value), resolved);
     }),
 
   updatePluginError: messageProcedure

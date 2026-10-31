@@ -76,9 +76,6 @@ const ChannelContent = memo(() => {
         platformId={platform}
         platformsLoading={platformsLoading}
         providers={providers}
-        runtimeStatus={
-          activePlatformDef ? platformRuntimeStatuses.get(activePlatformDef.id) : undefined
-        }
       />
       <Flexbox flex={1} style={{ overflow: 'hidden' }}>
         <AsyncBoundary

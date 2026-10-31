@@ -166,7 +166,12 @@ export class ServerToolTransport implements ToolTransport {
 
     try {
       const hookResult = await this.dispatchBeforeToolCall(chatToolPayload, context);
-      if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+      if (
+        context.abortSignal?.aborted ||
+        (await isOperationInterrupted(this.ctx)) ||
+        context.abortSignal?.aborted
+      )
+        return this.abortedBeforeLaunch();
       let toolCallMocked = false;
 
       if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
@@ -208,7 +213,12 @@ export class ServerToolTransport implements ToolTransport {
         // so Stop can land between entering `run` and reaching this line. The
         // executor's race has already settled the call by then — launching now
         // would start side-effecting work for a cancelled operation.
-        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+        if (
+          context.abortSignal?.aborted ||
+          (await isOperationInterrupted(this.ctx)) ||
+          context.abortSignal?.aborted
+        )
+          return this.abortedBeforeLaunch();
 
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           agentId: context.state.origin?.agentId,
@@ -240,7 +250,12 @@ export class ServerToolTransport implements ToolTransport {
 
         // Re-checked after the visibility await for the same reason as above:
         // every await between entry and launch reopens the cancellation window.
-        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+        if (
+          context.abortSignal?.aborted ||
+          (await isOperationInterrupted(this.ctx)) ||
+          context.abortSignal?.aborted
+        )
+          return this.abortedBeforeLaunch();
 
         log(`[${operationLogId}] Executing tool ${context.toolName} ...`);
         execution = await executeToolWithRetry(
@@ -263,6 +278,9 @@ export class ServerToolTransport implements ToolTransport {
               ...(agentVisibility !== undefined && { agentVisibility }),
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
+              // Who in the IM conversation asked for this run; tools that act for the owner
+              // (changing a bot's settings) refuse anyone else.
+              botContext: context.state.principal?.actor?.bot,
               clientIp: context.state.principal?.audit?.clientIp,
               currentTodos: context.currentTodos,
               deviceCapable: context.state.plan?.execution
@@ -291,6 +309,7 @@ export class ServerToolTransport implements ToolTransport {
               memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
               messageId: context.state.origin?.sourceMessageId,
               operationId,
+              projectId: context.state.origin?.projectId,
               projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
               scope: context.state.origin?.scope,
@@ -430,6 +449,9 @@ export class ServerToolTransport implements ToolTransport {
         mocked: toolCallMocked || execution.mocked,
         result: executionResult,
         resultBlocked: controlled.blocked,
+        // A tool that created its own row (a background sub-agent's placeholder)
+        // gets its result written there instead of into a second tool message.
+        toolMessageId: execution.toolMessageId ?? executionResult.toolMessageId,
       };
     } catch (error) {
       executeToolSpan.recordException(error as Error);

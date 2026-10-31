@@ -4,9 +4,6 @@ import { isDesktop } from '@lobechat/const';
 import { toast } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 
@@ -15,23 +12,23 @@ import { getDocumentRenderMode } from '@/utils/documentRenderMode';
  * document has loaded, and for a file-backed document: its data lives behind
  * `fileId` with an empty markdown `content`, so the export would download an
  * empty file (the standalone page menu hides export on the same condition).
+ * An HTML page's content is not Markdown, so it has no Markdown export either.
  */
 export const useMarkdownExport = (documentId: string | undefined) => {
   const { t } = useTranslation('file');
 
-  // The editor canvas keeps the live buffer in the document store; the SWR
-  // meta reflects the last persisted markdown. Prefer the store (fresher) —
-  // including an intentionally emptied buffer — and fall back to the SWR copy
-  // only while the editor has not produced a buffer for this document.
+  // The editor canvas keeps the live buffer in the document store; the detail
+  // replica reflects the last persisted markdown. Prefer the store (fresher) —
+  // including an intentionally emptied buffer — and fall back to the replica
+  // copy only while the editor has not produced a buffer for this document.
   const storeContent = useDocumentStore((s) =>
     documentId ? s.documents[documentId]?.content : undefined,
   );
-  const { data: documentMeta } = useClientDataSWR(
-    documentId ? portalKeys.documentHeader(documentId) : null,
-    () => documentService.getDocumentById(documentId!),
-  );
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const { data: documentMeta } = useFetchDocumentDetail(documentId);
 
-  if (!documentMeta || getDocumentRenderMode(documentMeta).mode === 'file') return;
+  const mode = documentMeta && getDocumentRenderMode(documentMeta).mode;
+  if (!documentMeta || mode === 'file' || mode === 'html') return;
 
   return async () => {
     const content = storeContent ?? documentMeta.content ?? '';

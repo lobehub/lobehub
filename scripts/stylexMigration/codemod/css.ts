@@ -225,6 +225,28 @@ export const expandShorthand = (prop: string, value: string): [string, string][]
     if (color.length === 1) result.push([`${prop}Color`, color[0]]);
     return result;
   }
+  // StyleX compiles `background` and `animation` to no class at all, without an error.
+  if (prop === 'background') {
+    if (value.trim() === 'none')
+      return [
+        ['backgroundColor', 'transparent'],
+        ['backgroundImage', 'none'],
+      ];
+    if (/^(?:inherit|initial|unset|revert|revert-layer)$/.test(value.trim()))
+      return [
+        ['backgroundColor', value],
+        ['backgroundImage', value],
+      ];
+    const isImage = /^(?:url|image-set|(?:repeating-)?(?:linear|radial|conic)-gradient)\(/;
+    // The shorthand also resets the image a component may have set.
+    if (parts.length === 1 && !isImage.test(parts[0]))
+      return [
+        ['backgroundColor', value],
+        ['backgroundImage', 'none'],
+      ];
+    throw new UnsupportedCssError(`background: ${value}`);
+  }
+  if (prop === 'animation') throw new UnsupportedCssError(`animation: ${value}`);
   return [[prop, value]];
 };
 
@@ -277,10 +299,10 @@ export const convertCss = (template: CssTemplate, names: TokenNames): ConvertedS
     declared.push({ context: `${pseudoElement}|${conditions.join('|')}`, prop });
     const props = roots.get(pseudoElement) ?? new Map<string, ValueNode>();
     roots.set(pseudoElement, props);
-    let node = props.get(prop) ?? { children: new Map() };
+    let node: ValueNode = props.get(prop) ?? { children: new Map() };
     props.set(prop, node);
     for (const condition of conditions) {
-      const child = node.children.get(condition) ?? { children: new Map() };
+      const child: ValueNode = node.children.get(condition) ?? { children: new Map() };
       node.children.set(condition, child);
       node = child;
     }

@@ -29,6 +29,11 @@ export interface GoalListValue {
 export interface GoalListParams {
   agentId?: string;
   filter: GoalListFilter;
+  /**
+   * Cache scope (`userId:workspaceId`) of the cross-agent list, which names
+   * neither an agent nor a project — so a workspace you left cannot answer here.
+   */
+  globalScope?: string;
   projectId?: string;
 }
 
@@ -38,21 +43,35 @@ export interface HomeGoalListParams {
   scope: string;
 }
 
+const GLOBAL_SCOPE_PREFIX = 'global:';
+const PROJECT_SCOPE_PREFIX = 'project:';
+
+/** Scope id of the cross-agent goals page for one cache scope. */
+export const globalGoalListScopeId = (globalScope: string): string =>
+  `${GLOBAL_SCOPE_PREFIX}${globalScope}`;
+
 /**
- * Scope id of a goals page: an agent's page, or a project's. Also the entry key
- * of that scope's `all` list — the key `goalListByAgentId` has always used.
+ * Scope id of a goals page: an agent's page, a project's, or the cross-agent
+ * page. Also the entry key of that scope's `all` list — the key
+ * `goalListByAgentId` has always used.
  */
 export const goalListScopeId = ({
   agentId,
+  globalScope,
   projectId,
-}: Pick<GoalListParams, 'agentId' | 'projectId'>): string =>
-  projectId ? `project:${projectId}` : agentId!;
+}: Pick<GoalListParams, 'agentId' | 'globalScope' | 'projectId'>): string =>
+  projectId
+    ? `${PROJECT_SCOPE_PREFIX}${projectId}`
+    : (agentId ?? globalGoalListScopeId(globalScope!));
 
 /** Rebuild the list params of one scope id (the inverse of `goalListScopeId`). */
-export const goalListScopeParams = (scopeId: string, filter: GoalListFilter): GoalListParams =>
-  scopeId.startsWith('project:')
-    ? { filter, projectId: scopeId.slice('project:'.length) }
-    : { agentId: scopeId, filter };
+export const goalListScopeParams = (scopeId: string, filter: GoalListFilter): GoalListParams => {
+  if (scopeId.startsWith(PROJECT_SCOPE_PREFIX))
+    return { filter, projectId: scopeId.slice(PROJECT_SCOPE_PREFIX.length) };
+  if (scopeId.startsWith(GLOBAL_SCOPE_PREFIX))
+    return { filter, globalScope: scopeId.slice(GLOBAL_SCOPE_PREFIX.length) };
+  return { agentId: scopeId, filter };
+};
 
 /**
  * Entry key of one tab's list. `all` keys the scope itself; a narrow tab keys a
@@ -106,6 +125,18 @@ export const goalGraphResource = defineReplica<string, GoalGraphSnapshot>({
 export const goalMetricSeriesResource = defineReplica<string, MetricSeriesWithPoints[]>({
   key: (goalId) => goalId,
   name: 'goalMetricSeries',
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * Goals created from one conversation, keyed by topic id. Bounded: every topic
+ * the user ever opened would otherwise keep its own persisted row.
+ */
+export const topicGoalListResource = defineReplica<string, GoalListValue, GoalListResponse>({
+  key: (topicId) => topicId,
+  name: 'topicGoalList',
+  persist: { maxEntries: 50 },
   storage: 'indexedDB',
   version: 1,
 });

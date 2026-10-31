@@ -1,6 +1,7 @@
 {
   "agent_cron_job_completed": "وظیفه زمان‌بندی شده شما \"{{jobName}}\" با موفقیت انجام شد.",
   "agent_cron_job_completed_title": "وظیفه زمان‌بندی شده انجام شد",
+  "agent_cron_job_completed_with_summary": "وظیفه زمان‌بندی‌شده شما \"{{jobName}}\" با موفقیت به پایان رسید.\n\n{{summary}}",
   "agent_cron_job_failed": "وظیفه زمان‌بندی‌شده شما «{{jobName}}» با خطا مواجه شد. برای مشاهده جزئیات کامل خطا، وظیفه را باز کنید.",
   "agent_cron_job_failed_insufficient_budget": "وظیفه زمان‌بندی‌شده شما «{{jobName}}» اجرا نشد زیرا اعتبار حساب شما کافی نیست. برای ادامه اجرای وظایف، حساب خود را شارژ یا پلن خود را ارتقا دهید.",
   "agent_cron_job_failed_insufficient_budget_title": "توقف وظیفه زمان‌بندی‌شده: اعتبار ناکافی",

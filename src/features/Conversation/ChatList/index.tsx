@@ -3,7 +3,7 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
@@ -11,11 +11,12 @@ import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
 import { getMessageListCacheIdentity, isMessageListServerVerified } from '@/services/message/cache';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
-import { operationSelectors } from '@/store/chat/selectors';
+import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
 import {
   hasPendingInterventions,
   INTERVENTION_REFRESH_INTERVAL,
 } from '@/store/chat/utils/interventionSync';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
 import { authSelectors, labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
 
@@ -32,13 +33,21 @@ import {
   useConversationStoreApi,
 } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
+import PreviewTail from './components/PreviewTail';
+import { resolveTopicPreview } from './components/PreviewTail/resolveTopicPreview';
+import { usePreviewHandoff } from './components/PreviewTail/usePreviewHandoff';
 import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
+import { useDeepLinkBranchActivation } from './hooks/useDeepLinkBranchActivation';
+import { useDeepLinkHistoryBackfill } from './hooks/useDeepLinkHistoryBackfill';
+import { useForwardPagingFallback } from './hooks/useForwardPagingFallback';
 import { useInitialRevalidation } from './hooks/useInitialRevalidation';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
+import { type InitialScrollPosition } from './hooks/useTopicScrollPersist';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 import { buildChatRows } from './utils/chatRows';
+import { hoistCompressedGroups } from './utils/compressedGroupOrder';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
 import { resolveRefreshingRowId } from './utils/refreshingRow';
@@ -93,11 +102,34 @@ export interface ChatListProps {
    */
   hideBackgroundRunHint?: boolean;
   /**
+   * Where the conversation opens: the saved position or the end (`bottom`,
+   * default), or always the first message (`top`, e.g. in share page).
+   */
+  initialScrollPosition?: InitialScrollPosition;
+  /**
    * Custom item renderer. If not provided, uses default ChatItem.
    */
   itemContent?: (index: number, id: string) => ReactNode;
   /** Message hash target to locate after the virtual list has rendered. */
   messageDeepLink?: MessageDeepLink;
+  /**
+   * The conversation reads forward (`messageReadMode: 'forward'`) but the
+   * server cannot page forward. The owner of the context should switch it back
+   * to the newest-first read.
+   */
+  onForwardPagingUnsupported?: () => void;
+  /**
+   * Print the loaded transcript, without the app chrome, when the page prints.
+   * Opt in on the page's main conversation only: a side panel (thread portal,
+   * copilot, floating chat) must not replace what its host page prints.
+   */
+  printable?: boolean;
+  /**
+   * Reopen the conversation where the reader stopped last time (e.g. a shared
+   * topic), paging in history until that message is loaded. Ignored while a
+   * message deep link is present.
+   */
+  rememberReadingPosition?: boolean;
   /**
    * Force showing welcome component even when messages exist
    */
@@ -120,13 +152,18 @@ const ChatList = memo<ChatListProps>(
     footerSlot,
     headerSlot,
     hideBackgroundRunHint,
+    initialScrollPosition,
     welcome,
     itemContent,
     messageDeepLink,
+    onForwardPagingUnsupported,
+    printable,
+    rememberReadingPosition,
     showWelcome,
   }) => {
     // The chat store owns the transcript; this view keeps its sync mounted.
     const context = useConversationStore((s) => s.context);
+    const paging = context.messageReadMode === 'forward' ? 'forward' : 'backward';
     const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
     const skipFetch = useConversationStore(dataSelectors.skipFetch);
     const useFetchMessages = useChatStore((s) => s.useFetchMessages);
@@ -150,9 +187,15 @@ const ChatList = memo<ChatListProps>(
       skipFetch: skipFetch || isCreatingTopic,
       syncInterventions: true,
     });
+    const laterMessagesError = useConversationStore((s) => s.laterMessagesError);
+    const isFallingBack = useForwardPagingFallback({
+      errors: [messagesSWR.error, laterMessagesError],
+      onUnsupported: onForwardPagingUnsupported,
+      paging,
+    });
     const messageListIdentity = getMessageListCacheIdentity(context);
     const refreshError = useMessageRefreshError({
-      error: messagesSWR.error,
+      error: isFallingBack ? undefined : messagesSWR.error,
       identity: messageListIdentity,
       isValidating: messagesSWR.isValidating,
       mutate: messagesSWR.mutate,
@@ -164,9 +207,16 @@ const ChatList = memo<ChatListProps>(
       isValidating: messagesSWR.isValidating,
     });
     const allDisplayMessages = useConversationStore(dataSelectors.displayMessages);
+    // A compression group summarises the history before the turn that triggered
+    // it, so it belongs above that turn's question rather than between the
+    // question and its answer.
+    const orderedMessages = useMemo(
+      () => hoistCompressedGroups(allDisplayMessages),
+      [allDisplayMessages],
+    );
     const displayMessages = useMemo(
-      () => (filterItem ? allDisplayMessages.filter(filterItem) : allDisplayMessages),
-      [allDisplayMessages, filterItem],
+      () => (filterItem ? orderedMessages.filter(filterItem) : orderedMessages),
+      [orderedMessages, filterItem],
     );
     const displayMessageIds = useMemo(() => displayMessages.map((m) => m.id), [displayMessages]);
     // Steered follow-up turns fold into the turn they interrupted. Custom item
@@ -258,6 +308,22 @@ const ChatList = memo<ChatListProps>(
       [rowIds.length, rowById, defaultWorkflowExpandLevel, receiptsByAnchor],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
+    const dbMessages = useConversationStore(dataSelectors.dbMessages);
+    const loadEarlierMessages = useConversationStore((s) => s.loadEarlierMessages);
+    const switchMessageBranch = useConversationStore((s) => s.switchMessageBranch);
+    const deepLinkTargetLoaded = useDeepLinkBranchActivation({
+      deepLink: messageDeepLink,
+      messages: dbMessages,
+      resolved: !!resolvedMessageDeepLink,
+      switchMessageBranch,
+    });
+    useDeepLinkHistoryBackfill({
+      deepLinkKey: messageDeepLink?.navigationKey,
+      loadedCount: dbMessages.length,
+      loadPage: loadEarlierMessages,
+      ready: messagesInit && paging === 'backward',
+      resolved: !!resolvedMessageDeepLink || deepLinkTargetLoaded,
+    });
 
     // When topicId is null (new conversation), show welcome directly without waiting for fetch
     // because there's no server data to fetch - only local optimistic updates exist
@@ -268,6 +334,32 @@ const ChatList = memo<ChatListProps>(
       isNewConversation,
       isStreaming,
       messagesInit,
+    });
+
+    const activeTopic = useChatStore((s) =>
+      context.topicId ? topicSelectors.getTopicById(context.topicId)(s) : undefined,
+    );
+    const topicPreview = useMemo(
+      () =>
+        feedback.showSkeleton
+          ? resolveTopicPreview({
+              contextKey: messageMapKey(context),
+              running:
+                isStreaming ||
+                activeTopic?.status === 'running' ||
+                activeTopic?.status === 'waitingForHuman',
+              topicId: context.topicId,
+              topicUpdatedAt: activeTopic?.updatedAt,
+            })
+          : undefined,
+      [activeTopic, context, feedback.showSkeleton, isStreaming],
+    );
+    const listRef = useRef<HTMLDivElement>(null);
+    const handoffPreview = usePreviewHandoff({
+      contextKey: messageMapKey(context),
+      listMounted: !topicPreview && !feedback.showSkeleton && !feedback.showFirstLoadError,
+      listRef,
+      preview: topicPreview,
     });
 
     // The hint renders inside the latest assistant row, which subscribes to the
@@ -295,6 +387,12 @@ const ChatList = memo<ChatListProps>(
           variant={'page'}
           onRetry={refreshError.retry}
         />
+      );
+    }
+
+    if (topicPreview) {
+      return (
+        <PreviewTail headerSlot={headerSlot} overlayHeight={overlayHeight} preview={topicPreview} />
       );
     }
 
@@ -331,15 +429,19 @@ const ChatList = memo<ChatListProps>(
               dataSource={rowIds}
               footerSlot={footerSlot}
               headerSlot={headerSlot}
+              initialScrollPosition={initialScrollPosition}
               itemContent={itemContent ?? defaultItemContent}
               messageDeepLink={resolvedMessageDeepLink}
+              paging={paging}
+              printable={printable}
+              rememberReadingPosition={rememberReadingPosition}
             />
           </BackgroundRunHintContext>
         </MessageActionProvider>
       );
 
     return (
-      <Flexbox style={{ height: '100%', minHeight: 0 }}>
+      <Flexbox style={{ height: '100%', minHeight: 0, position: 'relative' }}>
         {messageAuthorAgentIds.map((agentId) => (
           <MessageAuthorConfigLoader
             agentId={agentId}
@@ -347,9 +449,22 @@ const ChatList = memo<ChatListProps>(
             key={agentId}
           />
         ))}
-        <Flexbox flex={1} style={{ minHeight: 0 }}>
+        <Flexbox
+          flex={1}
+          ref={listRef}
+          style={{ minHeight: 0, visibility: handoffPreview ? 'hidden' : undefined }}
+        >
           {content}
         </Flexbox>
+        {handoffPreview && (
+          <div style={{ inset: 0, position: 'absolute' }}>
+            <PreviewTail
+              headerSlot={headerSlot}
+              overlayHeight={overlayHeight}
+              preview={handoffPreview}
+            />
+          </div>
+        )}
         {feedback.showBackgroundError && (
           <RefreshError
             error={refreshError.error}

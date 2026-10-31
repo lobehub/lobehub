@@ -3,6 +3,7 @@ import agentGroup from './agentGroup';
 import auth from './auth';
 import authError from './authError';
 import changelog from './changelog';
+import channel from './channel';
 import chat from './chat';
 import color from './color';
 import common from './common';
@@ -16,6 +17,7 @@ import electron from './electron';
 import error from './error';
 import eval_ from './eval';
 import file from './file';
+import fileShare from './fileShare';
 import home from './home';
 import hotkey from './hotkey';
 import image from './image';
@@ -61,6 +63,7 @@ const resources = {
   authError,
   changelog,
   chat,
+  channel,
   color,
   common,
   components,
@@ -73,6 +76,7 @@ const resources = {
   error,
   'eval': eval_,
   file,
+  fileShare,
   home,
   hotkey,
   image,

@@ -36,10 +36,10 @@ const styles = stylex.create({
 
 export const SetTaskScheduleInspector = memo<
   BuiltinInspectorProps<SetTaskScheduleParams, SetTaskScheduleState>
->(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const identifier = args?.identifier || partialArgs?.identifier;
+  const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
   const automationMode = args?.automationMode ?? partialArgs?.automationMode;
   const modeLabel = automationMode === null ? 'off' : automationMode;
 

@@ -8,7 +8,6 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { BriefModel } from '@/database/models/brief';
 import { readAgentSignalMarker } from '@/server/services/agentSignal/operationMarker';
 import { createServerSelfReviewBriefWriter } from '@/server/services/agentSignal/services/selfIteration/review/brief';
-import { resolveSelfReviewBriefTextTranslator } from '@/server/services/agentSignal/services/selfIteration/review/briefTextTranslator';
 import { createReviewRuntimePrimitives } from '@/server/services/agentSignal/services/selfIteration/review/server';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 
@@ -44,7 +43,6 @@ export const agentSignalReviewRuntime: ServerRuntimeRegistration = {
     const service = createReviewRuntimePrimitives({
       agentId,
       briefModel: new BriefModel(serverDB, userId, workspaceId),
-      briefTextTranslator: await resolveSelfReviewBriefTextTranslator(serverDB, userId),
       db: serverDB,
       localDate,
       proposalBriefWriter: createServerSelfReviewBriefWriter(serverDB, userId, workspaceId),

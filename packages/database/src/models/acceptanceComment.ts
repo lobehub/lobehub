@@ -1,7 +1,11 @@
 import type {
+  AcceptanceAccessRequest,
+  AcceptanceAccessRequestStatus,
   AcceptanceCommentAttachmentRef,
   AcceptanceCommentKind,
+  AcceptanceCommentMetadata,
   AcceptanceCommentSource,
+  AcceptanceCommentTime,
   AcceptanceReviewAnnotation,
   DocumentCommentJson,
 } from '@lobechat/types';
@@ -32,6 +36,7 @@ export interface CreateAcceptanceCommentParams {
     checkItemId: string;
     evidenceId: string;
     rect: AcceptanceReviewAnnotation['rect'];
+    time?: AcceptanceCommentTime;
   };
   /** Files to hang on the remark, kept apart from the body. */
   attachments?: AcceptanceCommentAttachmentRef[];
@@ -45,7 +50,7 @@ export interface CreateAcceptanceCommentParams {
   editorData?: DocumentCommentJson;
   kind?: AcceptanceCommentKind;
   /** Open, server-written per-remark facts. */
-  metadata?: Record<string, unknown>;
+  metadata?: AcceptanceCommentMetadata;
   parentCommentId?: string;
   /**
    * Ceiling for this author on this acceptance, enforced inside the write's own
@@ -83,13 +88,39 @@ export class AcceptanceCommentModel {
     params: CreateAcceptanceCommentParams,
   ): Promise<CreateAcceptanceCommentResult> => {
     return this.db.transaction(async (tx) => {
-      if (params.rateLimit)
+      const isAccessRequest = params.kind === 'access_request';
+      if (params.rateLimit || isAccessRequest)
         // One author on one acceptance is the contended pair, and the lock is
         // released when this transaction ends either way. Everybody else writes
         // in parallel exactly as before.
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtext(${params.acceptanceId}), hashtext(${params.authorUserId}))`,
         );
+
+      // One standing access request per person. Checked under the lock above,
+      // in the same transaction as the insert: checked before it, two tabs
+      // asking at once would each see none and both write a pending request —
+      // and a grant on the older one would not count, since only the newest
+      // request is ever read back as the grant.
+      if (isAccessRequest) {
+        const [standing] = await tx
+          .select()
+          .from(acceptanceComments)
+          .where(
+            and(
+              eq(acceptanceComments.acceptanceId, params.acceptanceId),
+              eq(acceptanceComments.authorUserId, params.authorUserId),
+              eq(acceptanceComments.kind, 'access_request'),
+              isNull(acceptanceComments.parentCommentId),
+              isNull(acceptanceComments.deletedAt),
+            ),
+          )
+          .orderBy(desc(acceptanceComments.createdAt), desc(acceptanceComments.id))
+          .limit(1);
+        const status = standing?.metadata?.accessRequest?.status;
+        if (standing && (status === 'pending' || status === 'granted'))
+          return { comment: standing, isDuplicate: true };
+      }
 
       let parentCommentId: string | undefined;
       if (params.parentCommentId) {
@@ -132,7 +163,9 @@ export class AcceptanceCommentModel {
           evidenceId: anchor?.evidenceId ?? null,
           kind: isReply ? 'comment' : (params.kind ?? 'comment'),
           parentCommentId: parentCommentId ?? null,
-          metadata: params.metadata ?? null,
+          metadata: anchor?.time
+            ? { ...params.metadata, evidenceAnchor: { time: anchor.time } }
+            : (params.metadata ?? null),
           // A page belongs to the thread it opened, never to a reply or reaction.
           source: parentCommentId ? null : (params.source ?? null),
           workspaceId: params.workspaceId ?? null,
@@ -377,6 +410,69 @@ export class AcceptanceCommentModel {
       )
       .returning({ id: acceptanceComments.id });
     return deleted.length > 0;
+  };
+
+  /**
+   * One person's standing access request on one acceptance: their newest
+   * surviving `access_request` row, whatever its answer. Withdrawing the request
+   * (deleting the row) is how a requester gives a grant back, and a moderator
+   * taking it down takes the grant with it.
+   */
+  findLatestAccessRequest = async (acceptanceId: string, authorUserId: string) => {
+    const [row] = await this.db
+      .select()
+      .from(acceptanceComments)
+      .where(
+        and(
+          eq(acceptanceComments.acceptanceId, acceptanceId),
+          eq(acceptanceComments.authorUserId, authorUserId),
+          eq(acceptanceComments.kind, 'access_request'),
+          isNull(acceptanceComments.parentCommentId),
+          isNull(acceptanceComments.deletedAt),
+        ),
+      )
+      .orderBy(desc(acceptanceComments.createdAt), desc(acceptanceComments.id))
+      .limit(1);
+    return row;
+  };
+
+  /** Whether a decider has granted this person `permission` on this acceptance. */
+  hasAccessGrant = async (
+    acceptanceId: string,
+    userId: string,
+    permission: AcceptanceAccessRequest['permission'],
+  ) => {
+    const request = (await this.findLatestAccessRequest(acceptanceId, userId))?.metadata
+      ?.accessRequest;
+    return request?.status === 'granted' && request.permission === permission;
+  };
+
+  /**
+   * Move an access request from `from` to `next`. Conditional on the status the
+   * caller read, so two deciders answering at once cannot both win — the second
+   * update matches nothing and returns undefined.
+   */
+  answerAccessRequest = async (
+    id: string,
+    from: AcceptanceAccessRequestStatus,
+    next: AcceptanceAccessRequest,
+  ) => {
+    const [row] = await this.db
+      .update(acceptanceComments)
+      .set({
+        metadata: sql`jsonb_set(coalesce(${acceptanceComments.metadata}, '{}'::jsonb), '{accessRequest}', ${JSON.stringify(next)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(acceptanceComments.id, id),
+          eq(acceptanceComments.kind, 'access_request'),
+          isNull(acceptanceComments.deletedAt),
+          sql`${acceptanceComments.metadata} -> 'accessRequest' ->> 'status' = ${from}`,
+        ),
+      )
+      .returning();
+    return row;
   };
 
   /** Mark a thread root handled (or reopen it). Replies are not resolvable. */

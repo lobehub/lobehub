@@ -8,6 +8,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import { agents, embeddings, files, messages, sessions, topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
+import { MessageScope } from '../../message/scope';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -233,11 +234,12 @@ describe('MessageModel Statistics Tests', () => {
 
   describe('genId', () => {
     it('should generate unique message IDs', () => {
-      const model = new MessageModel(serverDB, userId);
-      // @ts-ignore - accessing private method for testing
-      const id1 = model.genId();
-      // @ts-ignore - accessing private method for testing
-      const id2 = model.genId();
+      // genId lives on the shared scope every MessageModel sub-domain extends
+      const scope = new MessageScope(serverDB, userId);
+      // @ts-ignore - accessing protected method for testing
+      const id1 = scope.genId();
+      // @ts-ignore - accessing protected method for testing
+      const id2 = scope.genId();
 
       expect(id1).toHaveLength(22);
       expect(id2).toHaveLength(22);

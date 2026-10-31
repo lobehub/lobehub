@@ -92,8 +92,61 @@ describe('selfFeedbackIntentRuntime', () => {
         sourceId: 'self-feedback-intent:user-1:agent-1:operation:operation-1:tool-call-1',
         sourceType: 'agent.self_feedback_intent.declared',
       }),
-      { agentId: 'agent-1', userId: 'user-1' },
+      { agentId: 'agent-1', userId: 'user-1', workspaceId: undefined },
     );
+  });
+
+  /**
+   * @example
+   * A workspace-scoped run forwards its workspaceId to the enqueue boundary, so
+   * `assertAgentUsableBy` resolves the agent inside the team workspace instead of
+   * failing the personal-mode lookup with "Agent not found" (T-888).
+   */
+  it('forwards the run workspaceId to the enqueue boundary', async () => {
+    const runtime = selfFeedbackIntentRuntime.factory({
+      toolManifestMap: {},
+      workspaceId: 'workspace-1',
+    });
+
+    const result = await runtime.declareSelfFeedbackIntent(createInput(), {
+      agentId: 'agent-1',
+      toolCallId: 'tool-call-ws',
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(result.success).toBe(true);
+    expect(enqueueAgentSignalSourceEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ agentId: 'agent-1', userId: 'user-1' }),
+        sourceType: 'agent.self_feedback_intent.declared',
+      }),
+      { agentId: 'agent-1', userId: 'user-1', workspaceId: 'workspace-1' },
+    );
+  });
+
+  /**
+   * @example
+   * A personal run (no workspaceId) keeps enqueueing without a workspace scope.
+   */
+  it('omits the workspace scope for personal runs', async () => {
+    const runtime = selfFeedbackIntentRuntime.factory({ toolManifestMap: {} });
+
+    const result = await runtime.declareSelfFeedbackIntent(createInput(), {
+      agentId: 'agent-1',
+      toolCallId: 'tool-call-personal',
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(result.success).toBe(true);
+    expect(enqueueAgentSignalSourceEvent).toHaveBeenCalledWith(expect.anything(), {
+      agentId: 'agent-1',
+      userId: 'user-1',
+      workspaceId: undefined,
+    });
   });
 
   /**

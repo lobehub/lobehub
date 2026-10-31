@@ -102,7 +102,7 @@ const isDescendantOrSelf = (
  * newest row by `createdAt`, but after a regenerate the newest row lives on the
  * regenerated branch; when the reply switcher points at an earlier reply, every
  * new turn landed on a hidden branch, vanished from the UI, and never reached
- * the model, which rebuilds context from the selected branch (LOBE-14875).
+ * the model, which rebuilds context from the selected branch.
  *
  * - The client's rendered tail wins: "reply to what I see" is the user's intent,
  *   and the branch selection it switched to may not be persisted yet, or another

@@ -1,7 +1,10 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { dispatchInterventionState } from '@/store/chat/slices/agentRun/actions/entries/interventionProjection';
+import { messagesReducer } from '@/store/chat/slices/message/reducer';
 import { type Operation } from '@/store/chat/slices/operation/types';
+import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { collectGlobalApprovals } from './useGlobalPendingApprovals';
@@ -177,4 +180,51 @@ describe('collectGlobalApprovals', () => {
     expect(groups[0].interventions[0].identifier).toBe('claude-code');
     expect(groups[0].interventions[0].toolMessageId).toBe('msg_cc_tool');
   });
+  it.each(['aborted', 'approved', 'rejected'] as const)(
+    'removes a %s question from every tab while keeping another operation pending',
+    (status) => {
+      const source = { agentId: 'agent-source', topicId: 'topic-source' };
+      const unrelated = { agentId: 'agent-other', topicId: 'topic-other' };
+      const sourceKey = messageMapKey(source);
+      const otherKey = messageMapKey(unrelated);
+      const tool = pendingToolMessage('question-source', 'same-call-id');
+      const other = pendingToolMessage('question-other', 'same-call-id');
+      const state = {
+        dbMessagesMap: { [sourceKey]: [tool], [otherKey]: [other] },
+        operations: { source: op(source), other: op(unrelated) },
+      } as unknown as ChatStore;
+      state.internal_dispatchMessage = (action, options) => {
+        const bucket = messageMapKey(options!.context!);
+        state.dbMessagesMap[bucket] = messagesReducer(state.dbMessagesMap[bucket], action);
+      };
+      const tabViews = ['tab-a', 'tab-b', 'tab-hidden'].map(
+        (topicId) => () =>
+          collectGlobalApprovals(
+            state.dbMessagesMap,
+            state.operations,
+            messageMapKey({ agentId: 'viewer', topicId }),
+          ),
+      );
+      for (const read of tabViews)
+        expect(
+          read()
+            .flatMap((g) => g.interventions)
+            .map((i) => i.toolMessageId),
+        ).toContain(tool.id);
+      // The interpreter applies this production projection before awaiting persistence.
+      dispatchInterventionState(
+        () => state,
+        tool.id,
+        { status, resolving: false },
+        { context: source },
+      );
+      for (const read of tabViews) {
+        expect(
+          read()
+            .flatMap((g) => g.interventions)
+            .map((i) => i.toolMessageId),
+        ).toEqual([other.id]);
+      }
+    },
+  );
 });

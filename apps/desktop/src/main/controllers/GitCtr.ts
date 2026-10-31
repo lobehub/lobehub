@@ -136,7 +136,10 @@ export default class GitController extends ControllerModule {
   @IpcMethod()
   async getGitWorkingTreeFiles(dirPath: string): Promise<GitWorkingTreeFiles> {
     const { getGitWorkingTreeFiles: computeGitWorkingTreeFiles } = await loadGit();
-    return computeGitWorkingTreeFiles(dirPath);
+    // The renderer persists this overlay. A failed or timed-out `git status`
+    // must reject so the cached markers survive, rather than be reported as a
+    // confirmed clean working tree.
+    return computeGitWorkingTreeFiles(dirPath, { throwOnError: true });
   }
 
   @IpcMethod()

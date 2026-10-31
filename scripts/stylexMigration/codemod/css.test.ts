@@ -295,9 +295,48 @@ describe('expandShorthand', () => {
         ['borderBottomLeftRadius', '8px'],
       ],
     ],
-    ['background', 'rgb(0 0 0 / 50%)', [['background', 'rgb(0 0 0 / 50%)']]],
+    [
+      'background',
+      'rgb(0 0 0 / 50%)',
+      [
+        ['backgroundColor', 'rgb(0 0 0 / 50%)'],
+        ['backgroundImage', 'none'],
+      ],
+    ],
+    [
+      'background',
+      '__lobeX0__',
+      [
+        ['backgroundColor', '__lobeX0__'],
+        ['backgroundImage', 'none'],
+      ],
+    ],
+    [
+      'background',
+      'inherit',
+      [
+        ['backgroundColor', 'inherit'],
+        ['backgroundImage', 'inherit'],
+      ],
+    ],
+    [
+      'background',
+      'none',
+      [
+        ['backgroundColor', 'transparent'],
+        ['backgroundImage', 'none'],
+      ],
+    ],
   ])('%s: %s', (prop, value, expected) => {
     expect(expandShorthand(prop, value)).toEqual(expected);
+  });
+
+  it.each([
+    ['background', 'linear-gradient(red, blue)'],
+    ['background', 'url(a.png) no-repeat'],
+    ['animation', 'spin 1s linear infinite'],
+  ])('rejects %s: %s, which StyleX would compile to nothing', (prop, value) => {
+    expect(() => expandShorthand(prop, value)).toThrow(UnsupportedCssError);
   });
 });
 

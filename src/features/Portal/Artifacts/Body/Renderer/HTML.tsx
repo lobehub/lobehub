@@ -17,4 +17,5 @@ const HTMLRenderer = memo<HTMLRendererProps>(
   },
 );
 
+/**  Superseded by Canvas (`lobe-canvas`); kept so existing conversations keep rendering. */
 export default HTMLRenderer;

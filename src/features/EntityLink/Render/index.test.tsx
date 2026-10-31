@@ -82,16 +82,18 @@ vi.mock('@/libs/swr', () => ({
     if (key === null) return { data: undefined, mutate: vi.fn() };
     if (Array.isArray(key) && key[0] === 'internal-entity-preview')
       return { data: mockEntityPreview, mutate: vi.fn() };
-    return {
-      data: [{ documentId: 'docs_doc1', id: 'agent-document-1' }],
-      mutate: vi.fn(),
-    };
+    return { data: undefined, mutate: vi.fn() };
   },
 }));
 
-vi.mock('@/services/agentDocument', () => ({
-  agentDocumentService: { listDocuments: vi.fn() },
-  agentDocumentSWRKeys: { documentsList: (agentId: string) => ['agent-documents', agentId] },
+// The active agent's document-list replica, already loaded.
+vi.mock('@/store/agentDocument', () => ({
+  agentDocumentActions: { fetchDocumentList: vi.fn(), useFetchDocumentList: vi.fn() },
+  agentDocumentSelectors: {
+    getDocumentList: (agentId?: string) => () =>
+      agentId ? [{ documentId: 'docs_doc1', id: 'agent-document-1' }] : undefined,
+  },
+  useAgentDocumentStore: (selector: (state: unknown) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/agent', () => ({

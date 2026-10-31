@@ -10,7 +10,12 @@ import debug from 'debug';
 import { dashboardService } from '@/services/dashboard';
 import { useDashboardStore } from '@/store/dashboard';
 
-import type { AddWidgetToDashboardState, DashboardApiNameType } from '../../types';
+import type {
+  AddWidgetToDashboardState,
+  CreateDashboardState,
+  DashboardApiNameType,
+  UpdateDashboardState,
+} from '../../types';
 import { DashboardApiName, DashboardIdentifier } from '../../types';
 
 const log = debug('lobe-dashboard:executor');
@@ -35,6 +40,9 @@ class DashboardExecutor extends BaseExecutor<typeof DashboardApiName> {
   listDashboards = (params: unknown, ctx?: BuiltinToolContext) =>
     this.run(DashboardApiName.listDashboards, params, ctx);
 
+  createDashboard = (params: unknown, ctx?: BuiltinToolContext) =>
+    this.run(DashboardApiName.createDashboard, params, ctx);
+
   createWidgetDraft = (params: unknown, ctx?: BuiltinToolContext) =>
     this.run(DashboardApiName.createWidgetDraft, params, ctx);
 
@@ -50,6 +58,9 @@ class DashboardExecutor extends BaseExecutor<typeof DashboardApiName> {
   addWidgetToDashboard = (params: unknown, ctx?: BuiltinToolContext) =>
     this.run(DashboardApiName.addWidgetToDashboard, params, ctx);
 
+  updateDashboard = (params: unknown, ctx?: BuiltinToolContext) =>
+    this.run(DashboardApiName.updateDashboard, params, ctx);
+
   getWidgetRuns = (params: unknown, ctx?: BuiltinToolContext) =>
     this.run(DashboardApiName.getWidgetRuns, params, ctx);
 
@@ -60,10 +71,29 @@ class DashboardExecutor extends BaseExecutor<typeof DashboardApiName> {
    */
   onAfterCall = async ({ apiName, params, result }: ToolAfterCallContext) => {
     if (!result.success) return;
+    const store = useDashboardStore.getState();
+
+    if (
+      apiName === DashboardApiName.createDashboard ||
+      apiName === DashboardApiName.updateDashboard
+    ) {
+      const state = result.state as
+        Partial<CreateDashboardState | UpdateDashboardState> | undefined;
+      if (typeof state?.dashboardId !== 'string') return;
+      try {
+        // The new, renamed or re-described board shows in its detail page and its level's list.
+        await Promise.all([
+          store.refreshDashboardDetail(state.dashboardId),
+          store.refreshDashboards(state.projectId ? { projectId: state.projectId } : undefined),
+        ]);
+      } catch (error) {
+        log('refresh after %s failed: %o', apiName, error);
+      }
+      return;
+    }
+
     const widgetId = (params as { widgetId?: unknown } | undefined)?.widgetId;
     if (typeof widgetId !== 'string') return;
-
-    const store = useDashboardStore.getState();
     try {
       if (apiName === DashboardApiName.addWidgetToDashboard) {
         const state = result.state as Partial<AddWidgetToDashboardState> | undefined;

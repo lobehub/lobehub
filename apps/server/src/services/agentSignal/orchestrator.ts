@@ -25,10 +25,11 @@ import { createDefaultAgentSignalPolicies } from './policies';
 import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
+import type { AgentSignalScenarioId, WakeDecision } from './scenarios';
+import { AGENT_SIGNAL_SCENARIO_IDS, createScenarioPolicies } from './scenarios';
 import { persistAgentSignalReceipts, projectAgentSignalReceipts } from './services/receiptService';
 import { createSelfIterationCompletionHandler } from './services/selfIteration/completion';
 import { createServerSelfReviewBriefWriter } from './services/selfIteration/review/brief';
-import { resolveSelfReviewBriefTextTranslator } from './services/selfIteration/review/briefTextTranslator';
 import { claimNightlyReviewTopics } from './services/selfIteration/review/topicQuota';
 import { emitSourceEvent } from './sources';
 import { redisPolicyStateStore } from './store/adapters/redis/policyStateStore';
@@ -39,6 +40,8 @@ export { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 interface ExecuteAgentSignalSourceEventOptions extends AgentSignalEmitOptions {
   receiptStore?: AgentSignalReceiptStore;
   runtimeGuardBackend?: RuntimeGuardBackend;
+  /** Scenario whose policies run. Defaults to `self-iteration`. */
+  scenario?: AgentSignalScenarioId;
   store?: AgentSignalSourceEventStore;
 }
 
@@ -68,6 +71,8 @@ export interface RuntimeBackedAgentSignalEmissionOrchestration extends AgentSign
 export interface GeneratedAgentSignalEmissionResult {
   deduped: false;
   orchestration: AgentSignalEmissionOrchestration | RuntimeBackedAgentSignalEmissionOrchestration;
+  /** Present when a non-default scenario produced the result. */
+  scenario?: { id: AgentSignalScenarioId; wakeDecision?: WakeDecision };
   source: AgentSignalSource;
   trigger: GeneratedSourceEventResult['trigger'];
 }
@@ -113,8 +118,6 @@ const createPolicyOptions = (
           // Idea-only nightly reviews get their Daily Brief from the completion
           // path; proposal briefs are still written in-run by the review tool.
           ideasBrief: {
-            resolveTranslator: () =>
-              resolveSelfReviewBriefTextTranslator(context.db, context.userId),
             writer: createServerSelfReviewBriefWriter(
               context.db,
               context.userId,
@@ -206,11 +209,26 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
         ttlSeconds: 7 * 24 * 60 * 60,
       });
 
+    const scenarioId = options.scenario ?? AGENT_SIGNAL_SCENARIO_IDS.selfIteration;
+    let wakeDecision: WakeDecision | undefined;
+    const policies =
+      scenarioId === AGENT_SIGNAL_SCENARIO_IDS.selfIteration
+        ? createDefaultAgentSignalPolicies(
+            createPolicyOptions(context, options, procedurePolicyOptions),
+          )
+        : createScenarioPolicies(scenarioId, {
+            botWake: {
+              ...options.policyOptions?.botWake,
+              onDecision: (decision: WakeDecision) => {
+                wakeDecision = decision;
+                options.policyOptions?.botWake?.onDecision?.(decision);
+              },
+            },
+          });
+
     const runtime = await createAgentSignalRuntime({
       guardBackend: options.runtimeGuardBackend,
-      policies: createDefaultAgentSignalPolicies(
-        createPolicyOptions(context, options, procedurePolicyOptions),
-      ),
+      policies,
     });
     const runtimeResult = await runtime.emitNormalized(emission.source);
     const orchestration = buildRuntimeOrchestrationResult(emission.source, runtimeResult);
@@ -227,6 +245,9 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
     return {
       ...emission,
       orchestration,
+      ...(scenarioId === AGENT_SIGNAL_SCENARIO_IDS.selfIteration
+        ? {}
+        : { scenario: { id: scenarioId, ...(wakeDecision ? { wakeDecision } : {}) } }),
     };
   } catch (error) {
     if (!options.ignoreError) throw error;

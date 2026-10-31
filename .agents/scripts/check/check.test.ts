@@ -201,16 +201,16 @@ describe('countLines', () => {
 
 describe('checkFileSizes', () => {
   const current: Record<string, number> = {
-    'src/Big.ts': 801,
-    'src/Crossed.ts': 900,
-    'src/Grown.tsx': 1200,
-    'src/Shrunk.ts': 1000,
-    'src/Small.ts': 800,
+    'src/Big.ts': 1201,
+    'src/Crossed.ts': 1300,
+    'src/Grown.tsx': 1600,
+    'src/Shrunk.ts': 1400,
+    'src/Small.ts': 1200,
     'packages/locales/src/default/setting.ts': 5000,
-    'packages/locales/src/create.ts': 900,
+    'packages/locales/src/create.ts': 1300,
     'src/types.d.ts': 2000,
     'packages/sdk/src/generated/types.gen.ts': 12000,
-    'packages/sdk/src/generated/core/client.ts': 900,
+    'packages/sdk/src/generated/core/client.ts': 1300,
     'README.md': 5000,
   };
   const base: Record<string, number | null> = {
@@ -220,9 +220,9 @@ describe('checkFileSizes', () => {
     'src/types.d.ts': 1000,
     'packages/sdk/src/generated/types.gen.ts': null,
     'packages/sdk/src/generated/core/client.ts': null,
-    'src/Crossed.ts': 790,
-    'src/Grown.tsx': 1100,
-    'src/Shrunk.ts': 1100,
+    'src/Crossed.ts': 1190,
+    'src/Grown.tsx': 1500,
+    'src/Shrunk.ts': 1500,
   };
   const run = (files: string[]) =>
     checkFileSizes(
@@ -235,12 +235,12 @@ describe('checkFileSizes', () => {
     const findings = await run(Object.keys(current));
 
     expect(findings.errors).toEqual([
-      expect.stringContaining('src/Big.ts: new file has 801 lines'),
-      expect.stringContaining('src/Crossed.ts: grew from 790 to 900 lines'),
-      expect.stringContaining('packages/locales/src/create.ts: new file has 900 lines'),
+      expect.stringContaining('src/Big.ts: new file has 1201 lines'),
+      expect.stringContaining('src/Crossed.ts: grew from 1190 to 1300 lines'),
+      expect.stringContaining('packages/locales/src/create.ts: new file has 1300 lines'),
     ]);
     expect(findings.advisories).toEqual([
-      expect.stringContaining('src/Grown.tsx: already over 800 lines and grew from 1100 to 1200'),
+      expect.stringContaining('src/Grown.tsx: already over 1200 lines and grew from 1500 to 1600'),
     ]);
   });
 
@@ -248,7 +248,7 @@ describe('checkFileSizes', () => {
     await expect(
       checkFileSizes(
         ['src/Big.ts'],
-        async () => 801,
+        async () => 1201,
         async () => undefined,
       ),
     ).resolves.toEqual({ advisories: [], errors: [] });

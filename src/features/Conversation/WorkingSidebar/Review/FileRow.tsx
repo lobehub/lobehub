@@ -73,10 +73,15 @@ interface FileRowProps {
   mode: ReviewMode;
   onReverted: () => void;
   onToggle: () => void;
+  /** The diff text is still loading (row comes from the persisted summary). */
+  pending?: boolean;
   /** Absolute path of the owning repo — used as the working directory for
    * revert operations so submodule files revert inside the submodule, not
    * the parent repo. */
   repoAbsolutePath: string;
+  /** The row comes from the persisted summary, not the live read: revert stays
+   * disabled until the device confirms what the path holds now. */
+  stale?: boolean;
   textDiff: boolean;
   viewMode: 'unified' | 'split';
   wordWrap: boolean;
@@ -94,7 +99,9 @@ const FileRow = memo<FileRowProps>(
     mode,
     onReverted,
     onToggle,
+    pending,
     repoAbsolutePath,
+    stale,
     textDiff,
     viewMode,
     wordWrap,
@@ -130,6 +137,7 @@ const FileRow = memo<FileRowProps>(
             deletions={entry.deletions}
             filePath={entry.filePath}
             hideDir={hideDir}
+            revertDisabled={stale}
             status={entry.status}
             revertContext={
               mode === 'unstaged' ? { deviceId, workingDirectory: repoAbsolutePath } : undefined
@@ -156,6 +164,7 @@ const FileRow = memo<FileRowProps>(
                 filePath={entry.filePath}
                 isBinary={entry.isBinary}
                 patch={entry.patch}
+                pending={pending}
                 textDiff={textDiff}
                 truncated={entry.truncated}
                 viewMode={viewMode}

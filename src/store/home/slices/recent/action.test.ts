@@ -15,11 +15,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
+import { fileService } from '@/services/file';
 import { recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
 import { useHomeStore } from '@/store/home';
 import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
-import { recentListResource } from '@/store/home/slices/recent/projection';
+import { docsHomeListResource, recentListResource } from '@/store/home/slices/recent/projection';
 import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 
 const item = (id: string, title: string, type: RecentItem['type'] = 'task'): RecentItem => ({
@@ -92,6 +93,7 @@ const load = async (sidebar: RecentItem[], drawer?: RecentItem[]) => {
 beforeEach(() => {
   useScope(`recent-user-${randomUUID()}:personal`);
   act(() => useHomeStore.setState({ ...initialRecentState }));
+  vi.spyOn(fileService, 'getDocsHomeItems').mockImplementation(() => new Promise(() => {}));
 });
 
 afterEach(() => {
@@ -214,5 +216,134 @@ describe('recents replica', () => {
 
     secondRequest.resolve(taskUpdateResult);
     await secondRename;
+  });
+});
+
+type DocsHomeItem = Awaited<ReturnType<typeof fileService.getDocsHomeItems>>[number];
+
+const homeItem = (id: string, sourceType: 'document' | 'file' = 'document'): DocsHomeItem =>
+  ({
+    createdAt: new Date(0),
+    fileType: sourceType === 'document' ? 'custom/document' : 'image/png',
+    id,
+    knowledgeBaseIds: ['kb-1'],
+    metadata: { emoji: '📄', heavy: 'x'.repeat(10) },
+    name: id,
+    sourceType,
+    updatedAt: new Date(0),
+    uploader: { avatar: null, fullName: 'Ada', id: 'user-1', username: 'ada' },
+    userId: 'user-1',
+  }) as unknown as DocsHomeItem;
+
+const storedRow = <T>(
+  resource: { storage?: { get: (key: { queryKey: string; scope: string }) => Promise<T> } },
+  queryKey: string,
+) => resource.storage!.get({ queryKey, scope });
+
+describe('docs home list replica', () => {
+  it('paints the persisted rows before the network answers', async () => {
+    await docsHomeListResource.storage!.set(
+      { queryKey: 'recent', scope },
+      {
+        data: [
+          {
+            createdAt: new Date(0),
+            fileType: 'custom/document',
+            id: 'p1',
+            knowledgeBaseIds: [],
+            kind: 'page',
+            name: 'Cached page',
+            updatedAt: new Date(0),
+          },
+        ],
+        updatedAt: 1,
+      },
+    );
+
+    const { result } = renderHook(() => useHomeStore((s) => s.useFetchDocsHome)('recent'), {
+      wrapper,
+    });
+
+    await waitFor(() =>
+      expect(homeRecentSelectors.docsHome('recent')(useHomeStore.getState())?.[0].name).toBe(
+        'Cached page',
+      ),
+    );
+    expect(result.current.isValidating).toBe(true);
+  });
+
+  it('keeps each tab in its own entry', async () => {
+    vi.mocked(fileService.getDocsHomeItems).mockImplementation(async (tab) => [
+      homeItem(`row-${tab}`),
+    ]);
+
+    renderHook(
+      () => {
+        useHomeStore((s) => s.useFetchDocsHome)('mine');
+        useHomeStore((s) => s.useFetchDocsHome)('shared');
+      },
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      const state = useHomeStore.getState();
+      expect(homeRecentSelectors.docsHome('mine')(state)?.[0].id).toBe('row-mine');
+      expect(homeRecentSelectors.docsHome('shared')(state)?.[0].id).toBe('row-shared');
+    });
+  });
+
+  it('persists slim rows with kind, location and owner', async () => {
+    vi.mocked(fileService.getDocsHomeItems).mockResolvedValue([
+      homeItem('p1'),
+      homeItem('f1', 'file'),
+    ]);
+
+    renderHook(() => useHomeStore((s) => s.useFetchDocsHome)('recent'), { wrapper });
+
+    await waitFor(async () =>
+      expect((await storedRow(docsHomeListResource, 'recent'))?.data).toEqual([
+        {
+          createdAt: new Date(0),
+          emoji: '📄',
+          fileType: 'custom/document',
+          id: 'p1',
+          knowledgeBaseIds: ['kb-1'],
+          kind: 'page',
+          name: 'p1',
+          owner: { avatar: null, id: 'user-1', name: 'Ada' },
+          updatedAt: new Date(0),
+          userId: 'user-1',
+        },
+        expect.objectContaining({ id: 'f1', kind: 'file' }),
+      ]),
+    );
+    expect(JSON.stringify(localStorage)).not.toContain('heavy');
+  });
+
+  it("never paints another workspace's rows", async () => {
+    await docsHomeListResource.storage!.set(
+      { queryKey: 'recent', scope: `${scope}-other-workspace` },
+      {
+        data: [
+          {
+            createdAt: new Date(0),
+            fileType: 'image/png',
+            id: 'x',
+            knowledgeBaseIds: [],
+            kind: 'file',
+            name: 'Theirs',
+            updatedAt: new Date(0),
+          },
+        ],
+        updatedAt: 1,
+      },
+    );
+
+    const { result } = renderHook(() => useHomeStore((s) => s.useFetchDocsHome)('recent'), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(homeRecentSelectors.docsHome('recent')(useHomeStore.getState())).toBeUndefined();
   });
 });

@@ -14,6 +14,8 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-dynamic-import-in-server`      | error    | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports                              |
 | `no-mode-flags`                    | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                                                   |
 | `no-unguarded-response-field`      | error    | `src/**/*.tsx`                                                | a newer client must survive an older server omitting a response field   |
+| `no-inferred-service-types`        | warn     | `src/**/*.{ts,tsx}`                                           | payload types live in `@lobechat/types`, not `Awaited<ReturnType<…>>`   |
+| `no-inferred-schema-types`         | warn     | `packages/*/src`, `apps/server/src`, `src` (not `schemas/`)   | row types live in `@lobechat/types`, not `typeof table.$inferSelect`    |
 | `no-node-in-browser`               | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | no Node-only npm package where the SPA runs it (paths: ESLint)          |
 | `no-benchmark-in-tests`            | warn     | `**/*.test.ts(x)` except `packages/database`                  | a unit test asserts on behaviour, not on a wall-clock measurement       |
 | `no-unsafe-user-url-fetch`         | warn     | `apps/server/src`                                             | user-controlled URLs must use SSRF-safe transport (#16601)              |
@@ -145,13 +147,14 @@ Every summary now ends with the run's cost — model calls, cache hits, input an
 
 ## CI
 
-The `alint ·` steps at the end of the "ALint & Test Desktop App" job in `.github/workflows/test.yml` run on every push and pull request, on the change's diff only (they reuse that job's root install instead of paying for a runner of their own). The desktop job itself never fails because of alint:
+The `alint ·` steps at the end of the "ALint & Test Desktop App" job in `.github/workflows/test.yml` run on pushes and pull requests (except the weekly-release cases below), on the change's diff only (they reuse that job's root install instead of paying for a runner of their own). The desktop job itself never fails because of alint:
 
 - `alint --dirty` lints the working tree against `HEAD` and keeps only findings on changed lines. The steps fetch the merge base (against the PR base, or `canary` on a push) and run `git reset --mixed <merge-base>`, which turns the whole change into dirty changes, so the scope is exactly its diff and nothing older is reported. On a push to `canary` itself the diff is empty and nothing runs.
 - `packages/alint/report.ts` publishes the result as a separate **ALint** check run on the head commit: red when any `error` finding exists, neutral with only warnings, green when clean. Findings are attached to it as line annotations. The check is not a required status, so it does not block merging, but a red check reaches whoever watches CI, including agents woken by CI failures.
 - The same table goes into one summary comment on the open PR for the branch, rewritten in place on every push. It is created only once there is something to report; when a later push is clean the comment flips to a green verdict instead of disappearing.
 - Findings on the calibration fixtures are dropped from the check and the comment; the fixture suite covers them.
 - The provider key comes from the `DEEPSEEK_API_KEY` repository secret. Fork PRs cannot read it, so the steps are skipped.
+- Weekly release PRs (head branch `release/weekly-*`) and pushes to `main` skip the steps and post a notice instead: their diff is a whole cycle of canary changes that were already linted on their own PRs. Other `release/*` and `hotfix/*` PRs still run, since they start from `main` and their new or cherry-picked changes land on that branch itself.
 - When `alint.config.toml` or anything under `packages/alint` changed, the fixture suite runs too, so a rule edit is calibrated before it lands.
 - `.alintcache` is restored from the latest run whatever the rule set. Since alint 0.7.2 each cached result is keyed by its rule's own text, include/exclude lists and severity, so editing, adding or re-levelling one rule re-runs only that rule; everything else stays cached.
 

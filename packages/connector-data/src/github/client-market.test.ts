@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { ConnectorDataError } from '../errors';
 import {
   createGitHubMarketConnectorClient,
   createGitHubMarketTransport,
@@ -122,5 +123,33 @@ describe('createGitHubMarketConnectorClient', () => {
         parameters: [{ in: 'query', name: 'per_page', value: 100 }],
       }),
     );
+  });
+});
+
+describe('GitHub proxy authorization failures', () => {
+  it('normalizes an expired 401 to authorization unavailable', async () => {
+    const client = createGitHubMarketConnectorClient({
+      market: {
+        proxyOAuthRequest: async () => ({ status: 401, data: {} }),
+      },
+    });
+    const result = client.listAccessibleRepositories();
+    await expect(result).rejects.toBeInstanceOf(ConnectorDataError);
+    await expect(result).rejects.toMatchObject({
+      code: 'github_authorization_unavailable',
+      provider: 'github',
+      retryable: false,
+    });
+  });
+
+  it.each([403, 500, 503])('preserves HTTP %i as a request failure', async (status) => {
+    const client = createGitHubMarketConnectorClient({
+      market: {
+        proxyOAuthRequest: async () => ({ status, data: {} }),
+      },
+    });
+    const result = client.listAccessibleRepositories();
+    await expect(result).rejects.not.toBeInstanceOf(ConnectorDataError);
+    await expect(result).rejects.toMatchObject({ status });
   });
 });

@@ -12,6 +12,9 @@ const DEFER_REDIRECT_PREFIXES = ['/invite'];
 // `/a/:slugOrId` (agent-share visitor page) is deliberately NOT listed: a
 // user who followed a share link should reach the shared agent, not be
 // bounced into onboarding first.
+// `verify-im` must stay listed: binding an IM account lets that platform start
+// agent runs, which an un-onboarded account cannot use, so the binding link
+// detours through onboarding and returns via `callbackUrl`.
 const RESERVED_FIRST_SEGMENTS = new Set([
   'agent',
   'apps',
@@ -19,6 +22,8 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'desktop-onboarding',
   'devtools',
   'eval',
+  'goal',
+  'goals',
   'group',
   'image',
   'me',
@@ -35,6 +40,7 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'subscription',
   'task',
   'tasks',
+  'verify-im',
   'video',
 ]);
 
@@ -63,38 +69,53 @@ export const shouldDeferOnboardingRedirect = (pathname: string): boolean => {
   return !!first && !RESERVED_FIRST_SEGMENTS.has(first);
 };
 
-const redirectToOnboarding = (currentPath: string, search: string) => {
-  if (!currentPath.startsWith('/onboarding')) {
-    // Thread the page the user was on so onboarding finish points return there
-    window.location.href = buildOnboardingRedirectUrl(currentPath + search);
-  }
+/**
+ * Desktop's local first-run setup (welcome, login, permissions, data mode).
+ * It runs before the account-level onboarding below and must not be
+ * interrupted once its login step fetches the user state.
+ */
+const DESKTOP_LOCAL_SETUP_PATH = '/desktop-onboarding';
+
+interface OnboardingRedirectInput {
+  isDesktopRuntime: boolean;
+  pathname: string;
+  search: string;
+  state: Pick<UserInitializationState, 'onboarding'>;
+}
+
+/**
+ * Resolve where a user who has not finished account onboarding
+ * (`users.onboarding.finishedAt`) must go, or `undefined` to stay.
+ *
+ * Desktop applies the same account check as Web: its local setup
+ * (`desktopOnboardingCompleted` in the main process) only covers the device,
+ * so an account that signed in through the Desktop OIDC flow still has to
+ * finish `/onboarding` before using the main window.
+ */
+export const getOnboardingRedirectUrl = ({
+  isDesktopRuntime,
+  pathname,
+  search,
+  state,
+}: OnboardingRedirectInput): string | undefined => {
+  if (!onboardingSelectors.needsOnboarding(state)) return;
+  if (pathname.startsWith('/onboarding')) return;
+  if (isDesktopRuntime && isPathUnder(pathname, DESKTOP_LOCAL_SETUP_PATH)) return;
+  if (shouldDeferOnboardingRedirect(pathname)) return;
+
+  // Thread the page the user was on so onboarding finish points return there
+  return buildOnboardingRedirectUrl(pathname + search);
 };
 
-export const useDesktopUserStateRedirect = () => {
-  // Desktop onboarding redirect is now handled by main process (BrowserManager)
-  // No need to check localStorage here
-  return useCallback(() => {}, []);
-};
-
-export const useWebUserStateRedirect = () =>
+export const useUserStateRedirect = () =>
   useCallback((state: UserInitializationState) => {
     const { pathname, search } = window.location;
+    const redirectUrl = getOnboardingRedirectUrl({
+      isDesktopRuntime: isDesktop,
+      pathname,
+      search,
+      state,
+    });
 
-    if (!onboardingSelectors.needsOnboarding(state)) return;
-    if (shouldDeferOnboardingRedirect(pathname)) return;
-
-    redirectToOnboarding(pathname, search);
+    if (redirectUrl) window.location.href = redirectUrl;
   }, []);
-
-export const useUserStateRedirect = () => {
-  const desktopRedirect = useDesktopUserStateRedirect();
-  const webRedirect = useWebUserStateRedirect();
-
-  return useCallback(
-    (state: UserInitializationState) => {
-      const redirect = isDesktop ? desktopRedirect : webRedirect;
-      redirect(state);
-    },
-    [desktopRedirect, webRedirect],
-  );
-};

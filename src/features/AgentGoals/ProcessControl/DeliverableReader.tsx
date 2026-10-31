@@ -24,9 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { EntityLinkHostProvider, useEntityMarkdown } from '@/features/EntityLink';
 import { isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useActivityTime } from '@/hooks/useActivityTime';
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
+import { useDocumentStore } from '@/store/document';
 
 import type { DeliverableItem } from './deliverableList';
 import {
@@ -171,11 +169,10 @@ const SidebarItem = ({
 
 const DocumentBody = ({ documentId }: { documentId: string }) => {
   const markdownProps = useEntityMarkdown();
-  const { data: document, isLoading } = useClientDataSWR(
-    portalKeys.documentHeader(documentId),
-    () => documentService.getDocumentById(documentId),
-  );
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const { data: document, isHydrated, isLoading } = useFetchDocumentDetail(documentId);
 
+  if (isLoading && !isHydrated) return null;
   if (isLoading)
     return (
       <Flexbox className={styles.doc} data-testid={'deliverable-reader-loading'} gap={12}>

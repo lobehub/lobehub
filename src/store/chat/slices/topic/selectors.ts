@@ -4,7 +4,7 @@ import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { t } from 'i18next';
 import type { AiModelReasoningConfig } from 'model-bank';
 
-import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
+import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS, TopicTrigger } from '@/const/topic';
 import {
   type ChatTopic,
   type ChatTopicSummary,
@@ -15,10 +15,12 @@ import {
 import {
   getTopicSortTime,
   groupTopicsByAgent,
+  groupTopicsByDevice,
   groupTopicsByProject,
   groupTopicsByStatus,
   groupTopicsByTime,
   groupTopicsByUpdatedTime,
+  type TopicDeviceDirectory,
 } from '@/utils/client/topic';
 
 import { type ChatStoreState } from '../../initialState';
@@ -62,7 +64,8 @@ const currentActiveTopic = (s: ChatStoreState): ChatTopic | undefined => {
   // the by-id detail cache so consumers keep real data (title, metadata, …).
   return s.activeTopicId ? s.topicDetailMap?.[s.activeTopicId] : undefined;
 };
-const searchTopics = (s: ChatStoreState): ChatTopic[] => s.searchTopics;
+const searchTopics = (s: ChatStoreState): ChatTopic[] =>
+  s.searchTopics.filter((topic) => topic.trigger !== TopicTrigger.Channel);
 
 const displayTopics = (s: ChatStoreState): ChatTopic[] | undefined =>
   currentTopicsWithoutSystemTriggers(s);
@@ -311,6 +314,7 @@ const sidebarActiveTopic = (
   includeCompleted: boolean,
 ): ChatTopic | undefined => {
   const topic = currentActiveTopic(s);
+  if (topic?.trigger === TopicTrigger.Channel) return undefined;
   return !includeCompleted && topic && topic.id === s.justArchivedTopicId ? undefined : topic;
 };
 
@@ -376,6 +380,7 @@ const getGroupFn = (
   groupMode: TopicGroupMode,
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
 ) => {
   const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
   if (groupMode === 'byProject') {
@@ -399,6 +404,11 @@ const getGroupFn = (
     // them from its agent context.
     return (topics: ChatTopic[]) => groupTopicsByAgent(topics, field);
   }
+  if (groupMode === 'byDevice') {
+    // Device names resolve at render time from the directory and device
+    // registries, so groups stay title-less here.
+    return (topics: ChatTopic[]) => groupTopicsByDevice(topics, field, directories);
+  }
   return sortBy === 'updatedAt' ? groupTopicsByUpdatedTime : groupTopicsByTime;
 };
 
@@ -420,7 +430,7 @@ const buildGroupedTopics = (
         {
           children: favTopics,
           id: 'favorite',
-          title: t('favorite', { ns: 'topic' }),
+          title: t('pinned', { ns: 'topic' }),
         },
         ...groupFn(unfavTopics),
       ]
@@ -432,7 +442,8 @@ export const groupSidebarTopics = (
   groupMode: TopicGroupMode,
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
-) => buildGroupedTopics(topics, getGroupFn(groupMode, sortBy, loadingTopicIds));
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+) => buildGroupedTopics(topics, getGroupFn(groupMode, sortBy, loadingTopicIds, directories));
 
 const groupedTopicsSelector =
   (groupFn: typeof groupTopicsByTime = groupTopicsByTime) =>
@@ -491,7 +502,7 @@ const agentTopicsViewData = (s: ChatStoreState): TopicData | undefined => {
 };
 
 const agentTopicsViewTopics = (s: ChatStoreState): ChatTopic[] =>
-  agentTopicsViewData(s)?.items ?? [];
+  agentTopicsViewData(s)?.items.filter((topic) => topic.trigger !== TopicTrigger.Channel) ?? [];
 
 const agentTopicsViewHasMore = (s: ChatStoreState): boolean =>
   agentTopicsViewData(s)?.hasMore ?? false;

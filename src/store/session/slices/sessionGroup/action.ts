@@ -25,19 +25,15 @@ export class SessionGroupActionImpl {
   addSessionGroup = async (name: string): Promise<string> => {
     const id = await sessionService.createSessionGroup(name);
 
-    await this.#get().refreshSessions();
-
     return id;
   };
 
   removeSessionGroup = async (id: string): Promise<void> => {
     await sessionService.removeSessionGroup(id);
-    await this.#get().refreshSessions();
   };
 
   updateSessionGroupName = async (id: string, name: string): Promise<void> => {
     await sessionService.updateSessionGroup(id, { name });
-    await this.#get().refreshSessions();
   };
 
   updateSessionGroupSort = async (items: SessionGroupItem[]): Promise<void> => {
@@ -50,8 +46,6 @@ export class SessionGroupActionImpl {
     await sessionService.updateSessionGroupOrder(sortMap);
     loadingToast.close();
     toast.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
-
-    await this.#get().refreshSessions();
   };
 
   internal_dispatchSessionGroups = (payload: SessionGroupsDispatch): void => {

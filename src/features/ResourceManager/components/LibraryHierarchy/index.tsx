@@ -18,22 +18,23 @@ import { HierarchyNode } from './HierarchyNode';
 import SearchResults from './SearchResults';
 import { resolveHierarchySelectedKey } from './selection';
 import TreeSkeleton from './TreeSkeleton';
+import { useInitLibraryTree } from './useInitLibraryTree';
 import { buildVisibleNodes } from './visibleNodes';
 
 const LibraryHierarchy = memo(() => {
   const { t } = useTranslation('file');
-  const { currentFolderSlug } = useFolderPath();
-  const [libraryId, currentViewItemId, librarySearchQuery] = useResourceManagerStore((s) => [
-    s.libraryId,
+  const { currentFolderId } = useFolderPath();
+  const [currentViewItemId, librarySearchQuery] = useResourceManagerStore((s) => [
     s.currentViewItemId,
     s.librarySearchQuery,
   ]);
+  // Effect 1: Library switch → reset + load root (seeded from the persisted tree)
+  const libraryId = useInitLibraryTree();
 
   const children = useTreeStore((s) => s.children);
   const expanded = useTreeStore((s) => s.expanded);
   const status = useTreeStore((s) => s.status);
   const errors = useTreeStore((s) => s.errors);
-  const init = useTreeStore((s) => s.init);
   const expandAncestors = useTreeStore((s) => s.expandAncestors);
   const toggle = useTreeStore((s) => s.toggle);
   const loadChildren = useTreeStore((s) => s.loadChildren);
@@ -41,13 +42,7 @@ const LibraryHierarchy = memo(() => {
   // Reuse Explorer Breadcrumb's SWR cache so the sidebar doesn't double-fetch
   // document.getFolderBreadcrumb when navigating into a folder.
   const useFetchFolderBreadcrumb = useFileStore((s) => s.useFetchFolderBreadcrumb);
-  const { data: folderChain } = useFetchFolderBreadcrumb(currentFolderSlug);
-
-  // Effect 1: Library switch → reset + load root
-  useEffect(() => {
-    if (!libraryId) return;
-    init(libraryId);
-  }, [libraryId, init]);
+  const { data: folderChain } = useFetchFolderBreadcrumb(currentFolderId);
 
   // Effect 2: Folder navigation → expand ancestors once breadcrumb resolves
   useEffect(() => {
@@ -59,7 +54,7 @@ const LibraryHierarchy = memo(() => {
 
   const visibleNodes = useMemo(() => buildVisibleNodes(children, expanded), [children, expanded]);
 
-  const selectedKey = resolveHierarchySelectedKey({ currentFolderSlug, currentViewItemId });
+  const selectedKey = resolveHierarchySelectedKey({ currentFolderId, currentViewItemId });
 
   const hasData = visibleNodes.length > 0;
   // The root fetch is in flight with nothing cached yet.

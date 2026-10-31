@@ -1,10 +1,11 @@
 import { DEFAULT_VERIFY_PLAN_PROVIDER } from '@lobechat/business-const';
+import type { AcceptanceVisibility } from '@lobechat/const/verify';
 import type {
   AcceptanceChecklistItem,
   AcceptanceCheckReviewAction,
   AcceptanceRejectIntent,
   AcceptanceReviewAnnotation,
-  AcceptanceSubjectType,
+  CreatableAcceptanceSubjectType,
   ReviewAdjudication,
   ReviewProposalEdit,
   VerifierType,
@@ -18,6 +19,7 @@ import type {
 } from '@lobechat/types';
 
 import type { VerifyStatus } from '@/database/models/agentOperation';
+import type { VerifyAutoRepairOutcome } from '@/database/models/verifyRun';
 import type {
   VerifyCheckResultItem,
   VerifyCriterionItem,
@@ -120,6 +122,8 @@ export interface VerifyCriterionDraft {
 }
 
 export interface VerifyStateResponse {
+  /** The server's auto-repair decision for a failed round; absent until it decided. */
+  verifyAutoRepair?: VerifyAutoRepairOutcome | null;
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   verifyStatus: VerifyStatus | null;
@@ -129,6 +133,13 @@ export interface VerifyStateResponse {
 export type VerifyEvidenceWithUrl = VerifyEvidence & {
   fileName: string | null;
   fileUrl: string | null;
+  /** `terminal` evidence only: signed URLs for the stdout / stderr / output / recording files. */
+  terminalArtifacts?: Partial<
+    Record<
+      'cast' | 'output' | 'stderr' | 'stdout',
+      { fileUrl: string | null; sha256: string; size: number }
+    >
+  >;
 };
 
 /** One check result plus the evidence artifacts attached to it. */
@@ -149,30 +160,10 @@ export interface VerifyReportBundle {
   run: VerifyRunItem;
 }
 
-export interface VerifyReportSummary {
-  report: Pick<
-    VerifyReport,
-    | 'createdAt'
-    | 'failedChecks'
-    | 'generatedAt'
-    | 'id'
-    | 'overallConfidence'
-    | 'passedChecks'
-    | 'reviewedByUser'
-    | 'summary'
-    | 'totalChecks'
-    | 'uncertainChecks'
-    | 'verdict'
-    | 'verifyRunId'
-  > | null;
-  run: VerifyRunItem;
-}
-
-/** One cursor-paginated page of report summaries. */
-export interface VerifyReportSummaryPage {
-  items: VerifyReportSummary[];
-  /** Opaque token for the next page, or `null` when this is the last page. */
-  nextCursor: string | null;
+/** The acceptance round a verify run belongs to — where its old `/verify/:runId` link lands. */
+export interface VerifyRunAcceptanceRound {
+  acceptanceId: string;
+  roundIndex: number | null;
 }
 
 export interface GenerateDraftPlanInput {
@@ -197,23 +188,23 @@ export class VerifyService {
   getAcceptanceBundle = (id: string): Promise<AcceptanceBundle> =>
     lambdaClient.acceptance.getBundle.query({ id });
 
-  setAcceptanceVisibility = (id: string, visibility: 'private' | 'public') =>
+  setAcceptanceVisibility = (id: string, visibility: AcceptanceVisibility) =>
     lambdaClient.acceptance.setVisibility.mutate({ id, visibility });
 
   /** The acceptance aggregate for a subject (topic/task/document), or null. */
-  getAcceptanceBySubject = (subjectType: AcceptanceSubjectType, subjectId: string) =>
+  getAcceptanceBySubject = (subjectType: CreatableAcceptanceSubjectType, subjectId: string) =>
     lambdaClient.acceptance.getBySubject.query({ subjectId, subjectType });
 
   /** Persist a subject's standing acceptance checklist (topic tray). */
   saveAcceptanceChecklist = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
     checklist: AcceptanceChecklistItem[],
   ) => lambdaClient.acceptance.saveChecklist.mutate({ checklist, subjectId, subjectType });
 
   /** Set/update a subject's acceptance goal (the one-sentence outcome). */
   saveAcceptanceGoal = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
     requirement: string,
   ) => lambdaClient.acceptance.saveGoal.mutate({ requirement, subjectId, subjectType });
@@ -254,7 +245,7 @@ export class VerifyService {
    * per-row state must ask about its own subjects instead.
    */
   listAcceptanceStatuses = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectIds: string[],
   ): Promise<Array<{ status: string; subjectId: string }>> =>
     lambdaClient.acceptance.listStatusesBySubjects.query({ subjectIds, subjectType });
@@ -342,6 +333,9 @@ export class VerifyService {
 
   /** Stamp the aggregate `repairing` after the send-back dispatch. */
   markAcceptanceRepairing = (id: string) => lambdaClient.acceptance.markRepairing.mutate({ id });
+
+  requestAcceptanceRepair = (id: string, comment?: string) =>
+    lambdaClient.acceptance.requestRepair.mutate({ id, comment });
 
   /** Rename the acceptance's sidebar entry (a metadata title override). */
   renameAcceptance = (id: string, title: string) =>
@@ -446,16 +440,11 @@ export class VerifyService {
     }) as Promise<VerifyReportBundle | null>;
 
   /**
-   * One cursor-paginated page of the current user's verification sessions with
-   * report rollup fields. `cursor` comes from the previous page's `nextCursor`;
-   * `q` filters by title on the server so search spans the whole history.
+   * The acceptance round a run belongs to, under the same access rule as
+   * `getReportBundle`. `null` for a missing, denied or standalone run.
    */
-  listReportSummaries = (params?: {
-    cursor?: string;
-    limit?: number;
-    q?: string;
-  }): Promise<VerifyReportSummaryPage> =>
-    lambdaClient.verify.listReportSummaries.query(params) as Promise<VerifyReportSummaryPage>;
+  getRunAcceptanceRound = (verifyRunId: string): Promise<VerifyRunAcceptanceRound | null> =>
+    lambdaClient.verify.getRunAcceptanceRound.query({ verifyRunId });
 
   deleteRun = (verifyRunId: string): Promise<unknown> =>
     lambdaClient.verify.deleteRun.mutate({ verifyRunId });

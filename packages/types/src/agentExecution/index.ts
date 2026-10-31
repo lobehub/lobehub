@@ -4,10 +4,11 @@ import type { LobeAgentChatConfig } from '../agent/chatConfig';
 import type { CreateThreadWithMessageParams } from '../aiChat';
 import type { DeviceUnavailableErrorData } from '../device';
 import { workingDirConfigSchema } from '../device';
-import type { TaskDetail, UIChatMessage } from '../message';
+import type { ComposerUserMessage, TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
 export * from './credentialFacts';
+export * from './initRequest';
 export * from './modelFacts';
 
 /**
@@ -23,14 +24,19 @@ export * from './modelFacts';
 export const initialTopicMetadataSchema = z.object({
   repos: z.array(z.string()).optional(),
   /**
-   * Cloud-sandbox instance the composer chose before any topic existed. The
-   * choice is made on a conversation that has nothing to write to yet, so it
-   * travels with the first send instead — the server cannot read the client's
-   * pending selection, and without this the new topic would be born unbound and
-   * silently run at the workspace root.
+   * Cloud-sandbox placement the composer chose before any topic existed — an
+   * instance, or a folder on the drive. The choice is made on a conversation
+   * that has nothing to write to yet, so it travels with the first send
+   * instead — the server cannot read the client's pending selection, and
+   * without this the new topic would be born unbound and silently run in a
+   * temporary sandbox.
    */
+  /** Which workspace drive the placement is on; see `ChatTopicMetadata.sandboxDrive`. */
+  sandboxDrive: z.enum(['personal', 'public']).optional(),
+  /** The environment to initialize the sandbox from; see `ChatTopicMetadata.sandboxEnvironmentId`. */
+  sandboxEnvironmentId: z.string().max(255).optional(),
   sandboxInstanceId: z.string().optional(),
-  sandboxMode: z.enum(['ephemeral', 'persistent']).optional(),
+  sandboxWorkingDirectory: z.string().max(1024).optional(),
   workingDirectory: z.string().optional(),
   workingDirectoryConfig: workingDirConfigSchema.optional(),
 });
@@ -173,6 +179,14 @@ export interface ExecAgentAppContext {
    * `metadata.orchestrationRole` so the role snapshot persists for rendering.
    */
   orchestrationRole?: 'supervisor' | 'member';
+  /**
+   * Project the run belongs to. On a NEW topic it is written onto the row, so
+   * a conversation started from the project home is born inside the project
+   * even without a working directory. For an existing topic the server
+   * resolves it from the topic (or the run's task) and fills it in here, so
+   * every downstream stage reads one value.
+   */
+  projectId?: string;
   /**
    * Project working directory a NEW topic is born in — the blank conversation a
    * project group's "+" opened. The topic is bound to it and the run routes to
@@ -369,12 +383,33 @@ export interface ExecAgentParams {
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
   /**
+   * The operation the launcher's run belongs to, when another agent started this
+   * run. Every runtime hands its process its own `LOBEHUB_OPERATION_ID` but
+   * deliberately strips the launcher's agent id (device-dispatched runs), so the
+   * operation is the one identifier that survives every path. The server reads
+   * the topic and the agent from that operation row — its own record, and one
+   * that must belong to the caller — and stamps `metadata.agentSender` on the
+   * created user message.
+   *
+   * Deliberately not a topic id: a topic is a bare client claim no server row
+   * can vouch for, whereas the operation's topic and agent are written by the
+   * server itself.
+   */
+  sourceOperationId?: string;
+  /**
    * User agent of the originating request, captured server-side for run
    * attribution. Propagated into the run's `state.metadata` and downstream
    * LLM-call metadata for auditing and spend attribution. Never client-passable
    * input — derived from the request context.
    */
   userAgent?: string;
+  /**
+   * The composer-authored part of the user message this send creates: rich-text
+   * `editorData` and attached content (`metadata.contextSelections`, …). The
+   * same shape `aiChat.sendMessageInServer` persists, so a gateway send stores
+   * the row a client-runtime send would. See `ComposerUserMessageSchema`.
+   */
+  userMessage?: ComposerUserMessage;
 }
 
 /**
@@ -607,6 +642,12 @@ export interface ExecVirtualSubAgentParams {
   /** The agent ID to execute */
   agentId: string;
   /**
+   * Detached run (`callSubAgent({ runInBackground })`): the parent is not
+   * parked on it, its placeholder already holds the start receipt, and the
+   * answer is delivered to the parent as a separate message on completion.
+   */
+  background?: boolean;
+  /**
    * chatConfig overrides (thinking / reasoning-effort extend params) for the
    * sub-agent run, from the parent agent's `agencyConfig.subagent.chatConfig`.
    * Merged over the executing agent's own chatConfig, skipping nulled keys.
@@ -641,6 +682,12 @@ export interface ExecVirtualSubAgentParams {
   parentOperationId: string;
   /** Provider for {@link model}. */
   provider?: string;
+  /**
+   * The tool call (`callSubAgent` / `callAgent`) that spawned this sub-agent,
+   * stored on a new thread's metadata so the UI shows the thread as a
+   * sub-agent. A continued thread keeps the call that first spawned it.
+   */
+  sourceToolCallId?: string;
   /**
    * Existing isolation thread of an earlier `callSubAgent` run to continue.
    * When set, the instruction becomes a new turn on that thread (the sub-agent

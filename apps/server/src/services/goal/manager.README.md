@@ -78,7 +78,17 @@ commands. It submits a JSON file through `lh goal plan <goal-id> --token <turn> 
   The judgement is the main Agent's: only a malformed declaration, a Goal with
   rollout `off`, a takeover turn or a batch already in flight is refused. While
   a batch is in flight no uninvited turn starts, so the gate — not a planning
-  turn — answers the moment its members settle.
+  turn — answers the moment its members settle. The probe wave is the
+  exception: once a round's probes settle, the coordinator first hands them to
+  the main Agent as a `rollout_distill` takeover (`probeDistill.ts`). It reads
+  what the probes ran into and answers `revise_plan` with the full plan, which
+  becomes the plan skill's next version, and the same advance judges the gate
+  straight from that step, so the owner reviews the probes against the plan
+  they taught. A probe whose delivery falls short of that plan (a skipped step,
+  failing CI, open review) the Agent names in `rerun`: it re-opens in place on
+  the plan, continuing its delivery, and the round is distilled again once the
+  re-runs settle, before the gate judges it. Without a
+  turn to spend, the gate judges them on the plan as written.
 - `verify`: reason; requests the ordinary independent final acceptance Task.
   This does not mark the Goal achieved.
 - `retry`: reason (checkpoint-aware recovery instruction), taskId and exact

@@ -1,4 +1,5 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,13 +8,9 @@ import { operationSelectors } from '@/store/chat/selectors';
 
 import { contextSelectors, useConversationStore } from '../../../store';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  container: { paddingBlock: '4px', fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 const InterruptedHint = memo(() => {
   const { t } = useTranslation('chat');
@@ -23,7 +20,7 @@ const InterruptedHint = memo(() => {
   if (handingOff) return null;
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       {t('messageAction.interrupted')} · {t('messageAction.interruptedHint')}
     </div>
   );

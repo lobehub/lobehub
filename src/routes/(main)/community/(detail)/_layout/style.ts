@@ -1,18 +1,12 @@
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css }) => ({
+export const styles = stylex.create({
   // Content container
-  contentContainer: css`
-    min-height: 100%;
-  `,
+  contentContainer: { minHeight: '100%' },
 
   // Main container
-  mainContainer: css`
-    overflow-y: auto;
-  `,
+  mainContainer: { overflowY: 'auto' },
 
   // Placeholder
-  spacer: css`
-    flex: 1;
-  `,
-}));
+  spacer: { flex: '1' },
+});

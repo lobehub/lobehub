@@ -2,7 +2,7 @@ import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills'
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
+import type { ChatTopicMetadata, ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
 import { getHeterogeneousTaskModelProvider, readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -22,12 +22,22 @@ import { readTaskSkillIds } from '@/server/services/userSkill';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
 import {
+  isSameTopicExecution,
   resolveRunDeviceId,
   resolveTaskRunExecution,
   resolveTopicExecutionPatch,
 } from './resolveRunExecution';
 
 const log = debug('task-runner');
+
+/** Concurrent writers are rare; a few re-reads settle them or fail the kickoff. */
+const SYNC_TOPIC_EXECUTION_ATTEMPTS = 3;
+
+/** A continued topic moved for one run only, and how to move it back. */
+interface TopicRetarget {
+  previous: ChatTopicMetadata;
+  written: ChatTopicMetadata;
+}
 
 export interface RunTaskParams {
   /** Extra builtin tools this run mounts beside the Task skill, e.g. the Goal report tool. */
@@ -38,6 +48,8 @@ export interface RunTaskParams {
   extraPrompt?: string;
   /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
   maxSteps?: number;
+  /** Persist the dispatch owner's operation link before any execution starts. */
+  onOperationCreated?: (operationId: string) => Promise<void>;
   taskId: string;
   /**
    * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
@@ -90,32 +102,68 @@ export class TaskRunnerService {
    * the previous machine's directory — failing the kickoff (and letting the
    * caller's error path restore the task's resting state) is better than
    * running somewhere the user did not pin.
+   *
+   * Returns the write and the topic's previous execution axes when a device
+   * named for this run only took part in it: that retarget is not the task's
+   * standing selection, so the caller restores it if the run never starts.
+   * The write only lands while the topic still matches the snapshot it was
+   * computed from, so `previous` is exactly what it replaced; a concurrent
+   * change is re-read and the patch recomputed against it.
    */
   private async syncTopicExecution(
     topicId: string,
     taskConfig: Record<string, unknown>,
     runDeviceId: string | undefined,
-  ): Promise<void> {
-    const topic = await this.topicModel.findById(topicId);
-    const patch = resolveTopicExecutionPatch(topic?.metadata, taskConfig, runDeviceId);
-    if (!patch) return;
+    requestedDeviceId: string | undefined,
+  ): Promise<TopicRetarget | undefined> {
+    for (let attempt = 0; attempt < SYNC_TOPIC_EXECUTION_ATTEMPTS; attempt++) {
+      const topic = await this.topicModel.findById(topicId);
+      if (!topic) return;
 
-    await this.topicModel.updateMetadata(topicId, patch);
-    log('runTask: synced topic %s execution metadata', topicId);
+      const patch = resolveTopicExecutionPatch(
+        topic.metadata,
+        taskConfig,
+        runDeviceId,
+        requestedDeviceId,
+      );
+      if (!patch) return;
+
+      const updated = await this.topicModel.updateMetadata(topicId, patch, {
+        onlyIf: (current) => isSameTopicExecution(current, topic.metadata),
+      });
+      if (updated.length === 0) continue;
+
+      log('runTask: synced topic %s execution metadata', topicId);
+
+      if (!requestedDeviceId) return;
+      return {
+        // `undefined` clears an axis on restore, same as in the patch itself.
+        previous: {
+          boundDeviceId: topic.metadata?.boundDeviceId,
+          repos: topic.metadata?.repos,
+          workingDirectory: topic.metadata?.workingDirectory,
+          workingDirectoryConfig: topic.metadata?.workingDirectoryConfig,
+        },
+        written: patch,
+      };
+    }
+
+    throw new Error(`Topic ${topicId} execution kept changing while this run was starting`);
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
     const {
       additionalPluginIds,
-      taskId: idOrIdentifier,
+      taskId,
       continueTopicId,
       deviceId,
       extraPrompt,
       maxSteps,
+      onOperationCreated,
       trigger = 'manual',
     } = params;
 
-    const task = await this.taskModel.resolve(idOrIdentifier);
+    const task = await this.taskModel.findById(taskId);
     if (!task) {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
     }
@@ -133,6 +181,10 @@ export class TaskRunnerService {
     // otherwise an early failure (e.g. CONFLICT thrown because a concurrent
     // run is in flight) would clobber the in-flight run's status to 'paused'.
     let weSetRunning = false;
+    // A continued topic retargeted for this run only, and what to put back if
+    // the run is not accepted — see `syncTopicExecution`.
+    let topicRetarget: TopicRetarget | undefined;
+    let runAccepted = false;
 
     try {
       if (!task.assigneeAgentId) {
@@ -292,16 +344,21 @@ export class TaskRunnerService {
       // the run keeps inheriting the assignee agent's target and cwd.
       const taskExecution = readTaskExecutionConfig(taskConfig);
       // The device the run will actually use. It differs from the task's pin
-      // when the author FIXED the agent's target, and that difference decides
-      // whether the directory may travel: see `resolveTaskRunExecution`.
-      const runDeviceId = taskExecution
-        ? resolveRunDeviceId(
-            taskExecution,
-            await this.agentModel.getAgentAgencyConfig(agentRef),
-            this.workspaceId,
-          )
-        : undefined;
-      const runExecution = resolveTaskRunExecution(taskExecution, runDeviceId);
+      // when the caller names another device for this run (`--device`), or when
+      // the author FIXED the agent's target, and that difference decides
+      // whether the directory may travel: see `resolveTaskRunExecution`. A
+      // requested device goes through the policy even when the task pins
+      // nothing — a fixed target replaces it all the same.
+      const runDeviceId =
+        taskExecution || deviceId
+          ? resolveRunDeviceId(
+              taskExecution,
+              await this.agentModel.getAgentAgencyConfig(agentRef),
+              this.workspaceId,
+              deviceId,
+            )
+          : undefined;
+      const runExecution = resolveTaskRunExecution(taskExecution, runDeviceId, deviceId);
 
       // A continued topic keeps its own metadata (`turnSetup` stamps
       // `initialTopicMetadata` only for a topic it creates) and those stored
@@ -309,15 +366,20 @@ export class TaskRunnerService {
       // be ignored, and the previous machine's kept. Stamp the task's selection
       // onto the topic first; see `resolveTopicExecutionPatch`.
       if (continueTopicId) {
-        await this.syncTopicExecution(continueTopicId, taskConfig, runDeviceId);
+        topicRetarget = await this.syncTopicExecution(
+          continueTopicId,
+          taskConfig,
+          runDeviceId,
+          deviceId,
+        );
       }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
 
       const result = await aiAgentService.execAgent({
+        ...(onOperationCreated ? { onOperationCreated } : {}),
         ...(isSlug ? { slug: agentRef } : { agentId: agentRef }),
         additionalPluginIds: pluginIds,
-        ...(deviceId && { deviceId }),
         ...(typeof taskConfig.model === 'string' && { model: taskConfig.model }),
         ...(typeof taskConfig.provider === 'string' && { provider: taskConfig.provider }),
         hooks: createTaskRunHooks({
@@ -335,10 +397,10 @@ export class TaskRunnerService {
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,
         trigger: TopicTrigger.RunTask,
         userInterventionConfig: { approvalMode: 'headless' },
-        // The task's own pin, when it has one. `deviceId` forces device routing
-        // unless the agent's selection policy is `fixed` (author-controlled
-        // targets stay authoritative — same rule the chat picker follows), and
-        // the directory rides into the topic this run creates.
+        // The caller's device for this run, else the task's own pin. `deviceId`
+        // forces device routing unless the agent's selection policy is `fixed`
+        // (author-controlled targets stay authoritative — same rule the chat
+        // picker follows), and the directory rides into the topic this run creates.
         ...(runExecution?.deviceId ? { deviceId: runExecution.deviceId } : {}),
         ...(continueTopicId || runExecution?.initialTopicMetadata
           ? {
@@ -382,6 +444,9 @@ export class TaskRunnerService {
         }
         throw new Error(result.error || result.message || 'Agent run failed to start');
       }
+      // The operation may now be live on the requested device: bookkeeping that
+      // fails below must not move its topic back to the previous machine.
+      runAccepted = true;
 
       if (result.topicId) {
         const topicId = result.topicId;
@@ -423,6 +488,9 @@ export class TaskRunnerService {
             });
           // Same confirmation gate as TaskService.interruptTaskOperation.
           const stopped = !!stop?.success && stop.deviceCancellationConfirmed !== false;
+          // Nothing is left running on the requested device, so its retarget
+          // goes back like any other kickoff that did not start.
+          if (stopped) runAccepted = false;
           throw new TRPCError({
             code: stopped
               ? recorded === 'deleted'
@@ -444,9 +512,25 @@ export class TaskRunnerService {
         taskIdentifier: task.identifier,
       };
     } catch (error) {
+      // The run never started on the requested device, so its retarget must
+      // not outlive it: a later plain continuation would otherwise be routed
+      // there while the task still pins its own machine.
+      if (continueTopicId && topicRetarget && !runAccepted) {
+        const { previous, written } = topicRetarget;
+        try {
+          // Only while the topic still carries this run's own write: a device or
+          // directory someone set since then is newer than our snapshot.
+          await this.topicModel.updateMetadata(continueTopicId, previous, {
+            onlyIf: (current) => isSameTopicExecution(current, written),
+          });
+        } catch (restoreError) {
+          log('runTask: failed to restore topic %s execution: %O', continueTopicId, restoreError);
+        }
+      }
+
       if (weSetRunning) {
         try {
-          const failedTask = await this.taskModel.resolve(idOrIdentifier);
+          const failedTask = await this.taskModel.findById(taskId);
           if (failedTask && failedTask.status === 'running') {
             const errorText = error instanceof Error ? error.message : 'Unknown error';
             // A failed kickoff must not kill an automation task's schedule: the
@@ -476,7 +560,7 @@ export class TaskRunnerService {
    * payload shape unchanged.
    */
   static cascadeEmpty(): CascadeResult {
-    return { failed: [], paused: [], started: [] };
+    return { failed: [], paused: [], started: [], pausedTasks: [], startedTasks: [] };
   }
 
   /**
@@ -505,7 +589,7 @@ export class TaskRunnerService {
     const unlocked = await this.taskModel.getUnlockedTasksForMany(completedTaskIds);
     if (unlocked.length === 0) return TaskRunnerService.cascadeEmpty();
 
-    const result: CascadeResult = { failed: [], paused: [], started: [] };
+    const result: CascadeResult = TaskRunnerService.cascadeEmpty();
 
     for (const task of unlocked) {
       // An archived dependent stays idle; restoring it leaves it ready to run.
@@ -513,12 +597,14 @@ export class TaskRunnerService {
       if (await this.shouldHoldForCheckpoint(task)) {
         await this.taskModel.updateStatus(task.id, 'paused');
         result.paused.push(task.identifier);
+        result.pausedTasks!.push({ id: task.id, identifier: task.identifier });
         continue;
       }
 
       try {
         await this.runTask({ taskId: task.id });
         result.started.push(task.identifier);
+        result.startedTasks!.push({ id: task.id, identifier: task.identifier });
       } catch (error) {
         // Archived after discovery: the runner refused it, nothing failed.
         if (error instanceof TRPCError && error.code === 'PRECONDITION_FAILED') continue;
@@ -530,7 +616,7 @@ export class TaskRunnerService {
         } catch {
           /* ignore — surfaced via failed list */
         }
-        result.failed.push({ error: message, identifier: task.identifier });
+        result.failed.push({ error: message, id: task.id, identifier: task.identifier });
       }
     }
 
@@ -541,15 +627,17 @@ export class TaskRunnerService {
     if (!task.parentTaskId) return false;
     const parent = await this.taskModel.findById(task.parentTaskId);
     if (!parent) return false;
-    return this.taskModel.shouldPauseBeforeStart(parent, task.identifier);
+    return this.taskModel.shouldPauseBeforeStart(parent, task);
   }
 }
 
 export interface CascadeResult {
   /** Tasks where kickoff threw and were marked paused with an error. */
-  failed: { error: string; identifier: string }[];
+  failed: { error: string; id?: string; identifier: string }[];
   /** Tasks held back by a parent's `beforeIds` checkpoint. */
   paused: string[];
+  pausedTasks?: { id: string; identifier: string }[];
   /** Tasks that were successfully kicked off (topic created). */
   started: string[];
+  startedTasks?: { id: string; identifier: string }[];
 }

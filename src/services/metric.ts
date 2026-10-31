@@ -1,6 +1,19 @@
-import type { MetricKind, MetricSubjectType } from '@lobechat/types';
+import type {
+  MetricActorType,
+  MetricKind,
+  MetricPointSourceType,
+  MetricSubjectType,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
+
+/** One observation; who recorded it and how is optional for persisted older reads. */
+export interface MetricSeriesPoint {
+  actorType?: MetricActorType;
+  observedAt: Date;
+  sourceType?: MetricPointSourceType;
+  value: number;
+}
 
 /**
  * One chartable series of a subject — the shape the north-star strip consumes.
@@ -14,7 +27,7 @@ export interface MetricSeriesWithPoints {
   id: string;
   key: string;
   kind: MetricKind;
-  points: { observedAt: Date; value: number }[];
+  points: MetricSeriesPoint[];
   title?: string | null;
   unit?: string | null;
 }
@@ -51,7 +64,9 @@ class MetricService {
       key: item.key,
       kind: item.kind,
       points: item.points.map((point) => ({
+        actorType: point.actorType,
         observedAt: new Date(point.observedAt),
+        sourceType: point.sourceType,
         value: Number(point.value),
       })),
       title: item.title,

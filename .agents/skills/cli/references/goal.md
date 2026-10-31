@@ -115,7 +115,10 @@ probes run first, the rest are released wave by wave once the probes ran through
 without a person, and a rejection revises the recipe and re-probes. Whether the
 units are one mould is the planning agent's call; the server refuses only a
 malformed declaration, a Goal with `--rollout off`, or a batch already in flight.
-No planning turn starts while a batch is in flight.
+No planning turn starts while a batch is in flight, except one: when the probes
+settle, the main Agent gets a `rollout_distill` turn to rewrite the plan from
+what they ran into — answer it with `revise_plan` and the full plan — and the
+gate judges the probes after that.
 
 `wait` is how a turn waits for time or external evidence — never sleep or poll.
 Producers deliver the event with `lh goal wake`.
@@ -155,8 +158,9 @@ never shows on that topic's goal tray.
 
 From a chat, `create --topic` opens the Goal as a **draft**: nothing is
 dispatched until it is started. Arrange it first — seed tasks with `-t` or
-`--task-file` (titles with descriptions), adjust with `add-node` / `add-edge` —
-then launch it with `lh goal start <id>`; the owner can also start it from the
+`--task-file` (titles with descriptions and a `dependsOn` list of other titles
+in the file, drawn as `depends_on` edges), adjust with `add-node` / `add-edge` /
+`remove-edge` — then launch it with `lh goal start <id>`; the owner can also start it from the
 goal page. Many tasks of one recipe start as a batch:
 `lh goal start <id> --rollout canary --recipe-file <md> --probes <2-5 node ids>`
 moves the probes into a batch and turns every other seed (or only `--units`)
@@ -168,9 +172,16 @@ next planning turn.
 
 ## Decision gates and graph editing
 
-| Command                                           | Effect                                           |
-| ------------------------------------------------- | ------------------------------------------------ |
-| `lh goal decide <id> <decision-id> --option <id>` | Resolve a durable decision gate                  |
-| `lh goal retire <id> <node-ids...>`               | Retire nodes that must not run                   |
-| `lh goal add-node <id> <kind> <title>`            | Add a node (`--scope`, `--question`, `-d`, `-p`) |
-| `lh goal add-edge <id> <source> <target> <kind>`  | Connect two nodes                                |
+| Command                                             | Effect                                           |
+| --------------------------------------------------- | ------------------------------------------------ |
+| `lh goal decide <id> <decision-id> --option <id>`   | Resolve a durable decision gate                  |
+| `lh goal retire <id> <node-ids...>`                 | Retire nodes that must not run                   |
+| `lh goal add-node <id> <kind> <title>`              | Add a node (`--scope`, `--question`, `-d`, `-p`) |
+| `lh goal add-edge <id> <source> <target> <kind>`    | Connect two nodes                                |
+| `lh goal remove-edge <id> <source> <target> [kind]` | Remove edges from a draft (`--reason`)           |
+
+An edge reads `<source> <kind> <target>`: `A depends_on B` means A waits for B.
+`A blocks B` is accepted by `add-edge` and `remove-edge` and stored as
+`B depends_on A`, which is how `lh goal show` prints it. Only a draft can lose
+edges; a started Goal retires nodes instead. `lh goal show` / `list --json` carry
+the goal page `url`.

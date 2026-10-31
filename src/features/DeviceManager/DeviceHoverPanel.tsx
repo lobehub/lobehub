@@ -8,9 +8,11 @@ import {
   CalendarClockIcon,
   CpuIcon,
   FolderIcon,
+  HardDriveIcon,
   LayersIcon,
   type LucideIcon,
   MemoryStickIcon,
+  MessagesSquareIcon,
   MonitorIcon,
   PowerIcon,
   ServerIcon,
@@ -21,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 
 import { formatSize } from '@/utils/format';
 
+import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
 import { useDeviceMetricSeries } from './DeviceHealth/shared';
 import UsageMeter, { UsageMeterGroup, UsageMeterSkeleton } from './DeviceHealth/UsageMeter';
 import { latestUsageView } from './DeviceHealth/viewState';
@@ -114,7 +117,7 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
 
   // The series also carries the specs (cores, memory), so fetch it for offline
   // devices too; only an online device's last reading is shown as its load.
-  const { data, error } = useDeviceMetricSeries(device.deviceId);
+  const { data, error } = useDeviceMetricSeries(device.deviceId, device.scope);
   const usage = latestUsageView({ data, error });
   const summary = buildDeviceHoverSummary(device, data);
   const { online } = summary;
@@ -132,7 +135,13 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
             width: 6,
           }}
         />
-        <span>{online ? t('devices.status.online') : t('devices.status.offline')}</span>
+        <span>
+          {summary.onlineUnknown
+            ? t('devices.status.checking')
+            : online
+              ? t('devices.status.online')
+              : t('devices.status.offline')}
+        </span>
       </InfoRow>
       {online && (
         <InfoRow icon={CableIcon} label={t('devices.detail.connections')}>
@@ -142,6 +151,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={CalendarClockIcon} label={t('devices.detail.lastConnected')}>
         {dayjs(summary.lastConnectedAt).fromNow()}
       </InfoRow>
+      {online && (
+        <InfoRow icon={MessagesSquareIcon} label={t('devices.card.runningTopics')}>
+          <DeviceRunningSummaryValue deviceId={device.deviceId} />
+        </InfoRow>
+      )}
       {online && (
         <div className={styles.usage}>
           {usage.loading ? (
@@ -156,6 +170,9 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
                 label={t('devices.card.memoryUsage')}
                 value={usage.latest?.memoryPercent}
               />
+              {usage.reportsDisk && (
+                <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
+              )}
             </UsageMeterGroup>
           )}
         </div>
@@ -181,6 +198,11 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
       <InfoRow icon={MemoryStickIcon} label={t('devices.detail.memory')}>
         {summary.memoryTotalBytes ? formatSize(summary.memoryTotalBytes) : undefined}
       </InfoRow>
+      {summary.diskTotalBytes && (
+        <InfoRow icon={HardDriveIcon} label={t('devices.detail.disk')}>
+          {formatSize(summary.diskTotalBytes)}
+        </InfoRow>
+      )}
       <InfoRow icon={ServerIcon} label={t('devices.card.hostname')}>
         {summary.hostname ? (
           <span className={styles.code} title={summary.hostname}>

@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,36 +16,38 @@ const TONE_COLOR: Record<GoalCardTone, string> = {
   waiting: cssVar.colorWarning,
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  connector: css`
-    flex: 1;
-    min-width: 12px;
-    height: 1px;
-    background: ${cssVar.colorBorder};
-  `,
-  connectorDone: css`
-    background: ${cssVar.colorSuccessBorder};
-  `,
-  dot: css`
-    flex: none;
-
-    box-sizing: border-box;
-    width: 8px;
-    height: 8px;
-    border: 1px solid ${cssVar.colorTextQuaternary};
-    border-radius: 50%;
-  `,
-  dotCurrent: css`
-    width: 10px;
-    height: 10px;
-    border-width: 2px;
-    background: ${cssVar.colorBgElevated};
-  `,
-  dotDone: css`
-    border-color: ${cssVar.colorSuccess};
-    background: ${cssVar.colorSuccess};
-  `,
-}));
+const styles = stylex.create({
+  connector: {
+    flex: '1',
+    minWidth: '12px',
+    height: '1px',
+    backgroundColor: cssVar.colorBorder,
+    backgroundImage: 'none',
+  },
+  connectorDone: { backgroundColor: cssVar.colorSuccessBorder, backgroundImage: 'none' },
+  dot: {
+    flex: 'none',
+    boxSizing: 'border-box',
+    width: '8px',
+    height: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorTextQuaternary,
+    borderRadius: '50%',
+  },
+  dotCurrent: {
+    width: '10px',
+    height: '10px',
+    borderWidth: '2px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  dotDone: {
+    borderColor: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * The goal's big stages as one left-to-right track — where it stands in the
@@ -63,12 +67,15 @@ const StageTrack = memo<{ stage: GoalCardStage; tone: GoalCardTone }>(({ stage, 
         return (
           <Fragment key={key}>
             {index > 0 && (
-              <div className={cx(styles.connector, index <= current && styles.connectorDone)} />
+              <div {...stylex.props(styles.connector, index <= current && styles.connectorDone)} />
             )}
             <Flexbox horizontal align={'center'} gap={6} style={{ flex: 'none' }}>
               <span
-                className={cx(styles.dot, done && styles.dotDone, isCurrent && styles.dotCurrent)}
                 style={isCurrent ? { borderColor: TONE_COLOR[tone] } : undefined}
+                className={
+                  stylex.props(styles.dot, done && styles.dotDone, isCurrent && styles.dotCurrent)
+                    .className
+                }
               />
               <Text
                 fontSize={12}

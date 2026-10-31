@@ -96,4 +96,27 @@ describe('getDocumentRenderMode', () => {
       mode: 'editor',
     });
   });
+
+  it('renders an HTML page in the HTML view, whatever its filename', () => {
+    expect(getDocumentRenderMode({ fileType: 'custom/html', filename: 'Goal report' })).toEqual({
+      mode: 'html',
+    });
+    /** @example A `.html` title does not turn the page into a source view. */
+    expect(getDocumentRenderMode({ fileType: 'custom/html', filename: 'report.html' })).toEqual({
+      mode: 'html',
+    });
+    /** @example A knowledge-base page carries a placeholder mirror file but keeps its body inline. */
+    expect(
+      getDocumentRenderMode({
+        fileId: 'kb-mirror',
+        fileType: 'custom/html',
+        filename: 'Goal report',
+        sourceType: 'api',
+      }),
+    ).toEqual({ mode: 'html' });
+    /** @example An uploaded HTML file has a MIME type and is still a file. */
+    expect(
+      getDocumentRenderMode({ fileId: 'file-1', fileType: 'text/html', filename: 'a.html' }),
+    ).toEqual({ mode: 'file' });
+  });
 });

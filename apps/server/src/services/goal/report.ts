@@ -456,9 +456,16 @@ export const buildGoalReportInstruction = (
       '5. Write a one-sentence headline. When the Goal produced a final deliverable, set deliverableWorkId to that Work\'s id; when there is no final deliverable, omit deliverableWorkId entirely — do not send an empty string or a placeholder such as "none".',
       "6. Mark the mainline: the path that actually led to the result. mainline.nodeIds are the resolved tasks on the correct path (plus, when useful, the resolved root problem and the findings that carried the answer forward); mainline.edgeIds are the ids of this Goal's edges that connect two of those nodes — copy the ids from the Candidate mainline list, never the edge kind. Detour nodes are never on the mainline. The chapters must tell exactly this path: every chapter nodeId is a mainline node, and every mainline task or experiment node — including the acceptance node when it is listed — appears in some chapter.",
       '7. Do NOT restate acceptance verdicts or user decisions as data; the page reads those from their own records. Narrate around them.',
+      [
+        '8. Also write the report as ONE HTML page — this is what readers see first. Lay out the headline, the chapters, the detours with their lessons and the next steps as a clear, well-designed report. The page MUST be self-contained; it is rendered in a sandboxed frame with no network access to your files:',
+        '   - all CSS in <style> and all JS in <script> inside the page; no <link rel="stylesheet">, no <script src>, no web fonts, no CDN libraries, no local file paths;',
+        '   - every diagram (the path, a timeline, a chart) drawn as inline <svg> in the page, never an external image or a chart library;',
+        '   - only images given as data URIs or public https URLs;',
+        '   - legible on a light background and at narrow widths.',
+      ].join('\n'),
       submission.kind === 'cli'
-        ? `8. Write the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor) as JSON to a file, and the full written report in markdown, built from that same metadata, to another file. Submit both once with \`lh goal report ${graph.goal.id} --metadata-file <json> --content-file <md>\`. If it rejects a reference, fix the file and submit again.`
-        : `8. Call ${submission.toolName} once with goalId, the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor) and content: the full written report in markdown, built from that same metadata. If it rejects a reference, fix it and call again.`,
+        ? `9. Write the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor) as JSON to a file, the full written report in markdown, built from that same metadata, to another file, and the HTML page to a third. Submit them once with \`lh goal report ${graph.goal.id} --metadata-file <json> --content-file <md> --html-file <html>\`. If it rejects a reference, fix the file and submit again.`
+        : `9. Call ${submission.toolName} once with goalId, the metadata (headline, deliverableWorkId, chapters, mainline, nextSteps, graphCursor), content: the full written report in markdown, built from that same metadata, and html: that HTML page. If it rejects a reference, fix it and call again.`,
     ].join('\n'),
   ]
     .filter(Boolean)

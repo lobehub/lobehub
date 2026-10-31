@@ -185,7 +185,7 @@ export const createShareRrConfig = ({
       vitePlatformResolve('web'),
       cloudflare({ viteEnvironment: { name: 'ssr' } }),
       // Both environments render StyleX components; the client build emits the CSS.
-      stylexPlugin(),
+      stylexPlugin({ overlaySrcDirs: [path.join(repoRoot, 'src')] }),
       reactRouter(),
       ...lobeIconImports(),
       ...(resolvePlugins ?? []),

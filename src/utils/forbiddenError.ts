@@ -53,9 +53,13 @@ export const isHistoryMigratingError = (error: unknown): boolean => {
  */
 export const getDeleteErrorMessageKey = (
   error: unknown,
-): 'deleteHistoryMigrating' | 'deleteSharedOwnerOnly' | 'manageOnlyCreator' | 'operationFailed' => {
+):
+  | 'deleteHistoryMigrating'
+  | 'deleteSharedContentOwnerOnly'
+  | 'manageOnlyCreator'
+  | 'operationFailed' => {
   if (isHistoryMigratingError(error)) return 'deleteHistoryMigrating';
-  if (isOwnerOnlyForbiddenError(error)) return 'deleteSharedOwnerOnly';
+  if (isOwnerOnlyForbiddenError(error)) return 'deleteSharedContentOwnerOnly';
   if (isForbiddenError(error)) return 'manageOnlyCreator';
   return 'operationFailed';
 };

@@ -9,6 +9,7 @@ import {
   defaultGetLocalFilePreview,
   defaultReadExternalAssetForPublish,
   EXTERNAL_PUBLISH_ASSET_MAX_BYTES,
+  toLocalFilePreviewFailure,
 } from '../filePreview';
 
 const mockedHome = vi.hoisted(() => ({ dir: '' }));
@@ -134,12 +135,31 @@ describe('defaultGetLocalFilePreview', () => {
     expect(result).toEqual({ error: 'File is not an image', success: false });
   });
 
+  it('marks a deleted file as a terminal not-found failure', async () => {
+    const result = await defaultGetLocalFilePreview({
+      path: path.join(root, 'deleted.md'),
+      workingDirectory: root,
+    });
+    expect(result).toMatchObject({ code: 'not_found', success: false });
+  });
+
+  it('classifies only deleted / denied errors as terminal', () => {
+    const errno = (code: string) => Object.assign(new Error(code), { code });
+    expect(toLocalFilePreviewFailure(errno('ENOENT'))).toMatchObject({ code: 'not_found' });
+    expect(toLocalFilePreviewFailure(errno('EACCES'))).toMatchObject({ code: 'forbidden' });
+    expect(toLocalFilePreviewFailure(errno('EBUSY'))).toEqual({ error: 'EBUSY', success: false });
+  });
+
   it('refuses to read a file outside the working directory', async () => {
     const result = await defaultGetLocalFilePreview({
       path: path.join(outside, 'secret.txt'),
       workingDirectory: root,
     });
-    expect(result).toEqual({ error: 'File is outside the approved workspace', success: false });
+    expect(result).toEqual({
+      code: 'forbidden',
+      error: 'File is outside the approved workspace',
+      success: false,
+    });
   });
 
   it('errors when the working directory is missing', async () => {

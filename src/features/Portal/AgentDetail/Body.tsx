@@ -5,8 +5,8 @@ import { Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
-import Avatar from '@/components/Avatar';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { AgentNotFound } from '@/features/AgentNotFound';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
@@ -54,7 +54,8 @@ const Body = memo(() => {
 
   return (
     <Flexbox align="center" flex={1} gap={16} padding={32} style={{ overflowY: 'auto' }}>
-      <Avatar
+      <AgentAvatar
+        agentId={agentId}
         avatar={meta.avatar}
         background={meta.backgroundColor}
         name={displayName}

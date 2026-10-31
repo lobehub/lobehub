@@ -270,7 +270,12 @@ export const canExecutionTargetReadLocalPaths = (
 interface TopicDeviceBindingSource {
   agentId?: string | null;
   groupId?: string | null;
-  metadata?: { boundDeviceId?: string } | null;
+  metadata?: {
+    boundDeviceId?: string;
+    workingDirectory?: string;
+    workingDirectoryConfig?: { path?: string };
+  } | null;
+  projectWorkingDirectoryId?: string | null;
 }
 
 /**
@@ -287,6 +292,25 @@ export const getTopicBoundDeviceId = (
   if (!topic || !deviceId || !agentId) return;
   if (topic.agentId ? topic.agentId !== agentId : !!topic.groupId) return;
   return deviceId;
+};
+
+/**
+ * A conversation that holds a cwd but never recorded the machine it belongs
+ * to — a row written before device pinning existed. The cwd is a bare path, so
+ * the agent default must not be presented as its machine: the picker says the
+ * machine is unknown until the user names one. Project-directory topics take
+ * their machine from the directory, and a `fixed` target ignores the topic.
+ */
+export const isTopicDeviceUnknown = (
+  topic: TopicDeviceBindingSource | null | undefined,
+  agentId: string | undefined,
+  agencyConfig: LobeAgentAgencyConfig | undefined,
+): boolean => {
+  if (!topic || !agentId || topic.projectWorkingDirectoryId) return false;
+  if (topic.metadata?.boundDeviceId) return false;
+  if (topic.agentId ? topic.agentId !== agentId : !!topic.groupId) return false;
+  if (agencyConfig?.executionTargetSelectionPolicy === 'fixed') return false;
+  return !!(topic.metadata?.workingDirectory || topic.metadata?.workingDirectoryConfig?.path);
 };
 
 export interface TopicDeviceBindingResult {

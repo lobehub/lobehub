@@ -10,6 +10,7 @@ import {
   Camera,
   Globe,
   Keyboard,
+  Monitor,
   MousePointerClick,
   MoveVertical,
   ScanText,
@@ -50,10 +51,12 @@ const styles = stylex.create({
 interface BrowserArgs {
   dx?: number;
   dy?: number;
+  height?: number;
   key?: string;
   ref?: string;
   text?: string;
   url?: string;
+  width?: number;
   x?: number;
   y?: number;
 }
@@ -66,6 +69,7 @@ const API_ICONS: Record<BrowserApiNameType, LucideIcon> = {
   [BrowserApiName.readPage]: ScanText,
   [BrowserApiName.screenshot]: Camera,
   [BrowserApiName.scroll]: MoveVertical,
+  [BrowserApiName.setViewport]: Monitor,
   [BrowserApiName.snapshot]: ScanText,
 };
 
@@ -97,6 +101,10 @@ const getChipValue = (apiName: BrowserApiNameType, args: BrowserArgs): string =>
     }
     case BrowserApiName.scroll: {
       return formatScroll(args);
+    }
+    case BrowserApiName.setViewport: {
+      const { height, width } = args;
+      return typeof width === 'number' && typeof height === 'number' ? `${width}×${height}` : '';
     }
     default: {
       return '';

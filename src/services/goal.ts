@@ -4,10 +4,23 @@ import type {
   GoalGraphSnapshot,
   GoalMetricCriterion,
   GoalNodeKind,
+  GoalSubscriptionFreshnessPolicy,
+  GoalSubscriptionWakeCondition,
   GoalTickResult,
 } from '@lobechat/types';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, withLlmRelay } from '@/libs/trpc/client';
+import { oneShotRelay } from '@/services/llmRelay';
+import { useUserStore } from '@/store/user';
+import { systemAgentSelectors } from '@/store/user/selectors';
+
+/**
+ * The provider a goal's planning runs on: the goal's own planning-model pick
+ * when it has one, else the `goal` system agent's — the same choice the server
+ * makes, so a device-only provider is relayed back to this tab either way.
+ */
+const goalModelProvider = (planningProvider?: string) =>
+  planningProvider || systemAgentSelectors.goal(useUserStore.getState()).provider;
 
 export interface GoalListParams {
   agentId?: string;
@@ -21,6 +34,37 @@ export interface GoalListParams {
 
 /** Every graph method takes the `goals` row id. */
 class GoalService {
+  enableSubscription = async (id: string, bindingRevision: number) =>
+    (await lambdaClient.goal.enableSubscription.mutate({ id, bindingRevision })).data;
+  disableSubscription = async (id: string, bindingRevision: number) =>
+    (await lambdaClient.goal.disableSubscription.mutate({ id, bindingRevision })).data;
+
+  listSubscriptions = async (goalId: string) =>
+    (await lambdaClient.goal.listSubscriptions.query({ goalId })).data;
+
+  bindSubscription = async (input: {
+    goalId: string;
+    widgetId: string;
+    metricId: string | null;
+    criterionKey?: string;
+    confirmedVersionId: string;
+    confirmedContentHash: string;
+    freshnessPolicy: GoalSubscriptionFreshnessPolicy;
+    wakeCondition: GoalSubscriptionWakeCondition;
+  }) => (await lambdaClient.goal.bindSubscription.mutate(input)).data;
+
+  rebindSubscription = async (
+    input: Parameters<GoalService['bindSubscription']>[0] & { id: string; bindingRevision: number },
+  ) => (await lambdaClient.goal.rebindSubscription.mutate(input)).data;
+
+  updateSubscription = async (input: {
+    id: string;
+    bindingRevision: number;
+    enabled: boolean;
+    freshnessPolicy: GoalSubscriptionFreshnessPolicy;
+    wakeCondition: GoalSubscriptionWakeCondition;
+  }) => (await lambdaClient.goal.updateSubscription.mutate(input)).data;
+
   /**
    * List goals. Each item is the execution-carrier task with the goal row
    * attached plus subtree run statistics — see `GoalModel.list` on the server.
@@ -58,10 +102,21 @@ class GoalService {
     mode?: 'merge' | 'replace',
   ) => lambdaClient.goal.setMetricCriteria.mutate({ id, metrics, mode });
 
+  /** Drop declared clauses by key, against the server's current list. */
+  removeMetricCriteria = async (id: string, keys: string[]) =>
+    lambdaClient.goal.removeMetricCriteria.mutate({ id, keys });
+
   recordObservation = async (
     id: string,
     observation: { key: string; observedAt?: Date; title?: string; unit?: string; value: number },
   ) => lambdaClient.goal.recordObservation.mutate({ id, ...observation });
+
+  /**
+   * Copy the goal's definition into personal (`null`) or a workspace as a new
+   * draft; its graph progress and Tasks stay behind.
+   */
+  copyGoalToWorkspace = async (id: string, targetWorkspaceId: string | null) =>
+    lambdaClient.goal.copyGoalToWorkspace.mutate({ id, targetWorkspaceId });
 
   /** Delete a goal and its graph. The dispatched Work Tasks are left in place. */
   delete = async (id: string) => lambdaClient.goal.delete.mutate({ id });
@@ -80,16 +135,25 @@ class GoalService {
   /**
    * Run the coordinator now and report where it stopped. The goal also advances
    * on its own as its Work Tasks settle — this is the explicit nudge, not the
-   * engine, so the surface never has to hold a tick loop open.
+   * engine, so the surface never has to hold a tick loop open. Planning runs
+   * on the `goal` model inside this request; a model only this device reaches
+   * is relayed back to this tab (one-shot relay).
    */
-  advance = async (id: string): Promise<GoalTickResult & { ticks: number }> => {
-    const { data } = await lambdaClient.goal.advance.mutate({ id });
+  advance = async (
+    id: string,
+    planningProvider?: string,
+  ): Promise<GoalTickResult & { ticks: number }> => {
+    const { data } = await oneShotRelay.run(goalModelProvider(planningProvider), (relay) =>
+      lambdaClient.goal.advance.mutate({ id }, withLlmRelay(relay)),
+    );
     return data;
   };
 
-  /** Advance the graph by exactly one coordinator step. */
-  tick = async (id: string): Promise<GoalTickResult> => {
-    const { data } = await lambdaClient.goal.tick.mutate({ id });
+  /** Advance the graph by exactly one coordinator step. Relayed like `advance`. */
+  tick = async (id: string, planningProvider?: string): Promise<GoalTickResult> => {
+    const { data } = await oneShotRelay.run(goalModelProvider(planningProvider), (relay) =>
+      lambdaClient.goal.tick.mutate({ id }, withLlmRelay(relay)),
+    );
     return data;
   };
 
@@ -131,6 +195,26 @@ class GoalService {
     resolution?: string;
   }) => lambdaClient.goal.decide.mutate(params);
 
+  /** Hand the goal to another agent; with no executor, its unfinished Tasks follow. */
+  setAgent = async (id: string, agentId: string) =>
+    lambdaClient.goal.setAgent.mutate({ agentId, id });
+
+  /** Route the goal's Tasks to a dedicated executor; `null` hands them back to the goal agent. */
+  setTaskAgent = async (id: string, agentId: string | null) =>
+    lambdaClient.goal.setTaskAgent.mutate({ agentId, id });
+
+  /** Make a workspace goal private or public; its own Tasks follow. */
+  setVisibility = async (id: string, visibility: 'private' | 'public') =>
+    lambdaClient.goal.setVisibility.mutate({ id, visibility });
+
+  /** The model the goal agent plans with; `null` falls back to the agent's own. */
+  setModel = async (id: string, modelConfig: { model: string; provider: string } | null) =>
+    lambdaClient.goal.setModel.mutate({ id, modelConfig });
+
+  /** The model the goal's Tasks run on; `null` falls back to their executor's own. */
+  setTaskModel = async (id: string, modelConfig: { model: string; provider: string } | null) =>
+    lambdaClient.goal.setTaskModel.mutate({ id, modelConfig });
+
   setBudget = async (params: {
     deadline?: string | null;
     id: string;
@@ -152,6 +236,9 @@ class GoalService {
 
   updateRequirement = async (id: string, requirement: string) =>
     lambdaClient.goal.updateRequirement.mutate({ id, requirement });
+
+  updateTitle = async (id: string, title: string) =>
+    lambdaClient.goal.updateTitle.mutate({ id, title });
 }
 
 export const goalService = new GoalService();

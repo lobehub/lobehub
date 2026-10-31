@@ -195,7 +195,12 @@ describe('approving a batch release', () => {
     // is gone, so no new version can be written.
     await goalModel.updateRolloutState(goalId, {
       ...state,
-      pendingRevision: { ...state.pendingRevision!, revisedRecipe: '先播种，再换 replica' },
+      // Nothing to re-run: the rewrite goes straight back to the review.
+      pendingRevision: {
+        ...state.pendingRevision!,
+        rerun: [],
+        revisedRecipe: '先播种，再换 replica',
+      },
       planSkill: { id: 'doc_deleted_plan', name: 'migrate-stores-plan' },
     });
 
@@ -206,6 +211,209 @@ describe('approving a batch release', () => {
     expect(after.rolloutState!.planSkill).toBeUndefined();
     expect(after.rollout!.spec?.recipeOutline).toBe('先播种，再换 replica');
     expect(after.rolloutState!.phase).toBe('release_review');
+  });
+
+  /** Send the plan back from the report and land the main Agent's rewrite of it. */
+  const sendBackAndRewrite = async (service: GoalService, goalId: string, rerun?: string[]) => {
+    const pending = await pendingRelease(service, goalId);
+    await service.answerReleaseGate(pending!.nodeId, 'revise', '每个 PR 都要过 codex review 和 CI');
+    const goalModel = new GoalModel(serverDB, userId);
+    const state = (await service.graph(goalId)).goal.config!.rolloutState!;
+    await goalModel.updateRolloutState(goalId, {
+      ...state,
+      pendingRevision: {
+        ...state.pendingRevision!,
+        ...(rerun && { rerun }),
+        revisedRecipe: '换 replica，并让 PR 过 codex review 和 CI',
+      },
+    });
+    return service.tick(goalId);
+  };
+  const derivedFrom = async (goalId: string, nodeId: string) =>
+    (await serverDB.query.goalEdges.findMany({ where: eq(goalEdges.goalId, goalId) })).find(
+      (edge) => edge.kind === 'derived_from' && edge.sourceNodeId === nodeId,
+    )?.targetNodeId;
+
+  it('re-runs the reviewed experiments on a sent-back plan before the owner reviews again', async () => {
+    const { goalId, graphModel, probeIds, service } = await passedProbes();
+    await service.tick(goalId);
+    const before = (await service.graph(goalId)).goal.config!.rolloutState!;
+
+    const result = await sendBackAndRewrite(service, goalId);
+
+    expect(result.outcome).toBe('advanced');
+    const graph = await service.graph(goalId);
+    const state = graph.goal.config!.rolloutState!;
+    // The experiments run again in their own round, under the same gate: the
+    // owner is not asked about results the correction was about.
+    expect(await pendingRelease(service, goalId)).toBeUndefined();
+    expect(state).toMatchObject({
+      assayNodeId: before.assayNodeId,
+      phase: 'probe',
+      releaseGateAcceptanceId: before.releaseGateAcceptanceId,
+      templateNodeId: before.templateNodeId,
+      templateRevision: before.templateRevision,
+      waveIndex: 0,
+    });
+    expect(graph.goal.config!.rollout!.spec?.recipeOutline).toBe(
+      '换 replica，并让 PR 过 codex review 和 CI',
+    );
+    // Each experiment runs again as a new task that continues its earlier run.
+    expect(state.probeNodeIds).toHaveLength(probeIds.length);
+    expect(state.probeNodeIds.some((id) => probeIds.includes(id))).toBe(false);
+    const reruns = state.probeNodeIds.map((id) => graph.nodes.find((node) => node.id === id)!);
+    expect(reruns.map((node) => node.status)).not.toContain('resolved');
+    expect(reruns[0].description).toContain('每个 PR 都要过 codex review 和 CI');
+    expect(await Promise.all(state.probeNodeIds.map((id) => derivedFrom(goalId, id)))).toEqual(
+      probeIds,
+    );
+    const gated = graph.edges
+      .filter((edge) => edge.kind === 'depends_on' && edge.sourceNodeId === before.assayNodeId)
+      .map((edge) => edge.targetNodeId);
+    expect(gated).toEqual(expect.arrayContaining(state.probeNodeIds));
+    // Units already delivered keep their delivery.
+    for (const id of probeIds)
+      expect(graph.nodes.find((node) => node.id === id)!.status).toBe('resolved');
+
+    // Once the re-runs settle, the owner reviews their results on the same report,
+    // named by the plan they ran on rather than the round number.
+    for (const id of state.probeNodeIds) await graphModel.updateNodeStatus(goalId, id, 'resolved');
+    await service.tick(goalId);
+    const revised = (await service.graph(goalId)).goal.config!.rolloutState!;
+    const planVersion = revised.planVersions?.[String(revised.templateRevision)];
+    expect(planVersion).toBeGreaterThan(revised.templateRevision);
+    expect((await pendingRelease(service, goalId))!.question).toContain(
+      `Experiments of v${planVersion} finished`,
+    );
+    const rounds = await new VerifyRunModel(serverDB, userId).listByAcceptance(
+      before.releaseGateAcceptanceId!,
+    );
+    expect(rounds.at(-1)!.metadata!.releaseGate!.units.map((unit) => unit.nodeId)).toEqual(
+      state.probeNodeIds,
+    );
+  });
+
+  // A probe that built on another runs after it again: the re-runs keep the
+  // order, so the dependent one never starts on its prerequisite's old output.
+  it('keeps the order between probes that depended on each other', async () => {
+    const { goalId, graphModel, probeIds, service } = await passedProbes();
+    await graphModel.createEdge(goalId, probeIds[1], probeIds[0], 'depends_on');
+    await service.tick(goalId);
+
+    await sendBackAndRewrite(service, goalId);
+
+    const graph = await service.graph(goalId);
+    const [first, second] = graph.goal.config!.rolloutState!.probeNodeIds;
+    expect(
+      graph.edges.some(
+        (edge) =>
+          edge.kind === 'depends_on' && edge.sourceNodeId === second && edge.targetNodeId === first,
+      ),
+    ).toBe(true);
+  });
+
+  it('re-runs only the units the main Agent names', async () => {
+    const { goalId, probeIds, service } = await passedProbes();
+    await service.tick(goalId);
+
+    await sendBackAndRewrite(service, goalId, [probeIds[0], 'Unit 2']);
+
+    const state = (await service.graph(goalId)).goal.config!.rolloutState!;
+    // The named units are replaced in place by their re-runs; the rest stand.
+    expect(state.probeNodeIds).toHaveLength(probeIds.length);
+    expect(
+      await Promise.all(state.probeNodeIds.slice(0, 2).map((id) => derivedFrom(goalId, id))),
+    ).toEqual(probeIds.slice(0, 2));
+    expect(state.probeNodeIds.slice(2)).toEqual(probeIds.slice(2));
+    expect(state.releasedCount).toBe(probeIds.length);
+  });
+
+  it('returns a rewrite that re-runs nothing straight to the review', async () => {
+    const { goalId, probeIds, service } = await passedProbes();
+    await service.tick(goalId);
+    const before = (await service.graph(goalId)).goal.config!.rolloutState!;
+
+    await sendBackAndRewrite(service, goalId, []);
+
+    const state = (await service.graph(goalId)).goal.config!.rolloutState!;
+    expect(state).toMatchObject({
+      phase: 'release_review',
+      probeNodeIds: probeIds,
+      templateRevision: before.templateRevision,
+    });
+    expect(await pendingRelease(service, goalId)).toBeDefined();
+  });
+
+  it('re-runs a later wave sent back in place, and returns its results to the owner', async () => {
+    const { goalId, graphModel, service } = await firstWaveDelivered();
+    // The owner reviews the later wave (escalated by the main Agent in practice).
+    await service.tick(goalId);
+    const before = (await service.graph(goalId)).goal.config!.rolloutState!;
+    const reviewed = before.massNodeIds!;
+
+    await sendBackAndRewrite(service, goalId);
+
+    const state = (await service.graph(goalId)).goal.config!.rolloutState!;
+    expect(state).toMatchObject({ phase: 'mass', waveIndex: before.waveIndex });
+    expect(await Promise.all(state.massNodeIds!.map((id) => derivedFrom(goalId, id)))).toEqual(
+      reviewed,
+    );
+
+    // The re-run wave passes its gate. A main Agent that could release later
+    // waves on its own is not asked: the owner sent this one back.
+    const agentId = 'goal-release-agent';
+    await serverDB.insert(agents).values({ id: agentId, userId });
+    const config = (await service.graph(goalId)).goal.config!;
+    await serverDB
+      .update(goals)
+      .set({ agentId, config: { ...config, manager: { maxTurns: 4 } } })
+      .where(eq(goals.id, goalId));
+    const execAgent = vi.spyOn(AiAgentService.prototype, 'execAgent').mockResolvedValue({
+      operationId: 'op-release-turn',
+    } as Awaited<ReturnType<AiAgentService['execAgent']>>);
+    for (const id of state.massNodeIds!) await graphModel.updateNodeStatus(goalId, id, 'resolved');
+    await service.tick(goalId);
+
+    expect(execAgent).not.toHaveBeenCalled();
+    expect((await pendingRelease(service, goalId))!.question).toContain('re-run on plan');
+  });
+
+  // The review report may fail to open; the owner then sends the wave back on
+  // the goal page. The re-run still returns to the owner, not the main Agent.
+  it('returns a later wave sent back on the goal page to the owner', async () => {
+    const { goalId, graphModel, service } = await firstWaveDelivered();
+    await service.tick(goalId);
+    const held = (await service.graph(goalId)).goal.config!.rolloutState!;
+    const goalModel = new GoalModel(serverDB, userId);
+    await goalModel.updateRolloutState(goalId, { ...held, releaseGateAcceptanceId: undefined });
+    const pending = await pendingRelease(service, goalId);
+    await service.decide(goalId, pending!.id, 'revise', '每个 PR 都要过 codex review 和 CI');
+    const revising = (await service.graph(goalId)).goal.config!.rolloutState!;
+    await goalModel.updateRolloutState(goalId, {
+      ...revising,
+      pendingRevision: {
+        ...revising.pendingRevision!,
+        revisedRecipe: '换 replica，过 review 和 CI',
+      },
+    });
+    await service.tick(goalId);
+
+    const agentId = 'goal-release-fallback-agent';
+    await serverDB.insert(agents).values({ id: agentId, userId });
+    const config = (await service.graph(goalId)).goal.config!;
+    await serverDB
+      .update(goals)
+      .set({ agentId, config: { ...config, manager: { maxTurns: 4 } } })
+      .where(eq(goals.id, goalId));
+    const execAgent = vi.spyOn(AiAgentService.prototype, 'execAgent').mockResolvedValue({
+      operationId: 'op-release-turn',
+    } as Awaited<ReturnType<AiAgentService['execAgent']>>);
+    const rerun = (await service.graph(goalId)).goal.config!.rolloutState!;
+    for (const id of rerun.massNodeIds!) await graphModel.updateNodeStatus(goalId, id, 'resolved');
+    await service.tick(goalId);
+
+    expect(execAgent).not.toHaveBeenCalled();
+    expect((await pendingRelease(service, goalId))!.question).toContain('re-run on plan');
   });
 
   it('takes a retry of the answer it recorded, and refuses a different one', async () => {

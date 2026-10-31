@@ -11,6 +11,7 @@ import {
   MUTED_EDGE_OPACITY_DARK,
   nodeEmphasis,
   resolveMainline,
+  shownMainline,
 } from './mainline';
 
 const graphWith = (
@@ -178,11 +179,10 @@ describe('off-mainline legibility', () => {
   /**
    * Regression: the dark canvas turned the border token at a third opacity into
    * background, so an off-mainline line and the arrow ending it were barely
-   * there. Only the off-mainline tone is lifted; the mainline keeps its own
-   * primary line, so the hierarchy is not flattened.
+   * there. Off-mainline lines step back through opacity, so the lifted token
+   * only restores legibility.
    */
-  it('lifts only the off-mainline arrow on the dark canvas', () => {
-    expect(edgeMarkerColor('mainline', true)).toBe(cssVar.colorPrimary);
+  it('lifts the plain arrow on the dark canvas', () => {
     expect(edgeMarkerColor('detour', true)).toBe(cssVar.colorWarning);
     // Light mode is unchanged — the same border token as before.
     expect(edgeMarkerColor(undefined, false)).toBe(cssVar.colorBorder);
@@ -191,8 +191,30 @@ describe('off-mainline legibility', () => {
     expect(edgeMarkerColor('muted', true)).toBe(cssVar.colorTextQuaternary);
   });
 
+  /**
+   * Regression: a colored mainline line — near-black primary, then info blue,
+   * then light blue — read as heavier than the map. The cards carry the
+   * mainline; its lines end in the same ordinary arrow as any other line.
+   */
+  it('ends the mainline in an ordinary arrow', () => {
+    expect(edgeMarkerColor('mainline', false)).toBe(edgeMarkerColor(undefined, false));
+    expect(edgeMarkerColor('mainline', true)).toBe(edgeMarkerColor(undefined, true));
+  });
+
   it('is more legible on the dark canvas while still stepping back', () => {
     expect(MUTED_EDGE_OPACITY_DARK).toBeGreaterThan(MUTED_EDGE_OPACITY);
     expect(MUTED_EDGE_OPACITY_DARK).toBeLessThan(1);
+  });
+});
+
+describe('shownMainline', () => {
+  const graph = graphWith({ edgeIds: ['e1'], nodeIds: ['t1', 't2'] });
+
+  it('leaves a finished map plain until the mainline is turned on', () => {
+    expect(shownMainline(graph, false)).toBeUndefined();
+  });
+
+  it('draws the marked mainline once it is turned on', () => {
+    expect([...shownMainline(graph, true)!.nodeIds]).toEqual(['t1', 't2']);
   });
 });

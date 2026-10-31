@@ -12,6 +12,9 @@ import { useCallback, useState } from 'react';
  * a deferred read paints the whole block and collapses it afterwards on every
  * mount, including each virtual-list remount, dragging the transcript's scroll
  * position around.
+ *
+ * Folded is the default: the summary is earlier history, so a collapsed bar
+ * keeps the question and its answer adjacent until the reader asks for it.
  */
 export const compressedGroupTabKey = (id: string) => `compressed-group-tab:${id}`;
 
@@ -42,7 +45,7 @@ export const useGroupPreferences = (id: string) => {
     () => readPreference(compressedGroupTabKey(id)) ?? 'summary',
   );
   const [expanded, setExpanded] = useState(
-    () => readPreference(compressedGroupExpandedKey(id)) !== 'false',
+    () => readPreference(compressedGroupExpandedKey(id)) === 'true',
   );
 
   const setActiveTab = useCallback(

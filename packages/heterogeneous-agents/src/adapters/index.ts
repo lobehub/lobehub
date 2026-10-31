@@ -1,5 +1,6 @@
 export { AmpAdapter } from './amp';
-export { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from './claudeCode';
+export { ClaudeCodeAdapter } from './claudeCode';
+export { ClaudeCodeSdkAdapter } from './claudeCodeSdk';
 export { CodeBuddyAdapter } from './codeBuddy';
 export { CodexAdapter } from './codex';
 export { CodexAppServerAdapter } from './codexAppServer';

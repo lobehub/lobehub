@@ -1,4 +1,4 @@
-import type { AcceptanceSubjectType, VerifyRubricConfig } from '@lobechat/types';
+import type { CreatableAcceptanceSubjectType, VerifyRubricConfig } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand';
@@ -17,6 +17,9 @@ import {
   acceptanceBundleResource,
   acceptanceBySubjectKey,
   acceptanceBySubjectResource,
+  toPersistedVerifyRun,
+  verifyRunResource,
+  type VerifyRunSnapshot,
 } from './projection';
 
 export type Action = Pick<ActionImpl, keyof ActionImpl>;
@@ -27,6 +30,7 @@ type Setter = StoreSetter<Store>;
 /** `acceptanceBundleMap` / `acceptanceBySubjectMap` are plain `Record<key, value>` views. */
 const acceptanceBundleLens = recordLens<Store, AcceptanceBundle>('acceptanceBundleMap');
 const acceptanceBySubjectLens = recordLens<Store, AcceptanceBySubject>('acceptanceBySubjectMap');
+const verifyRunLens = recordLens<Store, VerifyRunSnapshot>('verifyRunMap');
 
 /**
  * The verify store owns the write-back loop for the delivery-check config
@@ -41,6 +45,8 @@ export class ActionImpl {
   readonly #bundle;
   /** The subject-attachment replica, behind `acceptanceBySubjectMap`. */
   readonly #bySubject;
+  /** The Agent Run verify card replica, behind `verifyRunMap[operationId]`. */
+  readonly #run;
 
   /** Pending writes coalesced per id and flushed together on a debounce. */
   #pendingCriteria = new Map<string, VerifyCriterionEdit>();
@@ -84,6 +90,22 @@ export class ActionImpl {
       stateKey: 'acceptanceBySubjectReplica',
       view: acceptanceBySubjectLens,
     });
+    this.#run = createReplicaSlice(verifyRunResource, {
+      actionPrefix: 'verifyRun',
+      fetcher: async (operationId) => {
+        const [state, results] = await Promise.all([
+          verifyService.getVerifyState(operationId),
+          verifyService.listResults(operationId),
+        ]);
+        return { results, state };
+      },
+      get,
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      set,
+      stateKey: 'verifyRunReplica',
+      toPersisted: toPersistedVerifyRun,
+      view: verifyRunLens,
+    });
   }
 
   /** Re-read one acceptance bundle (after a review, merge, delete or status sweep). */
@@ -93,10 +115,28 @@ export class ActionImpl {
 
   /** Re-read one subject's acceptance (after it is created or settled). */
   refreshAcceptanceBySubject = async (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId: string,
   ): Promise<void> => {
     await this.#bySubject.revalidate(acceptanceBySubjectKey({ subjectId, subjectType }));
+  };
+
+  /**
+   * Seed the persisted verify cards of a transcript before its messages mount
+   * (route pre-paint), so a settled card paints in the same frame as the
+   * message it belongs to instead of a few frames later.
+   */
+  preHydrateVerifyRuns = async (operationIds: string[]): Promise<void> => {
+    if (operationIds.length === 0) return;
+    const scope = verifyRunResource.scope.get();
+    // The slot may still hold the previous identity's rows; drop them before seeding.
+    this.#run.ensureScope(scope);
+    await Promise.all(operationIds.map((operationId) => this.#run.hydrate(operationId, scope)));
+  };
+
+  /** Re-read one Agent Run's verify card (after a plan action or a manual refresh). */
+  refreshVerifyRun = async (operationId: string): Promise<void> => {
+    await this.#run.revalidate(operationId);
   };
 
   /**
@@ -132,13 +172,24 @@ export class ActionImpl {
    * so the aggregate a later verify run creates is discovered without a reload.
    */
   useFetchAcceptanceBySubject = (
-    subjectType: AcceptanceSubjectType,
+    subjectType: CreatableAcceptanceSubjectType,
     subjectId?: string | null,
     options: { enabled?: boolean; refreshInterval?: number } = {},
   ): ReplicaSyncResult =>
     this.#bySubject.useSync(subjectId ? { subjectId, subjectType } : null, {
       enabled: options.enabled ?? true,
       refreshInterval: options.refreshInterval,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+    });
+
+  /**
+   * Fetch orchestration only; the caller reads the card through `verifyRunMap`
+   * (`verifySelectors.verifyRun`). A persisted settled run paints first and is
+   * revalidated in the background.
+   */
+  useFetchVerifyRun = (operationId?: string | null): ReplicaSyncResult =>
+    this.#run.useSync(operationId || null, {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
     });

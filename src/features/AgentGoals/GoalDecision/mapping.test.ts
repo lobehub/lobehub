@@ -70,6 +70,34 @@ describe('toGateQuestion', () => {
     });
   });
 
+  it("adds the retire cascade after an Agent's own consequence", () => {
+    // The Agent describes its answer; which tasks it takes along is the
+    // coordinator's to say, so an answer that retires never hides it.
+    const question = toGateQuestion(
+      {
+        id: 'd3',
+        options: [
+          {
+            alsoRetires: [{ nodeId: 'n1', title: 'Summary' }],
+            description: 'Skip the measurement',
+            effect: 'retire',
+            id: 'skip',
+            label: 'Skip',
+          },
+        ],
+        question: 'Skip?',
+      },
+      {
+        cascade: (option) => (option.alsoRetires ? 'Summary goes too.' : undefined),
+        describe: () => 'generic',
+        label: (o) => o.label,
+        question: 'Skip?',
+      },
+    );
+
+    expect(question.options[0].description).toBe('Skip the measurement Summary goes too.');
+  });
+
   it("keeps an Agent's own consequence over the generic one", () => {
     const question = toGateQuestion(
       {

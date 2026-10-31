@@ -1,10 +1,15 @@
 import { isDesktop } from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
-import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
-import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
-import { ChatErrorType } from '@lobechat/types';
+import { getErrorCodeSpec } from '@lobechat/model-runtime/errors';
+import {
+  AgentRuntimeErrorType,
+  ChatErrorType,
+  type ChatMessageError,
+  type ErrorType,
+  type ILobeAgentRuntimeErrorType,
+  type IToolErrorType,
+} from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { type AlertProps, Block, Highlighter, Skeleton, toast } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
@@ -22,7 +27,10 @@ import {
   useConversationStore,
 } from '@/features/Conversation/store';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
-import type { HeterogeneousAgentScheduleState } from '@/features/Electron/HeterogeneousAgent/StatusGuide/types';
+import type {
+  HeterogeneousAgentScheduleState,
+  HeterogeneousAgentStatusGuideProps,
+} from '@/features/Electron/HeterogeneousAgent/StatusGuide/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
@@ -38,6 +46,7 @@ import { readClientLlmWait } from './clientLlmWait';
 import { type DedicatedErrorCardType, isDedicatedErrorCardType } from './dedicatedErrorCards';
 import { isHeterogeneousAgentStatusGuideError } from './heterogeneous';
 import { useHeterogeneousAutoRetry } from './useHeterogeneousAutoRetry';
+import WorkingDirectoryStatusGuide from './WorkingDirectoryStatusGuide';
 
 // Re-export so existing barrel consumers (ContentBlock, message action bar) can
 // keep importing the guard from '@/features/Conversation/Error'.
@@ -68,12 +77,35 @@ const getRawErrorMessage = (error?: ChatMessageError | null) => {
   return;
 };
 
+/**
+ * Server dispatch errors keep the upstream response body verbatim in `detail`
+ * (e.g. the gateway's `{"error":"TIMEOUT","success":false}`). Stringified into
+ * the JSON details block it renders escaped twice, so show the parsed object.
+ */
+const parseJsonDetail = (detail: unknown) => {
+  if (typeof detail !== 'string' || !detail.trim().startsWith('{')) return detail;
+  try {
+    const parsed: unknown = JSON.parse(detail);
+    return isRecord(parsed) ? parsed : detail;
+  } catch {
+    return detail;
+  }
+};
+
 const getErrorDetails = (error?: ChatMessageError | null) => {
   if (!error) return;
 
   const rawErrorMessage = getRawErrorMessage(error);
   if (!rawErrorMessage) return error.body;
-  if (isRecord(error.body)) return { ...error.body, message: rawErrorMessage };
+  if (isRecord(error.body)) {
+    if (!('detail' in error.body)) return { ...error.body, message: rawErrorMessage };
+
+    const { detail, ...rest } = error.body;
+    // A message that only repeats the raw detail adds nothing to the block.
+    return detail === rawErrorMessage
+      ? { ...rest, detail: parseJsonDetail(detail) }
+      : { ...rest, detail: parseJsonDetail(detail), message: rawErrorMessage };
+  }
   if (error.body !== undefined) return { body: error.body, message: rawErrorMessage };
 
   return { message: rawErrorMessage };
@@ -201,6 +233,7 @@ const getErrorAlertConfig = (
     case AgentRuntimeErrorType.ModelNotFound:
     case AgentRuntimeErrorType.QuotaLimitReached:
     case AgentRuntimeErrorType.ExceededContextWindow:
+    case AgentRuntimeErrorType.RequestBodyTooLarge:
     case AgentRuntimeErrorType.LocationNotSupportError: {
       return {
         type: 'secondary',
@@ -299,6 +332,10 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     const conversationAgentId = useConversationStore(contextSelectors.agentId);
     const conversationTopicId = useConversationStore(contextSelectors.topicId);
     const isSharedTopic = useConversationStore((s) => !!s.context?.topicShareId);
+    // A static transcript (a render gallery, a preview, a conversation read
+    // through a grant) is held, never synced: nothing behind it could take the
+    // delete-and-regenerate, so it must not offer one.
+    const isStaticTranscript = useConversationStore((s) => s.transcriptSource === 'static');
     const sessionErrorBody = error?.body;
     const rawErrorMessage = getRawErrorMessage(error);
     const errorDetails = getErrorDetails(error);
@@ -327,7 +364,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
     // to retrying this message on our own, but only advertise it when that can
     // actually run: a block that isn't a top-level displayMessage, or one with no
     // parent user turn, would delete itself and regenerate nothing.
-    const canRetry = canCreate && (!!onRegenerate || !!ownParentId);
+    const canRetry = !isStaticTranscript && canCreate && (!!onRegenerate || !!ownParentId);
 
     const handleRetryAgentMessage = useCallback(() => {
       if (!canRetry) return;
@@ -427,9 +464,6 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
               console.error('[ErrorMessageExtra] Failed to cancel scheduled continuation:', error);
               toast.error(t('heteroRateLimit.cancelFailed'));
             }),
-          // Same fallback as the retry button: `onRegenerate` is absent on the
-          // standalone surfaces, where a bare `onRegenerate?.()` was a no-op.
-          onRunNow: handleManualRetry,
           onSchedule: () =>
             void scheduleHeteroContinuation({
               failedAssistantMessageId: data.id,
@@ -443,36 +477,60 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
       : undefined;
 
     if (isHeterogeneousAgentStatusGuideError(sessionErrorBody)) {
-      return (
-        <HeterogeneousAgentStatusGuide
-          agentType={sessionErrorBody.agentType}
-          autoRetry={autoRetry}
-          error={sessionErrorBody}
-          schedule={schedule}
-          onDismiss={() => void updateMessageError(data.id, null)}
-          onRetry={() => void handleHeterogeneousRetry()}
-          onOpenSystemTools={() =>
-            navigate(
-              isDesktop
-                ? '/settings/system-tools'
-                : activeAgentId
-                  ? `/agent/${activeAgentId}/profile`
-                  : '/settings/credential',
-            )
-          }
-          onTransfer={
-            isRateLimitError && conversationAgentId && conversationTopicId
-              ? () =>
-                  createTopicForwardModal({
-                    cancelSourceContinuation: true,
-                    sourceAgentId: conversationAgentId,
-                    topicId: conversationTopicId,
-                    topicTitle: conversationTopic?.title || '',
-                  })
-              : undefined
-          }
-        />
-      );
+      const guideProps: HeterogeneousAgentStatusGuideProps = {
+        agentType: sessionErrorBody.agentType,
+        autoRetry,
+        error: sessionErrorBody,
+        // A quota card owns its local collapse action. Clearing its error would
+        // also remove recovery controls while a scheduled continuation survives.
+        onDismiss:
+          sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.RateLimit
+            ? undefined
+            : () => void updateMessageError(data.id, null),
+        onHandoff:
+          // Waiting is an explicit choice. Cancelling it restores this entry
+          // from the topic state; opening or closing the picker consumes nothing.
+          isRateLimitError &&
+          !conversationTopicScheduled &&
+          conversationAgentId &&
+          conversationTopicId
+            ? () =>
+                createTopicForwardModal({
+                  cancelSourceContinuation: true,
+                  sourceAgentId: conversationAgentId,
+                  topicId: conversationTopicId,
+                  topicTitle: conversationTopic?.title || '',
+                })
+            : undefined,
+        onOpenSystemTools: () =>
+          navigate(
+            isDesktop
+              ? '/settings/system-tools'
+              : activeAgentId
+                ? `/agent/${activeAgentId}/profile`
+                : '/settings/credential',
+          ),
+        onRetry: () => void handleHeterogeneousRetry(),
+        schedule,
+      };
+
+      // A deleted worktree is recoverable from the card itself (back to the
+      // source repo), which a retry-only card can't offer.
+      if (
+        canRetry &&
+        sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound &&
+        conversationAgentId &&
+        conversationTopicId
+      )
+        return (
+          <WorkingDirectoryStatusGuide
+            {...guideProps}
+            agentId={conversationAgentId}
+            topicId={conversationTopicId}
+          />
+        );
+
+      return <HeterogeneousAgentStatusGuide {...guideProps} />;
     }
 
     // A run parked in `waiting_for_client` is still alive: show what it waits
@@ -532,11 +590,30 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         }
 
         case AgentRuntimeErrorType.OllamaBizError: {
-          return <OllamaBizError {...data} />;
+          return (
+            <OllamaBizError {...data} alertError={{ ...alertError, message: displayMessage }} />
+          );
         }
 
         case AgentRuntimeErrorType.ExceededContextWindow: {
-          return <ExceededContextWindowError id={data.id} />;
+          return (
+            <ExceededContextWindowError
+              canCompact={canCreate}
+              id={data.id}
+              parentId={retryScopeId}
+            />
+          );
+        }
+
+        case AgentRuntimeErrorType.RequestBodyTooLarge: {
+          return (
+            <ExceededContextWindowError
+              canCompact={canCreate}
+              id={data.id}
+              parentId={retryScopeId}
+              reason={'requestBodyTooLarge'}
+            />
+          );
         }
 
         case AgentRuntimeErrorType.NoOpenAIAPIKey: {

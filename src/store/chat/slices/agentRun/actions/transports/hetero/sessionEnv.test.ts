@@ -21,6 +21,18 @@ describe('buildLobeHubSessionEnv', () => {
     ).toEqual({ LOBEHUB_AGENT_ID: 'agt_1' });
   });
 
+  it('scopes the child to the workspace the topic lives in', () => {
+    // Without it `lh` falls back to personal scope and a workspace goal reads
+    // as "Goal not found".
+    expect(
+      buildLobeHubSessionEnv({ operationId: 'op_1', topicId: 'tpc_1', workspaceId: 'ws_1' }),
+    ).toEqual({
+      LOBEHUB_OPERATION_ID: 'op_1',
+      LOBEHUB_TOPIC_ID: 'tpc_1',
+      LOBEHUB_WORKSPACE_ID: 'ws_1',
+    });
+  });
+
   it('is empty when the run carries no conversation at all', () => {
     expect(buildLobeHubSessionEnv({})).toEqual({});
   });

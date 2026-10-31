@@ -12,6 +12,14 @@ Manage conversation topics (chat sessions).
 - \`lh topic delete <ids...> [--yes]\` - Delete one or more topics
 - \`lh topic recent [-L <limit>]\` - List recently accessed topics
 
+## Threads
+
+A thread is a side conversation branched off a message inside a topic.
+
+- \`lh thread list --topic-id <id> [--json]\` - List threads in a topic
+- \`lh thread list-all [--json]\` - List all your threads
+- \`lh thread delete <id> [--remove-children] [--yes]\` - Delete a thread
+
 ## Tips
 
 - Topics are associated with agents; use \`--agent-id\` to filter

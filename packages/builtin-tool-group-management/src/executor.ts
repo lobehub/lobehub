@@ -255,12 +255,13 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
     };
   };
 
-  vote = async (params: VoteParams, _ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
+  vote = async (_params: VoteParams, _ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
     // TODO: Implement voting mechanism
-    const optionLabels = params.options.map((o) => o.label).join(', ');
     return {
-      content: `Voting not yet implemented for question: "${params.question}" with options: ${optionLabels}`,
-      success: true,
+      content:
+        "Voting is not yet implemented. Collect members' opinions with `broadcast` instead, " +
+        'then tally the responses yourself.',
+      success: false,
     };
   };
 }

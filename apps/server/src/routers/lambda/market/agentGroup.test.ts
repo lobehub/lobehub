@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { MarketAPIError } from '@lobehub/market-sdk';
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentGroupRouter } from './agentGroup';
@@ -6,6 +8,7 @@ import { agentGroupRouter } from './agentGroup';
 const { mockMarketSDK } = vi.hoisted(() => ({
   mockMarketSDK: {
     agentGroups: {
+      deprecate: vi.fn(),
       getAgentGroupDetail: vi.fn(),
     },
     headers: {} as Record<string, string>,
@@ -124,5 +127,31 @@ describe('agentGroupRouter.checkOwnership', () => {
       isOwner: true,
       originalGroup: null,
     });
+  });
+});
+
+describe('agentGroupRouter.deprecateAgentGroup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMarketSDK.agentGroups.deprecate.mockResolvedValue({ success: true });
+  });
+
+  it('deprecates the requested group and returns the Market result', async () => {
+    const caller = agentGroupRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
+
+    const result = await caller.deprecateAgentGroup({ identifier: 'group-1' });
+
+    expect(mockMarketSDK.agentGroups.deprecate).toHaveBeenCalledWith('group-1');
+    expect(result).toEqual({ success: true });
+  });
+
+  it('maps a Market 404 to NOT_FOUND', async () => {
+    mockMarketSDK.agentGroups.deprecate.mockRejectedValue(new MarketAPIError(404, 'Not Found'));
+    const caller = agentGroupRouter.createCaller({ serverDB: {}, userId: 'user-1' } as any);
+
+    const error = await caller.deprecateAgentGroup({ identifier: 'missing' }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(TRPCError);
+    expect(error.code).toBe('NOT_FOUND');
   });
 });

@@ -26,10 +26,10 @@ const styles = stylex.create({
 
 export const SetTaskVerifyInspector = memo<
   BuiltinInspectorProps<SetTaskVerifyParams, SetTaskVerifyState>
->(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const identifier = args?.identifier || partialArgs?.identifier;
+  const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
 
   return (
     <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>

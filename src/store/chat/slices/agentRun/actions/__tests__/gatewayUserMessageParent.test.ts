@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe('gateway send: user message parent', () => {
-  // LOBE-14875: the server anchored gateway turns on the newest row, which after
+  // The server anchored gateway turns on the newest row, which after
   // a regenerate can sit on a branch the user is not viewing. The client must
   // tell the server which branch tail it renders the new turn under.
   it('sends the tail of the branch on screen, not the newest branch', async () => {

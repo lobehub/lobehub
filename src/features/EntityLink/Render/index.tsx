@@ -4,6 +4,7 @@ import { Github } from '@lobehub/icons';
 import { Mail } from 'lucide-react';
 import { memo } from 'react';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
@@ -22,12 +23,14 @@ const Render = memo<EntityLinkElementProps>(({ node }) => {
   const { linkHref, linkKind, linkLabel, linkDomain } = properties;
   const showIcon = useUserStore(userGeneralSettingsSelectors.enableMessageLinkIcon);
   const workspaces = useWorkspaces();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const label = linkLabel || linkHref || '';
   const internalReference = parseInternalLink(
     linkHref,
     typeof window === 'undefined' ? undefined : window.location.origin,
     workspaces.map((workspace) => workspace.slug),
+    activeWorkspaceSlug,
   );
 
   if (linkHref && internalReference) {

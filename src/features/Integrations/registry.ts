@@ -2,7 +2,7 @@ import { Cloudflare, Notion, Railway, Vercel } from '@lobehub/icons';
 import type { ComponentType } from 'react';
 
 /** Stable id of an integration; doubles as its settings sub-route (`/settings/integrations/<id>`). */
-export type IntegrationId = 'github';
+export type IntegrationId = 'github' | 'linear';
 
 export interface IntegrationDefinition {
   /** Documentation page for the integration. */

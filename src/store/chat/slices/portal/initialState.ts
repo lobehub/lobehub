@@ -20,6 +20,7 @@ export enum PortalViewType {
   Goal = 'goal',
   GoalMetric = 'goalMetric',
   GoalNode = 'goalNode',
+  GoalNorthStar = 'goalNorthStar',
   GoalReport = 'goalReport',
   GoalReportChapter = 'goalReportChapter',
   GroupThread = 'groupThread',
@@ -93,6 +94,8 @@ export type PortalViewData =
   | { goalId: string; type: PortalViewType.Goal }
   | { goalId: string; metric: GoalMetricKind; type: PortalViewType.GoalMetric }
   | { goalId: string; nodeId: string; type: PortalViewType.GoalNode }
+  /** One declared north-star clause of a goal, keyed by its metric series key. */
+  | { goalId: string; metricKey: string; type: PortalViewType.GoalNorthStar }
   | { goalId: string; type: PortalViewType.GoalReport }
   | { chapterIndex: number; goalId: string; type: PortalViewType.GoalReportChapter }
   | { acceptanceId: string; type: PortalViewType.Acceptance }
@@ -142,6 +145,9 @@ export interface ChatPortalState {
   /** Path of the currently active tab; kept for legacy consumers that only need display/open path. */
   activeLocalFilePath?: string;
 
+  /** Version a canvas tab is held at; a canvas absent here follows its latest version. */
+  canvasTabVersions: Record<string, number>;
+
   /** Unsaved edit buffers keyed by file path. Presence implies the file is dirty. */
   dirtyLocalFileContents: Record<string, string>;
 
@@ -171,6 +177,7 @@ export interface ChatPortalState {
 
 export const initialChatPortalState: ChatPortalState = {
   activeLocalFileIdsByScope: {},
+  canvasTabVersions: {},
   dirtyLocalFileContents: {},
   openLocalFiles: [],
   portalArtifactDisplayMode: ArtifactDisplayMode.Preview,

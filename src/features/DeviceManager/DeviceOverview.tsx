@@ -3,7 +3,6 @@
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
 import {
   ActionIcon,
-  Avatar,
   confirmModal,
   createStaticStyles,
   cssVar,
@@ -22,6 +21,7 @@ import {
   CpuIcon,
   FolderIcon,
   GaugeIcon,
+  HardDriveIcon,
   HeartPulseIcon,
   LayersIcon,
   type LucideIcon,
@@ -39,6 +39,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonBar from '@/components/Skeleton/Bar';
+import UserAvatar from '@/components/UserAvatar';
 import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 import { formatSize } from '@/utils/format';
 
@@ -238,17 +239,21 @@ interface DeviceOverviewProps {
  */
 const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
   const { t } = useTranslation('setting');
-  const { data, error } = useDeviceMetricSeries(device.deviceId);
+  const { data, error } = useDeviceMetricSeries(device.deviceId, device.scope);
   const usage = latestUsageView({ data, error });
   const latest = usage.loading ? null : usage.latest;
 
   const channels = device.channels ?? [];
   const online = channels.length > 0;
+  // The persisted copy carries no channels: presence is unknown, not offline.
+  const presenceUnknown = !!device.onlineUnknown;
 
   const newest = data?.points.at(-1);
   const cores = data?.cpuCount ?? null;
   const memoryTotal = data?.memoryTotalBytes ?? null;
   const memoryUsed = newest?.memoryUsedBytes ?? null;
+  const diskTotal = data?.diskTotalBytes ?? null;
+  const diskUsed = newest?.diskUsedBytes ?? null;
 
   const lastConnected = dayjs(channels[0]?.connectedAt ?? device.lastSeen).fromNow();
   const platformLabel = getPlatformLabel(device.platform);
@@ -302,7 +307,11 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
                   width: 6,
                 }}
               />
-              {online ? t('devices.status.online') : t('devices.status.offline')}
+              {presenceUnknown
+                ? t('devices.status.checking')
+                : online
+                  ? t('devices.status.online')
+                  : t('devices.status.offline')}
             </span>
           </InfoRow>
           <InfoRow icon={MonitorIcon} label={t('devices.detail.os')}>
@@ -325,7 +334,7 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
           </InfoRow>
           {device.scope === 'workspace' && device.enroller && (
             <InfoRow icon={UserIcon} label={t('workspaceSetting.devices.enrolledByLabel')}>
-              <Avatar avatar={device.enroller.avatar ?? undefined} size={20} />
+              <UserAvatar avatar={device.enroller.avatar} name={enrollerName} size={20} />
               <Text ellipsis>{enrollerName}</Text>
             </InfoRow>
           )}
@@ -350,6 +359,11 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
           <InfoRow icon={MemoryStickIcon} label={t('devices.detail.memory')}>
             {memoryTotal ? <Text>{formatSize(memoryTotal)}</Text> : <Empty />}
           </InfoRow>
+          {diskTotal ? (
+            <InfoRow icon={HardDriveIcon} label={t('devices.detail.disk')}>
+              <Text>{formatSize(diskTotal)}</Text>
+            </InfoRow>
+          ) : null}
           <InfoRow icon={FolderIcon} label={t('devices.card.workingDir')}>
             {device.defaultCwd ? (
               <span className={styles.code} title={device.defaultCwd}>
@@ -407,10 +421,22 @@ const DeviceOverview = ({ canOperate, device }: DeviceOverviewProps) => {
               : undefined
           }
         />
+        {!usage.loading && usage.reportsDisk && (
+          <StatCard
+            icon={HardDriveIcon}
+            title={t('devices.card.diskUsage')}
+            value={latest?.diskPercent}
+            detail={
+              diskUsed !== null && diskTotal
+                ? `${formatSize(diskUsed)} / ${formatSize(diskTotal)}`
+                : undefined
+            }
+          />
+        )}
       </div>
 
       <DetailCard extra={<HealthLegend />} icon={HeartPulseIcon} title={t('devices.health.title')}>
-        <DeviceHealth deviceId={device.deviceId} />
+        <DeviceHealth deviceId={device.deviceId} scope={device.scope} />
       </DetailCard>
 
       <DetailCard icon={CableIcon} title={t('devices.detail.connections')}>

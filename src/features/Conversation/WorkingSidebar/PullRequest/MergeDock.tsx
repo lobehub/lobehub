@@ -191,6 +191,7 @@ const MergeDock = memo<MergeDockProps>(
             {status.key === 'autoMerge' && (
               <Button
                 className={styles.trailing}
+                disabled={contextLoading}
                 loading={busy === 'disableAutoMerge'}
                 size={'small'}
                 type={'text'}

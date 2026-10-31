@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildGoalAgents,
   buildGoalCreateInput,
   buildReviewedGoalContent,
   deriveInitialGoalCriterionTitle,
@@ -57,6 +58,23 @@ describe('buildReviewedGoalContent', () => {
     expect(buildReviewedGoalContent(instruction)).toEqual({
       problemDescription: instruction,
       requirement: instruction,
+    });
+  });
+});
+
+describe('buildGoalAgents', () => {
+  it('routes Tasks to a dedicated executor', () => {
+    expect(buildGoalAgents('agt_plan', 'agt_exec')).toEqual({
+      agentId: 'agt_plan',
+      taskAgentId: 'agt_exec',
+    });
+  });
+
+  it('leaves Tasks with the main agent when no other executor is picked', () => {
+    expect(buildGoalAgents('agt_plan')).toEqual({ agentId: 'agt_plan', taskAgentId: undefined });
+    expect(buildGoalAgents('agt_plan', 'agt_plan')).toEqual({
+      agentId: 'agt_plan',
+      taskAgentId: undefined,
     });
   });
 });

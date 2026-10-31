@@ -2,12 +2,12 @@
 // wiring pulls `@/libs/swr/useCacheScope`, which reads this very store, and the
 // cycle would leave `createReplicaState` undefined while the initial state is
 // built.
-import { createReplicaState, type ReplicaState } from '@lobechat/replica';
 import {
   type Plans,
   type ReferralStatusString,
   type UserInitializationState,
 } from '@lobechat/types';
+import { createReplicaState, type ReplicaState } from 'local-replica';
 
 export interface CommonState {
   isFreePlan?: boolean;

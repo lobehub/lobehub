@@ -64,6 +64,30 @@ jobs:
       - name: Test App
         run: bun run test-app
 
+  sync-readme:
+    name: Sync README
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      # Tag checkouts are a detached HEAD, so commit the README onto canary instead.
+      - uses: actions/checkout@v7
+        with:
+          ref: canary
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      - name: Install deps
+        run: pnpm install
+
       - name: Workflow
         run: bun run workflow:readme
 
@@ -72,8 +96,8 @@ jobs:
           git diff
           git config --global user.name "lobehubbot"
           git config --global user.email "i@lobehub.com"
-          git add .
+          git add README.md README.zh-CN.md
           git commit -m "📝 docs(bot): Auto sync agents & plugin to readme" || exit 0
-          git push
+          git push origin canary
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}

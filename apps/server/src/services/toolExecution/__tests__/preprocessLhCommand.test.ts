@@ -69,6 +69,29 @@ describe('preprocessLhCommand', () => {
     );
   });
 
+  it('should hand the run its own operation id, so a sandbox dispatch can be attributed', async () => {
+    const result = await preprocessLhCommand(
+      'lh agent run -a agt_123 -p hi',
+      'user-1',
+      'workspace-1',
+      false,
+      'op-1',
+    );
+
+    expect(result.command).toBe(
+      wrap(
+        'lh agent run -a agt_123 -p hi',
+        " LOBEHUB_WORKSPACE_ID='workspace-1' LOBEHUB_OPERATION_ID='op-1'",
+      ),
+    );
+  });
+
+  it('should omit the operation id when the caller has no run context', async () => {
+    const result = await preprocessLhCommand('lh topic list', 'user-1');
+
+    expect(result.command).not.toContain('LOBEHUB_OPERATION_ID');
+  });
+
   it('should emit the JWT once regardless of how many lh calls the script makes', async () => {
     const cmd = 'lh topic list --page 1 && lh topic list --page 2 && echo "done"';
     const result = await preprocessLhCommand(cmd, 'user-1');

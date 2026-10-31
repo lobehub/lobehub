@@ -1,8 +1,11 @@
 // @vitest-environment node
 import { executeToolWithRetry } from '@lobechat/agent-runtime';
 import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
+import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createMCPError } from '@/libs/mcp/types';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
@@ -471,9 +474,8 @@ describe('ToolExecutionService', () => {
     });
   });
 
-  // Device-only MCP servers (stdio / localhost / LAN) can't be called from the
-  // cloud — with a device gateway configured, those calls must tunnel to the
-  // user's device instead of failing with a spawn/fetch error (#16533).
+  // Stdio always runs on a desktop device. Private HTTP uses the device when
+  // a gateway is configured; public HTTP can run directly on the server.
   describe('device-only MCP tunneling', () => {
     const makeService = (mcpService: any = { callTool: vi.fn() }) =>
       new ToolExecutionService({
@@ -719,38 +721,40 @@ describe('ToolExecutionService', () => {
       );
     });
 
-    it('keeps public HTTP MCP calls in-process on the server', async () => {
+    it.each([
+      [true, 'https://mcp.example.com'],
+      [false, 'http://192.168.1.10:8080/mcp'],
+    ])('keeps HTTP MCP calls on the server (gateway: %s, URL: %s)', async (configured, url) => {
+      (deviceGateway as any).isConfigured = configured;
       const callTool = vi.fn().mockResolvedValue({ ok: true });
       const service = makeService({ callTool });
 
       await service.executeTool(
         mcpPayload,
-        contextWith(
-          { name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' },
-          { activeDeviceId: 'device-1' },
-        ),
+        contextWith({ name: 'my-mcp', type: 'http', url }, { activeDeviceId: 'device-1' }),
       );
 
       expect(callTool).toHaveBeenCalledTimes(1);
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
     });
 
-    it('fails fast when no device is reachable instead of executing on the server', async () => {
+    it.each([
+      { name: 'my-mcp', type: 'http', url: 'http://localhost:8080/mcp' },
+      { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+    ])('fails fast when no device is reachable for $type MCP', async (mcpParams) => {
       // With a gateway configured (cloud), a device-only endpoint must never
       // run in-process — that would spawn the command / fetch the private URL
       // on the cloud server, bypassing the classic-path device-only guard.
       const callTool = vi.fn().mockResolvedValue({ ok: true });
       const service = makeService({ callTool });
 
-      const result = await service.executeTool(
-        mcpPayload,
-        contextWith({ name: 'my-mcp', type: 'http', url: 'http://localhost:8080/mcp' }),
-      );
+      const result = await service.executeTool(mcpPayload, contextWith(mcpParams));
 
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
       expect(callTool).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+      expect(result.content).toContain('open the LobeHub desktop app');
     });
 
     it('fails closed when no serverDB is available to apply device visibility', async () => {
@@ -823,12 +827,12 @@ describe('ToolExecutionService', () => {
       });
     });
 
-    it('runs stdio in-process when no gateway is configured (standalone Electron)', async () => {
+    it('rejects stdio when no gateway is configured instead of executing on the server', async () => {
       (deviceGateway as any).isConfigured = false;
       const callTool = vi.fn().mockResolvedValue({ ok: true });
       const service = makeService({ callTool });
 
-      await service.executeTool(
+      const result = await service.executeTool(
         mcpPayload,
         contextWith(
           { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
@@ -837,7 +841,126 @@ describe('ToolExecutionService', () => {
       );
 
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
-      expect(callTool).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: 'MCP_GATEWAY_NOT_CONFIGURED' });
+      expect(result.content).toContain('device gateway is not configured');
+      expect(result.content).toContain('Configure a device gateway');
+      expect(callTool).not.toHaveBeenCalled();
+    });
+  });
+
+  // The SDK puts the 401 status only in `.code` and MCPService
+  // wraps it in a TRPCError, so the model used to see a bare "Invalid or
+  // expired token" and told Share visitors to reauthorize a connection that
+  // belongs to the creator.
+  describe('MCP authorization failures', () => {
+    const mcpPayload = {
+      apiName: 'xmind_whoami',
+      arguments: '{}',
+      id: 'tool-call-auth',
+      identifier: 'xmind-mcp',
+      type: 'mcp',
+    } as any;
+
+    const unauthorized = () =>
+      new TRPCError({
+        cause: new SdkHttpError(
+          SdkErrorCode.ClientHttpNotImplemented,
+          'Error POSTing to endpoint: {"error":"Unauthorized: Invalid or expired token"}',
+          { status: 401 },
+        ),
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Error POSTing to endpoint: {"error":"Unauthorized: Invalid or expired token"}',
+      });
+
+    const run = (over: Record<string, unknown> = {}, error: unknown = unauthorized()) => {
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute: vi.fn() } as any,
+        mcpService: { callTool: vi.fn().mockRejectedValue(error) } as any,
+      });
+      return service.executeTool(mcpPayload, {
+        toolManifestMap: {
+          'xmind-mcp': {
+            mcpParams: { name: 'xmind-mcp', type: 'http', url: 'https://app.xmind.com/api/mcp' },
+          },
+        },
+        userId: 'creator-1',
+        ...over,
+      } as any);
+    };
+
+    it('tells the model a Share visitor cannot repair the creator connection', async () => {
+      const result = await run({ agentShareVisitor: { shareId: 'share-1' } });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain("set up on this agent creator's side");
+      expect(result.content).toContain('do not ask them to sign in, authorize, or reconnect');
+      expect(result.error).toMatchObject({ code: 'UNAUTHORIZED', kind: 'stop' });
+    });
+
+    it('asks the owner to reconnect outside Share', async () => {
+      const result = await run();
+
+      expect(result.content).toContain('reconnect');
+      expect(result.content).not.toContain("agent's creator");
+      expect(result.error).toMatchObject({ code: 'UNAUTHORIZED', kind: 'stop' });
+    });
+
+    it('keeps reconnect guidance when normalized upstream auth is returned as 403', async () => {
+      const result = await run(
+        {},
+        new TRPCError({
+          code: 'FORBIDDEN',
+          cause: createMCPError('AUTHORIZATION_ERROR', 'MCP authorization failed'),
+        }),
+      );
+      expect(result.success).toBe(false);
+      expect(result.content).toContain("reconnect 'xmind-mcp'");
+      expect(result.error).toMatchObject({ code: 'UNAUTHORIZED', kind: 'stop' });
+    });
+
+    it('preserves a failed MCP result for the card and the parent reply', async () => {
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute: vi.fn() } as any,
+        mcpService: {
+          callTool: vi.fn().mockResolvedValue({
+            content: 'Additional input is unsupported',
+            state: {
+              isError: true,
+              content: [{ type: 'text', text: 'Additional input is unsupported' }],
+            },
+            success: false,
+          }),
+        } as any,
+      });
+      const result = await service.executeTool(mcpPayload, {
+        toolManifestMap: {
+          'xmind-mcp': {
+            mcpParams: { name: 'xmind-mcp', type: 'http', url: 'https://example.com/mcp' },
+          },
+        },
+        userId: 'creator-1',
+      } as any);
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Additional input is unsupported');
+      expect(result.error).toMatchObject({
+        code: 'MCP_TOOL_ERROR',
+        message: 'Additional input is unsupported',
+      });
+    });
+
+    it('keeps other MCP failures as raw replannable errors', async () => {
+      const result = await run(
+        { agentShareVisitor: { shareId: 'share-1' } },
+        new TRPCError({
+          cause: new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'boom', { status: 500 }),
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'boom',
+        }),
+      );
+
+      expect(result.content).toBe('boom');
+      expect(result.error).toMatchObject({ code: 'MCP_EXECUTION_ERROR', kind: 'replan' });
     });
   });
 });

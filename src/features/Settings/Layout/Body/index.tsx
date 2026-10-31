@@ -15,6 +15,7 @@ import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
 
 const Body = memo(() => {
   const categoryGroups = useCategory();
+  const searchScope = useMemo(() => ({ categoryGroups }), [categoryGroups]);
   const navigate = useWorkspaceAwareNavigate();
   const location = useActiveLocation();
 
@@ -30,7 +31,7 @@ const Body = memo(() => {
 
   return (
     <Flexbox gap={4} paddingInline={4}>
-      <SearchSection>
+      <SearchSection scope={searchScope}>
         <Accordion
           gap={8}
           indicatorPlacement="inline"

@@ -15,11 +15,17 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
 import { useClientDataSWR } from '@/libs/swr';
-import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
+import {
+  agentDocumentActions,
+  agentDocumentSelectors,
+  useAgentDocumentStore,
+} from '@/store/agentDocument';
 import { useChatStore } from '@/store/chat';
 
 import { useEntityLinkHostDismiss, useEntityLinkPortal } from '../host';
@@ -124,9 +130,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
 
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;
-  const { data: agentDocuments, mutate: resolveAgentDocuments } = useClientDataSWR(
-    shouldResolveAgentDocument ? agentDocumentSWRKeys.documentsList(linkedAgentId) : null,
-    () => agentDocumentService.listDocuments({ agentId: linkedAgentId! }),
+  // Shares the agent's document-list replica with the documents panel, so the
+  // row id is usually known (or persisted) before the click; a click that beats
+  // the first sync resolves the list on demand.
+  const resolvedAgentId = shouldResolveAgentDocument ? linkedAgentId : undefined;
+  agentDocumentActions.useFetchDocumentList(resolvedAgentId);
+  const agentDocuments = useAgentDocumentStore(
+    agentDocumentSelectors.getDocumentList(resolvedAgentId),
   );
 
   const handleClick = useCallback(
@@ -147,7 +157,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
           reference.type === 'verify') &&
         shouldHardNavigateToWorkbench(reference.pathname)
       ) {
-        window.location.assign(reference.pathname);
+        // A workspace-prefixed path is already scoped; an unprefixed one (or one
+        // whose active slug was normalized away) is scoped like `navigate` does.
+        window.location.assign(
+          reference.workspaceSlug
+            ? reference.pathname
+            : buildWorkspaceAwarePath(reference.pathname, getActiveWorkspaceSlug()),
+        );
         return;
       }
 
@@ -214,7 +230,8 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
         }
         case 'document': {
           const documents = shouldResolveAgentDocument
-            ? (agentDocuments ?? (await resolveAgentDocuments().catch(() => undefined)))
+            ? (agentDocuments ??
+              (await agentDocumentActions.fetchDocumentList(linkedAgentId!).catch(() => undefined)))
             : undefined;
           const agentDocumentId = documents?.find(
             (document) => document.documentId === reference.documentId,
@@ -250,7 +267,7 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
       openVerifyReport,
       portalAvailable,
       reference,
-      resolveAgentDocuments,
+      linkedAgentId,
       shouldResolveAgentDocument,
     ],
   );

@@ -2,6 +2,7 @@ import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
 import type { ModulePreloadOptions, Plugin } from 'vite';
 
+import { canvasRuntime } from './canvasRuntime';
 import { viteCompletionSounds } from './completionSounds';
 import { lobeIconImports } from './lobeIconImports';
 import { lobeUiImports } from './lobeUiImports';
@@ -454,6 +455,14 @@ const splitByInitial = (
 // entry-set chunking. Requires preserveEntrySignatures: 'allow-extension'.
 export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => {
   const groups: Group[] = [
+    // The canvas runtime's own modules carry page-level CSS (base.css styles
+    // body). App chunks also reuse modules the runtime pulls in, so without a
+    // chunk of its own that CSS would ride along and restyle the App's body.
+    {
+      name: 'canvas-runtime',
+      priority: 4,
+      test: /[\\/]packages[\\/]canvas-runtime[\\/]src[\\/]/,
+    },
     {
       name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
       priority: 3,
@@ -484,11 +493,13 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 interface SharedRendererOptions {
   platform: Platform;
+  stylexOverlaySrcDirs?: string[];
   tsconfigPaths?: boolean;
 }
 
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   return [
+    canvasRuntime(),
     viteCompletionSounds(),
     viteMarkdownImport(),
     viteNodeModuleStub(),
@@ -522,7 +533,7 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         exclude: [/\.(css|json|html)$/],
         hotKeys: ['altKey', 'ctrlKey'],
       }),
-    stylexPlugin(),
+    stylexPlugin({ overlaySrcDirs: options.stylexOverlaySrcDirs }),
     react(),
     ...(options.platform === 'desktop' ? [] : [...lobeIconImports(), ...lobeUiImports()]),
   ];

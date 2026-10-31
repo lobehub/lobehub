@@ -298,6 +298,74 @@ describe('agentSkills replicas', () => {
       expect(useToolStore.getState().agentSkillListMap[AGENT_SKILL_LIST_KEY]?.[0]?.id).toBe('db-9');
     });
 
+    describe('ensureAgentSkillsLoaded', () => {
+      it('fetches the list when it has not been loaded', async () => {
+        vi.mocked(agentSkillService.list).mockResolvedValue({ data: [skill('db-1')], total: 1 });
+
+        await act(() => useToolStore.getState().ensureAgentSkillsLoaded());
+
+        expect(agentSkillService.list).toHaveBeenCalledTimes(1);
+        expect(useToolStore.getState().agentSkillListMap[AGENT_SKILL_LIST_KEY]?.[0]?.id).toBe(
+          'db-1',
+        );
+      });
+
+      it('does not request again once the list is loaded', async () => {
+        await seed();
+        vi.mocked(agentSkillService.list).mockClear();
+
+        await act(() => useToolStore.getState().ensureAgentSkillsLoaded());
+
+        expect(agentSkillService.list).not.toHaveBeenCalled();
+      });
+
+      it('still requests when the list only came from the persisted copy', async () => {
+        // A hydrated list can predate a skill installed on another device.
+        await agentSkillListResource.storage!.set(
+          { queryKey: LIST_STORAGE_KEY, scope },
+          { data: [skill('db-1', 'Cached')], updatedAt: 1 },
+        );
+        // The confirming request fails, so the persisted copy stays the only data.
+        vi.mocked(agentSkillService.list).mockRejectedValue(new Error('offline'));
+        const sync = renderHook(() => useToolStore((s) => s.useFetchAgentSkills)(true), {
+          wrapper,
+        });
+        await waitFor(() => expect(agentSkillService.list).toHaveBeenCalled());
+        await waitFor(() => expect(sync.result.current.isValidating).toBe(false));
+        expect(useToolStore.getState().agentSkillListMap[AGENT_SKILL_LIST_KEY]).toHaveLength(1);
+        sync.unmount();
+        vi.mocked(agentSkillService.list).mockClear();
+        vi.mocked(agentSkillService.list).mockResolvedValue({
+          data: [skill('db-1'), skill('db-2')],
+          total: 2,
+        });
+
+        await act(() => useToolStore.getState().ensureAgentSkillsLoaded());
+
+        expect(agentSkillService.list).toHaveBeenCalledTimes(1);
+        expect(useToolStore.getState().agentSkillListMap[AGENT_SKILL_LIST_KEY]).toHaveLength(2);
+      });
+
+      it('shares one request between concurrent callers', async () => {
+        vi.mocked(agentSkillService.list).mockResolvedValue({ data: [skill('db-1')], total: 1 });
+
+        await act(() =>
+          Promise.all([
+            useToolStore.getState().ensureAgentSkillsLoaded(),
+            useToolStore.getState().ensureAgentSkillsLoaded(),
+          ]),
+        );
+
+        expect(agentSkillService.list).toHaveBeenCalledTimes(1);
+      });
+
+      it('rejects when the request fails so the caller can degrade', async () => {
+        vi.mocked(agentSkillService.list).mockRejectedValue(new Error('boom'));
+
+        await expect(useToolStore.getState().ensureAgentSkillsLoaded()).rejects.toThrow('boom');
+      });
+    });
+
     it('drops a refresh response that resolves after the scope switched', async () => {
       let resolveList!: (value: unknown) => void;
       vi.mocked(agentSkillService.list).mockImplementation(

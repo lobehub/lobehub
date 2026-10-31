@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, Center, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RotateCwIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,32 +44,23 @@ export interface AsyncErrorProps {
   variant?: AsyncErrorVariant;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  block: css`
-    width: 100%;
-    min-height: 180px;
-    padding: 32px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  icon: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  inline: css`
-    padding-block: 8px;
-  `,
-  metric: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  page: css`
-    flex: 1;
-    width: 100%;
-    min-height: 320px;
-    padding: 48px;
-  `,
-}));
+const styles = stylex.create({
+  block: {
+    width: '100%',
+    minHeight: '180px',
+    padding: '32px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  icon: { color: cssVar.colorTextTertiary },
+  inline: { paddingBlock: '8px' },
+  metric: { color: cssVar.colorTextQuaternary },
+  page: { flex: '1', width: '100%', minHeight: '320px', padding: '48px' },
+});
 
 const AsyncError = memo<AsyncErrorProps>(
   ({ variant = 'block', error, onRetry, retrying = false, title, description, action }) => {
@@ -84,7 +77,12 @@ const AsyncError = memo<AsyncErrorProps>(
     // ─── metric: a failed marker where a number would render (never a fake $0) ───
     if (variant === 'metric') {
       return (
-        <Flexbox horizontal align={'center'} className={styles.metric} gap={6}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.metric).className}
+          gap={6}
+        >
           <Icon icon={TriangleAlertIcon} size={14} />
           <Text color={cssVar.colorTextQuaternary} fontSize={13}>
             {t('asyncState.metricLabel')}
@@ -107,8 +105,18 @@ const AsyncError = memo<AsyncErrorProps>(
     // ─── inline: single-line row failure with a retry link ───
     if (variant === 'inline') {
       return (
-        <Flexbox horizontal align={'center'} className={styles.inline} gap={8} justify={'center'}>
-          <Icon className={styles.icon} icon={TriangleAlertIcon} size={14} />
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.inline).className}
+          gap={8}
+          justify={'center'}
+        >
+          <Icon
+            className={stylex.props(styles.icon).className}
+            icon={TriangleAlertIcon}
+            size={14}
+          />
           <Text color={cssVar.colorTextSecondary} fontSize={13}>
             {heading}
           </Text>
@@ -129,9 +137,12 @@ const AsyncError = memo<AsyncErrorProps>(
 
     // ─── page / block: centered hero, sized by variant ───
     return (
-      <Center className={variant === 'page' ? styles.page : styles.block} gap={12}>
+      <Center
+        className={stylex.props(variant === 'page' ? styles.page : styles.block).className}
+        gap={12}
+      >
         <Icon
-          className={styles.icon}
+          className={stylex.props(styles.icon).className}
           icon={TriangleAlertIcon}
           size={variant === 'page' ? 32 : 24}
         />

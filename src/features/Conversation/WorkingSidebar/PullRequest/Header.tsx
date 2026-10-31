@@ -18,6 +18,8 @@ import { rowStyles } from '../Overview/OverviewRow';
 import PrHead, { headStyles, PrStatePill, PrTitle } from './Head';
 
 interface HeaderProps {
+  /** Mutations (close / reopen / change base) wait for the live PR reads. */
+  actionsDisabled?: boolean;
   activityLoaded?: boolean;
   detail: DeviceGitPullRequestDetail;
   deviceId?: string;
@@ -26,7 +28,7 @@ interface HeaderProps {
 }
 
 const Header = memo<HeaderProps>(
-  ({ activityLoaded = true, detail, deviceId, onAction, workingDirectory }) => {
+  ({ actionsDisabled, activityLoaded = true, detail, deviceId, onAction, workingDirectory }) => {
     const { t } = useTranslation('chat');
     const canChangeBase = detail.viewerCanWrite && detail.state === 'open';
     const [basePickerOpen, setBasePickerOpen] = useState(false);
@@ -41,6 +43,7 @@ const Header = memo<HeaderProps>(
           .filter((name) => name !== detail.headRefName)
           .map((name) => ({
             key: name,
+            disabled: actionsDisabled,
             label: name,
             onClick: () => {
               if (name !== detail.baseRefName) void onAction({ base: name, type: 'changeBase' });
@@ -66,11 +69,13 @@ const Header = memo<HeaderProps>(
             detail.state === 'open'
               ? {
                   danger: true,
+                  disabled: actionsDisabled,
                   key: 'close',
                   label: t('workingPanel.pr.menu.close'),
                   onClick: () => void onAction({ type: 'close' }),
                 }
               : {
+                  disabled: actionsDisabled,
                   key: 'reopen',
                   label: t('workingPanel.pr.menu.reopen'),
                   onClick: () => void onAction({ type: 'reopen' }),

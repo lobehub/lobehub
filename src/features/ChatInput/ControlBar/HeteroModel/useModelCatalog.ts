@@ -1,25 +1,26 @@
 import type {
+  HeterogeneousAgentModelCatalogSuccess,
   HeterogeneousProviderConfig,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
-import { useEffect, useRef } from 'react';
-import useSWR from 'swr';
+import { useEffect, useMemo, useRef } from 'react';
 
-import { heterogeneousAgentCatalogService } from '@/services/heterogeneousAgent';
+import {
+  fingerprintConfig,
+  heteroModelCatalogKey,
+  type HeteroModelCatalogParams,
+} from '@/store/device/heteroModelCatalog/projection';
+import { useHeteroModelCatalogStore } from '@/store/device/heteroModelCatalog/store';
 
-const DEDUPING_INTERVAL = 5 * 60 * 1000;
-
-const fingerprintConfig = (provider: HeterogeneousProviderConfig | undefined) => {
-  const serialized = JSON.stringify({
-    args: provider?.args ?? [],
-    env: Object.entries(provider?.env ?? {}).sort(([a], [b]) => a.localeCompare(b)),
-  });
-  let hash = 2166136261;
-  for (let index = 0; index < serialized.length; index += 1) {
-    hash ^= serialized.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
+/**
+ * Discovery spawns the CLI: a focus change does not re-run it, and a failure
+ * (missing CLI, unreachable device) is not retried. The driver forwards
+ * `shouldRetryOnError` to SWR as given.
+ */
+const SYNC_OPTIONS = {
+  dedupingInterval: 5 * 60 * 1000,
+  revalidateOnFocus: false,
+  shouldRetryOnError: false,
 };
 
 interface UseHeterogeneousAgentModelCatalogParams {
@@ -33,7 +34,21 @@ interface UseHeterogeneousAgentModelCatalogParams {
   type: ListHeterogeneousAgentModelsParams['type'];
 }
 
+export interface ModelCatalogResult {
+  data: HeterogeneousAgentModelCatalogSuccess | undefined;
+  /** A failed discovery; `name` is the catalog error code. */
+  error: Error | undefined;
+  /** Nothing to paint yet (no persisted catalog, no response) and a read is pending. */
+  isLoading: boolean;
+  isValidating: boolean;
+  mutate: () => Promise<unknown>;
+}
+
 /**
+ * The catalog is a replica (`@/store/device/heteroModelCatalog`): the last
+ * catalog of this device + agent paints on the first frame, and the CLI
+ * discovery confirms it in the background.
+ *
  * Preload after the member's effective target and device directory settle, then
  * revalidate a failed preload if the user opens the selector after the target
  * becomes available.
@@ -47,48 +62,48 @@ export const useModelCatalog = ({
   provider,
   targetReady,
   type,
-}: UseHeterogeneousAgentModelCatalogParams) => {
+}: UseHeterogeneousAgentModelCatalogParams): ModelCatalogResult => {
   const wasOpenRef = useRef(open);
-  const response = useSWR(
-    targetReady && !isDeviceListLoading && !isPreferenceLoading
-      ? [
-          'heterogeneous-agent-model-catalog',
-          type,
-          deviceId ?? 'local',
-          cwd ?? '',
-          provider?.command ?? '',
-          fingerprintConfig(provider),
-        ]
-      : null,
-    async () => {
-      const result = await heterogeneousAgentCatalogService.listModels({
-        args: provider?.args,
-        command: provider?.command,
-        cwd,
-        deviceId,
-        env: provider?.env,
-        type,
-      });
-      if (result.status === 'error') {
-        const catalogError = new Error(result.error.message);
-        catalogError.name = result.error.code;
-        throw catalogError;
-      }
-      return result;
-    },
-    {
-      dedupingInterval: DEDUPING_INTERVAL,
-      revalidateOnFocus: false,
-      shouldRetryOnError: false,
-    },
+  const enabled = targetReady && !isDeviceListLoading && !isPreferenceLoading;
+  // Only the discovery inputs: a model / effort pick must not start another
+  // discovery. `fingerprint` stands in for args + env in the memo deps.
+  const fingerprint = fingerprintConfig(provider);
+  const params = useMemo<HeteroModelCatalogParams | null>(
+    () =>
+      enabled
+        ? {
+            cwd,
+            deviceId,
+            provider: provider && {
+              args: provider.args,
+              command: provider.command,
+              env: provider.env,
+              type: provider.type,
+            },
+            type,
+          }
+        : null,
+    [enabled, cwd, deviceId, provider?.command, provider?.type, fingerprint, type],
   );
+  const key = params ? heteroModelCatalogKey(params) : undefined;
+  const data = useHeteroModelCatalogStore((s) => (key ? s.heteroModelCatalogMap[key] : undefined));
+  const { error, isHydrated, isValidating, revalidate } = useHeteroModelCatalogStore
+    .getState()
+    .slice.useSync(params, SYNC_OPTIONS);
+  const catalogError = error as Error | undefined;
 
   useEffect(() => {
     const hasJustOpened = open && !wasOpenRef.current;
     wasOpenRef.current = open;
 
-    if (hasJustOpened && response.error) void response.mutate();
-  }, [open, response.error, response.mutate]);
+    if (hasJustOpened && catalogError) void revalidate();
+  }, [open, catalogError, revalidate]);
 
-  return response;
+  return {
+    data,
+    error: catalogError,
+    isLoading: !!params && data === undefined && !catalogError && (!isHydrated || isValidating),
+    isValidating,
+    mutate: revalidate,
+  };
 };

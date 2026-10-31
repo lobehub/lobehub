@@ -177,6 +177,8 @@ export const CreateResponseRequestSchema = z
     previous_response_id: z.string().nullish(),
     reasoning: ReasoningConfigSchema.nullish(),
     stream: z.boolean().nullish(),
+    // Reject stale tool results instead of interpreting them as a new user turn.
+    strict_tool_resume: z.boolean().optional(),
     temperature: z.number().min(0).max(2).nullish(),
     tool_choice: z
       .union([
@@ -185,6 +187,8 @@ export const CreateResponseRequestSchema = z
       ])
       .nullish(),
     tools: z.array(ToolSchema).nullish(),
+    // Exclusive mode also restricts tools discoverable later in the operation.
+    tools_mode: z.enum(['additional', 'exclusive']).optional(),
     top_p: z.number().min(0).max(1).nullish(),
     truncation: TruncationSchema.nullish(),
     user: z.string().nullish(),

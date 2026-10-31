@@ -1,13 +1,13 @@
 'use client';
 
-import { DraggablePanel } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
-import { memo } from 'react';
+import { createStaticStyles, DraggablePanel } from '@lobehub/ui';
+import { lazy, memo, Suspense, useState } from 'react';
 
 import { CHAT_PORTAL_TOOL_UI_WIDTH } from '@/const/layoutTokens';
-import { PortalContent } from '@/features/Portal/router';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+
+import ShareLoading from '../../shell/ShareLoading';
 
 const styles = createStaticStyles(({ cssVar, css }) => ({
   body: css`
@@ -39,8 +39,19 @@ const styles = createStaticStyles(({ cssVar, css }) => ({
   `,
 }));
 
+// Every portal view (artifacts, documents, tasks, goals…) ships with the router,
+// about 1MB gzipped, for a panel that starts collapsed. Loading it on first open
+// keeps it off the download the transcript waits for.
+const PortalContent = lazy(() =>
+  import('@/features/Portal/router').then((module) => ({ default: module.PortalContent })),
+);
+
 const SharePortal = memo(() => {
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
+  // Latched: once opened the content stays mounted, as it always has, so
+  // closing the panel animates out with its view instead of an empty body.
+  const [opened, setOpened] = useState(showPortal);
+  if (showPortal && !opened) setOpened(true);
 
   return (
     <DraggablePanel
@@ -55,7 +66,11 @@ const SharePortal = memo(() => {
       showHandleWideArea={false}
       size={{ height: '100%', width: CHAT_PORTAL_TOOL_UI_WIDTH }}
     >
-      <PortalContent renderBody={(body) => <div className={styles.body}>{body}</div>} />
+      {opened && (
+        <Suspense fallback={<ShareLoading />}>
+          <PortalContent renderBody={(body) => <div className={styles.body}>{body}</div>} />
+        </Suspense>
+      )}
     </DraggablePanel>
   );
 });

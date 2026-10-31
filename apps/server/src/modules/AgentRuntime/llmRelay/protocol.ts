@@ -115,8 +115,14 @@ const getLeaseSecret = () => {
   return secret;
 };
 
-const sign = (body: string) =>
-  createHmac('sha256', getLeaseSecret()).update(`llm-relay-lease:${body}`).digest('base64url');
+const sign = (body: string, secret = getLeaseSecret()) =>
+  createHmac('sha256', secret).update(`llm-relay-lease:${body}`).digest('base64url');
+
+const getLeaseVerificationSecrets = () => {
+  const active = getLeaseSecret();
+  const fallback = process.env.KEY_VAULTS_FALLBACK_SECRET;
+  return fallback?.trim() && fallback !== active ? [active, fallback] : [active];
+};
 
 export const signLlmRelayLease = (claims: LeaseClaims) => {
   const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
@@ -133,9 +139,12 @@ export const verifyLlmRelayLease = (
   const [body, signature] = token.split('.');
   if (!body || !signature) return;
 
-  const expected = Buffer.from(sign(body));
   const actual = Buffer.from(signature);
-  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return;
+  const isAuthentic = getLeaseVerificationSecrets().some((secret) => {
+    const expected = Buffer.from(sign(body, secret));
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  });
+  if (!isAuthentic) return;
 
   try {
     const claims = JSON.parse(Buffer.from(body, 'base64url').toString()) as LeaseClaims;

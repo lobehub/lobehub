@@ -230,8 +230,17 @@ export const acceptanceSubjectTypes = [
   'document',
   'standalone',
   'goal_gate',
+  'site',
 ] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+// A site's standing review is created only with the site itself, never through the generic acceptance API.
+export const creatableAcceptanceSubjectTypes = [
+  'task',
+  'topic',
+  'document',
+  'standalone',
+  'goal_gate',
+] as const;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the
@@ -240,12 +249,23 @@ export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
  */
 /**
  * Who can see a verify artifact (a run's report page, an acceptance page)
- * beyond its creator. Personal-scope rows default to `public` (the page is
- * meant to be linked from PRs / reports); workspace-scope rows default to
- * `private` (org data stays member-gated until deliberately opened up).
+ * beyond its creator:
+ *
+ * - `public` — anyone holding the link.
+ * - `private` — the creator and members of the row's own workspace. In a
+ *   workspace this is "shared with the team", the default there.
+ * - `owner` — the creator alone, even inside a workspace.
+ *
+ * Personal-scope rows default to `public` (the page is meant to be linked from
+ * PRs / reports); workspace-scope rows default to `private`, so org data reaches
+ * every member without leaking past the workspace.
  */
-export const verifyVisibilities = ['private', 'public'] as const;
+export const verifyVisibilities = ['private', 'public', 'owner'] as const;
 export type VerifyVisibility = (typeof verifyVisibilities)[number];
+
+/** Whether a member of the row's workspace (not its creator) may read it. */
+export const isWorkspaceReadableVisibility = (visibility: VerifyVisibility) =>
+  visibility !== 'owner';
 
 export const acceptanceVisibilities = verifyVisibilities;
 export type AcceptanceVisibility = VerifyVisibility;
@@ -367,8 +387,119 @@ export const verifyEvidenceTypes = [
   'markdown',
   'dom_snapshot',
   'transcript',
+  // One command execution: a readable text payload plus structured execution
+  // facts, provenance and stdout / stderr / recording artifacts in metadata.
+  'terminal',
 ] as const;
 export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
+
+/** The part of a criterion's `requiredEvidence` entry the coverage gate reads. */
+export interface RequiredEvidenceCoverageSpec {
+  scope?: 'deliverable' | 'run_evidence' | 'task_artifacts';
+  type: VerifyEvidenceType;
+}
+
+/**
+ * Same-medium types that also satisfy a declared requirement. The gate checks
+ * that an artifact of the right medium exists; whether it proves the criterion
+ * is the judge's call. Without this, a recording uploaded as `video` against a
+ * `gif` requirement, or a CLI log uploaded as `text` against `transcript`,
+ * failed every repair round on a label while the judge never saw the artifact.
+ * A GIF is a run of screenshots, and judges receive it as a frame sheet (see
+ * `renderGifFrameSheet`), so it also answers a `screenshot` requirement — a GIF
+ * uploaded as `screenshot` is stored as `gif`, which otherwise failed the gate
+ * on the very artifact it asked for. `dom_snapshot` and `audio` have no
+ * substitute.
+ */
+const EVIDENCE_SATISFIED_BY: Partial<Record<VerifyEvidenceType, VerifyEvidenceType[]>> = {
+  gif: ['video'],
+  markdown: ['text', 'transcript'],
+  screenshot: ['gif'],
+  text: ['markdown', 'transcript'],
+  transcript: ['text', 'markdown'],
+  video: ['gif'],
+};
+
+/**
+ * Read the (optional) evidence requirement a criterion declares on its config.
+ * Evidence-driven criteria list the artifact types they need under
+ * `verifierConfig.requiredEvidence`; everything else returns undefined.
+ */
+export const readRequiredEvidence = <T extends RequiredEvidenceCoverageSpec>(
+  config: Record<string, unknown> | undefined | null,
+): T[] | undefined => {
+  const raw = config?.requiredEvidence;
+  return Array.isArray(raw) ? (raw as T[]) : undefined;
+};
+
+/**
+ * Which required evidence types are still missing for a criterion — pure, so the
+ * structural gate is unit-testable without a database. Returns `[]` when the
+ * item declares no evidence requirement (nothing to gate on).
+ */
+export const coverageGaps = (
+  required: RequiredEvidenceCoverageSpec[] | undefined,
+  evidence: { type: VerifyEvidenceType }[],
+): VerifyEvidenceType[] => {
+  if (!required?.length) return [];
+  const present = new Set(evidence.map((e) => e.type));
+  return [...new Set(required.map((r) => r.type))].filter(
+    (t) => !present.has(t) && !EVIDENCE_SATISFIED_BY[t]?.some((alt) => present.has(alt)),
+  );
+};
+
+/**
+ * Run-evidence types a criterion still misses. `deliverable` / `task_artifacts`
+ * requirements are resolved by the verifier from the operation's documents and
+ * files, so only `run_evidence` must exist as verify_evidence rows. This is the
+ * one coverage rule shared by the builder handoff, the CLI's publish report and
+ * the structural gate: when they disagree, a builder that already evidenced a
+ * criterion is treated as missing evidence.
+ */
+export const runEvidenceGaps = (
+  config: Record<string, unknown> | undefined | null,
+  evidence: { type: VerifyEvidenceType }[],
+): VerifyEvidenceType[] =>
+  coverageGaps(
+    readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence'),
+    evidence,
+  );
+/**
+ * Evidence whose payload is text a reader or model can take in directly. A
+ * `terminal` evidence belongs here because its payload is the text fallback of
+ * the execution, written for exactly the readers that have no player.
+ */
+export const verifyTextEvidenceTypes: ReadonlySet<string> = new Set([
+  'dom_snapshot',
+  'markdown',
+  'terminal',
+  'text',
+  'transcript',
+]);
+
+/**
+ * Every stored file an evidence row references: its own payload file, plus —
+ * for a `terminal` evidence — the stdout / stderr / output / recording files its
+ * record names. Anything that follows evidence to its files (library hiding,
+ * permanent purge) must use this, or those artifacts outlive their evidence.
+ * Reads ids leniently; the record itself was validated when it was stored.
+ */
+export const verifyEvidenceFileIds = (evidence: {
+  fileId?: string | null;
+  metadata?: unknown;
+  type: string;
+}): string[] => {
+  const ids = evidence.fileId ? [evidence.fileId] : [];
+  if (evidence.type !== 'terminal') return ids;
+  const artifacts = (evidence.metadata as { terminal?: { artifacts?: unknown } } | null | undefined)
+    ?.terminal?.artifacts;
+  if (!artifacts || typeof artifacts !== 'object') return ids;
+  for (const artifact of Object.values(artifacts as Record<string, unknown>)) {
+    const fileId = (artifact as { fileId?: unknown } | null)?.fileId;
+    if (typeof fileId === 'string' && fileId.length > 0) ids.push(fileId);
+  }
+  return [...new Set(ids)];
+};
 
 /** Who / what captured an evidence artifact (provenance). */
 export const verifyEvidenceCapturedBy = [
@@ -446,6 +577,12 @@ export const readEvidenceChapters = (value: unknown): VerifyEvidenceChapter[] | 
  */
 export const normalizeEvidenceMetadata = (metadata: unknown, type: string): unknown => {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  // Only a `terminal` row may carry an execution record — on any other medium
+  // it would claim provenance no reader checks.
+  if (type !== 'terminal' && 'terminal' in metadata) {
+    const { terminal: _terminal, ...rest } = metadata as Record<string, unknown>;
+    return normalizeEvidenceMetadata(Object.keys(rest).length > 0 ? rest : null, type);
+  }
   if (!('chapters' in metadata)) return metadata;
   const { chapters: _chapters, ...rest } = metadata as Record<string, unknown>;
   const chapters = type === 'video' ? readEvidenceChapters(metadata) : undefined;

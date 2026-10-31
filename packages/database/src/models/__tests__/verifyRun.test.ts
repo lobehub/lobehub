@@ -442,3 +442,32 @@ describe('VerifyRunModel.listByAcceptances', () => {
     expect(runs.every((run) => run.acceptanceId === mine)).toBe(true);
   });
 });
+
+describe('VerifyRunModel.recordAutoRepair', () => {
+  it('exposes the decision on the run state without clobbering other metadata', async () => {
+    const operationId = `op-${randomUUID()}`;
+    const runId = await buildRun(operationId);
+    const model = new VerifyRunModel(serverDB, userId);
+    await model.setMetadata(runId, { maxRepairRounds: 2 });
+
+    expect((await model.getStateByOperation(operationId))?.verifyAutoRepair).toBeNull();
+
+    await model.recordAutoRepair(runId, 'declined');
+
+    expect((await model.getStateByOperation(operationId))?.verifyAutoRepair).toBe('declined');
+    expect((await model.findById(runId))?.metadata).toMatchObject({
+      autoRepair: 'declined',
+      maxRepairRounds: 2,
+    });
+  });
+
+  it('never writes another user’s run', async () => {
+    const operationId = `op-${randomUUID()}`;
+    const runId = await buildRun(operationId);
+
+    await new VerifyRunModel(serverDB, otherUserId).recordAutoRepair(runId, 'declined');
+
+    const state = await new VerifyRunModel(serverDB, userId).getStateByOperation(operationId);
+    expect(state?.verifyAutoRepair).toBeNull();
+  });
+});

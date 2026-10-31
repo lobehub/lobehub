@@ -4,75 +4,26 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { ActionIcon, Block, Markdown, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+
 import { PanelRight, PanelRightClose } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 import TaskStatusTag from '@/features/AgentTasks/features/TaskStatusTag';
-import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
 
+import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { CreateTaskParams, CreateTaskState } from '../../../types';
+import { useTaskDetailToggle } from '../shared';
 
-const styles = stylex.create({
-  description: {
-    overflow: 'hidden',
-    display: '-webkit-box',
-    WebkitBoxOrient: 'vertical',
-    WebkitLineClamp: '3',
-    fontSize: '12px',
-    lineHeight: 1.5,
-    color: cssVar.colorTextTertiary,
-  },
-  identifier: {
-    flexShrink: 0,
-    paddingBlock: '1px',
-    paddingInline: '6px',
-    borderRadius: '4px',
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: '12px',
-    color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
-  },
-  instruction: {
-    overflow: 'hidden',
-    maxHeight: '132px',
-    maskImage: 'linear-gradient(to bottom, black 78%, transparent)',
-  },
-  row: { display: 'flex', gap: '8px', alignItems: 'center' },
-  taskItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '6px',
-    paddingBlock: '10px',
-    paddingInline: '12px',
-  },
-  title: {
-    overflow: 'hidden',
-    flex: '1',
-    minWidth: '0',
-    fontSize: '13px',
-    lineHeight: 1.4,
-    color: cssVar.colorText,
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-});
+const styles = stylex.create({ description: { overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "3", fontSize: "12px", lineHeight: 1.5, color: cssVar.colorTextTertiary }, identifier: { flexShrink: 0, paddingBlock: "1px", paddingInline: "6px", borderRadius: "4px", fontFamily: cssVar.fontFamilyCode, fontSize: "12px", color: cssVar.colorTextSecondary, backgroundColor: cssVar.colorFillTertiary, backgroundImage: "none" }, instruction: { overflow: "hidden", maxHeight: "132px", maskImage: "linear-gradient(to bottom, black 78%, transparent)" }, row: { display: "flex", gap: "8px", alignItems: "center" }, taskItem: { display: "flex", flexDirection: "column", gap: "6px", paddingBlock: "10px", paddingInline: "12px" }, title: { overflow: "hidden", flex: "1", minWidth: "0", fontSize: "13px", lineHeight: 1.4, color: cssVar.colorText, textOverflow: "ellipsis", whiteSpace: "nowrap" } });
 
 export const CreateTaskRender = memo<BuiltinRenderProps<CreateTaskParams, CreateTaskState>>(
   ({ args, pluginState }) => {
     const { t } = useTranslation('chat');
-    const [activeTaskDetailId, showTaskDetail, openTaskDetail, closeTaskDetail] = useChatStore(
-      (s) => [
-        chatPortalSelectors.taskDetailId(s),
-        chatPortalSelectors.showTaskDetail(s),
-        s.openTaskDetail,
-        s.closeTaskDetail,
-      ],
-    );
-
     const identifier = pluginState?.identifier;
+    const target = resolveTaskOpenTarget(pluginState);
+    const { canOpen, isExpanded, open, toggle } = useTaskDetailToggle(target);
     // Auto-expanding the freshly created task's detail portal is driven by the
     // executor's `onAfterCall` hook (gateway `tool_end`), not a render effect —
     // see `client/executor`. The card itself only handles the manual toggle.
@@ -88,20 +39,13 @@ export const CreateTaskRender = memo<BuiltinRenderProps<CreateTaskParams, Create
     const description = pluginState?.description;
     const instruction = args?.instruction;
     const parent = pluginState?.parentIdentifier ?? args?.parentIdentifier;
-    const isExpanded = !!identifier && showTaskDetail && activeTaskDetailId === identifier;
-
-    const toggle = () => {
-      if (!identifier) return;
-      if (isExpanded) closeTaskDetail();
-      else openTaskDetail(identifier);
-    };
 
     return (
       <Block
-        clickable={!!identifier}
+        clickable={canOpen}
         variant={'outlined'}
         width={'100%'}
-        onClick={identifier ? () => openTaskDetail(identifier) : undefined}
+        onClick={canOpen ? open : undefined}
       >
         <div {...stylex.props(styles.taskItem)}>
           <div {...stylex.props(styles.row)}>

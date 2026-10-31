@@ -4,12 +4,14 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { Markdown, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+
 import { Pencil } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 
+import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { EditTaskParams, EditTaskState } from '../../../types';
 import {
   AssigneeInline,
@@ -20,30 +22,7 @@ import {
   TaskResultCard,
 } from '../shared';
 
-const styles = stylex.create({
-  addChip: {
-    paddingBlock: '1px',
-    paddingInline: '8px',
-    borderRadius: '999px',
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: '12px',
-    color: cssVar.colorSuccess,
-    background: cssVar.colorSuccessBg,
-  },
-  deps: { display: 'inline-flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' },
-  removeChip: {
-    paddingBlock: '1px',
-    paddingInline: '8px',
-    borderWidth: '1px',
-    borderStyle: 'dashed',
-    borderColor: cssVar.colorErrorBorder,
-    borderRadius: '999px',
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: '12px',
-    color: cssVar.colorError,
-    textDecoration: 'line-through',
-  },
-});
+const styles = stylex.create({ addChip: { paddingBlock: "1px", paddingInline: "8px", borderRadius: "999px", fontFamily: cssVar.fontFamilyCode, fontSize: "12px", color: cssVar.colorSuccess, backgroundColor: cssVar.colorSuccessBg, backgroundImage: "none" }, deps: { display: "inline-flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }, removeChip: { paddingBlock: "1px", paddingInline: "8px", borderWidth: "1px", borderStyle: "dashed", borderColor: cssVar.colorErrorBorder, borderRadius: "999px", fontFamily: cssVar.fontFamilyCode, fontSize: "12px", color: cssVar.colorError, textDecoration: "line-through" } });
 
 export const EditTaskRender = memo<BuiltinRenderProps<EditTaskParams, EditTaskState>>(
   ({ args, pluginState }) => {
@@ -75,6 +54,7 @@ export const EditTaskRender = memo<BuiltinRenderProps<EditTaskParams, EditTaskSt
       <TaskResultCard
         icon={Pencil}
         identifier={identifier}
+        taskId={resolveTaskOpenTarget(pluginState, params)}
         title={t('builtins.lobe-task.apiName.editTask')}
       >
         {hasAnyChange ? (

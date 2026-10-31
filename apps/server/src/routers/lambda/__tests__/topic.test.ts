@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
+import { TopicRepository } from '@/database/repositories/topic';
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(),
+}));
+
+vi.mock('@/database/repositories/topic', () => ({
+  TopicRepository: vi.fn(),
 }));
 
 vi.mock('@/database/models/topicShare', () => ({
@@ -214,7 +219,7 @@ describe('topicRouter', () => {
 
     it('should handle batchCreateTopics with agentId', async () => {
       const mockBatchCreate = vi.fn().mockResolvedValue([{ id: 'topic1' }, { id: 'topic2' }]);
-      vi.mocked(TopicModel).mockImplementation(function () {
+      vi.mocked(TopicRepository).mockImplementation(function () {
         return {
           batchCreate: mockBatchCreate,
         } as any;
@@ -226,10 +231,10 @@ describe('topicRouter', () => {
       ];
 
       const ctx = {
-        topicModel: new TopicModel({} as any, 'user1'),
+        topicRepo: new TopicRepository({} as any, 'user1'),
       };
 
-      const result = await ctx.topicModel.batchCreate(input as any);
+      const result = await ctx.topicRepo.batchCreate(input as any);
 
       expect(mockBatchCreate).toHaveBeenCalledWith(input);
       expect(result).toHaveLength(2);

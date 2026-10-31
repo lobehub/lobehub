@@ -1,23 +1,20 @@
-import type { TreeItem } from '@/store/tree';
+import { libraryFolderPath } from '@/features/ResourceManager/utils/resourcePath';
+import { isExpandable, type TreeItem } from '@/store/tree';
 
 interface SelectionSource {
-  currentFolderSlug?: string | null;
+  currentFolderId?: string | null;
   currentViewItemId?: string | null;
 }
 
 export const resolveHierarchySelectedKey = ({
-  currentFolderSlug,
+  currentFolderId,
   currentViewItemId,
-}: SelectionSource): string | null => currentViewItemId ?? currentFolderSlug ?? null;
+}: SelectionSource): string | null => currentViewItemId ?? currentFolderId ?? null;
 
 export const isHierarchyNodeActive = (
-  item: Pick<TreeItem, 'id' | 'isFolder' | 'slug'>,
+  item: Pick<TreeItem, 'id'>,
   selectedKey: string | null,
-): boolean => {
-  if (!selectedKey) return false;
-
-  return item.isFolder ? selectedKey === (item.slug || item.id) : selectedKey === item.id;
-};
+): boolean => !!selectedKey && selectedKey === item.id;
 
 /**
  * Whether `selectedKey` points at this folder or at anything inside it.
@@ -30,7 +27,7 @@ export const isHierarchyNodeActive = (
  * folders it has not fetched.
  */
 export const hierarchySubtreeHoldsSelection = (
-  root: Pick<TreeItem, 'id' | 'isFolder' | 'slug'>,
+  root: Pick<TreeItem, 'id' | 'isFolder'>,
   children: Record<string, TreeItem[]>,
   selectedKey: string | null,
 ): boolean => {
@@ -47,7 +44,7 @@ export const hierarchySubtreeHoldsSelection = (
 
     for (const row of children[id] ?? []) {
       if (isHierarchyNodeActive(row, selectedKey)) return true;
-      if (row.isFolder) pending.push(row.id);
+      if (isExpandable(row)) pending.push(row.id);
     }
   }
 
@@ -56,7 +53,7 @@ export const hierarchySubtreeHoldsSelection = (
 
 interface DeletedFolderRedirect {
   children: Record<string, TreeItem[]>;
-  item: Pick<TreeItem, 'id' | 'isFolder' | 'slug'>;
+  item: Pick<TreeItem, 'id' | 'isFolder'>;
   libraryId?: string | null;
   parentKey?: string;
   selectedKey: string | null;
@@ -84,12 +81,5 @@ export const resolveDeletedFolderRedirect = ({
   if (!item.isFolder || !libraryId) return null;
   if (!hierarchySubtreeHoldsSelection(item, children, selectedKey)) return null;
 
-  const parent = parentKey
-    ? Object.values(children)
-        .flat()
-        .find((row) => row.id === parentKey)
-    : undefined;
-  const navKey = parent ? parent.slug || parent.id : '';
-
-  return `/resource/library/${libraryId}${navKey ? `/${navKey}` : ''}`;
+  return libraryFolderPath(libraryId, parentKey);
 };

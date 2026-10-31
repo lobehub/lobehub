@@ -1,36 +1,17 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Markdown, Tag, useTheme } from '@lobehub/ui';
+import { Block, Flexbox, Markdown, Tag, useTheme } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+
 import { memo } from 'react';
+
+import AgentAvatar from '@/components/AgentAvatar';
 
 import type { GetAgentDetailParams, GetAgentDetailState } from '../../../types';
 
-const styles = stylex.create({
-  container: { paddingBlock: '4px' },
-  field: { marginBlockEnd: { 'default': '8px', ':last-child': '0' } },
-  header: {
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'center',
-    marginBlockEnd: '12px',
-    paddingBlockEnd: '12px',
-    borderBlockEndWidth: '1px',
-    borderBlockEndStyle: 'solid',
-    borderBlockEndColor: cssVar.colorBorderSecondary,
-  },
-  label: {
-    marginBlockEnd: '4px',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: cssVar.colorTextSecondary,
-  },
-  title: { fontSize: '14px', fontWeight: 600 },
-  value: { fontSize: '13px' },
-});
+const styles = stylex.create({ container: { paddingBlock: "4px" }, field: { marginBlockEnd: { default: "8px", ":last-child": "0" } }, header: { display: "flex", gap: "12px", alignItems: "center", marginBlockEnd: "12px", paddingBlockEnd: "12px", borderBlockEndWidth: "1px", borderBlockEndStyle: "solid", borderBlockEndColor: cssVar.colorBorderSecondary }, label: { marginBlockEnd: "4px", fontSize: "12px", fontWeight: 500, color: cssVar.colorTextSecondary }, title: { fontSize: "14px", fontWeight: 600 }, value: { fontSize: "13px" } });
 
 export const GetAgentDetailRender = memo<
   BuiltinRenderProps<GetAgentDetailParams, GetAgentDetailState>
@@ -45,8 +26,9 @@ export const GetAgentDetailRender = memo<
     <div {...stylex.props(styles.container)}>
       {meta && (
         <div {...stylex.props(styles.header)}>
-          <Avatar
-            avatar={meta.avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={pluginState?.agentId}
+            avatar={meta.avatar}
             background={meta.backgroundColor || theme.colorBgContainer}
             shape={'square'}
             size={36}

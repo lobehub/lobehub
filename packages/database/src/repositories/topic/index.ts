@@ -1,12 +1,16 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { and, eq, sql } from 'drizzle-orm';
 
+import type { CreateTopicParams, ModelTimingContext } from '../../models/topic';
 import { messageGroups, messages, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { copyMessagesInDatabase } from '../../utils/copyMessagesInDatabase';
 import { idGenerator } from '../../utils/idGenerator';
-import { notShareVisitorTopic } from '../../utils/shareVisitor';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../../utils/workspace';
+import { batchCreateTopics, createTopic } from './create';
+import { duplicateTopic } from './duplicate';
+import { batchMoveToAgent } from './move';
+import { messageOwnership, topicOwnership, type TopicRepositoryScope } from './scope';
 
 /**
  * Run configuration a branched topic keeps from its source. Everything else in
@@ -46,14 +50,37 @@ export class TopicRepository {
     private readonly workspaceId?: string,
   ) {}
 
-  private ownership = () =>
-    and(
-      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
-      notShareVisitorTopic(),
-    );
+  private get scope(): TopicRepositoryScope {
+    return { db: this.db, userId: this.userId, workspaceId: this.workspaceId };
+  }
 
-  private messageOwnership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+  /**
+   * Creates a topic, re-parenting the given `messages` onto it atomically.
+   *
+   * Call stack:
+   *
+   * aiChatRouter.sendMessageInServer / topicRouter.createTopic
+   *   -> TopicRepository.create
+   *     -> TopicModel.create (+ messages.topicId update in the same transaction)
+   */
+  create = (params: CreateTopicParams, id?: string, timing?: ModelTimingContext) =>
+    createTopic(this.scope, params, id, timing);
+
+  /** Batch-creates topics, re-parenting each topic's `messages` atomically. */
+  batchCreate = (topicParams: (CreateTopicParams & { id?: string })[]) =>
+    batchCreateTopics(this.scope, topicParams);
+
+  /** Copies a topic and its messages (or a fork prefix) into a new topic atomically. */
+  duplicate = (topicId: string, newTitle?: string, options?: { upToMessageId?: string }) =>
+    duplicateTopic(this.scope, topicId, newTitle, options);
+
+  /** Moves topics with their messages and threads to another owned agent atomically. */
+  batchMoveToAgent = (topicIds: string[], targetAgentId: string) =>
+    batchMoveToAgent(this.scope, topicIds, targetAgentId);
+
+  private ownership = () => topicOwnership(this.scope);
+
+  private messageOwnership = () => messageOwnership(this.scope);
 
   /**
    * Copies the conversation that leads up to one user message into a new

@@ -35,7 +35,17 @@ import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/provid
 import { DocumentService } from '../document';
 import { FileService } from '../file';
 import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
+import {
+  type AgentDocumentBodyWriter,
+  writeAgentDocumentBody,
+  writeSnapshotThroughRoom,
+} from './bodyWrite';
 import { isRawTextAgentDocument } from './contentFormat';
+import {
+  attachEmptyParseShellLiteXML,
+  isEmptyParseShellDocument,
+  projectEmptyParseShell,
+} from './emptyParseShell';
 import {
   type AgentDocumentLiteXMLOperation,
   applyLiteXMLOperations,
@@ -186,6 +196,7 @@ const toAgentDocumentContextPayload = (
  */
 export class AgentDocumentsService {
   private agentDocumentModel: AgentDocumentModel;
+  private bodyWriter: AgentDocumentBodyWriter;
   private documentService: DocumentService;
   private fileModel: FileModel;
   private fileServiceInstance?: FileService;
@@ -211,6 +222,8 @@ export class AgentDocumentsService {
     );
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId, documentAccessScope);
+    const { agentDocumentModel, documentService } = this;
+    this.bodyWriter = { agentDocumentModel, db, documentService, userId, workspaceId };
   }
 
   /** Defers storage configuration until upload cleanup; native documents need only the database. */
@@ -228,6 +241,10 @@ export class AgentDocumentsService {
     if (!doc?.editorData) return doc;
     if (doc.fileType === DOCUMENT_FOLDER_TYPE) return doc;
     if (isManagedSkillDocument(doc)) return doc;
+    // An empty-parse shell hydrates to an empty Lexical state, which throws
+    // Lexical error #38 on every editorData load. Project it as the empty
+    // document it is instead of re-entering the editor.
+    if (isEmptyParseShellDocument(doc)) return projectEmptyParseShell(doc);
 
     try {
       const snapshot = await exportEditorDataSnapshot({
@@ -263,6 +280,12 @@ export class AgentDocumentsService {
     retriesLeft = 2,
   ): Promise<AgentDocumentWithLiteXML> {
     if (isRawTextAgentDocument(doc)) return doc;
+
+    // Empty-parse shells cannot hydrate (Lexical error #38). Expose the static
+    // empty LiteXML document instead of re-entering the editor, so reads and
+    // the remove/rename pre-reads stay addressable; a later modifyNodes on
+    // these ids still reports a precise "did not change the document" error.
+    if (isEmptyParseShellDocument(doc)) return attachEmptyParseShellLiteXML(doc);
 
     const snapshot = await exportEditorDataSnapshot({
       editorData: doc.editorData,
@@ -1063,6 +1086,8 @@ export class AgentDocumentsService {
     const snapshot = await createAgentMarkdownSnapshot(content);
 
     if (existing && projectedExisting?.content !== snapshot.content) {
+      if (await writeSnapshotThroughRoom(this.bodyWriter, existing.documentId, snapshot))
+        return (await this.agentDocumentModel.findById(existing.id)) ?? existing;
       await this.documentService.trySaveCurrentDocumentHistory(existing.documentId, 'llm_call');
     }
 
@@ -1080,14 +1105,9 @@ export class AgentDocumentsService {
     const { content: finalContent } = extractMarkdownH1Title(content);
     const snapshot = await createAgentMarkdownSnapshot(finalContent);
 
-    if (doc.content !== snapshot.content) {
-      await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
-    }
-
-    await this.agentDocumentModel.update(documentId, {
-      content: snapshot.content,
-      editorData: snapshot.editorData,
-    });
+    const target = { agentDocumentId: documentId, documentId: doc.documentId };
+    const recordHistory = doc.content !== snapshot.content;
+    await writeAgentDocumentBody(this.bodyWriter, target, snapshot, { recordHistory });
     return this.getDocumentByIdInAgent(documentId, expectedAgentId);
   }
 
@@ -1107,16 +1127,9 @@ export class AgentDocumentsService {
 
     // History must capture the successfully hydrated pre-edit state. Persisted
     // editorData may be the stale payload that forced Markdown recovery.
-    await this.documentService.trySaveCurrentDocumentHistory(
-      doc.documentId,
-      'llm_call',
-      snapshot.previousEditorData,
-    );
-
-    await this.agentDocumentModel.update(documentId, {
-      content: snapshot.content,
-      editorData: snapshot.editorData,
-    });
+    const target = { agentDocumentId: documentId, documentId: doc.documentId };
+    const { previousEditorData } = snapshot;
+    await writeAgentDocumentBody(this.bodyWriter, target, snapshot, { previousEditorData });
 
     return this.getDocumentByIdInAgent(documentId, expectedAgentId);
   }

@@ -5,6 +5,7 @@ import {
   getStatusDeviceId,
   isLinkedWorktreeCheckout,
   shouldShowCiLabel,
+  shouldShowGitSkeleton,
 } from '../overviewData';
 
 describe('collectChangeStats', () => {
@@ -89,5 +90,22 @@ describe('getStatusDeviceId', () => {
 
   it('shows nothing when no device is bound', () => {
     expect(getStatusDeviceId('device', undefined)).toBeUndefined();
+  });
+});
+
+describe('shouldShowGitSkeleton', () => {
+  it('shows the skeleton only on a first-ever load with no git data at all', () => {
+    expect(shouldShowGitSkeleton({ hasData: false, loading: true })).toBe(true);
+  });
+
+  // Regression: the skeleton keyed off `branchLoading || reviewLoading`, so a
+  // reload with a cached branch still blanked the whole section until the diff
+  // patches came back.
+  it('keeps rendering cached rows while other git reads are still in flight', () => {
+    expect(shouldShowGitSkeleton({ hasData: true, loading: true })).toBe(false);
+  });
+
+  it('never shows the skeleton once loading settles', () => {
+    expect(shouldShowGitSkeleton({ hasData: false, loading: false })).toBe(false);
   });
 });

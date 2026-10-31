@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { assertWatchKeywordsWritable, invalidateBotAfterUpdate } from '../agentBotProviderSettings';
+import {
+  assertWatchKeywordsWritable,
+  invalidateBotAfterUpdate,
+  mergeBotSettingsPatch,
+} from '../agentBotProviderSettings';
 
 const mockAssertBotFeatureAccess = vi.hoisted(() => vi.fn());
 const mockStopClient = vi.hoisted(() => vi.fn());
@@ -141,8 +145,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('stops the runtime when watch keywords go from none to some', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).toHaveBeenCalledWith('discord', 'app-1', 'user-1');
@@ -151,8 +155,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('stops the runtime when watch keywords are cleared', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: { watchKeywords: [{ keyword: 'bug' }] } },
-      { settings: { watchKeywords: [] } },
+      { ...target, settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
+      { settings: { botWakeDisabled: true, watchKeywords: [] } },
     );
 
     expect(mockStopClient).toHaveBeenCalledTimes(1);
@@ -164,8 +168,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
     gatewayState.useMessageGateway = false;
 
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).not.toHaveBeenCalled();
@@ -175,7 +179,10 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
   it('still stops the runtime for disable/rebind even without the external gateway', async () => {
     gatewayState.useMessageGateway = false;
 
-    await invalidateBotAfterUpdate({ ...target, settings: {} }, { enabled: false });
+    await invalidateBotAfterUpdate(
+      { ...target, settings: { botWakeDisabled: true } },
+      { enabled: false },
+    );
 
     expect(mockStopClient).toHaveBeenCalledTimes(1);
   });
@@ -184,8 +191,8 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
     // Gateway reconciliation skips webhook-mode providers, so a stop here
     // would take the bot offline until the next manual config save.
     await invalidateBotAfterUpdate(
-      { ...target, platform: 'telegram', settings: {} },
-      { settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, platform: 'telegram', settings: { botWakeDisabled: true } },
+      { settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
     );
 
     expect(mockStopClient).not.toHaveBeenCalled();
@@ -194,7 +201,7 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('does not stop the runtime when settings switch the bot into webhook mode', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: {} },
+      { ...target, settings: { botWakeDisabled: true } },
       { settings: { connectionMode: 'webhook', watchKeywords: [{ keyword: 'bug' }] } },
     );
 
@@ -203,7 +210,7 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
 
   it('does not stop the runtime when keyword presence is unchanged', async () => {
     await invalidateBotAfterUpdate(
-      { ...target, settings: { watchKeywords: [{ keyword: 'bug' }] } },
+      { ...target, settings: { botWakeDisabled: true, watchKeywords: [{ keyword: 'bug' }] } },
       { settings: { watchKeywords: [{ keyword: 'outage' }] } },
     );
 
@@ -212,9 +219,66 @@ describe('invalidateBotAfterUpdate — monitoring capability flips', () => {
   });
 
   it('does not stop the runtime for settings-free updates', async () => {
-    await invalidateBotAfterUpdate({ ...target, settings: {} }, {});
+    await invalidateBotAfterUpdate({ ...target, settings: { botWakeDisabled: true } }, {});
 
     expect(mockStopClient).not.toHaveBeenCalled();
     expect(mockInvalidateBot).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('mergeBotSettingsPatch', () => {
+  const stored = {
+    allowFrom: [{ id: 'u-1', name: 'Ada' }],
+    botWakeDisabled: false,
+    botWakeScope: 'bot-threads',
+    dmPolicy: 'pairing',
+    userId: 'owner-1',
+    watchKeywords: [{ keyword: 'bug' }],
+  };
+
+  // The agent maintains its own duties through `updateBot`: one key in, every other key kept.
+  it('writes the duties without resetting the settings the caller did not send', () => {
+    const merged = mergeBotSettingsPatch('discord', stored, {
+      botWakeDuties: '评估群里描述的需求',
+      botWakeDutiesThreshold: 0.7,
+    });
+
+    expect(merged).toMatchObject({
+      ...stored,
+      botWakeDuties: '评估群里描述的需求',
+      botWakeDutiesThreshold: 0.7,
+    });
+  });
+
+  it('replaces a key it carries whole, arrays included, and fills schema defaults', () => {
+    const merged = mergeBotSettingsPatch('discord', stored, { allowFrom: [] });
+
+    expect(merged?.allowFrom).toEqual([]);
+    expect(merged?.userId).toBe('owner-1');
+    // A field neither stored nor sent still gets its schema default.
+    expect(merged?.botWakeDutiesThreshold).toBe(0.65);
+  });
+
+  it('writes a flat key the runtime reads, even for a bot configured with a nested botWake', () => {
+    const merged = mergeBotSettingsPatch(
+      'discord',
+      { botWake: { enabled: true, rules: { scope: 'bot-threads' } }, userId: 'owner-1' },
+      { botWakeDuties: 'Triage bug reports.' },
+    );
+
+    expect(merged).toMatchObject({
+      botWakeDuties: 'Triage bug reports.',
+      botWakeDisabled: false,
+      botWakeScope: 'bot-threads',
+      userId: 'owner-1',
+    });
+    expect(merged?.botWake).toBeUndefined();
+  });
+
+  it('starts from the defaults when nothing is stored', () => {
+    expect(mergeBotSettingsPatch('discord', null, { botWakeDuties: 'x' })).toMatchObject({
+      botWakeDuties: 'x',
+      botWakeDisabled: false,
+    });
   });
 });

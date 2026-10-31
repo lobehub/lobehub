@@ -6,15 +6,14 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useSingleton } from '@/hooks/useSingleton';
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { invalidateDocumentMutation } from '@/services/document/invalidation';
 import { useAgentStore } from '@/store/agent';
+import { useDocumentStore } from '@/store/document';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
-import { standardizeIdentifier } from '@/utils/identifier';
 import { isSkillMarkdownDocument } from '@/utils/skillMarkdown';
 
 import { useResolvedAgentDocumentId, useResolvedDocumentId } from './documentViewContext';
@@ -31,13 +30,9 @@ export const usePortalDocumentTitle = () => {
   const documentId = useResolvedDocumentId();
   const agentId = useAgentStore((s) => s.activeAgentId);
 
-  const {
-    data: document,
-    isLoading,
-    mutate: mutateDocument,
-  } = useClientDataSWR(documentId ? portalKeys.documentHeader(documentId) : null, () =>
-    documentService.getDocumentById(documentId!),
-  );
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const optimisticDocumentDetail = useDocumentStore((s) => s.optimisticDocumentDetail);
+  const { data: document, isLoading } = useFetchDocumentDetail(documentId);
 
   const savedTitle = useMemo(
     () => document?.title || document?.filename || '',
@@ -58,9 +53,9 @@ export const usePortalDocumentTitle = () => {
   // 1. `saveChain` queues the SERVER calls — updateDocument mutations run
   //    in submit order, so a slow first request can never land after (and
   //    overwrite) a newer rename.
-  // 2. `saveTicketRef` gates the CLIENT-side settlement — only the newest
-  //    save may touch the SWR cache, so a rejected older request cannot roll
-  //    back a newer intent.
+  // 2. The replica's optimistic overlays settle the CLIENT state — a rejected
+  //    older request rolls back only its own overlay, never a newer intent —
+  //    and `saveTicketRef` keeps the follow-up (refresh / toast) to the newest.
   const saveChain = useSingleton(() => ({ current: Promise.resolve() as Promise<unknown> }));
   const saveTicketRef = useRef(0);
 
@@ -70,46 +65,34 @@ export const usePortalDocumentTitle = () => {
       // Empty or unchanged titles are not written.
       if (metaLocked || !nextTitle || nextTitle === savedTitle || !documentId) return;
 
-      // Claim the newest save; only this ticket may settle the client state.
+      // Claim the newest save; only this ticket may run the follow-up.
       const ticket = ++saveTicketRef.current;
-      const previousTitle = savedTitle;
-
-      // Optimistic update, then reconcile with the server response.
-      mutateDocument((prev) => (prev ? { ...prev, title: nextTitle } : prev), {
-        revalidate: false,
-      });
 
       // Queue the server write behind any in-flight rename so the server sees
       // the titles in the order the user submitted them — a slow first request
       // can no longer land last and overwrite the newer title.
       const write = saveChain.current
         .catch(() => undefined)
-        .then(() =>
-          documentService.updateDocument({ id: documentId, title: nextTitle }).then((result) => {
-            if (ticket !== saveTicketRef.current) return result;
-            // Revalidate the caches other surfaces read titles from
-            // (working-sidebar tree, standalone document page read
-            // `agent:documentsList`), mirroring the full-page editor's
-            // post-rename list refresh.
-            void invalidateDocumentMutation({ agentId: agentId ?? undefined, documentId });
-            return result;
-          }),
-        );
+        .then(() => documentService.updateDocument({ id: documentId, title: nextTitle }));
       saveChain.current = write;
       try {
-        await write;
+        // Optimistic update, then reconcile with the server response.
+        await optimisticDocumentDetail(documentId, { title: nextTitle }, () => write);
+        if (ticket !== saveTicketRef.current) return;
+        // Revalidate the caches other surfaces read titles from
+        // (working-sidebar tree, standalone document page read the agent
+        // document-list replica), mirroring the full-page editor's
+        // post-rename list refresh.
+        void invalidateDocumentMutation({ agentId: agentId ?? undefined, documentId });
       } catch (error) {
         if (ticket !== saveTicketRef.current) return;
         toast.error(t('operationFailed', { ns: 'common' }));
-        mutateDocument((prev) => (prev ? { ...prev, title: previousTitle } : prev), {
-          revalidate: false,
-        });
         // Reject so the rename dialog stays open with the typed title for a
         // retry instead of closing as if the write had landed.
         throw error;
       }
     },
-    [agentId, documentId, metaLocked, mutateDocument, savedTitle, saveChain, t],
+    [agentId, documentId, metaLocked, optimisticDocumentDetail, savedTitle, saveChain, t],
   );
 
   return {
@@ -134,7 +117,7 @@ export const resolvePortalDocumentPath = (
 ): string | undefined => {
   if (!documentId) return undefined;
   if (agentId && agentDocumentId) return buildAgentDocumentPath(agentId, documentId);
-  return `/page/${standardizeIdentifier(documentId)}`;
+  return docsPagePath(documentId);
 };
 
 /**
@@ -158,7 +141,6 @@ export const usePortalDocumentHeaderActions = () => {
   const refresh = useCallback(async () => {
     if (!documentId) return;
     await invalidateDocumentMutation({
-      agentDocumentId,
       agentId: agentDocumentId ? (agentId ?? undefined) : undefined,
       documentId,
     });

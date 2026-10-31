@@ -6,9 +6,9 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openGateReportModal } from '@/features/Acceptance/Viewer/Gate';
-import { useGoalStore } from '@/store/goal';
 
 import { coordinatorGateReason, localizedCoordinatorReason } from './coordinatorCopy';
+import { useReleaseGateDecided } from './useReleaseGateDecided';
 
 /**
  * A held batch release, as an entry rather than an answer: the release is a
@@ -21,7 +21,7 @@ const ReleaseGateEntry = memo<{
   goalId: string;
 }>(({ acceptanceId, decision, goalId }) => {
   const { t } = useTranslation('chat');
-  const refreshGoalGraph = useGoalStore((s) => s.refreshGoalGraph);
+  const onDecided = useReleaseGateDecided(goalId);
   return (
     <Flexbox gap={12}>
       <Text strong>{t('goalProcess.gate.title.batchRelease')}</Text>
@@ -29,12 +29,7 @@ const ReleaseGateEntry = memo<{
         {localizedCoordinatorReason(coordinatorGateReason(decision.question), t as any)}
       </Text>
       <Flexbox horizontal justify={'flex-end'}>
-        <Button
-          type={'primary'}
-          onClick={() =>
-            openGateReportModal({ acceptanceId, onDecided: () => refreshGoalGraph(goalId) })
-          }
-        >
+        <Button type={'primary'} onClick={() => openGateReportModal({ acceptanceId, onDecided })}>
           {t('goalProcess.gate.openReview')}
         </Button>
       </Flexbox>

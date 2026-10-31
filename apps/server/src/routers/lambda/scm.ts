@@ -11,6 +11,7 @@ import { scmEnv } from '@/envs/scm';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { fetchGitHubInstallation } from '@/server/services/scm/github/app';
+import { SCM_MAX_WAKES } from '@/server/services/scm/limits';
 import { consumeScmInstallClaim } from '@/server/services/scm/oauth/stateStore';
 import { canWriteScmScope } from '@/server/services/scm/scope';
 
@@ -113,6 +114,22 @@ export const scmRouter = router({
         externalUserId: identity.externalUserId,
         provider: identity.provider,
       };
+    }),
+
+  /**
+   * Whether a review or CI event can still wake this conversation. An open
+   * conversation polls for that background run only while this holds.
+   */
+  hasWakeTarget: scmProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      if (!scmEnv.ENABLED_GITHUB_APP) return false;
+      return ScmChangeRequestModel.hasWakeTarget(
+        ctx.serverDB,
+        ctx.scope,
+        input.topicId,
+        SCM_MAX_WAKES,
+      );
     }),
 
   listChangeRequests: scmProcedure

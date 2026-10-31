@@ -516,3 +516,178 @@ it.skipIf(process.env.TEST_SERVER_DB !== '1')(
     }
   },
 );
+describe('GoalGraphModel.removeDraftEdges', () => {
+  const seed = async (status: 'draft' | 'running') => {
+    const goal = await goalModel.create({ status, subjectType: 'standalone', title: 'Edges' });
+    const first = await graphModel.createNode(goal.id, { kind: 'task', title: 'First' });
+    const second = await graphModel.createNode(goal.id, { kind: 'task', title: 'Second' });
+    await graphModel.createEdge(goal.id, second!.id, first!.id, 'depends_on');
+    await graphModel.createEdge(goal.id, second!.id, first!.id, 'leads_to');
+    return { first: first!.id, goalId: goal.id, second: second!.id };
+  };
+
+  it('removes only the matching kind from a draft and records the unlink', async () => {
+    const { first, goalId, second } = await seed('draft');
+
+    const result = await graphModel.removeDraftEdges(
+      goalId,
+      { kind: 'depends_on', sourceNodeId: second, targetNodeId: first },
+      'wrong direction',
+    );
+
+    expect(result).toMatchObject({ status: 'removed' });
+    const graph = await graphModel.getGraph(goalId);
+    expect(graph?.edges.map((edge) => edge.kind)).toEqual(['leads_to']);
+    expect(graph?.events[0]).toMatchObject({
+      entityType: 'edge',
+      eventType: 'unlinked',
+      reason: 'wrong direction',
+    });
+  });
+
+  it('removes every edge between the pair when no kind is given', async () => {
+    const { first, goalId, second } = await seed('draft');
+
+    const result = await graphModel.removeDraftEdges(goalId, {
+      sourceNodeId: second,
+      targetNodeId: first,
+    });
+
+    expect(result.status === 'removed' && result.edgeIds).toHaveLength(2);
+    expect((await graphModel.getGraph(goalId))?.edges).toHaveLength(0);
+  });
+
+  it('leaves a started goal untouched', async () => {
+    const { first, goalId, second } = await seed('running');
+
+    const result = await graphModel.removeDraftEdges(goalId, {
+      sourceNodeId: second,
+      targetNodeId: first,
+    });
+
+    expect(result).toEqual({ goalStatus: 'running', status: 'not_draft' });
+    expect((await graphModel.getGraph(goalId))?.edges).toHaveLength(2);
+  });
+
+  it('does not touch another user goal', async () => {
+    const { first, goalId, second } = await seed('draft');
+
+    const result = await new GoalGraphModel(serverDB, otherUserId).removeDraftEdges(goalId, {
+      sourceNodeId: second,
+      targetNodeId: first,
+    });
+
+    expect(result).toEqual({ status: 'not_found' });
+    expect((await graphModel.getGraph(goalId))?.edges).toHaveLength(2);
+  });
+});
+
+describe('GoalGraphModel guard branches', () => {
+  const seedGoal = async (title: string) => goalModel.create({ subjectType: 'standalone', title });
+
+  it('refuses every goal-scoped write on another user goal', async () => {
+    const goal = await seedGoal('Owned elsewhere');
+    const sibling = new GoalGraphModel(serverDB, otherUserId);
+
+    expect(
+      await sibling.createNode(goal.id, { kind: 'task', title: 'Intruder task' }),
+    ).toBeUndefined();
+    expect(
+      await sibling.createNodeOnce(goal.id, { kind: 'task', title: 'Intruder task' }),
+    ).toBeUndefined();
+    expect(
+      await sibling.createEdge(goal.id, 'source-node', 'target-node', 'leads_to'),
+    ).toBeUndefined();
+    expect(await sibling.bindTask(goal.id, 'node', 'task')).toBeUndefined();
+    expect(await sibling.claimTaskNode(goal.id, 'node', new Date())).toBeUndefined();
+    expect(await sibling.updateNodeDescription(goal.id, 'node', 'desc')).toBeUndefined();
+    expect(
+      await sibling.createDecision(goal.id, 'node', { authority: 'user', question: 'why?' }),
+    ).toBeUndefined();
+    expect(await sibling.resolveDecision(goal.id, 'decision', 'option')).toBeUndefined();
+    expect(await sibling.cancelDecision(goal.id, 'decision', 'never asked')).toBeUndefined();
+    expect(await sibling.attachWorkVersion(goal.id, 'node', 'version', 'produced')).toBeUndefined();
+
+    // Nothing leaked through: the goal graph is still empty for its owner.
+    const graph = await graphModel.getGraph(goal.id);
+    expect(graph?.nodes).toHaveLength(0);
+    expect(graph?.edges).toHaveLength(0);
+  });
+
+  it('rejects an experiment that answers no question', async () => {
+    const goal = await seedGoal('Experiment without a question');
+
+    await expect(
+      graphModel.createNode(goal.id, { kind: 'experiment', title: 'Try it' }),
+    ).rejects.toThrow('An experiment must answer a question');
+  });
+
+  it('rejects a non-experiment that claims to answer a question', async () => {
+    const goal = await seedGoal('Task answering a question');
+
+    await expect(
+      graphModel.createNode(goal.id, {
+        kind: 'task',
+        questionId: '00000000-0000-0000-0000-000000000000',
+        title: 'Not an experiment',
+      }),
+    ).rejects.toThrow('Only experiments can answer questions');
+  });
+
+  it('returns undefined when the node to attach a Work version to is missing', async () => {
+    const goal = await seedGoal('No such node');
+
+    expect(
+      await graphModel.attachWorkVersion(
+        goal.id,
+        '00000000-0000-0000-0000-000000000000',
+        '00000000-0000-0000-0000-000000000001',
+        'produced',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined when a decision is opened on a non-decision node', async () => {
+    const goal = await seedGoal('Decision on a task');
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'W1' });
+
+    expect(
+      await graphModel.createDecision(goal.id, node!.id, {
+        authority: 'user',
+        question: 'not a gate',
+      }),
+    ).toBeUndefined();
+  });
+
+  it('returns undefined when resolving an already resolved decision', async () => {
+    const goal = await seedGoal('Resolve twice');
+    const gate = await graphModel.createNode(goal.id, { kind: 'decision', title: 'Ship?' });
+    const decision = await graphModel.createDecision(goal.id, gate!.id, {
+      authority: 'user',
+      options: [{ id: 'yes', label: 'Yes' }],
+      question: 'ship?',
+    });
+
+    expect(await graphModel.resolveDecision(goal.id, decision!.id, 'yes')).toBeDefined();
+    expect(await graphModel.resolveDecision(goal.id, decision!.id, 'yes')).toBeUndefined();
+  });
+
+  it('returns undefined when cancelling an already resolved decision', async () => {
+    const goal = await seedGoal('Cancel after resolve');
+    const gate = await graphModel.createNode(goal.id, { kind: 'decision', title: 'Ship?' });
+    const decision = await graphModel.createDecision(goal.id, gate!.id, {
+      authority: 'user',
+      options: [{ id: 'yes', label: 'Yes' }],
+      question: 'ship?',
+    });
+    await graphModel.resolveDecision(goal.id, decision!.id, 'yes');
+
+    expect(await graphModel.cancelDecision(goal.id, decision!.id, 'too late')).toBeUndefined();
+  });
+
+  it('returns undefined when no goal carries the task', async () => {
+    expect(
+      await graphModel.findGoalByTaskId('00000000-0000-0000-0000-000000000000'),
+    ).toBeUndefined();
+  });
+});

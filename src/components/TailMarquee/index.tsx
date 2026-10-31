@@ -1,4 +1,4 @@
-import { createStaticStyles, cx, keyframes } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   type CSSProperties,
   type PointerEvent,
@@ -8,84 +8,128 @@ import {
   useState,
 } from 'react';
 
-import { getMarqueeDuration, HOLD_RATIO, shouldRevealOnPointerDown } from './utils';
+import { sx } from '@/styles/sx';
 
-const HOLD = HOLD_RATIO * 100;
+import { getMarqueeDuration, shouldRevealOnPointerDown } from './utils';
 
-// Hold at the tail, scroll to the head, hold, scroll back.
-const scrollToHead = keyframes`
-  0%,
-  ${HOLD}% {
-    transform: translateX(0);
-  }
+const scrollToHead = stylex.keyframes({
+  '0%, 20%': { transform: 'translateX(0)' },
+  '40%, 60%': { transform: 'translateX(var(--tail-marquee-offset))' },
+  '80%, 100%': { transform: 'translateX(0)' },
+});
 
-  ${50 - HOLD / 2}%,
-  ${50 + HOLD / 2}% {
-    transform: translateX(var(--tail-marquee-offset));
-  }
-
-  ${100 - HOLD}%,
-  100% {
-    transform: translateX(0);
-  }
-`;
-
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    /* Paths read left to right in every locale; the alignment, fade and
-       translate below all assume LTR, so pin it even inside an RTL page. */
-    direction: ltr;
-    unicode-bidi: isolate;
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    justify-content: flex-end;
-
-    min-width: 0;
-  `,
-  overflowing: css`
-    mask-image: linear-gradient(to right, transparent, #000 16px);
-
-    /* Keyboard focus on the enclosing control (e.g. an accordion trigger)
-       loops; a tap on a touch screen plays one loop. */
-    *:focus-visible > &,
-    *:focus-visible > * > &,
-    &[data-revealing] {
-      mask-image: none;
-    }
-
-    *:focus-visible > & > span,
-    *:focus-visible > * > & > span {
-      animation: ${scrollToHead} var(--tail-marquee-duration) ease-in-out infinite;
-    }
-
-    &[data-revealing] > span {
-      animation: ${scrollToHead} var(--tail-marquee-duration) ease-in-out 1;
-    }
-
-    /* Only real hover loops: touch browsers keep a sticky :hover after a tap,
-       which would otherwise turn the one-loop tap reveal into an endless one. */
-    @media (hover: hover) {
-      &:hover {
-        mask-image: none;
-      }
-
-      &:hover > span {
-        animation: ${scrollToHead} var(--tail-marquee-duration) ease-in-out infinite;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      & > span {
-        animation: none !important;
-      }
-    }
-  `,
-  content: css`
-    flex: none;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    // Paths read left to right in every locale; the alignment, fade and
+    // translate below all assume LTR, so pin it even inside an RTL page.
+    direction: 'ltr',
+    unicodeBidi: 'isolate',
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    justifyContent: 'flex-end',
+    minWidth: 0,
+  },
+  content: {
+    flex: 'none',
+    whiteSpace: 'nowrap',
+  },
+  overflowing: {
+    maskImage: {
+      'default': 'linear-gradient(to right, transparent, #000 16px)',
+      ':is(:focus-visible > *, :focus-visible > * > *)': 'none',
+      ':is([data-revealing])': 'none',
+      '@media (hover: hover)': { 'default': null, ':hover': 'none' },
+    },
+  },
+  animated: {
+    animationName: {
+      'default': null,
+      ':is(:focus-visible > * > span, :focus-visible > * > * > span)': scrollToHead,
+      ':is([data-revealing] > span)': scrollToHead,
+      '@media (hover: hover)': {
+        'default': null,
+        ':is(:hover > span)': scrollToHead,
+        '@media (prefers-reduced-motion: reduce)': {
+          'default': 'none',
+          ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'none',
+          ':is([data-revealing] > span)': 'none',
+          ':is(:hover > span)': 'none',
+        },
+      },
+      '@media (prefers-reduced-motion: reduce)': {
+        'default': 'none',
+        ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'none',
+        ':is([data-revealing] > span)': 'none',
+        ':is(:hover > span)': 'none',
+      },
+    },
+    animationDuration: {
+      'default': null,
+      ':is(:focus-visible > * > span, :focus-visible > * > * > span)':
+        'var(--tail-marquee-duration)',
+      ':is([data-revealing] > span)': 'var(--tail-marquee-duration)',
+      '@media (hover: hover)': {
+        'default': null,
+        ':is(:hover > span)': 'var(--tail-marquee-duration)',
+        '@media (prefers-reduced-motion: reduce)': {
+          'default': '0s',
+          ':is(:focus-visible > * > span, :focus-visible > * > * > span)': '0s',
+          ':is([data-revealing] > span)': '0s',
+          ':is(:hover > span)': '0s',
+        },
+      },
+      '@media (prefers-reduced-motion: reduce)': {
+        'default': '0s',
+        ':is(:focus-visible > * > span, :focus-visible > * > * > span)': '0s',
+        ':is([data-revealing] > span)': '0s',
+        ':is(:hover > span)': '0s',
+      },
+    },
+    animationTimingFunction: {
+      'default': null,
+      ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'ease-in-out',
+      ':is([data-revealing] > span)': 'ease-in-out',
+      '@media (hover: hover)': {
+        'default': null,
+        ':is(:hover > span)': 'ease-in-out',
+        '@media (prefers-reduced-motion: reduce)': {
+          'default': 'ease',
+          ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'ease',
+          ':is([data-revealing] > span)': 'ease',
+          ':is(:hover > span)': 'ease',
+        },
+      },
+      '@media (prefers-reduced-motion: reduce)': {
+        'default': 'ease',
+        ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'ease',
+        ':is([data-revealing] > span)': 'ease',
+        ':is(:hover > span)': 'ease',
+      },
+    },
+    animationIterationCount: {
+      'default': null,
+      ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'infinite',
+      ':is([data-revealing] > span)': 1,
+      '@media (hover: hover)': {
+        'default': null,
+        ':is(:hover > span)': 'infinite',
+        '@media (prefers-reduced-motion: reduce)': {
+          'default': 1,
+          ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 1,
+          ':is([data-revealing] > span)': 1,
+          ':is(:hover > span)': 1,
+        },
+      },
+      '@media (prefers-reduced-motion: reduce)': {
+        'default': 1,
+        ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 1,
+        ':is([data-revealing] > span)': 1,
+        ':is(:hover > span)': 1,
+      },
+    },
+  },
+});
 
 interface TailMarqueeProps {
   children: ReactNode;
@@ -133,21 +177,18 @@ const TailMarquee = ({ children, className, style }: TailMarqueeProps) => {
 
   return (
     <div
-      className={cx(styles.container, overflow > 0 && styles.overflowing, className)}
       data-revealing={revealing || undefined}
       ref={containerRef}
       title={overflow > 0 ? fullText : undefined}
-      style={
-        {
-          ...style,
-          '--tail-marquee-duration': `${duration}s`,
-          '--tail-marquee-offset': `${overflow}px`,
-        } as CSSProperties
-      }
+      {...sx([styles.container, overflow > 0 && styles.overflowing], className, {
+        ...style,
+        '--tail-marquee-duration': `${duration}s`,
+        '--tail-marquee-offset': `${overflow}px`,
+      } as CSSProperties)}
       onAnimationEnd={() => setRevealing(false)}
       onPointerDown={handlePointerDown}
     >
-      <span className={styles.content} ref={contentRef}>
+      <span ref={contentRef} {...stylex.props(styles.content, overflow > 0 && styles.animated)}>
         {children}
       </span>
     </div>

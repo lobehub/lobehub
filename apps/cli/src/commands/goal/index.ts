@@ -1,0 +1,1282 @@
+import { readFile } from 'node:fs/promises';
+
+import type {
+  GoalEdgeKind,
+  GoalEventEntityType,
+  GoalEventType,
+  GoalGraphDecision,
+  GoalGraphEvent,
+  GoalGraphSnapshot,
+  GoalNodeKind,
+  GoalPlanContext,
+  GoalTickResult,
+} from '@lobechat/types';
+import { goalSeedDependencyProblem } from '@lobechat/utils/goalSeeds';
+import { type Command, Option } from 'commander';
+import pc from 'picocolors';
+
+import { getTrpcClient } from '../../api/client';
+import { confirm, outputJson, printTable, truncate } from '../../utils/format';
+import { log } from '../../utils/logger';
+import { resolveAppUrlBuilder } from '../task/url';
+import { registerGoalAccessCommands } from './access';
+import { registerGoalGraphEditCommands } from './graphEdit';
+import {
+  type GoalMetricState,
+  printMetricState,
+  readMetricState,
+  registerGoalMetricCommands,
+} from './metric';
+import { goalReads, hasOperationToken } from './reads';
+import { registerGoalReportCommand } from './report';
+import { missingSeedDependencies, parseTaskFile } from './seedTasks';
+
+// Typed rather than inferred: an `as const` map is indexable by a widened
+// `any` node kind, which is how a renamed kind silently printed `undefined`
+// here after the type checker had signed off everywhere else.
+
+/** `--variant mechanism=replica,swr` → one axis and its values. */
+const parseVariant = (raw: string) => {
+  const separator = raw.indexOf('=');
+  const axis = separator > 0 ? raw.slice(0, separator).trim() : '';
+  const values = (separator > 0 ? raw.slice(separator + 1) : '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!axis || !values.length) throw new Error(`--variant expects axis=value1,value2; got ${raw}`);
+  return { axis, values };
+};
+
+const nodeIcon: Record<GoalNodeKind, string> = {
+  batch: '▦',
+  decision: '◆',
+  experiment: '⚗',
+  finding: '●',
+  problem: '◇',
+  task: '▣',
+};
+/**
+ * Every edge kind reads `source <kind> target`, so a row listing its INCOMING
+ * edges by kind states the relationship backwards: an incoming `depends_on`
+ * means the other node depends on THIS one, not the reverse. Render the inverse
+ * verb instead, so each entry is a true sentence about the row it sits on.
+ */
+const inverseEdgeLabel: Record<GoalEdgeKind, string> = {
+  answers: 'answered by',
+  contains: 'inside',
+  contradicts: 'contradicted by',
+  decomposes: 'part of',
+  depends_on: 'blocks',
+  derived_from: 'ancestor of',
+  investigates: 'investigated by',
+  leads_to: 'follows',
+  produces: 'produced by',
+  supports: 'supported by',
+};
+
+const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
+
+/** Backoff bounds for a transient `goal tick` failure. */
+const TICK_RETRY_BASE_MS = 1000;
+const TICK_RETRY_MAX_MS = 30_000;
+
+/**
+ * tRPC codes that are a verdict about the REQUEST, not about the trip to the
+ * server: retrying them just reproduces the same answer. Everything else —
+ * including a transport failure that never reached tRPC — is treated as a blip
+ * worth surviving, because `goal run` is meant to be left unattended for hours
+ * and a dropped socket must not end the run half-way.
+ */
+const fatalTickCodes = new Set([
+  'BAD_REQUEST',
+  'CONFLICT',
+  'FORBIDDEN',
+  'NOT_FOUND',
+  'PARSE_ERROR',
+  'UNAUTHORIZED',
+]);
+
+const trpcErrorCode = (error: unknown): string | undefined => {
+  const value = error as { data?: { code?: string }; shape?: { data?: { code?: string } } };
+  return value?.data?.code ?? value?.shape?.data?.code;
+};
+
+/**
+ * A transport-level failure (`fetch failed`, ECONNRESET, a 502 from a proxy)
+ * carries no tRPC envelope at all, so the ABSENCE of a code is the signal that
+ * the request never got a verdict. Erring towards retry keeps an unrecognised
+ * error shape from killing a multi-hour run.
+ */
+const isRetryableTickError = (error: unknown) => {
+  const code = trpcErrorCode(error);
+  return code === undefined || !fatalTickCodes.has(code);
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Run one coordinator tick, riding out transient failures until `retryWindowMs`
+ * of CONSECUTIVE failure has elapsed. The window is wall-clock rather than an
+ * attempt count so a long outage is survivable without making the backoff
+ * pointlessly aggressive; each delay is also clamped to what's left of the
+ * window so the command never sleeps past its own budget (and so a tiny window
+ * stays fast instead of blocking on the first 1s backoff).
+ */
+const tickWithRetry = async <T>(
+  tick: () => Promise<T>,
+  retryWindowMs: number,
+  onRetry: (error: unknown, delayMs: number) => void,
+): Promise<T> => {
+  const deadline = Date.now() + retryWindowMs;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await tick();
+    } catch (error) {
+      const remaining = deadline - Date.now();
+      if (!isRetryableTickError(error) || remaining <= 0) throw error;
+      const delay = Math.min(TICK_RETRY_BASE_MS * 2 ** attempt, TICK_RETRY_MAX_MS, remaining);
+      onRetry(error, delay);
+      await sleep(delay);
+    }
+  }
+};
+
+interface GoalRunTickResult extends GoalTickResult {
+  pollCount?: number;
+  waitedMs?: number;
+}
+
+const isSameWaitingState = (previous: GoalRunTickResult | undefined, current: GoalTickResult) =>
+  previous?.outcome === 'waiting_external' &&
+  current.outcome === 'waiting_external' &&
+  previous.message === current.message &&
+  previous.nodeId === current.nodeId &&
+  previous.taskId === current.taskId;
+
+function printGraph(graph: GoalGraphSnapshot, metrics?: GoalMetricState) {
+  const { goal } = graph;
+  console.log(
+    `\n${pc.bold(goal.title)} ${pc.dim(goal.id)} [${goal.status}${
+      goal.config?.pausedBy ? ` · paused by ${goal.config.pausedBy}` : ''
+    }]`,
+  );
+  // Older servers do not send it; personal goals are private whatever the column says.
+  if (goal.workspaceId && goal.visibility)
+    console.log(`${pc.dim('Visibility:')} ${goal.visibility}`);
+  if (goal.subjectType)
+    console.log(`${pc.dim('Subject:')} ${`${goal.subjectType} ${goal.subjectId ?? ''}`.trim()}`);
+  if (goal.requirement) console.log(`${pc.dim('Requirement:')} ${goal.requirement}`);
+  const turn = goal.config?.managerState;
+  const pending = graph.decisions.filter((decision) => decision.status === 'pending').length;
+  console.log(
+    `${pc.dim('Planning:')} ${
+      turn
+        ? `turn #${turn.turns} · started ${turn.startedAt}${turn.consumed ? ' · settled' : ''}`
+        : 'no planning turn'
+    }${pending > 0 ? pc.yellow(` · ${pending} decision(s) need you`) : ''}`,
+  );
+  if (metrics) printMetricState(metrics);
+  const incoming = new Map<string, typeof graph.edges>();
+  for (const edge of graph.edges) {
+    const list = incoming.get(edge.targetNodeId) ?? [];
+    list.push(edge);
+    incoming.set(edge.targetNodeId, list);
+  }
+  const rows = graph.nodes.map((node) => {
+    const relations = (incoming.get(node.id) ?? [])
+      .map((edge) => `${inverseEdgeLabel[edge.kind] ?? edge.kind} ${edge.sourceNodeId.slice(0, 8)}`)
+      .join(', ');
+    return [
+      `${nodeIcon[node.kind]} ${node.kind}`,
+      node.status,
+      truncate(node.title, 46),
+      node.taskId ?? '-',
+      relations || '-',
+      node.id,
+    ];
+  });
+  console.log();
+  printTable(rows, ['TYPE', 'STATUS', 'TITLE', 'TASK', 'RELATIONS', 'NODE ID']);
+}
+
+function printTick(result: GoalTickResult) {
+  const icon =
+    result.outcome === 'achieved'
+      ? pc.green('✓')
+      : result.outcome === 'waiting_human'
+        ? pc.yellow('◆')
+        : result.outcome === 'failed'
+          ? pc.red('✗')
+          : pc.blue('→');
+  console.log(`${icon} ${pc.bold(result.outcome)} ${result.message}`);
+  if (result.taskId) console.log(`  ${pc.dim(`task: ${result.taskId}`)}`);
+  if (result.nodeId) console.log(`  ${pc.dim(`node: ${result.nodeId}`)}`);
+}
+
+/** Recent events `lh goal state` shows unless a caller asks for another count. */
+const GOAL_EVENT_TAIL_DEFAULT = 10;
+
+/**
+ * A one-line reading of each admission code the server can return.
+ *
+ * Keyed by code, not by message: the server deliberately folds several causes
+ * ("the turn was consumed", "its run ended", "the graph moved") into the single
+ * `Stale planning input` message, so the message alone cannot say which
+ * precondition failed — which is exactly what the CLI is here to surface.
+ */
+const admissionHint: Record<string, string> = {
+  acceptance_escalate_only:
+    'a failed Goal acceptance can only be escalated — it cannot be superseded by new work',
+  budget_exhausted: 'a budget bound is reached (rounds, cost or deadline)',
+  consumed: 'this turn was already settled; its plan cannot be submitted again',
+  duplicate:
+    'a plan is already recorded for this turn; submitting again returns that receipt unchanged',
+  existing_work: 'unfinished work must be delivered before planning or verifying',
+  inactive: 'the Goal is not in an active state (planning or running)',
+  operation_mismatch: 'the token does not speak for the operation bound to this Goal',
+  pending_decision: 'a decision gate is still waiting on an answer',
+  release_turn_only:
+    'this turn was handed a batch release; answer with release, or escalate without ask for the owner',
+  release_unsolicited: 'release only answers a batch release handed to this turn',
+  revise_turn_only:
+    'this turn was handed the batch plan to rewrite; answer with revise_plan (the full revised recipe)',
+  revise_unsolicited: 'revise_plan only answers a batch plan handed to this turn to rewrite',
+  review_changed: 'task review feedback changed after this turn started',
+  stale_input: 'the graph moved after this turn started, so the plan would apply to stale input',
+  started_from_draft:
+    'the Goal was started from its draft, which settled this turn; the next turn plans further work',
+  turn_owner: 'this Goal has no matching planning turn',
+  turn_settled: "this turn's run is no longer running",
+  wait_unsettled: 'unfinished work must be settled before waiting',
+  wait_until_past: 'the wait deadline is already in the past',
+};
+
+const toIso = (value: Date | string) =>
+  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
+const shortHash = (hash?: string | null) => (hash ? `${hash.slice(0, 12)}…` : '—');
+
+/**
+ * Recorded receipt against what the server computes now. The snapshot a plan is
+ * validated against is server-owned — a client cannot recompute it — so this is
+ * the one place the "why was my plan stale" comparison becomes visible.
+ */
+const compareHash = (recorded: string | null, current?: string) => {
+  if (!current) return pc.dim('unavailable');
+  if (!recorded) return `${shortHash(current)} ${pc.dim('(no receipt)')}`;
+  return current === recorded
+    ? `${shortHash(current)} ${pc.dim('matches receipt')}`
+    : `${shortHash(recorded)} → ${shortHash(current)} ${pc.yellow('moved')}`;
+};
+
+/** The same comparison without color, for a message that is not a console line. */
+const compareHashPlain = (recorded: string | null, current?: string) => {
+  if (!current) return 'unavailable';
+  if (!recorded) return `${shortHash(current)} (no receipt)`;
+  return current === recorded
+    ? `${shortHash(current)} matches receipt`
+    : `${shortHash(recorded)} → ${shortHash(current)} MOVED`;
+};
+
+function printGoalState(
+  graph: GoalGraphSnapshot,
+  context: GoalPlanContext,
+  events: GoalGraphEvent[],
+) {
+  const { goal } = graph;
+  const field = (label: string, value: string) =>
+    console.log(`  ${pc.dim(label.padEnd(11))} ${value}`);
+
+  console.log(`\n${pc.bold(goal.title)} ${pc.dim(goal.id)}`);
+  field(
+    'Status',
+    `${context.goal.status}${
+      context.goal.pausedBy ? pc.yellow(` (paused by ${context.goal.pausedBy})`) : ''
+    }`,
+  );
+  field(
+    'Subject',
+    goal.subjectType ? `${goal.subjectType} ${goal.subjectId ?? ''}`.trim() : 'standalone',
+  );
+  field('Agent', context.goal.agentId ?? '—');
+  if (goal.requirement) field('Requirement', truncate(goal.requirement, 96));
+  if (context.budget) {
+    const cap =
+      context.budget.maxTotalCost === null
+        ? ''
+        : `/${Number(context.budget.maxTotalCost).toFixed(2)}`;
+    field(
+      'Budget',
+      `runs ${context.budget.runs}/${context.budget.maxRounds ?? '∞'} · $${context.budget.totalCost.toFixed(2)}${cap}${
+        context.budget.deadline ? ` · deadline ${context.budget.deadline}` : ''
+      }${context.budget.blocked ? pc.red(' · exhausted') : ''}`,
+    );
+  }
+
+  if (context.turn) {
+    const { turn } = context;
+    console.log(
+      `\n  ${pc.bold(`Planning turn #${turn.turns}`)} ${pc.dim(`started ${turn.startedAt}`)}`,
+    );
+    field('token', turn.token);
+    field(
+      'operation',
+      `${turn.operationId ?? '—'}${turn.opStatus ? pc.dim(` (${turn.opStatus})`) : ''}`,
+    );
+    field(
+      'receipt',
+      `consumed ${turn.consumed} · failedTurns ${turn.failedTurns} · neverStarted ${turn.dispatchNeverStarted} · adopted ${turn.adopted}`,
+    );
+    field('snapshot', compareHash(context.snapshot.recorded, context.snapshot.current));
+    field('review', compareHash(context.review.recorded, context.review.current));
+    if (turn.problem)
+      field('problem', `${turn.problemTaskId ?? '—'} · ${truncate(turn.problem, 60)}`);
+    if (turn.submitted)
+      field('submitted', `${turn.submitted.action} · ${truncate(turn.submitted.reason, 60)}`);
+    if (turn.retryAfter) field('retryAfter', turn.retryAfter);
+  } else {
+    console.log(`\n  ${pc.dim('No planning turn recorded for this Goal.')}`);
+  }
+
+  const { admission } = context;
+  // `duplicate` is `ok` (nothing is refused) but is NOT an invitation to plan:
+  // the turn already holds a submitted plan, and `submit` returns that receipt
+  // instead of applying a new one, so it must not read as "accepted".
+  const alreadyRecorded = admission.code === 'duplicate';
+  console.log(
+    `\n  ${pc.bold('Admission')} ${
+      alreadyRecorded
+        ? pc.yellow('◆ a plan is already recorded for this turn — a new one will not replace it')
+        : admission.ok
+          ? pc.green('✓ a plan for the current turn would be accepted')
+          : pc.red(`✗ refused — ${admission.code}`)
+    }`,
+  );
+  if (!admission.ok) {
+    const hint = admissionHint[admission.code];
+    if (hint) console.log(`      ${pc.dim(hint)}`);
+    if (admission.message) console.log(`      ${admission.message}`);
+  }
+
+  if (context.queue)
+    field(
+      'Queue',
+      `${context.queue.unfinishedTasks} unfinished task(s) · ${context.queue.pendingDecisions} pending decision(s)`,
+    );
+
+  if (events.length > 0) {
+    console.log(`\n  ${pc.bold('Recent events')} ${pc.dim(`(newest ${events.length})`)}`);
+    for (const event of events)
+      console.log(
+        `    ${pc.dim(toIso(event.createdAt))}  ${event.entityType} ${event.eventType}${
+          event.reason ? `  ${truncate(event.reason, 76)}` : ''
+        }`,
+      );
+  }
+}
+
+/**
+ * The plan shape `goal.planContext` accepts, read off the client so the two
+ * cannot drift. A refused `lh goal plan` re-reads the admission with the plan it
+ * just submitted: four guards (`existing_work`, `acceptance_escalate_only`,
+ * `wait_unsettled`, `wait_until_past`) only fire when a plan is present, so
+ * omitting it would report `ok` and explain nothing.
+ */
+type PlanInput = NonNullable<
+  Parameters<Awaited<ReturnType<typeof getTrpcClient>>['goal']['planContext']['query']>[0]['plan']
+>;
+
+/**
+ * Explain a refused `lh goal plan` from the server's own admission, so an
+ * operator does not have to re-derive it from the graph. Best-effort: a
+ * diagnostic that itself fails must never replace the real error.
+ */
+async function explainPlanRefusal(
+  id: string,
+  options: { operation?: string; plan?: PlanInput; token?: string },
+): Promise<string | undefined> {
+  try {
+    const reads = await goalReads();
+    const { data } = await reads.planContext.query({
+      id,
+      operationId: options.operation ?? process.env.LOBEHUB_OPERATION_ID,
+      plan: options.plan,
+      token: options.token,
+    });
+    if (data.admission.ok) return undefined;
+    const lines = [`Refused (${data.admission.code}): ${admissionHint[data.admission.code] ?? ''}`];
+    if (data.admission.message) lines.push(`  ${data.admission.message}`);
+    if (data.turn) {
+      lines.push(
+        `  turn #${data.turn.turns} started ${data.turn.startedAt} · consumed ${data.turn.consumed} · run ${
+          data.turn.opStatus ?? 'n/a'
+        }`,
+      );
+      lines.push(`  snapshot ${compareHashPlain(data.snapshot.recorded, data.snapshot.current)}`);
+      lines.push(`  review   ${compareHashPlain(data.review.recorded, data.review.current)}`);
+    }
+    lines.push(`  Inspect with: lh goal state ${id}`);
+    return lines.join('\n');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Builds goal page links. Best-effort: a read must not fail over a link, and an
+ * operation-token run may be refused the workspace lookup behind it.
+ */
+const goalUrlBuilder = async () => {
+  try {
+    const buildUrl = await resolveAppUrlBuilder(await getTrpcClient());
+    return (id: string) => buildUrl(`/goal/${encodeURIComponent(id)}`);
+  } catch {
+    return () => undefined;
+  }
+};
+
+export function registerGoalCommand(program: Command) {
+  const goal = program.command('goal').description('Run long-horizon Goal Graphs');
+  goal
+    .command('wake <id>')
+    .description('Deliver an external result to a specific Goal wait')
+    .requiredOption('--token <token>', 'managerState.token from the waiting Goal')
+    .requiredOption('--event <id>', 'Stable delivery ID')
+    .requiredOption('--type <type>', 'Event type declared by the wait')
+    .requiredOption('--key <key>', 'Event correlation key declared by the wait')
+    .option('--summary <text>', 'Short observation')
+    .option('--reference <reference>', 'Evidence reference, not an inline dataset')
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: {
+          token: string;
+          event: string;
+          type: string;
+          key: string;
+          summary?: string;
+          reference?: string;
+          json?: boolean;
+        },
+      ) => {
+        const client = await getTrpcClient();
+        const result = await client.goal.wake.mutate({
+          id,
+          waitToken: options.token,
+          eventId: options.event,
+          type: options.type,
+          key: options.key,
+          summary: options.summary,
+          reference: options.reference,
+        });
+        if (options.json) outputJson(result.data);
+        else
+          console.log(
+            result.data.accepted
+              ? 'Event recorded; Goal continuation queued.'
+              : `Event not applied: ${result.data.reason}`,
+          );
+      },
+    );
+  goal
+    .command('plan <id>')
+    .summary('Atomically submit the current main Agent plan')
+    .description(
+      [
+        'Atomically submit the current main Agent plan.',
+        '',
+        'A tasks plan lists 1-10 tasks, each a title, a self-contained description and an optional dependsOn.',
+        'When the work applies one recipe to many units (migrate N stores to one mechanism, give N resources',
+        'the same caching, update N callers), declare a batch instead of listing every unit: add "rollout" with',
+        '"recipe" (the procedure every unit follows), "units" (every unit beyond the probes, as a title or',
+        '{"title","description"}) and optional "variants" ([{"axis","values"}]); "tasks" then hold 2-5',
+        'representative probes. The probes run first; once they ran through without a person the owner approves',
+        'the first wave, and each later wave is handed to this agent to release or escalate; a rejected',
+        'release comes back to this agent to rewrite the plan for review. Units that differ',
+        'only in names, files or details are still one mould; work whose steps differ per task is not.',
+      ].join('\n'),
+    )
+    .requiredOption(
+      '--file <path>',
+      'JSON plan: action tasks/wait/verify/retry/escalate/release/revise_plan, reason and action fields; a tasks plan may add "rollout" to run its units as a batch; release answers a batch release handed to this turn; revise_plan answers a plan the owner sent back, with "recipe" the full revised plan and optional "rerun" the experiment unit ids to run again on it (omitted: all), and answers settled probes to distill with "recipe" and optional "rerun" the probe ids that fall short of it (omitted: none)',
+    )
+    .requiredOption('--token <token>', 'Current server-issued planning turn token')
+    .option('--operation <id>', 'Defaults to LOBEHUB_OPERATION_ID')
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: { file: string; token: string; operation?: string; json?: boolean },
+      ) => {
+        const operationId = options.operation ?? process.env.LOBEHUB_OPERATION_ID;
+        if (!operationId) throw new Error('Current manager operation ID required');
+        // Read and parse the plan BEFORE any network call: a missing or malformed
+        // file is a local error, and must not be dressed up as a server refusal
+        // just because the Goal's own admission happens to be non-OK.
+        const plan = JSON.parse(await readFile(options.file, 'utf8'));
+        const client = await getTrpcClient();
+        const endpoint = hasOperationToken()
+          ? client.goal.submitOperationPlan
+          : client.goal.submitPlan;
+        try {
+          const result = await endpoint.mutate({ id, token: options.token, operationId, plan });
+          if (options.json) outputJson(result.data);
+          else
+            console.log(
+              'Plan recorded; the coordinator will continue after this Agent turn exits.',
+            );
+        } catch (error) {
+          // A refusal is a verdict about this turn, so print the server's own
+          // admission before the error propagates: the bare message ("Stale
+          // planning input") cannot say which precondition failed. The plan
+          // travels with it — the read is only as specific as the plan it sees.
+          // stderr, not stdout: `--json` callers parse stdout, and a refusal
+          // must not turn it into prose.
+          const explanation = await explainPlanRefusal(id, {
+            operation: options.operation,
+            plan,
+            token: options.token,
+          });
+          if (explanation) console.error(explanation);
+          throw error;
+        }
+      },
+    );
+
+  registerGoalReportCommand(goal);
+
+  goal
+    .command('create <title>')
+    .option(
+      '--max-manager-turns <n>',
+      'Add a main Agent with this turn limit; it takes over problems the system planner cannot route',
+    )
+    .summary('Create a goal and seed its graph')
+    .description(
+      [
+        'Create a goal and seed its graph.',
+        '',
+        'From a chat, create it with --topic. The goal opens as a draft bound to this topic: nothing is',
+        'dispatched until it is started, so arrange it first:',
+        '  1. Place the tasks: -t <titles...>, --task-file <json> for briefs and dependsOn order, or later',
+        '     `lh goal add-node <id> task <title> -d <brief>` and `lh goal add-edge` (`remove-edge` undoes one).',
+        '  2. Check the graph the command prints (or `lh goal show <id>`).',
+        '  3. Start it: `lh goal start <id>` (see `lh man goal start`). The owner can also start it from the',
+        '     goal page.',
+        '',
+        'Many tasks that apply one recipe to different units (migrate N stores, cache N resources, update N',
+        'callers) should run as a batch: seed every unit as a task, then start with',
+        '`--rollout canary --recipe-file <md> --probes <2-5 node ids>`. The probes run first; the other units',
+        'are released wave by wave only after the probes ran through without a person.',
+        '',
+        'Without --topic the goal is standalone and starts at once; omit -t to let the planner decompose it.',
+      ].join('\n'),
+    )
+    .option('-r, --requirement <text>', 'Acceptance requirement')
+    .option(
+      '-i, --instruction <text>',
+      "The ask in the user's own words, shown on the problem node",
+    )
+    .option('-t, --task <title...>', 'Seed task node titles (omit to let the planner decompose)')
+    .option(
+      '--task-file <path>',
+      'Seed tasks from a JSON array of {"title","description","dependsOn":[titles]}',
+    )
+    .option(
+      '--agent <id>',
+      'Goal agent: supervises and plans the goal (defaults to the current agent)',
+    )
+    .option(
+      '--task-agent <id>',
+      "Dedicated executor for the goal's tasks (defaults to the goal agent)",
+    )
+    .option('--project <id>', 'Project ID')
+    .option(
+      '--visibility <visibility>',
+      'Workspace visibility: private (only you) or public (every member). Defaults to private when the goal or task agent is private, else public',
+    )
+    .option('--explore <instruction>', 'Explore alternatives using completed experiment results')
+    .option('--max-experiments <n>', 'Maximum experiment nodes (requires --explore, default 10)')
+    .option(
+      '--max-supervision-incidents <n>',
+      'Maximum supervised interruptions (supervision is always on; default 10, maximum 100)',
+    )
+    .option('--max-rounds <n>', 'Maximum goal rounds')
+    .option('--max-cost <usd>', 'Maximum total cost in USD')
+    .option('--max-attempts-per-task <n>', 'Attempts per Task before opening a decision gate')
+    .option(
+      '--max-concurrent-tasks <n>',
+      "How many of this goal's tasks may run at once (default 3)",
+    )
+    .option(
+      '--rollout <mode>',
+      'Batch roll-out policy: canary (probe first, then waves), full, or off to forbid a batch. Omit to decide when starting (lh goal start --rollout) or let the planner decide',
+    )
+    .option('--canary-size <n>', 'Probe size K for --rollout canary (default 5, maximum 5)')
+    .option('--wave-size <n>', 'Units released per wave after the gate passes (default 5)')
+
+    .option('--max-steps-per-run <n>', 'Optional agent step cap per Task run (for example 500)')
+    .option(
+      '--operation-lease-timeout-ms <n>',
+      'Reclaim a Task operation after this idle time (minimum: 60000)',
+    )
+    .option(
+      '--topic',
+      "Link the goal to the current topic. Use it whenever you create a goal for the user from a chat, not only for /goal: without it the goal is standalone and never shows on this topic's goal tray. This agent supervises the goal from this topic. The goal opens as a draft: arrange its tasks, then run `lh goal start <id>`",
+    )
+    // Former name of --topic, kept so existing prompts and scripts keep working.
+    .addOption(new Option('--conversation').hideHelp())
+    .option('--criterion <text...>', 'Acceptance criterion (repeatable)')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (title: string, options) => {
+      if (options.maxExperiments && !options.explore) {
+        throw new Error('--max-experiments requires --explore');
+      }
+      if (options.rollout && !['canary', 'full', 'off'].includes(options.rollout)) {
+        throw new Error('--rollout must be one of: canary, full, off');
+      }
+      if (options.visibility && !['private', 'public'].includes(options.visibility)) {
+        throw new Error('--visibility must be one of: private, public');
+      }
+      const seedTasks = [
+        ...((options.task as string[] | undefined) ?? []),
+        ...(options.taskFile ? parseTaskFile(await readFile(options.taskFile, 'utf8')) : []),
+      ];
+      const seedProblem = goalSeedDependencyProblem(seedTasks);
+      if (seedProblem) throw new Error(`--task-file: ${seedProblem}`);
+      const operationId = process.env.LOBEHUB_OPERATION_ID;
+      const fromTopic = Boolean(options.topic || options.conversation);
+      if (fromTopic && !operationId) {
+        throw new Error(
+          '--topic must run inside an agent topic (LOBEHUB_OPERATION_ID). If this shell lost it, find the running operation with `lh trace op list --topic <topicId>` and export it',
+        );
+      }
+      const client = await getTrpcClient();
+      const buildUrl = await resolveAppUrlBuilder(client);
+      const goalInput = {
+        // Supervision is stated by the client, not left to the server: this CLI
+        // ships on its own and can be pointed at a server that predates the
+        // creation invariant, where nothing else would turn supervision on now
+        // that `--supervise` is gone.
+        config: {
+          exploration: options.explore
+            ? {
+                instruction: options.explore,
+                maxExperiments: Number(options.maxExperiments ?? 10),
+              }
+            : undefined,
+          manager: options.maxManagerTurns
+            ? { maxTurns: Number(options.maxManagerTurns) }
+            : undefined,
+          maxConcurrentTasks: options.maxConcurrentTasks
+            ? Number.parseInt(options.maxConcurrentTasks, 10)
+            : undefined,
+          recovery: {
+            maxAttemptsPerTask: options.maxAttemptsPerTask
+              ? Number.parseInt(options.maxAttemptsPerTask, 10)
+              : undefined,
+            maxStepsPerRun: options.maxStepsPerRun
+              ? Number.parseInt(options.maxStepsPerRun, 10)
+              : undefined,
+            operationLeaseTimeoutMs: options.operationLeaseTimeoutMs
+              ? Number.parseInt(options.operationLeaseTimeoutMs, 10)
+              : undefined,
+          },
+          supervision: {
+            enabled: true,
+            ...(options.maxSupervisionIncidents
+              ? { maxIncidents: Number.parseInt(options.maxSupervisionIncidents, 10) }
+              : {}),
+          },
+          // Auto-detection is the default: with no `--rollout`, the planner's
+          // homogeneity claim decides. `off` forbids a batch outright.
+          rollout: options.rollout
+            ? {
+                canarySize: options.canarySize
+                  ? Number.parseInt(options.canarySize, 10)
+                  : undefined,
+                trigger: options.rollout,
+                waveSize: options.waveSize ? Number.parseInt(options.waveSize, 10) : undefined,
+              }
+            : undefined,
+          taskAgentId: options.taskAgent,
+        },
+        criteria: (options.criterion as string[] | undefined)?.map((criterion) => ({
+          title: criterion,
+        })),
+        maxRounds: options.maxRounds ? Number.parseInt(options.maxRounds, 10) : undefined,
+        maxTotalCost: options.maxCost ? Number.parseFloat(options.maxCost) : undefined,
+        problemDescription: options.instruction,
+        projectId: options.project,
+        requirement: options.requirement,
+        title,
+        tasks: seedTasks.length ? seedTasks : undefined,
+        visibility: options.visibility,
+      };
+      // A topic goal takes its agent and topic from the running
+      // operation on the server; the CLI only names the run. Device and gateway
+      // runs hold an operation token, which only the operation endpoint accepts.
+      // A local desktop run keeps its operation client-side, so it also names
+      // its topic and agent for the server to check.
+      const result = fromTopic
+        ? hasOperationToken()
+          ? await client.goal.createConversationGoal.mutate({
+              ...goalInput,
+              draft: true,
+              operationId: operationId!,
+            })
+          : await client.goal.create.mutate({
+              ...goalInput,
+              agentId: process.env.LOBEHUB_AGENT_ID,
+              draft: true,
+              conversationOperationId: operationId,
+              conversationTopicId: process.env.LOBEHUB_TOPIC_ID,
+            })
+        : await client.goal.create.mutate({
+            ...goalInput,
+            agentId: options.agent ?? process.env.LOBEHUB_AGENT_ID,
+            createdByAgentId: process.env.LOBEHUB_AGENT_ID,
+          });
+      const undrawn = missingSeedDependencies(result.data!, seedTasks);
+      if (undrawn.length)
+        log.warn(
+          `The server did not draw these dependsOn edges (it may predate dependsOn); add them with \`lh goal add-edge\`: ${undrawn.join('; ')}`,
+        );
+      const turnToken = 'turnToken' in result ? result.turnToken : undefined;
+      // `goal.create` returns the whole graph snapshot, so the id is on its
+      // goal — `result.data.id` is undefined, and the CLI cannot resolve the
+      // router's types to catch that, which is how it reached a printed URL.
+      const url = buildUrl(`/goal/${encodeURIComponent(result.data!.goal.id)}`);
+      if (options.json !== undefined)
+        return outputJson({ ...result.data, turnToken, url }, options.json);
+      printGraph(result.data!);
+      console.log(`${pc.bold('goal')}: ${url}`);
+      if (result.data!.goal.status === 'draft')
+        console.log(
+          `${pc.bold('draft')}: nothing runs yet. Arrange the tasks, then start it: lh goal start ${result.data!.goal.id}`,
+        );
+      if (turnToken) {
+        console.log(
+          `${pc.bold('planning turn')}: lh goal plan ${result.data!.goal.id} --token ${turnToken} --file <plan.json>`,
+        );
+      }
+    });
+
+  goal
+    .command('start <id>')
+    .summary('Start a draft goal')
+    .description(
+      [
+        'Start a draft goal. Until now nothing was dispatched; from here the coordinator runs its tasks.',
+        '',
+        'Plain start dispatches the arranged tasks under the goal budget. To run many tasks of one recipe as a',
+        'batch, pass --rollout with the recipe and 2-5 probe node ids: the probes move into a batch and run',
+        'first; every other seed task (or only --units) leaves the graph as a roster unit, its description',
+        "kept as that unit's note, and is released wave by wave once the probes ran through without a person.",
+        'A rejected release goes back to the main Agent to rewrite the plan for review. Tasks that differ',
+        'only in names, files or details are one recipe; steps that differ are not: start those without --rollout.',
+        'Inside a batch a seed may depend only on a probe, and folded seeds need distinct titles.',
+        '',
+        'Starting a draft that holds tasks settles the planning turn that created it: submit any plan with',
+        'lh goal plan before starting, not after.',
+      ].join('\n'),
+    )
+    .option('--rollout <mode>', 'Fold the seed tasks into a batch: canary or full')
+    .option('--probes <nodeIds...>', 'Seed task node ids that run first (2-5 for canary)')
+    .option(
+      '--units <nodeIds...>',
+      'Seed task node ids that become batch units (default: every other seed)',
+    )
+    .option('--recipe <text>', 'The procedure every unit follows')
+    .option('--recipe-file <path>', 'Read the recipe from a markdown file')
+    .option(
+      '--variant <axis=values...>',
+      'An axis the units differ along, e.g. mechanism=replica,swr (repeatable); the gate holds until the probes cover each value',
+    )
+    .option('--operation <id>', 'Defaults to LOBEHUB_OPERATION_ID')
+    .option('--json', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: {
+          json?: boolean;
+          operation?: string;
+          probes?: string[];
+          recipe?: string;
+          recipeFile?: string;
+          rollout?: string;
+          units?: string[];
+          variant?: string[];
+        },
+      ) => {
+        let rollout;
+        if (options.rollout) {
+          if (!['canary', 'full'].includes(options.rollout))
+            throw new Error('--rollout must be canary or full');
+          const recipe = options.recipeFile
+            ? await readFile(options.recipeFile, 'utf8')
+            : options.recipe;
+          if (!recipe?.trim()) throw new Error('--rollout needs --recipe or --recipe-file');
+          if (!options.probes?.length) throw new Error('--rollout needs --probes <nodeIds...>');
+          rollout = {
+            probeNodeIds: options.probes,
+            recipe,
+            trigger: options.rollout as 'canary' | 'full',
+            unitNodeIds: options.units,
+            variants: options.variant?.map(parseVariant),
+          };
+        } else if (options.probes || options.units || options.recipe || options.recipeFile) {
+          throw new Error('--probes, --units and --recipe only apply with --rollout');
+        }
+        const client = await getTrpcClient();
+        const operationId = options.operation ?? process.env.LOBEHUB_OPERATION_ID;
+        const result =
+          hasOperationToken() && operationId
+            ? await client.goal.startOperation.mutate({ id, operationId, rollout })
+            : await client.goal.start.mutate({ id, rollout });
+        if (options.json) return outputJson(result.data);
+        log.info(
+          rollout
+            ? `${result.message}: ${rollout.probeNodeIds.length} probes run first, the rest wait behind the batch gate`
+            : result.message,
+        );
+      },
+    );
+
+  goal
+    .command('list')
+    .description('List goals with their graph roll-up')
+    .option('--agent <id>', 'Filter by responsible agent')
+    .option('--project <id>', 'Filter by project')
+    .option('--status <status...>', 'Filter by lifecycle status')
+    .option('--limit <n>', 'Maximum rows', '50')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (options) => {
+      const result = await (
+        await getTrpcClient()
+      ).goal.list.query({
+        agentId: options.agent,
+        limit: Number.parseInt(options.limit, 10),
+        projectId: options.project,
+        statuses: options.status,
+      });
+      if (options.json !== undefined) {
+        const goalUrl = await goalUrlBuilder();
+        const goals = result.goals.map((item: { goal: { id: string } }) => ({
+          ...item,
+          url: goalUrl(item.goal.id),
+        }));
+        return outputJson(goals, options.json);
+      }
+      if (result.goals.length === 0) return log.info('No goals yet.');
+      printTable(
+        result.goals.map((item) => [
+          item.goal.status,
+          truncate(item.goal.title, 44),
+          `${item.taskDone}/${item.taskTotal}`,
+          String(item.findingCount),
+          item.pendingDecisions > 0 ? pc.yellow(String(item.pendingDecisions)) : '-',
+          `$${item.totalRunCost.toFixed(2)}`,
+          item.goal.id,
+        ]),
+        ['STATUS', 'TITLE', 'TASKS', 'FINDINGS', 'NEEDS YOU', 'COST', 'GOAL ID'],
+      );
+    });
+
+  const show = async (id: string, options: { json?: boolean | string }) => {
+    const reads = await goalReads();
+    const result = await reads.graph.query({ id });
+    const url = (await goalUrlBuilder())(result.data.goal.id);
+    const metrics = await readMetricState(reads, result.data);
+    if (options.json !== undefined)
+      return outputJson({ ...result.data, metrics, url }, options.json);
+    printGraph(result.data, metrics);
+    if (url) console.log(`${pc.bold('goal')}: ${url}`);
+  };
+  goal
+    .command('show <id>')
+    .description('Show goal and graph')
+    .option('--json [fields]', 'Output JSON')
+    .action(show);
+  goal
+    .command('graph <id>')
+    .description('Show the Goal Graph')
+    .option('--json [fields]', 'Output JSON')
+    .action(show);
+
+  goal
+    .command('state <id>')
+    .alias('inspect')
+    .description('Explain why this Goal will or will not accept a plan right now')
+    .option(
+      '--events <n>',
+      'Recent events to include (0 disables)',
+      String(GOAL_EVENT_TAIL_DEFAULT),
+    )
+    .option('--json [fields]', 'Output JSON')
+    .action(async (id: string, options: { events: string; json?: boolean | string }) => {
+      const reads = await goalReads();
+      const tail = Math.max(0, Number.parseInt(options.events, 10) || 0);
+      const [graph, context] = await Promise.all([
+        reads.graph.query({ id }),
+        reads.planContext.query({ id }),
+      ]);
+      const events = tail > 0 ? (await reads.events.query({ id, limit: tail })).data.events : [];
+      if (options.json !== undefined) return outputJson({ ...context.data, events }, options.json);
+      printGoalState(graph.data, context.data, events);
+    });
+
+  goal
+    .command('events <id>')
+    .description("List this Goal's audit trail, newest first")
+    .option('-L, --limit <n>', 'Events to fetch', '50')
+    .option('--cursor <token>', 'Continue from the previous page (the token it printed)')
+    .option('--entity <type>', 'Filter by entity: goal | node | edge | decision | task')
+    .option(
+      '--type <type>',
+      'Filter by event: created | updated | activated | resolved | rejected | retired | linked | unlinked',
+    )
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: {
+          cursor?: string;
+          entity?: GoalEventEntityType;
+          json?: boolean | string;
+          limit: string;
+          type?: GoalEventType;
+        },
+      ) => {
+        const reads = await goalReads();
+        const result = await reads.events.query({
+          id,
+          cursor: options.cursor,
+          entityType: options.entity,
+          eventType: options.type,
+          limit: Number.parseInt(options.limit, 10),
+        });
+        if (options.json !== undefined) return outputJson(result.data, options.json);
+        if (result.data.events.length === 0) return log.info('No events.');
+        printTable(
+          result.data.events.map((event) => [
+            toIso(event.createdAt),
+            `${event.entityType} ${event.eventType}`,
+            event.actorType,
+            truncate(event.reason ?? '-', 64),
+            event.id,
+          ]),
+          ['TIME', 'EVENT', 'ACTOR', 'REASON', 'EVENT ID'],
+        );
+        if (result.data.nextCursor)
+          console.log(
+            pc.dim(`\nMore may follow — continue with --cursor "${result.data.nextCursor}"`),
+          );
+      },
+    );
+
+  goal
+    .command('supervision <id>')
+    .description('Inspect recovery incidents, diagnostic topic and effective recovery rate')
+    .action(async (id: string) => {
+      const result = await (await getTrpcClient()).goal.supervision.query({ id });
+      outputJson(result.data);
+    });
+
+  goal
+    .command('tick <id>')
+    .description('Advance exactly one deterministic coordinator step')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (id: string, options) => {
+      const result = await (await getTrpcClient()).goal.tick.mutate({ id });
+      if (options.json !== undefined) return outputJson(result.data, options.json);
+      printTick(result.data);
+    });
+
+  goal
+    .command('run <id>')
+    .description('Tick until the goal reaches a stop condition')
+    .option(
+      '--max-ticks <n>',
+      'Safety limit on ADVANCING ticks; idle polls of an unchanged waiting state do not count',
+      '100',
+    )
+    .option('--poll-ms <ms>', 'Delay while waiting for task execution', '3000')
+    .option(
+      '--retry-window-ms <ms>',
+      'Keep retrying a failing tick for this long before giving up (0 disables retry)',
+      '600000',
+    )
+    .option('--json', 'Output tick results as JSON')
+    .action(
+      async (
+        id: string,
+        options: { json?: boolean; maxTicks: string; pollMs: string; retryWindowMs: string },
+      ) => {
+        const client = await getTrpcClient();
+        const results: GoalRunTickResult[] = [];
+        const maxTicks = Number.parseInt(options.maxTicks, 10);
+        const pollMs = Number.parseInt(options.pollMs, 10);
+        const retryWindowMs = Number.parseInt(options.retryWindowMs, 10);
+        // Only ticks that CHANGED something count against the budget. Polling an
+        // unchanged `waiting_external` state is the coordinator idling while a
+        // Task runs — a Task that legitimately takes an hour would otherwise
+        // burn the whole allowance on no-ops and stop a healthy goal half-way.
+        let advancingTicks = 0;
+        let exhaustedBudget = false;
+        for (;;) {
+          // Pinned explicitly: inferring `T` through the callback collapses the
+          // router's return type to `unknown` in the CLI's standalone
+          // type-check, which has no built `@lobechat/types` to resolve against.
+          const { data } = await tickWithRetry<{ data: GoalTickResult }>(
+            () => client.goal.tick.mutate({ id }),
+            retryWindowMs,
+            (error, delayMs) => {
+              if (options.json) return;
+              const message = error instanceof Error ? error.message : String(error);
+              log.warn(`Tick failed (${message}); retrying in ${delayMs}ms`);
+            },
+          );
+          const previous = results.at(-1);
+          const isIdlePoll = isSameWaitingState(previous, data);
+          if (isIdlePoll) {
+            previous.pollCount = (previous.pollCount ?? 1) + 1;
+            previous.waitedMs = (previous.waitedMs ?? pollMs) + pollMs;
+          } else {
+            advancingTicks++;
+            results.push(
+              data.outcome === 'waiting_external'
+                ? { ...data, pollCount: 1, waitedMs: pollMs }
+                : data,
+            );
+            if (!options.json) printTick(data);
+          }
+          if (terminalOutcomes.has(data.outcome)) break;
+          if (!isIdlePoll && advancingTicks >= maxTicks) {
+            exhaustedBudget = true;
+            break;
+          }
+          if (data.outcome === 'waiting_external') await sleep(pollMs);
+        }
+        if (options.json) outputJson(results);
+        if (exhaustedBudget) {
+          // A half-finished goal must not look like success to a wrapper script:
+          // the whole reason this branch exists is that the run still has work
+          // left, so leave a non-zero code behind for the caller to branch on.
+          process.exitCode = 1;
+          log.warn(
+            `Stopped after ${advancingTicks} advancing ticks (--max-ticks ${maxTicks}); the goal is unfinished. Resume with: lh goal run ${id}`,
+          );
+        }
+      },
+    );
+
+  goal
+    .command('pause <id>')
+    .description('Pause goal coordination')
+    .action(async (id: string) => {
+      const client = await getTrpcClient();
+      const result = await client.goal.pause.mutate({ id });
+      log.info(result.message);
+    });
+
+  goal
+    .command('resume <id>')
+    .description('Resume goal coordination')
+    .option(
+      '--confirm-exit',
+      'Confirm the main Agent planning turn the goal paused on has ended, and settle it before resuming',
+    )
+    .action(async (id: string, options: { confirmExit?: boolean }) => {
+      const client = await getTrpcClient();
+      const result = await client.goal.resume.mutate({
+        id,
+        ...(options.confirmExit ? { confirmExit: true } : {}),
+      });
+      log.info(result.message);
+    });
+
+  goal
+    .command('delete <id>')
+    .description('Delete a goal and its graph')
+    .option('--yes', 'Skip confirmation prompt')
+    .action(async (id: string, options: { yes?: boolean }) => {
+      if (!options.yes && !(await confirm(`Delete goal ${id}? This cannot be undone.`))) {
+        console.log('Cancelled.');
+        return;
+      }
+      const client = await getTrpcClient();
+      const result = await client.goal.delete.mutate({ id });
+      log.info(result.message);
+    });
+
+  goal
+    .command('set-budget <id>')
+    .description('Update limits; pass "none" to remove a limit')
+    .option('--max-rounds <n>')
+    .option('--max-cost <usd>')
+    .option('--max-experiments <n>', 'Exploration experiment cap (1–200)')
+    .option(
+      '--max-manager-turns <n>',
+      'Main Agent turn cap (1–100); raising it resumes a goal it paused',
+    )
+    .option(
+      '--max-concurrent-tasks <n>',
+      'Tasks allowed to run at once (1–10; "none" restores the default)',
+    )
+    .option('--max-attempts-per-task <n>', 'Attempts per Task before opening a decision gate')
+    .option('--max-steps-per-run <n>', 'Agent step cap per Task run ("none" removes it)')
+    .action(
+      async (
+        id: string,
+        options: {
+          maxAttemptsPerTask?: string;
+          maxConcurrentTasks?: string;
+          maxCost?: string;
+          maxExperiments?: string;
+          maxManagerTurns?: string;
+          maxRounds?: string;
+          maxStepsPerRun?: string;
+        },
+      ) => {
+        const parseLimit = (value: string | undefined, integer = false) =>
+          value === undefined
+            ? undefined
+            : value === 'none'
+              ? null
+              : integer
+                ? Number.parseInt(value, 10)
+                : Number.parseFloat(value);
+        const result = await (
+          await getTrpcClient()
+        ).goal.setBudget.mutate({
+          id,
+          maxAttemptsPerTask:
+            options.maxAttemptsPerTask === undefined
+              ? undefined
+              : Number.parseInt(options.maxAttemptsPerTask, 10),
+          maxConcurrentTasks: parseLimit(options.maxConcurrentTasks, true),
+          maxExperiments:
+            options.maxExperiments === undefined ? undefined : Number(options.maxExperiments),
+          maxManagerTurns:
+            options.maxManagerTurns === undefined
+              ? undefined
+              : Number.parseInt(options.maxManagerTurns, 10),
+          maxRounds: parseLimit(options.maxRounds, true),
+          maxStepsPerRun: parseLimit(options.maxStepsPerRun, true),
+          maxTotalCost: parseLimit(options.maxCost),
+        });
+        log.info(result.message);
+      },
+    );
+
+  registerGoalAccessCommands(goal);
+
+  goal
+    .command('bind-topic <id>')
+    .description(
+      'Attach an existing goal to the current topic run: this agent supervises it from this topic, as if it had been created here with create --topic',
+    )
+    .option('--force', 'Move a goal that is already bound to another topic or task')
+    .option(
+      '--goal-only',
+      'When the goal agent changes, leave existing tasks with their current agent',
+    )
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: { force?: boolean; goalOnly?: boolean; json?: boolean | string },
+      ) => {
+        const operationId = process.env.LOBEHUB_OPERATION_ID;
+        if (!operationId)
+          throw new Error('bind-topic must run inside an agent topic (LOBEHUB_OPERATION_ID)');
+        const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
+        const input = { force: options.force, goalOnly: options.goalOnly, id, operationId };
+        // Same split as `create --topic`: the server takes the agent and
+        // topic from the run; a local desktop run, whose operation lives
+        // only on the client, also names them for the server to check.
+        const result = hasOperationToken()
+          ? await client.goal.bindOperationTopic.mutate(input)
+          : await client.goal.bindTopic.mutate({
+              ...input,
+              agentId: process.env.LOBEHUB_AGENT_ID,
+              topicId: process.env.LOBEHUB_TOPIC_ID,
+            });
+        const turnToken = result.turnToken;
+        const url = buildUrl(`/goal/${encodeURIComponent(result.data!.goal.id)}`);
+        if (options.json !== undefined)
+          return outputJson(
+            {
+              ...result.data,
+              previousSubject: result.previousSubject,
+              reassignedTaskIds: result.reassignedTaskIds,
+              turnToken,
+              url,
+            },
+            options.json,
+          );
+        log.info(result.message);
+        console.log(`${pc.bold('goal')}: ${url}`);
+        if (turnToken) {
+          console.log(
+            `${pc.bold('planning turn')}: lh goal plan ${result.data!.goal.id} --token ${turnToken} --file <plan.json>`,
+          );
+        }
+      },
+    );
+
+  goal
+    .command('restart <id>')
+    .description('Start every unfinished task over (cancel stale runs, reset to backlog)')
+    .option(
+      '--agent <id>',
+      "Also hand the restarted tasks (and the goal's executor slot) to this agent",
+    )
+    .action(async (id: string, options: { agent?: string }) => {
+      const result = await (
+        await getTrpcClient()
+      ).goal.restart.mutate({ agentId: options.agent, id });
+      log.info(`${result.message}. Resume ticking with: lh goal run ${id}`);
+    });
+
+  goal
+    .command('decisions <id>')
+    .description('List durable decision gates')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (id: string, options) => {
+      const graph = (await (await getTrpcClient()).goal.graph.query({ id })).data;
+      if (options.json !== undefined) return outputJson(graph.decisions, options.json);
+      printTable(
+        graph.decisions.map((decision: GoalGraphDecision) => [
+          decision.status,
+          truncate(decision.question, 60),
+          decision.recommendedOptionId ?? '-',
+          decision.id,
+        ]),
+        ['STATUS', 'QUESTION', 'RECOMMENDED', 'DECISION ID'],
+      );
+    });
+
+  goal
+    .command('decide <id> <decision-id>')
+    .description('Resolve a durable decision gate')
+    .requiredOption('--option <id>', 'Selected option ID')
+    .option('--reason <text>', 'Resolution rationale')
+    .action(async (id: string, decisionId: string, options) => {
+      const result = await (
+        await getTrpcClient()
+      ).goal.decide.mutate({
+        decisionId,
+        id,
+        optionId: options.option,
+        resolution: options.reason,
+      });
+      log.info(result.message);
+    });
+
+  registerGoalGraphEditCommands(goal);
+  registerGoalMetricCommands(goal);
+}

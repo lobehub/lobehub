@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { RouteObject } from 'react-router';
+import type { LoaderFunctionArgs, RouteObject } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { desktopRoutes } from './desktopRouter.config';
@@ -33,7 +33,9 @@ describe('page list loader wiring', () => {
   it('delegates to the real loader on first use', async () => {
     const { pageListLoader: realLoader } = await import('@/routes/(main)/page/pageListLoader');
 
-    await expect(pageListLoader()).resolves.toBeNull();
-    expect(realLoader).toHaveBeenCalled();
+    const args = { params: { id: 'docs_a' } } as unknown as LoaderFunctionArgs;
+
+    await expect(pageListLoader(args)).resolves.toBeNull();
+    expect(realLoader).toHaveBeenCalledWith(args);
   });
 });

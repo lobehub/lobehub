@@ -96,3 +96,15 @@ describe('@stylexjs/unplugin dev internals', () => {
     }
   });
 });
+
+describe('debug proxy page', () => {
+  it('swaps the StyleX dev runtime for the proxied CSS shim', () => {
+    const html = readFileSync(
+      path.resolve(import.meta.dirname, '../../public/_dangerous_local_dev_proxy.html'),
+      'utf8',
+    );
+
+    expect(html).toContain(`srcPath.indexOf('${stylexDevRuntimeId}') !== -1`);
+    expect(html).toContain(`srcPath = '/@id/${stylexProxiedDevCssModuleId}'`);
+  });
+});

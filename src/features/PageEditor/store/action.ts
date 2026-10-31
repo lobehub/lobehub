@@ -182,7 +182,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
               emoji,
               title,
             },
-            { saveSource: 'autosave' },
+            { metadataOnly: true, saveSource: 'autosave' },
           );
 
           // Notify parent after successful save. The callbacks were captured

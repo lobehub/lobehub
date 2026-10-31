@@ -57,6 +57,11 @@ The recording's start time depends on the recorder:
 - **`simctl` / `ffmpeg` recorders**: log `mark step "Recording started"` the
   moment the recorder reports it started, and use that mark's `wall` as the
   start.
+- **Playwright `recordVideo`**: the video starts when the browser context is
+  created, not at your first `goto` or `reload`. Log the start right after
+  `browser.newContext(...)` returns, and log marks from the script itself
+  (`Date.now() / 1000` per mark) — times measured from a reload or from
+  `performance.now()` are offset by every second spent before them.
 
 Convert marks into chapters:
 
@@ -90,20 +95,26 @@ Authored rounds put `chapters` on the video's evidence entry in `result.json`:
 ]
 ```
 
-A single upload carries them in metadata:
+Plan rounds use the same `result.json` entry and publish it with
+`ingest --operation`. A single supplementary upload takes the chapters file
+directly, and rejects a malformed marker before uploading:
 
 ```bash
-lh acceptance run evidence upload --check "$CHECK_RESULT_ID" --type video \
-  --file ./proof/scroll-top.mp4 --desc "Five scrolls at the top of a short topic" \
-  --metadata "{\"chapters\": $(cat ./proof/flow.chapters.json)}"
+lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" \
+  --type video --file ./proof/scroll-top.mp4 --chapters ./proof/flow.chapters.json \
+  --desc "Five scrolls at the top of a short topic"
+# with a check result id instead: lh acceptance run evidence upload --check … --chapters …
 ```
 
 Ingest warns and drops every malformed marker — a negative or missing `t`, an
 unknown `kind`, a `step` without a `label`, a `check`/`flag` without a `note` —
 and ignores chapters on anything that is not a video. Treat the warning as a
-claim the reviewer will not see: fix it and re-ingest before handing off.
-Chapters need `lh` 0.0.60 or later (`lh --version`); an older CLI uploads the
-video without them, so read the evidence back and confirm they arrived.
+claim the reviewer will not see: fix it and re-ingest before handing off — in a
+plan round, supplement that video with `result submit --chapters` instead, since
+a second ingest duplicates every artifact. Chapters need `lh` 0.0.60 or later
+(`lh --version`); an older CLI uploads the video without them, so read the
+evidence back and confirm they arrived. `--chapters` on a single upload is newer
+still: `lh acceptance run result submit --help` lists it when available.
 
 ## When the reviewer answers on the timeline
 

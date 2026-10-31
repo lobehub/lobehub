@@ -1,4 +1,5 @@
 import { type AgentState, normalizeAgentState } from '@lobechat/agent-runtime';
+import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { describe, expect, it } from 'vitest';
 
 import { resolveServerCallLlmTooling } from '../serverCallLlmTooling';
@@ -29,6 +30,34 @@ const searchTool = {
 } as unknown as NonNullable<AgentState['tools']>[number];
 
 describe('resolveServerCallLlmTooling', () => {
+  it.each([false, true])(
+    'limits active-device tools to the operation pool (allowed=%s)',
+    (allowed) => {
+      const callerTool = {
+        type: 'function' as const,
+        function: { name: 'lobe-client-fn____inspect' },
+      };
+      const result = resolveServerCallLlmTooling(
+        { operationId: 'op-1', stepIndex: 0 },
+        buildState({
+          binding: { device: { id: 'device-1' } },
+          plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
+          operationToolSet: {
+            enabledToolIds: ['lobe-client-fn'],
+            executorMap: {},
+            manifestMap: allowed ? { 'lobe-local-system': LocalSystemManifest } : {},
+            sourceMap: { 'lobe-client-fn': 'client' },
+            tools: [callerTool],
+          },
+        }),
+      );
+      expect(result.tools).toContainEqual(callerTool);
+      expect(result.resolved.enabledToolIds.includes('lobe-local-system')).toBe(allowed);
+      if (!allowed) expect(result.tools).toEqual([callerTool]);
+      else expect(result.tools!.length).toBeGreaterThan(1);
+    },
+  );
+
   // Regression: `serverCallLlmContextBuilder` needs this to compute
   // `creds_sandbox_reachable` — `sandbox_enabled` alone (whether the
   // dedicated Cloud Sandbox tool is offered) doesn't tell it whether

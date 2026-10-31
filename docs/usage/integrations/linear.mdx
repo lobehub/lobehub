@@ -1,0 +1,87 @@
+---
+title: Linear Integration
+description: >-
+  Connect a Linear workspace to LobeHub with OAuth, import its issues as tasks, and disconnect it when you no longer need access.
+tags:
+  - LobeHub
+  - Integration
+  - Linear
+  - OAuth
+---
+
+# Linear Integration
+
+**The Linear Integration connects a Linear workspace to LobeHub.** You authorize LobeHub once with Linear OAuth, and the connection is kept with your account or Workspace.
+
+LobeHub requests **read-only** access. It identifies your Linear workspace and the user who authorized it, and reads issues when you import them; it cannot create or change issues.
+
+> \[!NOTE]
+>
+> Integrations is an Alpha feature. Turn it on in **Settings → Labs → Integrations** first; **Integrations** then appears in Settings.
+>
+> To let an Agent search and update Linear issues inside a conversation, use the Linear connector instead. See [Connectors](/docs/usage/agent/connectors).
+
+## Connect Linear
+
+1. Open **Settings → Integrations → Linear**.
+2. Click **Connect workspace**. Linear opens its authorization page.
+3. Choose the Linear workspace to connect, then approve the request.
+4. Linear returns you to LobeHub, which shows **Linear connected: \<workspace>**.
+
+The workspace then appears under **Connections**, with who connected it and when. To go to that workspace, choose **Open in Linear** from the menu next to it.
+
+In a Workspace, the connection belongs to that Workspace. Only Workspace members who can edit can connect or disconnect Linear.
+
+## Import issues as tasks
+
+Bring Linear issues into a LobeHub project as its tasks to work on them here. Syncing is **one way**: LobeHub reads Linear and never changes, closes or deletes an issue.
+
+Syncing happens inside a project, so connect a Linear workspace first (above); every project in the same account or Workspace can then use it.
+
+1. Open the project, go to **Settings → Advanced**, and click **Import issues** under **Sync from Linear**. The Linear icon at the top of the project's **Tasks** page opens the same dialog. With several Linear workspaces connected, pick one first.
+2. **Choose scope**: pick a **Linear team**, and optionally one of its **Linear projects**. Only open states are ticked by default; completed and canceled issues are left out. Click **Next**.
+3. **Pick issues**: the list shows the issues in scope; ones already synced show their task number. Then either:
+   - tick the issues you want and click **Import N issues**, or
+   - click **Save as rule and sync all** to import every issue in scope and keep the scope as a sync rule.
+4. **Sync**: the sync runs in the background and the dialog shows its progress and outcome (created, updated, closed and skipped, with reasons). Click **Continue in background** to close the dialog; you are notified when it ends, and the outcome is listed under **Sync runs** in **Advanced** settings.
+
+Each issue becomes one task: the issue title becomes the task name, its description becomes the instruction (with a link back to the issue), and its priority carries over. A sub-issue is placed under its parent's task when both are in the same project. Comments, attachments, assignees and labels are not imported.
+
+### Sync again
+
+A project's saved rules are listed under **Sync rules** on its **Settings → Advanced** page. Click **Sync now** to run one again in the background; its progress and outcome appear under **Sync runs**. Importing an issue that is already linked does the same for that issue. A sync:
+
+- updates the task that issue already has, instead of creating another one; the import list marks such issues with a green check and the task number. An issue maps to one task per account or Workspace, so an issue already synced into another project keeps its task there;
+- keeps your changes: if you edited a task's name, instruction or priority in LobeHub, that task is no longer overwritten;
+- closes the task when the issue was completed or canceled in Linear. A task that is running is not interrupted;
+- never reopens or deletes a task. A task you moved to the trash is skipped.
+
+One sync creates up to 100 tasks. When more issues are waiting, the result says so; sync again to continue.
+
+Deleting a rule only removes the saved filter; tasks it created stay. Deleting the project also deletes its rules.
+
+## Disconnect Linear
+
+1. In **Connections**, open the menu next to the workspace and choose **Disconnect**.
+2. Confirm. LobeHub asks Linear to revoke its access token and removes the workspace from **Connections**.
+
+Revocation is best-effort: if Linear cannot be reached, the workspace is still removed but the token may stay valid. To make sure access ends, also revoke LobeHub in your Linear settings under authorized applications.
+
+## Troubleshooting
+
+| Message                                                              | What to do                                                                               |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Authorization was cancelled on Linear.**                           | Click **Connect workspace** again and approve the request.                               |
+| **The connection request expired.**                                  | Start again from **Connect workspace**; each request can be used only once.              |
+| **Linear authorized the connection, but LobeHub could not save it.** | Click **Connect workspace** again.                                                       |
+| **Only workspace members can connect Linear here.**                  | Ask a Workspace owner or admin for a member role, or connect from your personal account. |
+| **This deployment has no Linear application configured**             | See [Self-hosted deployments](#self-hosted-deployments).                                 |
+| **The Linear connection has expired.**                               | Click **Connect workspace** and authorize the same workspace again, then retry.          |
+
+## Self-hosted deployments
+
+A self-hosted deployment needs Redis (`REDIS_URL`), which holds the short-lived connection request; without it, **Connect workspace** fails. It also needs its own Linear OAuth application:
+
+1. In Linear, go to **Settings → API → OAuth applications** and create an application.
+2. Set the callback URL to `<APP_URL>/api/webhooks/linear/oauth/callback`, where `<APP_URL>` is your LobeHub address. It must match `APP_URL` exactly.
+3. Set `LINEAR_CLIENT_ID` and `LINEAR_CLIENT_SECRET` on the server to the application's client ID and secret, then restart LobeHub.

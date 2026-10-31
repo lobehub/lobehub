@@ -37,6 +37,7 @@ const VIEW_MIN_WIDTH: PortalWidths = {
   [PortalViewType.Goal]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalMetric]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalNode]: CHAT_PORTAL_TOOL_UI_WIDTH,
+  [PortalViewType.GoalNorthStar]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalReport]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.GoalReportChapter]: CHAT_PORTAL_TOOL_UI_WIDTH,
   [PortalViewType.TaskDetail]: CHAT_PORTAL_TOOL_UI_WIDTH,

@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { MetricSeriesWithPoints } from '@/services/metric';
 
-import { buildNorthStarCards, formatMetricValue, NORTH_STAR_STALE_AFTER_MS } from './northStar';
+import {
+  buildNorthStarCards,
+  buildNorthStarChartRows,
+  buildObservationRows,
+  deltaTone,
+  formatMetricValue,
+  NORTH_STAR_STALE_AFTER_MS,
+} from './northStar';
 
 const NOW = Date.parse('2026-09-06T12:00:00Z');
 
@@ -142,5 +149,72 @@ describe('formatMetricValue', () => {
     expect(formatMetricValue(72_180)).toBe('72,180');
     expect(formatMetricValue(0.07)).toBe('0.07');
     expect(formatMetricValue(null)).toBe('—');
+  });
+});
+
+describe('buildObservationRows', () => {
+  it('lists observations newest first with the change from the one before', () => {
+    const { points } = series('followers', [1000, 1040, 1080, 1120]);
+
+    expect(buildObservationRows(points).map(({ delta, value }) => ({ delta, value }))).toEqual([
+      { delta: 40, value: 1120 },
+      { delta: 40, value: 1080 },
+      { delta: 40, value: 1040 },
+      { delta: null, value: 1000 },
+    ]);
+  });
+
+  it('attaches each finished task to the first observation after it', () => {
+    const { points } = series('followers', [1000, 1040, 1080]);
+    const at = (index: number, offsetMs: number) =>
+      new Date(points[index].observedAt.getTime() + offsetMs);
+    const tasks = [
+      { id: 'n_before', resolvedAt: at(0, -1000), title: 'Before the window' },
+      { id: 'n_batch1', resolvedAt: at(1, -10_000), title: 'Batch 1' },
+      { id: 'n_batch2', resolvedAt: at(2, 0), title: 'Batch 2' },
+      { id: 'n_later', resolvedAt: at(2, 1000), title: 'Not measured yet' },
+    ];
+
+    expect(
+      buildObservationRows(points, tasks).map((row) => row.tasks.map((task) => task.id)),
+    ).toEqual([['n_batch2'], ['n_batch1'], ['n_before']]);
+  });
+
+  it('returns nothing for a series never measured', () => {
+    expect(buildObservationRows([])).toEqual([]);
+  });
+});
+
+describe('buildNorthStarChartRows', () => {
+  it('pairs every observation with the flat target line', () => {
+    const { points } = series('followers', [1000, 1080]);
+
+    expect(buildNorthStarChartRows(points, 1100, (date) => date.toISOString())).toEqual([
+      { target: 1100, time: points[0].observedAt.toISOString(), value: 1000 },
+      { target: 1100, time: points[1].observedAt.toISOString(), value: 1080 },
+    ]);
+  });
+});
+
+describe('deltaTone', () => {
+  it('reads an increase as progress on a count-up clause', () => {
+    expect(deltaTone('gte', 1080, 40, 1100)).toBe('good');
+    expect(deltaTone('gt', 1040, -40, 1100)).toBe('bad');
+  });
+
+  it('reads a decrease as progress on a lower-is-better clause', () => {
+    // 未关闭 issue 112 → 目标 0：少了 12 个是进展，多了 5 个是倒退。
+    expect(deltaTone('lte', 100, -12, 0)).toBe('good');
+    expect(deltaTone('lt', 105, 5, 0)).toBe('bad');
+  });
+
+  it('judges an eq clause by whether the value moved toward the target', () => {
+    expect(deltaTone('eq', 95, -5, 90)).toBe('good');
+    expect(deltaTone('eq', 80, -15, 90)).toBe('bad');
+    expect(deltaTone('eq', 85, -10, 90)).toBe('neutral');
+  });
+
+  it('stays neutral when nothing changed', () => {
+    expect(deltaTone('gte', 1000, 0, 1100)).toBe('neutral');
   });
 });

@@ -1,7 +1,7 @@
 /**
  * Default personal names assigned to a freshly created agent.
  *
- * An agent's `name` is the identity it is addressed by ("Alice", "小艾"), while
+ * An agent's `name` is the identity it is addressed by ("Alice", "小满"), while
  * `title` describes the role it plays ("Health Assistant"). A brand-new agent has
  * no role yet, so we seed a name immediately — it gives the agent a face in the
  * sidebar before the Agent Builder conversation has produced anything, and the
@@ -11,10 +11,10 @@
  * a product. Nothing here may collide with an assistant brand (Siri, Alexa,
  * Claude, Gemini, ...) or with LobeHub's own naming.
  *
- * Chinese names are composed from surname + given-name pools so the result
- * varies in length (2–4 characters); every other language draws from a flat
- * pool of common given names. Languages without a pool fall back to English,
- * which reads acceptably across Latin-script locales.
+ * Chinese names are a fixed two characters shaped like an assistant ("小满",
+ * "朵朵"); every other language draws from a flat pool of common given names. Languages
+ * without a pool fall back to English, which reads acceptably across
+ * Latin-script locales.
  */
 
 const pick = <T>(pool: readonly T[]): T => pool[Math.floor(Math.random() * pool.length)];
@@ -357,246 +357,143 @@ const FLAT_POOLS: Record<string, readonly string[]> = {
 };
 
 /**
- * Building blocks for composed Chinese names. Double given names are composed
- * from `doubleFirst` × `doubleSecond` rather than enumerated, which is what
- * gives the space its size (~13k doubles → ~2.2M full names); `blocked` lists
- * the rare pairs that read as everyday words or place names instead of person
- * names, plus full composed names that collide with brands or iconic people.
+ * Chinese names are always two characters and read as an assistant rather than
+ * a stranger. Three shapes, weighted in `rollZhName`:
+ *
+ * - "小X" (小满, 小柚): the shape everyone already uses for helpers.
+ * - Reduplicated nicknames (朵朵, 安安): warm and easy to call.
+ * - Composed given names (知夏, 予安): `ZH_GIVEN_FIRST` × `ZH_GIVEN_SECOND`,
+ *   which is what gives the space its size (~5k names).
+ *
+ * The single-character pools are vetted name by name — no assistant brand
+ * (小爱, 小度, 小艺, 小冰, 小布, 小娜, 小米 ...), no Japanese surname (小林,
+ * 小泉, 小野 ...), no famous character (小新, 小葵, 小兰, 小霞) and no everyday
+ * word (小心, 小时, 小说 ...). Composed pairs are screened by `ZH_BLOCKED`.
  */
-interface ZhNameCharset {
+// prettier-ignore
+const ZH_XIAO_SUFFIXES = [
+  '满', '禾', '鹿', '舟', '橙', '柚', '桃', '棠', '荷', '芽',
+  '苗', '麦', '豆', '糖', '晴', '星', '月', '云', '雪', '雨',
+  '溪', '羽', '鸥', '安', '宁', '乐', '悦', '欣', '诺', '可',
+  '墨', '夏', '秋', '初', '橘', '栗', '梨', '杏', '梅', '竹',
+  '桐', '枫', '叶', '果', '朵', '暖', '晨', '曦', '光', '澄',
+  '清', '汐', '澜', '沐', '帆', '航', '远', '树', '椰', '柠',
+  '莓', '茉', '芸', '薇', '熙', '圆', '蕊', '蝶', '萤', '鲸',
+  '狸', '栀', '芊', '菲', '琪', '琳', '瑶', '遥', '岚', '屿',
+  '洲', '沫', '珂', '菁', '茵', '伊', '依', '棉', '铃', '笛',
+  '琴', '诗', '书', '音', '蓓', '芷', '莲', '芙', '蔓', '菱',
+  '茶', '桂', '楠', '榕', '宇', '辰', '昕', '涵', '沁', '漫',
+  '湘', '洛', '鹤', '燕', '翎', '念', '予', '亦', '允', '静',
+  '慧', '敏', '洁', '婷', '雯', '霏', '舒', '恬', '怡', '宜',
+  '妍', '颖', '盈', '莹', '萱', '茜',
+];
+
+// prettier-ignore
+const ZH_REDUPLICATED = [
+  '安', '乐', '朵', '糖', '果', '豆', '圆', '悠', '可', '桃',
+  '柚', '橙', '甜', '笑', '月', '晴', '欣', '宁', '茉', '栗',
+  '苗', '禾', '满', '芽', '点', '依', '菲', '楠', '萌', '绵',
+  '芊', '沐', '晨', '涵', '洋', '嘉', '佳', '琪', '莹', '媛',
+  '淼', '森', '墨', '夏', '初', '雪', '冉', '恬', '怡', '菁',
+  '莉', '琳', '瑶', '舟', '棠', '杏', '莓', '椰',
+];
+
+// prettier-ignore
+const ZH_GIVEN_FIRST = [
+  '子', '若', '亦', '云', '清', '沐', '晚', '静', '知', '慕',
+  '听', '望', '书', '予', '语', '诗', '思', '心', '依', '安',
+  '星', '明', '晓', '春', '秋', '雨', '青', '松', '荷', '墨',
+  '南', '初', '可', '佳', '鹿', '悠', '一', '以', '念', '素',
+  '景', '兰', '竹', '梅', '新', '锦', '雅', '芸', '洛', '婉',
+  '允', '宁', '夕', '忆', '嘉', '文', '晨', '乐', '宛', '芷',
+];
+
+// prettier-ignore
+const ZH_GIVEN_SECOND = [
+  '瑶', '宁', '安', '欣', '澜', '悦', '远', '青', '晴', '夏',
+  '云', '薇', '然', '涵', '溪', '舟', '月', '兰', '桐', '深',
+  '洲', '竹', '言', '川', '辰', '汐', '如', '雨', '诺', '之',
+  '歌', '和', '瑾', '舒', '曦', '萱', '棠', '禾', '笙', '熙',
+  '昕', '恬', '怡', '宜', '妍', '颖', '岚', '雪', '星', '蕊',
+  '枫', '墨', '帆', '芊', '苓', '霖', '仪', '遥', '微', '琪',
+  '琳', '菲', '槿', '蓉', '凝', '柔', '初', '意', '晚', '容',
+  '白', '桥', '阳', '书', '秋', '乐', '可', '朵', '屿', '音',
+];
+
+/** Composed pairs that read as everyday words, place names or famous people. */
+// prettier-ignore
+const ZH_BLOCKED = new Set([
+  '明白', '晚安', '雪白', '清白', '青白', '雨雪', '梅雨', '春秋', '春晚', '一月',
+  '一朵', '云朵', '一晚', '一如', '宛如', '依然', '若然', '亦然', '亦可', '可乐',
+  '安乐', '心意', '新意', '诗意', '语意', '文意', '一意', '诗歌', '新歌', '听歌',
+  '诗书', '文书', '新书', '听书', '文言', '语言', '文墨', '明星', '新星', '望远',
+  '慕容', '婉容', '南宁', '南阳', '洛阳', '安阳', '夕阳', '雅安', '新竹', '安溪',
+  '荷兰', '宁夏', '语音', '宁可', '乐意', '清初', '知青', '新颖', '可言', '念书',
+  '明晚', '婉言', '允诺', '明言', '诗云', '心仪',
+]);
+
+/** Simplified → traditional for the characters above that differ. */
+// prettier-ignore
+const ZH_HANT_CHARS: Record<string, string> = {
+  乐: '樂', 云: '雲', 叶: '葉', 圆: '圓', 宁: '寧', 悦: '悅', 枫: '楓', 柠: '檸',
+  树: '樹', 满: '滿', 澜: '瀾', 点: '點', 绵: '綿', 萤: '螢', 诺: '諾', 远: '遠',
+  鲸: '鯨', 鸥: '鷗', 麦: '麥', 瑶: '瑤', 遥: '遙', 岚: '嵐', 屿: '嶼', 铃: '鈴',
+  诗: '詩', 书: '書', 莲: '蓮', 静: '靜', 洁: '潔', 颖: '穎', 莹: '瑩', 语: '語',
+  晓: '曉', 锦: '錦', 兰: '蘭', 忆: '憶', 仪: '儀', 桥: '橋', 阳: '陽', 听: '聽',
+  鹤: '鶴', 栀: '梔',
+};
+
+interface ZhNamePools {
   blocked: ReadonlySet<string>;
-  compoundSurnames: readonly string[];
-  doubleFirst: readonly string[];
-  doubleSecond: readonly string[];
-  givenSingle: readonly string[];
-  surnames: readonly string[];
+  givenFirst: readonly string[];
+  givenSecond: readonly string[];
+  reduplicated: readonly string[];
+  xiao: readonly string[];
 }
 
-const ZH_HANS: ZhNameCharset = {
-  // prettier-ignore
-  blocked: new Set([
-    // pairs that read as everyday words / place names
-    '明白', '晚安', '安眠', '雪白', '青白', '风月', '风雨', '云雨', '望风', '望远',
-    '清华', '昭然', '雪山', '梅雨', '朝阳', '新华', '雅安', '洛阳', '宁夏', '新竹',
-    '永和', '云烟', '风烟', '竹笙', '夕阳', '祈雨', '文言', '碧玉', '牧歌', '时辰',
-    '岁月', '素颜', '新颖', '明星', '风雪', '文墨', '春梦', '鹿晗',
-    // full surname+given names that collide with brands / iconic people
-    '马云', '李宁', '周瑜',
-  ]),
-  // prettier-ignore
-  compoundSurnames: [
-    '东方', '上官', '公孙', '南宫', '司马', '司徒', '夏侯', '宇文', '尉迟', '慕容',
-    '独孤', '皇甫', '百里', '西门', '诸葛', '轩辕', '长孙', '呼延', '令狐', '欧阳',
-  ],
-  // prettier-ignore
-  doubleFirst: [
-    '子', '若', '亦', '云', '清', '沐', '晚', '静', '知', '慕',
-    '听', '望', '疏', '温', '书', '予', '半', '未', '语', '诗',
-    '汀', '澄', '乐', '思', '心', '怀', '佩', '依', '令', '安',
-    '宛', '星', '明', '晓', '春', '秋', '雪', '雨', '风', '芷',
-    '青', '松', '荷', '墨', '昭', '凌', '鹤', '南', '初', '可',
-    '佳', '采', '鹿', '维', '皓', '悠', '一', '以', '念', '素',
-    '景', '沁', '泠', '兰', '竹', '梅', '桂', '栖', '晏', '暮',
-    '朝', '暄', '新', '永', '长', '承', '沧', '千', '少', '锦',
-    '雅', '芸', '洛', '池', '婉', '曼', '灵', '简', '蓝', '允',
-    '宁', '夕', '霁', '淳', '忆', '惜', '攸', '栀', '祈', '筠',
-    '嘉', '文', '碧', '丹', '彦', '君', '奕', '砚', '牧', '浅',
-    '晨', '闻', '歆', '沅', '熹', '茗', '时', '岁', '皎', '翩',
-  ],
-  // prettier-ignore
-  doubleSecond: [
-    '瑶', '宁', '安', '欣', '澜', '悦', '远', '青', '轩', '晴',
-    '欢', '夏', '云', '薇', '姝', '然', '涵', '溪', '舟', '风',
-    '月', '白', '兰', '桐', '霖', '深', '洲', '辞', '竹', '影',
-    '言', '川', '玉', '华', '霄', '鸣', '乔', '辰', '央', '汐',
-    '如', '雨', '山', '眠', '桢', '诺', '之', '卿', '歌', '阳',
-    '晖', '微', '和', '瑾', '仪', '舒', '宸', '曦', '珞', '瑄',
-    '珂', '绮', '苓', '萱', '蓉', '茜', '苒', '芊', '帆', '棠',
-    '禾', '笙', '熙', '昕', '潼', '滢', '淇', '恬', '怡', '兮',
-    '烟', '霏', '雯', '霓', '岚', '宜', '妍', '嫣', '容', '颜',
-    '盈', '莹', '颖', '琪', '琳', '璇', '璐', '渊', '雪', '星',
-    '晗', '蕊', '菲', '枫', '槿', '墨', '彤', '梦', '寻', '玥',
-  ],
-  // prettier-ignore
-  givenSingle: [
-    '川', '汀', '汐', '沅', '沐', '沛', '泓', '洛', '洲', '涵', '淮', '清', '湘', '溪', '澄', '澈', '泽', '潇', '澜',
-    '明', '昭', '星', '月', '晴', '晗', '暄', '曦', '曜', '晖', '晚', '光', '辉', '烨', '焕', '灿',
-    '云', '风', '岚', '雪', '霜', '露', '霞', '虹',
-    '禾', '松', '柏', '桐', '楠', '榆', '槐', '梧', '杉', '荷', '莲', '菱', '芷', '兰', '苇', '茉', '芊', '苓', '茵',
-    '山', '峰', '峻', '崇', '岩', '屿',
-    '文', '书', '墨', '章', '诗', '词', '琴', '棋', '画',
-    '珊', '瑜', '瑾', '琛', '璟', '珩', '琅',
-    '思', '念', '忆', '悟', '惟', '慧', '睿', '智', '聪', '谦', '谨', '诚', '毅', '信', '修', '俊', '卓', '嘉',
-    '远', '遥', '逸', '然', '知', '衡', '野', '舟', '深',
-    '鹤', '燕', '鸿', '雁', '声', '韵', '歌', '咏',
-    '安', '宁', '和', '泰', '康', '青', '黛', '丹', '彤', '素', '春', '秋', '冬', '初', '若', '予', '亦',
-    '宸', '辰', '宇', '轩', '昀', '昱', '晟',
-    '瑶', '欣', '悦', '佩', '依', '姝', '卿', '泠', '仪', '舒',
-    '珞', '珂', '萱', '熙', '昕', '恬', '怡', '霏', '雯', '玥',
-    '妍', '盈', '莹', '颖', '琳', '蕊', '菲', '枫', '梦', '寻',
-    '婉', '曼', '碧', '彦', '君', '奕', '砚', '茗', '歆', '攸',
-    '筠', '淳', '霁', '皎', '翩', '瑄', '灵',
-  ],
-  // prettier-ignore
-  surnames: [
-    '王', '李', '张', '刘', '陈', '杨', '黄', '赵', '吴', '周',
-    '徐', '孙', '马', '朱', '胡', '郭', '何', '林', '罗', '高',
-    '郑', '梁', '谢', '宋', '唐', '许', '韩', '冯', '邓', '曹',
-    '彭', '曾', '肖', '田', '董', '袁', '潘', '于', '蒋', '蔡',
-    '余', '杜', '叶', '程', '苏', '魏', '吕', '丁', '任', '沈',
-    '姚', '卢', '姜', '崔', '钟', '谭', '陆', '汪', '范', '金',
-    '石', '廖', '贾', '夏', '韦', '傅', '方', '白', '邹', '孟',
-    '熊', '秦', '邱', '江', '尹', '薛', '闫', '段', '雷', '侯',
-    '龙', '史', '陶', '黎', '贺', '顾', '毛', '郝', '龚', '邵',
-    '万', '钱', '严', '覃', '武', '戴', '莫', '孔', '向', '汤',
-    '常', '赖', '庞', '樊', '兰', '殷', '施', '洪', '翟', '倪',
-    '牛', '章', '鲁', '葛', '伍', '申', '尤', '毕', '聂', '焦',
-    '俞', '柴', '邢', '路', '岳', '齐', '梅', '庄', '辛', '管',
-    '祝', '左', '涂', '谷', '祁', '时', '舒', '耿', '詹', '关',
-    '苗', '费', '纪', '靳', '盛', '童', '欧', '甄', '项', '曲',
-  ],
-};
+const toZhPools = (toScript: (text: string) => string): ZhNamePools => ({
+  blocked: new Set([...ZH_BLOCKED].map(toScript)),
+  givenFirst: ZH_GIVEN_FIRST.map(toScript),
+  givenSecond: ZH_GIVEN_SECOND.map(toScript),
+  reduplicated: ZH_REDUPLICATED.map((char) => toScript(char).repeat(2)),
+  xiao: ZH_XIAO_SUFFIXES.map((char) => `小${toScript(char)}`),
+});
 
-const ZH_HANT: ZhNameCharset = {
-  // prettier-ignore
-  blocked: new Set([
-    // pairs that read as everyday words / place names
-    '明白', '晚安', '安眠', '雪白', '青白', '風月', '風雨', '雲雨', '望風', '望遠',
-    '清華', '昭然', '雪山', '梅雨', '朝陽', '新華', '雅安', '洛陽', '寧夏', '新竹',
-    '永和', '雲煙', '風煙', '竹笙', '夕陽', '祈雨', '文言', '碧玉', '牧歌', '時辰',
-    '歲月', '素顏', '新穎', '明星', '風雪', '文墨', '春夢', '鹿晗',
-    // full surname+given names that collide with brands / iconic people
-    '馬雲', '李寧', '周瑜',
-  ]),
-  // prettier-ignore
-  compoundSurnames: [
-    '東方', '上官', '公孫', '南宮', '司馬', '司徒', '夏侯', '宇文', '尉遲', '慕容',
-    '獨孤', '皇甫', '百里', '西門', '諸葛', '軒轅', '長孫', '呼延', '令狐', '歐陽',
-  ],
-  // prettier-ignore
-  doubleFirst: [
-    '子', '若', '亦', '雲', '清', '沐', '晚', '靜', '知', '慕',
-    '聽', '望', '疏', '溫', '書', '予', '半', '未', '語', '詩',
-    '汀', '澄', '樂', '思', '心', '懷', '佩', '依', '令', '安',
-    '宛', '星', '明', '曉', '春', '秋', '雪', '雨', '風', '芷',
-    '青', '松', '荷', '墨', '昭', '凌', '鶴', '南', '初', '可',
-    '佳', '採', '鹿', '維', '皓', '悠', '一', '以', '念', '素',
-    '景', '沁', '泠', '蘭', '竹', '梅', '桂', '棲', '晏', '暮',
-    '朝', '暄', '新', '永', '長', '承', '滄', '千', '少', '錦',
-    '雅', '芸', '洛', '池', '婉', '曼', '靈', '簡', '藍', '允',
-    '寧', '夕', '霽', '淳', '憶', '惜', '攸', '梔', '祈', '筠',
-    '嘉', '文', '碧', '丹', '彥', '君', '奕', '硯', '牧', '淺',
-    '晨', '聞', '歆', '沅', '熹', '茗', '時', '歲', '皎', '翩',
-  ],
-  // prettier-ignore
-  doubleSecond: [
-    '瑤', '寧', '安', '欣', '瀾', '悅', '遠', '青', '軒', '晴',
-    '歡', '夏', '雲', '薇', '姝', '然', '涵', '溪', '舟', '風',
-    '月', '白', '蘭', '桐', '霖', '深', '洲', '辭', '竹', '影',
-    '言', '川', '玉', '華', '霄', '鳴', '喬', '辰', '央', '汐',
-    '如', '雨', '山', '眠', '楨', '諾', '之', '卿', '歌', '陽',
-    '暉', '微', '和', '瑾', '儀', '舒', '宸', '曦', '珞', '瑄',
-    '珂', '綺', '苓', '萱', '蓉', '茜', '苒', '芊', '帆', '棠',
-    '禾', '笙', '熙', '昕', '潼', '瀅', '淇', '恬', '怡', '兮',
-    '煙', '霏', '雯', '霓', '嵐', '宜', '妍', '嫣', '容', '顏',
-    '盈', '瑩', '穎', '琪', '琳', '璇', '璐', '淵', '雪', '星',
-    '晗', '蕊', '菲', '楓', '槿', '墨', '彤', '夢', '尋', '玥',
-  ],
-  // prettier-ignore
-  givenSingle: [
-    '川', '汀', '汐', '沅', '沐', '沛', '泓', '洛', '洲', '涵', '淮', '清', '湘', '溪', '澄', '澈', '澤', '瀟', '瀾',
-    '明', '昭', '星', '月', '晴', '晗', '暄', '曦', '曜', '暉', '晚', '光', '輝', '燁', '煥', '燦',
-    '雲', '風', '嵐', '雪', '霜', '露', '霞', '虹',
-    '禾', '松', '柏', '桐', '楠', '榆', '槐', '梧', '杉', '荷', '蓮', '菱', '芷', '蘭', '葦', '茉', '芊', '苓', '茵',
-    '山', '峰', '峻', '崇', '岩', '嶼',
-    '文', '書', '墨', '章', '詩', '詞', '琴', '棋', '畫',
-    '珊', '瑜', '瑾', '琛', '璟', '珩', '琅',
-    '思', '念', '憶', '悟', '惟', '慧', '睿', '智', '聰', '謙', '謹', '誠', '毅', '信', '修', '俊', '卓', '嘉',
-    '遠', '遙', '逸', '然', '知', '衡', '野', '舟', '深',
-    '鶴', '燕', '鴻', '雁', '聲', '韻', '歌', '詠',
-    '安', '寧', '和', '泰', '康', '青', '黛', '丹', '彤', '素', '春', '秋', '冬', '初', '若', '予', '亦',
-    '宸', '辰', '宇', '軒', '昀', '昱', '晟',
-    '瑤', '欣', '悅', '佩', '依', '姝', '卿', '泠', '儀', '舒',
-    '珞', '珂', '萱', '熙', '昕', '恬', '怡', '霏', '雯', '玥',
-    '妍', '盈', '瑩', '穎', '琳', '蕊', '菲', '楓', '夢', '尋',
-    '婉', '曼', '碧', '彥', '君', '奕', '硯', '茗', '歆', '攸',
-    '筠', '淳', '霽', '皎', '翩', '瑄', '靈',
-  ],
-  // prettier-ignore
-  surnames: [
-    '王', '李', '張', '劉', '陳', '楊', '黃', '趙', '吳', '周',
-    '徐', '孫', '馬', '朱', '胡', '郭', '何', '林', '羅', '高',
-    '鄭', '梁', '謝', '宋', '唐', '許', '韓', '馮', '鄧', '曹',
-    '彭', '曾', '肖', '田', '董', '袁', '潘', '于', '蔣', '蔡',
-    '余', '杜', '葉', '程', '蘇', '魏', '呂', '丁', '任', '沈',
-    '姚', '盧', '姜', '崔', '鍾', '譚', '陸', '汪', '范', '金',
-    '石', '廖', '賈', '夏', '韋', '傅', '方', '白', '鄒', '孟',
-    '熊', '秦', '邱', '江', '尹', '薛', '閆', '段', '雷', '侯',
-    '龍', '史', '陶', '黎', '賀', '顧', '毛', '郝', '龔', '邵',
-    '萬', '錢', '嚴', '覃', '武', '戴', '莫', '孔', '向', '湯',
-    '常', '賴', '龐', '樊', '蘭', '殷', '施', '洪', '翟', '倪',
-    '牛', '章', '魯', '葛', '伍', '申', '尤', '畢', '聶', '焦',
-    '俞', '柴', '邢', '路', '岳', '齊', '梅', '莊', '辛', '管',
-    '祝', '左', '涂', '谷', '祁', '時', '舒', '耿', '詹', '關',
-    '苗', '費', '紀', '靳', '盛', '童', '歐', '甄', '項', '曲',
-  ],
-};
+const ZH_HANS = toZhPools((text) => text);
+const ZH_HANT = toZhPools((text) => [...text].map((char) => ZH_HANT_CHARS[char] ?? char).join(''));
 
 /**
- * Compose a double given name from the first/second pools, rejecting doubled
- * characters and pairs that read as everyday words. Rejections are so rare
- * (<1% of the space) that the loop returns on the first draw in practice; the
- * fixed pair after it is an unreachable-in-practice backstop.
+ * Compose a given name from the first/second pools, rejecting doubled
+ * characters and pairs that read as words. Rejections are a few percent of the
+ * space, so the loop returns within a draw or two; the "小X" fallback is an
+ * unreachable-in-practice backstop.
  */
-const composeDouble = (charset: ZhNameCharset): string => {
+const composeGivenName = (pools: ZhNamePools): string => {
   for (let i = 0; i < 32; i++) {
-    const first = pick(charset.doubleFirst);
-    const second = pick(charset.doubleSecond);
-    if (first !== second && !charset.blocked.has(first + second)) return first + second;
+    const name = pick(pools.givenFirst) + pick(pools.givenSecond);
+    if (name[0] !== name[1] && !pools.blocked.has(name)) return name;
   }
-  return charset.doubleFirst[0] + charset.doubleSecond[0];
+  return pick(pools.xiao);
 };
 
 /**
- * One weighted roll across the four name shapes. Length distribution: two
- * characters 15% (bare double given name 5%, surname + single character 10%),
- * three characters 80% (surname + double given name), four characters 5%
- * (compound surname + double given name).
- *
- * The bare-double share keeps a surname-less name ("晚晴") in rotation for
- * warmth, weighted low because its pool (~13k) is the smallest bucket: the
- * overall Σp² ≈ 8.8e-7 gives an effective pool of ~1.1M names, and raising
- * the small buckets is what shrinks it.
+ * One weighted roll across the three shapes: "小X" 35%, reduplicated 10%,
+ * composed 55%. "小X" carries the assistant feel, but its pool is the smallest
+ * that is drawn often, so it is the share that most decides how soon two
+ * agents meet the same name; the composed half keeps repeats rare.
  */
-const rollZhName = (charset: ZhNameCharset): string => {
+const rollZhName = (pools: ZhNamePools): string => {
   const roll = Math.random();
 
-  if (roll < 0.05) return composeDouble(charset);
-  if (roll < 0.15) return pick(charset.surnames) + pick(charset.givenSingle);
-  if (roll < 0.95) return pick(charset.surnames) + composeDouble(charset);
-  return pick(charset.compoundSurnames) + composeDouble(charset);
+  if (roll < 0.35) return pick(pools.xiao);
+  if (roll < 0.45) return pick(pools.reduplicated);
+  return composeGivenName(pools);
 };
 
 /**
- * Compose one Chinese name. Beyond the pair-level screening inside
- * `composeDouble`, the FULL name is checked against `blocked` too — that is
- * what stops surname + single-character draws from minting "马云" or "李宁".
- * Only exact matches are rejected: "马云汐" is a fine name even though it
- * starts with a blocked one. The 4-character fallback cannot collide with the
- * all-2-character block list.
- */
-const composeZhName = (charset: ZhNameCharset): string => {
-  for (let i = 0; i < 8; i++) {
-    const name = rollZhName(charset);
-    if (!charset.blocked.has(name)) return name;
-  }
-  return pick(charset.compoundSurnames) + composeDouble(charset);
-};
-
-/**
- * Draw from a generator while avoiding taken names. Composed names come from a
- * space of thousands, so a handful of retries all but guarantees a fresh one;
- * when luck runs out, a repeat name beats no name.
+ * Draw from a generator while avoiding taken names. The composed space is
+ * thousands wide, so a handful of retries all but guarantees a fresh one; when
+ * luck runs out, a repeat name beats no name.
  */
 const drawComposed = (generate: () => string, taken: ReadonlySet<string>): string => {
   let candidate = generate();
@@ -607,7 +504,7 @@ const drawComposed = (generate: () => string, taken: ReadonlySet<string>): strin
 /**
  * Pick a random display name for a new agent, matching the user's language.
  *
- * Chinese locales get a composed 2–4 character name — traditional script for
+ * Chinese locales get a two-character assistant name — traditional script for
  * `zh-TW` / `zh-HK` / `zh-Hant`, simplified otherwise. Other languages with a
  * dedicated pool (Japanese, Korean, French, ...) draw from it; everything else
  * falls back to the English pool.
@@ -625,7 +522,8 @@ export const randomAgentName = (locale?: string, exclude?: Iterable<string>): st
 
   if (tag.startsWith('zh')) {
     const traditional = tag.startsWith('zh-tw') || tag.startsWith('zh-hk') || tag.includes('hant');
-    return drawComposed(() => composeZhName(traditional ? ZH_HANT : ZH_HANS), taken);
+    const pools = traditional ? ZH_HANT : ZH_HANS;
+    return drawComposed(() => rollZhName(pools), taken);
   }
 
   const fullPool = FLAT_POOLS[tag.split('-')[0]] ?? EN_AGENT_NAMES;

@@ -3,7 +3,6 @@
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
 import {
   ActionIcon,
-  Button,
   Center,
   createStaticStyles,
   DropdownMenu,
@@ -16,8 +15,6 @@ import {
 } from '@lobehub/ui';
 import type { GitStatusEntry } from '@pierre/trees';
 import {
-  CheckIcon,
-  ChevronDownIcon,
   EllipsisIcon,
   FileIcon,
   FilePlusIcon,
@@ -39,15 +36,16 @@ import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
 import { useClientDataSWR } from '@/libs/swr';
 import { projectFileService } from '@/services/projectFile';
 import { useGlobalStore } from '@/store/global';
+import { isPersistedPartialIndex } from '@/store/projectFile';
 
 import { filterProjectFileEntries, mergeMissingDeletedEntries } from './fileFilter';
 import { FILE_TREE_UNSAFE_CSS } from './fileTreeStyle';
 import { isExcludedProjectFileEntry } from './fileVisibility';
 import { getAncestorIds, getParentRelativePath, PROJECT_ROOT_NODE_ID } from './treePaths';
 import { useCollapsedDirectoryChildren } from './useCollapsedDirectoryChildren';
+import { useFilesTreeSources } from './useFilesTreeSources';
 import { useFileTreeActions } from './useFileTreeActions';
-import { buildGitStatusEntries, useGitWorkingTreeFiles } from './useGitWorkingTreeFiles';
-import { useProjectFiles } from './useProjectFiles';
+import { buildGitStatusEntries } from './useGitWorkingTreeFiles';
 
 interface FilesProps {
   /**
@@ -219,15 +217,13 @@ const Files = memo<FilesProps>(
     // sandbox both answer over the network, and neither can be handed to Electron
     // to reveal in a file manager.
     const isSandbox = !!sandboxTopicId || !!sandboxInstanceId;
-    const { data, error, isLoading } = useProjectFiles(deviceId, workingDirectory, {
+    const {
+      git: { data: gitFiles, error: gitError },
+      project: { data, error, isLoading, isValidating },
+    } = useFilesTreeSources(deviceId, workingDirectory, {
       instanceId: sandboxInstanceId,
       topicId: sandboxTopicId,
     });
-    const { data: gitFiles } = useGitWorkingTreeFiles(
-      deviceId,
-      workingDirectory,
-      data?.source === 'git',
-    );
     const projectSource = data?.source;
     const projectRoot = data?.root ?? workingDirectory;
 
@@ -388,27 +384,6 @@ const Files = memo<FilesProps>(
       setExpandedIds([]);
     }, []);
 
-    const viewItems = useMemo(
-      () => [
-        {
-          extra: viewMode === 'project' ? <CheckIcon size={14} /> : undefined,
-          icon: <FolderTreeIcon size={14} />,
-          key: 'project',
-          label: t('workingPanel.files.views.project'),
-          onClick: () => setViewMode('project'),
-        },
-        {
-          disabled: data?.source !== 'git',
-          extra: viewMode === 'changes' ? <CheckIcon size={14} /> : undefined,
-          icon: <GitCompareArrowsIcon size={14} />,
-          key: 'changes',
-          label: t('workingPanel.files.views.changes'),
-          onClick: () => setViewMode('changes'),
-        },
-      ],
-      [data?.source, t, viewMode],
-    );
-
     useEffect(() => {
       if (!isFiltering) return;
       treeRef.current?.setExpanded(defaultExpandedIds);
@@ -503,6 +478,14 @@ const Files = memo<FilesProps>(
     );
 
     const isEmpty = displayEntries.length === 0;
+    // A large project's saved tree keeps only its shallowest entries. Its own
+    // refresh replaces it within moments; only when that refresh is not running
+    // (it failed, or has not been retried) is the partial tree worth flagging.
+    const showsPartialIndex = isPersistedPartialIndex(data) && !isValidating;
+    // A restored tree / overlay is painted before the host answers again. When
+    // that refresh fails the saved view stays on screen, so it must say that it
+    // could not be revalidated instead of reading as the current directory.
+    const showsRefreshFailure = !!data && !!(error || gitError);
 
     if (!data && isLoading) {
       return (
@@ -524,22 +507,23 @@ const Files = memo<FilesProps>(
             </div>
           ) : (
             <>
-              <DropdownMenu items={viewItems} placement={'bottomLeft'}>
-                <Button
-                  icon={viewMode === 'project' ? FolderTreeIcon : GitCompareArrowsIcon}
-                  size={'small'}
-                  style={{ maxWidth: 'calc(100% - 84px)' }}
-                  title={t('workingPanel.files.views.title')}
-                  type={'text'}
-                >
-                  {t(
-                    viewMode === 'project'
-                      ? 'workingPanel.files.views.project'
-                      : 'workingPanel.files.views.changes',
-                  )}
-                  <ChevronDownIcon size={12} />
-                </Button>
-              </DropdownMenu>
+              <ActionIcon
+                active={viewMode === 'project'}
+                aria-pressed={viewMode === 'project'}
+                icon={FolderTreeIcon}
+                size={'small'}
+                title={t('workingPanel.files.views.project')}
+                onClick={() => setViewMode('project')}
+              />
+              <ActionIcon
+                active={viewMode === 'changes'}
+                aria-pressed={viewMode === 'changes'}
+                disabled={data?.source !== 'git'}
+                icon={GitCompareArrowsIcon}
+                size={'small'}
+                title={t('workingPanel.files.views.changes')}
+                onClick={() => setViewMode('changes')}
+              />
               <div style={{ flex: 1 }} />
             </>
           )}
@@ -617,8 +601,14 @@ const Files = memo<FilesProps>(
             />
           </div>
         )}
-        {truncatedCount > 0 && (
-          <div className={styles.truncated}>{t('workingPanel.files.truncatedNotice')}</div>
+        {showsRefreshFailure ? (
+          <div className={styles.truncated}>{t('workingPanel.files.refreshFailed')}</div>
+        ) : showsPartialIndex ? (
+          <div className={styles.truncated}>{t('workingPanel.files.partialIndexNotice')}</div>
+        ) : (
+          truncatedCount > 0 && (
+            <div className={styles.truncated}>{t('workingPanel.files.truncatedNotice')}</div>
+          )
         )}
       </Flexbox>
     );

@@ -15,10 +15,8 @@ import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import { t as i18nT } from 'i18next';
 import { BanIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon, RotateCcwIcon } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { agentQuotaService } from '@/services/agentQuota';
 
 import {
   buildBurnSeries,
@@ -38,7 +36,6 @@ import {
   projectBurnout,
   type QuotaSeriesKey,
   type QuotaWindowSpan,
-  selectProviderQuotaAccount,
   seriesId,
   SESSION_SERIES,
   shouldShowHeatDot,
@@ -49,6 +46,7 @@ import {
   windowSeriesIdOf,
   type WindowStat,
 } from './quotaCalendarModel';
+import { useQuotaCalendarHistory } from './useQuotaCalendarHistory';
 
 const styles = createStaticStyles(({ css }) => ({
   calendarGrid: css`
@@ -333,8 +331,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type WindowRow = Awaited<ReturnType<typeof agentQuotaService.getWindows>>[number];
-
 const toMs = (value: Date | number | string | null | undefined): number | null =>
   value == null ? null : new Date(value).getTime();
 
@@ -362,7 +358,6 @@ const normalizeWindows = (rows: WindowLike[]): NormalizedWindow[] =>
 
 const CHART_W = 640;
 const CHART_H = 120;
-const HISTORY_DAYS = 90;
 const RING_RADIUS = 22;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
@@ -775,43 +770,14 @@ const MONTHLY_LABEL_KEYS: Record<
 
 const QuotaCalendar = memo<QuotaCalendarProps>(({ externalAccountId, provider }) => {
   const { t } = useTranslation('chat');
-  const [accountUnavailable, setAccountUnavailable] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [readings, setReadings] = useState<QuotaLimitReading[]>([]);
-  const [turns, setTurns] = useState<UsageTurn[]>([]);
-  const [windows, setWindows] = useState<NormalizedWindow[]>([]);
+  const { accountUnavailable, loading, readings, turns, windowRows } = useQuotaCalendarHistory(
+    provider,
+    externalAccountId,
+  );
+  const windows = useMemo(() => normalizeWindows(windowRows as WindowLike[]), [windowRows]);
   const [series, setSeries] = useState<QuotaSeriesKey>(SESSION_SERIES);
   const [month, setMonth] = useState(() => dayjs().startOf('month'));
   const now = Date.now();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const accounts = await agentQuotaService.listAccounts().catch(() => []);
-      const account = selectProviderQuotaAccount(accounts, provider, externalAccountId);
-      if (!account) {
-        if (!cancelled) setAccountUnavailable(true);
-        return;
-      }
-      setAccountUnavailable(false);
-
-      const [windowRows, snapshotSeries, usageTurns] = await Promise.all([
-        agentQuotaService.getWindows(account.id, 200).catch(() => [] as WindowRow[]),
-        agentQuotaService
-          .listSnapshots(account.id, HISTORY_DAYS)
-          .catch(() => [] as QuotaLimitReading[]),
-        agentQuotaService.listUsageTurns(account.id, HISTORY_DAYS).catch(() => [] as UsageTurn[]),
-      ]);
-      if (cancelled) return;
-      setWindows(normalizeWindows(windowRows));
-      setReadings(snapshotSeries);
-      setTurns(usageTurns);
-    })().finally(() => setLoading(false));
-
-    return () => {
-      cancelled = true;
-    };
-  }, [externalAccountId, provider]);
 
   // The session window comes first: it is the window an agent actually
   // works inside, and the one that stops a run mid-task. Codex reports one

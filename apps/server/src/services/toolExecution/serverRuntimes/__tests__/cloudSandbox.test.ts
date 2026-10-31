@@ -82,7 +82,11 @@ describe('cloudSandboxRuntime', () => {
     });
 
     const { cloudSandboxRuntime } = await import('../cloudSandbox');
-    const runtime = await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+    const runtime = await cloudSandboxRuntime.factory(
+      // The run's own id travels too, so an `lh agent run` from here can be
+      // attributed to the agent that launched it.
+      buildContext({ operationId: 'op-x', workspaceId: 'ws-42' }),
+    );
 
     await runtime.runCommand({ command: 'lh agent edit agt_1 -t x', description: 'edit self' });
 
@@ -91,6 +95,7 @@ describe('cloudSandboxRuntime', () => {
       'user-1',
       'ws-42',
       false,
+      'op-x',
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
@@ -176,7 +181,13 @@ describe('cloudSandboxRuntime', () => {
     const command = "echo 'the lh CLI is unavailable here'";
     await runtime.runCommand({ command, description: 'echo' });
 
-    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(command, 'user-1', undefined, true);
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      command,
+      'user-1',
+      undefined,
+      true,
+      undefined,
+    );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
       expect.objectContaining({ command }),
@@ -196,7 +207,13 @@ describe('cloudSandboxRuntime', () => {
 
     await runtime.runCommand({ command: 'ls -la', description: 'list files' });
 
-    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith('ls -la', 'user-1', undefined, true);
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'ls -la',
+      'user-1',
+      undefined,
+      true,
+      undefined,
+    );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'runCommand',
       expect.objectContaining({ command: 'ls -la' }),
@@ -265,5 +282,35 @@ describe('cloudSandboxRuntime', () => {
     expect(mocks.resolveSandboxSessionConfig).toHaveBeenCalledWith(
       expect.objectContaining({ isShareVisitorRun: true }),
     );
+  });
+
+  // The sandbox service stamps `metadata.agentShare` on visitor file writes
+  // (e.g. readFile image previews) so they stay out of the creator's library.
+  // It must see only the provenance ids — never permission fields like
+  // toolGrants from the full visitor context.
+  it('passes only the visitor provenance ids to the sandbox service for share-visitor runs', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(
+      buildContext({
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          toolGrants: [{ apiName: 'readFile', identifier: 'lobe-cloud-sandbox' }],
+          visitorUserId: 'visitor-1',
+        },
+      }),
+    );
+
+    expect(mocks.createSandboxService.mock.calls[0][0].agentShareVisitor).toEqual({
+      shareId: 'share-1',
+      visitorUserId: 'visitor-1',
+    });
+  });
+
+  it('passes no agentShareVisitor to the sandbox service for ordinary runs', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext());
+
+    expect(mocks.createSandboxService.mock.calls[0][0].agentShareVisitor).toBeUndefined();
   });
 });

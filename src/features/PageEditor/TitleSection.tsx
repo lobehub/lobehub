@@ -19,6 +19,15 @@ export const getTitleTextAreaInteractionProps = (canEdit: boolean) => ({
   readOnly: !canEdit,
 });
 
+// Enter that confirms an IME candidate (Chinese/Japanese input) must not submit
+// the title: moving focus to the body mid-composition commits the text there too.
+// Safari reports the confirming keydown with isComposing=false but keyCode 229.
+export const isTitleSubmitKey = (e: {
+  key: string;
+  keyCode?: number;
+  nativeEvent?: { isComposing?: boolean };
+}) => e.key === 'Enter' && !e.nativeEvent?.isComposing && e.keyCode !== 229;
+
 const TitleSection = memo(() => {
   const { t } = useTranslation('file');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
@@ -137,7 +146,7 @@ const TitleSection = memo(() => {
           onKeyDown={(e) => {
             if (!canEdit) return;
 
-            if (e.key === 'Enter') {
+            if (isTitleSubmitKey(e)) {
               e.preventDefault();
               handleTitleSubmit();
             }

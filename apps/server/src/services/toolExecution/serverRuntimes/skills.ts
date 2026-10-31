@@ -37,13 +37,14 @@ import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { FileService } from '@/server/services/file';
-import { MarketService } from '@/server/services/market';
+import type { MarketService } from '@/server/services/market';
 import {
   createSandboxService,
   normalizeSandboxCommandResult,
   resolveSandboxSessionConfig,
   type SandboxSessionSpecification,
 } from '@/server/services/sandbox';
+import type { SandboxInitialization } from '@/server/services/sandbox/environmentInit';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 import {
@@ -57,7 +58,9 @@ import {
   UserSkillService,
 } from '@/server/services/userSkill';
 
+import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
+import { createSandboxMarketService } from './sandboxMarket';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -149,9 +152,16 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private fileModel: FileModel;
   private serverDB: LobeChatDatabase;
   private topicId?: string;
+  /**
+   * The run this runtime belongs to. Handed to `preprocessLhCommand` so a
+   * sandbox `lh agent run` carries `LOBEHUB_OPERATION_ID`, exactly as the device
+   * and heterogeneous runtimes do.
+   */
+  private operationId?: string;
   private userId: string;
   private workspaceId?: string;
   private sandboxCwd?: string;
+  private sandboxInitialization?: SandboxInitialization;
   private sandboxWorkingDir?: string;
   private sandboxInstanceId?: string;
   private sandboxMode?: SandboxMode;
@@ -160,6 +170,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private disabledSkillIds: Set<string>;
   private isSkillGranted?: (identifier: string) => boolean;
   private shareVisitorBlocked: boolean;
+  private wrapSandbox?: SandboxWrapper;
 
   constructor(options: {
     agentId?: string;
@@ -180,6 +191,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      */
     isSkillGranted?: (identifier: string) => boolean;
     marketService: MarketService;
+    operationId?: string;
     resourceService: SkillResourceService;
     /**
      * Persistence for this run, resolved once by the factory. Every sandbox
@@ -189,6 +201,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
      * CLIs, injected credentials and anything outside the workspace with it.
      */
     sandboxCwd?: string;
+    sandboxInitialization?: SandboxInitialization;
     sandboxInstanceId?: string;
     sandboxMode?: SandboxMode;
     sandboxSpecification?: SandboxSessionSpecification;
@@ -200,6 +213,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     topicId?: string;
     userId: string;
     workspaceId?: string;
+    wrapSandbox?: SandboxWrapper;
   }) {
     this.agentId = options.agentId;
     this.skillModel = options.skillModel;
@@ -209,9 +223,11 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.fileModel = options.fileModel;
     this.serverDB = options.serverDB;
     this.topicId = options.topicId;
+    this.operationId = options.operationId;
     this.userId = options.userId;
     this.workspaceId = options.workspaceId;
     this.sandboxCwd = options.sandboxCwd;
+    this.sandboxInitialization = options.sandboxInitialization;
     this.sandboxWorkingDir = options.sandboxWorkingDir;
     this.sandboxInstanceId = options.sandboxInstanceId;
     this.sandboxMode = options.sandboxMode;
@@ -220,6 +236,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
     this.isSkillGranted = options.isSkillGranted;
     this.shareVisitorBlocked = options.shareVisitorBlocked ?? false;
+    this.wrapSandbox = options.wrapSandbox;
   }
 
   /**
@@ -293,6 +310,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       this.userId,
       workspaceId,
       this.shareVisitorBlocked,
+      this.operationId,
     );
 
     return { command: result.command, error: result.error };
@@ -350,6 +368,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -358,7 +377,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         topicId: this.topicId,
         userId: this.userId,
       });
-      const response = await sandboxService.callTool('runCommand', { command: lhResult.command });
+      const response = await (this.wrapSandbox?.(sandboxService) ?? sandboxService).callTool(
+        'runCommand',
+        { command: lhResult.command },
+      );
 
       log('runCommand response: %O', response);
 
@@ -708,6 +730,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -716,7 +739,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         topicId: this.topicId,
         userId: this.userId,
       });
-      const response = await sandboxService.callTool('execScript', enhancedParams);
+      const response = await (this.wrapSandbox?.(sandboxService) ?? sandboxService).callTool(
+        'execScript',
+        enhancedParams,
+      );
 
       log('execScript response: %O', response);
 
@@ -771,6 +797,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         fileService: this.fileService,
         marketService: this.marketService,
         sandboxCwd: this.sandboxCwd,
+        sandboxInitialization: this.sandboxInitialization,
         sandboxInstanceId: this.sandboxInstanceId,
         sandboxMode: this.sandboxMode,
         sandboxSpecification: this.sandboxSpecification,
@@ -903,14 +930,12 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       workspaceId,
     });
 
-    const marketService = new MarketService({
-      accessToken: marketAccessToken,
-      userInfo: {
-        sandboxStorage: sandbox.claim,
-        userId: context.userId,
-        workspaceId,
-      },
-    });
+    const marketService = createSandboxMarketService(
+      context,
+      marketAccessToken,
+      workspaceId,
+      sandbox.claim,
+    );
     const fileService = new FileService(context.serverDB, context.userId, workspaceId);
     const fileModel = new FileModel(context.serverDB, context.userId, workspaceId);
 
@@ -936,6 +961,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       : undefined;
 
     const service = new SkillServerRuntimeService({
+      wrapSandbox: pageSandboxWrapper(context, workspaceId),
       agentId: context.agentId,
       device,
       disabledSkillIds,
@@ -943,8 +969,13 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       fileService,
       isSkillGranted,
       marketService,
+      // The run this runtime belongs to, so an `lh agent run` it preprocesses in
+      // the cloud sandbox can be attributed to the agent that launched it — the
+      // device branch below carries the same id for its own routing.
+      operationId: context.operationId,
       resourceService,
       sandboxCwd: sandbox.cwd,
+      sandboxInitialization: sandbox.initialization,
       sandboxInstanceId: sandbox.environment,
       sandboxMode: sandbox.mode,
       sandboxSpecification: sandbox.specification,

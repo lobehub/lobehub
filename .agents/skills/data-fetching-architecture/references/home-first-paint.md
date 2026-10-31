@@ -17,7 +17,7 @@ the browser.
   Restore cached results into the state consumed by the UI, then revalidate through
   the existing SWR hook.
 - For a small subset needed before a larger response arrives, reuse
-  `LocalStorageQueryProjectionStorage` from `src/libs/queryProjectionStorage`.
+  `AppLocalStorage` from `src/libs/replica/storage.ts`.
   Keep field selection and lifecycle rules in the owning domain; do not create
   another storage framework or duplicate the same data across caches without a
   demonstrated need.
@@ -31,7 +31,7 @@ the browser.
 ## User Display Snapshot Reference
 
 `src/store/user/displaySnapshot.ts` is the domain adapter for the user's avatar URL
-and preference. It reuses `LocalStorageQueryProjectionStorage`; it is not a second
+and preference. It reuses `AppLocalStorage`; it is not a second
 cache engine. `src/layout/AuthProvider/BetterAuth/UserUpdater.tsx` reads it after the
 session identifies the exact user, before painting that user's initialized shell.
 The authoritative user-state response still refreshes the values afterward.

@@ -16,6 +16,10 @@ import type {
   SkillDirectoryDeps,
 } from '@lobechat/device-control';
 import {
+  outsideWorkspacePreviewFailure,
+  toLocalFilePreviewFailure,
+} from '@lobechat/device-control/file-preview';
+import {
   defaultGetProjectFileIndex,
   defaultListProjectDirectory,
   defaultSearchProjectFiles,
@@ -97,6 +101,7 @@ import RemoteFileUploadService, {
 } from '@/services/remoteFileUploadSrv';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
+import { shrinkImageForUpload } from '@/utils/shrinkImageForUpload';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -507,11 +512,16 @@ export default class LocalFileCtr extends ControllerModule {
           return formatUploadFailure(describeUploadFailure(error));
         },
         upload: async (filePath) => {
-          const record = await this.app
-            .getService(RemoteFileUploadService)
-            .uploadLocalFile(filePath);
-          if (!record?.url) logger.warn('Image upload returned no record:', { filePath });
-          return record;
+          const prepared = await shrinkImageForUpload(filePath, imageMimeType);
+          try {
+            const record = await this.app
+              .getService(RemoteFileUploadService)
+              .uploadLocalFile(prepared.filePath);
+            if (!record?.url) logger.warn('Image upload returned no record:', { filePath });
+            return record;
+          } finally {
+            await prepared.cleanup();
+          }
         },
       });
     }
@@ -612,13 +622,13 @@ export default class LocalFileCtr extends ControllerModule {
       });
 
       if (!url) {
-        return { error: 'File is outside the approved workspace', success: false };
+        return outsideWorkspacePreviewFailure();
       }
 
       return { success: true, url };
     } catch (error) {
       logger.error('Failed to create local file preview URL:', error);
-      return { error: (error as Error).message, success: false };
+      return toLocalFilePreviewFailure(error);
     }
   }
 
@@ -702,7 +712,7 @@ export default class LocalFileCtr extends ControllerModule {
       });
 
       if (!preview) {
-        return { error: 'File is outside the approved workspace', success: false };
+        return outsideWorkspacePreviewFailure();
       }
 
       return {
@@ -711,7 +721,7 @@ export default class LocalFileCtr extends ControllerModule {
       };
     } catch (error) {
       logger.error('Failed to read local file preview:', error);
-      return { error: (error as Error).message, success: false };
+      return toLocalFilePreviewFailure(error);
     }
   }
 

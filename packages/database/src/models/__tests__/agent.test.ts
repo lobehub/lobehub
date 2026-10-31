@@ -3292,9 +3292,9 @@ describe('AgentModel', () => {
         .values({ systemRole: 'OLD PROMPT', userId })
         .returning();
 
-      const original = (agentModel as any).assertWorkspaceDeviceBinding.bind(agentModel);
+      const original = (agentModel as any).ctx.assertWorkspaceDeviceBinding;
       const spy = vi
-        .spyOn(agentModel as any, 'assertWorkspaceDeviceBinding')
+        .spyOn((agentModel as any).ctx, 'assertWorkspaceDeviceBinding')
         .mockImplementationOnce(async (...args: unknown[]) => {
           await agentModel.update(agent.id, { editorData: null, systemRole: 'NEW PROMPT' });
           return original(...args);

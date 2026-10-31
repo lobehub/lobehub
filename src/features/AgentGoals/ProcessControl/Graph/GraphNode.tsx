@@ -16,6 +16,7 @@ import AssigneeProfileAvatar from '../AssigneeProfileAvatar';
 import { coordinatorNodeTitleKey } from '../coordinatorCopy';
 import type { GoalNodeView } from '../goalGraphViewModel';
 import { KIND_COLOR, KIND_ICON } from '../shared';
+import { TASK_HOLD_VISUALS } from '../taskHold';
 import { useElapsed } from '../useElapsed';
 import { experimentStatusVisual } from './experimentStatus';
 
@@ -45,6 +46,8 @@ export interface GraphNodeData extends Record<string, unknown> {
     chip?: StateChip | null;
     /** Detail behind an info icon beside the title, e.g. what a gate checks. */
     hint?: ReactNode;
+    /** Where the hint opens; beside the card when above would cover its neighbours. */
+    hintPlacement?: 'rightTop' | 'top';
     icon?: LucideIcon;
     /** Glyph colours when the card is not its kind — a release gate. */
     palette?: { line: string; soft: string };
@@ -194,7 +197,8 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   /* A ring, not a fill: the kind tint and the state chip must stay readable.
      Blue, not `colorPrimary` — the primary is near-black here, so the ring read
-     as a heavier version of the plain card border and told nothing apart. */
+     as a heavier version of the plain card border and told nothing apart. The
+     cards carry the mainline; the lines between them stay ordinary. */
   mainline: css`
     border-color: ${cssVar.colorInfo};
     box-shadow: 0 0 0 1px ${cssVar.colorInfo};
@@ -203,7 +207,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-color: ${cssVar.colorPrimaryBorder};
   `,
   stale: css`
-    border-color: ${cssVar.colorErrorBorder};
+    border-color: ${cssVar.colorWarningBorder};
   `,
   subtitle: css`
     overflow: hidden;
@@ -256,12 +260,9 @@ const useStateChip = (data: GraphNodeData): StateChip | null => {
       icon: TASK_STATUS_VISUALS.paused.icon,
       text: t('goalProcess.tag.needsDecision'),
     };
-  if (stale)
-    return {
-      color: TASK_STATUS_VISUALS.failed.color,
-      icon: TASK_STATUS_VISUALS.failed.icon,
-      text: t('goalProcess.tag.lost'),
-    };
+  if (stale) return { ...TASK_HOLD_VISUALS.stalled, text: t('goalProcess.tag.stalled') };
+  if (view.quotaRetryAt)
+    return { ...TASK_HOLD_VISUALS.waitingQuota, text: t('goalProcess.tag.waitingQuota') };
   // Running renders the same animated ring the frontier and home surfaces use.
   if (running)
     return { color: TASK_STATUS_VISUALS.running.color, text: t('goalProcess.node.running') };
@@ -407,7 +408,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
               {presentation?.title ??
                 (coordinatorTitleKey ? t(coordinatorTitleKey as any) : node.title)}
               {presentation?.hint && (
-                <Tooltip title={presentation.hint}>
+                <Tooltip placement={presentation.hintPlacement} title={presentation.hint}>
                   <span data-hint className={cx('nodrag', styles.hint)} role="img">
                     <Icon icon={Info} size={13} />
                   </span>

@@ -16,6 +16,7 @@ import {
   findFinalAcceptanceView,
   findGoalAcceptanceGate,
   findOpenChangeRequest,
+  goalReportPageId,
   goalResultHeadline,
   hasGoalResult,
   isGoalReportOrganizing,
@@ -444,6 +445,9 @@ describe('buildCriterionOutcomes', () => {
     expect(outcomes[1].summary).toBe('Two claims have no source');
     expect(outcomes[1].reason).toBe('Sources are missing');
     expect(outcomes[2].evidence).toEqual([]);
+    // The Portal's check view finds a criterion by its bundle row id.
+    expect(outcomes[0].checkId).toBe('c1');
+    expect(outcomes[2].checkId).toBeUndefined();
   });
 
   it('ignores results from earlier rounds', () => {
@@ -741,6 +745,15 @@ describe('resultTrailSource', () => {
   it('falls back when the stored storyline does not parse', () => {
     const broken = { ...latest, metadata: { headline: 'x' } as any };
     expect(resultTrailSource(report({ latest: broken, status: 'completed' })).kind).toBe('derived');
+  });
+
+  it('leads the result with the report HTML page, kept while a newer report is written', () => {
+    const withPage = { ...latest, pageDocumentId: 'docs-report' };
+    expect(goalReportPageId(report({ latest: withPage, status: 'completed' }))).toBe('docs-report');
+    expect(goalReportPageId(report({ latest: withPage, status: 'running' }))).toBe('docs-report');
+    // A markdown-only report, or none yet, has no page to lead with.
+    expect(goalReportPageId(report({ latest, status: 'completed' }))).toBeUndefined();
+    expect(goalReportPageId({})).toBeUndefined();
   });
 });
 

@@ -1,5 +1,5 @@
 import { Flexbox, ScrollArea, TooltipGroup } from '@lobehub/ui';
-import { type ReactNode, type UIEvent } from 'react';
+import { type CSSProperties, type ReactNode, type UIEvent } from 'react';
 import { memo, Suspense, useCallback, useLayoutEffect, useRef } from 'react';
 
 import { SideBarHeaderSkeleton } from '@/features/NavPanel/components/SideBarSkeleton';
@@ -11,10 +11,11 @@ const scrollOffsets = new Map<string, number>();
 
 interface SidebarLayoutProps {
   body?: ReactNode;
+  contentStyle?: CSSProperties;
   header?: ReactNode;
 }
 
-const SideBarLayout = memo<SidebarLayoutProps>(({ header, body }) => {
+const SideBarLayout = memo<SidebarLayoutProps>(({ header, body, contentStyle }) => {
   const navKey = useActiveNavKey();
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -38,7 +39,7 @@ const SideBarLayout = memo<SidebarLayoutProps>(({ header, body }) => {
         disableContentFit
         scrollFade
         // Preserve the height chain for sidebar bodies containing virtual lists.
-        contentProps={{ style: { height: '100%' } }}
+        contentProps={{ style: { height: '100%', ...contentStyle } }}
         style={{ flex: 1, minHeight: 0 }}
         viewportProps={{ onScroll: handleScroll, ref: scrollerRef }}
       >

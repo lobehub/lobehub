@@ -2,13 +2,15 @@ import { startTransition, StrictMode } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { HydratedRouter } from 'react-router/dom';
 
-import { setReplicaPersistedHydration } from '@/libs/replica';
+import { setReplicaScopeSource } from '@/libs/replica';
 
-// The Workbench runtime never mounts the user store, so a replica's cache scope
-// would stay the last-known user's partition — hydrating it would paint a
-// previous (possibly server-invalidated) session's private rows. Reads here are
-// network-only; authorization is whatever the server answers.
-setReplicaPersistedHydration(false);
+import { workbenchReplicaScope } from '../src/shell/workbenchReplicaScope';
+
+// The Workbench runtime never mounts the user store, so the main SPA's scope
+// would stay the last-known user's partition with nothing to verify it. Its own
+// source keeps public surfaces network-only and lets a private route opt into
+// hydrate-then-verify by running the session check (`enableWorkbenchIdentity`).
+setReplicaScopeSource(workbenchReplicaScope);
 
 // RR suffixes dynamically-shared route CSS hrefs with `#`, so the vite preload
 // helper re-requests them with `crossorigin` — against our cross-origin CDN the

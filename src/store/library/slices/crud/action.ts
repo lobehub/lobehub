@@ -155,6 +155,11 @@ export class KnowledgeBaseCrudActionImpl {
       knowledgeBaseService.deleteKnowledgeBase(id),
     );
 
+    // The library sidebar persists its tree per library: a revisit of the old
+    // URL must not repaint the deleted library's rows.
+    const { useTreeStore } = await import('@/store/tree');
+    useTreeStore.getState().forgetLibrary(id);
+
     await this.#get().refreshKnowledgeBaseList();
   };
 
@@ -189,6 +194,23 @@ export class KnowledgeBaseCrudActionImpl {
     } finally {
       this.#get().internal_toggleKnowledgeBaseLoading(id, false);
     }
+  };
+
+  /**
+   * Set (or with `null`, clear back to the generated default) a library's
+   * cover. The cover lives in `settings`, which the server merges into.
+   */
+  updateKnowledgeBaseCover = async (id: string, cover: string | null): Promise<void> => {
+    await this.#kbEntity.optimistic(
+      id,
+      (kb) => {
+        const { cover: _previous, ...settings } = (kb.settings ?? {}) as Record<string, unknown>;
+        return { ...kb, settings: cover ? { ...settings, cover } : settings };
+      },
+      () => knowledgeBaseService.updateKnowledgeBaseList(id, { cover }),
+    );
+
+    await this.#get().refreshKnowledgeBaseList();
   };
 }
 

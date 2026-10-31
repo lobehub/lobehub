@@ -45,45 +45,48 @@ export async function exploreGraph(params: {
       message: 'Graph changed or another advance is already exploring',
     };
   try {
-    const decision = await new GoalExplorationPlanner(db, userId, workspaceId).plan({
-      requirement: graph.goal.requirement ?? graph.goal.title,
-      instruction: policy.instruction,
-      maxExperiments: policy.maxExperiments,
-      experiments: graph.nodes
-        .filter(
-          (node) =>
-            node.kind === 'experiment' ||
-            (node.kind === 'task' &&
-              node.title !== GOAL_ACCEPTANCE_TASK_TITLE &&
-              !experimentOwner(graph, node.id) &&
-              !isProtocolRevision(graph, node.id)),
-        )
-        .map((node) => ({
-          id: node.id,
-          title: node.title,
-          status: node.status,
-          results: experimentResults(graph, node.id),
-          // Tells the planner which experiments a previous turn authored, so it can
-          // judge whether its own last move helped before repeating that direction.
-          derivedFromId: graph.edges.find(
-            (edge) => edge.sourceNodeId === node.id && edge.kind === 'derived_from',
-          )?.targetNodeId,
-          // An uncontained seed cannot hold a correction, so it reports none left
-          // rather than inviting a choice the apply step would refuse.
-          revisionsRemaining:
-            node.kind === 'experiment' || experimentOwner(graph, node.id)
-              ? Math.max(MAX_PROTOCOL_REVISIONS - protocolRevisionCount(graph, node.id), 0)
-              : 0,
-          inputVersionIds: graph.workVersions
-            .filter(
-              (version) =>
-                experimentScope(graph, node.id).has(version.nodeId) &&
-                version.relation === 'produced' &&
-                version.work,
-            )
-            .map((version) => version.workVersionId),
-        })),
-    });
+    const decision = await new GoalExplorationPlanner(db, userId, workspaceId).plan(
+      {
+        requirement: graph.goal.requirement ?? graph.goal.title,
+        instruction: policy.instruction,
+        maxExperiments: policy.maxExperiments,
+        experiments: graph.nodes
+          .filter(
+            (node) =>
+              node.kind === 'experiment' ||
+              (node.kind === 'task' &&
+                node.title !== GOAL_ACCEPTANCE_TASK_TITLE &&
+                !experimentOwner(graph, node.id) &&
+                !isProtocolRevision(graph, node.id)),
+          )
+          .map((node) => ({
+            id: node.id,
+            title: node.title,
+            status: node.status,
+            results: experimentResults(graph, node.id),
+            // Tells the planner which experiments a previous turn authored, so it can
+            // judge whether its own last move helped before repeating that direction.
+            derivedFromId: graph.edges.find(
+              (edge) => edge.sourceNodeId === node.id && edge.kind === 'derived_from',
+            )?.targetNodeId,
+            // An uncontained seed cannot hold a correction, so it reports none left
+            // rather than inviting a choice the apply step would refuse.
+            revisionsRemaining:
+              node.kind === 'experiment' || experimentOwner(graph, node.id)
+                ? Math.max(MAX_PROTOCOL_REVISIONS - protocolRevisionCount(graph, node.id), 0)
+                : 0,
+            inputVersionIds: graph.workVersions
+              .filter(
+                (version) =>
+                  experimentScope(graph, node.id).has(version.nodeId) &&
+                  version.relation === 'produced' &&
+                  version.work,
+              )
+              .map((version) => version.workVersionId),
+          })),
+      },
+      graph.goal.config,
+    );
     const result = await model.apply(goalId, claim.token, decision);
     if (result.outcome === 'stale')
       return {

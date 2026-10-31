@@ -120,7 +120,6 @@ beforeEach(() => {
       defaultSessions: [],
       pinnedSessions: [],
       sessions: [],
-      isSessionsFirstFetchFinished: false,
     },
     false,
   );

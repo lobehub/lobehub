@@ -15,7 +15,7 @@ import {
   VERIFY_ON_FAIL_ACTIONS,
   VERIFY_VERIFIER_TYPES,
 } from '@lobechat/prompts';
-import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
+import type { GoalConfig, RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
@@ -192,11 +192,16 @@ export class GoalCriteriaGeneratorService {
    * schema failure; the coordinator then falls back to a single task seeded
    * from the raw requirement and records why, instead of stalling the goal.
    */
-  async decompose(params: {
+  async decompose({
+    goalConfig,
+    ...params
+  }: {
     clarifications?: GoalClarificationAnswer[];
+    /** Carries the goal's planning-model pick, which outranks the system goal model. */
+    goalConfig?: GoalConfig | null;
     requirement: string;
   }): Promise<GoalDecompositionDraft> {
-    const modelConfig = await resolveGoalModelConfig(this.db, this.userId);
+    const modelConfig = await resolveGoalModelConfig(this.db, this.userId, goalConfig);
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     const raw = await ai.generateObject(
       {

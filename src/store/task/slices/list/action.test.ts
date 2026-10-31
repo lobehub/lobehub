@@ -46,7 +46,7 @@ describe('TaskListSliceAction', () => {
     // An edit can move a task across every list boundary at once — reorder it
     // by `updatedAt`, change its visibility, attach a schedule that flips
     // Home's automation filter — so refresh revalidates every list and board.
-    it('revalidates every task list and board, plus the scheduled and mine roll-ups', async () => {
+    it('revalidates every task list and board, the scheduled and mine pages included', async () => {
       const { mutate } = await import('@/libs/swr');
 
       await useTaskStore.getState().refreshTaskList();
@@ -59,8 +59,10 @@ describe('TaskListSliceAction', () => {
       const scope = (await import('@/libs/replica')).cacheScope.get();
       expect(matches(['replica:sync', 'taskList', 1, scope, 'any-list', {}])).toBe(true);
       expect(matches(['replica:sync', 'taskGroupList', 1, scope, 'any-board', {}])).toBe(true);
-      expect(matches(['task:scheduledList', '__all__', 'all'])).toBe(true);
-      expect(matches(['task:myList', 'assigned', 'all'])).toBe(true);
+      // The scheduled roll-up, "My tasks" and the sidebar panel are replica
+      // entries now, so no SWR-persisted `task:` key is left to revalidate.
+      expect(matches(['task:scheduledList', '__all__', 'all'])).toBe(false);
+      expect(matches(['task:myList', 'assigned', 'all'])).toBe(false);
     });
   });
 
@@ -150,7 +152,9 @@ describe('TaskListSliceAction', () => {
           taskGroupListMap: {
             [result.current.queryKey!]: {
               groupBy: 'status',
-              groups: [{ key: 'backlog', tasks: [{ identifier: 'T-1' }], total: 1 }] as any,
+              groups: [
+                { key: 'backlog', tasks: [{ id: 'T-1', identifier: 'T-1' }], total: 1 },
+              ] as any,
             },
           },
         });
@@ -259,7 +263,7 @@ describe('TaskListSliceAction', () => {
   });
 
   describe('useFetchScheduledTaskList', () => {
-    it('keys and requests the selected scheduled-task page', async () => {
+    it('syncs the selected scheduled-task page as a task-list replica entry', async () => {
       const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
@@ -267,70 +271,185 @@ describe('TaskListSliceAction', () => {
         useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 }),
       );
 
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:scheduledList', '__all__', 'all', { limit: 50, offset: 50 }],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
-      await fetcher();
+      // No SWR-persisted `task:scheduledList` key any more.
+      expect(
+        vi
+          .mocked(useClientDataSWR)
+          .mock.calls.some(([key]) => Array.isArray(key) && key[0] === 'task:scheduledList'),
+      ).toBe(false);
+      const [page] = await syncCalls('taskList');
+      await page.fetcher();
       expect(taskService.list).toHaveBeenCalledWith(
-        expect.objectContaining({ automated: true, limit: 50, offset: 50 }),
+        expect.objectContaining({ automated: true, limit: 50, offset: 50, orderBy: 'updatedAt' }),
       );
     });
 
-    it('scopes the scheduled roll-up to one agent, key included', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
+    it('scopes the scheduled roll-up to one agent', async () => {
       const { taskService } = await import('@/services/task');
 
       renderHook(() =>
         useTaskStore.getState().useFetchScheduledTaskList({ agentId: 'agent-1', limit: 50 }),
       );
 
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:scheduledList', 'agent-1', 'all', { limit: 50, offset: undefined }],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
-      await fetcher();
+      const [page] = await syncCalls('taskList');
+      await page.fetcher();
       expect(taskService.list).toHaveBeenCalledWith(
-        expect.objectContaining({ assigneeAgentId: 'agent-1', automated: true }),
+        expect.objectContaining({ assigneeAgentId: 'agent-1', automated: true, limit: 50 }),
       );
     });
 
-    it('scopes the scheduled roll-up to one project, key included', async () => {
+    it('scopes the scheduled roll-up to one project, never to an agent too', async () => {
+      const { taskService } = await import('@/services/task');
+
+      renderHook(() =>
+        useTaskStore
+          .getState()
+          .useFetchScheduledTaskList({ agentId: 'agent-1', limit: 50, projectId: 'project-1' }),
+      );
+
+      const [page] = await syncCalls('taskList');
+      await page.fetcher();
+      const params = vi.mocked(taskService.list).mock.calls[0][0];
+      expect(params).toMatchObject({ automated: true, projectId: 'project-1' });
+      expect(params.assigneeAgentId).toBeUndefined();
+    });
+
+    it('keeps concurrent consumers and scopes isolated by their query keys', () => {
+      const { result } = renderHook(() => [
+        useTaskStore.getState().useFetchScheduledTaskList({ limit: 5 }),
+        useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 }),
+        useTaskStore.getState().useFetchScheduledTaskList({ agentId: 'agent-1', limit: 5 }),
+        useTaskStore.getState().useFetchScheduledTaskList({ limit: 5, projectId: 'project-1' }),
+        useTaskStore.getState().useFetchTaskList({ allAgents: true, automated: true }),
+      ]);
+
+      expect(new Set(result.current.map((sync) => sync.queryKey)).size).toBe(5);
+    });
+
+    // Regression: the roll-up lived in the SWR persistence layer, so a reload
+    // only painted it after that layer's whole-cache hydration. As a replica
+    // entry it paints from the store row (persisted or fetched) on mount.
+    it('paints the page from its replica entry, in the list endpoint shape', () => {
+      const { result } = renderHook(() =>
+        useTaskStore.getState().useFetchScheduledTaskList({ limit: 5 }),
+      );
+      const queryKey = result.current.queryKey!;
+      expect(result.current.data).toBeUndefined();
+
+      const items = [{ id: 'task-1', identifier: 'T-1', status: 'scheduled' }] as any;
+      act(() => {
+        useTaskStore.setState({ taskListMap: { [queryKey]: { items, total: 7 } } });
+      });
+
+      expect(result.current.data).toEqual({ data: items, total: 7 });
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it('returns no page and no query key while disabled', () => {
+      const { result } = renderHook(() =>
+        useTaskStore.getState().useFetchScheduledTaskList({ enabled: false, limit: 5 }),
+      );
+      expect(result.current.queryKey).toBeUndefined();
+      expect(result.current.data).toBeUndefined();
+    });
+  });
+
+  describe('preHydrateScheduledTaskList', () => {
+    // The Tasks route loader seeds the scheduled page before the route
+    // commits, so a reload paints it instead of the list's loading state.
+    it('seeds the scheduled page from its persisted row before anything mounts', async () => {
+      const { scheduledTaskListQuery } = await import('./action');
+      const { taskListQueryKey, taskListResource } = await import('./projection');
+      const items = [{ id: 'task-1', identifier: 'T-1', status: 'scheduled' }];
+      const get = vi
+        .spyOn(taskListResource.storage!, 'get')
+        .mockResolvedValue({ data: { items, total: 1 } as any, updatedAt: 1 });
+      const options = { agentId: 'agent-1', limit: 50, offset: 0 };
+
+      await expect(useTaskStore.getState().preHydrateScheduledTaskList(options)).resolves.toBe(
+        true,
+      );
+
+      const queryKey = taskListQueryKey(scheduledTaskListQuery(options));
+      expect(useTaskStore.getState().taskListMap[queryKey]).toEqual({ items, total: 1 });
+      // The hook asks for exactly the entry the loader seeded.
+      const { result } = renderHook(() =>
+        useTaskStore.getState().useFetchScheduledTaskList(options),
+      );
+      expect(result.current.queryKey).toBe(queryKey);
+      expect(result.current.data).toEqual({ data: items, total: 1 });
+      get.mockRestore();
+    });
+  });
+
+  describe('useFetchMyTaskList', () => {
+    it('syncs "My tasks" as a task-list entry narrowed by scope and statuses', async () => {
       const { useClientDataSWR } = await import('@/libs/swr');
       const { taskService } = await import('@/services/task');
 
       renderHook(() =>
-        useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, projectId: 'project-1' }),
+        useTaskStore.getState().useFetchMyTaskList({
+          limit: 20,
+          offset: 20,
+          scope: 'assigned',
+          statuses: ['running', 'backlog'],
+        }),
       );
 
-      expect(useClientDataSWR).toHaveBeenCalledWith(
-        ['task:scheduledList', '__project__:project-1', 'all', { limit: 50, offset: undefined }],
-        expect.any(Function),
-        expect.any(Object),
-      );
-      const fetcher = vi.mocked(useClientDataSWR).mock.calls[0][1] as () => Promise<unknown>;
-      await fetcher();
-      expect(taskService.list).toHaveBeenCalledWith(
-        expect.objectContaining({ automated: true, projectId: 'project-1' }),
-      );
+      expect(
+        vi
+          .mocked(useClientDataSWR)
+          .mock.calls.some(([key]) => Array.isArray(key) && key[0] === 'task:myList'),
+      ).toBe(false);
+      const [page] = await syncCalls('taskList');
+      await page.fetcher();
+      expect(taskService.list).toHaveBeenCalledWith({
+        automated: undefined,
+        limit: 20,
+        offset: 20,
+        orderBy: 'updatedAt',
+        projectId: undefined,
+        scope: 'assigned',
+        statuses: ['backlog', 'running'],
+        visibility: undefined,
+      });
     });
 
-    it('keeps concurrent consumers isolated by their SWR keys', async () => {
-      const { useClientDataSWR } = await import('@/libs/swr');
+    it('ignores the visibility chip and keeps each scope and status set apart', () => {
+      useTaskStore.setState({ listVisibility: 'private' });
+      const { result } = renderHook(() => [
+        useTaskStore.getState().useFetchMyTaskList({ scope: 'assigned' }),
+        useTaskStore.getState().useFetchMyTaskList({ scope: 'created' }),
+        useTaskStore.getState().useFetchMyTaskList({ scope: 'assigned', statuses: ['running'] }),
+      ]);
 
-      renderHook(() => useTaskStore.getState().useFetchScheduledTaskList({ limit: 5 }));
+      expect(new Set(result.current.map((sync) => sync.queryKey)).size).toBe(3);
+      expect(result.current[0].queryKey).toContain('"visibility":"all"');
+    });
+  });
+
+  describe('agent sidebar groups', () => {
+    it('lets an embedded board override the visibility chip', async () => {
+      const { taskService } = await import('@/services/task');
+      useTaskStore.setState({ listVisibility: 'private' });
+
       renderHook(() =>
-        useTaskStore.getState().useFetchScheduledTaskList({ limit: 50, offset: 50 }),
+        useTaskStore.getState().useFetchTaskGroupList({
+          agentId: 'agent-1',
+          excludeStatuses: ['completed', 'canceled'],
+          visibility: 'all',
+        }),
       );
 
-      expect(vi.mocked(useClientDataSWR).mock.calls.map(([key]) => key)).toEqual([
-        ['task:scheduledList', '__all__', 'all', { limit: 5, offset: undefined }],
-        ['task:scheduledList', '__all__', 'all', { limit: 50, offset: 50 }],
-      ]);
+      const [board] = await syncCalls('taskGroupList');
+      await board.fetcher();
+      expect(taskService.groupList).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assigneeAgentId: 'agent-1',
+          excludeStatuses: ['canceled', 'completed'],
+          visibility: undefined,
+        }),
+      );
     });
   });
 

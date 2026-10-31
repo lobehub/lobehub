@@ -6,8 +6,6 @@ import { debounce } from 'es-toolkit/compat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { mutate } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { invalidateDocumentMutation } from '@/services/document/invalidation';
 
@@ -17,7 +15,12 @@ const isConflictError = (error: unknown) =>
 export interface UseHighlightSaveParams {
   content: string;
   documentId: string;
-  onSaved: (content: string, updatedAt?: string) => void;
+  /**
+   * Called when a write starts; returns the commit for its confirmed result.
+   * The caller captures what the write belongs to (e.g. the active identity)
+   * before the request is awaited.
+   */
+  onSaveStart: () => (content: string, updatedAt?: string) => void;
   updatedAt?: Date;
 }
 
@@ -30,7 +33,7 @@ export interface UseHighlightSaveResult {
 export const useHighlightSave = ({
   content,
   documentId,
-  onSaved,
+  onSaveStart,
   updatedAt,
 }: UseHighlightSaveParams): UseHighlightSaveResult => {
   const { t } = useTranslation('portal');
@@ -39,14 +42,14 @@ export const useHighlightSave = ({
 
   const bufferRef = useRef(buffer);
   const documentIdRef = useRef(documentId);
-  const onSavedRef = useRef(onSaved);
+  const onSaveStartRef = useRef(onSaveStart);
   const expectedUpdatedAtRef = useRef(updatedAt);
   const baseContentRef = useRef(content);
   const pendingSaveRef = useRef<Promise<void> | undefined>(undefined);
   const tRef = useRef(t);
   bufferRef.current = buffer;
   documentIdRef.current = documentId;
-  onSavedRef.current = onSaved;
+  onSaveStartRef.current = onSaveStart;
   tRef.current = t;
 
   const saveBuffer = useCallback(async (source: 'manual' | 'autosave') => {
@@ -54,6 +57,7 @@ export const useHighlightSave = ({
     if (toWrite === undefined) return;
     const expectedUpdatedAt = expectedUpdatedAtRef.current;
     try {
+      const commitSaved = onSaveStartRef.current();
       const result = await documentService.updateDocument({
         content: toWrite,
         id: documentIdRef.current,
@@ -66,7 +70,7 @@ export const useHighlightSave = ({
         expectedUpdatedAtRef.current = savedAt;
       }
       baseContentRef.current = toWrite;
-      onSavedRef.current(toWrite, result?.updatedAt);
+      commitSaved(toWrite, result?.updatedAt);
       if (bufferRef.current === toWrite) {
         bufferRef.current = undefined;
         setBuffer(undefined);
@@ -77,9 +81,9 @@ export const useHighlightSave = ({
         if (expectedUpdatedAtRef.current?.getTime() !== expectedUpdatedAt?.getTime()) return;
         bufferRef.current = undefined;
         setBuffer(undefined);
+        // Refreshes the document's replica entry, which the portal body reads.
         await Promise.allSettled([
           invalidateDocumentMutation({ documentId: documentIdRef.current }),
-          mutate(portalKeys.documentHeader(documentIdRef.current)),
         ]);
         toast.error(tRef.current('document.saveConflict'));
         return;

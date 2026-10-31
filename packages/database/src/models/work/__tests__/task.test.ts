@@ -2,6 +2,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { TaskSubtreeRepository } from '../../../repositories/taskSubtree';
 import { messages, topics, works, workspaces, workVersions } from '../../../schemas';
 import { TaskModel } from '../../task';
 import { WorkModel } from '..';
@@ -905,7 +906,10 @@ describe('WorkModel · workspace task visibility', () => {
     expect(expectTaskListItem(memberView[0]).task.name).toBe('Shared task');
 
     // The task transition mirrors visibility onto Work in the same transaction.
-    await ownerTasks.updateVisibility(task.id, 'private');
+    await new TaskSubtreeRepository(serverDB, userId, workspaceId).updateVisibility(
+      task.id,
+      'private',
+    );
 
     const [mirrored] = await serverDB
       .select({ visibility: works.visibility })

@@ -11,6 +11,7 @@ import type {
   IdentifiersResponse,
 } from '@/types/discover';
 import { setNamespace } from '@/utils/storeDebug';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import {
   type GroupAgentCategoriesParams,
@@ -141,7 +142,17 @@ export class GroupAgentActionImpl {
       version: params.version,
     };
     const queryKey = groupAgentDetailQueryKey(normalized);
-    const sync = this.#detail.useSync(normalized, { enabled, revalidateOnFocus: false });
+    const sync = this.#detail.useSync(normalized, {
+      enabled,
+      // NOT_FOUND is definitive: drop the hydrated entry (memory plus persisted
+      // rows) so a deleted group stops painting a stale copy. Bind the removal
+      // to the scope the failing request was captured under. Transient failures
+      // keep the cached detail.
+      onError: (error, { key, scope }) => {
+        if (key && isTrpcErrorCode(error, 'NOT_FOUND')) this.#detail.remove(key, scope);
+      },
+      revalidateOnFocus: false,
+    });
     return this.#toSyncResult(
       sync,
       queryKey,

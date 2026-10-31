@@ -1,85 +1,65 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { FileSource } from '@lobechat/types';
 
 import type { AgentDocument } from '@/database/models/agentDocuments';
-import {
-  AgentAccess,
-  AgentDocumentModel,
-  buildDocumentFilename,
-} from '@/database/models/agentDocuments';
+import { AgentDocumentModel } from '@/database/models/agentDocuments';
 import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 
-import {
-  getAgentDocumentContentType,
-  RAW_TEXT_DOCUMENT_FILE_TYPE,
-} from '../agentDocuments/contentFormat';
-import { createAgentMarkdownSnapshot } from '../agentDocuments/headlessEditor';
+import { getAgentDocumentContentType } from '../agentDocuments/contentFormat';
 import { FileService } from '../file';
+import { writePageBodyThroughRoom } from '../pageCollab/bodyWriter';
+import type { AgentDocumentVfsDeps } from './deps';
 import { AgentDocumentVfsError } from './errors';
+import { deleteMountedSkill, writeMountedSkill } from './mountedSkills';
 import { createSkillMount } from './mounts/skills/createSkillMount';
-import {
-  getUnifiedSkillNamespaceParentPath,
-  getUnifiedSkillNamespaceRootPath,
-  isUnifiedSkillPath as isSkillPath,
-  SKILL_NAMESPACES,
-  type SkillNamespace,
-} from './mounts/skills/path';
+import { isUnifiedSkillPath as isSkillPath } from './mounts/skills/path';
 import type { SkillMount } from './mounts/skills/SkillMount';
-import type { SkillMountNode } from './mounts/skills/types';
+import {
+  createSyntheticDirectoryNode,
+  getSyntheticNode,
+  listSyntheticChildren,
+  toMountedNode,
+  toMountedStats,
+  toOrdinaryNode,
+  toOrdinaryStats,
+} from './nodes';
+import { collectOrdinarySubtree, listOrdinaryNodes, resolveOrdinaryPath } from './ordinaryTree';
+import { renameOrdinaryPath, writeOrdinaryDocument } from './ordinaryWrites';
+import {
+  applyListLimit,
+  assertNotSelfReferentialCopy,
+  buildOrdinaryPath,
+  LOBE_PATH,
+  normalizeAgentDocumentPath,
+  sliceReadContent,
+  splitAgentDocumentPath,
+} from './paths';
+import { resolveReadablePath } from './skillPaths';
+import {
+  deletePermanently,
+  deletePermanentlyByPath,
+  listTrash,
+  restoreFromTrash,
+  restoreFromTrashByPath,
+} from './trash';
 import type {
+  AgentDocumentCopyOptions,
+  AgentDocumentDeleteOptions,
   AgentDocumentListOptions,
+  AgentDocumentMkdirOptions,
   AgentDocumentNode,
   AgentDocumentReadOptions,
   AgentDocumentReadResult,
   AgentDocumentStats,
   AgentDocumentTrashEntry,
+  AgentDocumentVfsContext,
+  AgentDocumentWriteOptions,
 } from './types';
 
-const LOBE_PATH = './lobe';
-const LOBE_SKILLS_PATH = './lobe/skills';
-/**
- * Default cap for VFS directory reads while the public API still returns arrays.
- * Keep this near path constants because it is part of the VFS surface, not storage policy.
- */
-const DEFAULT_LIST_LIMIT = 100;
-/**
- * Maximum one-call VFS directory read size.
- * Prevents accidental wide-directory materialization from CLI or tool callers.
- */
-const MAX_LIST_LIMIT = 500;
 /**
  * Internal recursive copy safety cap.
  * This is intentionally separate from public listing pagination so `rename()` never drops children.
  */
 const MAX_RECURSIVE_COPY_CHILDREN = 5000;
-
-const SYNTHETIC_DIRECTORY_MODE = AgentAccess.LIST | AgentAccess.READ;
-
-interface AgentDocumentVfsContext {
-  agentId: string;
-  topicId?: string;
-}
-
-interface AgentDocumentWriteOptions {
-  /**
-   * Raw writes bypass the Markdown editor snapshot because arbitrary tool or code output may
-   * contain markup that the editor legitimately normalizes or discards.
-   */
-  contentFormat?: 'markdown' | 'raw';
-  createMode?: 'always-new' | 'if-missing' | 'must-exist';
-}
-
-interface AgentDocumentMkdirOptions {
-  recursive?: boolean;
-}
-
-interface AgentDocumentDeleteOptions {
-  recursive?: boolean;
-}
-
-interface AgentDocumentCopyOptions {
-  overwrite?: boolean;
-}
 
 /**
  * Unified filesystem view for ordinary agent documents plus mounted subtrees.
@@ -108,6 +88,8 @@ export class AgentDocumentVfsService {
   private skillMount: SkillMount;
   private fileServiceInstance?: FileService;
 
+  private readonly deps: AgentDocumentVfsDeps;
+
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
@@ -115,6 +97,17 @@ export class AgentDocumentVfsService {
   ) {
     this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
     this.skillMount = createSkillMount(db, userId, workspaceId);
+    this.deps = {
+      agentDocumentModel: this.agentDocumentModel,
+      getFileService: () => this.fileService,
+      skillMount: this.skillMount,
+      writeThroughRoom: (documentId, body) =>
+        writePageBodyThroughRoom(db, documentId, body, {
+          saveSource: 'llm_call',
+          userId,
+          workspaceId,
+        }),
+    };
   }
 
   /** Defers storage configuration until a permanent deletion actually has uploads to reclaim. */
@@ -149,14 +142,14 @@ export class AgentDocumentVfsService {
 
     if (normalizedPath === './') {
       const [ordinaryNodes, lobeNode] = await Promise.all([
-        this.listOrdinaryNodes(ctx.agentId, null, './', options),
-        Promise.resolve(this.createSyntheticDirectoryNode(LOBE_PATH, 'lobe')),
+        listOrdinaryNodes(this.deps, ctx.agentId, null, './', options),
+        Promise.resolve(createSyntheticDirectoryNode(LOBE_PATH, 'lobe')),
       ]);
 
       return [...ordinaryNodes, lobeNode];
     }
 
-    const syntheticChildren = this.listSyntheticChildren(normalizedPath);
+    const syntheticChildren = listSyntheticChildren(normalizedPath);
 
     if (syntheticChildren) return syntheticChildren;
 
@@ -168,12 +161,12 @@ export class AgentDocumentVfsService {
       });
 
       return applyListLimit(
-        nodes.map((node) => this.toMountedNode(node)),
+        nodes.map((node) => toMountedNode(node)),
         options,
       );
     }
 
-    const parentNode = await this.resolveOrdinaryPath(normalizedPath, ctx.agentId);
+    const parentNode = await resolveOrdinaryPath(this.deps, normalizedPath, ctx.agentId);
 
     if (!parentNode) {
       throw new AgentDocumentVfsError(`Path not found: ${normalizedPath}`, 'NOT_FOUND');
@@ -183,7 +176,13 @@ export class AgentDocumentVfsService {
       throw new AgentDocumentVfsError(`Path is not a directory: ${normalizedPath}`, 'BAD_REQUEST');
     }
 
-    return this.listOrdinaryNodes(ctx.agentId, parentNode.documentId, normalizedPath, options);
+    return listOrdinaryNodes(
+      this.deps,
+      ctx.agentId,
+      parentNode.documentId,
+      normalizedPath,
+      options,
+    );
   }
 
   /**
@@ -198,7 +197,7 @@ export class AgentDocumentVfsService {
    */
   async stat(path: string, ctx: AgentDocumentVfsContext): Promise<AgentDocumentStats | undefined> {
     const normalizedPath = normalizeAgentDocumentPath(path);
-    const syntheticNode = this.getSyntheticNode(normalizedPath);
+    const syntheticNode = getSyntheticNode(normalizedPath);
 
     if (syntheticNode) return syntheticNode;
 
@@ -209,11 +208,11 @@ export class AgentDocumentVfsService {
         topicId: ctx.topicId,
       });
 
-      return this.toMountedStats(node);
+      return toMountedStats(node);
     }
 
-    const ordinaryNode = await this.resolveOrdinaryPath(normalizedPath, ctx.agentId);
-    return ordinaryNode ? this.toOrdinaryStats(ordinaryNode, normalizedPath) : undefined;
+    const ordinaryNode = await resolveOrdinaryPath(this.deps, normalizedPath, ctx.agentId);
+    return ordinaryNode ? toOrdinaryStats(ordinaryNode, normalizedPath) : undefined;
   }
 
   /**
@@ -250,7 +249,7 @@ export class AgentDocumentVfsService {
       };
     }
 
-    const node = await this.resolveOrdinaryPath(normalizedPath, ctx.agentId);
+    const node = await resolveOrdinaryPath(this.deps, normalizedPath, ctx.agentId);
 
     if (!node) {
       throw new AgentDocumentVfsError(`Path not found: ${path}`, 'NOT_FOUND');
@@ -290,10 +289,11 @@ export class AgentDocumentVfsService {
     const createMode = options.createMode ?? 'if-missing';
 
     if (isSkillPath(normalizedPath)) {
-      return this.writeMountedSkill(normalizedPath, content, ctx, createMode);
+      return writeMountedSkill(this.deps, normalizedPath, content, ctx, createMode);
     }
 
-    return this.writeOrdinaryDocument(
+    return writeOrdinaryDocument(
+      this.deps,
       normalizedPath,
       content,
       ctx,
@@ -380,7 +380,7 @@ export class AgentDocumentVfsService {
       throw new AgentDocumentVfsError(`Invalid directory path: ${path}`, 'BAD_REQUEST');
     }
 
-    return this.toOrdinaryStats(currentNode, normalizedPath);
+    return toOrdinaryStats(currentNode, normalizedPath);
   }
 
   /**
@@ -420,7 +420,9 @@ export class AgentDocumentVfsService {
     assertNotSelfReferentialCopy(sourcePath, destinationPath, sourceNode);
 
     if (!isSkillPath(sourcePath) && !isSkillPath(destinationPath)) {
-      return this.renameOrdinaryPath(sourcePath, destinationPath, ctx, options);
+      return renameOrdinaryPath(this.deps, sourcePath, destinationPath, ctx, options, (path, ctx) =>
+        this.delete(path, ctx),
+      );
     }
 
     const copied = await this.copy(sourcePath, destinationPath, ctx, options);
@@ -502,17 +504,17 @@ export class AgentDocumentVfsService {
     const normalizedPath = normalizeAgentDocumentPath(path);
 
     if (isSkillPath(normalizedPath)) {
-      await this.deleteMountedSkill(normalizedPath, ctx);
+      await deleteMountedSkill(this.deps, normalizedPath, ctx);
       return;
     }
 
-    const node = await this.resolveOrdinaryPath(normalizedPath, ctx.agentId);
+    const node = await resolveOrdinaryPath(this.deps, normalizedPath, ctx.agentId);
 
     if (!node) {
       throw new AgentDocumentVfsError(`Path not found: ${path}`, 'NOT_FOUND');
     }
 
-    const subtree = await this.collectOrdinarySubtree(node, ctx.agentId, true);
+    const subtree = await collectOrdinarySubtree(this.deps, node, ctx.agentId, true);
 
     if (node.fileType === DOCUMENT_FOLDER_TYPE && !options.recursive) {
       throw new AgentDocumentVfsError(
@@ -539,24 +541,7 @@ export class AgentDocumentVfsService {
    * - Flat trash entries with reconstructed paths
    */
   async listTrash(ctx: AgentDocumentVfsContext, path?: string): Promise<AgentDocumentTrashEntry[]> {
-    const deletedDocs = await this.agentDocumentModel.listDeletedByAgent(ctx.agentId);
-    const entries = await Promise.all(
-      deletedDocs.map(async (doc) => {
-        const path = await this.buildOrdinaryPathFromNode(doc, ctx.agentId);
-        return {
-          ...this.toOrdinaryStats(doc, path),
-          deleteReason: doc.deleteReason,
-          deletedAt: doc.deletedAt ?? new Date(0),
-        } satisfies AgentDocumentTrashEntry;
-      }),
-    );
-
-    if (!path) return entries;
-
-    const normalizedPath = normalizeAgentDocumentPath(path);
-    return entries.filter(
-      (entry) => entry.path === normalizedPath || entry.path.startsWith(`${normalizedPath}/`),
-    );
+    return listTrash(this.deps, ctx, path);
   }
 
   /**
@@ -572,42 +557,7 @@ export class AgentDocumentVfsService {
     agentDocumentId: string,
     ctx: AgentDocumentVfsContext,
   ): Promise<AgentDocumentStats> {
-    const root = await this.agentDocumentModel.findByIdWithOptions(agentDocumentId, {
-      includeDeleted: true,
-    });
-
-    if (!root?.deletedAt) {
-      throw new AgentDocumentVfsError(`Trash entry not found: ${agentDocumentId}`, 'NOT_FOUND');
-    }
-
-    const ancestors = await this.collectDeletedAncestors(root, ctx.agentId);
-    const subtree = await this.collectOrdinarySubtree(root, ctx.agentId, true);
-
-    for (const ancestor of ancestors.reverse()) {
-      if (ancestor.deletedAt) {
-        await this.agentDocumentModel.restore(ancestor.id);
-      }
-    }
-
-    for (const item of subtree) {
-      if (item.deletedAt) {
-        await this.agentDocumentModel.restore(item.id);
-      }
-    }
-
-    const restored = await this.resolveOrdinaryPath(
-      await this.buildOrdinaryPathFromNode(root, ctx.agentId),
-      ctx.agentId,
-    );
-
-    if (!restored) {
-      throw new AgentDocumentVfsError(`Failed to restore path: ${agentDocumentId}`, 'BAD_REQUEST');
-    }
-
-    return this.toOrdinaryStats(
-      restored,
-      await this.buildOrdinaryPathFromNode(restored, ctx.agentId),
-    );
+    return restoreFromTrash(this.deps, agentDocumentId, ctx);
   }
 
   /**
@@ -620,106 +570,25 @@ export class AgentDocumentVfsService {
    * - Void
    */
   async deletePermanently(agentDocumentId: string, ctx: AgentDocumentVfsContext): Promise<void> {
-    const root = await this.agentDocumentModel.findByIdWithOptions(agentDocumentId, {
-      includeDeleted: true,
-    });
-
-    if (!root?.deletedAt) {
-      throw new AgentDocumentVfsError(`Trash entry not found: ${agentDocumentId}`, 'NOT_FOUND');
-    }
-
-    const subtree = await this.collectOrdinarySubtree(root, ctx.agentId, true);
-
-    for (const item of subtree.reverse()) {
-      const fileIds = await this.agentDocumentModel.permanentlyDelete(item.id);
-      for (const fileId of fileIds) {
-        await this.fileService.removeUnreferencedFile(fileId, FileSource.AgentDocument);
-      }
-    }
+    return deletePermanently(this.deps, agentDocumentId, ctx);
   }
 
   async restoreFromTrashByPath(
     path: string,
     ctx: AgentDocumentVfsContext,
   ): Promise<AgentDocumentStats> {
-    const entry = await this.findTrashEntryByPath(path, ctx);
-
-    if (!entry) {
-      throw new AgentDocumentVfsError(`Trash entry not found: ${path}`, 'NOT_FOUND');
-    }
-
-    return this.restoreFromTrash(entry.agentDocumentId!, ctx);
+    return restoreFromTrashByPath(this.deps, path, ctx);
   }
 
   async deletePermanentlyByPath(path: string, ctx: AgentDocumentVfsContext): Promise<void> {
-    const entry = await this.findTrashEntryByPath(path, ctx);
-
-    if (!entry) {
-      throw new AgentDocumentVfsError(`Trash entry not found: ${path}`, 'NOT_FOUND');
-    }
-
-    await this.deletePermanently(entry.agentDocumentId!, ctx);
-  }
-
-  private async listOrdinaryNodes(
-    agentId: string,
-    parentId: string | null,
-    parentPath: string,
-    options: AgentDocumentListOptions = {},
-  ): Promise<AgentDocumentNode[]> {
-    const docs = await this.agentDocumentModel.listByParent(agentId, parentId, {
-      cursor: options.cursor,
-    });
-    const visibleDocs = selectOldestByFilename(docs);
-    return applyListLimit(
-      visibleDocs.map((doc) =>
-        this.toOrdinaryNode(doc, buildOrdinaryPath(parentPath, doc.filename)),
-      ),
-      options,
-    );
-  }
-
-  private async resolveOrdinaryPath(
-    path: string,
-    agentId: string,
-  ): Promise<AgentDocument | undefined> {
-    return this.resolveOrdinaryPathWithOptions(path, agentId);
-  }
-
-  private async resolveOrdinaryPathWithOptions(
-    path: string,
-    agentId: string,
-    options?: { includeDeleted?: boolean },
-  ): Promise<AgentDocument | undefined> {
-    if (path === './') return undefined;
-
-    const segments = splitAgentDocumentPath(path);
-    let parentId: string | null = null;
-    let current: AgentDocument | undefined;
-
-    for (const segment of segments) {
-      const candidates = await this.agentDocumentModel.listByParentAndFilename(
-        agentId,
-        parentId,
-        segment,
-        {
-          ...options,
-        },
-      );
-
-      current = selectOldestAgentDocument(candidates);
-      if (!current) return undefined;
-      parentId = current.documentId;
-    }
-
-    return current;
+    return deletePermanentlyByPath(this.deps, path, ctx);
   }
 
   private async listChildrenForRecursiveCopy(
     path: string,
     ctx: AgentDocumentVfsContext,
   ): Promise<AgentDocumentNode[]> {
-    const syntheticChildren = this.listSyntheticChildren(path);
+    const syntheticChildren = listSyntheticChildren(path);
 
     if (syntheticChildren) return syntheticChildren;
 
@@ -730,10 +599,10 @@ export class AgentDocumentVfsService {
         topicId: ctx.topicId,
       });
 
-      return nodes.map((node) => this.toMountedNode(node));
+      return nodes.map((node) => toMountedNode(node));
     }
 
-    const parentNode = await this.resolveOrdinaryPath(path, ctx.agentId);
+    const parentNode = await resolveOrdinaryPath(this.deps, path, ctx.agentId);
 
     if (!parentNode) {
       throw new AgentDocumentVfsError(`Path not found: ${path}`, 'NOT_FOUND');
@@ -754,652 +623,6 @@ export class AgentDocumentVfsService {
       );
     }
 
-    return docs.map((doc) => this.toOrdinaryNode(doc, buildOrdinaryPath(path, doc.filename)));
-  }
-
-  private async writeMountedSkill(
-    path: string,
-    content: string,
-    ctx: AgentDocumentVfsContext,
-    createMode: NonNullable<AgentDocumentWriteOptions['createMode']>,
-  ): Promise<AgentDocumentStats> {
-    const existing = await this.skillMount
-      .get({
-        agentId: ctx.agentId,
-        path,
-        topicId: ctx.topicId,
-      })
-      .catch((error) => {
-        if (error instanceof AgentDocumentVfsError && error.code === 'NOT_FOUND') return undefined;
-        throw error;
-      });
-
-    if (!existing && createMode === 'must-exist') {
-      throw new AgentDocumentVfsError(`Path not found: ${path}`, 'NOT_FOUND');
-    }
-
-    if (existing && createMode === 'always-new') {
-      throw new AgentDocumentVfsError(`Path already exists: ${path}`, 'CONFLICT');
-    }
-
-    let nextNode: SkillMountNode;
-
-    if (existing) {
-      nextNode = await this.skillMount.update({
-        agentId: ctx.agentId,
-        content,
-        path,
-        topicId: ctx.topicId,
-      });
-    } else {
-      const { namespace, skillName } = inferMountedSkillIdentity(path);
-      nextNode = await this.skillMount.create({
-        agentId: ctx.agentId,
-        content,
-        skillName,
-        targetNamespace: namespace,
-        topicId: ctx.topicId,
-      });
-    }
-
-    return this.toMountedStats(nextNode);
-  }
-
-  private async writeOrdinaryDocument(
-    path: string,
-    content: string,
-    ctx: AgentDocumentVfsContext,
-    createMode: NonNullable<AgentDocumentWriteOptions['createMode']>,
-    contentFormat: NonNullable<AgentDocumentWriteOptions['contentFormat']>,
-  ): Promise<AgentDocumentStats> {
-    if (path === './' || path === LOBE_PATH || path.startsWith(`${LOBE_PATH}/`)) {
-      throw new AgentDocumentVfsError(`Cannot write reserved path: ${path}`, 'BAD_REQUEST');
-    }
-
-    const exactExisting = await this.resolveOrdinaryPath(path, ctx.agentId);
-    const writablePath = exactExisting ? path : normalizeOrdinaryDocumentPath(path);
-    const existing = exactExisting ?? (await this.resolveOrdinaryPath(writablePath, ctx.agentId));
-
-    if (existing) {
-      if (existing.fileType === DOCUMENT_FOLDER_TYPE) {
-        throw new AgentDocumentVfsError(`Path is not a file: ${writablePath}`, 'BAD_REQUEST');
-      }
-
-      if (createMode === 'always-new') {
-        throw new AgentDocumentVfsError(`Path already exists: ${writablePath}`, 'BAD_REQUEST');
-      }
-
-      if (contentFormat === 'raw') {
-        await this.agentDocumentModel.update(existing.id, {
-          content,
-          editorData: null,
-          fileType: RAW_TEXT_DOCUMENT_FILE_TYPE,
-        });
-      } else {
-        const snapshot = await createAgentMarkdownSnapshot(content);
-        await this.agentDocumentModel.update(existing.id, {
-          content: snapshot.content,
-          editorData: snapshot.editorData,
-        });
-      }
-
-      const updated = await this.resolveOrdinaryPath(writablePath, ctx.agentId);
-
-      if (!updated) {
-        throw new AgentDocumentVfsError(
-          `Failed to reload updated path: ${writablePath}`,
-          'BAD_REQUEST',
-        );
-      }
-
-      return this.toOrdinaryStats(updated, writablePath);
-    }
-
-    if (createMode === 'must-exist') {
-      throw new AgentDocumentVfsError(`Path not found: ${writablePath}`, 'NOT_FOUND');
-    }
-
-    const segments = splitAgentDocumentPath(writablePath);
-    const filename = segments.at(-1);
-
-    if (!filename) {
-      throw new AgentDocumentVfsError(`Invalid VFS path: ${writablePath}`, 'BAD_REQUEST');
-    }
-
-    const parentPath = segments.length === 1 ? './' : `./${segments.slice(0, -1).join('/')}`;
-    const parentNode =
-      parentPath === './' ? undefined : await this.resolveOrdinaryPath(parentPath, ctx.agentId);
-
-    if (parentPath !== './' && !parentNode) {
-      throw new AgentDocumentVfsError(`Parent path not found: ${parentPath}`, 'BAD_REQUEST');
-    }
-
-    if (parentNode && parentNode.fileType !== DOCUMENT_FOLDER_TYPE) {
-      throw new AgentDocumentVfsError(
-        `Parent path is not a directory: ${parentPath}`,
-        'BAD_REQUEST',
-      );
-    }
-
-    const normalizedFilename = buildDocumentFilename(filename);
-    if (contentFormat === 'raw') {
-      const created = await this.agentDocumentModel.create(
-        ctx.agentId,
-        normalizedFilename,
-        content,
-        {
-          fileType: RAW_TEXT_DOCUMENT_FILE_TYPE,
-          parentId: parentNode?.documentId ?? null,
-          title: normalizedFilename,
-        },
-      );
-
-      return this.toOrdinaryStats(created, buildOrdinaryPath(parentPath, normalizedFilename));
-    }
-
-    const snapshot = await createAgentMarkdownSnapshot(content);
-    const created = await this.agentDocumentModel.create(
-      ctx.agentId,
-      normalizedFilename,
-      snapshot.content,
-      {
-        editorData: snapshot.editorData,
-        parentId: parentNode?.documentId ?? null,
-        title: normalizedFilename,
-      },
-    );
-
-    return this.toOrdinaryStats(created, buildOrdinaryPath(parentPath, normalizedFilename));
-  }
-
-  private async renameOrdinaryPath(
-    sourcePath: string,
-    destinationPath: string,
-    ctx: AgentDocumentVfsContext,
-    options: AgentDocumentCopyOptions,
-  ): Promise<AgentDocumentStats> {
-    if (
-      destinationPath === './' ||
-      destinationPath === LOBE_PATH ||
-      destinationPath.startsWith(`${LOBE_PATH}/`)
-    ) {
-      throw new AgentDocumentVfsError(
-        `Cannot rename to reserved path: ${destinationPath}`,
-        'BAD_REQUEST',
-      );
-    }
-
-    const sourceNode = await this.resolveOrdinaryPath(sourcePath, ctx.agentId);
-
-    if (!sourceNode) {
-      throw new AgentDocumentVfsError(`Path not found: ${sourcePath}`, 'NOT_FOUND');
-    }
-
-    const existingDestination = await this.resolveOrdinaryPath(destinationPath, ctx.agentId);
-
-    if (existingDestination) {
-      if (!options.overwrite) {
-        throw new AgentDocumentVfsError(`Path already exists: ${destinationPath}`, 'BAD_REQUEST');
-      }
-
-      if (existingDestination.fileType === DOCUMENT_FOLDER_TYPE) {
-        throw new AgentDocumentVfsError(
-          `Cannot overwrite directory path: ${destinationPath}`,
-          'BAD_REQUEST',
-        );
-      }
-
-      await this.delete(destinationPath, ctx);
-    }
-
-    const segments = splitAgentDocumentPath(destinationPath);
-    const filename = segments.at(-1);
-
-    if (!filename) {
-      throw new AgentDocumentVfsError(`Invalid VFS path: ${destinationPath}`, 'BAD_REQUEST');
-    }
-
-    const parentPath = segments.length === 1 ? './' : `./${segments.slice(0, -1).join('/')}`;
-    const parentNode =
-      parentPath === './' ? undefined : await this.resolveOrdinaryPath(parentPath, ctx.agentId);
-
-    if (parentPath !== './' && !parentNode) {
-      throw new AgentDocumentVfsError(`Parent path not found: ${parentPath}`, 'BAD_REQUEST');
-    }
-
-    if (parentNode && parentNode.fileType !== DOCUMENT_FOLDER_TYPE) {
-      throw new AgentDocumentVfsError(
-        `Parent path is not a directory: ${parentPath}`,
-        'BAD_REQUEST',
-      );
-    }
-
-    const parentId = parentNode?.documentId ?? null;
-    const moved = await this.agentDocumentModel.movePath(sourceNode.id, {
-      filename,
-      parentId,
-    });
-
-    if (!moved) {
-      throw new AgentDocumentVfsError(`Failed to rename path: ${sourcePath}`, 'BAD_REQUEST');
-    }
-
-    return this.toOrdinaryStats(moved, destinationPath);
-  }
-
-  private toOrdinaryNode(doc: AgentDocument, path: string): AgentDocumentNode {
-    return {
-      agentDocumentId: doc.id,
-      createdAt: doc.createdAt,
-      documentId: doc.documentId,
-      id: doc.id,
-      mode: doc.accessSelf,
-      mount: {
-        driver: 'agent-documents',
-        source: 'documents',
-      },
-      name: doc.filename,
-      path,
-      size: doc.content.length,
-      type: doc.fileType === DOCUMENT_FOLDER_TYPE ? 'directory' : 'file',
-      updatedAt: doc.updatedAt,
-    };
-  }
-
-  private toOrdinaryStats(doc: AgentDocument, path: string): AgentDocumentStats {
-    return {
-      ...this.toOrdinaryNode(doc, path),
-      contentType:
-        doc.fileType === DOCUMENT_FOLDER_TYPE ? undefined : getAgentDocumentContentType(doc),
-      deleteReason: doc.deleteReason,
-      deletedAt: doc.deletedAt,
-      metadata: doc.metadata ?? undefined,
-    };
-  }
-
-  private toMountedNode(node: SkillMountNode): AgentDocumentNode {
-    return {
-      id: `skills:${node.namespace}:${node.path}`,
-      mode: skillNodeToMode(node),
-      mount: {
-        driver: 'skills',
-        namespace: node.namespace,
-        source: resolveSkillMountSource(node.namespace),
-      },
-      name: node.name,
-      path: node.path,
-      size: node.size ?? (node.type === 'file' ? node.content?.length : undefined),
-      type: node.type,
-    };
-  }
-
-  private toMountedStats(node: SkillMountNode): AgentDocumentStats {
-    return {
-      ...this.toMountedNode(node),
-      contentType: node.contentType,
-    };
-  }
-
-  private createSyntheticDirectoryNode(path: string, name: string): AgentDocumentNode {
-    return {
-      id: `synthetic:${path}`,
-      mode: SYNTHETIC_DIRECTORY_MODE,
-      mount: {
-        driver: 'synthetic',
-        source: 'virtual',
-      },
-      name,
-      path,
-      type: 'directory',
-    };
-  }
-
-  private getSyntheticNode(path: string): AgentDocumentStats | undefined {
-    if (path === './') return { ...this.createSyntheticDirectoryNode('./', '') };
-    if (path === LOBE_PATH) return { ...this.createSyntheticDirectoryNode(LOBE_PATH, 'lobe') };
-    if (path === LOBE_SKILLS_PATH) {
-      return { ...this.createSyntheticDirectoryNode(LOBE_SKILLS_PATH, 'skills') };
-    }
-
-    const namespace = getSkillNamespaceDirectory(path);
-
-    if (namespace) {
-      const name = path.split('/').at(-1)!;
-      return {
-        ...this.createSyntheticDirectoryNode(path, name),
-        mount: buildSkillMountInfo(namespace),
-      };
-    }
-
-    return undefined;
-  }
-
-  private listSyntheticChildren(path: string): AgentDocumentNode[] | undefined {
-    if (path === LOBE_PATH) {
-      return [this.createSyntheticDirectoryNode(LOBE_SKILLS_PATH, 'skills')];
-    }
-
-    if (path === LOBE_SKILLS_PATH) {
-      return [
-        this.createSyntheticDirectoryNode('./lobe/skills/builtin', 'builtin'),
-        this.createSyntheticDirectoryNode('./lobe/skills/installed', 'installed'),
-        this.createSyntheticDirectoryNode('./lobe/skills/agent', 'agent'),
-      ];
-    }
-
-    if (path === './lobe/skills/installed') {
-      return [
-        this.createSyntheticDirectoryNode('./lobe/skills/installed/all', 'all'),
-        this.createSyntheticDirectoryNode('./lobe/skills/installed/active', 'active'),
-      ];
-    }
-
-    const namespace = getSkillNamespaceCollectionParent(path);
-
-    if (namespace) {
-      return [
-        {
-          ...this.createSyntheticDirectoryNode(
-            getUnifiedSkillNamespaceRootPath(namespace),
-            'skills',
-          ),
-          mount: buildSkillMountInfo(namespace),
-        },
-      ];
-    }
-
-    return undefined;
-  }
-
-  private async collectOrdinarySubtree(
-    root: AgentDocument,
-    agentId: string,
-    includeDeleted: boolean,
-  ): Promise<AgentDocument[]> {
-    const nodes = [root];
-
-    if (root.fileType !== DOCUMENT_FOLDER_TYPE) return nodes;
-
-    const queue: AgentDocument[] = [root];
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const children = await this.agentDocumentModel.listByParent(agentId, current.documentId, {
-        includeDeleted,
-      });
-
-      for (const child of children) {
-        nodes.push(child);
-        if (child.fileType === DOCUMENT_FOLDER_TYPE) {
-          queue.push(child);
-        }
-      }
-    }
-
-    return nodes;
-  }
-
-  private async collectDeletedAncestors(
-    node: AgentDocument,
-    agentId: string,
-  ): Promise<AgentDocument[]> {
-    const ancestors: AgentDocument[] = [];
-    let parentId = node.parentId;
-
-    while (parentId) {
-      const parent = await this.agentDocumentModel.findByDocumentId(agentId, parentId, {
-        includeDeleted: true,
-      });
-
-      if (!parent) break;
-      ancestors.push(parent);
-      parentId = parent.parentId;
-    }
-
-    return ancestors;
-  }
-
-  private async buildOrdinaryPathFromNode(node: AgentDocument, agentId: string): Promise<string> {
-    const segments = [node.filename];
-    let parentId = node.parentId;
-
-    while (parentId) {
-      const parent = await this.agentDocumentModel.findByDocumentId(agentId, parentId, {
-        includeDeleted: true,
-      });
-
-      if (!parent) break;
-      segments.unshift(parent.filename);
-      parentId = parent.parentId;
-    }
-
-    return `./${segments.join('/')}`;
-  }
-
-  private async deleteMountedSkill(path: string, ctx: AgentDocumentVfsContext) {
-    const { namespace, skillName } = inferMountedSkillIdentity(resolveWritableMountedPath(path));
-
-    if (namespace !== 'agent') {
-      throw new AgentDocumentVfsError(`Path is read-only: ${path}`, 'FORBIDDEN');
-    }
-
-    await this.skillMount.delete({
-      agentId: ctx.agentId,
-      path: `${getUnifiedSkillNamespaceRootPath(namespace)}/${skillName}/SKILL.md`,
-      topicId: ctx.topicId,
-    });
-  }
-
-  private async findTrashEntryByPath(path: string, ctx: AgentDocumentVfsContext) {
-    const normalizedPath = normalizeAgentDocumentPath(path);
-    const entries = await this.listTrash(ctx);
-    return entries.find((entry) => entry.path === normalizedPath);
+    return docs.map((doc) => toOrdinaryNode(doc, buildOrdinaryPath(path, doc.filename)));
   }
 }
-
-const normalizeAgentDocumentPath = (path: string) => {
-  const raw = path.trim();
-  const withDot =
-    raw === '/' ? './' : raw.startsWith('./') ? raw : raw.startsWith('/') ? `.${raw}` : `./${raw}`;
-  const collapsed = withDot.replaceAll(/\/+/g, '/');
-
-  if (collapsed.includes('/./') || collapsed.includes('/../') || collapsed.endsWith('/..')) {
-    throw new AgentDocumentVfsError(`Invalid VFS path: ${path}`, 'BAD_REQUEST');
-  }
-
-  const normalized = collapsed === './' ? './' : collapsed.replace(/\/$/, '');
-  return normalized;
-};
-
-const splitAgentDocumentPath = (path: string) =>
-  path.replace(/^\.\//, '').split('/').filter(Boolean);
-
-const buildOrdinaryPath = (parentPath: string, filename: string) =>
-  parentPath === './' ? `./${filename}` : `${parentPath}/${filename}`;
-
-const normalizeOrdinaryDocumentPath = (path: string): string => {
-  const segments = splitAgentDocumentPath(path);
-  const filename = segments.at(-1);
-  if (!filename) return path;
-
-  const parentPath = segments.length === 1 ? './' : `./${segments.slice(0, -1).join('/')}`;
-  const normalizedFilename = buildDocumentFilename(filename);
-  return buildOrdinaryPath(parentPath, normalizedFilename);
-};
-
-const normalizeListLimit = (limit?: number) => {
-  if (limit === undefined) return DEFAULT_LIST_LIMIT;
-
-  // Clamp caller-provided limits so path APIs stay bounded even when invoked by tools.
-  return Math.min(Math.max(Math.trunc(limit), 1), MAX_LIST_LIMIT);
-};
-
-const applyListLimit = <T>(items: T[], options: AgentDocumentListOptions) =>
-  items.slice(0, normalizeListLimit(options.limit));
-
-const compareAgentDocumentAge = (left: AgentDocument, right: AgentDocument) => {
-  const leftCreatedAt = left.createdAt?.getTime?.() ?? 0;
-  const rightCreatedAt = right.createdAt?.getTime?.() ?? 0;
-
-  if (leftCreatedAt !== rightCreatedAt) return leftCreatedAt - rightCreatedAt;
-
-  return left.id.localeCompare(right.id);
-};
-
-const selectOldestAgentDocument = (documents: AgentDocument[]) =>
-  [...documents].sort(compareAgentDocumentAge)[0];
-
-const selectOldestByFilename = (documents: AgentDocument[]) => {
-  const visibleByFilename = new Map<string, AgentDocument>();
-
-  for (const document of [...documents].sort(compareAgentDocumentAge)) {
-    if (visibleByFilename.has(document.filename)) continue;
-    visibleByFilename.set(document.filename, document);
-  }
-
-  return [...visibleByFilename.values()];
-};
-
-const isDescendantPath = (parentPath: string, childPath: string) =>
-  childPath !== parentPath && childPath.startsWith(`${parentPath}/`);
-
-const assertNotSelfReferentialCopy = (
-  sourcePath: string,
-  destinationPath: string,
-  sourceNode: AgentDocumentStats,
-) => {
-  if (sourcePath === destinationPath) {
-    throw new AgentDocumentVfsError(`Cannot copy path onto itself: ${sourcePath}`, 'BAD_REQUEST');
-  }
-
-  if (sourceNode.type === 'directory' && isDescendantPath(sourcePath, destinationPath)) {
-    throw new AgentDocumentVfsError(
-      `Cannot copy directory into its own subtree: ${sourcePath} -> ${destinationPath}`,
-      'BAD_REQUEST',
-    );
-  }
-};
-
-const sliceReadContent = (
-  content: string,
-  loc?: [number, number],
-): Omit<AgentDocumentReadResult, 'contentType' | 'path'> => {
-  const lines = content.split('\n');
-  const totalLineCount = lines.length;
-  const totalCharCount = content.length;
-  const actualLoc: [number, number] = loc ?? [0, totalLineCount];
-  const [startLine, endLine] = actualLoc;
-  const selectedLines = lines.slice(startLine, endLine);
-  const selectedContent = selectedLines.join('\n');
-
-  return {
-    charCount: selectedContent.length,
-    content: selectedContent,
-    lineCount: selectedLines.length,
-    loc: actualLoc,
-    totalCharCount,
-    totalLineCount,
-  };
-};
-
-const inferMountedSkillIdentity = (path: string) => {
-  for (const namespace of ['agent'] as const) {
-    const prefix = getUnifiedSkillNamespaceRootPath(namespace);
-
-    if (path === prefix || !path.startsWith(`${prefix}/`)) continue;
-
-    const relativePath = path.slice(prefix.length + 1);
-    const [skillName] = relativePath.split('/');
-
-    if (!skillName) {
-      throw new AgentDocumentVfsError(
-        `Expected a skill path, but received namespace root: ${path}`,
-        'BAD_REQUEST',
-      );
-    }
-
-    return { namespace, skillName };
-  }
-
-  throw new AgentDocumentVfsError(`Namespace is not writable: ${path}`, 'FORBIDDEN');
-};
-
-const getSkillNamespaceDirectory = (path: string): SkillNamespace | undefined => {
-  for (const namespace of SKILL_NAMESPACES) {
-    const parentPath = getUnifiedSkillNamespaceParentPath(namespace);
-    const rootPath = getUnifiedSkillNamespaceRootPath(namespace);
-
-    if (path === parentPath || path === rootPath) return namespace;
-  }
-
-  return undefined;
-};
-
-const getSkillNamespaceCollectionParent = (path: string): SkillNamespace | undefined => {
-  for (const namespace of SKILL_NAMESPACES) {
-    if (path === getUnifiedSkillNamespaceParentPath(namespace)) return namespace;
-  }
-
-  return undefined;
-};
-
-const buildSkillMountInfo = (namespace: SkillNamespace) => ({
-  driver: 'skills',
-  namespace,
-  source: resolveSkillMountSource(namespace),
-});
-
-const resolveSkillMountSource = (namespace: SkillNamespace) => {
-  if (namespace === 'builtin') return 'builtin';
-  if (namespace === 'installed-active' || namespace === 'installed-all') return 'installed';
-  return 'documents';
-};
-
-const SKILL_MOUNT_ACCESS = {
-  'agent': AgentAccess.READ | AgentAccess.LIST | AgentAccess.WRITE | AgentAccess.DELETE,
-  'builtin': AgentAccess.READ | AgentAccess.LIST,
-  'installed-active': AgentAccess.READ | AgentAccess.LIST,
-  'installed-all': AgentAccess.READ | AgentAccess.LIST,
-} as const satisfies Record<SkillNamespace, AgentAccess>;
-
-const skillNodeToMode = (node: SkillMountNode): AgentAccess => {
-  return SKILL_MOUNT_ACCESS[node.namespace];
-};
-
-const resolveWritableMountedPath = (path: string) => {
-  if (!isSkillPath(path)) return path;
-
-  for (const namespace of ['agent', 'builtin', 'installed-active', 'installed-all'] as const) {
-    const prefix = getUnifiedSkillNamespaceRootPath(namespace);
-
-    if (path === prefix) {
-      throw new AgentDocumentVfsError(
-        `Expected a skill path, but received namespace root: ${path}`,
-        'BAD_REQUEST',
-      );
-    }
-
-    if (!path.startsWith(`${prefix}/`)) continue;
-
-    const relativePath = path.slice(prefix.length + 1);
-    const [skillName, ...rest] = relativePath.split('/');
-
-    if (!skillName) {
-      throw new AgentDocumentVfsError(
-        `Expected a skill path, but received namespace root: ${path}`,
-        'BAD_REQUEST',
-      );
-    }
-
-    if (rest.length === 0) {
-      return `${prefix}/${skillName}/SKILL.md`;
-    }
-
-    return path;
-  }
-
-  return path;
-};
-
-const resolveReadablePath = (path: string) =>
-  isSkillPath(path) ? resolveWritableMountedPath(path) : path;

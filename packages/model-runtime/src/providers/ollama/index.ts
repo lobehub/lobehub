@@ -1,17 +1,24 @@
 import type { ChatModelCard } from '@lobechat/types';
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { ModelProvider } from 'model-bank';
-import type { Tool } from 'ollama/browser';
+import type { ChatResponse, Tool } from 'ollama/browser';
 import { Ollama } from 'ollama/browser';
 import type { ClientOptions } from 'openai';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
+import {
+  parseStructuredOutputText,
+  parseStructuredToolArguments,
+  StructuredOutputError,
+} from '../../core/openaiCompatibleFactory/structuredOutput';
 import { convertIterableToStream, createModelPullStream, OllamaStream } from '../../core/streams';
 import type {
   ChatMethodOptions,
   ChatStreamPayload,
   Embeddings,
   EmbeddingsPayload,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
   ModelRequestOptions,
   OpenAIChatMessage,
   PullModelParams,
@@ -86,48 +93,104 @@ export class LobeOllamaAI implements LobeRuntimeAI {
         headers: options?.headers,
       });
     } catch (error) {
-      const e = error as {
-        error: any;
-        message: string;
-        name: string;
-        status_code: number;
-      };
-      const errorDetail = {
-        ...(typeof e.error !== 'string' ? e.error : undefined),
-        message: String(e.error?.message || e.message),
-        name: e.name,
-        status_code: e.status_code,
-      };
+      throw await this.toRuntimeError(error);
+    }
+  }
 
-      const fetchErrorMessage = e.message?.toLowerCase();
-      if (fetchErrorMessage === 'fetch failed' || fetchErrorMessage === 'failed to fetch') {
-        // A long-running chat request can fail even while the local Ollama service remains healthy.
-        // See https://github.com/lobehub/lobehub/issues/17316
-        try {
-          await this.client.list();
-        } catch {
-          throw AgentRuntimeError.chat({
-            error: {
-              message: 'please check whether your ollama service is available',
-            },
-            errorType: AgentRuntimeErrorType.OllamaServiceUnavailable,
-            provider: ModelProvider.Ollama,
-          });
-        }
+  async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    const { messages, model, schema, thinking, tools } = payload;
+    if (!tools && !schema) throw new Error('tools or schema is required');
 
-        throw AgentRuntimeError.chat({
-          error: errorDetail,
-          errorType: AgentRuntimeErrorType.ProviderNetworkError,
+    // `client.abort()` only reaches streamed requests, so a cancelled structured
+    // call gets a one-off client whose fetch carries the caller's signal.
+    const signal = options?.signal;
+    const client = signal
+      ? new Ollama({
+          fetch: (input, init) => fetch(input, { ...init, signal }),
+          ...(this.baseURL && { host: this.baseURL }),
+        })
+      : this.client;
+
+    let response: ChatResponse;
+    try {
+      response = await client.chat({
+        format: tools ? undefined : schema!.schema,
+        messages,
+        model,
+        stream: false,
+        // Ollama rejects `think: true` on models without thinking, so only ever turn it off.
+        ...(thinking?.type === 'disabled' && { think: false }),
+        tools: tools as Tool[] | undefined,
+      });
+    } catch (error) {
+      throw await this.toRuntimeError(error);
+    }
+
+    if (response.prompt_eval_count !== undefined || response.eval_count !== undefined) {
+      const inputTokens = response.prompt_eval_count ?? 0;
+      const outputTokens = response.eval_count ?? 0;
+      await options?.onUsage?.({
+        inputTextTokens: inputTokens,
+        outputTextTokens: outputTokens,
+        totalInputTokens: inputTokens,
+        totalOutputTokens: outputTokens,
+        totalTokens: inputTokens + outputTokens,
+      });
+    }
+
+    if (!tools) return parseStructuredOutputText(response.message?.content);
+
+    const toolCalls = response.message?.tool_calls;
+    if (!toolCalls?.length) throw new StructuredOutputError('no tool calls returned');
+
+    return toolCalls.map((item) => ({
+      arguments: parseStructuredToolArguments(item.function.arguments),
+      name: item.function.name,
+    }));
+  }
+
+  private async toRuntimeError(error: unknown) {
+    const e = error as {
+      error: any;
+      message: string;
+      name: string;
+      status_code: number;
+    };
+    const errorDetail = {
+      ...(typeof e.error !== 'string' ? e.error : undefined),
+      message: String(e.error?.message || e.message),
+      name: e.name,
+      status_code: e.status_code,
+    };
+
+    const fetchErrorMessage = e.message?.toLowerCase();
+    if (fetchErrorMessage === 'fetch failed' || fetchErrorMessage === 'failed to fetch') {
+      // A long-running chat request can fail even while the local Ollama service remains healthy.
+      // See https://github.com/lobehub/lobehub/issues/17316
+      try {
+        await this.client.list();
+      } catch {
+        return AgentRuntimeError.chat({
+          error: {
+            message: 'please check whether your ollama service is available',
+          },
+          errorType: AgentRuntimeErrorType.OllamaServiceUnavailable,
           provider: ModelProvider.Ollama,
         });
       }
 
-      throw AgentRuntimeError.chat({
+      return AgentRuntimeError.chat({
         error: errorDetail,
-        errorType: AgentRuntimeErrorType.OllamaBizError,
+        errorType: AgentRuntimeErrorType.ProviderNetworkError,
         provider: ModelProvider.Ollama,
       });
     }
+
+    return AgentRuntimeError.chat({
+      error: errorDetail,
+      errorType: AgentRuntimeErrorType.OllamaBizError,
+      provider: ModelProvider.Ollama,
+    });
   }
 
   async embeddings(payload: EmbeddingsPayload): Promise<Embeddings[]> {

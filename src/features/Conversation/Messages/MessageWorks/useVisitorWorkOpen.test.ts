@@ -61,7 +61,7 @@ describe('useVisitorWorkOpen', () => {
     });
   });
 
-  // Regression (LOBE-14768): a file Work carrying only `fileId` (no persisted
+  // Regression: a file Work carrying only `fileId` (no persisted
   // URL) used to return early, so clicking its card did nothing.
   it('previews a file Work without a persisted URL from the /f/:id proxy', () => {
     const { result } = renderHook(() => useVisitorWorkOpen());

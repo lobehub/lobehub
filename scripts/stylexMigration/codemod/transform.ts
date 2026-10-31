@@ -201,6 +201,54 @@ export const transformSource = (source: string, fileName = 'file.tsx'): Transfor
     return { rest, styleArgs };
   };
 
+  const isEmptyString = (node: ts.Expression) =>
+    (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === '';
+  const operand = (node: ts.Expression) =>
+    ts.isIdentifier(node) ||
+    ts.isPropertyAccessExpression(node) ||
+    ts.isElementAccessExpression(node) ||
+    ts.isCallExpression(node) ||
+    ts.isParenthesizedExpression(node)
+      ? text(node)
+      : `(${text(node)})`;
+  const guarded = (condition: ts.Expression, style: ts.Expression) =>
+    `${operand(condition)} && ${ts.isConditionalExpression(style) ? `(${text(style)})` : text(style)}`;
+
+  /**
+   * StyleX args of a `${styles.a} ${on ? styles.b : ''}` class list. Joined
+   * stylex.props class strings would resolve conflicts by CSS order, so the list
+   * must become one call; any other text in it cannot.
+   */
+  const templateStyleArgs = (tpl: ts.TemplateExpression) => {
+    const unsupported = () => new UnsupportedCssError(`class template ${text(tpl)}`);
+    const literals = [tpl.head.text, ...tpl.templateSpans.map((span) => span.literal.text)];
+    if (literals.some((literal) => literal.trim())) throw unsupported();
+    return tpl.templateSpans.map(({ expression: e }) => {
+      if (isStyleArg(e)) return text(e);
+      if (ts.isConditionalExpression(e) && !containsStyleRef(e.condition)) {
+        if (isStyleArg(e.whenTrue) && isEmptyString(e.whenFalse))
+          return guarded(e.condition, e.whenTrue);
+        if (isEmptyString(e.whenTrue) && isStyleArg(e.whenFalse))
+          return `!${guarded(e.condition, e.whenFalse)}`;
+      }
+      throw unsupported();
+    });
+  };
+  const isStyleTemplate = (node: ts.Node): node is ts.TemplateExpression =>
+    ts.isTemplateExpression(node) && containsStyleRef(node);
+
+  // A class kept in a variable or a lookup object is later combined with other
+  // classes; separate stylex.props calls would resolve by CSS order, not by
+  // argument order. Object values inside JSX props (classNames slots) are fine.
+  const inJsxProp = (n: ts.Node): boolean =>
+    !!n.parent &&
+    (ts.isJsxExpression(n.parent) ||
+      ((ts.isObjectLiteralExpression(n.parent) || ts.isPropertyAssignment(n.parent)) &&
+        inJsxProp(n.parent)));
+  const isStoredOutsideJsx = (node: ts.Node) =>
+    ts.isVariableDeclaration(node.parent) ||
+    (ts.isPropertyAssignment(node.parent) && !inJsxProp(node.parent));
+
   const visit = (node: ts.Node) => {
     if (ts.isJsxAttribute(node) && text(node.name) === 'className' && node.initializer) {
       const init = node.initializer;
@@ -223,33 +271,36 @@ export const transformSource = (source: string, fileName = 'file.tsx'): Transfor
             return;
           }
         }
+        if (isStyleTemplate(expr)) {
+          replace(node, `{...stylex.props(${templateStyleArgs(expr).join(', ')})}`);
+          return;
+        }
       }
+    }
+
+    if (isStyleTemplate(node)) {
+      if (isStoredOutsideJsx(node))
+        throw new UnsupportedCssError('class template stored outside JSX');
+      replace(node, `stylex.props(${templateStyleArgs(node).join(', ')}).className`);
+      return;
     }
 
     if (isCx(node)) {
       const { rest, styleArgs } = splitCx(node);
       if (styleArgs.length > 0) {
-        if (rest.length > 0) mergesOutsideClassName++;
         const props = `stylex.props(${styleArgs.join(', ')}).className`;
+        if (rest.length === 0) {
+          replace(node, props);
+          return;
+        }
+        mergesOutsideClassName++;
         replace(node, `${text(node.expression)}(${[props, ...rest].join(', ')})`);
         return;
       }
     }
 
     if (isStyleArg(node as ts.Expression) && !isStyleArg(node.parent as ts.Expression)) {
-      // A ref kept in a variable or a lookup object is later combined with other
-      // classes; separate stylex.props calls would resolve by CSS order, not by
-      // argument order. Object values inside JSX props (classNames slots) are fine.
-      const inJsxProp = (n: ts.Node): boolean =>
-        !!n.parent &&
-        (ts.isJsxExpression(n.parent) ||
-          ((ts.isObjectLiteralExpression(n.parent) || ts.isPropertyAssignment(n.parent)) &&
-            inJsxProp(n.parent)));
-      if (
-        ts.isVariableDeclaration(node.parent) ||
-        (ts.isPropertyAssignment(node.parent) && !inJsxProp(node.parent))
-      )
-        throw new UnsupportedCssError('style ref stored outside JSX');
+      if (isStoredOutsideJsx(node)) throw new UnsupportedCssError('style ref stored outside JSX');
       replace(node, `stylex.props(${text(node)}).className`);
       return;
     }

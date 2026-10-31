@@ -22,6 +22,8 @@ user-invocable: false
 - Element that also forwards a caller's `className` / `style`: `{...sx([styles.root, active && styles.active], className, style)}` from `@/styles/sx`. Spreading `stylex.props` next to `className` fails `@stylexjs/no-conflicting-props`.
 - Component that lets callers restyle it: take `xstyle?: StyleXStyles` and pass it last in the `sx` / `stylex.props` array. A plain `className` from outside cannot override StyleX rules. Passing a class to `@lobehub/ui` components (`className`, `classNames`) works, because lobe-ui CSS sits in `@layer lobe-ui`.
 - Values follow `@stylexjs/valid-styles`: no multi-value shorthands (`margin: '0 8px'` → `marginBlock` / `marginInline`), and string `flex` (`flex: '1'`).
+- `background`, `animation`, `border` and `border{Top,Right,Bottom,Left}` shorthands compile to no class at all, whatever the value (`border: 'none'` included), without an error. Write longhands: `backgroundColor` (plus `backgroundImage: 'none'` when replacing a `background` shorthand), `animationName` / `animationDuration` / …, `borderWidth` / `borderStyle` / `borderColor`.
+- Check a migration in dev with the DevDock snapshot helper: on the migrated page run `__lobeStyleSnapshot.capture('<name>', '<root selector>')`, swap the files back (`git stash push -- <path>`), reload, run `__lobeStyleSnapshot.compare('<name>')`, then `git stash pop`. Each pair reads `[captured, current]`, here `[migrated, original]`. It lists elements and `::before` / `::after` whose tracked computed styles, box (relative to the root) or text differ; an empty list means those match, not that hover, focus or closed dialogs were checked, so open each state you migrated and compare it too. Keep the window size, scroll everything under the root back to the start, and move the pointer off the compared area.
 - `bun run stylex:migration --list <A|B|C|D>` lists files by how hard they are to move: A flat, B self pseudo-classes, C descendant / ancestor coupling (use `stylex.defaultMarker()` + `stylex.when.ancestor()` or `xstyle`), D tag / third-party DOM selectors (scoped plain CSS).
 
 ## Component Priority
@@ -68,7 +70,15 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 
 Keep transient state in its smallest useful owner. Extract a custom hook when state transitions and handlers obscure rendering or form a reusable unit; do not extract solely because a component has a particular number of hooks.
 
-Split a component only to establish a real state, reuse, render-update, or mountable-capability boundary. Do not split solely to make files smaller; when a file reaches the 800-line limit in **`source-layout`**, find one of these boundaries rather than cutting at a line count. Decomposing a heavy domain feature into host-assembled atoms is owned by **`compose-atoms`**.
+Split a component only to establish a real state, reuse, render-update, or mountable-capability boundary. Do not split solely to make files smaller; when a file reaches the 1200-line limit in **`source-layout`**, find one of these boundaries rather than cutting at a line count. Decomposing a heavy domain feature into host-assembled atoms is owned by **`compose-atoms`**.
+
+## Popover Exits
+
+An action inside popover content that leaves the popover must close it, or the popover stays over the destination (for example, a plan badge in the user panel navigating to `/settings/plans`).
+
+- Navigation: a host whose content links or navigates keeps `open` state, calls `useCloseOnNavigate(open, () => setOpen(false))` from `@/hooks/useCloseOnNavigate`, and passes the returned key to its `Popover`. This covers links added later, including links from other files. The key matters when navigation hides the host in an `<Activity>` (the home sidebar): a hidden tree sets up no new effects, so the base-ui popup never finishes its exit animation and stays on screen until a remount removes it.
+- Modal handoff or a final pick: call `usePopoverContext().close()` (or the host's setter) before opening the modal or after the pick, as `NavPanel/switcher/SwitcherMenu.tsx` does. Content rendered outside a popover cannot use the context, because its default `close` throws in development.
+- A confirm step whose result appears in the same popover, such as the share-link privacy confirm, keeps it open.
 
 ## Render Performance and Memoization
 

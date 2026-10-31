@@ -82,7 +82,7 @@ describe('getDeleteErrorMessageKey', () => {
     ).toBe('deleteHistoryMigrating');
     expect(
       getDeleteErrorMessageKey(trpcError({ code: 'FORBIDDEN', errorData: { code: 'OWNER_ONLY' } })),
-    ).toBe('deleteSharedOwnerOnly');
+    ).toBe('deleteSharedContentOwnerOnly');
     expect(getDeleteErrorMessageKey(trpcError({ code: 'FORBIDDEN' }))).toBe('manageOnlyCreator');
     expect(getDeleteErrorMessageKey(new Error('boom'))).toBe('operationFailed');
   });

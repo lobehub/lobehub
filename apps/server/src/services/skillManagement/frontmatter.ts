@@ -1,5 +1,7 @@
 import matter from 'gray-matter';
 
+import { safeMatterOptions } from '@/server/utils/safeMatterOptions';
+
 /**
  * Parsed metadata from a managed skill `SKILL.md` frontmatter block.
  */
@@ -214,11 +216,15 @@ export const normalizeSkillIndexContent = (input: NormalizeSkillIndexContentInpu
     throw new Error('Skill frontmatter description is required');
   }
 
-  const serialized = matter.stringify(body, {
-    ...data,
-    description: normalizeFrontmatterScalar(description, 'description'),
-    name: bundleName,
-  });
+  const serialized = matter.stringify(
+    body,
+    {
+      ...data,
+      description: normalizeFrontmatterScalar(description, 'description'),
+      name: bundleName,
+    },
+    safeMatterOptions,
+  );
 
   return body.endsWith('\n') ? serialized : serialized.replace(/\n$/, '');
 };

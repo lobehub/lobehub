@@ -5,7 +5,11 @@ import type {
   GroupedTopic,
   TimeGroupId,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
+import {
+  agentDisplayName,
+  getWorkingDirEffectivePath,
+  getWorkingDirSourcePath,
+} from '@lobechat/types';
 import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
@@ -14,7 +18,8 @@ import isYesterday from 'dayjs/plugin/isYesterday';
 dayjs.extend(isToday);
 dayjs.extend(isYesterday);
 
-const getTopicGroupId = (timestamp: number): TimeGroupId => {
+/** Time bucket of a timestamp: today, yesterday, this week, this month, a month or a year. */
+export const getTimeGroupId = (timestamp: number): TimeGroupId => {
   const date = dayjs(timestamp);
   const now = dayjs();
 
@@ -47,8 +52,8 @@ const getTopicGroupId = (timestamp: number): TimeGroupId => {
   return `${date.year()}`;
 };
 
-// Ensure group sorting
-const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
+/** Orders time buckets newest first: the fixed buckets, then months and years. */
+export const sortTimeGroups = <T extends { id: string }>(groups: T[]): T[] => {
   const orderMap = new Map<string, number>([
     ['today', 0],
     ['yesterday', 1],
@@ -93,7 +98,7 @@ const groupTopicsByField = (
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
   for (const topic of sortedTopics) {
-    const groupId = getTopicGroupId(getTopicSortTime(topic, field));
+    const groupId = getTimeGroupId(getTopicSortTime(topic, field));
     const existing = groupsMap.get(groupId);
     if (existing) {
       existing.push(topic);
@@ -107,7 +112,7 @@ const groupTopicsByField = (
     id,
   }));
 
-  return sortGroups(result);
+  return sortTimeGroups(result);
 };
 
 export const groupTopicsByTime = (topics: ChatTopic[]) => groupTopicsByField(topics, 'createdAt');
@@ -314,9 +319,10 @@ interface AgentAttributedTopic extends ChatTopic {
  *   multiple agents (e.g. the project topic list).
  *
  * Returns:
- * - `agent:{agentId}` groups sorted by most recent activity, titled from the
- *   first row's agent metadata, and a title-less `no-agent` bucket for rows
- *   without attribution (the renderer names those from its agent context).
+ * - `agent:{agentId}` groups sorted by most recent activity, titled with the
+ *   first row's agent display name (name, else title), and a title-less
+ *   `no-agent` bucket for rows without attribution (the renderer names those
+ *   from its agent context).
  */
 export const groupTopicsByAgent = (
   topics: AgentAttributedTopic[],
@@ -343,8 +349,92 @@ export const groupTopicsByAgent = (
     .map(([id, children]) => ({
       children,
       id,
-      title: children[0]?.agentTitle ?? children[0]?.agentName ?? undefined,
+      title: agentDisplayName({
+        name: children[0]?.agentName,
+        title: children[0]?.agentTitle,
+      }),
     }))
+    .sort((a, b) => {
+      const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
+      const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
+      return bTime - aTime;
+    });
+};
+
+// Device-based grouping
+const NO_DEVICE_GROUP_ID = 'no-device';
+const DEVICE_GROUP_PREFIX = 'device:';
+
+/**
+ * The directory shape `groupTopicsByDevice` needs to resolve a topic's device
+ * from its `projectWorkingDirectoryId` — structurally satisfied by the
+ * store's `ProjectDirectory`.
+ */
+export interface TopicDeviceDirectory {
+  deviceId?: string | null;
+  id: string;
+}
+
+/**
+ * Groups topics by the device they run on.
+ *
+ * Use when:
+ * - Rendering the "group by device" mode in a project-scoped topic sidebar
+ *   whose topics span multiple machines.
+ *
+ * Expects:
+ * - Topics with optional `metadata.boundDeviceId` (an explicit device binding
+ *   wins) and optional `projectWorkingDirectoryId`, resolved to a device via
+ *   `directories`.
+ *
+ * Returns:
+ * - `device:{deviceId}` groups sorted by most recent activity, and a
+ *   title-less `no-device` bucket for rows without any device attribution.
+ *   Groups carry no title — the renderer names them from its directory and
+ *   device registries.
+ */
+/**
+ * The device a topic runs on: an explicit `metadata.boundDeviceId` wins, then
+ * the device of its project working directory. Shared by device grouping and
+ * the project sidebar's device filter so both attribute topics the same way.
+ */
+export const createTopicDeviceResolver = (directories?: ReadonlyArray<TopicDeviceDirectory>) => {
+  const deviceIdByDirectoryId = new Map(
+    (directories ?? []).map((directory) => [directory.id, directory.deviceId]),
+  );
+  return (topic: ChatTopic): string | undefined =>
+    topic.metadata?.boundDeviceId ??
+    (topic.projectWorkingDirectoryId
+      ? (deviceIdByDirectoryId.get(topic.projectWorkingDirectoryId) ?? undefined)
+      : undefined);
+};
+
+export const groupTopicsByDevice = (
+  topics: ChatTopic[],
+  field: 'createdAt' | 'updatedAt',
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+): GroupedTopic[] => {
+  if (!topics.length) return [];
+
+  const resolveDeviceId = createTopicDeviceResolver(directories);
+  const groupsMap = new Map<string, ChatTopic[]>();
+  for (const topic of topics) {
+    const deviceId = resolveDeviceId(topic);
+    const id = deviceId ? `${DEVICE_GROUP_PREFIX}${deviceId}` : NO_DEVICE_GROUP_ID;
+    const existing = groupsMap.get(id);
+    if (existing) {
+      existing.push(topic);
+    } else {
+      groupsMap.set(id, [topic]);
+    }
+  }
+
+  for (const children of groupsMap.values()) {
+    children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
+  }
+
+  return Array.from(groupsMap.entries())
+    .map(([id, children]) => ({ children, id }))
     .sort((a, b) => {
       const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
       const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
@@ -387,7 +477,7 @@ export const STATUS_GROUP_ORDER: TopicStatusBucket[] = [
  * server can't see) or persisted as `running` lands in `running`; then the
  * persisted status, defaulting to `active`.
  */
-const resolveStatusBucket = (
+export const resolveStatusBucket = (
   topic: ChatTopic,
   loadingTopicIds?: ReadonlySet<string>,
 ): TopicStatusBucket => {
@@ -432,4 +522,44 @@ export const groupTopicsByStatus = (
     children: groupsMap.get(status)!,
     id: status,
   }));
+};
+
+/** Status buckets a list can be narrowed to; archived work has its own toggle. */
+export const TOPIC_STATUS_FILTERS = ['pending', 'running', 'scheduled', 'active'] as const;
+export type TopicStatusFilter = (typeof TOPIC_STATUS_FILTERS)[number];
+
+/** `none` keeps the topics no device is attributed to. */
+export type TopicDeviceFilter = string | 'none';
+
+export interface TopicListFilter {
+  device?: TopicDeviceFilter;
+  status?: TopicStatusFilter;
+}
+
+/**
+ * Narrow a topic list by status bucket and device, using the same attribution
+ * as status and device grouping. An empty filter returns the list unchanged.
+ */
+export const filterTopics = (
+  topics: ChatTopic[],
+  filter: TopicListFilter,
+  {
+    directories,
+    loadingTopicIds,
+  }: {
+    directories?: ReadonlyArray<TopicDeviceDirectory>;
+    loadingTopicIds?: ReadonlySet<string>;
+  } = {},
+): ChatTopic[] => {
+  const { device, status } = filter;
+  if (!device && !status) return topics;
+  const resolveDeviceId = createTopicDeviceResolver(directories);
+  return topics.filter((topic) => {
+    if (status && resolveStatusBucket(topic, loadingTopicIds) !== status) return false;
+    if (device) {
+      const deviceId = resolveDeviceId(topic);
+      if (device === 'none' ? !!deviceId : deviceId !== device) return false;
+    }
+    return true;
+  });
 };

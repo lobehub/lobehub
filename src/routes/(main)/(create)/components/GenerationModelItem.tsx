@@ -23,16 +23,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   descriptionText_dark: css`
     color: ${cssVar.colorText};
   `,
-  popover: css`
-    .ant-popover-inner {
-      background: ${cssVar.colorBgElevated};
-    }
-  `,
-  popover_dark: css`
-    .ant-popover-inner {
-      background: ${cssVar.colorBgSpotlight};
-    }
-  `,
   priceText: css`
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
@@ -171,11 +161,7 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
     if (!showPopover || !popoverContent) return content;
 
     return (
-      <Popover
-        classNames={{ root: cx(styles.popover, isDarkMode && styles.popover_dark) }}
-        content={popoverContent}
-        placement="rightTop"
-      >
+      <Popover content={popoverContent} placement="rightTop">
         {content}
       </Popover>
     );

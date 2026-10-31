@@ -12,6 +12,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { AppUpdateAction, AppUpdateHint, useDeviceAppUpdate } from './AppUpdate';
 import { getChannelKind, getChannelVersion } from './channelKind';
 import { CliUpdate } from './CliUpdate';
+import { getIdleConnectionStatus } from './connectionCount';
 import PresenceDot from './PresenceDot';
 
 interface ConnectionCardProps {
@@ -80,7 +81,17 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
   // A restart drops the desktop app offline; keep following it in place of
   // its card until it reconnects.
   const restartInFlight =
-    !hasDesktopChannel && update.view.kind !== 'loading' && update.view.kind !== 'unavailable';
+    !device.onlineUnknown &&
+    !hasDesktopChannel &&
+    update.view.kind !== 'loading' &&
+    update.view.kind !== 'unavailable';
+
+  // A persisted row has no channels until the server answers: that is "checking",
+  // not "offline".
+  const idleStatus =
+    getIdleConnectionStatus(device) === 'checking'
+      ? t('devices.status.checking')
+      : t('devices.status.offline');
 
   const plainStatus = (text: string) => (
     <Text ellipsis fontSize={12} type={'secondary'}>
@@ -140,7 +151,7 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
                   ? t('devices.channel.connected', {
                       time: dayjs(channels[kinds.indexOf('cli')].connectedAt).fromNow(),
                     })
-                  : t('devices.status.offline'),
+                  : idleStatus,
               )}
             />
           )}
@@ -150,9 +161,11 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
       {channels.length === 0 &&
         !restartInFlight &&
         plainStatus(
-          `${t('devices.status.offline')} · ${t('devices.lastSeen', {
-            time: dayjs(device.lastSeen).fromNow(),
-          })}`,
+          device.onlineUnknown
+            ? idleStatus
+            : `${idleStatus} · ${t('devices.lastSeen', {
+                time: dayjs(device.lastSeen).fromNow(),
+              })}`,
         )}
     </Flexbox>
   );

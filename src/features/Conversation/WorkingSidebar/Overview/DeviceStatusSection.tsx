@@ -79,14 +79,14 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface DeviceStatusSectionProps {
-  /** Polls the device's presence and CPU / memory series only while the Overview is on screen. */
+  /** Polls the device's presence and CPU / memory / disk series only while the Overview is on screen. */
   active: boolean;
   deviceId: string;
 }
 
 /**
  * The device the topic runs on, as its device card shows it: presence,
- * hostname, running topics and the latest CPU / memory load. Answers "is the
+ * hostname, running topics and the latest CPU / memory / disk usage. Answers "is the
  * machine doing this work healthy and busy?" without leaving the conversation.
  */
 const DeviceStatusSection = memo<DeviceStatusSectionProps>(({ active, deviceId }) => {
@@ -94,7 +94,7 @@ const DeviceStatusSection = memo<DeviceStatusSectionProps>(({ active, deviceId }
   const { t: tCommon } = useTranslation('common');
   const bound = useBoundDevice(deviceId, active);
   const device = bound.status === 'ready' ? bound.device : undefined;
-  const { data, error } = useDeviceMetricSeries(deviceId, active && !!device);
+  const { data, error } = useDeviceMetricSeries(deviceId, device?.scope, active && !!device);
 
   if (bound.status === 'loading')
     return (
@@ -197,6 +197,9 @@ const DeviceStatusContent = ({ data, device, error }: DeviceStatusContentProps) 
           <UsageMeterGroup>
             <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
             <UsageMeter label={t('devices.card.memoryUsage')} value={usage.latest?.memoryPercent} />
+            {usage.reportsDisk && (
+              <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
+            )}
           </UsageMeterGroup>
         )}
       </Flexbox>

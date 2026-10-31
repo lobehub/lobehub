@@ -5,6 +5,7 @@ import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { lambdaClient } from '@/libs/trpc/client';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
+import { ensureAgentMarketSkillsAndWarn } from '@/services/ensureAgentMarketSkills';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
@@ -208,6 +209,14 @@ export const installMarketplaceAgents = async (
   const installedAgentIds = Array.from(installedBySource.values());
 
   if (installedAgentIds.length > 0) {
+    // Once every createAgent has settled, install the Market skills the created
+    // agents reference in one pass. Already non-throwing, and the agents exist
+    // either way, so nothing here may change the result below.
+    await ensureAgentMarketSkillsAndWarn(
+      prepared
+        .filter((p) => installedBySource.has(p.sourceId))
+        .map((p) => p.detail.config.plugins ?? []),
+    );
     await refreshAgentList();
   }
 

@@ -22,6 +22,7 @@
     "@lobechat/conversation-flow": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
+    "p-map": "^7.0.6",
     "random-words": "^2.0.1",
     "remove-markdown": "^0.6.4",
     "ts-md5": "^2.0.1",

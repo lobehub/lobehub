@@ -1,7 +1,11 @@
 import { type UserCredSummary } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { CLAUDE_CODE_TOKEN_CRED_KEY, resolveClaudeCodeTokenStatus } from './claudeCodeTokenCred';
+import {
+  canRemoveClaudeCodeToken,
+  CLAUDE_CODE_TOKEN_CRED_KEY,
+  resolveClaudeCodeTokenStatus,
+} from './claudeCodeTokenCred';
 
 const personalToken = (overrides: Partial<UserCredSummary> = {}): UserCredSummary =>
   ({
@@ -34,15 +38,7 @@ describe('resolveClaudeCodeTokenStatus', () => {
 
     expect(
       resolveClaudeCodeTokenStatus({ contextCreds: [], inWorkspace: true, personalCreds: [cred] }),
-    ).toEqual({ personalCred: cred, sharedElsewhere: false, status: 'personalNotShared' });
-  });
-
-  it('flags a personal token that is shared to a different workspace', () => {
-    const cred = personalToken({ organizationAccountId: 42, sharedToActiveWorkspace: false });
-
-    expect(
-      resolveClaudeCodeTokenStatus({ contextCreds: [], inWorkspace: true, personalCreds: [cred] }),
-    ).toEqual({ personalCred: cred, sharedElsewhere: true, status: 'personalNotShared' });
+    ).toEqual({ personalCred: cred, status: 'personalNotShared' });
   });
 
   it('shows the personal preview once the token is shared to the active workspace', () => {
@@ -79,5 +75,39 @@ describe('resolveClaudeCodeTokenStatus', () => {
     expect(
       resolveClaudeCodeTokenStatus({ contextCreds: [], inWorkspace: false, personalCreds: [] }),
     ).toEqual({ status: 'missing' });
+  });
+});
+
+describe('canRemoveClaudeCodeToken', () => {
+  it('allows removing the caller’s own configured token', () => {
+    const status = resolveClaudeCodeTokenStatus({
+      contextCreds: [contextToken],
+      inWorkspace: false,
+      personalCreds: [personalToken()],
+    });
+
+    expect(canRemoveClaudeCodeToken(status)).toBe(true);
+  });
+
+  it('allows removing an own token that is not shared to this workspace', () => {
+    const status = resolveClaudeCodeTokenStatus({
+      contextCreds: [],
+      inWorkspace: true,
+      personalCreds: [personalToken()],
+    });
+
+    expect(canRemoveClaudeCodeToken(status)).toBe(true);
+  });
+
+  it('does not allow removing a token owned by the workspace or another member', () => {
+    const status = resolveClaudeCodeTokenStatus({
+      contextCreds: [contextToken],
+      inWorkspace: true,
+      personalCreds: [],
+    });
+
+    expect(canRemoveClaudeCodeToken(status)).toBe(false);
+    expect(canRemoveClaudeCodeToken({ status: 'missing' })).toBe(false);
+    expect(canRemoveClaudeCodeToken({ status: 'unknown' })).toBe(false);
   });
 });

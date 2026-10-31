@@ -1,5 +1,7 @@
 import type { CodexQuotaSnapshot } from '@lobechat/heterogeneous-agents/quota';
 
+import { getAgentQuotaStoreState } from '@/store/agentQuota';
+
 import { agentQuotaService } from './agentQuota';
 import { buildCodexPanelSnapshot } from './codexQuotaViewModel';
 import { heterogeneousAgentService } from './electron/heterogeneousAgent';
@@ -19,6 +21,8 @@ interface FetchOptions {
   revalidate?: boolean;
 }
 
+const quotaReads = () => getAgentQuotaStoreState();
+
 const readPersisted = async <T>(request: Promise<T>, fallback: T): Promise<T> => {
   try {
     return await request;
@@ -34,8 +38,8 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
   let lastLive: CodexQuotaSnapshot | null = null;
   const readQuota = async (options: FetchOptions = {}): Promise<CodexQuotaSnapshot> => {
     const [allAccounts, bindings] = await Promise.all([
-      readPersisted(agentQuotaService.listAccounts(), []),
-      source.agentId ? readPersisted(agentQuotaService.listBindings(source.agentId), []) : [],
+      readPersisted(quotaReads().readQuotaAccounts(), []),
+      source.agentId ? readPersisted(quotaReads().readQuotaBindings(source.agentId), []) : [],
     ]);
     const accounts = allAccounts.filter((account) => account.provider === 'codex');
     const pinnedId = bindings.find((binding) => binding.role === 'pinned')?.accountId;
@@ -46,7 +50,7 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
           accounts.find((item) => item.id === pinnedId) ??
           accounts[0]);
     let readings = account
-      ? await readPersisted(agentQuotaService.getLatestReadings(account.id), [])
+      ? await readPersisted(quotaReads().readQuotaReadings(account.id), [])
       : [];
     const persisted =
       account && readings.length ? buildCodexPanelSnapshot(account, readings, lastLive) : null;
@@ -75,13 +79,12 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
       throw error;
     }
     if (live?.status === 'ok') lastLive = live;
+    let ingested = false;
     const externalAccountId = live?.identity?.externalAccountId;
     if (live?.status === 'ok' && externalAccountId) {
       trustedAccountId = externalAccountId;
       account = accounts.find((item) => item.externalAccountId === externalAccountId);
-      readings = account
-        ? await readPersisted(agentQuotaService.getLatestReadings(account.id), [])
-        : [];
+      readings = account ? await readPersisted(quotaReads().readQuotaReadings(account.id), []) : [];
       const fresh = live.readings?.filter(
         (reading) =>
           !readings.some(
@@ -93,21 +96,29 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
       );
       if (!source.deviceId && fresh?.length) {
         try {
+          ingested = true;
           account = await agentQuotaService.ingestCodexSnapshot({
             identity: live.identity!,
             readings: fresh,
           });
+          // The ingest moved the account's `updatedAt` (and may have created it).
+          void readPersisted(quotaReads().readQuotaAccounts({ fresh: true }), []);
         } catch (error) {
           console.error('[codexQuota:ingest]', error);
         }
       }
       if (source.deviceId && !account) {
-        account = (await readPersisted(agentQuotaService.listAccounts(), [])).find(
+        account = (await readPersisted(quotaReads().readQuotaAccounts({ fresh: true }), [])).find(
           (item) => item.provider === 'codex' && item.externalAccountId === externalAccountId,
         );
       }
+      // The device sampler ingests server-side, and a local ingest just wrote
+      // new readings: both make the replica's copy outdated.
       if (account)
-        readings = await readPersisted(agentQuotaService.getLatestReadings(account.id), []);
+        readings = await readPersisted(
+          quotaReads().readQuotaReadings(account.id, { fresh: !!source.deviceId || ingested }),
+          [],
+        );
     } else if (live?.status === 'ok') {
       // A successful but unidentified login must not inherit the previous account.
       trustedAccountId = undefined;
@@ -136,10 +147,18 @@ export const createCodexQuotaReader = (source: CodexQuotaSource) => {
         snapshot.readings?.length
       ) {
         trustedAccountId = snapshot.identity.externalAccountId;
-        await agentQuotaService.ingestCodexSnapshot({
+        const account = await agentQuotaService.ingestCodexSnapshot({
           identity: snapshot.identity,
           readings: snapshot.readings,
         });
+        // The replica still holds the pre-ingest account / readings: refresh both,
+        // so a reader mounted inside the dedupe window does not paint them again.
+        await Promise.all([
+          readPersisted(quotaReads().readQuotaAccounts({ fresh: true }), []),
+          account?.id
+            ? readPersisted(quotaReads().readQuotaReadings(account.id, { fresh: true }), [])
+            : undefined,
+        ]);
       }
     },
   });

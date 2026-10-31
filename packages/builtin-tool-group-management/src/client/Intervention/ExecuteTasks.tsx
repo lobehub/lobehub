@@ -1,53 +1,23 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import {
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
-  AccordionRoot,
-  AccordionTrigger,
-  Avatar,
-  Flexbox,
-  Icon,
-  Input,
-  InputNumber,
-  stopPropagation,
-  TextArea,
-  Tooltip,
-  useTheme,
-} from '@lobehub/ui';
+import { AccordionHeader, AccordionItem, AccordionPanel, AccordionRoot, AccordionTrigger, Flexbox, Icon, Input, InputNumber, stopPropagation, TextArea, Tooltip, useTheme } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+
 import isEqual from 'fast-deep-equal';
 import { Clock, Trash2 } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTasksParams, TaskItem } from '../../types';
 
-const styles = stylex.create({
-  assignee: {
-    display: 'flex',
-    flexShrink: 0,
-    gap: '6px',
-    alignItems: 'center',
-    fontSize: '12px',
-    color: cssVar.colorTextSecondary,
-  },
-  container: { paddingBlock: '12px', borderRadius: cssVar.borderRadius },
-  deleteButton: {
-    cursor: 'pointer',
-    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorError },
-    transition: 'color 0.2s',
-  },
-  timeoutInput: { width: '100px' },
-});
+const styles = stylex.create({ assignee: { display: "flex", flexShrink: 0, gap: "6px", alignItems: "center", fontSize: "12px", color: cssVar.colorTextSecondary }, container: { paddingBlock: "12px", borderRadius: cssVar.borderRadius }, deleteButton: { cursor: "pointer", color: { default: cssVar.colorTextTertiary, ":hover": cssVar.colorError }, transition: "color 0.2s" }, index: { flexShrink: 0, fontSize: "12px", color: cssVar.colorTextQuaternary }, taskTitle: { overflow: "hidden", fontSize: "14px", fontWeight: 500, textOverflow: "ellipsis", whiteSpace: "nowrap" }, timeoutInput: { width: "100px" } });
 
 const DEFAULT_TIMEOUT = 1_800_000; // 30 minutes
 
@@ -104,9 +74,11 @@ const TaskEditor = memo<TaskEditorProps>(({ task, index, onChange, onDelete }) =
           <AccordionTrigger>
             <Flexbox horizontal align={'center'} gap={8}>
               <div {...stylex.props(styles.assignee)}>
-                <Avatar
-                  avatar={agent?.avatar || DEFAULT_AVATAR}
+                <AgentAvatar
+                  agentId={task.agentId}
+                  avatar={agent?.avatar}
                   background={agent?.backgroundColor || theme.colorBgContainer}
+                  name={agent?.title}
                   shape={'circle'}
                   size={20}
                 />

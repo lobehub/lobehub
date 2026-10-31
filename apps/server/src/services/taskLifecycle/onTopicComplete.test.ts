@@ -54,6 +54,10 @@ const notifyRunFailed = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/business/server/task/notifyTaskRunFailed', () => ({
   notifyTaskRunFailed: (...args: unknown[]) => notifyRunFailed(...args),
 }));
+const runCompleted = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/business/server/task/onTaskRunCompleted', () => ({
+  onTaskRunCompleted: (...args: unknown[]) => runCompleted(...args),
+}));
 
 const baseTask = (overrides: Partial<TaskItem> = {}): TaskItem =>
   ({
@@ -75,6 +79,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
   let service: TaskLifecycleService;
   let updateStatus: ReturnType<typeof vi.fn>;
   let updateStatusIfCurrent: ReturnType<typeof vi.fn>;
+  let completeIfCompletionRequested: ReturnType<typeof vi.fn>;
   let updateContext: ReturnType<typeof vi.fn>;
   let findById: ReturnType<typeof vi.fn>;
   let updateHeartbeat: ReturnType<typeof vi.fn>;
@@ -87,12 +92,14 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     notifyCompleted.mockReset().mockResolvedValue(undefined);
     notifyFailed.mockReset().mockResolvedValue(undefined);
     notifyRunFailed.mockReset().mockResolvedValue(undefined);
+    runCompleted.mockReset().mockResolvedValue(undefined);
     cascadeOnCompletion.mockReset().mockResolvedValue({ failed: [], paused: [], started: [] });
 
     service = new TaskLifecycleService({} as any, 'user-1');
 
     updateStatus = vi.fn().mockResolvedValue(null);
     updateStatusIfCurrent = vi.fn();
+    completeIfCompletionRequested = vi.fn();
     updateContext = vi.fn().mockResolvedValue(null);
     findById = vi.fn();
     updateHeartbeat = vi.fn().mockResolvedValue(undefined);
@@ -104,6 +111,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
     const taskModel = (service as any).taskModel;
     taskModel.updateStatus = updateStatus;
     taskModel.updateStatusIfCurrent = updateStatusIfCurrent;
+    taskModel.completeIfCompletionRequested = completeIfCompletionRequested;
     taskModel.updateContext = updateContext;
     taskModel.findById = findById;
     taskModel.updateHeartbeat = updateHeartbeat;
@@ -276,7 +284,7 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         automationMode: null,
         context: { completion: { requestedByOperationId: 'op-1' } },
       });
-      updateStatusIfCurrent.mockResolvedValue({ ...task, status: 'completed' });
+      completeIfCompletionRequested.mockResolvedValue({ ...task, status: 'completed' });
       findById.mockResolvedValue(task);
 
       await service.onTopicComplete({
@@ -287,12 +295,33 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         topicId: 'topic-1',
       });
 
-      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
-        completedAt: expect.any(Date),
-        error: null,
-      });
+      // The request is consumed by the same write that completes the task.
+      expect(completeIfCompletionRequested).toHaveBeenCalledWith('task-1', 'op-1');
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
       expect(cascadeOnCompletion).toHaveBeenCalledWith('task-1');
+    });
+
+    it('pauses for review when the request was withdrawn while the topic was settling', async () => {
+      // A rejected acceptance delivery withdrew the request after the task was first read.
+      const task = baseTask({
+        automationMode: null,
+        context: { completion: { requestedByOperationId: 'op-1' } },
+      });
+      findById.mockResolvedValue(task);
+      completeIfCompletionRequested.mockResolvedValue(null);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(cascadeOnCompletion).not.toHaveBeenCalled();
+      expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'paused', {
+        error: null,
+      });
     });
 
     it.each(['schedule', 'heartbeat'] as const)(
@@ -856,6 +885,72 @@ describe('TaskLifecycleService.onTopicComplete', () => {
         'task-1',
         expect.objectContaining({ lifecycle: expect.anything() }),
       );
+    });
+  });
+
+  describe('run-completed follow-up', () => {
+    it('runs after the status has settled, with the run identity', async () => {
+      findById.mockResolvedValue(
+        baseTask({ assigneeAgentId: 'agent-1', automationMode: null } as Partial<TaskItem>),
+      );
+
+      await service.onTopicComplete({
+        lastAssistantContent: 'final reply',
+        operationId: 'op-1',
+        reason: 'done',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(runCompleted).toHaveBeenCalledWith({
+        agentId: 'agent-1',
+        lastAssistantContent: 'final reply',
+        operationId: 'op-1',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+        userId: 'user-1',
+        workspaceId: undefined,
+      });
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+      expect(updateStatus.mock.invocationCallOrder[0]).toBeLessThan(
+        runCompleted.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('a failing follow-up does not fail the lifecycle', async () => {
+      findById.mockResolvedValue(baseTask({ automationMode: null } as Partial<TaskItem>));
+      runCompleted.mockRejectedValue(new Error('boom'));
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        service.onTopicComplete({
+          operationId: 'op-1',
+          reason: 'done',
+          taskId: 'task-1',
+          taskIdentifier: 'TASK-1',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toBeUndefined();
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: null });
+      // Logged where production sees it: the follow-up can change task state.
+      expect(consoleError).toHaveBeenCalled();
+    });
+
+    it('is not called when the run failed', async () => {
+      findById.mockResolvedValue(baseTask({ automationMode: null } as Partial<TaskItem>));
+
+      await service.onTopicComplete({
+        errorMessage: 'upstream 500',
+        operationId: 'op-1',
+        reason: 'error',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(runCompleted).not.toHaveBeenCalled();
     });
   });
 

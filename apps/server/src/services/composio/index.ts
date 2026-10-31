@@ -255,9 +255,19 @@ export class ComposioService {
     return undefined;
   }
 
-  async getComposioManifests(agentId?: string): Promise<LobeToolManifest[]> {
+  /**
+   * @param options.identifiers Read only these identifiers instead of every
+   * connection, so a share run never resolves a connection the owner did not
+   * grant.
+   */
+  async getComposioManifests(
+    agentId?: string,
+    options?: { identifiers?: string[] },
+  ): Promise<LobeToolManifest[]> {
     const manifests: LobeToolManifest[] = [];
     const coveredIdentifiers = new Set<string>();
+    const identifiers = options?.identifiers?.filter((id) => VALID_COMPOSIO_IDENTIFIERS.has(id));
+    if (identifiers?.length === 0) return manifests;
 
     // 1. Connector-based (new path): rows whose metadata.composio marks them as
     //    Composio connectors and are ACTIVE. Tool defs come from
@@ -266,7 +276,9 @@ export class ComposioService {
     //    Composio connector shadows the base one for the same identifier.
     if (this.connectorModel && this.connectorToolModel) {
       try {
-        const connectors = await this.connectorModel.resolveAll(agentId);
+        const connectors = identifiers
+          ? await this.connectorModel.resolveByIdentifiers(identifiers, agentId)
+          : await this.connectorModel.resolveAll(agentId);
         const composioConnectors = connectors.filter(
           (c) =>
             VALID_COMPOSIO_IDENTIFIERS.has(c.identifier) &&
@@ -331,7 +343,8 @@ export class ComposioService {
           (plugin) =>
             VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier) &&
             plugin.customParams?.composio?.status === 'ACTIVE' &&
-            !coveredIdentifiers.has(plugin.identifier),
+            !coveredIdentifiers.has(plugin.identifier) &&
+            (!identifiers || identifiers.includes(plugin.identifier)),
         );
 
         for (const plugin of composioPlugins) {

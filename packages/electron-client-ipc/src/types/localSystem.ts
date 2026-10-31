@@ -1,3 +1,5 @@
+import type { LocalFilePreviewFailure } from './localFilePreviewFailure';
+
 // Define types for local file operations
 export interface LocalFileItem {
   contentType?: string;
@@ -204,8 +206,7 @@ export interface LocalFilePreviewUrlParams {
   workingDirectory: string;
 }
 
-export interface LocalFilePreviewUrlResult {
-  error?: string;
+export interface LocalFilePreviewUrlResult extends LocalFilePreviewFailure {
   success: boolean;
   url?: string;
 }
@@ -244,8 +245,7 @@ export type LocalFilePreview =
   | LocalFilePreviewText
   | LocalFilePreviewUnsupported;
 
-export interface LocalFilePreviewResult {
-  error?: string;
+export interface LocalFilePreviewResult extends LocalFilePreviewFailure {
   preview?: LocalFilePreview;
   success: boolean;
 }

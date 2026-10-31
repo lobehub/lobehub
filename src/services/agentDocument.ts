@@ -22,8 +22,6 @@ const getStringField = (value: unknown, field: 'documentId' | 'id') => {
   return typeof fieldValue === 'string' ? fieldValue : undefined;
 };
 
-const getAgentDocumentId = (value: unknown) => getStringField(value, 'id');
-
 const getDocumentId = (value: unknown) => getStringField(value, 'documentId');
 
 interface AgentDocumentToolContext {
@@ -83,10 +81,14 @@ class AgentDocumentService {
     return lambdaClient.agentDocument.getReaderDocument.query(params);
   };
 
+  /** A managed skill and its `SKILL.md`; `null` once it no longer exists. */
+  getSkill = async (params: { agentDocumentId: string; agentId: string }) => {
+    return lambdaClient.agentDocument.getSkill.query(params);
+  };
+
   associateDocument = async (params: { agentId: string; documentId: string }) => {
     const result = await lambdaClient.agentDocument.associateDocument.mutate(params);
     await invalidateDocumentMutation({
-      agentDocumentId: getAgentDocumentId(result),
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: params.documentId,
@@ -98,7 +100,6 @@ class AgentDocumentService {
   importFile = async (params: { agentId: string; fileId: string; parentId?: string | null }) => {
     const result = await lambdaClient.agentDocument.importFile.mutate(params);
     await invalidateDocumentMutation({
-      agentDocumentId: getAgentDocumentId(result),
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: getDocumentId(result),
@@ -118,7 +119,6 @@ class AgentDocumentService {
   ) => {
     const result = await lambdaClient.agentDocument.createDocument.mutate(params);
     await invalidateDocumentMutation({
-      agentDocumentId: getAgentDocumentId(result),
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: getDocumentId(result),
@@ -139,7 +139,6 @@ class AgentDocumentService {
   ) => {
     const result = await lambdaClient.agentDocument.createForTopic.mutate(params);
     await invalidateDocumentMutation({
-      agentDocumentId: getAgentDocumentId(result),
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: getDocumentId(result),
@@ -162,7 +161,6 @@ class AgentDocumentService {
   ) => {
     const result = await lambdaClient.agentDocument.replaceDocumentContent.mutate(params);
     await invalidateDocumentMutation({
-      agentDocumentId: params.id,
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: getDocumentId(result),
@@ -199,7 +197,6 @@ class AgentDocumentService {
   ) => {
     const result = await lambdaClient.agentDocument.modifyNodes.mutate(params);
     await invalidateDocumentMutation({
-      agentDocumentId: params.id,
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: getDocumentId(result),
@@ -227,7 +224,6 @@ class AgentDocumentService {
       withChildren,
     });
     await invalidateDocumentMutation({
-      agentDocumentId: id,
       agentId,
       cause: 'agent-document',
       documentId,
@@ -242,7 +238,6 @@ class AgentDocumentService {
   ) => {
     const result = await lambdaClient.agentDocument.copyDocument.mutate(params);
     await invalidateDocumentMutation({
-      agentDocumentId: getAgentDocumentId(result),
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: getDocumentId(result),
@@ -256,7 +251,6 @@ class AgentDocumentService {
   ) => {
     const result = await lambdaClient.agentDocument.renameDocument.mutate(params);
     await invalidateDocumentMutation({
-      agentDocumentId: params.id,
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: getDocumentId(result),
@@ -279,7 +273,6 @@ class AgentDocumentService {
     // otherwise the next autosave from that stale editor would overwrite the
     // generated SKILL.md frontmatter/body via the document save path.
     await invalidateDocumentMutation({
-      agentDocumentId: result.index.agentDocumentId,
       agentId: params.agentId,
       cause: 'agent-document',
       documentId: result.index.documentId,

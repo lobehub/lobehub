@@ -40,9 +40,22 @@ vi.mock('@/features/Settings/features/SettingHeader', () => ({
   ),
 }));
 
-const createWrapper = () => {
+const createWrapper = (enableWorkspace = false) => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
-    <Provider createStore={() => initServerConfigStore({})}>{children}</Provider>
+    <Provider
+      createStore={() =>
+        initServerConfigStore(
+          enableWorkspace
+            ? {
+                featureFlags: { enableWorkspace: true } as any,
+                serverConfig: { enableBusinessFeatures: true } as any,
+              }
+            : {},
+        )
+      }
+    >
+      {children}
+    </Provider>
   );
 
   return Wrapper;
@@ -50,13 +63,13 @@ const createWrapper = () => {
 
 const initialUserStoreState = useUserStore.getState();
 
-const renderPage = () => {
+const renderPage = (options: { enableWorkspace?: boolean } = {}) => {
   useUserStore.setState({
     isUserStateInit: true,
     updateLab: vi.fn(),
   });
 
-  return render(<Page />, { wrapper: createWrapper() });
+  return render(<Page />, { wrapper: createWrapper(options.enableWorkspace) });
 };
 
 afterEach(() => {
@@ -147,7 +160,14 @@ describe('Labs settings page', () => {
     // Every toggle carries exactly one stage tag — counted against the registry
     // rather than a literal, so adding an experiment does not fail this test for
     // the wrong reason.
-    expect(alphaTags.length + betaTags.length).toBe(LAB_FEATURES.length);
+    expect(alphaTags.length + betaTags.length).toBe(
+      LAB_FEATURES.filter((feature) => !feature.workspaceOnly).length,
+    );
+  });
+
+  it('does not render an empty workspace group', () => {
+    renderPage({ enableWorkspace: true });
+    expect(screen.queryByText('group.workspace')).toBeNull();
   });
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {

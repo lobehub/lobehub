@@ -1,6 +1,7 @@
 {
   "agent_cron_job_completed": "Uw geplande taak \"{{jobName}}\" is succesvol voltooid.",
   "agent_cron_job_completed_title": "Geplande taak voltooid",
+  "agent_cron_job_completed_with_summary": "Uw geplande taak \"{{jobName}}\" is succesvol voltooid.\n\n{{summary}}",
   "agent_cron_job_failed": "Uw geplande taak \"{{jobName}}\" is mislukt. Open de taak om de volledige foutmelding te bekijken.",
   "agent_cron_job_failed_insufficient_budget": "Uw geplande taak \"{{jobName}}\" kon niet worden uitgevoerd omdat uw account geen credits meer heeft. Vul aan of upgrade uw abonnement om toekomstige taken te hervatten.",
   "agent_cron_job_failed_insufficient_budget_title": "Geplande taak gepauzeerd: onvoldoende credits",

@@ -25,6 +25,13 @@ import { oidcAuth } from './middleware/oidcAuth';
 export const router = trpc.router;
 
 /**
+ * Merge sub-routers into one flat router: procedure paths are unchanged and a
+ * duplicate path throws when the router is built.
+ * @link https://trpc.io/docs/v11/merging-routers
+ */
+export const mergeRouters = trpc.mergeRouters;
+
+/**
  * Create an unprotected procedure
  * @link https://trpc.io/docs/v11/procedures
  **/

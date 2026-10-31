@@ -29,8 +29,8 @@ export interface ChatAIChatState {
    */
   gatewayConnections: Record<string, GatewayConnection>;
   /**
-   * Mux-level op lifecycle feed, keyed by operationId. No UI reads it yet;
-   * later work drives spinners / reconnect decisions from it.
+   * Mux-level op lifecycle feed, keyed by operationId. `useTopicRunEvents`
+   * reads it to follow runs another device starts on an open topic.
    */
   gatewayFeed: Record<string, GatewayFeedEntry>;
   inputFiles: File[];

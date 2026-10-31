@@ -10,7 +10,7 @@ import { DeviceConnectModal, DeviceDetailPage, DeviceManager } from '@/features/
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 
-import KeepAwake from './KeepAwake';
+import ThisComputer from './ThisComputer';
 
 interface PageProps {
   mobile?: boolean;
@@ -47,7 +47,7 @@ const Page = memo<PageProps>(({ mobile }) => {
         onConnect={handleConnect}
         onOpenDevice={openDevice}
       />
-      {isDesktop && <KeepAwake />}
+      {isDesktop && <ThisComputer />}
     </Flexbox>
   );
 

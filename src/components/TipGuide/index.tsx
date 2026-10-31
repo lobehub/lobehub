@@ -1,32 +1,12 @@
-import { createStaticStyles, cx, Flexbox, Popover } from '@lobehub/ui';
+import { Flexbox, Popover } from '@lobehub/ui';
 import { ActionIcon, type PopoverPlacement } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { XIcon } from 'lucide-react';
 import { type CSSProperties, type FC, type ReactNode } from 'react';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    close: css`
-      color: white;
-    `,
-    container: css`
-      position: relative;
-    `,
-    footer: css`
-      display: flex;
-      justify-content: end;
-      width: 100%;
-    `,
-    overlay: css`
-      .ant-popover-inner {
-        border: none;
-      }
-    `,
-    tip: css`
-      position: absolute;
-      inset-inline-start: 50%;
-      transform: translate(-50%);
-    `,
-  };
+const styles = stylex.create({
+  close: { color: 'white' },
+  container: { position: 'relative' },
 });
 
 export interface TipGuideProps {
@@ -91,7 +71,7 @@ const TipGuide: FC<TipGuideProps> = ({
   if (!open) return children;
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       <div
         style={{
           marginTop: offsetY,
@@ -99,17 +79,15 @@ const TipGuide: FC<TipGuideProps> = ({
       >
         <Popover
           arrow={true}
+          classNames={{ root: className }}
           open={open}
           placement={placement}
           trigger="hover"
-          classNames={{
-            root: cx(className, styles.overlay),
-          }}
           content={
             <Flexbox horizontal gap={24} style={{ userSelect: 'none' }}>
               <div>{title}</div>
               <ActionIcon
-                className={styles.close}
+                className={stylex.props(styles.close).className}
                 icon={XIcon}
                 size={'small'}
                 onClick={() => {

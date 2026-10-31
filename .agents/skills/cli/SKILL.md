@@ -23,6 +23,7 @@ apps/cli/src/
 ├── index.ts                  # Entry point — parses argv, invokes program.ts
 ├── program.ts                # Builds the Commander program, registers every command
 ├── api/
+│   ├── acceptance/           # `lh acceptance`: review loop, rounds (run/), plans, criteria, rubrics; `lh verify` aliases
 │   ├── client.ts             # tRPC client (type-safe backend API)
 │   └── http.ts               # Raw HTTP utilities
 ├── auth/
@@ -55,6 +56,7 @@ apps/cli/src/
 │   ├── message.ts            # Message management
 │   ├── migrate/              # Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)
 │   ├── model.ts              # AI model management
+│   ├── notification.ts       # Notification delivery settings (personal / workspace)
 │   ├── notify.ts             # Send a callback message to a topic to trigger the agent
 │   ├── plugin.ts             # Plugin management
 │   ├── project.ts            # Goal-oriented project management
@@ -69,8 +71,6 @@ apps/cli/src/
 │   ├── trace/                # Inspect and replay recorded agent execution traces
 │   ├── update.ts             # Self-update to the latest published version
 │   ├── user.ts               # User account & settings
-│   ├── verify.ts             # Agent Run verification machinery (criteria, rubrics, check plans)
-│   ├── verifyAcceptance.ts   # `lh acceptance`: cross-round delivery review loop
 │   └── workspace.ts          # Workspace list/scope/members/usage/audit
 ├── daemon/
 │   └── manager.ts            # Background daemon process management
@@ -82,7 +82,7 @@ apps/cli/src/
 ├── utils/
 │   ├── logger.ts             # Logging (verbose mode)
 │   ├── format.ts             # Table output, JSON, timeAgo/timeUntil, truncate
-│   └── agentStream.ts        # SSE streaming for agent runs
+│   └── agentStream.ts        # WebSocket streaming for agent runs and task follow
 └── constants/
     └── urls.ts               # Official server & gateway URLs
 ```
@@ -106,8 +106,8 @@ apps/cli/src/
 | `lh task`          | -     | Manage agent tasks (assignees, checkpoints, deps, review)                          |
 | `lh thread`        | -     | Manage message threads                                                             |
 | `lh trace`         | -     | Inspect and replay recorded agent execution traces                                 |
-| `lh verify`        | -     | Agent Run verification machinery — criteria, rubrics, per-run check plans          |
-| `lh acceptance`    | -     | Delivery acceptances — the cross-round review loop (checks, feedback, decision)    |
+| `lh acceptance`    | -     | Delivery acceptances: review loop, rounds, per-run check plans, criteria, rubrics  |
+| `lh verify`        | -     | Deprecated alias of `lh acceptance` commands                                       |
 | `lh eval`          | -     | Manage evaluation workflows and benchmarks                                         |
 | `lh generate`      | `gen` | Content generation (text, image, video, tts, asr, download)                        |
 | `lh doc`           | -     | Document CRUD, batch-create, parse, topic linking                                  |
@@ -118,6 +118,7 @@ apps/cli/src/
 | `lh message`       | -     | Message list, search, delete, count, heatmap                                       |
 | `lh topic`         | -     | Topic CRUD + search + recent                                                       |
 | `lh notify`        | -     | Send a callback message to a topic and trigger the agent to process it             |
+| `lh notification`  | -     | Notification settings: show, enable/disable channels, IM platforms and types       |
 | `lh migrate`       | -     | Import data from external tools (OpenClaw, ChatGPT, Claude, etc.)                  |
 | `lh bot`           | -     | Manage bot integrations (channels, access policies, messengers)                    |
 | `lh skill`         | -     | Skill CRUD + import (GitHub/URL/market)                                            |
@@ -138,8 +139,13 @@ apps/cli/src/
 
 Every command runs against one scope, resolved in this order:
 
-1. an explicit `--workspace <id>` on the commands that take it
-2. the `LOBEHUB_WORKSPACE_ID` env var
+1. an explicit `--workspace <id|slug>` on the `workspace`, `device` and `topic`
+   commands that take it (a slug is resolved against `lh workspace list`; one
+   that matches nothing fails). A credential that cannot call `workspace.list`
+   (no `workspace:read`, such as a workspace-bound API key) skips resolution and
+   sends the value as an id with a warning, so it must pass the id.
+   `lh connect --workspace` takes an id only.
+2. the `LOBEHUB_WORKSPACE_ID` env var (an id only)
 3. the scope persisted by `lh workspace use <id|slug>`
 4. personal content (no workspace)
 

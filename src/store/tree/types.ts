@@ -1,4 +1,7 @@
+import type { ReplicaState } from '@/libs/replica';
 import type { StoreHandle } from '@/store/utils/optimisticEngine';
+
+import type { LibraryTreeSnapshot } from './projection';
 
 export interface TreeItem {
   /**
@@ -14,6 +17,11 @@ export interface TreeItem {
    */
   fileId?: string | null;
   fileType: string;
+  /**
+   * Something sits under this row. Folders are expandable regardless; this is
+   * what lets a document that holds other documents expand too.
+   */
+  hasChildren?: boolean;
   id: string;
   isFolder: boolean;
   metadata?: Record<string, any>;
@@ -52,6 +60,9 @@ export interface TreeState extends TreeDataState {
   errors: Record<string, unknown>;
   expandAncestors: (folderIds: string[]) => Promise<void>;
   expanded: Record<string, boolean>;
+  /** Drop the open library's persisted tree (a server-side bulk delete, see `forgetSnapshot`). */
+  forgetLibrary: (knowledgeBaseId: string) => void;
+  forgetSnapshot: () => void;
 
   // actions
   init: (knowledgeBaseId: string) => void;
@@ -59,10 +70,20 @@ export interface TreeState extends TreeDataState {
   loadChildren: (folderId: string) => Promise<void>;
   moveItem: (itemId: string, fromParent: string, toParent: string) => Promise<void>;
   moveItems: (itemIds: string[], fromParent: string, toParent: string) => Promise<void>;
-  reconcile: (folderId: string, items: TreeItem[]) => void;
+  /**
+   * Read the library's persisted tree into `snapshotMap` so the next `init`
+   * paints it on its first frame. Called from the route loader.
+   */
+  preHydrate: (knowledgeBaseId: string) => Promise<boolean>;
+  /** `confirmed: false` renders the rows without persisting them (pending explorer overlays). */
+  reconcile: (folderId: string, items: TreeItem[], options?: { confirmed?: boolean }) => void;
   removeItems: (itemIds: string[], parentId: string) => Promise<void>;
   renameItem: (itemId: string, parentId: string, newName: string) => Promise<void>;
   reset: () => void;
   revalidate: (folderId: string) => Promise<void>;
+  /** Refetch every loaded folder — for a bulk mutation whose scope only the server knows. */
+  revalidateLoaded: (fallbackKey?: string) => Promise<void>;
+  snapshotMap: Record<string, LibraryTreeSnapshot>;
+  snapshotReplica: ReplicaState<LibraryTreeSnapshot>;
   toggle: (folderId: string) => void;
 }

@@ -266,7 +266,14 @@ export class App {
     const isSingle = app.requestSingleInstanceLock();
     if (!isSingle) {
       logger.info('Another instance is already running, exiting');
+      // `app.exit(0)` only *initiates* shutdown — without returning, the rest
+      // of this async bootstrap kept running: the duplicate instance went on
+      // to start the IPC server, gateway connection and shell services, so a
+      // machine could briefly run two live device processes for one user and
+      // both answered gateway tool calls (observed as the same runCommand
+      // executing twice with two independent process trees). Stop here.
       app.exit(0);
+      return;
     }
 
     this.initDevBranding();

@@ -6,6 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useMenu } from './useMenu';
 
+const favoriteMenuItemMock = vi.hoisted(() =>
+  vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
+);
+vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
+
 const messageSuccessMock = vi.hoisted(() => vi.fn());
 const modalConfirmMock = vi.hoisted(() => vi.fn());
 const openTopicInNewWindowMock = vi.hoisted(() => vi.fn());
@@ -15,9 +20,28 @@ const autoRenameTopicTitleMock = vi.hoisted(() => vi.fn());
 const removeTopicMock = vi.hoisted(() => vi.fn());
 const updateTopicTitleMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
+const labState = vi.hoisted(() => ({ enableTopicBugReport: false }));
+const bugReportTargetMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
   useAuthorInfo: () => ({ fullName: 'Miao Miao' }),
+}));
+
+vi.mock('@/business/client/hooks/useTopicBugReportMenuItem', () => ({
+  useTopicBugReportMenuItem: (target: unknown) => {
+    bugReportTargetMock(target);
+    return { key: 'reportProblem', label: 'topic:actions.reportProblem' };
+  },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: typeof labState) => unknown) => selector(labState),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableTopicBugReport: (state: typeof labState) => state.enableTopicBugReport,
+  },
 }));
 
 vi.mock('@/components/RenameModal', () => ({
@@ -116,6 +140,7 @@ const isActionItem = (
 
 describe('Conversation header action menu', () => {
   afterEach(() => {
+    labState.enableTopicBugReport = false;
     vi.restoreAllMocks();
     Reflect.deleteProperty(document, 'execCommand');
   });
@@ -141,20 +166,20 @@ describe('Conversation header action menu', () => {
     expect(copiedText).toBe('topic-1');
     expect(document.querySelector('textarea')).toBeNull();
   });
-  it('includes the desktop popup-window action for the active topic', () => {
+  it('reuses the sidebar open-in-new-window action for the active topic', () => {
     useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
 
     const { result } = renderHook(() => useMenu());
 
     const popupItem = result.current
       .menuItems()
-      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
+      .find((item) => isActionItem(item) && item.key === 'openInNewWindow');
 
     expect(popupItem).toBeDefined();
     if (!isActionItem(popupItem)) {
       throw new Error('Expected popup menu item to be a clickable action item');
     }
-    expect(popupItem?.label).toBe('topic:inPopup.title');
+    expect(popupItem?.label).toBe('topic:actions.openInNewWindow');
 
     act(() => {
       popupItem?.onClick?.();
@@ -170,7 +195,7 @@ describe('Conversation header action menu', () => {
 
     const popupItem = result.current
       .menuItems()
-      .find((item) => isActionItem(item) && item.key === 'openInPopupWindow');
+      .find((item) => isActionItem(item) && item.key === 'openInNewWindow');
 
     expect(popupItem).toBeUndefined();
   });
@@ -191,5 +216,43 @@ describe('Conversation header action menu', () => {
 
     expect(screen.getByText('topic:info.title')).toBeInTheDocument();
     expect(screen.getByText(/Miao Miao.*topic:info.updatedAt/)).toBeInTheDocument();
+  });
+
+  it('offers the problem report only when its lab is on', () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    const findReportItem = (items: unknown[]) =>
+      items.find((item) => isActionItem(item) && item.key === 'reportProblem');
+
+    const { rerender, result } = renderHook(() => useMenu());
+    expect(findReportItem(result.current.menuItems())).toBeUndefined();
+
+    labState.enableTopicBugReport = true;
+    rerender();
+
+    expect(findReportItem(result.current.menuItems())).toBeDefined();
+    expect(bugReportTargetMock).toHaveBeenLastCalledWith({
+      agentId: 'agent-1',
+      threadId: undefined,
+      topicId: 'topic-1',
+    });
+  });
+
+  it('offers Favorites for the open topic beside Pin, without the hotkey', () => {
+    const { result } = renderHook(() => useMenu());
+
+    const keys = result.current
+      .menuItems()
+      .map((item) => (item && 'key' in item ? item.key : undefined));
+    expect(keys.slice(0, 2)).toEqual(['favorite', 'toggleFavorite']);
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        path: '/agent/agent-1/topic-1',
+        snapshotReady: true,
+        targetId: 'topic-1',
+        title: 'Topic 1',
+        type: 'topic',
+      },
+      { showHotkey: false },
+    );
   });
 });

@@ -27,21 +27,25 @@ import {
   useConversationStoreApi,
   virtuaListSelectors,
 } from '../../store';
+import { VLIST_CLASS_NAME } from '../constants';
 import {
   CONVERSATION_SPACER_TRANSITION_MS,
   useConversationScroll,
 } from '../hooks/useConversationScroll';
 import { useEarlierHistoryTrigger } from '../hooks/useEarlierHistoryTrigger';
+import { useLaterHistoryTrigger } from '../hooks/useLaterHistoryTrigger';
+import { useReadingAnchor } from '../hooks/useReadingAnchor';
 import { useSelectionMessageIds } from '../hooks/useSelectionMessageIds';
-import { useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
+import { type InitialScrollPosition, useTopicScrollPersist } from '../hooks/useTopicScrollPersist';
 import { resolveAutoScrollDetached } from '../utils/autoScrollFollow';
 import type { ResolvedMessageDeepLink } from '../utils/messageDeepLink';
 import AutoScroll from './AutoScroll';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
 import { useAutoScrollEnabled } from './AutoScroll/useAutoScrollEnabled';
 import BackBottom from './BackBottom';
-import EarlierHistoryError from './EarlierHistoryError';
-import EarlierHistorySkeleton from './EarlierHistorySkeleton';
+import HistoryPageError from './HistoryPageError';
+import HistoryPageSkeleton from './HistoryPageSkeleton';
+import PrintTranscript from './PrintTranscript';
 
 const DebugInspector = lazy(() => import('./AutoScroll/DebugInspector'));
 
@@ -56,7 +60,6 @@ const CONVERSATION_HEADER_ID = '__conversation_header__';
 // that talk to virtua directly) work in MESSAGE index space; this offset
 // translates at the virtua boundary.
 const LEADING_ROWS = 1;
-const VLIST_CLASS_NAME = 'conversation-vlist';
 const USER_SCROLL_INTENT_TTL_MS = 500;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
@@ -64,8 +67,14 @@ interface VirtualizedListProps {
   dataSource: string[];
   footerSlot?: ReactNode;
   headerSlot?: ReactNode;
+  initialScrollPosition?: InitialScrollPosition;
   itemContent: (index: number, data: string) => ReactNode;
   messageDeepLink?: ResolvedMessageDeepLink;
+  paging?: 'backward' | 'forward';
+  /** Print the loaded transcript, without the app chrome, when the page prints. */
+  printable?: boolean;
+  /** Reopen at the message the reader last had at the top of the viewport. */
+  rememberReadingPosition?: boolean;
 }
 
 /**
@@ -74,7 +83,18 @@ interface VirtualizedListProps {
  * Based on ConversationStore data flow, no dependency on global ChatStore.
  */
 const VirtualizedList = memo<VirtualizedListProps>(
-  ({ dataSource, footerSlot, headerSlot, itemContent, messageDeepLink }) => {
+  ({
+    dataSource,
+    footerSlot,
+    headerSlot,
+    initialScrollPosition,
+    itemContent,
+    messageDeepLink,
+    paging,
+    printable,
+    rememberReadingPosition,
+  }) => {
+    const isForward = paging === 'forward';
     const virtuaRef = useRef<VListHandle>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -97,9 +117,10 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const { recordScroll } = useTopicScrollPersist({
       contextKey,
       containerRef,
-      dataSourceLength: dataSource.length,
+      dataSource,
       getScroller,
       headerOffset: LEADING_ROWS,
+      initialPosition: isForward ? 'top' : initialScrollPosition,
       messageDeepLink,
       virtuaRef,
     });
@@ -136,6 +157,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
     // Store actions
     const storeApi = useConversationStoreApi();
     const loadEarlierMessages = useConversationStore((s) => s.loadEarlierMessages);
+    const loadLaterMessages = useConversationStore((s) => s.loadLaterMessages);
     const registerVirtuaScrollMethods = useConversationStore((s) => s.registerVirtuaScrollMethods);
     const setScrollState = useConversationStore((s) => s.setScrollState);
     const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
@@ -144,6 +166,22 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const activeIndex = useConversationStore(virtuaListSelectors.activeIndex);
 
     const earlierHistory = useEarlierHistoryTrigger({ loadEarlierMessages, virtuaRef });
+    const laterHistory = useLaterHistoryTrigger({
+      enabled: isForward,
+      loadLaterMessages,
+      virtuaRef,
+    });
+    const historyTrigger = isForward ? laterHistory : earlierHistory;
+
+    const { onScroll: recordReadingAnchor } = useReadingAnchor({
+      contextKey,
+      dataSource,
+      enabled: !!rememberReadingPosition && !messageDeepLink,
+      getScroller,
+      headerOffset: LEADING_ROWS,
+      loadPage: isForward ? loadLaterMessages : loadEarlierMessages,
+      virtuaRef,
+    });
 
     const markUserScrollIntent = useCallback(() => {
       lastUserScrollIntentAtRef.current = Date.now();
@@ -199,25 +237,25 @@ const VirtualizedList = memo<VirtualizedListProps>(
         if (SCROLL_KEYS.has(event.key)) {
           markActiveScrollInput();
         }
-        earlierHistory.onKeyDown(event);
+        historyTrigger.onKeyDown(event);
       },
-      [earlierHistory, markActiveScrollInput],
+      [historyTrigger, markActiveScrollInput],
     );
 
     const handleWheel = useCallback(
       (event: WheelEvent<HTMLDivElement>) => {
         markActiveScrollInput();
-        earlierHistory.onWheel(event);
+        historyTrigger.onWheel(event);
       },
-      [earlierHistory, markActiveScrollInput],
+      [historyTrigger, markActiveScrollInput],
     );
 
     const handleTouchMove = useCallback(
       (event: TouchEvent<HTMLDivElement>) => {
         markActiveScrollInput();
-        earlierHistory.onTouchMove(event);
+        historyTrigger.onTouchMove(event);
       },
-      [earlierHistory, markActiveScrollInput],
+      [historyTrigger, markActiveScrollInput],
     );
 
     const getDistanceToBottom = useCallback(() => {
@@ -256,7 +294,8 @@ const VirtualizedList = memo<VirtualizedListProps>(
         onScrollOffset(ref.scrollOffset, hasUserScrollIntent);
 
         // Programmatic mount/restore scrolls carry no intent and never fetch.
-        if (hasUserScrollIntent) earlierHistory.onUserScroll();
+        if (hasUserScrollIntent) historyTrigger.onUserScroll();
+        recordReadingAnchor(hasUserScrollIntent);
 
         const autoScrollDetached = resolveAutoScrollDetached({
           detached: storeApi.getState().autoScrollDetached,
@@ -277,10 +316,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
       }
     }, [
       activeIndex,
-      earlierHistory,
       getDistanceToBottom,
+      historyTrigger,
       markUserScrolling,
       onScrollOffset,
+      recordReadingAnchor,
       recordScroll,
       setActiveIndex,
       setScrollState,
@@ -392,6 +432,9 @@ const VirtualizedList = memo<VirtualizedListProps>(
     }, [dataSource, streamingIndices, selectionMessageIds]);
 
     const atBottom = useConversationStore(virtuaListSelectors.atBottom);
+    // The bottom of a forward transcript with rounds still to load is not the
+    // conversation's end.
+    const hasLaterMessages = useConversationStore(dataSelectors.hasLaterMessages);
 
     // The ChatInput's floating overlay (TodoProgress + QueueTray) covers the
     // bottom of this scroll viewport like a layer. Extend VList's internal
@@ -402,9 +445,16 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const paddingBottom = Math.max(24, overlayHeight + 12);
 
+    // A forward list always ends in the footer row: it hosts the later-page
+    // skeleton and retry row, kept before the footer slot.
+    const hasFooterRow = !!footerSlot || isForward;
     const dataWithSlots = useMemo(
-      () => [CONVERSATION_HEADER_ID, ...listData, ...(footerSlot ? [CONVERSATION_FOOTER_ID] : [])],
-      [footerSlot, listData],
+      () => [
+        CONVERSATION_HEADER_ID,
+        ...listData,
+        ...(hasFooterRow ? [CONVERSATION_FOOTER_ID] : []),
+      ],
+      [hasFooterRow, listData],
     );
 
     // Prepend detection for virtua: when pre-window history loads, the former
@@ -427,8 +477,12 @@ const VirtualizedList = memo<VirtualizedListProps>(
     // excludes a zero-height row at the top from its render range, so it
     // would never mount to show the skeleton it hosts.
     const keepMountedIndicesWithSlots = useMemo(
-      () => [0, ...keepMountedIndices.map((index) => index + LEADING_ROWS)],
-      [keepMountedIndices],
+      () => [
+        0,
+        ...keepMountedIndices.map((index) => index + LEADING_ROWS),
+        ...(isForward ? [dataWithSlots.length - 1] : []),
+      ],
+      [dataWithSlots.length, isForward, keepMountedIndices],
     );
 
     // Mirror the latest data length into a ref so the scroll-methods registered
@@ -447,7 +501,7 @@ const VirtualizedList = memo<VirtualizedListProps>(
         onPointerDownCapture={handlePointerDown}
         onPointerMoveCapture={handlePointerMove}
         onTouchMoveCapture={handleTouchMove}
-        onTouchStartCapture={earlierHistory.onTouchStart}
+        onTouchStartCapture={historyTrigger.onTouchStart}
         onWheelCapture={handleWheel}
       >
         {/* Pinned to the list viewport top; only renders while multi-selecting */}
@@ -474,14 +528,16 @@ const VirtualizedList = memo<VirtualizedListProps>(
               return (
                 <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
                   {headerSlot}
-                  <EarlierHistorySkeleton />
-                  <EarlierHistoryError />
+                  <HistoryPageSkeleton side={'earlier'} />
+                  <HistoryPageError side={'earlier'} />
                 </WideScreenContainer>
               );
             }
             if (messageId === CONVERSATION_FOOTER_ID) {
               return (
                 <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
+                  {isForward && <HistoryPageSkeleton side={'later'} />}
+                  {isForward && <HistoryPageError side={'later'} />}
                   {footerSlot}
                 </WideScreenContainer>
               );
@@ -544,10 +600,11 @@ const VirtualizedList = memo<VirtualizedListProps>(
           <BackBottom
             atBottom={atBottom}
             bottomOffset={overlayHeight}
-            visible={!atBottom}
+            visible={!atBottom && !hasLaterMessages}
             onScrollToBottom={handleBackBottom}
           />
         </WideScreenContainer>
+        {printable && <PrintTranscript dataSource={dataSource} itemContent={itemContent} />}
       </div>
     );
   },

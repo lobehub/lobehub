@@ -3,7 +3,6 @@
 import type { DeviceListItem } from '@lobechat/types';
 import {
   ActionIcon,
-  Avatar,
   confirmModal,
   createStaticStyles,
   cssVar,
@@ -26,6 +25,7 @@ import {
 import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -131,7 +131,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
   // Cards are not virtualized; only cards on screen keep their usage meters polling.
   const cardRef = useRef<HTMLDivElement>(null);
   const [inViewport] = useInViewport(cardRef);
-  const { data, error } = useDeviceMetricSeries(device.deviceId, !!inViewport);
+  const { data, error } = useDeviceMetricSeries(device.deviceId, device.scope, !!inViewport);
   const { t } = useTranslation('setting');
   const { t: tCommon } = useTranslation('common');
   const canEdit = useCanEditDevice()(device);
@@ -303,7 +303,7 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
               // shared workspace pools. Hidden in personal scope (always the
               // caller) and for ghost rows (no row yet).
               <Tooltip title={t('workspaceSetting.devices.enrolledBy', { name: enrollerName })}>
-                <Avatar avatar={device.enroller.avatar ?? undefined} size={20} />
+                <UserAvatar avatar={device.enroller.avatar} name={enrollerName} size={20} />
               </Tooltip>
             )}
             {canEdit && (
@@ -353,6 +353,9 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
           <UsageMeterGroup>
             <UsageMeter label={t('devices.card.cpuUsage')} value={usage.latest?.cpuPercent} />
             <UsageMeter label={t('devices.card.memoryUsage')} value={usage.latest?.memoryPercent} />
+            {usage.reportsDisk && (
+              <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
+            )}
           </UsageMeterGroup>
         )}
       </Flexbox>

@@ -61,4 +61,17 @@ describe('AiSendMessageServerSchema', () => {
       expect(parse({ newTopic: { id: 'msg_aBc123XyZ890' } }).success).toBe(false);
     });
   });
+
+  it('should drop client-supplied agentSender from every message it creates', () => {
+    const forged = { agentSender: { agentId: 'agt_victim' }, collapsed: true };
+    const parsed = AiSendMessageServerSchema.parse({
+      newAssistantMessage: { metadata: forged, model: 'gpt-4o', provider: 'openai' },
+      newUserMessage: { content: 'hello', metadata: forged },
+      preloadMessages: [{ content: 'earlier', metadata: forged, role: 'assistant' }],
+    });
+
+    expect(parsed.newUserMessage.metadata).toEqual({ collapsed: true });
+    expect(parsed.newAssistantMessage.metadata).toEqual({ collapsed: true });
+    expect(parsed.preloadMessages?.[0].metadata).toEqual({ collapsed: true });
+  });
 });

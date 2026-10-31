@@ -8,7 +8,7 @@ import { resolveRequestLocale } from '@/locales/requestLocale';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
 import SharedPageView from '../../src/features/page/SharedPageView';
-import { loadShareResources } from '../../src/shell/createShareI18n';
+import { loadShareT } from '../../src/shell/createShareI18n';
 import { cloudflareContext } from '../lib/cloudflareContext';
 import { buildPageMeta, shareMetaDescription } from '../lib/seo';
 import { createServerLambdaClient } from '../lib/serverTrpc';
@@ -26,7 +26,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     });
 
   return {
-    description: shareMetaDescription(await loadShareResources(locale), 'pageDescription'),
+    description: shareMetaDescription(await loadShareT(locale), 'pageDescription'),
     documentId,
     locale,
     sharedDocument,

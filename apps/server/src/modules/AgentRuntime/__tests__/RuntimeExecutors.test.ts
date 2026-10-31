@@ -52,17 +52,11 @@ const mockBuiltinModels = vi.hoisted(() => [
 ]);
 
 // Mock dependencies
-vi.mock('@/server/modules/ModelRuntime', () => ({
-  initModelRuntimeFromDB: vi.fn().mockResolvedValue({
-    // Emit a minimal non-empty completion so the call_llm empty-completion
-    // guard doesn't treat the default mock as a "gave up" turn and
-    // throw ModelEmptyError. Tests that exercise real output override this.
-    chat: vi.fn().mockImplementation(async (_payload: any, options: any) => {
-      await options?.callback?.onText?.('done');
-      return new Response('done');
-    }),
-  }),
-}));
+vi.mock('@/server/modules/ModelRuntime', async () => {
+  const { createModelRuntimeMock } = await import('./mocks/modelRuntimeMock');
+
+  return createModelRuntimeMock();
+});
 
 vi.mock('@/server/services/message', () => ({
   MessageService: vi.fn().mockImplementation(function () {
@@ -3684,14 +3678,14 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         state: {},
         success: false,
       });
-      const loadAgentState = vi.fn().mockResolvedValue({ status: 'interrupted' });
-
+      const loadAgentState = vi.fn(async () => ({
+        status: mockToolExecutionService.executeTool.mock.calls.length ? 'interrupted' : 'running',
+      }));
       const executors = createRuntimeExecutors({
         ...ctx,
         loadAgentState,
       });
       const state = createMockState();
-
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',

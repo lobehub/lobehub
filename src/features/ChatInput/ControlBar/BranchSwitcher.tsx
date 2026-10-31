@@ -2,9 +2,6 @@ import type { DeviceGitWorktreeListItem } from '@lobechat/types';
 import {
   confirmModal,
   copyToClipboard,
-  createStaticStyles,
-  cssVar,
-  cx,
   DropdownMenuFooter,
   DropdownMenuHeader,
   DropdownMenuItem,
@@ -19,6 +16,8 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CheckIcon,
   CopyIcon,
@@ -42,182 +41,133 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
-import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
 import { openCreateBranchModal } from './CreateBranchModal';
-import { gitMenuTriggerStyles } from './gitMenuTriggerStyles';
+import gitMenuTriggerStyles from './gitMenuTrigger.module.css';
 import { openRenameBranchModal } from './RenameBranchModal';
+import { useBranchList } from './useBranchList';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { findWorktreeForBranch, getPathName } from './worktreeHelpers';
 
-const styles = createStaticStyles(({ css }) => ({
-  branchLabel: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  footer: css`
-    border-block-start: 1px solid ${cssVar.colorSplit};
-  `,
-  header: css`
-    padding: 0;
-  `,
+const spin = stylex.keyframes({ to: { transform: 'rotate(360deg)' } });
+
+const styles = stylex.create({
+  branchLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   // Fill the list slot like `list` does, so the footer stays pinned to the
   // bottom of the fixed-height popup while loading / empty.
-  emptyState: css`
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 0;
-    padding-block: 12px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  item: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    height: auto;
-    min-height: 32px;
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: 4px;
-
-    font-size: 14px;
-    line-height: 20px;
-    color: ${cssVar.colorText};
-
-    /* Swap the checkmark for the row actions while hovering the row. */
-    &:hover .branch-row-actions {
-      display: flex;
-    }
-
-    &:hover .branch-row-check {
-      display: none;
-    }
-  `,
-  itemCheck: css`
-    flex: none;
-    color: ${cssVar.colorPrimary};
-  `,
-  rowAction: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  rowActionDanger: css`
-    &:hover {
-      color: ${cssVar.colorError};
-      background: ${cssVar.colorErrorBg};
-    }
-  `,
-  rowActions: css`
-    display: none;
-    flex: none;
-    gap: 2px;
-    align-items: center;
-  `,
-  itemIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  itemMain: css`
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-  `,
-  itemMeta: css`
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  list: css`
-    flex: 1;
-    min-height: 0;
-  `,
+  emptyState: {
+    display: 'flex',
+    flex: '1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '0',
+    paddingBlock: '12px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  footer: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorSplit,
+  },
+  header: { padding: '0' },
+  item: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    height: 'auto',
+    minHeight: '32px',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: '4px',
+    fontSize: '14px',
+    lineHeight: '20px',
+    color: cssVar.colorText,
+  },
+  // Swap the checkmark for the row actions while hovering the row (the
+  // `defaultMarker` on `item`).
+  itemCheck: {
+    display: { default: null, [stylex.when.ancestor(':hover')]: 'none' },
+    flex: 'none',
+    color: cssVar.colorPrimary,
+  },
+  itemIcon: { flex: 'none', color: cssVar.colorTextSecondary },
+  itemMain: { overflow: 'hidden', flex: '1', minWidth: '0' },
+  itemMeta: { fontSize: '12px', lineHeight: '16px', color: cssVar.colorTextTertiary },
+  list: { flex: '1', minHeight: '0' },
   // The base popup only becomes a flex column once the virtual list mounts;
   // force it so the loading / empty placeholder can fill the list slot too.
-  popup: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: 300px;
-    height: 360px;
-  `,
-  searchBar: css`
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-  `,
-  refreshButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  section: css`
-    flex: 1;
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sectionRow: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 4px 2px;
-    padding-inline: 8px;
-  `,
-  spinning: css`
-    animation: branch-switcher-spin 0.8s linear infinite;
-
-    @keyframes branch-switcher-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-}));
+  popup: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '300px',
+    height: '360px',
+  },
+  refreshButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowAction: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActionDanger: {
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorError },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorErrorBg },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowActions: {
+    display: { default: 'none', [stylex.when.ancestor(':hover')]: 'flex' },
+    flex: 'none',
+    gap: '2px',
+    alignItems: 'center',
+  },
+  searchBar: {
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+  },
+  section: { flex: '1', fontSize: '11px', fontWeight: 500, color: cssVar.colorTextTertiary },
+  sectionRow: {
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '2px',
+    paddingInline: '8px',
+  },
+  spinning: {
+    animationName: spin,
+    animationDuration: '0.8s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+});
 
 interface BranchSwitcherProps {
   agentId: string;
@@ -271,16 +221,15 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     const currentRowRef = useRef<HTMLDivElement>(null);
     const switchWorktree = useSwitchWorktree({ agentId, isGithub, sourcePath, topicId });
 
+    // The persisted list paints the moment the dropdown opens; the read refreshes it.
     const {
-      data: branches = [],
-      isLoading,
+      branches,
       error: branchesError,
-      mutate: mutateBranches,
-    } = useSWR(
-      open ? deviceKeys.gitBranches(deviceId ?? 'local', path) : null,
-      () => gitService.listGitBranches({ deviceId, path }),
-      { keepPreviousData: true, revalidateOnFocus: false, shouldRetryOnError: false },
-    );
+      isLoading,
+      loadFailed,
+      refreshBranches,
+      revalidate: mutateBranches,
+    } = useBranchList(deviceId, path, open);
     const { data: workingStatus, mutate: mutateWorkingStatus } = useFetchGitWorkingTreeStatus(
       deviceId,
       path,
@@ -405,12 +354,13 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         // the optimistic label back to the real branch.
         onAfterCheckout?.();
         if (result.success) {
+          void refreshBranches();
           onOpenChange(false);
           return undefined;
         }
         return result.error || t('workingDirectory.checkoutFailed');
       },
-      [deviceId, onAfterCheckout, onOptimisticCheckout, onOpenChange, path, t],
+      [deviceId, onAfterCheckout, onOptimisticCheckout, onOpenChange, path, refreshBranches, t],
     );
 
     const openCreateBranch = useCallback(() => {
@@ -420,7 +370,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
     // Rename a branch from a modal. Closes the dropdown first (mirrors create),
     // then reconciles via onAfterCheckout — a renamed current branch updates the
-    // header label, and the list refetches when the dropdown reopens.
+    // header label — and re-reads the list, so its next open paints the new name.
     const handleRename = useCallback(
       (event: MouseEvent, branch: string) => {
         event.stopPropagation();
@@ -436,12 +386,15 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
               to: newName,
             });
             onAfterCheckout?.();
-            if (result.success) return undefined;
+            if (result.success) {
+              void refreshBranches();
+              return undefined;
+            }
             return result.error || t('workingDirectory.renameFailed');
           },
         });
       },
-      [deviceId, onAfterCheckout, onOpenChange, path, t],
+      [deviceId, onAfterCheckout, onOpenChange, path, refreshBranches, t],
     );
 
     const handleCopy = useCallback(
@@ -471,14 +424,13 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
           onOk: async () => {
             const result = await gitService.deleteGitBranch({ branch, deviceId, path });
             onAfterCheckout?.();
-            if (!result.success) {
-              toast.error(result.error || t('workingDirectory.deleteFailed'));
-            }
+            if (result.success) void refreshBranches();
+            else toast.error(result.error || t('workingDirectory.deleteFailed'));
           },
           title: t('workingDirectory.deleteBranchTitle'),
         });
       },
-      [deviceId, onAfterCheckout, onOpenChange, path, t, tCommon],
+      [deviceId, onAfterCheckout, onOpenChange, path, refreshBranches, t, tCommon],
     );
 
     return (
@@ -488,9 +440,9 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>
-            <DropdownMenuPopup className={styles.popup}>
-              <DropdownMenuHeader className={styles.header}>
-                <div className={styles.searchBar}>
+            <DropdownMenuPopup className={stylex.props(styles.popup).className}>
+              <DropdownMenuHeader className={stylex.props(styles.header).className}>
+                <div {...stylex.props(styles.searchBar)}>
                   <Input
                     autoFocus
                     placeholder={t('workingDirectory.branchSearchPlaceholder')}
@@ -503,11 +455,17 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     onKeyDown={(e) => e.stopPropagation()}
                   />
                 </div>
-                <div className={styles.sectionRow}>
-                  <div className={styles.section}>{t('workingDirectory.branchesHeading')}</div>
-                  <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
+                <div {...stylex.props(styles.sectionRow)}>
+                  <div {...stylex.props(styles.section)}>
+                    {t('workingDirectory.branchesHeading')}
+                  </div>
+                  <div
+                    {...stylex.props(styles.refreshButton)}
+                    role="button"
+                    onClick={handleRefresh}
+                  >
                     <Icon
-                      className={cx(isRefreshing && styles.spinning)}
+                      className={isRefreshing ? stylex.props(styles.spinning).className : undefined}
                       icon={RefreshCwIcon}
                       size={12}
                     />
@@ -516,11 +474,16 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
               </DropdownMenuHeader>
 
               {isLoading && branches.length === 0 ? (
-                <div className={styles.emptyState}>{t('workingDirectory.branchesLoading')}</div>
-              ) : !isLoading && branchesError ? (
-                <div className={styles.emptyState}>{t('workingDirectory.branchesLoadFailed')}</div>
+                <div {...stylex.props(styles.emptyState)}>
+                  {t('workingDirectory.branchesLoading')}
+                </div>
+              ) : loadFailed ? (
+                // A failed refresh keeps the list it already has on screen.
+                <div {...stylex.props(styles.emptyState)}>
+                  {t('workingDirectory.branchesLoadFailed')}
+                </div>
               ) : filtered.length === 0 ? (
-                <div className={styles.emptyState}>
+                <div {...stylex.props(styles.emptyState)}>
                   {search.trim()
                     ? t('workingDirectory.branchesNoMatch')
                     : t('workingDirectory.branchesEmpty')}
@@ -528,8 +491,13 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
               ) : (
                 <DropdownMenuScrollViewport
                   virtual
-                  className={styles.list}
+                  className={stylex.props(styles.list).className}
                   getItemLabel={(_, index) => filtered[index]?.name}
+                  // The virtual viewport sizes itself on mount: a background
+                  // refresh that adds branches while the dropdown is open
+                  // would otherwise leave the extra rows (often the current
+                  // branch, last) undrawn. Remount when the count changes.
+                  key={filtered.length}
                   listItemHeight={32}
                 >
                   {filtered.map((branch) => {
@@ -540,28 +508,30 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     const owner = findWorktreeForBranch(worktrees, branch.name);
                     return (
                       <DropdownMenuItem
-                        className={styles.item}
+                        className={stylex.props(stylex.defaultMarker(), styles.item).className}
                         closeOnClick={false}
                         key={branch.name}
                         ref={isCurrent ? currentRowRef : undefined}
                         onClick={() => handleCheckout(branch.name)}
                       >
                         <Icon
-                          className={cx(styles.itemIcon, isBusy && styles.spinning)}
                           icon={isBusy ? LoaderIcon : owner ? GitForkIcon : GitBranchIcon}
                           size={14}
+                          className={
+                            stylex.props(styles.itemIcon, isBusy && styles.spinning).className
+                          }
                         />
-                        <div className={styles.itemMain}>
-                          <div className={styles.branchLabel}>{branch.name}</div>
+                        <div {...stylex.props(styles.itemMain)}>
+                          <div {...stylex.props(styles.branchLabel)}>{branch.name}</div>
                           {isCurrent && workingStatus && !workingStatus.clean && (
-                            <div className={styles.itemMeta}>
+                            <div {...stylex.props(styles.itemMeta)}>
                               {t('workingDirectory.uncommittedChanges', {
                                 count: workingStatus.total,
                               })}
                             </div>
                           )}
                           {owner && (
-                            <div className={styles.itemMeta}>
+                            <div {...stylex.props(styles.itemMeta)}>
                               {t('workingDirectory.branchInWorktree', {
                                 name: getPathName(owner.path),
                               })}
@@ -570,16 +540,16 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                         </div>
                         {isCurrent && (
                           <Icon
-                            className={cx('branch-row-check', styles.itemCheck)}
+                            className={stylex.props(styles.itemCheck).className}
                             icon={CheckIcon}
                             size={14}
                           />
                         )}
-                        <div className={cx('branch-row-actions', styles.rowActions)}>
+                        <div {...stylex.props(styles.rowActions)}>
                           <Tooltip title={tCommon('copy')}>
                             <div
                               aria-label={tCommon('copy')}
-                              className={styles.rowAction}
+                              {...stylex.props(styles.rowAction)}
                               role="button"
                               onClick={(e) => void handleCopy(e, branch.name)}
                             >
@@ -588,7 +558,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           </Tooltip>
                           <Tooltip title={t('workingDirectory.renameBranchAction')}>
                             <div
-                              className={styles.rowAction}
+                              {...stylex.props(styles.rowAction)}
                               role="button"
                               onClick={(e) => handleRename(e, branch.name)}
                             >
@@ -598,7 +568,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           {!isCurrent && !owner && (
                             <Tooltip title={t('workingDirectory.deleteBranchAction')}>
                               <div
-                                className={cx(styles.rowAction, styles.rowActionDanger)}
+                                {...stylex.props(styles.rowAction, styles.rowActionDanger)}
                                 role="button"
                                 onClick={(e) => handleDelete(e, branch.name)}
                               >
@@ -613,10 +583,19 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                 </DropdownMenuScrollViewport>
               )}
 
-              <DropdownMenuFooter className={styles.footer}>
-                <DropdownMenuItem className={styles.item} onClick={openCreateBranch}>
-                  <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
-                  <div className={styles.itemMain}>{t('workingDirectory.createBranchAction')}</div>
+              <DropdownMenuFooter className={stylex.props(styles.footer).className}>
+                <DropdownMenuItem
+                  className={stylex.props(styles.item).className}
+                  onClick={openCreateBranch}
+                >
+                  <Icon
+                    className={stylex.props(styles.itemIcon).className}
+                    icon={GitBranchPlusIcon}
+                    size={14}
+                  />
+                  <div {...stylex.props(styles.itemMain)}>
+                    {t('workingDirectory.createBranchAction')}
+                  </div>
                 </DropdownMenuItem>
               </DropdownMenuFooter>
             </DropdownMenuPopup>

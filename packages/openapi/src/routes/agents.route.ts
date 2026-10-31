@@ -7,11 +7,11 @@ import { zValidator } from '../common/validator';
 import { AgentController } from '../controllers/agent.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
-import { PaginationQuerySchema } from '../types';
 import {
   AgentIdParamSchema,
   CreateAgentRequestSchema,
   DuplicateAgentSchema,
+  GetAgentsQuerySchema,
   UpdateAgentRequestSchema,
 } from '../types/agent.type';
 
@@ -30,7 +30,7 @@ AgentRoutes.get(
     getScopePermissions('AGENT_READ', ['ALL', 'OWNER']),
     'You do not have permission to view the Agent list',
   ),
-  zValidator('query', PaginationQuerySchema),
+  zValidator('query', GetAgentsQuerySchema),
   async (c) => {
     const controller = new AgentController();
     return await controller.queryAgents(c);

@@ -9,6 +9,8 @@ const topicId = (s: State) => s.context.topicId;
 const threadId = (s: State) => s.context.threadId;
 const isThread = (s: State) => !!s.context.threadId;
 const isTopic = (s: State) => !!s.context.topicId;
+/** A read-only share-link view (topic share or shared-agent visitor), not the owner's own chat. */
+const isSharePage = (s: State) => !!s.context.topicShareId || !!s.context.agentShareId;
 
 const conversationKey = (s: State): string => {
   const { agentId, topicId, threadId, scope, isNew, groupId, subAgentId } = s.context;
@@ -33,6 +35,7 @@ export const contextSelectors = {
   groupId,
   hook,
   hooks,
+  isSharePage,
   isThread,
   isTopic,
   threadId,

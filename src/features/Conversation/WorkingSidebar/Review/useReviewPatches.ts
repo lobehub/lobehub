@@ -1,6 +1,7 @@
 export {
   getGitReviewPatchesKey,
   getReviewRefreshInterval,
+  getReviewSummaryState,
   invalidateGitReviewCaches,
   type ReviewMode,
   type ReviewPatchesData,

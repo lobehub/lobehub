@@ -12,6 +12,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import {
+  ensureMarketSkills,
+  ensureMarketSkillsInputSchema,
   SkillImporter,
   SkillImportError,
   SkillResourceError,
@@ -154,6 +156,10 @@ export const agentSkillsRouter = router({
       assertWorkspaceRowManageable(ctx, target.userId, 'skill');
       return ctx.skillModel.delete(input.id);
     }),
+
+  ensureFromMarket: skillWriteProcedure
+    .input(ensureMarketSkillsInputSchema)
+    .mutation(async ({ ctx, input }) => ensureMarketSkills(input.identifiers, ctx)),
 
   // ===== Query =====
 

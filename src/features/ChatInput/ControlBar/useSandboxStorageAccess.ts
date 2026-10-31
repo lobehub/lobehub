@@ -1,13 +1,11 @@
 import { isDesktop } from '@lobechat/const';
-import useSWR from 'swr';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { sandboxStorageService } from '@/services/sandboxStorage';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { sandboxActions, sandboxSelectors, useSandboxStore } from '@/store/sandbox';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
@@ -61,18 +59,15 @@ const useRunsInSandbox = (agentId: string): boolean => {
 export const useSandboxStorageAccess = (agentId: string): SandboxStorageAccessResult => {
   const labEnabled = useUserStore(labPreferSelectors.enablePersistentSandbox);
   const runsInSandbox = useRunsInSandbox(agentId);
-  const workspaceId = useActiveWorkspaceId();
   const shouldAsk = labEnabled && runsInSandbox;
 
-  // Keyed by workspace, because the server resolves the entitlement from the
-  // active one. A single global key with focus revalidation off would hand the
-  // previous workspace's answer and quota to the next one until a reload —
-  // offering persistence where there is none, or hiding one there is.
-  const { data } = useSWR(
-    shouldAsk ? ['sandbox-storage-entitlement', workspaceId ?? ''] : null,
-    () => sandboxStorageService.getEntitlement(),
-    { revalidateOnFocus: false },
-  );
+  // A replica partitioned by the cache scope (user + workspace), because the
+  // server resolves the entitlement from the active workspace: one workspace's
+  // answer and quota never reach the next. Persisted, so a reload paints the
+  // chip from the last answer while this one is confirmed; the server still
+  // checks the claim on every sandbox call.
+  sandboxActions.useFetchEntitlement(shouldAsk, { revalidateOnFocus: false });
+  const data = useSandboxStore(sandboxSelectors.entitlement);
 
   if (!shouldAsk) return { quotaBytes: null, status: 'hidden' };
   // Until the answer arrives, show nothing rather than flashing an upgrade

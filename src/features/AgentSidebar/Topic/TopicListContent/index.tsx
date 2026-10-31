@@ -14,6 +14,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 import ByAgentMode from './ByAgentMode';
+import ByDeviceMode from './ByDeviceMode';
 import ByProjectMode from './ByProjectMode';
 import ByStatusMode from './ByStatusMode';
 import ByTimeMode from './ByTimeMode';
@@ -60,6 +61,8 @@ const TopicListContent = memo(() => {
         <ByStatusMode />
       ) : topicGroupMode === 'byAgent' ? (
         <ByAgentMode />
+      ) : topicGroupMode === 'byDevice' ? (
+        <ByDeviceMode />
       ) : (
         <ByTimeMode />
       )}

@@ -20,7 +20,7 @@ import { resolveRequestLocale } from '@/locales/requestLocale';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 import ShareAppShell from '../src/shell';
-import { loadShareResources } from '../src/shell/createShareI18n';
+import { createShareT, loadShareResources } from '../src/shell/createShareI18n';
 import { buildPageMeta, shareMetaDescription } from './lib/seo';
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -28,6 +28,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const resources = await loadShareResources(locale);
 
   return {
+    description: shareMetaDescription(createShareT(locale, resources), 'topicDescription'),
     dir: isRtlLang(locale) ? 'rtl' : 'ltr',
     locale,
     resources,
@@ -36,7 +37,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) =>
   buildPageMeta({
-    description: shareMetaDescription(loaderData?.resources, 'topicDescription'),
+    description: loaderData?.description ?? shareMetaDescription(undefined, 'topicDescription'),
     locale: loaderData?.locale,
     title: BRANDING_NAME,
   });

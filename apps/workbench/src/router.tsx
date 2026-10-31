@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import type { RouteObject } from 'react-router';
 import { Outlet, useRouteError } from 'react-router';
 
+import { ACCEPTANCE_LIST_PATH } from '@/features/Acceptance/roundLink';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 import WorkbenchShell, { WorkbenchNamespace } from './shell';
@@ -61,10 +62,11 @@ const WorkbenchErrorBoundary = () => {
   );
 };
 
-const ExitWorkbench = () => {
+/** Leave the Workbench for a page another app serves; the host picks which. */
+const HardRedirect = ({ to }: { to: string }) => {
   useEffect(() => {
-    window.location.replace('/');
-  }, []);
+    window.location.replace(to);
+  }, [to]);
 
   return <WorkbenchLoading />;
 };
@@ -80,12 +82,18 @@ export const workbenchRoutes: RouteObject[] = [
     children: [
       {
         element: lazyElement(() => import('./routes/agent/docs/[docId]')),
+        // Seed the persisted reader body before the reader paints. Resolved on
+        // first use, so the agent document store stays out of the entry chunk.
+        loader: (args) =>
+          import('./routes/agent/docs/[docId]/readerLoader').then((module) =>
+            module.agentDocumentReaderLoader(args),
+          ),
         path: 'agent/:aid/docs/:docId',
       },
       {
         children: [
           {
-            element: <ExitWorkbench />,
+            element: <HardRedirect to={'/'} />,
             index: true,
           },
           {
@@ -103,10 +111,12 @@ export const workbenchRoutes: RouteObject[] = [
       {
         children: [
           {
-            element: lazyElement(() => import('./routes/verify')),
+            // The standalone report list is gone; reports live on Acceptance.
+            element: <HardRedirect to={ACCEPTANCE_LIST_PATH} />,
             index: true,
           },
           {
+            // Old report links resolve to the run's acceptance round.
             element: lazyElement(() => import('./routes/verify/[runId]')),
             path: ':runId',
           },
@@ -115,7 +125,7 @@ export const workbenchRoutes: RouteObject[] = [
         path: 'verify',
       },
       {
-        element: <ExitWorkbench />,
+        element: <HardRedirect to={'/'} />,
         path: '*',
       },
     ],

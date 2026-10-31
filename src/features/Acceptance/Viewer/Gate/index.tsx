@@ -5,14 +5,16 @@ import { createModal, useModalContext } from '@lobehub/ui';
 import { AcceptanceBundleGate, AcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { latestRound } from './dossier';
-import GateReview from './GateReview';
+import GateReview, { type GateDecisionKind } from './GateReview';
+
+export type { GateDecisionKind } from './GateReview';
 
 const GateReportContent = ({
   acceptanceId,
   onDecided,
 }: {
   acceptanceId: string;
-  onDecided?: () => void;
+  onDecided?: (decision: GateDecisionKind) => void;
 }) => {
   const { data } = useAcceptanceBundle(acceptanceId);
   const { close } = useModalContext();
@@ -23,9 +25,9 @@ const GateReportContent = ({
       inModal
       dossier={dossier}
       onClose={close}
-      onDecided={() => {
+      onDecided={(decision) => {
         close();
-        onDecided?.();
+        onDecided?.(decision);
       }}
     />
   );
@@ -41,7 +43,7 @@ export const openGateReportModal = ({
   onDecided,
 }: {
   acceptanceId: string;
-  onDecided?: () => void;
+  onDecided?: (decision: GateDecisionKind) => void;
 }) =>
   createModal({
     content: (

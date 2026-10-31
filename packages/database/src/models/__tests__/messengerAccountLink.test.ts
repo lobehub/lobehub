@@ -717,4 +717,60 @@ describe('MessengerAccountLinkModel', () => {
       expect(updated).toBeUndefined();
     });
   });
+
+  describe('findById', () => {
+    it('resolves by id inside the owner scope, optionally constrained by platform', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const link = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'discord',
+        platformUserId: 'd-find',
+      });
+
+      expect((await model.findById(link.id))?.id).toBe(link.id);
+      expect((await model.findById(link.id, 'discord'))?.id).toBe(link.id);
+      expect(await model.findById(link.id, 'telegram')).toBeUndefined();
+      expect(await model.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+    });
+  });
+
+  describe('findAllByPlatformWithCredentials', () => {
+    it('decrypts every stored link and tolerates missing or unreadable blobs', async () => {
+      await serverDB.insert(messengerAccountLinks).values([
+        {
+          platform: 'slack',
+          platformUserId: 's-missing',
+          tenantId: 't-missing',
+          userId: userA,
+          workspaceId: null,
+        },
+        {
+          credentials: 'not-json',
+          platform: 'slack',
+          platformUserId: 's-bad',
+          tenantId: 't-bad',
+          userId: userA,
+          workspaceId: null,
+        },
+        {
+          credentials: JSON.stringify({ botToken: 'ok' }),
+          platform: 'slack',
+          platformUserId: 's-ok',
+          tenantId: 't-ok',
+          userId: userA,
+          workspaceId: null,
+        },
+      ]);
+
+      const rows = await MessengerAccountLinkModel.findAllByPlatformWithCredentials(
+        serverDB,
+        'slack',
+      );
+      const byPlatformUser = Object.fromEntries(rows.map((r) => [r.platformUserId, r.credentials]));
+
+      expect(byPlatformUser['s-missing']).toEqual({});
+      expect(byPlatformUser['s-bad']).toEqual({});
+      expect(byPlatformUser['s-ok']).toEqual({ botToken: 'ok' });
+    });
+  });
 });

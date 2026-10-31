@@ -130,6 +130,32 @@ describe('WorktreeSwitcher', () => {
     expect(within(trigger).getByTestId('worktree-tooltip')).toBeTruthy();
   });
 
+  it('keeps the trigger mounted but inert while the branch is unconfirmed', () => {
+    render(
+      <WorktreeSwitcher
+        disabled
+        isGithub
+        agentId="agent-1"
+        currentBranch="feat/current"
+        path="/repo"
+        sourcePath="/repo"
+        worktrees={[
+          {
+            branch: 'feat/current',
+            current: true,
+            path: '/repo',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+        ]}
+      />,
+    );
+
+    const trigger = screen.getByTestId('worktree-dropdown-trigger');
+    // Same DOM and icon as the enabled trigger — only the action is gated.
+    expect(within(trigger).getByTestId('icon')).toBeTruthy();
+    expect(trigger.firstElementChild).toHaveAttribute('aria-disabled', 'true');
+  });
+
   it('shows a branch icon on the main worktree and a fork icon on a linked one', () => {
     const cleanStatus = { added: 0, clean: true, deleted: 0, modified: 0, total: 0 };
     const worktrees = [

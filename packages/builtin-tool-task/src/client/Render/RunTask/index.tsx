@@ -4,27 +4,16 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { Markdown } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+
 import { Play } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { RunTaskParams, RunTaskState } from '../../../types';
 import { InlineField, monoChipClassName, SectionField, TaskResultCard } from '../shared';
 
-const styles = stylex.create({
-  topicChip: {
-    display: 'inline-flex',
-    gap: '4px',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    borderRadius: '999px',
-    fontSize: '12px',
-    color: cssVar.colorInfo,
-    background: cssVar.colorInfoBg,
-  },
-});
+const styles = stylex.create({ topicChip: { display: "inline-flex", gap: "4px", alignItems: "center", alignSelf: "flex-start", paddingBlock: "2px", paddingInline: "8px", borderRadius: "999px", fontSize: "12px", color: cssVar.colorInfo, backgroundColor: cssVar.colorInfoBg, backgroundImage: "none" } });
 
 export const RunTaskRender = memo<BuiltinRenderProps<RunTaskParams, RunTaskState>>(
   ({ args, pluginState }) => {
@@ -43,14 +32,13 @@ export const RunTaskRender = memo<BuiltinRenderProps<RunTaskParams, RunTaskState
         icon={Play}
         iconColor={cssVar.colorWarning}
         identifier={identifier}
+        taskId={resolveTaskOpenTarget(pluginState, params)}
         title={t('builtins.lobe-task.apiName.runTask')}
       >
         {hasBody ? (
           <>
             {continueTopic && (
-              <span {...stylex.props(styles.topicChip)}>
-                {t('builtins.lobe-task.run.continueTopic')}
-              </span>
+              <span {...stylex.props(styles.topicChip)}>{t('builtins.lobe-task.run.continueTopic')}</span>
             )}
             {prompt && (
               <SectionField label={t('builtins.lobe-task.run.prompt')}>

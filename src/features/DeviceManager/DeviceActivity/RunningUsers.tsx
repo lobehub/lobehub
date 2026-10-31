@@ -1,12 +1,12 @@
 'use client';
 
-import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
 import type { DeviceEnroller } from '@lobechat/types';
-import { Avatar, createStaticStyles, cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { TriangleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import UserAvatar from '@/components/UserAvatar';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 import { useClientDataSWR } from '@/libs/swr';
 import { deviceService } from '@/services/device';
@@ -42,9 +42,10 @@ const userName = (user: DeviceEnroller) => user.fullName || user.username || '';
 export const RunUserAvatar = memo<{ className?: string; size?: number; user: DeviceEnroller }>(
   ({ className, size = 20, user }) => (
     <Tooltip title={userName(user)}>
-      <Avatar
-        avatar={user.avatar || DEFAULT_USER_AVATAR_URL}
+      <UserAvatar
+        avatar={user.avatar}
         className={className}
+        name={userName(user)}
         shape={'circle'}
         size={size}
         style={{ flex: 'none' }}

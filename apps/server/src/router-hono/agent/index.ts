@@ -2,6 +2,9 @@ import { Hono } from 'hono';
 
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
+import { botWakeFlush } from './handlers/botWakeFlush';
+import { channelAdvance, channelCallback } from './handlers/channel';
+import { documentAccess, documentProjection } from './handlers/documentCollab';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
@@ -40,6 +43,9 @@ app.post('/', qstashOrApiKeyAuth(), execAgent);
 app.post('/run', qstashAuth(), runStep);
 app.get('/run', runStepHealth);
 
+app.post('/channel/advance', qstashAuth(), channelAdvance);
+app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
+
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);
 
@@ -49,6 +55,8 @@ app.post('/tool-result', serviceTokenAuth(), toolResult);
 app.get('/llm-relay/:callId/payload', llmRelayPayload);
 // POST /api/agent/llm-relay/:callId/chunks — one batch of protocol chunks
 app.post('/llm-relay/:callId/chunks', llmRelayChunks);
+app.get('/document-access', serviceTokenAuth(), documentAccess);
+app.post('/document-projection', serviceTokenAuth(), documentProjection);
 
 // POST /api/agent/finalize-abandoned — watchdog reverse-trigger finalize
 app.post('/finalize-abandoned', serviceTokenAuth(), finalizeAbandoned);
@@ -77,7 +85,12 @@ app.get(
 // POST /api/agent/gateway/start — non-Vercel ensureRunning (Bearer KEY_VAULTS_SECRET)
 app.post(
   '/gateway/start',
-  bearerSecretAuth(() => process.env.KEY_VAULTS_SECRET),
+  bearerSecretAuth(() => {
+    const activeSecret = process.env.KEY_VAULTS_SECRET;
+    return activeSecret?.trim()
+      ? [activeSecret, process.env.KEY_VAULTS_FALLBACK_SECRET]
+      : undefined;
+  }),
   gatewayStart,
 );
 
@@ -95,6 +108,9 @@ app.post('/webhooks/bot-callback', qstashAuth(), botCallback);
 
 // Replay retries carry no completion response and require the queue signature.
 app.post('/webhooks/bot-replay', qstashAuth(), botReplay);
+
+// POST /api/agent/webhooks/bot-wake-flush — delayed flush of the bot-wake channel scheduler (QStash)
+app.post('/webhooks/bot-wake-flush', qstashAuth(), botWakeFlush);
 
 // POST /api/agent/webhooks/subagent-callback — sub-agent completion bridge (QStash)
 app.post('/webhooks/subagent-callback', qstashAuth(), subAgentCallback);

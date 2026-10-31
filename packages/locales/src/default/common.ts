@@ -15,6 +15,8 @@ export default {
   'agentLabel.create': 'New label',
   'agentLabel.manage': 'Manage labels',
   'agentLabel.menuTitle': 'Labels',
+  'agentSkills.ensureFailed':
+    'Some skills this agent relies on could not be installed automatically: {{skills}}. You can add them manually in the Skill Store.',
   'agentViewAll.groupBy.author': 'Author',
   'agentViewAll.groupBy.label': 'Label',
   'agentViewAll.groupBy.noLabel': 'No label',
@@ -24,6 +26,7 @@ export default {
   'agentViewAll.orderBy.author': 'Author',
   'agentViewAll.orderBy.title': 'Title',
   'agentViewAll.orderBy.updatedAt': 'Updated at',
+  'agentViewAll.pendant.official': 'Official',
   'agentViewAll.removeFromSidebar': 'Hide from my sidebar',
   'agentViewAll.sidebarSection.collapse': 'Fold',
   'agentViewAll.sidebarSection.expand': 'Unfold',
@@ -171,7 +174,7 @@ export default {
 
   'cmdk.painting': 'Image',
 
-  'cmdk.resource': 'Resources',
+  'cmdk.resource': 'Docs',
 
   'cmdk.search.agent': 'Agent',
 
@@ -290,6 +293,12 @@ export default {
   'exportType.allAgent': 'Export All Agent Settings',
   'exportType.allAgentWithMessage': 'Export All Agents and Messages',
   'exportType.globalSetting': 'Export Global Settings',
+  'favorite.add': 'Add to Favorites',
+  'favorite.limitReached': 'Favorites can hold up to {{count}} items. Remove one to add another.',
+  'favorite.remove': 'Remove from Favorites',
+  'favorite.reorderError': "Couldn't save the order of your favorites. Try again.",
+  'favorite.section': 'Favorites',
+  'favorite.updateError': "Couldn't update your favorites. Try again.",
   'feedback': 'Feedback',
   'feedback.emailContact': 'You can also email us at <email>{{email}}</email>',
   'feedback.errors.fileTooLarge': 'File exceeds 5MB',
@@ -408,13 +417,13 @@ export default {
   'layoutInitializing': 'Loading layout...',
   'legal': 'Legal Disclaimer',
   'loading': 'Loading...',
-  'stillLoading': 'Still loading...',
+  'bootLoadingHint': 'Setting the stage…',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
   'deleteHistoryMigrating':
     'Chat history is still migrating. It can be deleted once the migration finishes — please try again in a few minutes.',
-  'deleteSharedOwnerOnly':
-    "Only a workspace owner can delete this — it carries other members' conversations",
+  'deleteSharedContentOwnerOnly':
+    "Can't delete: this includes other members' topics, comments, or tasks. Ask a workspace owner to delete it.",
   'manageOnlyCreator': 'Only the creator or a workspace owner can do this',
   'openOnRight': 'Open on the right',
   'openOnRightHint': 'Release to open side-by-side on the right',
@@ -425,6 +434,8 @@ export default {
   'navPanel.agent': 'Agents',
   'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
+  'navPanel.openMenu': 'Open menu',
+  'navPanel.shortcuts': 'Shortcuts',
   'navPanel.displayItems': 'Display Items',
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.hidden': 'Hidden',
@@ -480,7 +491,7 @@ export default {
   'visibilityConfirm.publish.itemReversible':
     'You can switch it back to private later from the same menu',
   'visibilityConfirm.publish.itemCapturedState':
-    'Members can run its copies and reach everything it has captured — files, CLI logins, your signed-in identity',
+    'Copies made before environments became one-time setups keep what they captured — files, CLI logins, your signed-in identity — and members can reach them',
   'visibilityConfirm.publish.itemLoaded':
     'After switching back, content others have already loaded can’t be pulled back',
   'retry': 'Retry',
@@ -500,6 +511,12 @@ export default {
   'supportAgent.context.attached': 'Diagnostic info attached',
   'supportAgent.context.remove': 'Remove',
   'supportAgent.error.failed': 'Something went wrong while answering. Try again.',
+  'supportAgent.error.inspection_expired':
+    'This permission request expired. Start a new conversation to continue.',
+  'supportAgent.error.inspection_submitted':
+    'A permission response may already have been submitted. Its outcome is unknown. Start a new conversation to continue.',
+  'supportAgent.error.resume_failed':
+    'Unable to confirm that this conversation resumed. Start a new conversation to continue.',
   'supportAgent.error.invalid_conversation':
     'This conversation can no longer be continued. Send again to start a new one.',
   'supportAgent.error.rate_limited': "You've reached the hourly question limit. Try again later.",
@@ -509,6 +526,7 @@ export default {
   'supportAgent.inspect.accessHint':
     'For the next 10 minutes it can act as you in your account to investigate. It has been told to only read, and to change nothing unless you ask.',
   'supportAgent.inspect.allow': 'Allow',
+  'supportAgent.inspect.approvedDecision': 'You approved access to {{target}}.',
   'supportAgent.inspect.declined': 'You declined the request',
   'supportAgent.inspect.deny': 'Decline',
   'supportAgent.inspect.granted': 'Granted {{target}}',
@@ -527,6 +545,7 @@ export default {
   'supportAgent.inspect.target.agent': 'the configuration of the agent "{{title}}"',
   'supportAgent.inspect.target.conversation':
     'the full conversation "{{title}}" ({{total}} messages)',
+  'supportAgent.inspect.target.unavailable': 'an unavailable page',
   'supportAgent.inspect.untitled': 'Untitled',
   'supportAgent.newConversation': 'New conversation',
   'supportAgent.placeholder': 'Describe your question…',
@@ -588,13 +607,14 @@ export default {
   'tab.eval': 'Eval Lab',
   'tab.files': 'Files',
   'tab.generation': 'Generation',
+  'tab.goals': 'Goals',
   'tab.home': 'Home',
   'tab.knowledgeBase': 'Library',
   'tab.marketplace': 'Marketplace',
   'tab.me': 'Me',
   'tab.memory': 'Memory',
   'tab.pages': 'Pages',
-  'tab.resource': 'Resources',
+  'tab.resource': 'Docs',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',

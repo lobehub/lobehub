@@ -1,5 +1,6 @@
 import { toRecord } from '@lobechat/utils/object';
 
+import { ConnectorDataError } from '../errors';
 import { createRecoverableMemo } from '../memo';
 import { createGitHubConnectorClient, type GitHubConnectorClient } from './client';
 import type { GitHubConnectorTransport } from './graphql/client';
@@ -53,6 +54,15 @@ const parseProxyResponse = (value: unknown): MarketProxyResponse => {
   const response = value as { data?: unknown; status?: unknown };
   if (typeof response.status !== 'number' || !Number.isFinite(response.status)) {
     throw new Error('GitHub Market proxy status is invalid');
+  }
+  if (response.status === 401) {
+    throw new ConnectorDataError({
+      cause: { status: response.status },
+      code: 'github_authorization_unavailable',
+      operation: 'proxyRequest',
+      provider: 'github',
+      retryable: false,
+    });
   }
   if (response.status < 200 || response.status >= 300) {
     throw Object.assign(new Error('GitHub Market proxy request failed'), {

@@ -98,12 +98,7 @@ export class ElectronRemoteServerActionImpl {
     const { stores } = await import('@/store/utils/userDataStores');
     stores.reset();
 
-    const [{ useSessionStore }, { useChatStore }] = await Promise.all([
-      import('@/store/session'),
-      import('@/store/chat'),
-    ]);
-
-    await useSessionStore.getState().refreshSessions();
+    const { useChatStore } = await import('@/store/chat');
     await useChatStore.getState().refreshMessages();
     await useChatStore.getState().refreshTopic();
     await useUserStore.getState().refreshUserState();

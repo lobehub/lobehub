@@ -8,7 +8,6 @@ import {
 import { Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
-  Avatar,
   Button,
   type DropdownItem,
   DropdownMenu,
@@ -20,6 +19,7 @@ import { Check, ImageIcon, MoreHorizontal, Trash2, UploadIcon, WandSparkles } fr
 import { memo, useCallback, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import EmojiPicker from '@/components/EmojiPicker';
 import {
   openAgentArtworkStudio,
@@ -48,10 +48,6 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: calc(${cssVar.borderRadiusLG} + 4px);
 
     background: ${cssVar.colorBgContainer};
-
-    .ant-avatar:focus {
-      outline: none;
-    }
   `,
   avatarGenerating: css`
     pointer-events: none;
@@ -95,11 +91,6 @@ const styles = createStaticStyles(({ css }) => ({
     .agent-background:hover &,
     .agent-background:focus-within & {
       opacity: 1;
-    }
-  `,
-  avatarPicker: css`
-    .ant-tabs-tab:has([id$='-tab-generate']) {
-      order: -1;
     }
   `,
   compactBackground: css`
@@ -495,11 +486,22 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
             key={avatarRemountKey(avatar)}
             locale={locale}
             open={canEdit ? undefined : false}
-            popupClassName={`${styles.avatarPicker} agent-avatar-artwork-picker`}
+            popupClassName="agent-avatar-artwork-picker"
             popupProps={{ placement: 'bottomLeft' }}
             shape={'square'}
             size={72}
             value={avatar || undefined}
+            // Without an avatar of its own the trigger shows the agent's generated
+            // character, the same one every other agent avatar draws.
+            customRender={() => (
+              <AgentAvatar
+                agentId={agentId}
+                avatar={avatar}
+                className={'lobe-emoji-picker-avatar'}
+                name={name || title}
+                size={72}
+              />
+            )}
             customTabs={[
               {
                 label: (
@@ -510,10 +512,11 @@ export const AgentProfileArtwork = memo<AgentProfileArtworkProps>(
                 render: () => (
                   <Flexbox gap={16} padding={20} width={348}>
                     <Center className={styles.generatedPreview} height={156}>
-                      <Avatar
-                        avatar={avatar || undefined}
+                      <AgentAvatar
+                        agentId={agentId}
+                        avatar={avatar}
                         key={avatarRemountKey(avatar)}
-                        shape={'square'}
+                        name={name || title}
                         size={112}
                       />
                     </Center>

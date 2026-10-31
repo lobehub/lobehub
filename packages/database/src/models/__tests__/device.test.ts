@@ -323,6 +323,22 @@ describe('DeviceModel', () => {
       expect(ids).toEqual(['w1', 'w2']);
     });
 
+    it('findPersonalByDeviceId never resolves to a workspace enrollment', async () => {
+      await serverDB.insert(devices).values([
+        { deviceId: 'both', identitySource: 'machine-id', userId, workspaceId: wsId },
+        { deviceId: 'both', identitySource: 'machine-id', userId },
+        { deviceId: 'ws-only', identitySource: 'machine-id', userId, workspaceId: wsId },
+        { deviceId: 'theirs', identitySource: 'machine-id', userId: otherUserId },
+      ]);
+
+      expect(await deviceModel.findPersonalByDeviceId('both')).toMatchObject({
+        deviceId: 'both',
+        workspaceId: null,
+      });
+      expect(await deviceModel.findPersonalByDeviceId('ws-only')).toBeUndefined();
+      expect(await deviceModel.findPersonalByDeviceId('theirs')).toBeUndefined();
+    });
+
     it('queryWorkspaceDevices returns [] without workspace context', async () => {
       await serverDB
         .insert(devices)

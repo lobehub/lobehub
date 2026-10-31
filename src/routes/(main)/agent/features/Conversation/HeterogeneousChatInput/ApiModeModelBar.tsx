@@ -18,7 +18,7 @@ import {
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
@@ -55,17 +55,20 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const useFetchServerDefaultCapability = useAgentStore(
     (state) => state.useFetchServerDefaultHeterogeneousCapability,
   );
-  const serverCapability = useFetchServerDefaultCapability(
-    !!serverDefaultApiConfig && !!serverDefaultAgentType,
-  );
+  const serverCapabilityEnabled = !!serverDefaultApiConfig && !!serverDefaultAgentType;
+  const serverCapabilitySync = useFetchServerDefaultCapability(serverCapabilityEnabled);
+  // The last confirmed capability paints at once; the sync only confirms it.
+  const serverCapability = useAgentStore(agentSelectors.heteroServerDefaultCapability);
+  const serverCapabilityLoading =
+    serverCapabilityEnabled && !serverCapability && !serverCapabilitySync.error;
   const builtinAiModelList = useAiInfraStore((state) => state.builtinAiModelList);
   const serverDefaultModelOptions = useMemo(() => {
     const models =
-      serverCapability.data?.enabled === true && serverDefaultAgentType
-        ? resolveServerDefaultAgentModels(serverCapability.data.models, serverDefaultAgentType)
+      serverCapability?.enabled === true && serverDefaultAgentType
+        ? resolveServerDefaultAgentModels(serverCapability.models, serverDefaultAgentType)
         : [];
     return buildServerDefaultModelOptions(models, builtinAiModelList);
-  }, [builtinAiModelList, serverCapability.data, serverDefaultAgentType]);
+  }, [builtinAiModelList, serverCapability, serverDefaultAgentType]);
 
   if (
     !heterogeneousProvider ||
@@ -105,7 +108,7 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
         <Select
           className={modelPickerStyles.picker}
           labelRender={compactTriggerLabel}
-          loading={serverCapability.isLoading}
+          loading={serverCapabilityLoading}
           options={serverDefaultModelOptions}
           popupMatchSelectWidth={false}
           size="small"

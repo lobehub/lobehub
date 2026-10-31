@@ -110,6 +110,47 @@ describe('ChatEnhanceAction', () => {
         expect(params.params).not.toHaveProperty('customPrompt');
       }
     });
+    it('keeps the detected language when a small model adds text after the locale', async () => {
+      const messageId = 'message-id';
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'session',
+          dbMessagesMap: {
+            [messageMapKey({ agentId: 'session' })]: [
+              {
+                id: messageId,
+                content: '杭州西湖是中国著名的风景名胜区。',
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                role: 'assistant',
+                sessionId: 'session',
+              },
+            ],
+          },
+        });
+      });
+
+      // qwen3:1.7b answers the detection prompt with the locale, then echoes the input
+      (chatService.fetchPresetTaskResult as Mock).mockImplementationOnce(async ({ onFinish }) => {
+        await onFinish?.('zh-CN  \n{杭州西湖是中国著名的风景名胜区。}');
+      });
+      (chatService.fetchPresetTaskResult as Mock).mockImplementationOnce(async ({ onFinish }) => {
+        await onFinish?.('West Lake in Hangzhou is a famous scenic area in China.');
+      });
+
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        await result.current.translateMessage(messageId, 'en-US');
+      });
+
+      expect(messageService.updateMessageTranslate).toHaveBeenLastCalledWith(messageId, {
+        content: 'West Lake in Hangzhou is a famous scenic area in China.',
+        from: 'zh-CN',
+        to: 'en-US',
+      });
+    });
   });
 
   describe('clearTranslate', () => {

@@ -92,10 +92,8 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
     const { t } = useTranslation('setting');
     const navigate = useWorkspaceAwareNavigate();
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
-    const { data, error, isLoading, mutate, setAccessLevel, updating } = useResourcePermission(
-      resourceType,
-      resourceId,
-    );
+    const { data, error, isConfirmed, isLoading, mutate, setAccessLevel, updating } =
+      useResourcePermission(resourceType, resourceId);
 
     const isPrivate = data?.visibility === 'private';
     const accessOptions = useAccessLevelOptions({
@@ -107,9 +105,9 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
 
     // Managing member access is a manager-only surface, like Agent's page: a
     // non-manager (or a private resource that is not the caller's) gets a
-    // reason toast and lands back where they came from.
-    const isDenied =
-      (!!error && isForbiddenError(error)) || (!isLoading && !!data && !data.canManage);
+    // reason toast and lands back where they came from. A persisted record may
+    // predate a grant, so only a record re-fetched this session redirects.
+    const isDenied = (!!error && isForbiddenError(error)) || (isConfirmed && !data?.canManage);
     useEffect(() => {
       if (!isDenied) return;
       toast.error(t('permission.noManagePermission'));

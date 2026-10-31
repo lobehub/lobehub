@@ -3,9 +3,11 @@ import dayjs from 'dayjs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
+  filterTopics,
   getTopicWorkingDirectoryEffectivePath,
   getTopicWorkingDirectorySourcePath,
   groupTopicsByAgent,
+  groupTopicsByDevice,
   groupTopicsByProject,
   groupTopicsByStatus,
   groupTopicsByTime,
@@ -802,14 +804,28 @@ describe('groupTopicsByAgent', () => {
     ]);
   });
 
-  it('falls back to agentName when agentTitle is absent', () => {
-    const topics = [createRow('a1', 1, { agentId: 'agent-x', agentName: 'lobehub' })];
+  it('titles the group with agentName over agentTitle', () => {
+    const topics = [
+      createRow('a1', 1, {
+        agentId: 'agent-x',
+        agentName: 'Cook',
+        agentTitle: '公共CC(美国 100刀)',
+      }),
+    ];
 
     expect(groupTopicsByAgent(topics, 'updatedAt')[0]).toEqual({
       children: topics,
       id: 'agent:agent-x',
-      title: 'lobehub',
+      title: 'Cook',
     });
+  });
+
+  it('falls back to agentTitle when agentName is blank', () => {
+    const topics = [
+      createRow('a1', 1, { agentId: 'agent-x', agentName: ' ', agentTitle: 'LobeHub' }),
+    ];
+
+    expect(groupTopicsByAgent(topics, 'updatedAt')[0].title).toBe('LobeHub');
   });
 
   it('buckets rows without agent attribution as a title-less no-agent group', () => {
@@ -831,5 +847,129 @@ describe('groupTopicsByAgent', () => {
 
     expect(result.map((group) => group.id)).toEqual(['agent:agent-x', 'agent:agent-y']);
     expect(result[0].children.map((topic) => topic.id)).toEqual(['new', 'old']);
+  });
+});
+
+describe('groupTopicsByDevice', () => {
+  const createRow = (id: string, updatedAt: number, extra?: Partial<ChatTopic>): ChatTopic => ({
+    createdAt: updatedAt,
+    id,
+    title: id,
+    updatedAt,
+    ...extra,
+  });
+
+  it('should return empty array for empty input', () => {
+    expect(groupTopicsByDevice([], 'updatedAt')).toEqual([]);
+  });
+
+  it('groups topics by metadata.boundDeviceId', () => {
+    const topics = [
+      createRow('a1', 2, { metadata: { boundDeviceId: 'device-x' } }),
+      createRow('a2', 1, { metadata: { boundDeviceId: 'device-x' } }),
+      createRow('b1', 3, { metadata: { boundDeviceId: 'device-y' } }),
+    ];
+
+    const result = groupTopicsByDevice(topics, 'updatedAt');
+
+    expect(result.map((group) => group.id)).toEqual(['device:device-y', 'device:device-x']);
+    expect(result[1].children.map((topic) => topic.id)).toEqual(['a1', 'a2']);
+  });
+
+  it('resolves the device from the topic directory when boundDeviceId is absent', () => {
+    const topics = [
+      createRow('a', 2, { projectWorkingDirectoryId: 'dir-1' }),
+      createRow('b', 1, { projectWorkingDirectoryId: 'dir-2' }),
+    ];
+    const directories = [
+      { deviceId: 'device-x', id: 'dir-1' },
+      { deviceId: 'device-y', id: 'dir-2' },
+    ];
+
+    expect(groupTopicsByDevice(topics, 'updatedAt', directories).map((group) => group.id)).toEqual([
+      'device:device-x',
+      'device:device-y',
+    ]);
+  });
+
+  it('prefers metadata.boundDeviceId over the directory device', () => {
+    const topics = [
+      createRow('a', 1, {
+        metadata: { boundDeviceId: 'device-bound' },
+        projectWorkingDirectoryId: 'dir-1',
+      }),
+    ];
+    const directories = [{ deviceId: 'device-x', id: 'dir-1' }];
+
+    expect(groupTopicsByDevice(topics, 'updatedAt', directories)[0].id).toBe('device:device-bound');
+  });
+
+  it('buckets rows without device attribution as a title-less no-device group', () => {
+    const topics = [
+      createRow('a', 2),
+      createRow('b', 1, { projectWorkingDirectoryId: 'dir-missing' }),
+    ];
+
+    expect(groupTopicsByDevice(topics, 'updatedAt', [])).toEqual([
+      { children: topics, id: 'no-device' },
+    ]);
+  });
+
+  it('sorts children and groups by the chosen field descending', () => {
+    const topics = [
+      createRow('old', 1, { metadata: { boundDeviceId: 'device-x' } }),
+      createRow('new', 5, { metadata: { boundDeviceId: 'device-x' } }),
+      createRow('other-recent', 4, { metadata: { boundDeviceId: 'device-y' } }),
+    ];
+
+    const result = groupTopicsByDevice(topics, 'createdAt');
+
+    expect(result.map((group) => group.id)).toEqual(['device:device-x', 'device:device-y']);
+    expect(result[0].children.map((topic) => topic.id)).toEqual(['new', 'old']);
+  });
+});
+
+describe('filterTopics', () => {
+  const row = (id: string, extra: Partial<ChatTopic> = {}): ChatTopic =>
+    ({ createdAt: 1, id, title: id, updatedAt: 1, ...extra }) as ChatTopic;
+  const topics = [
+    row('waiting', { status: 'waitingForHuman', metadata: { boundDeviceId: 'device-x' } }),
+    row('running', { projectWorkingDirectoryId: 'dir-1', status: 'running' }),
+    row('idle'),
+  ];
+  const directories = [{ deviceId: 'device-y', id: 'dir-1' }];
+
+  it('returns the same list when nothing is filtered', () => {
+    expect(filterTopics(topics, {})).toBe(topics);
+  });
+
+  it('keeps the topics in the chosen status bucket, needs-attention included', () => {
+    expect(filterTopics(topics, { status: 'pending' }).map((topic) => topic.id)).toEqual([
+      'waiting',
+    ]);
+    expect(filterTopics(topics, { status: 'active' }).map((topic) => topic.id)).toEqual(['idle']);
+  });
+
+  it('counts a topic streaming on this client as running', () => {
+    expect(
+      filterTopics(topics, { status: 'running' }, { loadingTopicIds: new Set(['idle']) }).map(
+        (topic) => topic.id,
+      ),
+    ).toEqual(['running', 'idle']);
+  });
+
+  it('attributes devices like device grouping, and keeps unattributed rows under none', () => {
+    expect(
+      filterTopics(topics, { device: 'device-y' }, { directories }).map((topic) => topic.id),
+    ).toEqual(['running']);
+    expect(
+      filterTopics(topics, { device: 'none' }, { directories }).map((topic) => topic.id),
+    ).toEqual(['idle']);
+  });
+
+  it('combines status and device', () => {
+    expect(
+      filterTopics(topics, { device: 'device-x', status: 'running' }, { directories }),
+    ).toEqual([]);
   });
 });

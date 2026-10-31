@@ -8,6 +8,7 @@ import {
   ListTodoIcon,
   Settings,
   ShapesIcon,
+  TargetIcon,
   Video,
 } from 'lucide-react';
 
@@ -107,6 +108,15 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     keywordsKey: 'cmdk.keywords.tasks',
     path: '/tasks',
     pathPrefix: '/tasks',
+  },
+  {
+    cmdkKey: 'tab.goals',
+    electronKey: 'navigation.goals',
+    icon: TargetIcon,
+    id: 'goals',
+    keywords: ['goals', 'objective', 'target', 'agent'],
+    path: '/goals',
+    pathPrefix: '/goals',
   },
   {
     cmdkKey: 'tab.dashboard',

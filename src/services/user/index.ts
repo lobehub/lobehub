@@ -3,6 +3,7 @@ import { type MarkdownPatchHunk } from '@lobechat/markdown-patch';
 import type {
   ConfirmOnboardingUnderstandingInput,
   OnboardingUnderstandingPollingResult,
+  PersonalSystemAgentKey,
   RetryOnboardingUnderstandingProviderInput,
   ReviseOnboardingUnderstandingInput,
   StartOnboardingUnderstandingInput,
@@ -136,6 +137,13 @@ export class UserService {
     approvalMode?: 'auto-run' | 'allow-list' | 'manual';
   }) => {
     return lambdaClient.user.updateToolIntervention.mutate(value);
+  };
+
+  updatePersonalSystemAgent = async (
+    key: PersonalSystemAgentKey,
+    value: { enabled?: boolean; model?: string; provider?: string },
+  ) => {
+    return lambdaClient.user.updatePersonalSystemAgent.mutate({ key, value });
   };
 
   updateToolChannels = async (value: { crawlerImpls?: string[]; searchProviders?: string[] }) => {

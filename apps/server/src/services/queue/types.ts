@@ -6,6 +6,11 @@ export interface QueueMessage {
   deduplicationId?: string;
   delay?: number;
   endpoint: string;
+  /**
+   * Serializes deliveries that share `key` (at most `parallelism` in flight). QStash only; the
+   * local queue ignores it.
+   */
+  flowControl?: { key: string; parallelism: number };
   operationId: string;
   payload?: any;
   priority?: 'high' | 'normal' | 'low';

@@ -4,6 +4,7 @@ import type { BuiltinRenderProps } from '@lobechat/types';
 import { Button, cx, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+
 import { AlertTriangle, ListTree } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,31 +15,7 @@ import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 import { stripSubAgentReference } from '../../../subAgentReference';
 import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
 
-const styles = stylex.create({
-  container: { paddingBlock: '4px' },
-  label: { paddingInlineStart: '4px', fontSize: '12px', color: cssVar.colorTextTertiary },
-  labelRow: { marginBlockEnd: '4px' },
-  openThread: { height: '22px', paddingInline: '6px', fontSize: '12px' },
-  promptBox: {
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    borderRadius: cssVar.borderRadiusLG,
-    background: cssVar.colorFillTertiary,
-  },
-  resultBox: {
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    borderRadius: cssVar.borderRadiusLG,
-    background: cssVar.colorBgContainer,
-  },
-  stoppedLabel: { fontSize: '12px', color: cssVar.colorWarning },
-  stoppedResultBox: {
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorWarningBorder,
-    background: cssVar.colorWarningBg,
-  },
-});
+const styles = stylex.create({ container: { paddingBlock: "4px" }, label: { paddingInlineStart: "4px", fontSize: "12px", color: cssVar.colorTextTertiary }, labelRow: { marginBlockEnd: "4px" }, openThread: { height: "22px", paddingInline: "6px", fontSize: "12px" }, promptBox: { paddingBlock: "8px", paddingInline: "12px", borderRadius: cssVar.borderRadiusLG, backgroundColor: cssVar.colorFillTertiary, backgroundImage: "none" }, resultBox: { paddingBlock: "8px", paddingInline: "12px", borderRadius: cssVar.borderRadiusLG, backgroundColor: cssVar.colorBgContainer, backgroundImage: "none" }, stoppedLabel: { fontSize: "12px", color: cssVar.colorWarning }, stoppedResultBox: { borderWidth: "1px", borderStyle: "solid", borderColor: cssVar.colorWarningBorder, backgroundColor: cssVar.colorWarningBg, backgroundImage: "none" } });
 
 /**
  * Render for lobe-agent's `callSubAgent` tool.
@@ -51,7 +28,8 @@ const styles = stylex.create({
  * than rendered as a dead no-op.
  *
  * A run that stopped before finishing is marked with a warning, so its partial
- * summary is not mistaken for a finished result.
+ * summary is not mistaken for a finished result. A background run says it is
+ * still running until its answer arrives on the state.
  */
 export const CallSubAgentRender = memo<
   BuiltinRenderProps<CallSubAgentParams, CallSubAgentState, string>
@@ -59,7 +37,15 @@ export const CallSubAgentRender = memo<
   const { t } = useTranslation('plugin');
   const { t: tChat } = useTranslation('chat');
   const prompt = args?.instruction?.trim();
-  const result = typeof content === 'string' ? stripSubAgentReference(content).trim() : '';
+  // A background run's tool result is only its start receipt; the answer is
+  // kept on the state once it arrives.
+  const background = pluginState?.background === true;
+  const result = background
+    ? (pluginState?.result ?? '').trim()
+    : typeof content === 'string'
+      ? stripSubAgentReference(content).trim()
+      : '';
+  const runningInBackground = background && pluginState?.status === 'pending';
   const threadId = pluginState?.threadId;
   const stopped = pluginState?.status === 'error';
 
@@ -84,7 +70,7 @@ export const CallSubAgentRender = memo<
 
   if (!prompt && !result && !subagentThread) return null;
 
-  const showResultSection = !!result || !!subagentThread;
+  const showResultSection = !!result || !!subagentThread || runningInBackground;
 
   return (
     <Flexbox className={stylex.props(styles.container).className} gap={12}>
@@ -116,10 +102,12 @@ export const CallSubAgentRender = memo<
                   {t('builtins.lobe-agent.subAgent.stopped')}
                 </Text>
               </Flexbox>
-            ) : (
+            ) : runningInBackground ? (
               <Text className={stylex.props(styles.label).className}>
-                {t('builtins.lobe-claude-code.agent.result')}
+                {t('builtins.lobe-agent.subAgent.backgroundRunning')}
               </Text>
+            ) : (
+              <Text className={stylex.props(styles.label).className}>{t('builtins.lobe-claude-code.agent.result')}</Text>
             )}
             {subagentThread && (
               <Button
@@ -135,12 +123,11 @@ export const CallSubAgentRender = memo<
               </Button>
             )}
           </Flexbox>
+          {runningInBackground && (
+            <Text className={stylex.props(styles.label).className}>{t('builtins.lobe-agent.subAgent.backgroundHint')}</Text>
+          )}
           {result && (
-            <Flexbox
-              className={cx(
-                stylex.props(styles.resultBox, stopped && styles.stoppedResultBox).className,
-              )}
-            >
+            <Flexbox className={stylex.props(styles.resultBox, stopped && styles.stoppedResultBox).className}>
               <Markdown style={{ maxHeight: 320, overflow: 'auto' }} variant={'chat'}>
                 {result}
               </Markdown>

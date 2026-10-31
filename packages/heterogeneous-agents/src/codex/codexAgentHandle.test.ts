@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -94,6 +96,31 @@ describe('createCodexAgentHandle', () => {
   });
 
   /** @example An ordinary topic surfaces the raw Codex error so the CLI can retry fresh. */
+  /** @example `inherit = "core"` cannot strip the scope and credentials `lh` needs. */
+  it('forwards workspace, server and a JWT file through the shell policy', async () => {
+    const handle = await createCodexAgentHandle({
+      ...options,
+      env: {
+        ...options.env,
+        LOBEHUB_JWT: 'secret-jwt',
+        LOBEHUB_SERVER: 'https://app.lobehub.com',
+        LOBEHUB_WORKSPACE_ID: 'ws-airi',
+      },
+    });
+    const config = mocks.options[0].threadParams.config ?? {};
+    expect(config).toMatchObject({
+      'shell_environment_policy.set.LOBEHUB_SERVER': 'https://app.lobehub.com',
+      'shell_environment_policy.set.LOBEHUB_WORKSPACE_ID': 'ws-airi',
+    });
+    // The token itself never enters the persisted thread config, only its 0600 file.
+    expect(JSON.stringify(config)).not.toContain('secret-jwt');
+    const jwtPath = config['shell_environment_policy.set.LOBEHUB_JWT_FILE'] as string;
+    expect(readFileSync(jwtPath, 'utf8')).toBe('secret-jwt');
+
+    await handle.exit;
+    await vi.waitFor(() => expect(existsSync(jwtPath)).toBe(false));
+  });
+
   it('surfaces a missing ordinary session so the CLI can retry fresh', async () => {
     mocks.run.mockRejectedValue(
       new Error('thread/resume failed: no rollout found for thread id stale'),

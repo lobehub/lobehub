@@ -19,7 +19,7 @@ import {
   extractTodosFromMessages,
   redactResultForEvents,
 } from '../utils';
-import { selectToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
+import { selectEffectiveToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
 
 const TOOL_EXECUTION_PHASE = 'tool_execution';
@@ -114,15 +114,8 @@ const parseToolArgs = (tool: ChatToolPayload): Record<string, unknown> => {
   }
 };
 
-const buildEffectiveManifestMap = (state: AgentState): Record<string, any> => ({
-  ...selectToolManifestMap(state),
-  ...Object.fromEntries(
-    (state.activatedStepTools ?? [])
-      .filter((activation) => activation.manifest)
-      .map((activation) => [activation.id, activation.manifest!]),
-  ),
-});
-
+const buildEffectiveManifestMap = (state: AgentState): Record<string, any> =>
+  selectEffectiveToolManifestMap(state);
 /**
  * Resource an API call mutates, read from the argument its manifest names in
  * `serializeBy`. Undefined when the API declares none or the argument is not a

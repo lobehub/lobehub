@@ -123,14 +123,30 @@ describe('EditedFilesCard open action', () => {
     expect(screen.getByText(singleTitle).closest('[role="button"]')).not.toBeNull();
   });
 
-  // Regression (LOBE-14768): the share visitor page's portal hosts no LocalFile
+  // Regression: the share visitor page's portal hosts no LocalFile
   // view, so the header click used to push an invisible view and do nothing.
-  it('keeps the header inert on the agent-share visitor page, leaving the diff action', () => {
+  // Without a preview it falls back to the diff snapshot instead.
+  it('expands the diff from the header on the agent-share visitor page', () => {
     conversationState.context.agentShareId = 'share_1';
     useChatStore.setState({ activeTopicId: 'tpc_1' });
     render(createElement(EditedFilesCard, { entries: [sandboxEntry] }));
 
-    expect(screen.getByText(singleTitle).closest('[role="button"]')).toBeNull();
-    expect(screen.getByRole('button', { name: 'editedFiles.viewChanges' })).toBeInTheDocument();
+    const header = screen.getByText(singleTitle).closest('[role="button"]')!;
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(header);
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  // Regression (T-965): a Claude Code edit outside the working directory had
+  // neither a preview nor a diff, so its card silently ignored clicks.
+  it('states that a file with no preview and no diff cannot be opened', () => {
+    render(
+      createElement(EditedFilesCard, {
+        entries: [{ ...singleEntry, diffTexts: [], path: '/tmp/spec-20322/spec.md' }],
+      }),
+    );
+
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('editedFiles.previewUnavailable')).toBeInTheDocument();
   });
 });

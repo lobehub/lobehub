@@ -13,7 +13,6 @@ import {
 import type { ChangeEvent, CSSProperties, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { KeyedMutator } from 'swr';
 
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import type {
@@ -42,7 +41,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
-import type { AgentDocumentItem } from './types';
+import type { AgentDocumentItem, AgentDocumentListMutator } from './types';
 import { isOrphanSkillBundleItem } from './types';
 import { canDropDocument } from './utils/canDrop';
 import { createDocumentComparator } from './utils/sortDocuments';
@@ -115,7 +114,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface Props {
   agentId: string;
   data: AgentDocumentItem[];
-  mutate: KeyedMutator<AgentDocumentItem[]>;
+  mutate: AgentDocumentListMutator;
   onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
   style?: CSSProperties;
 }

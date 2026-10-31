@@ -1,3 +1,4 @@
+import type { UserCredSummary } from '@lobechat/types';
 import { MarketAPIError, orgRefToPathSegment } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -15,6 +16,7 @@ const MARKET_STATUS_TO_TRPC_CODE: Record<number, TRPCError['code']> = {
   400: 'BAD_REQUEST',
   403: 'FORBIDDEN',
   404: 'NOT_FOUND',
+  409: 'CONFLICT',
 };
 
 /**
@@ -40,9 +42,9 @@ const credsProcedure = publicProcedure
   // `ctx.workspaceId` from the raw `X-Workspace-Id` header is NOT trustworthy on
   // its own (createLambdaContext copies it verbatim, with no membership check).
   // `cloudWorkspaceAuth` verifies the caller is actually a member before letting
-  // `workspaceId` through — demoting it to `undefined` otherwise. `share` below
-  // is the only procedure here that reads `ctx.workspaceId`; this guarantees it
-  // can never target a workspace the caller doesn't belong to.
+  // `workspaceId` through — demoting it to `undefined` otherwise. `share`,
+  // `publish` and `unshare` below target `ctx.workspaceId`; this guarantees
+  // they can never reach a workspace the caller doesn't belong to.
   .use(cloudWorkspaceAuth)
   .use(marketUserInfo)
   .use(requireMarketAuth)
@@ -57,6 +59,14 @@ const credsProcedure = publicProcedure
     });
   });
 const credsManageProcedure = credsProcedure.use(withRbacPermission('workspace:update:all'));
+
+/**
+ * The active workspace's organization, for share operations that act on one
+ * of a credential's shares. Outside a workspace no org is sent, which Market
+ * accepts while the credential has a single share.
+ */
+const shareTarget = (ctx: { workspaceId?: string | null }) =>
+  ctx.workspaceId ? { orgId: orgRefToPathSegment({ workspaceId: ctx.workspaceId }) } : {};
 
 export const credsRouter = router({
   // Create file credential
@@ -271,13 +281,16 @@ export const credsRouter = router({
       }
     }),
 
-  // Publish a draft-linked credential (visibility 'private') so the rest of
-  // the workspace's organization can see it. Owner-only — no orgId needed,
-  // the credential is already linked from a prior `share` call.
+  // Publish a privately shared credential so every member of the active
+  // workspace can use it. Owner-only.
   publish: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
     log('publish input: id=%d', input.id);
     try {
-      const result = await ctx.marketService.market.creds.publish(input.id);
+      const result = await ctx.marketService.market.creds.publish(
+        input.id,
+        undefined,
+        shareTarget(ctx),
+      );
       log('publish success: id=%d', result.id);
       return result;
     } catch (error) {
@@ -290,8 +303,8 @@ export const credsRouter = router({
   // workspace's Market organization. Always targets `ctx.workspaceId` — never
   // accepts an org id from client input — so `cloudWorkspaceAuth`'s membership
   // check (above) guarantees a caller can never share into a workspace they
-  // don't belong to. Re-callable to change `visibility` on an already-shared
-  // credential (Market's `shareCred` unconditionally overwrites).
+  // don't belong to. A credential can be shared into several workspaces;
+  // calling again for the same one changes that share's `visibility`.
   share: credsProcedure
     .input(
       z.object({
@@ -320,12 +333,16 @@ export const credsRouter = router({
       }
     }),
 
-  // Unshare a credential from its organization (flips back to private,
-  // clears the link). Does not delete the credential.
+  // Remove a credential's share into the active workspace. Does not delete
+  // the credential. Its owner, or an admin of that workspace, may call it.
   unshare: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
     log('unshare input: id=%d', input.id);
     try {
-      const result = await ctx.marketService.market.creds.unshare(input.id);
+      const result = await ctx.marketService.market.creds.unshare(
+        input.id,
+        undefined,
+        shareTarget(ctx),
+      );
       log('unshare success: id=%d', result.id);
       return result;
     } catch (error) {
@@ -408,7 +425,7 @@ export const credsRouter = router({
     }),
 
   // List all credentials
-  list: credsProcedure.query(async ({ ctx }) => {
+  list: credsProcedure.query(async ({ ctx }): Promise<{ data?: UserCredSummary[] }> => {
     log('list called');
 
     try {
@@ -417,38 +434,15 @@ export const credsRouter = router({
 
       if (!ctx.workspaceId) return result;
 
-      // A personal credential carries at most one `organizationAccountId` link
-      // at a time (sharing again just overwrites it) — so `organizationAccountId
-      // != null` alone can't tell the frontend "shared to *this* workspace" from
-      // "shared to some other workspace I visited previously". Cross-reference
-      // against the active workspace's own merged view (which already lists the
-      // caller's shared/draft-linked credentials by id) to scope it correctly.
-      // Best-effort: if the workspace has no Market org yet (Community Profile
-      // not set up), don't fail the whole personal list over it — just skip
-      // the enrichment.
-      try {
-        const orgList = await ctx.marketService.market.organizations
-          .creds({ workspaceId: ctx.workspaceId })
-          .list();
-        // `ownerType` is a real field on the Market API response, but the
-        // installed @lobehub/market-sdk's UserCredSummary type hasn't caught
-        // up to it yet — same gap as `injectForSkill` below.
-        const activeWorkspaceCredIds = new Set(
-          (orgList.data as Array<{ id: number; ownerType?: string }> | undefined)
-            ?.filter((c) => c.ownerType === 'user')
-            .map((c) => c.id) ?? [],
-        );
-
-        return {
-          data: result.data?.map((cred) => ({
-            ...cred,
-            sharedToActiveWorkspace: activeWorkspaceCredIds.has(cred.id),
-          })),
-        };
-      } catch (orgListError) {
-        log('list: failed to resolve active-workspace share scope: %O', orgListError);
-        return result;
-      }
+      const workspaceId = ctx.workspaceId;
+      return {
+        data: result.data?.map((cred) => ({
+          ...cred,
+          sharedToActiveWorkspace: !!cred.shares?.some(
+            (share) => share.workspaceId === workspaceId,
+          ),
+        })),
+      };
     } catch (error) {
       log('list error: %O', error);
       throw new TRPCError({

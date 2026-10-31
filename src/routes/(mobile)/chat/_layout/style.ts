@@ -1,8 +1,8 @@
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css }) => ({
+export const styles = stylex.create({
   // Main container
-  mainContainer: css`
-    overflow-y: hidden;
-  `,
-}));
+  mainContainer: {
+    overflowY: 'hidden',
+  },
+});

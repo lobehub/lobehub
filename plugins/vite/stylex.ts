@@ -1,9 +1,10 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import stylex from '@stylexjs/unplugin/vite';
-import type { PluginOption } from 'vite';
+import type { Plugin, PluginOption, UserConfig } from 'vite';
 
 import { stylexProxiedDevCssPlugin } from './stylexDevCss';
 import { createStylexEntryCss } from './stylexEntryCss';
@@ -40,12 +41,22 @@ export const stylexTokenModules = [
 
 const classNamePrefix = 'lh';
 
-export function stylexPlugin(): PluginOption {
+export interface StylexPluginOptions {
+  overlaySrcDirs?: string[];
+}
+
+// A host repo that overlays this one resolves `@/*` to its own src before ours,
+// so StyleX must try the same directories in the same order to find its
+// `.stylex.ts` files.
+export const stylexAliases = (overlaySrcDirs: string[] = []) => {
+  const srcDirs = [...new Set([...overlaySrcDirs, path.join(repoRoot, 'src')])];
+  return { '@/*': srcDirs.map((dir) => path.join(dir, '*')) };
+};
+
+export function stylexPlugin({ overlaySrcDirs }: StylexPluginOptions = {}): PluginOption {
   const entryCss = createStylexEntryCss(classNamePrefix);
   const plugin = stylex({
-    aliases: {
-      '@/*': [path.join(repoRoot, 'src/*')],
-    },
+    aliases: stylexAliases(overlaySrcDirs),
     classNamePrefix,
     cssInjectionTarget: entryCss.cssInjectionTarget,
     dev: !isTest && process.env.NODE_ENV !== 'production',
@@ -62,10 +73,7 @@ export function stylexPlugin(): PluginOption {
     },
   });
 
-  const plugins = (Array.isArray(plugin) ? plugin : [plugin]) as Array<{
-    config?: unknown;
-    configureServer?: unknown;
-  }>;
+  const plugins = (Array.isArray(plugin) ? plugin : [plugin]) as Plugin[];
   for (const item of plugins) {
     // @lobehub/ui depends on @stylexjs/stylex but ships precompiled CSS. This hook
     // would pull that package out of dependency pre-bundling.
@@ -73,6 +81,20 @@ export function stylexPlugin(): PluginOption {
     // The unplugin polls a shared CSS store from configureServer and keeps Vitest's
     // Vite server alive after the run.
     if (isTest) delete item.configureServer;
+    if (!isTest && typeof item.buildStart === 'function' && typeof item.transform === 'function') {
+      const buildStart = item.buildStart;
+      const transform = item.transform;
+      const require = createRequire(path.join(repoRoot, 'package.json'));
+      item.buildStart = async function (options) {
+        await buildStart.call(this, options);
+        // commonJS token references are placeholders until their defineConsts
+        // modules are collected. Register them before dev CSS can be requested.
+        for (const tokenModule of stylexTokenModules) {
+          const filename = require.resolve(tokenModule);
+          await Reflect.apply(transform, this, [readFileSync(filename, 'utf8'), filename]);
+        }
+      };
+    }
   }
 
   const [locateEntryCss, verifyEntryCss] = entryCss.plugins;
@@ -88,9 +110,12 @@ export function stylexPluginForVitest(): PluginOption {
   return [
     stylexPlugin(),
     {
-      config: () => ({
-        test: { server: { deps: { inline: [/@lobehub[/\\]ui[/\\]es[/\\]stylex[/\\]/] } } },
-      }),
+      // `test` is declared by Vitest's augmentation of its own Vite copy, which a
+      // host repo on another Vitest major does not see.
+      config: () =>
+        ({
+          test: { server: { deps: { inline: [/@lobehub[/\\]ui[/\\]es[/\\]stylex[/\\]/] } } },
+        }) as UserConfig,
       name: 'lobe-stylex-vitest-deps',
     },
   ];

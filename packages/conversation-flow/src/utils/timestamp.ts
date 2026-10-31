@@ -2,7 +2,7 @@
  * Coerce a message timestamp into a numeric epoch value.
  *
  * The static contract on `UIChatMessage` is `createdAt: number`, but real-world
- * payloads violate it: the Gateway snapshot (LOBE-14005) serializes timestamps
+ * payloads violate it: the Gateway snapshot serializes timestamps
  * as ISO strings, and historical DB rows can carry the same shape. Arithmetic
  * or relational comparison on a string silently produces `NaN`, which disables
  * every sort that relies on it — the renderer then falls back to traversal

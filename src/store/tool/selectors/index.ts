@@ -9,4 +9,5 @@ export { customPluginSelectors } from '../slices/customPlugin/selectors';
 export { lobehubSkillStoreSelectors } from '../slices/lobehubSkillStore/selectors';
 export { mcpStoreSelectors } from '../slices/mcpStore/selectors';
 export { pluginSelectors } from '../slices/plugin/selectors';
+export { projectSkillsSelectors } from '../slices/projectSkills/selectors';
 export { toolSelectors } from './tool';

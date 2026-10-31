@@ -26,13 +26,26 @@ interface HumanInteractionUsage {
   totalWaitingTimeMs: number;
 }
 
+/** LLM spend an operation reported as one lump sum, per (provider, model). */
+interface UnitemizedLlmCost {
+  model: string | null;
+  provider: string | null;
+  totalCost: number;
+}
+
 /** Tool / human-interaction rollup derived from the topic's operation rows. */
 interface OperationUsageRollup {
-  /** True when any operation contributed a non-zero tool / human-interaction stat. */
+  /** True when any operation contributed a non-zero tool / human-interaction stat or cost. */
   hasData: boolean;
   humanInteraction: HumanInteractionUsage;
   toolsCost: { byTool: ToolCostEntry[]; total: number };
   toolsUsage: { byTool: ToolUsageEntry[]; totalCalls: number; totalTimeMs: number };
+  /**
+   * LLM spend of operations whose cost blob carries no `llm` breakdown — a
+   * heterogeneous CLI run (Claude Code / Codex) reports only the run's total, and
+   * its assistant messages carry tokens but no per-message `cost`.
+   */
+  unitemizedLlmCost: UnitemizedLlmCost[];
 }
 
 /**
@@ -80,6 +93,10 @@ const num = (v: unknown): number => (v == null ? 0 : Number(v));
  * Park/resume cycles are safe too: `waiting_for_async_tool` resumes overwrite
  * the same row, and a `waiting_for_human` resume runs under a NEW operationId
  * with a fresh accumulator.
+ *
+ * An op whose cost blob has no `llm` key reported its LLM spend as a lump total
+ * that never reached the messages; that remainder (total minus tool cost) is
+ * returned as `unitemizedLlmCost` so the caller can fill the message-side gap.
  */
 const aggregateOperationUsage = async (
   trx: Transaction,
@@ -90,7 +107,11 @@ const aggregateOperationUsage = async (
     SELECT
       usage->'tools' AS "toolsUsage",
       usage->'humanInteraction' AS "humanInteraction",
-      cost->'tools' AS "toolsCost"
+      cost->'tools' AS "toolsCost",
+      cost ? 'llm' AS "hasLlmCost",
+      (cost->>'total')::numeric AS "costTotal",
+      provider,
+      model
     FROM agent_operations
     WHERE topic_id = ${topicId}
       AND ${ownership}
@@ -99,6 +120,7 @@ const aggregateOperationUsage = async (
 
   const usageByTool = new Map<string, ToolUsageEntry>();
   const costByTool = new Map<string, ToolCostEntry>();
+  const unitemizedByModel = new Map<string, UnitemizedLlmCost>();
   let totalCalls = 0;
   let totalTimeMs = 0;
   let costTotal = 0;
@@ -153,6 +175,19 @@ const aggregateOperationUsage = async (
         }
       }
     }
+
+    if (row.hasLlmCost === false) {
+      const llmCost = num(row.costTotal) - num(toolsCost?.total);
+      if (llmCost > 0) {
+        const key = `${row.provider ?? ''}/${row.model ?? ''}`;
+        let merged = unitemizedByModel.get(key);
+        if (!merged) {
+          merged = { model: row.model ?? null, provider: row.provider ?? null, totalCost: 0 };
+          unitemizedByModel.set(key, merged);
+        }
+        merged.totalCost += llmCost;
+      }
+    }
   }
 
   const byName = <T extends { name: string }>(map: Map<string, T>) =>
@@ -164,6 +199,7 @@ const aggregateOperationUsage = async (
     costTotal > 0 ||
     usageByTool.size > 0 ||
     costByTool.size > 0 ||
+    unitemizedByModel.size > 0 ||
     Object.values(humanInteraction).some((v) => v > 0);
 
   return {
@@ -171,6 +207,7 @@ const aggregateOperationUsage = async (
     humanInteraction,
     toolsCost: { byTool: byName(costByTool), total: costTotal },
     toolsUsage: { byTool: byName(usageByTool), totalCalls, totalTimeMs },
+    unitemizedLlmCost: [...unitemizedByModel.values()],
   };
 };
 
@@ -184,6 +221,8 @@ const aggregateOperationUsage = async (
  *   2. Tool + human-interaction usage and tool cost: SUM over the topic's
  *      `agent_operations` usage/cost blobs (see {@link aggregateOperationUsage})
  *      — this data never lands on messages, so operations are its only source.
+ *      Operations that reported their LLM spend as a lump total also fill the
+ *      LLM cost of any provider whose messages carry no cost.
  *
  * The stored shape mirrors `agent_operations`:
  *   - scalar columns : total_input_tokens / total_output_tokens / total_tokens / total_cost
@@ -301,6 +340,30 @@ export const recomputeTopicUsage = async (
   let apiCalls = 0;
   let processingTimeMs = 0;
   const byModel: Array<Record<string, unknown>> = [];
+  // Providers whose messages itemize cost; an op's lump-sum LLM cost for one of
+  // these is already counted message by message.
+  const itemizedProviders = new Set<unknown>();
+
+  // cost.llm.byModel mirrors the operation shape: cost-bearing models only,
+  // each carrying its merged ModelUsage breakdown.
+  const pushModelCost = (
+    provider: string | null,
+    model: string | null,
+    rowCost: number,
+    group?: Record<string, unknown>,
+  ) => {
+    const usageObj: Record<string, number> = {};
+    if (group) for (const f of USAGE_FIELDS) if (group[f] != null) usageObj[f] = Number(group[f]);
+    usageObj.cost = rowCost;
+
+    byModel.push({
+      id: `${provider ?? 'unknown'}/${model ?? 'unknown'}`,
+      model,
+      provider,
+      totalCost: rowCost,
+      usage: usageObj,
+    });
+  };
 
   for (const g of groups) {
     const rowTotalTokens = num(g.totalTokens);
@@ -314,23 +377,17 @@ export const recomputeTopicUsage = async (
     if (rowCost != null) {
       totalCost += rowCost;
       hasCost = true;
+      itemizedProviders.add(g.provider);
+      pushModelCost((g.provider as string) ?? null, (g.model as string) ?? null, rowCost, g);
     }
+  }
 
-    // cost.llm.byModel mirrors the operation shape: cost-bearing models only,
-    // each carrying its merged ModelUsage breakdown.
-    if (rowCost != null) {
-      const usageObj: Record<string, number> = {};
-      for (const f of USAGE_FIELDS) if (g[f] != null) usageObj[f] = Number(g[f]);
-      usageObj.cost = rowCost;
-
-      byModel.push({
-        id: `${(g.provider as string) ?? 'unknown'}/${(g.model as string) ?? 'unknown'}`,
-        model: (g.model as string) ?? null,
-        provider: (g.provider as string) ?? null,
-        totalCost: rowCost,
-        usage: usageObj,
-      });
-    }
+  for (const entry of ops.unitemizedLlmCost) {
+    if (itemizedProviders.has(entry.provider)) continue;
+    totalCost += entry.totalCost;
+    hasCost = true;
+    const group = groups.find((g) => g.provider === entry.provider && g.model === entry.model);
+    pushModelCost(entry.provider, entry.model, entry.totalCost, group);
   }
 
   const usage = {

@@ -6,8 +6,10 @@ import {
   CircleAlert,
   ListTodo,
   Loader2,
+  Lock,
   MessageSquarePlus,
   RotateCcw,
+  UsersRound,
   Wrench,
 } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
@@ -241,6 +243,12 @@ interface DecisionBarProps {
       beside the bar. Standalone pages only copy the repair prompt. */
   onRerun: () => void;
   pending: boolean;
+  /** The viewer may weigh in but not decide: the closing actions stay on the
+      bar, disabled, with this reason shown beside them. */
+  readOnlyReason?: string;
+  /** The viewer was granted reject access: reject is live, accept stays
+      disabled, and this reason says who accepts. */
+  rejectOnlyReason?: string;
   /** A live round that is a dispatched repair — coloured as an in-progress task
       (warning), not a neutral verify, to match the system's task-process cue. */
   repairing?: boolean;
@@ -277,6 +285,8 @@ const DecisionBar = memo<DecisionBarProps>(
     onRejectComment,
     onRerun,
     pending,
+    readOnlyReason,
+    rejectOnlyReason,
     repairing,
     rerunAvailable,
     rerunPending,
@@ -362,6 +372,23 @@ const DecisionBar = memo<DecisionBarProps>(
                 {subText}
               </Text>
             )}
+            {(readOnlyReason || rejectOnlyReason) && (
+              <Flexbox
+                horizontal
+                align={'center'}
+                data-testid={'acceptance-decision-reason'}
+                gap={4}
+              >
+                <Icon
+                  icon={readOnlyReason ? Lock : UsersRound}
+                  size={12}
+                  style={{ flex: 'none' }}
+                />
+                <Text fontSize={12} type={'secondary'}>
+                  {readOnlyReason ?? rejectOnlyReason}
+                </Text>
+              </Flexbox>
+            )}
           </Flexbox>
 
           {/* The clearing list — every note this round queues for the next one.
@@ -379,64 +406,88 @@ const DecisionBar = memo<DecisionBarProps>(
             </Button>
           )}
         </Flexbox>
-        <Flexbox horizontal className={styles.actions} gap={8}>
-          {/* A dispatched send-back (repairing) keeps the copy entry alive —
+        {readOnlyReason ? (
+          // Not this viewer's call: the decision they are waiting on stays in
+          // view, disabled, so the bar says who decides instead of vanishing.
+          state === 'settled' && (
+            <Flexbox horizontal className={styles.actions} gap={8}>
+              <Button disabled title={readOnlyReason} type={'text'}>
+                {t('acceptance.bar.rejectComment')}
+              </Button>
+              <Button disabled title={readOnlyReason} type={'fill'}>
+                {t('acceptance.actions.accept')}
+              </Button>
+            </Flexbox>
+          )
+        ) : rejectOnlyReason ? (
+          // Granted reject access only: sending back is theirs, accepting is not.
+          state === 'settled' && (
+            <Flexbox horizontal className={styles.actions} gap={8}>
+              <Button disabled={pending} type={'fill'} onClick={onRejectComment}>
+                {t('acceptance.bar.rejectComment')}
+              </Button>
+              <Button disabled title={rejectOnlyReason} type={'fill'}>
+                {t('acceptance.actions.accept')}
+              </Button>
+            </Flexbox>
+          )
+        ) : (
+          <Flexbox horizontal className={styles.actions} gap={8}>
+            {/* A dispatched send-back (repairing) keeps the copy entry alive —
             the reviewer may still hand the prompt to another agent. Embedded,
             the composer beside it already receives the draft. */}
-          {state === 'live' && hasFeedback && !embedded && (
-            <Button disabled={pending} type={'fill'} onClick={onCopyReview}>
-              {t('acceptance.bar.copyReview')}
-            </Button>
-          )}
+            {state === 'live' && hasFeedback && !embedded && (
+              <Button disabled={pending} type={'fill'} onClick={onCopyReview}>
+                {t('acceptance.bar.copyReview')}
+              </Button>
+            )}
 
-          {(state === 'settled' || state === 'rejected') &&
-            (hasFeedback || state === 'rejected' ? (
-              // Feedback is queued — the delivery isn't being accepted now; the
-              // bar's job is getting the repair round started.
-              <>
-                {/* Last words before the repair leaves — a global note the next
+            {(state === 'settled' || state === 'rejected') &&
+              (hasFeedback || state === 'rejected' ? (
+                // Feedback is queued — the delivery isn't being accepted now; the
+                // bar's job is getting the repair round started.
+                <>
+                  {/* Last words before the repair leaves — a global note the next
                   round reads, for what the queued per-check feedback missed. */}
-                <Button
-                  disabled={pending}
-                  icon={<Icon icon={MessageSquarePlus} />}
-                  type={'fill'}
-                  onClick={onAddComment}
-                >
-                  {t('acceptance.bar.addComment')}
-                </Button>
-                {!embedded && (
-                  <Button disabled={pending} type={'primary'} onClick={onCopyReview}>
-                    {t('acceptance.bar.copyReview')}
-                  </Button>
-                )}
-                {embedded && rerunAvailable && (
                   <Button
                     disabled={pending}
-                    loading={rerunPending}
-                    type={'primary'}
-                    onClick={onRerun}
+                    icon={<Icon icon={MessageSquarePlus} />}
+                    type={'fill'}
+                    onClick={onAddComment}
                   >
-                    {t('acceptance.bar.rerun')}
+                    {t('acceptance.bar.addComment')}
                   </Button>
-                )}
-              </>
-            ) : (
-              // Clean review — accept carries primary weight only once every
-              // check is signed off; before that it stays a quiet option.
-              <>
-                <Button disabled={pending} type={'text'} onClick={onRejectComment}>
-                  {t('acceptance.bar.rejectComment')}
-                </Button>
-                <Button
-                  disabled={pending}
-                  type={allConfirmed ? 'primary' : 'fill'}
-                  onClick={onAccept}
-                >
-                  {t('acceptance.actions.accept')}
-                </Button>
-              </>
-            ))}
-        </Flexbox>
+                  {/* One commit action per host: standalone copies the repair
+                  prompt; embedded drafts it into the composer beside the bar. */}
+                  {(!embedded || rerunAvailable) && (
+                    <Button
+                      disabled={pending}
+                      loading={embedded && rerunPending}
+                      type={'primary'}
+                      onClick={embedded ? onRerun : onCopyReview}
+                    >
+                      {t(embedded ? 'acceptance.bar.rerun' : 'acceptance.bar.copyReview')}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                // Clean review — accept carries primary weight only once every
+                // check is signed off; before that it stays a quiet option.
+                <>
+                  <Button disabled={pending} type={'text'} onClick={onRejectComment}>
+                    {t('acceptance.bar.rejectComment')}
+                  </Button>
+                  <Button
+                    disabled={pending}
+                    type={allConfirmed ? 'primary' : 'fill'}
+                    onClick={onAccept}
+                  >
+                    {t('acceptance.actions.accept')}
+                  </Button>
+                </>
+              ))}
+          </Flexbox>
+        )}
       </div>
     );
   },

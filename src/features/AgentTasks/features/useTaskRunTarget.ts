@@ -2,11 +2,10 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceExecutionTarget, DeviceListItem, WorkingDirConfig } from '@lobechat/types';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { resolveWorkspaceSurface } from '@/features/ChatInput/ControlBar/useWorkspaceSurface';
-import { useDeviceList } from '@/features/DeviceManager/useDeviceList';
 import { devicePoolForAgent, devicePoolForTask } from '@/features/ExecutionTargetPicker';
 import { resolveAgentWorkingDirectoryConfig } from '@/helpers/agentWorkingDirectory';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
@@ -15,12 +14,32 @@ import { getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
 export type DeviceLabelSource = Pick<DeviceListItem, 'deviceId' | 'friendlyName' | 'hostname'>;
 
 export const deviceLabel = (device: DeviceLabelSource, unknownLabel: string) =>
   device.friendlyName || device.hostname || unknownLabel;
+
+/**
+ * Why the run-location control is locked, for its tooltip. An author-fixed
+ * policy (or a disabled form) says so; a target still waiting on the device
+ * list is only being checked, not fixed.
+ */
+export const getTaskDeviceLockReason = ({
+  canSelect,
+  disabled,
+  isPending,
+}: {
+  canSelect: boolean;
+  disabled?: boolean;
+  isPending: boolean;
+}): 'fixed' | 'pending' | undefined => {
+  if (disabled || !canSelect) return 'fixed';
+  if (isPending) return 'pending';
+  return undefined;
+};
 
 /**
  * What the directory axis can offer, which is a property of the TARGET and not
@@ -46,9 +65,20 @@ export interface TaskRunTarget {
    * device the caller can see (see `devicePoolForAgent`).
    */
   devices?: DeviceListItem[];
+  /**
+   * The device list could not be confirmed: its request failed and no retry is
+   * in flight. The stored rows still cannot be pinned, but the control stays
+   * open so the user can retry ({@link retryDevices}) or follow the agent.
+   */
+  devicesFailed: boolean;
   directoryKind: TaskDirectoryKind;
   /** Where the run lands: the task's pin if it has one, else the agent's own target. */
   effectiveTarget: DeviceExecutionTarget;
+  /**
+   * The machine the assignee agent's own target lands on, when it names one. The
+   * "follow the agent" state starts from it, and the device list marks it.
+   */
+  inheritedDeviceId?: string;
   /**
    * The directory the run will start in when the task does not choose one,
    * resolved through the same chain the runtime uses. Shown as the greyed hint
@@ -65,6 +95,12 @@ export interface TaskRunTarget {
   inheritedTarget: DeviceExecutionTarget;
   /** Whether a task-level pin is what puts the run on {@link deviceId}. */
   isDeviceTarget: boolean;
+  /**
+   * The target controls must wait: the preference is loading, or the device
+   * list is still the stored copy. Its rows may since have been deleted or
+   * unshared, and a pin stored from one would point the task's runs at a
+   * machine they cannot resolve.
+   */
   isPending: boolean;
   /**
    * The task's own pin, and only when the assignee's policy lets it take
@@ -72,6 +108,8 @@ export interface TaskRunTarget {
    * run side drops must not be shown as the target.
    */
   pinnedDeviceId?: string;
+  /** Re-request the device list after {@link devicesFailed}. */
+  retryDevices: () => void;
 }
 
 /**
@@ -89,7 +127,14 @@ export interface TaskRunTarget {
  */
 export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): TaskRunTarget => {
   const { t } = useTranslation('chat');
-  const { data: devices, isLoading: isDevicesLoading } = useDeviceList();
+  const {
+    data: devices,
+    error: devicesError,
+    isConfirmed: isDevicesConfirmed,
+    isLoading: isDevicesLoading,
+    isValidating: isDevicesValidating,
+    mutate: refreshDevices,
+  } = useDeviceList();
   const isHetero = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   // Agent-level, not the active chat topic's: a task run carries no topic
   // binding, so the conversation that happens to be open must not move it.
@@ -148,13 +193,13 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   // dead "Follow agent" hint, although the run starts in a path on a machine.
   // Picking a directory then pins this machine (`applyTaskDirectorySelection`),
   // so the run is routed to where the path exists.
-  const deviceId = pinApplies
-    ? pinnedDeviceId
-    : inheritedTarget === 'device'
+  const inheritedDeviceId =
+    inheritedTarget === 'device'
       ? agencyConfig?.boundDeviceId
       : inheritedTarget === 'local'
         ? localDeviceId
         : undefined;
+  const deviceId = pinApplies ? pinnedDeviceId : inheritedDeviceId;
 
   // From the device list this hook already fetched, not the device store,
   // which a task page may never populate.
@@ -213,17 +258,23 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
     return t(`heteroAgent.executionTarget.${inheritedTarget}`);
   })();
 
+  const devicesFailed = !isDevicesConfirmed && !!devicesError && !isDevicesValidating;
+  const retryDevices = useCallback(() => void refreshDevices(), [refreshDevices]);
+
   return {
     canSelect: canSelectExecutionTarget,
     deviceId,
     devices: pool,
+    devicesFailed,
     directoryKind,
     effectiveTarget,
+    inheritedDeviceId,
     inheritedDirectory,
     inheritedLabel,
     inheritedTarget,
     isDeviceTarget,
-    isPending: isPreferenceLoading || isDevicesLoading,
+    isPending: isPreferenceLoading || isDevicesLoading || (!isDevicesConfirmed && !devicesFailed),
     pinnedDeviceId: pinApplies ? pinnedDeviceId : undefined,
+    retryDevices,
   };
 };

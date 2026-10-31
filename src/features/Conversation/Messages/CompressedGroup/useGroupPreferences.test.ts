@@ -39,13 +39,13 @@ describe('useGroupPreferences', () => {
   });
 
   it('reads a stored fold on the first render, not after one', () => {
-    localStorage.setItem(EXPANDED_KEY, 'false');
+    localStorage.setItem(EXPANDED_KEY, 'true');
 
     const { observed } = renderPreferences();
 
-    // A deferred (effect-based) read renders `true` here and folds afterwards,
-    // which is what painted the whole summary before collapsing it.
-    expect(observed[0]).toEqual({ activeTab: 'summary', expanded: false });
+    // A deferred (effect-based) read renders the collapsed default first and
+    // opens afterwards, which moves the transcript's scroll position.
+    expect(observed[0]).toEqual({ activeTab: 'summary', expanded: true });
   });
 
   it('reads the stored tab on the first render', () => {
@@ -54,8 +54,8 @@ describe('useGroupPreferences', () => {
     expect(renderPreferences().observed[0].activeTab).toBe('history');
   });
 
-  it('defaults to the summary tab and an open group when nothing is stored', () => {
-    expect(renderPreferences().observed[0]).toEqual({ activeTab: 'summary', expanded: true });
+  it('defaults to the summary tab and a folded group when nothing is stored', () => {
+    expect(renderPreferences().observed[0]).toEqual({ activeTab: 'summary', expanded: false });
   });
 
   it('keeps the stored fold across an unmount and remount', () => {
@@ -70,17 +70,17 @@ describe('useGroupPreferences', () => {
 
   it('writes the fold on toggle', () => {
     const { result } = renderPreferences();
-    expect(result.current.expanded).toBe(true);
-
-    act(() => result.current.toggleExpanded());
-
-    expect(localStorage.getItem(EXPANDED_KEY)).toBe('false');
     expect(result.current.expanded).toBe(false);
 
     act(() => result.current.toggleExpanded());
 
     expect(localStorage.getItem(EXPANDED_KEY)).toBe('true');
     expect(result.current.expanded).toBe(true);
+
+    act(() => result.current.toggleExpanded());
+
+    expect(localStorage.getItem(EXPANDED_KEY)).toBe('false');
+    expect(result.current.expanded).toBe(false);
   });
 
   it('writes the tab on selection', () => {

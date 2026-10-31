@@ -1,6 +1,8 @@
 export default {
   'agent_cron_job_completed': 'Your scheduled task "{{jobName}}" completed successfully.',
   'agent_cron_job_completed_title': 'Scheduled task completed',
+  'agent_cron_job_completed_with_summary':
+    'Your scheduled task "{{jobName}}" completed successfully.\n\n{{summary}}',
   'agent_cron_job_failed':
     'Your scheduled task "{{jobName}}" failed. Open the task to see the full error.',
   'agent_cron_job_failed_insufficient_budget':

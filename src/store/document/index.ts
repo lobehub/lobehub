@@ -11,6 +11,7 @@ export type {
   DocumentDetail,
   DocumentDetailSliceState,
   InitDocumentParams,
+  UseFetchDocumentDetailResult,
   UseFetchDocumentOptions,
   UseFetchDocumentResult,
 } from './slices/document';
