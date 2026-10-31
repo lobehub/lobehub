@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
+import { TRPCClientError } from '@trpc/client';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -275,6 +276,78 @@ describe('linearRouter', () => {
 
       expect(second).toEqual(first);
       expect(await caller({ userId }).listSyncJobs({ projectId })).toHaveLength(1);
+    });
+
+    describe('when the async router rejects the hand-off', () => {
+      // What the async router answers when it turns down the internal token.
+      const rejected = () =>
+        new TRPCClientError('Invalid JWT token', {
+          result: {
+            error: {
+              code: -32_001,
+              data: { code: 'UNAUTHORIZED', httpStatus: 401 },
+              message: 'Invalid JWT token',
+            },
+          },
+        } as any);
+
+      const startRule = async () => {
+        const connection = await connect({ userId });
+        mocks.getToken.mockResolvedValue('token');
+        const rule = await caller({ userId }).createSyncRule({
+          connectionId: connection.id,
+          projectId,
+          stateTypes: ['unstarted'],
+          teamId: 'team-1',
+          teamName: 'Engineering',
+        });
+        return caller({ userId }).startRuleSync({ ruleId: rule.id });
+      };
+
+      const settled = async (calls: number) => {
+        for (let i = 0; i < 200 && mocks.runSync.mock.calls.length < calls; i++) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+        // Let the last attempt record its outcome.
+        for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+      };
+
+      it('hands it off again with a new token', async () => {
+        mocks.runSync.mockRejectedValueOnce(rejected()).mockResolvedValueOnce({ ok: true });
+
+        const { id } = await startRule();
+        await settled(2);
+
+        expect(mocks.runSync).toHaveBeenCalledTimes(2);
+        expect(mocks.runSync).toHaveBeenLastCalledWith({ taskId: id, workspaceId: undefined });
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, status: 'pending' },
+        ]);
+      });
+
+      it('fails the job at once when the retry is rejected too, so it can be started again', async () => {
+        mocks.runSync.mockRejectedValue(rejected());
+
+        const { id } = await startRule();
+        await settled(2);
+
+        expect(mocks.runSync).toHaveBeenCalledTimes(2);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'failed', id, status: 'error' },
+        ]);
+      });
+
+      it('leaves a job the router accepted to the router, even when the response is lost', async () => {
+        mocks.runSync.mockRejectedValue(new TRPCClientError('fetch failed'));
+
+        const { id } = await startRule();
+        await settled(1);
+
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, status: 'pending' },
+        ]);
+      });
     });
 
     it('keeps a long sync alive, so it is not shown as cut off', async () => {

@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 
 import { calculateJwkThumbprint, decodeProtectedHeader, SignJWT } from 'jose';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const { authEnvMock } = vi.hoisted(() => ({
   authEnvMock: {
@@ -118,5 +118,43 @@ describe('internal JWT key rotation', () => {
     await expect(
       validateHeteroOperationJWT(await signHeteroToken(keys.old, null)),
     ).resolves.toMatchObject({ operation_id: 'operation-1', sub: 'user-1' });
+  });
+
+  describe('a rejected token', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('logs that it expired, with the timing claims but not the token', async () => {
+      const { validateInternalJWT } = await import('./internalJwt');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const iat = Math.floor(Date.now() / 1000) - 60;
+      const token = await new SignJWT({ purpose: 'lobe-internal-call' })
+        .setProtectedHeader({ alg: 'RS256', kid: keys.new.kid })
+        .setIssuedAt(iat)
+        .setExpirationTime(iat + 5)
+        .sign(keys.new.privateKey);
+
+      await expect(validateInternalJWT(token)).resolves.toBe(false);
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('internal call token'),
+        expect.objectContaining({ code: 'ERR_JWT_EXPIRED', exp: iat + 5, iat, kid: 'new-key' }),
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(token);
+    });
+
+    it('logs a key the JWKS no longer holds', async () => {
+      const { validateInternalJWT } = await import('./internalJwt');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const retired = createRsaKey('retired-key');
+
+      await expect(validateInternalJWT(await signToken(retired))).resolves.toBe(false);
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ code: 'ERR_JWKS_NO_MATCHING_KEY', kid: 'retired-key' }),
+      );
+    });
   });
 });

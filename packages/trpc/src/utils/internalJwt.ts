@@ -5,6 +5,7 @@ import type { JSONWebKeySet, JWK, JWK_RSA_Public, JWTVerifyOptions } from 'jose'
 import {
   calculateJwkThumbprint,
   createLocalJWKSet,
+  decodeJwt,
   decodeProtectedHeader,
   importJWK,
   jwtVerify,
@@ -350,7 +351,25 @@ export const validateInternalJWT = async (token: string): Promise<boolean> => {
     log('Internal JWT validation successful');
     return true;
   } catch (error) {
-    log('Internal JWT validation failed: %O', error);
+    // Logged in production (not only under DEBUG): a rejected lambda → async
+    // call leaves its job unclaimed, and without the reason an expired token,
+    // a key missing after rotation and a bad signature all look the same.
+    console.warn('[internalJwt] rejected an internal call token:', describeRejection(token, error));
     return false;
+  }
+};
+
+/** Why a token was rejected, from its public header and timing claims only. */
+const describeRejection = (token: string, error: unknown) => {
+  const reason = {
+    code: (error as { code?: unknown } | null)?.code,
+    message: error instanceof Error ? error.message : String(error),
+    now: Math.floor(Date.now() / 1000),
+  };
+  try {
+    const { exp, iat } = decodeJwt(token);
+    return { ...reason, exp, iat, kid: decodeProtectedHeader(token).kid };
+  } catch {
+    return reason;
   }
 };
