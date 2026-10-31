@@ -599,23 +599,11 @@ export const buildHeteroSpawnArgs = (
     if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
   }
 
-  if (
-    provider.type === 'antigravity' ||
-    provider.type === 'claude-code' ||
-    provider.type === 'codebuddy'
-  ) {
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
-    const effort =
-      provider.type === 'antigravity'
-        ? HETERO_SELECTOR_CAPABILITIES.antigravity.effort.resolve(provider)
-        : getExplicitClaudeCodeReasoningEffort(provider);
-    if (
-      effort &&
-      effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasCliFlag(baseArgs, '--effort')
-    )
-      extraArgs.push('--effort', effort);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
   }
 
   if (provider.type === 'codex') {
@@ -665,7 +653,7 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -749,23 +737,11 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (
-    provider.type === 'antigravity' ||
-    provider.type === 'claude-code' ||
-    provider.type === 'codebuddy'
-  ) {
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
-    const effort =
-      provider.type === 'antigravity'
-        ? HETERO_SELECTOR_CAPABILITIES.antigravity.effort.resolve(provider)
-        : getExplicitClaudeCodeReasoningEffort(provider);
-    if (
-      effort &&
-      effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasCliFlag(baseArgs, '--effort')
-    )
-      selectorArgs.push('--effort', effort);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) selectorArgs.push('--effort', effort);
   }
 
   if (provider.type === 'codex') {
@@ -829,7 +805,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&

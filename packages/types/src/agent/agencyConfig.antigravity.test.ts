@@ -7,62 +7,51 @@ import {
 } from './agencyConfig';
 import { applyHeteroSelection, getHeteroSelectorCapability } from './heteroSelectorCapabilities';
 
-describe('Antigravity model and effort selection', () => {
-  it('exposes the native catalog and five effort levels', () => {
+describe('Antigravity model variant selection', () => {
+  it('exposes the native model catalog without an independent effort selector', () => {
     const capability = getHeteroSelectorCapability('antigravity');
     expect(capability?.model?.source).toBe('catalog');
-    expect(capability?.effort?.levels('any-model')).toEqual([
-      'low',
-      'medium',
-      'high',
-      'xhigh',
-      'max',
-    ]);
-    expect(capability?.model?.resolve({ model: 'custom-model' })).toBe('custom-model');
-    expect(capability?.effort?.resolve({ args: ['--effort=max'], effort: 'low' })).toBe('max');
-    expect(capability?.effort?.resolve({ effort: 'ultra' })).toBe('default');
+    expect(capability?.effort).toBeUndefined();
+    expect(capability?.model?.resolve({ model: 'gemini-4-argon-high' })).toBe(
+      'gemini-4-argon-high',
+    );
   });
 
-  it('passes model and effort through both native and CLI wrapper launches', () => {
-    const provider = { type: 'antigravity' as const, model: 'custom-model', effort: 'max' };
-    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model', 'custom-model', '--effort', 'max']);
-    expect(buildHeteroExecArgs(provider)).toEqual(['--model', 'custom-model', '--effort', 'max']);
-    expect(
-      buildHeteroSpawnArgs({ ...provider, model: 'default', effort: 'default' }),
-    ).toBeUndefined();
-    expect(
-      buildHeteroExecArgs({ ...provider, model: 'default', effort: 'default' }),
-    ).toBeUndefined();
+  it('passes the complete model variant through native and CLI wrapper launches', () => {
+    const provider = { type: 'antigravity' as const, model: 'gemini-4-argon-high' };
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--model', 'gemini-4-argon-high']);
+    expect(buildHeteroExecArgs(provider)).toEqual(['--model', 'gemini-4-argon-high']);
+    expect(buildHeteroSpawnArgs({ ...provider, model: 'default' })).toBeUndefined();
+    expect(buildHeteroExecArgs({ ...provider, model: 'default' })).toBeUndefined();
   });
 
-  it('lets explicit native args win and clears conflicting args after a new pick', () => {
+  it('replaces the configured model argument when picking another variant', () => {
     const provider = {
       type: 'antigravity' as const,
-      args: ['--model=old', '--effort', 'low', '--sandbox'],
-      model: 'stale',
-      effort: 'max',
+      args: ['--model=gemini-4-argon-low', '--sandbox'],
     };
-    expect(buildHeteroSpawnArgs(provider)).toEqual(provider.args);
-    expect(buildHeteroExecArgs(provider)).toEqual(provider.args.map((arg) => `--agent-arg=${arg}`));
-    const patch = applyHeteroSelection(provider, { model: 'new', effort: 'high' });
-    expect(patch).toEqual({ args: ['--sandbox'], model: 'new', effort: 'high' });
+    const patch = applyHeteroSelection(provider, { model: 'gemini-4-argon-high' });
+    expect(patch).toEqual({ args: ['--sandbox'], model: 'gemini-4-argon-high' });
     expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
       '--sandbox',
       '--model',
-      'new',
-      '--effort',
-      'high',
+      'gemini-4-argon-high',
+    ]);
+    expect(buildHeteroExecArgs({ ...provider, ...patch })).toEqual([
+      '--agent-arg=--sandbox',
+      '--model',
+      'gemini-4-argon-high',
     ]);
   });
 
-  it('applies topic model and effort pins without changing the Agent defaults', () => {
-    const provider = { type: 'antigravity' as const, model: 'agent-model', effort: 'low' };
+  it('uses the topic variant without changing the Agent default', () => {
+    const provider = { type: 'antigravity' as const, model: 'gemini-4-argon-low' };
     const effective = applyTopicModelToHeterogeneousProvider(provider, {
-      model: 'topic-model',
+      model: 'gemini-4-argon-high',
       provider: 'antigravity',
-      effort: 'max',
     });
-    expect(buildHeteroSpawnArgs(effective)).toEqual(['--model', 'topic-model', '--effort', 'max']);
-    expect(provider).toEqual({ type: 'antigravity', model: 'agent-model', effort: 'low' });
+    expect(buildHeteroSpawnArgs(effective)).toEqual(['--model', 'gemini-4-argon-high']);
+    expect(buildHeteroExecArgs(effective)).toEqual(['--model', 'gemini-4-argon-high']);
+    expect(provider).toEqual({ type: 'antigravity', model: 'gemini-4-argon-low' });
   });
 });

@@ -32,10 +32,6 @@ const CLAUDE_CODE_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', '
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
-/** Antigravity CLI 1.4 accepts these native `--effort` values. */
-const ANTIGRAVITY_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
-type AntigravityReasoningEffort = (typeof ANTIGRAVITY_REASONING_EFFORT_LEVELS)[number];
-
 /** Grok Build reasoning-effort levels accepted by the CLI's `--effort` flag. */
 const GROK_BUILD_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
 
@@ -357,16 +353,6 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
   'antigravity': {
-    effort: {
-      encodings: [{ flags: ['--effort'], kind: 'flag' }],
-      levels: () => ANTIGRAVITY_REASONING_EFFORT_LEVELS,
-      resolve: (source: HeteroSelectionSource | null | undefined): HeterogeneousReasoningEffort => {
-        const effort = (getCliFlagValue(source?.args, '--effort') ?? source?.effort)?.trim();
-        return ANTIGRAVITY_REASONING_EFFORT_LEVELS.includes(effort as AntigravityReasoningEffort)
-          ? (effort as AntigravityReasoningEffort)
-          : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-      },
-    },
     model: {
       encodings: [{ flags: ['--model'], kind: 'flag' }],
       resolve: resolvePersistedModel,
