@@ -1,7 +1,7 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { createStaticStyles, cssVar, Flexbox, keyframes } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, keyframes } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useLayoutEffect } from 'react';
@@ -9,9 +9,13 @@ import { useTranslation } from 'react-i18next';
 
 import { retainSkeleton } from '@/components/Skeleton/skeletonHandover';
 import { isDesktop } from '@/const/version';
-import { getInnerCssVariables } from '@/features/DesktopLayoutContainer/cssVariables';
+import {
+  getInnerCssVariables,
+  getOuterCssVariables,
+} from '@/features/DesktopLayoutContainer/cssVariables';
 import { styles as containerStyles } from '@/features/DesktopLayoutContainer/style';
 import { LIST_COLUMN_BACKGROUND, RAIL_WIDTH } from '@/features/NavRail/const';
+import { readImLayoutHint } from '@/features/NavRail/layoutHint';
 import { wrapStyles as layoutStyles } from '@/features/NavRail/wrapStyle';
 import { electronStylish } from '@/styles/electron';
 
@@ -126,8 +130,66 @@ interface AppShellSkeletonProps {
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
   const hint = useLoadingHint();
+  const imLayout = readImLayoutHint();
 
   useLayoutEffect(retainSkeleton, []);
+
+  const brand = (
+    <div className={styles.contentBrand}>
+      <div className={styles.brand}>
+        <LobeHub size={40} type={'text'} />
+        {hint && <LoadingHint enter={hint === 'enter'} />}
+      </div>
+    </div>
+  );
+
+  // `im_layout`: icon rail + one rounded wrap (list column + content).
+  if (imLayout)
+    return (
+      <div aria-hidden className={`${CSS_VAR_CLASS} ${styles.root}`} id={id}>
+        {isDesktop && <div className={`${styles.dragRegion} ${electronStylish.draggable}`} />}
+        <Flexbox
+          horizontal
+          height={isDesktop ? `calc(100% - ${TITLE_BAR_HEIGHT}px)` : '100%'}
+          width={'100%'}
+        >
+          <div
+            style={{
+              background: navPanelBackground,
+              flexShrink: 0,
+              height: '100%',
+              width: RAIL_WIDTH,
+            }}
+          />
+          <Flexbox
+            horizontal
+            style={getInnerCssVariables({ isDark })}
+            className={
+              stylex.props(layoutStyles.wrap, isDesktop && layoutStyles.wrapDesktop).className
+            }
+          >
+            {showLeftPanel && (
+              <div
+                style={{
+                  background: LIST_COLUMN_BACKGROUND,
+                  borderInlineEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+                  flexShrink: 0,
+                  height: '100%',
+                  width: navPanelWidth,
+                }}
+              />
+            )}
+            <Flexbox
+              className={cx(containerStyles.innerContainer, containerStyles.innerFlush)}
+              height={'100%'}
+              width={'100%'}
+            >
+              {brand}
+            </Flexbox>
+          </Flexbox>
+        </Flexbox>
+      </div>
+    );
 
   return (
     <div aria-hidden className={`${CSS_VAR_CLASS} ${styles.root}`} id={id}>
@@ -137,40 +199,30 @@ const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
         height={isDesktop ? `calc(100% - ${TITLE_BAR_HEIGHT}px)` : '100%'}
         width={'100%'}
       >
-        {/* Mirrors the rail layout: icon rail + one rounded wrap (list + content). */}
-        <div
-          style={{
-            background: navPanelBackground,
-            flexShrink: 0,
-            height: '100%',
-            width: RAIL_WIDTH,
-          }}
-        />
+        {showLeftPanel && (
+          <div
+            style={{
+              background: navPanelBackground,
+              flexShrink: 0,
+              height: '100%',
+              width: navPanelWidth,
+            }}
+          />
+        )}
         <Flexbox
-          horizontal
-          style={getInnerCssVariables({ isDark })}
-          className={
-            stylex.props(layoutStyles.wrap, isDesktop && layoutStyles.wrapDesktop).className
-          }
+          className={containerStyles.outerContainer}
+          height={'100%'}
+          padding={8}
+          style={getOuterCssVariables({ expand: showLeftPanel })}
+          width={'100%'}
         >
-          {showLeftPanel && (
-            <div
-              style={{
-                background: LIST_COLUMN_BACKGROUND,
-                borderInlineEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-                flexShrink: 0,
-                height: '100%',
-                width: navPanelWidth,
-              }}
-            />
-          )}
-          <Flexbox className={containerStyles.innerContainer} height={'100%'} width={'100%'}>
-            <div className={styles.contentBrand}>
-              <div className={styles.brand}>
-                <LobeHub size={40} type={'text'} />
-                {hint && <LoadingHint enter={hint === 'enter'} />}
-              </div>
-            </div>
+          <Flexbox
+            className={containerStyles.innerContainer}
+            height={'100%'}
+            style={getInnerCssVariables({ isDark })}
+            width={'100%'}
+          >
+            {brand}
           </Flexbox>
         </Flexbox>
       </Flexbox>

@@ -1,16 +1,29 @@
-import { Flexbox } from '@lobehub/ui';
+import { cx, Flexbox } from '@lobehub/ui';
 import { type FC, type PropsWithChildren } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { useIsDark } from '@/hooks/useIsDark';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { getInnerCssVariables } from './cssVariables';
+import { getInnerCssVariables, getOuterCssVariables } from './cssVariables';
 import { LayoutContainerContext } from './LayoutContainerContext';
 import { styles } from './style';
 
-const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
+interface DesktopLayoutContainerProps extends PropsWithChildren {
+  /**
+   * Fill the parent edge to edge, with no outer padding or own border: the
+   * `im_layout` rail wrap already draws the rounded border around it.
+   */
+  flush?: boolean;
+}
+
+const DesktopLayoutContainer: FC<DesktopLayoutContainerProps> = ({ children, flush }) => {
   const innerContainerRef = useRef<HTMLDivElement>(null);
   const isDarkMode = useIsDark();
+  const [expand] = useGlobalStore((s) => [systemStatusSelectors.showLeftPanel(s)]);
+
+  const outerCssVariables = useMemo(() => getOuterCssVariables({ expand }), [expand]);
 
   const innerCssVariables = useMemo(
     () => getInnerCssVariables({ isDark: isDarkMode }),
@@ -32,9 +45,15 @@ const DesktopLayoutContainer: FC<PropsWithChildren> = ({ children }) => {
   }, [innerCssVariables]);
 
   return (
-    <Flexbox className={styles.outerContainer} height={'100%'} width={'100%'}>
+    <Flexbox
+      className={cx(styles.outerContainer, flush && styles.outerFlush)}
+      height={'100%'}
+      padding={flush ? 0 : 8}
+      style={flush ? undefined : outerCssVariables}
+      width={'100%'}
+    >
       <Flexbox
-        className={styles.innerContainer}
+        className={cx(styles.innerContainer, flush && styles.innerFlush)}
         height={'100%'}
         ref={innerContainerRef}
         style={innerCssVariables}

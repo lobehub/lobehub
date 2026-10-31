@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { RAIL_WIDTH } from '@/features/NavRail/const';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
@@ -33,15 +34,18 @@ const MAC_COLLAPSED_NAVIGATION_BAR_WIDTH = 116;
 // would create a duplicate DOM id and get caught by NavPanelDraggable's hover CSS.
 const NAV_TOGGLE_ID = 'titlebar_toggle_left_panel_button';
 
-// The list column starts after the icon rail, so the titlebar spans both.
 const navPanelSelector = (s: GlobalState) => {
   const showLeftPanel = systemStatusSelectors.showLeftPanel(s);
   if (!showLeftPanel) return 0;
-  return systemStatusSelectors.leftPanelWidth(s) + RAIL_WIDTH;
+  return systemStatusSelectors.leftPanelWidth(s);
 };
 
 const useNavPanelWidth = () => {
-  return useGlobalStore(navPanelSelector);
+  const width = useGlobalStore(navPanelSelector);
+  // Under `im_layout` the list column starts after the icon rail, so the
+  // titlebar spans both.
+  const imLayout = useImLayout();
+  return imLayout && width > 0 ? width + RAIL_WIDTH : width;
 };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

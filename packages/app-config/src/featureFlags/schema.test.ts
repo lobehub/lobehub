@@ -237,6 +237,17 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableDashboard).toBe(false);
   });
 
+  it('should keep the rail layout off by default and enable it per user or globally', () => {
+    expect(DEFAULT_FEATURE_FLAGS.im_layout).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableImLayout).toBe(false);
+
+    expect(mapFeatureFlagsEnvToState({ im_layout: true }).enableImLayout).toBe(true);
+
+    const config = { im_layout: ['user-123'] };
+    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableImLayout).toBe(true);
+    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableImLayout).toBe(false);
+  });
+
   it('should keep Channels off by default and enable them per user or globally', () => {
     expect(DEFAULT_FEATURE_FLAGS.channel).toBe(false);
     expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableChannels).toBe(false);

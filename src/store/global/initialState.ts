@@ -638,7 +638,7 @@ export const INITIAL_STATUS = {
   imageTopicViewMode: 'grid' as const,
   imageTopicPanelWidth: 80,
   knowledgeBaseModalViewMode: 'list' as const,
-  leftPanelWidth: 248,
+  leftPanelWidth: 280,
   mobileShowTopic: false,
   modelDetailPanelCollapsedKeys: [],
   modelSwitchPanelWidth: 460,

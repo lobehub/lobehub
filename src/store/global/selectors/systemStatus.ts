@@ -70,7 +70,7 @@ export const routeOverlayWrites = (
 
 export const systemStatus = (s: GlobalState) => s.status;
 
-export const NAV_PANEL_MIN_WIDTH = 220;
+export const NAV_PANEL_MIN_WIDTH = 240;
 export const NAV_PANEL_MAX_WIDTH = 400;
 
 const normalizeNavPanelWidth = (width: number | string | undefined): number => {

@@ -46,6 +46,10 @@ vi.mock('@/features/NavPanel/Shell', nullComponent);
 vi.mock('@/features/NavRail', nullComponent);
 vi.mock('@/features/MessageList/HomeInboxRedirect', nullComponent);
 vi.mock('@/features/NavRail/wrapStyle', () => ({ wrapStyles: {} }));
+vi.mock('@/features/NavRail/useImLayout', () => ({
+  useImLayout: () => false,
+  useSyncImLayoutHint: () => {},
+}));
 vi.mock('@/layout/GlobalProvider/CmdkLazy', nullComponent);
 vi.mock('./GatewayMuxWarmup', nullComponent);
 vi.mock('./ClientLlmWaitResume', nullComponent);

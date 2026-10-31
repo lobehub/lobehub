@@ -1,6 +1,12 @@
 import { cssVar } from '@lobehub/ui';
 
+import { isDesktop } from '@/const/version';
 import { getDarwinMajorVersion, isMacOSWithLargeWindowBorders } from '@/utils/platform';
+
+export const getOuterCssVariables = ({ expand }: { expand?: boolean }): Record<string, string> => ({
+  '--container-padding-left': expand ? '0px' : '8px',
+  '--container-padding-top': isDesktop ? '0px' : '8px',
+});
 
 export const getInnerCssVariables = ({ isDark }: { isDark: boolean }): Record<string, string> => {
   const darwinMajorVersion = getDarwinMajorVersion();

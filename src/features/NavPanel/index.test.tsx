@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import NavPanel from './index';
 import { NavPanelPortal } from './NavPanelPortal';
@@ -55,19 +55,25 @@ vi.mock('./components/NavPanelDraggable', () => ({
   },
 }));
 
-// The shell registers the Messages list as the `home` entry and Contacts as
-// `contacts`; stub both so the shell test stays about registry wiring.
+vi.mock('@/features/HomeSidebar/Content', () => ({
+  default: () => <div>Home sidebar</div>,
+}));
+
+const layout = vi.hoisted(() => ({ imLayout: false }));
+
+vi.mock('@/features/NavRail/useImLayout', () => ({ useImLayout: () => layout.imLayout }));
+
+// Under `im_layout` the shell registers the Messages list as `home` instead.
 vi.mock('@/features/MessageList', async () => {
   const { NavPanelPortal } = await import('./NavPanelPortal');
   return {
     default: () => (
       <NavPanelPortal navKey="home">
-        <div>Home sidebar</div>
+        <div>Messages list</div>
       </NavPanelPortal>
     ),
   };
 });
-
 vi.mock('@/features/ContactList', () => ({ default: () => null }));
 vi.mock('@/features/TaskNav', () => ({ default: () => null }));
 
@@ -80,7 +86,7 @@ describe('NavPanel', () => {
   it.each([false, true])(
     'ignores unrelated registrations with active content present: %s',
     (registered) => {
-      pathname = '/';
+      pathname = '/tasks';
       const owner = Symbol('home');
       if (registered) registerNavPanelContent('home', owner, <div>Original</div>);
       render(<NavPanel />);
@@ -134,7 +140,7 @@ describe('NavPanel', () => {
   });
 
   it('uses the Home entry for routes without a dedicated navigation panel', async () => {
-    pathname = '/lobe-team/dashboard';
+    pathname = '/lobe-team/tasks';
 
     render(
       <>
@@ -236,30 +242,13 @@ describe('NavPanel', () => {
   });
 });
 
-// The project index owns the whole wrap in the rail layout.
-describe('NavPanel full-page routes', () => {
-  beforeEach(() => {
-    clearNavPanelRegistry();
-  });
-
-  it.each(['/projects', '/lobe-team/projects'])('renders no list column on %s', (route) => {
-    pathname = route;
-    registerNavPanelContent('home', Symbol('home'), <div>Home sidebar</div>);
-
-    render(<NavPanel />);
-
-    expect(screen.queryByTestId('nav-panel')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('nav-sidebar-skeleton')).not.toBeInTheDocument();
-  });
-});
-
 describe('NavPanelShell', () => {
   beforeEach(() => {
     clearNavPanelRegistry();
   });
 
   it('provides the Home entry on routes that never mount the Home layout', async () => {
-    pathname = '/dashboard';
+    pathname = '/tasks';
 
     render(<NavPanelShell />);
 
@@ -309,5 +298,36 @@ describe('SideBarLayout scroll restoration', () => {
     pathname = '/memory';
     const second = render(<SideBarLayout body={<div>body</div>} />);
     expect(getViewport(second.container).scrollTop).toBe(0);
+  });
+});
+
+describe('NavPanel under the im_layout trial', () => {
+  beforeEach(() => {
+    clearNavPanelRegistry();
+    layout.imLayout = true;
+  });
+
+  afterEach(() => {
+    layout.imLayout = false;
+  });
+
+  it('renders no list column on the full-page project index', () => {
+    pathname = '/projects';
+    registerNavPanelContent('home', Symbol('home'), <div>Home sidebar</div>);
+
+    render(<NavPanel />);
+
+    expect(screen.queryByTestId('nav-panel')).not.toBeInTheDocument();
+  });
+
+  it('registers the Messages list as the home entry', async () => {
+    pathname = '/agent/agent-1';
+
+    render(<NavPanelShell />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Messages list')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Home sidebar')).not.toBeInTheDocument();
   });
 });
