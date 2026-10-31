@@ -5,6 +5,7 @@ import { memo, useMemo } from 'react';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
 import { contextSelectors, useConversationStore } from '@/features/Conversation/store';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useModelSupportImageOutput } from '@/hooks/useModelSupportImageOutput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -47,15 +48,20 @@ const MainChatInput = memo(() => {
   // The model chip lives on the right, next to Send (see rightActions); the
   // left bar keeps the "+" menu, dictation and the expand toggle.
   const leftActions: ActionKeys[] = useMemo(() => ['plus', 'voiceDictation'], []);
+  // `im_layout` opens conversations as channels: a single-row IM composer
+  // (Enter sends), without the action and control bars.
+  const imLayout = useImLayout();
 
   return (
     <>
       <AgentConfigError />
       <ChatInput
         skipScrollMarginWithList
+        compact={imLayout}
         isConfigLoading={isAgentConfigLoading}
         leftActions={leftActions}
         rightActions={rightActions}
+        showControlBar={!imLayout}
         {...(isDevMode
           ? { sendMenu: { items: sendMenuItems } }
           : { sendButtonProps: { shape: 'round' } })}

@@ -3421,6 +3421,7 @@
   "workingPanel.overview.ports.revoked": "Sharing stopped",
   "workingPanel.overview.ports.title": "Ports",
   "workingPanel.overview.ports.unavailable": "Can't read this device's ports right now",
+  "workingPanel.overview.profile.view": "View profile",
   "workingPanel.overview.subagents": "Subagents",
   "workingPanel.overview.subtopics": "Subtopics",
   "workingPanel.overview.sync.ahead_one": "{{count}} commit ahead",

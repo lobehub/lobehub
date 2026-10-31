@@ -4,6 +4,7 @@ import { memo } from 'react';
 
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useChatStore } from '@/store/chat';
 
 import { useSendMenuItems } from './useSendMenuItems';
@@ -31,12 +32,17 @@ const rightActions: ActionKeys[] = ['model', 'voiceMessage', 'contextWindow'];
 const MainChatInput = memo(() => {
   const sendMenuItems = useSendMenuItems();
 
+  // `im_layout` opens conversations as channels: a single-row IM composer.
+  const imLayout = useImLayout();
+
   return (
     <ChatInput
       skipScrollMarginWithList
+      compact={imLayout}
       leftActions={leftActions}
       rightActions={rightActions}
       sendMenu={{ items: sendMenuItems }}
+      showControlBar={!imLayout}
       onEditorReady={(instance) => {
         // Sync to global ChatStore for compatibility with other features
         useChatStore.setState({ mainInputEditor: instance });

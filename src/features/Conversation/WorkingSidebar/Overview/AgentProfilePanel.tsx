@@ -2,14 +2,16 @@
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { Flexbox, Segmented, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Segmented, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { SquareArrowOutUpRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
 import { ModelIcon } from '@/components/LobeIcons';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -25,15 +27,18 @@ const styles = stylex.create({
     paddingInline: '16px',
   },
   hero: {
-    paddingBlockStart: '20px',
-    paddingBlockEnd: '14px',
-    paddingInline: '16px',
+    position: 'relative',
+    paddingBlockStart: '28px',
+    paddingBlockEnd: '12px',
+    paddingInline: '40px',
+    textAlign: 'center',
   },
   role: {
     overflow: 'hidden',
     fontSize: '12px',
     lineHeight: '18px',
     color: cssVar.colorTextTertiary,
+    maxWidth: '100%',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -71,11 +76,12 @@ interface AgentProfilePanelProps {
 
 /**
  * The conversation's right panel opens as the agent's profile, like an IM
- * contact card: avatar beside title and role, then Details and the Workspace (the former
- * overview, with Portal entries) as tabs.
+ * contact card: centered avatar, title and role (profile link in the corner), then
+ * Details and the Workspace (the former overview, with Portal entries) as tabs.
  */
 const AgentProfilePanel = memo<AgentProfilePanelProps>(({ agentId, workspace }) => {
   const { t } = useTranslation('chat');
+  const navigate = useWorkspaceAwareNavigate();
   const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const [tab, setTab] = useState<ProfileTab>('detail');
@@ -89,21 +95,27 @@ const AgentProfilePanel = memo<AgentProfilePanelProps>(({ agentId, workspace }) 
 
   return (
     <Flexbox>
-      <Flexbox horizontal align={'center'} gap={12} {...stylex.props(styles.hero)}>
+      <Flexbox align={'center'} gap={6} {...stylex.props(styles.hero)}>
+        {/* The profile entry sits in the header corner, not in the Details tab. */}
+        <ActionIcon
+          icon={SquareArrowOutUpRightIcon}
+          size={'small'}
+          style={{ insetBlockStart: 10, insetInlineEnd: 10, position: 'absolute' }}
+          title={t('workingPanel.overview.profile.view')}
+          onClick={() => navigate(`/agent/${agentId}/profile`)}
+        />
         <Avatar
           emojiScaleWithBackground
           avatar={meta.avatar || DEFAULT_AVATAR}
           background={meta.backgroundColor || undefined}
           name={title}
           shape={'square'}
-          size={52}
+          size={64}
         />
-        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
-          <Text ellipsis fontSize={16} weight={600}>
-            {title}
-          </Text>
-          {roleLine && <span {...stylex.props(styles.role)}>{roleLine}</span>}
-        </Flexbox>
+        <Text ellipsis fontSize={17} style={{ maxWidth: '100%' }} weight={600}>
+          {title}
+        </Text>
+        {roleLine && <span {...stylex.props(styles.role)}>{roleLine}</span>}
       </Flexbox>
       <Flexbox align={'center'} {...stylex.props(styles.tabs)}>
         <Segmented

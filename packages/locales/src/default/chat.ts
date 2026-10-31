@@ -3598,6 +3598,7 @@ export default {
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',
   'workingPanel.overview.emptyTitle': 'Ready to work',
+  'workingPanel.overview.profile.view': 'View profile',
   'workingPanel.profile.description': 'About',
   'workingPanel.profile.model': 'Model',
   'workingPanel.profile.noDescription': 'No description yet',
