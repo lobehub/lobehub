@@ -1,15 +1,15 @@
-import type { UserMemoryDetail } from '@lobechat/types';
+import type {
+  UserMemoryActivity,
+  UserMemoryContext,
+  UserMemoryDetail,
+  UserMemoryExperience,
+  UserMemoryIdentity,
+  UserMemoryPreference,
+} from '@lobechat/types';
 import { LayersEnum } from '@lobechat/types';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
-import type {
-  UserMemoryActivity,
-  UserMemoryContext,
-  UserMemoryExperience,
-  UserMemoryIdentity,
-  UserMemoryPreference,
-} from '../../../schemas';
 import {
   userMemories,
   userMemoriesContexts,
@@ -21,15 +21,30 @@ import { selectNonVectorColumns } from '../../../utils/columns';
 import type { UserMemoryModelContext } from './context';
 
 export type ListMemoriesItem<L extends LayersEnum> = L extends LayersEnum.Context
-  ? UserMemoryDetail & { context: UserMemoryContext; layer: LayersEnum.Context }
+  ? UserMemoryDetail & {
+      context: UserMemoryContext;
+      layer: LayersEnum.Context;
+    }
   : L extends LayersEnum.Experience
-    ? UserMemoryDetail & { experience: UserMemoryExperience; layer: LayersEnum.Experience }
+    ? UserMemoryDetail & {
+        experience: UserMemoryExperience;
+        layer: LayersEnum.Experience;
+      }
     : L extends LayersEnum.Identity
-      ? UserMemoryDetail & { identity: UserMemoryIdentity; layer: LayersEnum.Identity }
+      ? UserMemoryDetail & {
+          identity: UserMemoryIdentity;
+          layer: LayersEnum.Identity;
+        }
       : L extends LayersEnum.Preference
-        ? UserMemoryDetail & { layer: LayersEnum.Preference; preference: UserMemoryPreference }
+        ? UserMemoryDetail & {
+            layer: LayersEnum.Preference;
+            preference: UserMemoryPreference;
+          }
         : L extends LayersEnum.Activity
-          ? UserMemoryDetail & { activity: UserMemoryActivity; layer: LayersEnum.Activity }
+          ? UserMemoryDetail & {
+              activity: UserMemoryActivity;
+              layer: LayersEnum.Activity;
+            }
           : never;
 
 export interface ListMemoriesParams<L extends LayersEnum> {

@@ -489,7 +489,6 @@ const AgentViewAllPage = memo(() => {
     createConnectAgentMenuItem,
     createGroupChatMenuItem,
     createMarketAgentMenuItem,
-    isMutatingAgent,
   } = useCreateMenuItems();
 
   // Creating from the Private tab lands the item in the private bucket, so
@@ -599,7 +598,7 @@ const AgentViewAllPage = memo(() => {
             )}
             {canCreate ? (
               <DropdownMenu items={createMenuItems}>
-                <Button icon={PlusIcon} loading={isMutatingAgent}>
+                <Button icon={PlusIcon}>
                   <Icon icon={ChevronDownIcon} size={14} />
                 </Button>
               </DropdownMenu>

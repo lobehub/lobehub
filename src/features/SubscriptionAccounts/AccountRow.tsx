@@ -24,7 +24,12 @@ import { usageTextColor } from '@/features/DeviceManager/DeviceHealth/shared';
 import { UsageBar } from '@/features/DeviceManager/DeviceHealth/UsageMeter';
 import { type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
 
-import { type AccountStatus, deriveAccountView, type SubscriptionProvider } from './accountView';
+import {
+  type AccountStatus,
+  deriveAccountView,
+  meterWindows,
+  type SubscriptionProvider,
+} from './accountView';
 
 /** Column widths shared by {@link AccountRow} and {@link AccountListHeader}. */
 export const COLUMN_WIDTH = {
@@ -325,14 +330,17 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
 
       {/* Both windows stacked in one column, so the pair reads as one quota. */}
       <Flexbox gap={6} style={{ flex: 'none', width: COLUMN_WIDTH.quota }}>
-        <WindowMeter
-          label={t('subscriptionAccounts.meter.session')}
-          value={view.session?.usedPercent}
-        />
-        <WindowMeter
-          label={t('subscriptionAccounts.meter.weekly')}
-          value={view.weekly?.usedPercent}
-        />
+        {meterWindows(view).map((key) => (
+          <WindowMeter
+            key={key}
+            value={view[key]?.usedPercent}
+            label={
+              key === 'session'
+                ? t('subscriptionAccounts.meter.session')
+                : t('subscriptionAccounts.meter.weekly')
+            }
+          />
+        ))}
       </Flexbox>
 
       <Flexbox

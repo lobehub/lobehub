@@ -66,6 +66,7 @@ jobs:
             .github/scripts/size-gate-comment.test.cjs \
             .github/scripts/pr-admission-check.test.cjs \
             .github/scripts/mergeAllowBuilds.test.mjs \
+            .github/scripts/desktopRelease*.test.mjs \
             .github/scripts/desktop-core-gate.test.mjs
 
       - name: Setup environment
@@ -77,6 +78,9 @@ jobs:
       - name: Install CLI deps
         run: pnpm install
         working-directory: apps/cli
+
+      - name: Verify hotfix operator CLI
+        run: node --test .github/scripts/hotfixWorkflow.test.mjs
 
       - name: Test CLI build configuration, bundle and model-facing docs
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
@@ -265,11 +269,7 @@ jobs:
       # new or cherry-picked changes (and conflict resolutions) on the branch
       # itself, so their PRs are the only place those changes get linted.
       ALINT_SKIP_REASON: >-
-        ${{
-        github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/weekly-') && 'weekly release PR, whose changes were linted on their own PRs' ||
-        github.event_name == 'push' && github.ref == 'refs/heads/main' && 'push to main, whose changes were linted on their own PRs' ||
-        ''
-        }}
+        ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'release/weekly-') && 'weekly release PR, whose changes were linted on their own PRs' || github.event_name == 'push' && github.ref == 'refs/heads/main' && 'push to main, whose changes were linted on their own PRs' || '' }}
 
     steps:
       - name: Checkout

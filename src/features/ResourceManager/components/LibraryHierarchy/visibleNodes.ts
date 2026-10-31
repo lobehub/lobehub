@@ -1,4 +1,4 @@
-import type { TreeItem } from '@/store/tree';
+import { isExpandable, type TreeItem } from '@/store/tree';
 
 export interface VisibleNode {
   item: TreeItem;
@@ -31,7 +31,7 @@ export const buildVisibleNodes = (
       seen.add(node.id);
 
       result.push({ item: node, key: node.id, level, parentKey });
-      if (node.isFolder && expanded[node.id]) {
+      if (isExpandable(node) && expanded[node.id]) {
         walk(node.id, level + 1);
       }
     }

@@ -22,7 +22,7 @@ export interface PeopleSelection {
   value: ChannelPersonOption[];
 }
 
-const usePersonName = () => {
+export const usePersonName = () => {
   const { t } = useTranslation('channel');
   return (person: ChannelPersonOption) => person.fullName || person.username || t('person');
 };

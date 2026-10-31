@@ -65,3 +65,51 @@ describe('browserExecutor.snapshot', () => {
     expect(result.content).toBe('Browser is not open for this conversation');
   });
 });
+
+describe('browserExecutor.setViewport', () => {
+  const setViewport = vi.fn();
+
+  beforeEach(async () => {
+    setViewport.mockReset();
+    const { electronBrowserControlService } = await import('@/services/electron/browserControl');
+    Object.assign(electronBrowserControlService, { setViewport });
+  });
+
+  it('tells the model the panel shows the viewport scaled down', async () => {
+    setViewport.mockResolvedValue({ scale: 0.28, success: true });
+    const { browserExecutor } = await import('./index');
+
+    const result = await browserExecutor.setViewport({ height: 900, width: 1440 }, ctx);
+
+    expect(setViewport).toHaveBeenCalledWith({
+      height: 900,
+      sessionId: 'topic:tpc_1',
+      width: 1440,
+    });
+    expect(result).toMatchObject({ success: true });
+    expect(result.content).toBe(
+      'Viewport set to 1440×900. The panel shows it at 28%, so screenshots come out at that scale.',
+    );
+  });
+
+  it('resets to the panel size without a size', async () => {
+    setViewport.mockResolvedValue({ scale: 1, success: true });
+    const { browserExecutor } = await import('./index');
+
+    const result = await browserExecutor.setViewport({}, ctx);
+
+    expect(result.content).toBe('Viewport reset to the browser panel size.');
+  });
+
+  it('surfaces an invalid size', async () => {
+    setViewport.mockResolvedValue({ error: 'width must be a whole number', success: false });
+    const { browserExecutor } = await import('./index');
+
+    const result = await browserExecutor.setViewport({ height: 900, width: 10 }, ctx);
+
+    expect(result).toMatchObject({
+      error: { message: 'width must be a whole number' },
+      success: false,
+    });
+  });
+});

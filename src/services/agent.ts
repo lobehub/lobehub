@@ -75,6 +75,8 @@ const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep
 export interface CreateAgentParams {
   config?: PartialDeep<AgentItem>;
   groupId?: string;
+  /** This desktop's gateway device, where the creator's direct Channel to a local Agent runs. */
+  localDeviceId?: string;
   /**
    * `private` keeps the agent visible only to its creator within the active
    * workspace; `public` (default) makes it visible to every member. The
@@ -143,6 +145,7 @@ class AgentService {
     return lambdaClient.agent.createAgent.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
+      localDeviceId: params.localDeviceId,
       visibility: params.visibility,
     });
   };

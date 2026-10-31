@@ -1,5 +1,13 @@
 import { createStaticStyles, Icon, Tooltip } from '@lobehub/ui';
-import { CircleDotDashed, Database, ImagePlus, MessageSquareText, Mic, Video } from 'lucide-react';
+import {
+  AudioLines,
+  CircleDotDashed,
+  Database,
+  ImagePlus,
+  MessageSquareText,
+  Mic,
+  Video,
+} from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -15,13 +23,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   speechRecognition: css`
     color: ${cssVar.colorInfo};
   `,
+  textToSpeech: css`
+    color: ${cssVar.cyan};
+  `,
   videoGeneration: css`
     color: ${cssVar.colorWarning};
   `,
 }));
 
 export type SpendTypeValue =
-  'chat' | 'embedding' | 'imageGeneration' | 'speechRecognition' | 'videoGeneration';
+  | 'chat'
+  | 'embedding'
+  | 'imageGeneration'
+  | 'speechRecognition'
+  | 'textToSpeech'
+  | 'videoGeneration';
 
 interface SpendTypeProps {
   /** The readable label — shown on hover, since the cell itself is icon-only. */
@@ -42,6 +58,9 @@ const getIcon = (type: string) => {
     }
     case 'speechRecognition': {
       return Mic;
+    }
+    case 'textToSpeech': {
+      return AudioLines;
     }
     case 'videoGeneration': {
       return Video;

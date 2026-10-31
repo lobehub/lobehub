@@ -229,6 +229,7 @@
     "@larksuiteoapi/node-sdk": "^1.73.0",
     "@lexical/utils": "^0.42.0",
     "@lobechat/agent-address-linq": "workspace:*",
+    "@lobechat/agent-address-mail": "workspace:*",
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/agent-mock": "workspace:*",
     "@lobechat/agent-runtime": "workspace:*",
