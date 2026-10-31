@@ -824,6 +824,12 @@ export interface CreateTopicParams {
   /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
   model?: string;
   /**
+   * Bind the new topic to a project without a directory (conversation-only).
+   * Ignored when `projectWorkingDirectoryId` resolves — the directory carries
+   * its own project.
+   */
+  projectId?: string;
+  /**
    * Bind the new topic to a project working directory. The server resolves the
    * directory and pins its project, device and paths onto the topic — the same
    * binding `projectWorkingDirectory.startTopic` writes. Carried by the first

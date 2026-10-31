@@ -9,15 +9,14 @@ import { startProjectTopicDraft } from './startProjectTopicDraft';
 
 /**
  * Every project "new topic" goes straight into the agent's conversation, never
- * through a picker. On a directory the agent can run in it opens a blank draft
- * that the first message turns into a topic. Otherwise it creates the topic
- * up front — bound to `bindDirectoryId` when the caller names a directory the
- * draft can't stage on, else conversation-only — since a draft needs both.
+ * through a picker. It opens a blank draft — on `directoryId` when the agent
+ * can run there, else conversation-only in the project — that the first
+ * message turns into a topic. Only `bindDirectoryId`, a directory the caller
+ * names that a draft can't stage on, creates the topic up front.
  */
 export const useStartProjectTopic = (projectId: string | undefined) => {
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
-  const createProjectTopic = useProjectDirectoryStore((s) => s.createProjectTopic);
   const startDirectoryTopic = useProjectDirectoryStore((s) => s.startTopic);
 
   return async ({
@@ -30,15 +29,12 @@ export const useStartProjectTopic = (projectId: string | undefined) => {
     directoryId?: string;
   }) => {
     if (!projectId) return;
-    if (directoryId) {
+    if (!bindDirectoryId) {
       startProjectTopicDraft({ agentId, directoryId, navigate, projectId });
       return;
     }
     try {
-      const title = t('directories.untitled');
-      const topic = bindDirectoryId
-        ? await startDirectoryTopic(bindDirectoryId, agentId, title)
-        : await createProjectTopic({ agentId, projectId, title });
+      const topic = await startDirectoryTopic(bindDirectoryId, agentId, t('directories.untitled'));
       navigate(getProjectTopicPath(projectId, topic.id));
     } catch (error) {
       console.error('Failed to start a project topic', error);
