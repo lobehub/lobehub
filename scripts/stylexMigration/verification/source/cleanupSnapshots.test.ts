@@ -23,6 +23,15 @@ const setup = async () => {
     path.join(output, 'base-source/.stylex-dependencies/.stylex-tools/restore.log'),
     'pnpm failure details',
   );
+  await mkdir(
+    path.join(output, 'base-source/.stylex-dependencies/.stylex-tools/cache/a/b/c/d/e/f'),
+    { recursive: true },
+  );
+  await mkdir(path.join(output, 'base-source/.stylex-tools/fixtures/Example'), { recursive: true });
+  await writeFile(
+    path.join(output, 'base-source/.stylex-tools/fixtures/Example/build.log'),
+    'build details',
+  );
   return output;
 };
 
@@ -47,6 +56,12 @@ describe('owned verification source lifecycle', () => {
     ).toBe('lock');
     await expect(readFile(path.join(output, 'base-source/component.ts'))).rejects.toThrow();
     expect((await cleanupSourceSnapshots(output)).removed).toEqual([]);
+    expect(
+      await readFile(
+        path.join(output, 'source-metadata/base-source/.stylex-tools/fixtures/Example/build.log'),
+        'utf8',
+      ),
+    ).toBe('build details');
     expect(
       await readFile(
         path.join(
