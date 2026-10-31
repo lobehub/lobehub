@@ -1,8 +1,69 @@
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-// The `kv` / `table` descendant rules live in styles.module.css.
 export const styles = stylex.create({
+  kv: {
+    display: 'grid',
+    gridTemplateColumns: 'max-content 1fr',
+    rowGap: '9px',
+    columnGap: '18px',
+    alignItems: 'baseline',
+    margin: 0,
+  },
+  kvLabel: { fontSize: '12.5px', color: cssVar.colorTextSecondary },
+  kvValue: { margin: 0, fontSize: '13px', fontVariantNumeric: 'tabular-nums' },
+  tableContainer: { overflowX: 'auto' },
+  table: { borderCollapse: 'collapse', width: '100%', minWidth: 'max-content', fontSize: '13px' },
+  tableHead: {
+    paddingBlockEnd: '8px',
+    paddingInline: '10px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+    fontSize: '10.5px',
+    fontWeight: 500,
+    color: cssVar.colorTextQuaternary,
+    textAlign: {
+      'default': 'start',
+      ':is([data-align="right"])': 'end',
+      ':is([data-align="center"])': 'center',
+    },
+    fontVariantNumeric: { 'default': null, ':is([data-align="right"])': 'tabular-nums' },
+    whiteSpace: 'nowrap',
+  },
+  tableCell: {
+    maxWidth: '320px',
+    paddingBlockStart: { 'default': '8px', ':is(tr[data-total] > td)': '11px' },
+    paddingBlockEnd: '8px',
+    paddingInline: '10px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: {
+      'default': 'solid',
+      ':is(tr[data-total] > td)': 'none',
+      ':is(tbody tr:last-child > td)': 'none',
+    },
+    borderBlockEndColor: {
+      'default': cssVar.colorFillQuaternary,
+      ':is(tr[data-total] > td)': 'currentColor',
+      ':is(tbody tr:last-child > td)': 'currentColor',
+    },
+    borderBlockStartWidth: { 'default': null, ':is(tr[data-total] > td)': '1px' },
+    borderBlockStartStyle: { 'default': null, ':is(tr[data-total] > td)': 'solid' },
+    borderBlockStartColor: { 'default': null, ':is(tr[data-total] > td)': cssVar.colorBorder },
+    fontWeight: { 'default': null, ':is(tr[data-total] > td)': 600 },
+    verticalAlign: 'baseline',
+    backgroundColor: {
+      'default': null,
+      ':is(tbody tr:not([data-total]):hover > td)': cssVar.colorFillQuaternary,
+    },
+    backgroundImage: { 'default': null, ':is(tbody tr:not([data-total]):hover > td)': 'none' },
+    fontVariantNumeric: { 'default': null, ':is([data-align="right"])': 'tabular-nums' },
+    textAlign: {
+      'default': null,
+      ':is([data-align="right"])': 'end',
+      ':is([data-align="center"])': 'center',
+    },
+  },
   aside: {
     display: 'flex',
     flexWrap: 'wrap',

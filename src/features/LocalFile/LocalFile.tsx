@@ -7,12 +7,54 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 
-import moduleStyles from './LocalFile.module.css';
 import { type StartTopicConversation } from './StartTopicConversation';
 import { useLocalFileActions } from './useLocalFileActions';
 import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
 const styles = stylex.create({
+  segment: {
+    'cursor': 'pointer',
+    'position': 'relative',
+    'display': 'inline-flex',
+    'gap': '6px',
+    'alignItems': 'center',
+    'paddingBlock': '5px',
+    'paddingInline': '11px',
+    'borderStyle': 'none',
+    'borderWidth': 'medium',
+    'borderColor': 'currentColor',
+    'fontFamily': 'inherit',
+    'fontSize': '13px',
+    'lineHeight': '20px',
+    'color': { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    'whiteSpace': 'nowrap',
+    'backgroundColor': { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    'backgroundImage': 'none',
+    'borderRadius': { 'default': null, ':focus-visible': '6px' },
+    'outlineColor': { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    'outlineStyle': { 'default': null, ':focus-visible': 'solid' },
+    'outlineWidth': { 'default': null, ':focus-visible': '2px' },
+    'outlineOffset': { 'default': null, ':focus-visible': '-2px' },
+    '::before': {
+      content: { 'default': null, ':is([data-local-file-segment] + *)': "''" },
+      position: { 'default': null, ':is([data-local-file-segment] + *)': 'absolute' },
+      insetBlock: { 'default': null, ':is([data-local-file-segment] + *)': '5px' },
+      insetInlineStart: { 'default': null, ':is([data-local-file-segment] + *)': 0 },
+      width: { 'default': null, ':is([data-local-file-segment] + *)': '1px' },
+      backgroundColor: {
+        'default': null,
+        ':is([data-local-file-segment] + *)': cssVar.colorBorderSecondary,
+        ':hover': 'transparent',
+        ':is([data-local-file-segment]:hover + *)': 'transparent',
+      },
+      backgroundImage: {
+        'default': null,
+        ':is([data-local-file-segment] + *)': 'none',
+        ':hover': 'none',
+        ':is([data-local-file-segment]:hover + *)': 'none',
+      },
+    },
+  },
   container: {
     paddingBlock: '2px',
     paddingInlineStart: '4px',
@@ -93,20 +135,20 @@ export const LocalFile = ({
     readonly,
   });
 
+  // Inline chip, not a <button> (block layout inside markdown prose) — so
+  // give the clickable state complete button semantics by hand.
   const fileContent = (
     <Flexbox
       horizontal
       align={'center'}
+      gap={4}
+      role={handleClick ? 'button' : undefined}
+      style={{ display: 'inline-flex', verticalAlign: 'middle' }}
+      tabIndex={handleClick ? 0 : undefined}
       className={
         stylex.props(styles.container, (handleClick || canOpenNatively) && styles.interactive)
           .className
       }
-      gap={4}
-      // Inline chip, not a <button> (block layout inside markdown prose) — so
-      // give the clickable state complete button semantics by hand.
-      role={handleClick ? 'button' : undefined}
-      style={{ display: 'inline-flex', verticalAlign: 'middle' }}
-      tabIndex={handleClick ? 0 : undefined}
       onClick={handleClick}
       onKeyDown={
         handleClick
@@ -137,19 +179,30 @@ export const LocalFile = ({
   const popoverContent = (
     <div {...stylex.props(styles.segmented)}>
       {canPreview && (
-        <button className={moduleStyles.segment} type={'button'} onClick={handlePreview}>
+        <button
+          data-local-file-segment
+          {...stylex.props(styles.segment)}
+          type={'button'}
+          onClick={handlePreview}
+        >
           <EyeIcon size={15} />
           {t('LocalFile.action.preview')}
         </button>
       )}
-      <button className={moduleStyles.segment} type={'button'} onClick={handleOpenFile}>
+      <button
+        data-local-file-segment
+        {...stylex.props(styles.segment)}
+        type={'button'}
+        onClick={handleOpenFile}
+      >
         <ExternalLink size={15} />
         {t('LocalFile.action.open')}
       </button>
       {isDirectory ? (
         canStartTopic && (
           <button
-            className={moduleStyles.segment}
+            data-local-file-segment
+            {...stylex.props(styles.segment)}
             type={'button'}
             onClick={() => void startTopic()}
           >
@@ -158,7 +211,12 @@ export const LocalFile = ({
           </button>
         )
       ) : (
-        <button className={moduleStyles.segment} type={'button'} onClick={handleOpenFolder}>
+        <button
+          data-local-file-segment
+          {...stylex.props(styles.segment)}
+          type={'button'}
+          onClick={handleOpenFolder}
+        >
           <FolderOpen size={15} />
           {t('LocalFile.action.showInFolder')}
         </button>

@@ -1,7 +1,58 @@
+import * as stylex from '@stylexjs/stylex';
 import { memo, useLayoutEffect, useRef } from 'react';
 
+import { sx } from '@/styles/sx';
+
 import type { CellModel, CellStyle, SheetModel } from './model';
-import styles from './SheetGrid.module.css';
+
+const styles = stylex.create({
+  container: {
+    overflow: 'auto',
+    flex: '1',
+    color: '#1a1a1a',
+    backgroundColor: '#fff',
+    backgroundImage: 'none',
+  },
+  table: { tableLayout: 'fixed', borderSpacing: 0, borderCollapse: 'separate' },
+  cell: {
+    overflow: 'hidden',
+    paddingBlock: '1px',
+    paddingInline: '4px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: '#e0e2e6',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: '#e0e2e6',
+    fontSize: '13px',
+    lineHeight: 1.35,
+    verticalAlign: 'bottom',
+    backgroundColor: '#fff',
+    backgroundImage: 'none',
+  },
+  corner: { zIndex: 5, insetBlockStart: 0, insetInlineStart: 0 },
+  frozenCell: { position: 'sticky', zIndex: 3 },
+  frozenLastCell: { boxShadow: '0 1px 0 0 #9aa4b2' },
+  frozenColumnLast: { boxShadow: '1px 0 0 0 #9aa4b2' },
+  gutter: {
+    position: 'sticky',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: '#e0e2e6',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: '#e0e2e6',
+    fontSize: '11px',
+    fontWeight: 400,
+    color: '#6a7280',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+    backgroundColor: '#f2f3f5',
+    backgroundImage: 'none',
+  },
+  headCell: { zIndex: 3, insetBlockStart: 0, height: '22px' },
+  rowHead: { zIndex: 2, insetInlineStart: 0, width: '46px' },
+});
 
 const GUTTER_WIDTH = 46;
 
@@ -53,15 +104,24 @@ const GridCell = memo<{
   frozenColOffset?: number;
   frozenRow: boolean;
   lastFrozenCol: boolean;
-}>(({ cell, frozenColOffset, frozenRow, lastFrozenCol }) => (
+  lastFrozenRow: boolean;
+}>(({ cell, frozenColOffset, frozenRow, lastFrozenCol, lastFrozenRow }) => (
   <td
-    className={lastFrozenCol ? styles.frozenColumnLast : undefined}
+    {...sx(
+      [
+        styles.cell,
+        frozenRow && styles.frozenCell,
+        lastFrozenCol && styles.frozenColumnLast,
+        lastFrozenRow && styles.frozenLastCell,
+      ],
+      undefined,
+      {
+        ...toCssStyle(cell.s),
+        ...(frozenColOffset === undefined ? {} : stickyColumnStyle(frozenColOffset, frozenRow)),
+      },
+    )}
     colSpan={cell.cs}
     rowSpan={cell.rs}
-    style={{
-      ...toCssStyle(cell.s),
-      ...(frozenColOffset === undefined ? {} : stickyColumnStyle(frozenColOffset, frozenRow)),
-    }}
   >
     {cell.t}
   </td>
@@ -99,8 +159,8 @@ const SheetGrid = memo<SheetGridProps>(({ sheet }) => {
   }, [sheet, frozenRows]);
 
   return (
-    <div className={styles.container} ref={container}>
-      <table>
+    <div {...stylex.props(styles.container)} ref={container}>
+      <table {...stylex.props(styles.table)}>
         <colgroup>
           <col style={{ width: GUTTER_WIDTH }} />
           {sheet.cols.map((width, index) => (
@@ -109,22 +169,21 @@ const SheetGrid = memo<SheetGridProps>(({ sheet }) => {
         </colgroup>
         <thead>
           <tr>
-            <th className={`${styles.gutter} ${styles.corner} ${styles.headCell}`} />
+            <th {...stylex.props(styles.gutter, styles.corner, styles.headCell)} />
             {sheet.cols.map((_, index) => (
               <th
                 key={index}
-                className={[
-                  styles.gutter,
-                  styles.headCell,
-                  index === frozenCols - 1 && styles.frozenColumnLast,
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                style={
+                {...sx(
+                  [
+                    styles.gutter,
+                    styles.headCell,
+                    index === frozenCols - 1 && styles.frozenColumnLast,
+                  ],
+                  undefined,
                   index >= frozenCols
                     ? undefined
-                    : { insetInlineStart: frozenColOffsets[index], zIndex: 4 }
-                }
+                    : { insetInlineStart: frozenColOffsets[index], zIndex: 4 },
+                )}
               >
                 {columnName(index + 1)}
               </th>
@@ -134,26 +193,30 @@ const SheetGrid = memo<SheetGridProps>(({ sheet }) => {
         <tbody>
           {sheet.rows.map((row) => {
             const frozen = row.r <= frozenRows;
-            const className = [
-              frozen && styles.frozen,
-              frozen && row.r === frozenRows && styles.frozenLast,
-            ]
-              .filter(Boolean)
-              .join(' ');
+            const lastFrozenRow = frozen && row.r === frozenRows;
             return (
               <tr
-                className={className}
                 data-frozen={frozen ? '' : undefined}
                 key={row.r}
                 style={row.h ? { height: pointToPixel(row.h) } : undefined}
               >
-                <th className={`${styles.gutter} ${styles.rowHead}`}>{row.r}</th>
+                <th
+                  {...stylex.props(
+                    styles.gutter,
+                    styles.rowHead,
+                    frozen && styles.frozenCell,
+                    lastFrozenRow && styles.frozenLastCell,
+                  )}
+                >
+                  {row.r}
+                </th>
                 {row.cells.map((cell) => (
                   <GridCell
                     cell={cell}
                     frozenRow={frozen}
                     key={cell.c}
                     lastFrozenCol={cell.c === frozenCols}
+                    lastFrozenRow={lastFrozenRow}
                     frozenColOffset={
                       cell.c <= frozenCols ? frozenColOffsets[cell.c - 1] : undefined
                     }

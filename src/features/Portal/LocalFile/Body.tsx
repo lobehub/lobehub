@@ -28,7 +28,7 @@ import {
 
 import { getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
-import PreviewToolbar, { ToolbarActionButton } from './PreviewToolbar';
+import PreviewToolbar, { ToolbarActionButton, toolbarToggleClassNames } from './PreviewToolbar';
 import UnsupportedPreview from './UnsupportedPreview';
 import VideoPreview from './VideoPreview';
 
@@ -310,6 +310,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                 )}
                 {canRender && (
                   <ToggleGroup
+                    classNames={toolbarToggleClassNames}
                     value={mode}
                     variant={'outlined'}
                     options={[

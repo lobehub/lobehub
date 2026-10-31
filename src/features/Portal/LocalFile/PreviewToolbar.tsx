@@ -6,9 +6,7 @@ import type { MouseEventHandler, ReactNode } from 'react';
 import { memo } from 'react';
 
 import PathBreadcrumb from './PathBreadcrumb';
-import moduleStyles from './PreviewToolbar.module.css';
 
-// Container-query and descendant rules live in PreviewToolbar.module.css.
 const styles = stylex.create({
   action: {
     cursor: { 'default': 'pointer', ':disabled': 'not-allowed' },
@@ -27,6 +25,12 @@ const styles = stylex.create({
     opacity: { 'default': null, ':disabled': 0.45 },
   },
   actionActive: { color: cssVar.colorText, backgroundColor: cssVar.colorFillSecondary },
+  actionIcon: { display: 'inline-flex', alignItems: 'center' },
+  actionLabel: {
+    whiteSpace: 'nowrap',
+    display: { 'default': null, '@container (max-width: 300px)': 'none' },
+  },
+  toggleLabel: { display: { 'default': null, '@container (max-width: 300px)': 'none' } },
   bar: {
     containerType: 'inline-size',
     flexShrink: 0,
@@ -40,12 +44,23 @@ const styles = stylex.create({
     backgroundImage: 'none',
   },
   path: {
+    display: {
+      'default': null,
+      '@container (max-width: 440px)': {
+        'default': null,
+        ':has(~ [data-toolbar-actions] > *)': 'none',
+      },
+    },
     overflow: 'hidden',
     minWidth: 0,
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
   },
 });
+
+export const toolbarToggleClassNames = {
+  itemLabel: stylex.props(styles.toggleLabel).className,
+};
 
 interface ToolbarActionButtonProps {
   active?: boolean;
@@ -63,13 +78,18 @@ export const ToolbarActionButton = memo<ToolbarActionButtonProps>(
       <button
         aria-label={title ?? (typeof label === 'string' ? label : undefined)}
         aria-pressed={active}
-        className={`${stylex.props(styles.action, active && styles.actionActive).className} ${moduleStyles.action}`}
+        className={stylex.props(styles.action, active && styles.actionActive).className}
         disabled={disabled || loading}
         type={'button'}
         onClick={onClick}
       >
-        <Icon icon={loading ? Loader2Icon : icon} size={14} spin={loading} />
-        {label && <span className={moduleStyles.actionLabel}>{label}</span>}
+        <Icon
+          className={stylex.props(styles.actionIcon).className}
+          icon={loading ? Loader2Icon : icon}
+          size={14}
+          spin={loading}
+        />
+        {label && <span {...stylex.props(styles.actionLabel)}>{label}</span>}
       </button>
     );
 
@@ -97,12 +117,7 @@ const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, deviceId, path, roo
     justify={'space-between'}
   >
     <Tooltip title={path}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={`${stylex.props(styles.path).className} ${moduleStyles.path}`}
-        flex={1}
-      >
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.path).className} flex={1}>
         <PathBreadcrumb deviceId={deviceId} path={path} rootPath={rootPath} />
       </Flexbox>
     </Tooltip>
@@ -111,7 +126,6 @@ const PreviewToolbar = memo<PreviewToolbarProps>(({ actions, deviceId, path, roo
         data-toolbar-actions
         horizontal
         align={'center'}
-        className={moduleStyles.actions}
         flex={'none'}
         gap={2}
         style={{ marginInlineStart: 'auto' }}

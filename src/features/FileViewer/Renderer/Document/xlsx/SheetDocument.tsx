@@ -4,7 +4,6 @@ import { Fragment, memo } from 'react';
 import type { BodyItem, SheetOutline, SheetSection } from './classifySheet';
 import type { CellModel } from './model';
 import { styles } from './styles';
-import moduleStyles from './styles.module.css';
 
 const alignOf = (cell: CellModel) =>
   cell.s.h === 'right' ? 'right' : cell.s.h === 'center' ? 'center' : undefined;
@@ -16,12 +15,16 @@ const SectionTable = memo<{
   const columns = header.map((cell) => cell.c);
 
   return (
-    <div className={moduleStyles.table}>
-      <table>
+    <div {...stylex.props(styles.tableContainer)}>
+      <table {...stylex.props(styles.table)}>
         <thead>
           <tr>
             {header.map((cell, index) => (
-              <th data-align={index === 0 ? undefined : alignOf(cell)} key={cell.c}>
+              <th
+                {...stylex.props(styles.tableHead)}
+                data-align={index === 0 ? undefined : alignOf(cell)}
+                key={cell.c}
+              >
                 {cell.t}
               </th>
             ))}
@@ -40,12 +43,12 @@ const SectionTable = memo<{
                       : '';
                   if (!cell)
                     return (
-                      <td key={column}>
+                      <td {...stylex.props(styles.tableCell)} key={column}>
                         {extras ? <span {...stylex.props(styles.extra)}>{extras}</span> : null}
                       </td>
                     );
                   return (
-                    <td data-align={alignOf(cell)} key={column}>
+                    <td {...stylex.props(styles.tableCell)} data-align={alignOf(cell)} key={column}>
                       {cell.t}
                       {extras ? <span {...stylex.props(styles.extra)}>{extras}</span> : null}
                     </td>
@@ -64,13 +67,13 @@ SectionTable.displayName = 'SectionTable';
 
 const KeyValueList = memo<{ bodyFontSize: number; rows: CellModel[][] }>(
   ({ bodyFontSize, rows }) => (
-    <dl className={moduleStyles.kv}>
+    <dl {...stylex.props(styles.kv)}>
       {rows.map((cells, index) => {
         const [label, ...rest] = cells;
         return (
           <Fragment key={index}>
-            <dt>{label.t}</dt>
-            <dd>
+            <dt {...stylex.props(styles.kvLabel)}>{label.t}</dt>
+            <dd {...stylex.props(styles.kvValue)}>
               {rest.length === 0
                 ? '—'
                 : rest.map((cell, cellIndex) => (
