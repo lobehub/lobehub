@@ -55,7 +55,6 @@ vi.mock('../wake/opener', () => ({ createReplyOpener: () => mocks.opener }));
 vi.mock('../wake/identity', () => ({
   createWakeIdentityLoader: () => async () => ({ agentName: 'Nasa', ownerNames: ['Arvin'] }),
 }));
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -114,7 +113,7 @@ const boot = async (settings: Record<string, unknown> = {}) => {
   mockFindEnabledByPlatform.mockResolvedValue([
     makeProvider({
       applicationId: 'app-1',
-      settings: { dmPolicy: 'open', userId: OWNER, ...settings },
+      settings: { botWakeEnabled: true, dmPolicy: 'open', userId: OWNER, ...settings },
     }),
   ]);
   await new BotMessageRouter().getWebhookHandler(

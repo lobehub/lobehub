@@ -32,7 +32,7 @@ import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
-  mergeBotSettingsForPersist,
+  mergeBotSettingsForCreate,
   mergeBotSettingsPatch,
 } from '@/server/services/bot/agentBotProviderSettings';
 import type { ResolvedMessageTarget } from '@/server/services/bot/messageTarget';
@@ -458,7 +458,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
           userId: context.userId!,
           workspaceId: context.workspaceId ?? undefined,
         });
-        const settings = mergeBotSettingsForPersist(params.platform, params.settings);
+        const settings = mergeBotSettingsForCreate(params.platform, params.settings);
         assertBotAccessSettings(settings);
         await assertWatchKeywordsWritable({
           applicationId: params.applicationId,

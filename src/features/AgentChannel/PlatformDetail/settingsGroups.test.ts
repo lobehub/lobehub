@@ -215,8 +215,14 @@ describe('groupWakeFields', () => {
     const sections = groupWakeFields(botWakeFields);
     const keys = sections.flatMap((section) => section.fields.map((f) => f.key));
 
-    expect(sections.map((section) => section.key)).toEqual(['judgement', 'channels', 'pace']);
-    expect(sections[0].fields.map((f) => f.key)).toEqual([
+    expect(sections.map((section) => section.key)).toEqual([
+      'switch',
+      'judgement',
+      'channels',
+      'pace',
+    ]);
+    expect(sections[0].fields.map((f) => f.key)).toEqual([K.enabled]);
+    expect(sections[1].fields.map((f) => f.key)).toEqual([
       K.duties,
       K.dutiesThreshold,
       K.customInstructionsEnabled,
@@ -225,7 +231,7 @@ describe('groupWakeFields', () => {
     expect(keys.filter((key) => /Proactive|Initiate/.test(key))).toEqual([]);
   });
 
-  it('shows only the keywords until the rollout reaches the user', () => {
+  it('shows only the keywords on a platform without the bot-wake options', () => {
     expect(keysOf(['watchKeywords'].map(field))).toEqual([['keywords', ['watchKeywords']]]);
   });
 
@@ -236,16 +242,12 @@ describe('groupWakeFields', () => {
     ]);
   });
 
-  it('places every option the runtime reads, apart from the hidden master switch', () => {
-    const placed = groupWakeFields(Object.values(K).map(field)).flatMap((section) =>
-      section.fields.map((f) => f.key),
-    );
+  it('places every option the runtime reads, the master switch in a block of its own first', () => {
+    const sections = groupWakeFields(Object.values(K).map(field));
+    const placed = sections.flatMap((section) => section.fields.map((f) => f.key));
 
-    expect(placed.sort()).toEqual(
-      Object.values(K)
-        .filter((key) => key !== K.enabled)
-        .sort(),
-    );
+    expect(sections[0]).toMatchObject({ fields: [{ key: K.enabled }], key: 'switch' });
+    expect(placed.sort()).toEqual(Object.values(K).sort());
   });
 });
 

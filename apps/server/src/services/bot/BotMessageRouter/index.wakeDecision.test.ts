@@ -19,7 +19,6 @@ vi.mock('@/server/services/agentSignal/persistence/recordDecision', () => ({
   recordSignalDecision: mockRecordSignalDecision,
 }));
 
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -64,8 +63,11 @@ const decisions = () =>
     verdicts: params.decision.verdicts,
   }));
 
+/** Decisions are recorded only for a bot whose wake switch is on, so every bot here has it on. */
 const boot = async (settings: Record<string, unknown> = { dmPolicy: 'open' }) => {
-  mockFindEnabledByPlatform.mockResolvedValue([makeProvider({ applicationId: 'app-1', settings })]);
+  mockFindEnabledByPlatform.mockResolvedValue([
+    makeProvider({ applicationId: 'app-1', settings: { botWakeEnabled: true, ...settings } }),
+  ]);
   const router = new BotMessageRouter();
   await router.getWebhookHandler(
     'telegram',
@@ -222,7 +224,8 @@ describe('BotMessageRouter bot-wake decision records', () => {
   });
 
   it('does not record the catch-all’s silent drops of unrelated channel chatter', async () => {
-    await boot({ dmPolicy: 'open' });
+    // With the wake switch on the catch-all judges such chatter; off, it only drops it.
+    await boot({ botWakeEnabled: false, dmPolicy: 'open' });
 
     await catchAllHandler()(thread({ id: 'telegram:group-9' }), message());
     await flush();

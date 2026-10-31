@@ -18,10 +18,6 @@ vi.mock('@/server/services/agentSignal/persistence/recordDecision', () => ({
   recordSignalDecision: mockRecordSignalDecision,
 }));
 
-const flag = vi.hoisted(() => ({ on: false }));
-vi.mock('@/server/featureFlags', () => ({
-  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn(async () => ({ enableBotWake: flag.on })),
-}));
 vi.mock('@/database/core/db-adaptor', async () => (await import('./testUtils')).dbAdaptorModule());
 vi.mock('@/database/models/agentBotProvider', async () =>
   (await import('./testUtils')).agentBotProviderModule(),
@@ -83,16 +79,15 @@ const message = (overrides = {}) => ({
   ...overrides,
 });
 
-describe('BotMessageRouter bot_wake rollout flag', () => {
+describe('BotMessageRouter bot-wake switch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetBotMessageRouterMocks();
     mockGetList.mockResolvedValue(['alice-id', 'bob-id']);
     mockRecordSignalDecision.mockResolvedValue({ persisted: false });
-    flag.on = false;
   });
 
-  describe('flag off (the default): the bot behaves as it did before the pipeline existed', () => {
+  describe('switch off (the default): the bot behaves as it did before the pipeline existed', () => {
     it('writes nothing for any inbound path', async () => {
       await boot({ dmPolicy: 'open', watchKeywords: [{ instruction: '', keyword: 'deploy' }] });
 
@@ -129,10 +124,13 @@ describe('BotMessageRouter bot_wake rollout flag', () => {
     });
   });
 
-  describe('flag on', () => {
+  describe('switch on', () => {
     it('records the decision and lets a watch-keyword wake end in silence', async () => {
-      flag.on = true;
-      await boot({ dmPolicy: 'open', watchKeywords: [{ instruction: '', keyword: 'deploy' }] });
+      await boot({
+        botWakeEnabled: true,
+        dmPolicy: 'open',
+        watchKeywords: [{ instruction: '', keyword: 'deploy' }],
+      });
 
       await subscribedHandler()(
         thread({ id: 'telegram:chat-3' }),
@@ -145,8 +143,11 @@ describe('BotMessageRouter bot_wake rollout flag', () => {
     });
 
     it('lets a channel keyword wake through the catch-all end in silence, as in a subscribed thread', async () => {
-      flag.on = true;
-      await boot({ dmPolicy: 'open', watchKeywords: [{ instruction: '', keyword: 'deploy' }] });
+      await boot({
+        botWakeEnabled: true,
+        dmPolicy: 'open',
+        watchKeywords: [{ instruction: '', keyword: 'deploy' }],
+      });
 
       await catchAllHandler()(thread(), message({ id: 'm8', text: 'please deploy now' }));
       await flush();
@@ -159,8 +160,11 @@ describe('BotMessageRouter bot_wake rollout flag', () => {
     });
 
     it('always answers a DM through the catch-all, keyword or not', async () => {
-      flag.on = true;
-      await boot({ dmPolicy: 'open', watchKeywords: [{ instruction: '', keyword: 'deploy' }] });
+      await boot({
+        botWakeEnabled: true,
+        dmPolicy: 'open',
+        watchKeywords: [{ instruction: '', keyword: 'deploy' }],
+      });
 
       await catchAllHandler()(thread({ isDM: true }), message({ id: 'm9', text: 'deploy now' }));
 
@@ -170,8 +174,7 @@ describe('BotMessageRouter bot_wake rollout flag', () => {
     });
 
     it('still answers an @mention without any chance of silence', async () => {
-      flag.on = true;
-      await boot();
+      await boot({ botWakeEnabled: true, dmPolicy: 'open' });
 
       await mentionHandler()(thread(), message({ id: 'm6', isMention: true, text: '@bot hi' }));
       await flush();

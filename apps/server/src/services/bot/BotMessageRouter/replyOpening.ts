@@ -87,6 +87,8 @@ export interface ReplyOpeningDeps {
   /** The bot's own platform id, so its earlier lines read as its own. */
   applicationId: string;
   client: Pick<PlatformClient, 'getReplyTargets'>;
+  /** The bot's wake switch (`botWakeEnabled`): the bot decides only while it is on. */
+  decides: boolean;
   /**
    * Whether the bot is already answering in a conversation. A second reply in a busy channel
    * would be dropped as a duplicate, so it moves into a thread instead.
@@ -94,8 +96,6 @@ export interface ReplyOpeningDeps {
   isBusy?: (platformThreadId: string) => boolean;
   mode: BotReplyPlacementMode;
   opener?: ReplyOpener;
-  /** The `bot_wake` rollout flag for the bot's owner: the bot decides only while it is on. */
-  rolledOut: () => Promise<boolean>;
   timeoutMs?: number;
 }
 
@@ -142,7 +142,7 @@ const verdictOf = (
 /**
  * Builds how a bot opens its reply to a message addressed to it.
  *
- * - When the owner leaves the placement to the bot (and the rollout is on), the bot decides with a
+ * - When the owner leaves the placement to the bot (and its wake switch is on), the bot decides with a
  *   short model call: a quick answer stays in the channel, work that runs long moves into a thread
  *   it names, and work that takes a while gets a one-sentence acknowledgement first. A wake nobody
  *   asked for (`followup`) answers in the channel and never acknowledges: it may still end silent.
@@ -153,14 +153,8 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
   const { client, mode, opener } = deps;
   const timeoutMs = deps.timeoutMs ?? REPLY_OPENER_TIMEOUT_MS;
 
-  const decidesPlacement = async () => {
-    if (mode !== 'agent' || !opener || !client.getReplyTargets) return false;
-    try {
-      return await deps.rolledOut();
-    } catch {
-      return false;
-    }
-  };
+  const decidesPlacement = async () =>
+    deps.decides && mode === 'agent' && !!opener && !!client.getReplyTargets;
 
   const moveTo = (thread: OpeningThread, platformThreadId: string) => {
     if (platformThreadId === thread.id) return;

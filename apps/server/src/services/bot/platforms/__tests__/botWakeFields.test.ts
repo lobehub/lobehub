@@ -77,8 +77,8 @@ describe('bot-wake settings fields', () => {
     for (const field of botWakeFields) expect(keys).toContain(field.key);
   });
 
-  it('stay hidden until the bot_wake rollout reaches the user', () => {
-    for (const field of botWakeFields) expect(field.featureFlag).toBe('enableBotWake');
+  it('are released to every user, behind no feature flag', () => {
+    for (const field of botWakeFields) expect(field.featureFlag).toBeUndefined();
   });
 
   it('show only the master switch until it is on, and the scheduler timings until it batches', () => {

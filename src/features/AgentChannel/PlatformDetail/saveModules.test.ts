@@ -84,11 +84,14 @@ describe('resolveSaveModules', () => {
     ]);
   });
 
-  it('writes the hidden wake switch with every wake module, so the options stay on', () => {
+  it('gives the wake switch no block: it saves itself as it changes', () => {
     const wake = resolveSaveModules(discord, false).filter((m) => m.id.startsWith('wake-'));
 
     expect(wake.length).toBeGreaterThan(0);
-    for (const module of wake) expect(module.alsoWrites).toEqual(['botWakeEnabled']);
+    for (const module of wake) {
+      expect(module.keys).not.toContain('botWakeEnabled');
+      expect(module.alsoWrites).toBeUndefined();
+    }
   });
 
   it('splits access into owner identity, conversation and device blocks', () => {
@@ -198,12 +201,10 @@ describe('settingsToSave', () => {
     expect(settingsToSave(byId['wake-pace'], withOverride, withOverride).botWake).toEqual(override);
   });
 
-  it('writes the wake switch from the form, so a bot saved before the options existed gets it', () => {
-    const values = { settings: { ...stored.settings, botWakeEnabled: true } };
+  it('leaves the wake switch as stored when saving a wake block', () => {
+    const values = { settings: { ...stored.settings, botWakeEnabled: false } };
 
-    expect(
-      settingsToSave(byId['wake-pace'], values, { settings: { charLimit: 2000 } }).botWakeEnabled,
-    ).toBe(true);
+    expect(settingsToSave(byId['wake-pace'], values, stored).botWakeEnabled).toBe(true);
   });
 
   it('drops an option the form cleared instead of keeping the stored one', () => {

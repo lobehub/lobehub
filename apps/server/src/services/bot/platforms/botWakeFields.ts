@@ -11,9 +11,6 @@ import {
 
 import type { FieldSchema } from './types';
 
-/** The user flag that decides whether the signed-in user sees these fields. */
-const FEATURE_FLAG = 'enableBotWake';
-
 const ENABLED = { field: KEY.enabled, value: true };
 /** The timings show only for a custom pace; a preset sets them. */
 const CUSTOM_PACE = [ENABLED, { field: KEY.pace, value: 'custom' }];
@@ -25,7 +22,6 @@ const channelList = (key: string, label: string, idPlaceholder: string): FieldSc
   key,
   default: [],
   description: `${label}Hint`,
-  featureFlag: FEATURE_FLAG,
   label,
   // Matches the parser's own cap: an over-cap list is dropped wholesale, and for an allowlist
   // that silently means "unrestricted". The form refuses to grow or save past this number.
@@ -54,9 +50,8 @@ const channelList = (key: string, label: string, idPlaceholder: string): FieldSc
  * enforce: there is no "record only" or "off" to pick. Appended to a platform's `settings`
  * group; the form renders them flat, so each is a top-level key (see `BOT_WAKE_SETTING_KEYS`).
  *
- * Everything but the master switch stays hidden until `botWakeEnabled` is on, the scheduler's
- * timings until it is set to `enforce`, and the whole group until the `bot_wake` rollout reaches
- * the signed-in user.
+ * Everything but the master switch stays hidden until `botWakeEnabled` is on, and the scheduler's
+ * timings until it is set to `enforce`.
  */
 export const makeBotWakeFields = ({
   channelIdPlaceholder = 'channel.botWakeChannelIdPlaceholder',
@@ -69,9 +64,10 @@ export const makeBotWakeFields = ({
 } = {}): FieldSchema[] => [
   {
     key: KEY.enabled,
+    // Off for a bot saved before the switch existed: the runtime merges this default into it. A new
+    // bot is created with the switch on instead (see `withNewBotWakeOn`).
     default: false,
     description: 'channel.botWakeEnabledHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeEnabled',
     type: 'boolean',
   },
@@ -79,7 +75,6 @@ export const makeBotWakeFields = ({
     key: KEY.scope,
     default: DEFAULT_WAKE_RULES.scope,
     description: 'channel.botWakeScopeHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeScope',
     type: 'string',
     visibleWhen: ENABLED,
@@ -103,7 +98,6 @@ export const makeBotWakeFields = ({
     key: KEY.pace,
     default: 'balanced',
     description: 'channel.botWakePaceHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakePace',
     type: 'string',
     visibleWhen: ENABLED,
@@ -127,7 +121,6 @@ export const makeBotWakeFields = ({
     key: KEY.windowSeconds,
     default: DEFAULT_WAKE_RULES.windowSeconds,
     description: 'channel.botWakeWindowSecondsHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeWindowSeconds',
     maximum: 86_400,
     minimum: 0,
@@ -138,7 +131,6 @@ export const makeBotWakeFields = ({
     key: KEY.maxSilentWakes,
     default: DEFAULT_WAKE_RULES.maxSilentWakes,
     description: 'channel.botWakeMaxSilentWakesHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeMaxSilentWakes',
     maximum: 100,
     minimum: 0,
@@ -149,7 +141,6 @@ export const makeBotWakeFields = ({
     key: KEY.ownerPresenceSeconds,
     default: DEFAULT_WAKE_RULES.ownerPresenceSeconds,
     description: 'channel.botWakeOwnerPresenceSecondsHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeOwnerPresenceSeconds',
     maximum: 86_400,
     minimum: 0,
@@ -160,7 +151,6 @@ export const makeBotWakeFields = ({
     key: KEY.classifierThreshold,
     default: DEFAULT_WAKE_RULES.classifier.threshold,
     description: 'channel.botWakeClassifierThresholdHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeClassifierThreshold',
     maximum: 1,
     minimum: 0,
@@ -170,7 +160,6 @@ export const makeBotWakeFields = ({
   {
     key: KEY.duties,
     description: 'channel.botWakeDutiesHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeDuties',
     placeholder: 'channel.botWakeDutiesPlaceholder',
     type: 'string',
@@ -184,7 +173,6 @@ export const makeBotWakeFields = ({
     key: KEY.dutiesThreshold,
     default: DEFAULT_WAKE_RULES.duties.threshold,
     description: 'channel.botWakeDutiesThresholdHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeDutiesThreshold',
     maximum: 1,
     minimum: 0,
@@ -195,7 +183,6 @@ export const makeBotWakeFields = ({
     key: KEY.customInstructionsEnabled,
     default: false,
     description: 'channel.botWakeCustomInstructionsEnabledHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeCustomInstructionsEnabled',
     type: 'boolean',
     visibleWhen: ENABLED,
@@ -203,7 +190,6 @@ export const makeBotWakeFields = ({
   {
     key: KEY.customInstructions,
     description: 'channel.botWakeCustomInstructionsHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeCustomInstructions',
     placeholder: 'channel.botWakeCustomInstructionsPlaceholder',
     type: 'string',
@@ -218,7 +204,6 @@ export const makeBotWakeFields = ({
     key: KEY.schedulerMode,
     default: 'off',
     description: 'channel.botWakeSchedulerModeHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeSchedulerMode',
     type: 'string',
     visibleWhen: CUSTOM_PACE,
@@ -230,7 +215,6 @@ export const makeBotWakeFields = ({
     key: KEY.collectSeconds,
     default: MIN_COLLECT_SECONDS,
     description: 'channel.botWakeCollectSecondsHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeCollectSeconds',
     maximum: 3600,
     minimum: MIN_COLLECT_SECONDS,
@@ -241,7 +225,6 @@ export const makeBotWakeFields = ({
     key: KEY.cooldownSeconds,
     default: MIN_COOLDOWN_SECONDS,
     description: 'channel.botWakeCooldownSecondsHint',
-    featureFlag: FEATURE_FLAG,
     label: 'channel.botWakeCooldownSeconds',
     maximum: 3600,
     minimum: MIN_COOLDOWN_SECONDS,

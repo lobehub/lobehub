@@ -55,7 +55,7 @@ vi.mock('@/store/agent/selectors', () => ({
 }));
 vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: (selector: (s: { featureFlags: Record<string, unknown> }) => unknown) =>
-    selector({ featureFlags: { enableBotWake: true } }),
+    selector({ featureFlags: {} }),
 }));
 vi.mock('@/components/InfoTooltip', () => ({ default: () => null }));
 vi.mock('@/features/AgentChannel/const', () => ({ getPlatformIcon: () => null }));
@@ -106,6 +106,49 @@ describe('PlatformDetail saving', () => {
     expect(patch.settings.showUsageStats).toBe(true);
     expect(patch).not.toHaveProperty('credentials');
     expect(patch).not.toHaveProperty('applicationId');
+  });
+
+  it('saves the wake switch by itself as soon as it is turned off, and hides the options', async () => {
+    render(<PlatformDetail agentId="agt" currentConfig={config} platformDef={platformDef} />, {
+      wrapper: MemoryRouter,
+    });
+
+    openTab(en['channel.tab.wake']);
+    expect(screen.getByText(en['channel.wake.section.pace'])).toBeVisible();
+    fireEvent.click(screen.getByRole('switch', { name: new RegExp(en['channel.botWakeEnabled']) }));
+
+    await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+    const [, , patch] = mocks.updateBotProvider.mock.calls[0];
+    expect(patch.settings.botWakeEnabled).toBe(false);
+    // The rest of the wake options are written as stored.
+    expect(patch.settings.botWakePace).toBe('custom');
+    expect(screen.queryByText(en['channel.wake.section.pace'])).toBeNull();
+  });
+
+  it('keeps the wake switch off for a bot saved before it existed, also when saving something else', async () => {
+    render(
+      <PlatformDetail
+        agentId="agt"
+        currentConfig={{ ...config, settings: { showUsageStats: false } }}
+        platformDef={platformDef}
+      />,
+      { wrapper: MemoryRouter },
+    );
+
+    openTab(en['channel.tab.wake']);
+    expect(
+      screen.getByRole('switch', { name: new RegExp(en['channel.botWakeEnabled']) }),
+    ).toHaveAttribute('aria-checked', 'false');
+
+    openTab(en['channel.tab.reply']);
+    fireEvent.click(screen.getByRole('switch', { name: new RegExp(en['channel.showUsageStats']) }));
+
+    await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1), {
+      timeout: 3000,
+    });
+    expect(mocks.updateBotProvider.mock.calls[0][2].settings.botWakeEnabled).toBe(false);
   });
 
   it('writes an operator’s mode override back untouched when it saves something else', async () => {

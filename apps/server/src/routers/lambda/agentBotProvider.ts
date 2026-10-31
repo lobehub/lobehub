@@ -17,6 +17,7 @@ import {
   assertBotAccessSettings,
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
+  mergeBotSettingsForCreate,
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
 import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
@@ -216,7 +217,7 @@ export const agentBotProviderRouter = router({
 
       const payload = {
         ...input,
-        settings: mergeBotSettingsForPersist(input.platform, input.settings),
+        settings: mergeBotSettingsForCreate(input.platform, input.settings),
       };
       assertAccessSettingsForTRPC(payload.settings);
       await assertWatchKeywordsWritable({

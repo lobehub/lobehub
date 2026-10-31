@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
+  mergeBotSettingsForCreate,
+  mergeBotSettingsForPersist,
   mergeBotSettingsPatch,
 } from '../agentBotProviderSettings';
 
@@ -277,5 +279,25 @@ describe('mergeBotSettingsPatch', () => {
       botWakeDuties: 'x',
       botWakeEnabled: false,
     });
+  });
+});
+
+describe('mergeBotSettingsForCreate', () => {
+  it('creates a bot with the wake switch on, with or without settings', () => {
+    expect(mergeBotSettingsForCreate('discord', { dmPolicy: 'open' })).toMatchObject({
+      botWakeEnabled: true,
+      dmPolicy: 'open',
+    });
+    expect(mergeBotSettingsForCreate('discord', undefined)?.botWakeEnabled).toBe(true);
+  });
+
+  it('keeps a switch the caller set', () => {
+    expect(mergeBotSettingsForCreate('discord', { botWakeEnabled: false })?.botWakeEnabled).toBe(
+      false,
+    );
+  });
+
+  it('leaves a saved bot that never stored the switch off when it is updated', () => {
+    expect(mergeBotSettingsForPersist('discord', { dmPolicy: 'open' })?.botWakeEnabled).toBe(false);
   });
 });
