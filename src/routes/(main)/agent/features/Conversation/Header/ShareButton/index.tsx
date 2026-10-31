@@ -5,6 +5,7 @@ import { Share2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { withSuspense } from '@/components/withSuspense';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
@@ -26,9 +27,13 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const { agentId, topicId } = useAgentContext();
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
+  const workspaceId = useActiveWorkspaceId();
 
   // Hide share button when no topic exists (no messages sent yet)
   if (!topicId) return null;
+  // Inside a workspace teammates already reach the topic and collaborate through
+  // comments, which take this header slot (TopicCommentButton) instead.
+  if (workspaceId) return null;
 
   const iconButton = (
     <ActionIcon

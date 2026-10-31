@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     allowed: true,
     reason: 'requires member',
   },
+  workspaceId: null as string | null,
 }));
 
 const actionIconPropsSpy = vi.hoisted(() => vi.fn());
@@ -30,11 +31,14 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   };
 });
 
-vi.mock('next/dynamic', () => ({
-  default: () =>
-    function DynamicComponent({ children }: { children?: ReactNode }) {
-      return <div data-testid="share-popover">{children}</div>;
-    },
+vi.mock('@/features/SharePopover/lazy', () => ({
+  LazySharePopover: ({ children }: { children?: ReactNode }) => (
+    <div data-testid="share-popover">{children}</div>
+  ),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => mocks.workspaceId,
 }));
 
 vi.mock('@/components/withSuspense', () => ({
@@ -73,7 +77,24 @@ describe('Conversation ShareButton', () => {
     mocks.activeTopicId = 'topic-1';
     mocks.enableBusinessFeatures = true;
     mocks.permission.allowed = true;
+    mocks.workspaceId = null;
     actionIconPropsSpy.mockClear();
+  });
+
+  it('renders the share entry in personal scope', () => {
+    const { getByTestId } = render(<ShareButton />);
+
+    expect(getByTestId('share-popover')).toBeInTheDocument();
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ disabled: false }));
+  });
+
+  it('hides the share entry inside a workspace, where comments take the slot', () => {
+    mocks.workspaceId = 'ws-1';
+
+    const { container } = render(<ShareButton />);
+
+    expect(actionIconPropsSpy).not.toHaveBeenCalled();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('does not open share popover for workspace viewers', () => {
