@@ -8,6 +8,7 @@ import type {
   BrowserControlClickParams,
   BrowserControlClickResult,
   BrowserControlFillParams,
+  BrowserControlPanelSizeParams,
   BrowserControlParams,
   BrowserControlPressParams,
   BrowserControlReadPageResult,
@@ -104,11 +105,20 @@ export const keyInputEvents = ({ key, modifiers }: BrowserKeyCombo) => {
  */
 interface GuestViewport {
   height: number;
-  /** Panel size before emulation, kept because emulation hides it from the page. */
+  /** Panel size the scale was fitted to; emulation hides it from the page. */
   panel: { height: number; width: number };
   scale: number;
   width: number;
 }
+
+const fitViewport = (
+  size: { height: number; width: number },
+  panel: GuestViewport['panel'],
+): GuestViewport => ({
+  ...size,
+  panel,
+  scale: Math.min(1, panel.width / size.width, panel.height / size.height),
+});
 
 const emulateViewport = (guest: WebContents, { height, scale, width }: GuestViewport) =>
   guest.enableDeviceEmulation({
@@ -311,6 +321,8 @@ export default class BrowserControlCtr extends ControllerModule {
   private idleTimers = new Map<string, NodeJS.Timeout>();
   /** Kept per page, not per session: a remounted guest starts at the panel size again. */
   private viewports = new WeakMap<WebContents, GuestViewport>();
+  /** Latest panel size per session, reported by the renderer as the panel resizes. */
+  private panelSizes = new Map<string, GuestViewport['panel']>();
   private pendingGatewayCalls = new Map<
     string,
     { reject: (reason: Error) => void; resolve: (result: BrowserToolCallResult) => void }
@@ -487,12 +499,12 @@ export default class BrowserControlCtr extends ControllerModule {
       }
 
       const panel =
+        this.panelSizes.get(params.sessionId) ??
         current?.panel ??
         (JSON.parse(
           await evaluate(guest, 'JSON.stringify({ height: innerHeight, width: innerWidth })'),
         ) as GuestViewport['panel']);
-      const scale = Math.min(1, panel.width / size.width, panel.height / size.height);
-      const viewport = { ...size, panel, scale };
+      const viewport = fitViewport(size, panel);
 
       // Chromium drops the emulation with each new document, so re-apply it.
       if (!current) {
@@ -503,8 +515,29 @@ export default class BrowserControlCtr extends ControllerModule {
       }
       this.viewports.set(guest, viewport);
       emulateViewport(guest, viewport);
-      return { scale, success: true };
+      return { scale: viewport.scale, success: true };
     });
+  }
+
+  /**
+   * The renderer reports the panel's size whenever it changes. A fixed viewport
+   * is refitted to it, or the page would stay scaled for the old panel: clipped
+   * when it shrinks, with clicks landing outside the visible guest.
+   */
+  @IpcMethod()
+  reportPanelSize(params: BrowserControlPanelSizeParams): void {
+    const panel = { height: params.height, width: params.width };
+    if (panel.width <= 0 || panel.height <= 0) return;
+    this.panelSizes.set(params.sessionId, panel);
+
+    const guest = this.sidebar.getSessionWebContents(params.sessionId);
+    const current = guest && !guest.isDestroyed() ? this.viewports.get(guest) : undefined;
+    if (!guest || !current) return;
+    if (current.panel.width === panel.width && current.panel.height === panel.height) return;
+
+    const viewport = fitViewport(current, panel);
+    this.viewports.set(guest, viewport);
+    emulateViewport(guest, viewport);
   }
 
   @IpcMethod()

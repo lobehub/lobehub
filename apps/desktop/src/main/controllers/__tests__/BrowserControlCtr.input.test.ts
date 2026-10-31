@@ -161,6 +161,40 @@ describe('BrowserControlCtr input', () => {
     expect(guest.capturePage).toHaveBeenCalledWith({ height: 225, width: 400, x: 0, y: 0 });
   });
 
+  it('refits a fixed viewport when the panel resizes', async () => {
+    await controller.setViewport({ height: 900, sessionId: 's', width: 1600 });
+    guest.enableDeviceEmulation.mockClear();
+
+    controller.reportPanelSize({ height: 600, sessionId: 's', width: 200 });
+
+    expect(guest.enableDeviceEmulation).toHaveBeenCalledWith(
+      expect.objectContaining({ scale: 0.125 }),
+    );
+
+    // Clicks follow the new fit: CSS (640, 400) now lands at panel (80, 50).
+    vi.useFakeTimers();
+    const click = controller.click({ ref: 'e1', sessionId: 's' });
+    await vi.runAllTimersAsync();
+    await click;
+    vi.useRealTimers();
+    expect(guest.sendInputEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'mouseDown', x: 80, y: 50 }),
+    );
+
+    // The same size again does not re-emulate.
+    guest.enableDeviceEmulation.mockClear();
+    controller.reportPanelSize({ height: 600, sessionId: 's', width: 200 });
+    expect(guest.enableDeviceEmulation).not.toHaveBeenCalled();
+  });
+
+  it('fits a new viewport to the last reported panel size', async () => {
+    controller.reportPanelSize({ height: 500, sessionId: 's', width: 500 });
+
+    await expect(
+      controller.setViewport({ height: 900, sessionId: 's', width: 1000 }),
+    ).resolves.toEqual({ scale: 0.5, success: true });
+  });
+
   it('resets to the panel size without a size', async () => {
     await controller.setViewport({ height: 900, sessionId: 's', width: 1600 });
 

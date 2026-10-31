@@ -38,6 +38,12 @@ export interface BrowserControlPressParams extends BrowserControlParams {
   key: string;
 }
 
+/** Size of the panel the session's page is shown in, in CSS pixels. */
+export interface BrowserControlPanelSizeParams extends BrowserControlParams {
+  height: number;
+  width: number;
+}
+
 export interface BrowserControlSetViewportParams extends BrowserControlParams {
   /** CSS pixels; omit both width and height to go back to the panel's own size. */
   height?: number;
