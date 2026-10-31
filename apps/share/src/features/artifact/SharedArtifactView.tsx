@@ -1,6 +1,7 @@
 'use client';
 
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useParams } from 'react-router';
 import useSWR from 'swr';
 
@@ -9,14 +10,15 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 import ShareLayout from '../../shell/ShareLayout';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  frame: css`
-    width: 100%;
-    height: 100%;
-    border: 0;
-    background: ${cssVar.colorBgLayout};
-  `,
-}));
+const styles = stylex.create({
+  frame: {
+    width: '100%',
+    height: '100%',
+    borderStyle: 'none',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+});
 
 const SharedArtifactView = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,7 +35,7 @@ const SharedArtifactView = () => {
     <ShareLayout error={error || (!loading && !data)} loading={loading} title={data?.title}>
       {data && (
         <iframe
-          className={styles.frame}
+          {...stylex.props(styles.frame)}
           referrerPolicy={'no-referrer'}
           sandbox={'allow-scripts'}
           src={data.iframeSrc}

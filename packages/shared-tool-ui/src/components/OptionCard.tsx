@@ -1,93 +1,56 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check } from 'lucide-react';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Card sits inline with the chat — no surrounding panel chrome. Hover
-  // tints the row so the stack reads as clickable; selection swaps to a
-  // neutral filled row so the pick is visually weighty. We use `colorFill*`
-  // rather than `colorPrimaryBg` because LobeHub's default primary is a
-  // near-black neutral, which makes `colorPrimaryBg` render as a muddy black
-  // block; the selection signal instead rides the filled row + the checkmark.
-  option: css`
-    cursor: pointer;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: 8px;
-
-    transition: background 0.12s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  optionCheck: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorPrimary};
-  `,
-  optionDescription: css`
-    font-size: 12px;
-    line-height: 1.45;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  // Neutral 1/2/3/4 chip — stays the same colour whether selected or not so
-  // the selection signal lives on the filled background + checkmark.
-  optionIndex: css`
-    flex-shrink: 0;
-
-    box-sizing: border-box;
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 22px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  // Keyboard cursor — a ring instead of a fill so it stays legible when
-  // stacked on the hover tint or the selected fill.
-  optionHighlighted: css`
-    box-shadow: inset 0 0 0 1px ${cssVar.colorBorder};
-  `,
-  optionLabel: css`
-    font-weight: 500;
-  `,
-  // One step above the hover tint is enough — the checkmark carries the
-  // selection signal, so a heavy fill just reads as a muddy block. The hover
-  // override repeats the same fill: it must outrank `.option:hover` (which
-  // would otherwise drop the row to the lighter unselected tint), and no
-  // darkening keeps the selected row flat — it's already "on".
-  optionSelected: css`
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  recommendedBadge: css`
-    flex-shrink: 0;
-
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 11px;
-    line-height: 18px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  option: {
+    cursor: 'pointer',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: '8px',
+    transition: 'background 0.12s ease',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  optionCheck: { flexShrink: 0, color: cssVar.colorPrimary },
+  optionDescription: { fontSize: '12px', lineHeight: 1.45, color: cssVar.colorTextSecondary },
+  optionIndex: {
+    flexShrink: 0,
+    boxSizing: 'border-box',
+    width: '22px',
+    height: '22px',
+    borderRadius: '6px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontWeight: 600,
+    lineHeight: '22px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  optionHighlighted: { boxShadow: `inset 0 0 0 1px ${cssVar.colorBorder}` },
+  optionLabel: { fontWeight: 500 },
+  optionSelected: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  recommendedBadge: {
+    flexShrink: 0,
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 export interface OptionCardProps {
   description?: string;
@@ -120,24 +83,30 @@ export const OptionCard = memo<OptionCardProps>(
       aria-selected={selected}
       gap={12}
       role="option"
-      className={cx(
-        styles.option,
-        selected && styles.optionSelected,
-        highlighted && styles.optionHighlighted,
-      )}
+      className={
+        stylex.props(
+          styles.option,
+          selected && styles.optionSelected,
+          highlighted && styles.optionHighlighted,
+        ).className
+      }
       onClick={() => {
         if (!disabled) onToggle();
       }}
     >
-      <span className={styles.optionIndex}>{index}</span>
+      <span {...stylex.props(styles.optionIndex)}>{index}</span>
       <Flexbox flex={1} gap={2}>
         <Flexbox horizontal align="center" gap={8}>
-          <Text className={styles.optionLabel}>{label}</Text>
-          {recommendedText && <span className={styles.recommendedBadge}>{recommendedText}</span>}
+          <Text className={stylex.props(styles.optionLabel).className}>{label}</Text>
+          {recommendedText && (
+            <span {...stylex.props(styles.recommendedBadge)}>{recommendedText}</span>
+          )}
         </Flexbox>
-        {description && <span className={styles.optionDescription}>{description}</span>}
+        {description && <span {...stylex.props(styles.optionDescription)}>{description}</span>}
       </Flexbox>
-      {selected && <Icon className={styles.optionCheck} icon={Check} size={16} />}
+      {selected && (
+        <Icon className={stylex.props(styles.optionCheck).className} icon={Check} size={16} />
+      )}
     </Flexbox>
   ),
 );

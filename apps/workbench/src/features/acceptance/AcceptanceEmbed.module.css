@@ -1,0 +1,6 @@
+/* Descendant tag selector the lobe-ui title renders into: StyleX cannot target it. */
+.content h1 {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}

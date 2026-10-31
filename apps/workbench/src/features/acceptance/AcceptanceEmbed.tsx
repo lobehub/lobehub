@@ -1,5 +1,6 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cx, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 
@@ -22,30 +23,24 @@ import ReadChecks from '@/features/Acceptance/Viewer/ReadOnly/Checks';
 import ReadDiscussion from '@/features/Acceptance/Viewer/ReadOnly/Discussion';
 import { useAcceptanceBundle } from '@/features/Acceptance/Viewer/useAcceptanceBundle';
 
-const styles = createStaticStyles(({ css }) => ({
-  page: css`
-    overflow: auto;
-    width: 100%;
-    height: 100dvh;
-    background: ${cssVar.colorBgContainer};
-  `,
-  content: css`
-    width: 100%;
-    max-width: 1040px;
-    margin-inline: auto;
-    padding: 24px;
+import titleStyles from './AcceptanceEmbed.module.css';
 
-    h1 {
-      overflow: visible;
-      overflow-wrap: anywhere;
-      white-space: normal;
-    }
-
-    @media (width <= 767px) {
-      padding: 16px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  content: {
+    width: '100%',
+    maxWidth: '1040px',
+    marginInline: 'auto',
+    paddingBlock: { 'default': '24px', '@media (width <= 767px)': '16px' },
+    paddingInline: { 'default': '24px', '@media (width <= 767px)': '16px' },
+  },
+  page: {
+    overflow: 'auto',
+    width: '100%',
+    height: '100dvh',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+});
 
 const EmbedContent = () => {
   const { acceptanceId } = useAcceptanceScope();
@@ -61,7 +56,7 @@ const EmbedContent = () => {
   );
 
   return (
-    <Flexbox className={styles.content} gap={24}>
+    <Flexbox className={cx(stylex.props(styles.content).className, titleStyles.content)} gap={24}>
       <AcceptanceIdentity />
       <AcceptanceGoal />
       <AcceptanceTabs
@@ -98,7 +93,7 @@ const AcceptanceEmbed = () => {
 
   return (
     <AcceptanceScope embedded acceptanceId={acceptanceId} key={acceptanceId}>
-      <div data-acceptance-embed className={styles.page}>
+      <div data-acceptance-embed {...stylex.props(styles.page)}>
         <AcceptanceBundleGate>
           <EmbedContent />
         </AcceptanceBundleGate>
