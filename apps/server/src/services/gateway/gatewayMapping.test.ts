@@ -5,8 +5,9 @@ vi.mock('@/envs/gateway', () => ({ gatewayEnv: {} }));
 
 describe('resolveBotGatewayCapabilities', () => {
   it.each([
-    { enabled: false, name: 'no rules at all', settings: {} },
-    { enabled: false, name: 'null settings', settings: null },
+    { enabled: true, name: 'no rules at all: bot-wake is on by default', settings: {} },
+    { enabled: true, name: 'null settings: bot-wake is on by default', settings: null },
+    { enabled: false, name: 'switched off, no keywords', settings: { botWakeDisabled: true } },
     {
       enabled: true,
       name: 'a watch keyword',
@@ -31,17 +32,17 @@ describe('resolveBotGatewayCapabilities', () => {
     {
       enabled: true,
       name: 'bot-wake switched on in the settings form',
-      settings: { botWakeEnabled: true },
+      settings: { botWakeDisabled: false },
     },
     {
       enabled: false,
       name: 'the settings form saved with bot-wake off',
-      settings: { botWakeEnabled: false, botWakeMode: 'shadow', botWakeScope: 'all' },
+      settings: { botWakeDisabled: true, botWakeMode: 'shadow', botWakeScope: 'all' },
     },
     {
       enabled: false,
       name: 'bot-wake on in the form but never joining unprompted',
-      settings: { botWakeEnabled: true, botWakeScope: 'none' },
+      settings: { botWakeDisabled: false, botWakeScope: 'none' },
     },
     {
       enabled: false,
@@ -63,7 +64,16 @@ describe('resolveBotGatewayCapabilities', () => {
       name: 'keyword wins over a disabled bot-wake',
       settings: { botWake: { enabled: false }, watchKeywords: 'deploy' },
     },
-    { enabled: false, name: 'garbage botWake value', settings: { botWake: 7 } },
+    {
+      enabled: true,
+      name: 'garbage botWake value: the flat keys are read',
+      settings: { botWake: 7 },
+    },
+    {
+      enabled: false,
+      name: 'garbage botWake value, switched off',
+      settings: { botWake: 7, botWakeDisabled: true },
+    },
   ])('$name -> messageMonitoring.enabled=$enabled', ({ enabled, settings }) => {
     expect(resolveBotGatewayCapabilities(settings)).toEqual({ messageMonitoring: { enabled } });
   });

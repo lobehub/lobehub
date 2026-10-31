@@ -150,6 +150,7 @@ const batchSnapshot = ({
       title: 'Batch',
       updatedAt: T0,
       userId: 'user-1',
+      visibility: 'public',
       workspaceId: null,
     },
     nodes,

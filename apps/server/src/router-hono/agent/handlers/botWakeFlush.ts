@@ -36,10 +36,7 @@ export async function botWakeFlush(c: Context): Promise<Response> {
       );
 
       return provider
-        ? {
-            settings: provider.settings as Record<string, unknown> | undefined,
-            userId: provider.userId,
-          }
+        ? { settings: provider.settings as Record<string, unknown> | undefined }
         : undefined;
     });
 

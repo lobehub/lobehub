@@ -16,6 +16,7 @@ import { resolveMissingTaskModelConfig } from '../task/modelSnapshot';
 import { goalTaskAgentId } from './GoalService/utils';
 import { GoalManagerService } from './manager';
 import { assertGoalModelRunnable, goalTaskModelOverride } from './modelConfig';
+import { assertGoalAgentVisibilityCompat } from './visibility';
 
 const goalNotFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
 
@@ -90,21 +91,24 @@ export class GoalAssignmentService {
    * an admin acting on someone else's goal would be unreachable to every later
    * planning turn, or silently skipped as a missing executor.
    */
-  assertUsableForGoal = async (goal: Pick<GoalItem, 'userId'> | string, agentId: string) => {
+  assertUsableForGoal = async (
+    goal: Pick<GoalItem, 'userId' | 'visibility' | 'workspaceId'> | string,
+    agentId: string,
+  ) => {
     await this.assertUsable(agentId);
-    const ownerId =
-      typeof goal === 'string' ? (await this.goalModel.findById(goal))?.userId : goal.userId;
-    if (!ownerId) throw goalNotFound();
-    if (ownerId === this.userId) return;
-    await assertAgentUsableBy(this.db, agentId, {
-      userId: ownerId,
-      workspaceId: this.workspaceId,
-    }).catch(() => {
-      throw new TRPCError({
-        code: 'FORBIDDEN',
-        message: "The goal's owner cannot use this Agent; pick one they have access to",
+    const row = typeof goal === 'string' ? await this.goalModel.findById(goal) : goal;
+    if (!row) throw goalNotFound();
+    if (row.userId !== this.userId)
+      await assertAgentUsableBy(this.db, agentId, {
+        userId: row.userId,
+        workspaceId: this.workspaceId,
+      }).catch(() => {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: "The goal's owner cannot use this Agent; pick one they have access to",
+        });
       });
-    });
+    await assertGoalAgentVisibilityCompat(this.db, row, [agentId]);
   };
 
   /**
