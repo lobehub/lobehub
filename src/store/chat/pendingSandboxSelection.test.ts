@@ -1,12 +1,28 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   consumePendingSandboxSelection,
   getPendingSandboxSelection,
+  resolvePendingSandboxSelection,
   setPendingSandboxSelection,
+  setSandboxDefaultSelection,
   subscribePendingSandboxSelection,
   toSandboxTopicMetadata,
 } from './pendingSandboxSelection';
+
+const mocks = vi.hoisted(() => ({
+  cachedEntitlement: undefined as { entitled: boolean } | undefined,
+  getEntitlement: vi.fn(),
+}));
+
+vi.mock('@/services/sandboxStorage', () => ({
+  sandboxStorageService: { getEntitlement: mocks.getEntitlement },
+}));
+
+vi.mock('@/store/sandbox', () => ({
+  sandboxSelectors: { entitlement: () => mocks.cachedEntitlement },
+  useSandboxStore: { getState: () => ({}) },
+}));
 
 describe('pendingSandboxSelection', () => {
   it('notifies a subscriber on set and on consume — a second reader must move too', () => {
@@ -50,5 +66,71 @@ describe('pendingSandboxSelection', () => {
       sandboxWorkingDirectory: 'app',
     });
     expect(toSandboxTopicMetadata(undefined)).toBeUndefined();
+  });
+
+  // The entitlement loads after the composer does. A first message sent while
+  // it is still in flight used to be born with no folder — the paid default
+  // silently became a temporary sandbox.
+  describe('resolvePendingSandboxSelection', () => {
+    const root = { workingDirectory: '.' };
+
+    beforeEach(() => {
+      mocks.cachedEntitlement = undefined;
+      mocks.getEntitlement.mockReset();
+    });
+
+    it('settles the default against the server when the entitlement has not loaded', async () => {
+      mocks.getEntitlement.mockResolvedValue({ entitled: true });
+      setSandboxDefaultSelection('agent-cold', root);
+
+      await expect(resolvePendingSandboxSelection('agent-cold')).resolves.toEqual(root);
+      // It becomes the pick, so the transport reading it next sees the same.
+      expect(getPendingSandboxSelection('agent-cold')).toEqual(root);
+
+      consumePendingSandboxSelection('agent-cold');
+      setSandboxDefaultSelection('agent-cold');
+    });
+
+    it('leaves a plan without a drive on the temporary sandbox', async () => {
+      mocks.getEntitlement.mockResolvedValue({ entitled: false });
+      setSandboxDefaultSelection('agent-free', root);
+
+      await expect(resolvePendingSandboxSelection('agent-free')).resolves.toBeUndefined();
+      expect(getPendingSandboxSelection('agent-free')).toBeUndefined();
+
+      setSandboxDefaultSelection('agent-free');
+    });
+
+    it('uses the cached answer without asking the server again', async () => {
+      mocks.cachedEntitlement = { entitled: true };
+      setSandboxDefaultSelection('agent-warm', root);
+
+      await expect(resolvePendingSandboxSelection('agent-warm')).resolves.toEqual(root);
+      expect(mocks.getEntitlement).not.toHaveBeenCalled();
+
+      consumePendingSandboxSelection('agent-warm');
+      setSandboxDefaultSelection('agent-warm');
+    });
+
+    it('keeps an explicit pick, including the temporary sandbox', async () => {
+      mocks.cachedEntitlement = { entitled: true };
+      setSandboxDefaultSelection('agent-picked', root);
+      setPendingSandboxSelection('agent-picked', {});
+
+      await expect(resolvePendingSandboxSelection('agent-picked')).resolves.toEqual({});
+
+      consumePendingSandboxSelection('agent-picked');
+      setSandboxDefaultSelection('agent-picked');
+    });
+
+    it('reads a failed lookup, or an agent without a default, as no drive', async () => {
+      mocks.getEntitlement.mockRejectedValue(new Error('offline'));
+      setSandboxDefaultSelection('agent-offline', root);
+
+      await expect(resolvePendingSandboxSelection('agent-offline')).resolves.toBeUndefined();
+      await expect(resolvePendingSandboxSelection('agent-none')).resolves.toBeUndefined();
+
+      setSandboxDefaultSelection('agent-offline');
+    });
   });
 });

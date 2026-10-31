@@ -28,7 +28,6 @@ type LabFeatureI18nKey =
   | 'integrations'
   | 'messageTextSelectionActions'
   | 'oauthApps'
-  | 'persistentSandbox'
   | 'projects'
   | 'selfLearning'
   | 'topicBugReport';
@@ -126,12 +125,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableIntegrations',
     i18nKey: 'integrations',
     searchKeywords: ['integrations', 'github', 'github app', 'pull request'],
-    stage: 'alpha',
-  },
-  {
-    flag: 'enablePersistentSandbox',
-    i18nKey: 'persistentSandbox',
-    searchKeywords: ['persistent sandbox', 'workspace', 'sandbox storage'],
     stage: 'alpha',
   },
   {

@@ -87,7 +87,6 @@ export const storageClaimProcedure = wsCompatProcedure.use(serverDatabase).use(a
 
   const drives = createDriveAccess({
     resolveClaim: resolveSandboxStorageClaim,
-    serverDB: ctx.serverDB,
     userId: ctx.userId,
     workspaceId,
   });

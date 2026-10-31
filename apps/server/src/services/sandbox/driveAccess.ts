@@ -4,7 +4,6 @@ import {
   sandboxDriveOfKey,
   type SandboxStorageClaim,
 } from '@lobechat/builtin-tool-cloud-sandbox';
-import type { LobeChatDatabase } from '@lobechat/database';
 
 import { MarketService } from '@/server/services/market';
 
@@ -13,7 +12,6 @@ import type { resolveSandboxStorageClaim } from './entitlement';
 interface DriveAccessInput {
   /** Handed in rather than imported, so a caller's own seam for it is the one used. */
   resolveClaim: typeof resolveSandboxStorageClaim;
-  serverDB: LobeChatDatabase;
   userId: string;
   workspaceId?: string;
 }
@@ -26,12 +24,7 @@ interface DriveAccessInput {
  * drive out of every other member's reach — they would need a claim for its
  * key, and nothing built on this issues one.
  */
-export const createDriveAccess = ({
-  resolveClaim,
-  serverDB,
-  userId,
-  workspaceId,
-}: DriveAccessInput) => {
+export const createDriveAccess = ({ resolveClaim, userId, workspaceId }: DriveAccessInput) => {
   const claims = new Map<SandboxDrive, Promise<SandboxStorageClaim | null>>();
 
   const claim = (drive: SandboxDrive) => {
@@ -41,7 +34,6 @@ export const createDriveAccess = ({
     const pending = resolveClaim({
       drive,
       isShareVisitorRun: false,
-      serverDB,
       userId,
       workspaceId,
     });

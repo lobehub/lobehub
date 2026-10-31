@@ -36,8 +36,6 @@
   "features.messageTextSelectionActions.title": "Akcje zaznaczania tekstu wiadomości",
   "features.oauthApps.desc": "Pokaż zarządzanie aplikacjami OAuth w ustawieniach osobistych i przestrzeni roboczej. Ta funkcja jest domyślnie ukryta.",
   "features.oauthApps.title": "Aplikacje OAuth",
-  "features.persistentSandbox.desc": "Zachowaj pliki zapisane przez chmurę sandbox. Jego katalog roboczy przetrwa recykling sesji i jest współdzielony między Twoimi tematami, zamiast być usuwanym wraz z sandboxem. Wymaga płatnego planu; duże pliki do pobrania i zależności nadal należą do /tmp.",
-  "features.persistentSandbox.title": "Trwały Sandbox",
   "features.projects.desc": "Organizuj długoterminowe cele w dedykowanych przestrzeniach roboczych z własnymi agentami, bazami wiedzy i zadaniami.",
   "features.projects.title": "Przestrzenie Robocze Projektów",
   "features.selfLearning.desc": "Pokaż, czego każdy agent nauczył się z rzeczywistej praktyki — jego bazę reguł, które reguły są faktycznie używane, oraz które warstwy są nadal puste.",
