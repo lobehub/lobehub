@@ -193,7 +193,13 @@ const ShareLayout = ({
               </>
             )}
           </div>
-          <Flexbox horizontal align={'center'} className={stylex.props(styles.actions).className} flex={'none'} gap={2}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.actions).className}
+            flex={'none'}
+            gap={2}
+          >
             <ShareHeaderActions
               actions={!error && !loading ? actions : undefined}
               compactActions={!error && !loading ? compactActions : undefined}
