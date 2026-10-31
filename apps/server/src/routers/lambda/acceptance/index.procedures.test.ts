@@ -34,6 +34,7 @@ function expected(): Array<
     ['ensure', 'mutation', 13],
     ['getBundle', 'query', 7],
     ['getBySubject', 'query', 12],
+    ['getFrameBoard', 'query', 7],
     ['linkPullRequest', 'mutation', 13],
     ['list', 'query', 12],
     ['listPage', 'query', 12],
@@ -42,6 +43,7 @@ function expected(): Array<
     ['merge', 'mutation', 13],
     ['predictReviews', 'mutation', 13],
     ['publishFlow', 'mutation', 13],
+    ['publishFrameBoard', 'mutation', 13],
     ['purgePreview', 'query', 12],
     ['recordFlowStep', 'mutation', 13],
     ['regroupChecks', 'mutation', 13],
@@ -59,6 +61,7 @@ function expected(): Array<
     ['setVisibility', 'mutation', 13],
     ['startFlow', 'mutation', 13],
     ['unlinkPullRequest', 'mutation', 13],
+    ['updateFrame', 'mutation', 13],
     ['updateStatus', 'mutation', 13],
     ['updateStatusBatch', 'mutation', 13],
   ];

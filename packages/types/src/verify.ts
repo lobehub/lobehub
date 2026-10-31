@@ -1,4 +1,5 @@
 import type { VerifyCheckDefinition } from './acceptanceFlow';
+import type { AcceptanceFrameBoard } from './acceptanceFrame';
 import type { GoalReleaseGateDossier } from './goalRollout';
 /**
  * Verify (delivery checker) domain types — the shared vocabulary, frozen-item
@@ -170,6 +171,8 @@ export interface AcceptanceMetadata {
   [key: string]: unknown;
   /** Current checklist organization; frozen plans, results and reviews keep their original IDs. */
   checkGrouping?: { groups: AcceptanceCheckGroup[]; version: number };
+  /** Design review + delivery check frames (`lh acceptance frames publish`). */
+  frameBoard?: AcceptanceFrameBoard;
   /**
    * Pull requests linked by hand (`lh acceptance link-pr`, or ingest finding
    * one). Display-only claims: nothing is verified against the provider, so

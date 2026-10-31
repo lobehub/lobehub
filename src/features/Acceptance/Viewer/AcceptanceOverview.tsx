@@ -2,7 +2,7 @@
 
 import { createStaticStyles, cssVar, Flexbox, useResponsive } from '@lobehub/ui';
 import { useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 
 import { useAcceptanceScope } from './AcceptanceScope';
 import AcceptanceCheckInventory from './Checks/AcceptanceCheckInventory';
@@ -17,6 +17,8 @@ import AcceptanceResources from './Evidence/AcceptanceResources';
 import { AcceptanceFlow } from './Flow/AcceptanceFlow';
 import { getFlowNodeCount, resolveAcceptanceTab } from './Flow/flowNavigation';
 import AcceptanceEnterFocus from './Focus/AcceptanceEnterFocus';
+import { AcceptanceFrames } from './Frames/AcceptanceFrames';
+import { useFrameBoardData } from './Frames/useFrameBoard';
 import GateReview from './Gate/GateReview';
 import AcceptanceGoal from './Header/AcceptanceGoal';
 import AcceptanceGoalEdit from './Header/AcceptanceGoalEdit';
@@ -25,6 +27,7 @@ import AcceptanceShare from './Header/AcceptanceShare';
 import AcceptanceStatusControl from './Header/AcceptanceStatusControl';
 import type { AcceptanceTabKey } from './Header/AcceptanceTabs';
 import AcceptanceTabs from './Header/AcceptanceTabs';
+import { ACCEPTANCE_TAB_KEYS } from './Header/tabKeys';
 import { acceptanceContentLayout } from './layout';
 import { flowPlanPhase } from './Plan/planReview';
 import AcceptanceDecision from './Review/AcceptanceDecision';
@@ -70,14 +73,22 @@ export const AcceptanceOverview = ({
   // A link to one comment has to land on the tab that shows it. The reader can
   // still leave: their own tab choice, once made, outranks the fragment.
   const { hash } = useLocation();
+  // `?tab=frames` (or any tab key) lets a shared link open on that face.
+  const [searchParams] = useSearchParams();
+  const linkedTab = ACCEPTANCE_TAB_KEYS.find((key) => key === searchParams.get('tab'));
   const rounds = data?.rounds ?? [];
   const flowCount = getFlowNodeCount(data?.flows);
-  const tab = resolveAcceptanceTab(
-    requestedTab ?? (!embedded && commentIdFromHash(hash) ? 'discussion' : undefined),
+  const frameCount = useFrameBoardData(md ? acceptanceId : null).data?.frames.length ?? 0;
+  const resolvedTab = resolveAcceptanceTab(
+    requestedTab ??
+      (!embedded && commentIdFromHash(hash) ? 'discussion' : undefined) ??
+      (embedded ? undefined : linkedTab),
     flowCount,
     Boolean(flowPlanPhase(rounds.at(-1))),
     md,
   );
+  // The board is a wide desktop surface, like the flow canvas.
+  const tab = resolvedTab === 'frames' && frameCount === 0 ? 'checks' : resolvedTab;
   const checks = data ? checksForTurn(data, turn) : [];
   // A Goal decision gate reviews its own frozen dossier, not a checklist.
   const gateDossier =
@@ -116,6 +127,7 @@ export const AcceptanceOverview = ({
               active={tab}
               checkCount={checks.length}
               flowCount={md ? flowCount : 0}
+              frameCount={frameCount}
               resourceCount={resourceCount}
               discussionCount={countDiscussionMessages({
                 approvals: [],
@@ -134,7 +146,9 @@ export const AcceptanceOverview = ({
         className={styles.column}
         gap={16}
         paddingBlock={20}
-        style={tab === 'flow' ? { maxWidth: 1500 } : undefined}
+        style={
+          tab === 'flow' ? { maxWidth: 1500 } : tab === 'frames' ? { maxWidth: 'none' } : undefined
+        }
       >
         {/* Deciding belongs where the evidence is. The discussion is a
             conversation; ending one there put the closing act under a thread
@@ -144,6 +158,8 @@ export const AcceptanceOverview = ({
             entirely. */}
         {tab === 'discussion' ? (
           <AcceptanceDiscussion onOpenChecks={() => setTab('checks')} />
+        ) : tab === 'frames' ? (
+          <AcceptanceFrames />
         ) : tab === 'flow' ? (
           <>
             <AcceptanceFlow />

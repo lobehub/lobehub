@@ -10,10 +10,11 @@ import { canvasService } from '@/services/canvas';
 
 interface CanvasModalProps {
   canvasId: string;
+  page?: string;
   version?: number;
 }
 
-const CanvasModalContent = ({ canvasId, version }: CanvasModalProps) => {
+const CanvasModalContent = ({ canvasId, page, version }: CanvasModalProps) => {
   const { t } = useTranslation('portal');
   const { data, error, isLoading, mutate } = useClientDataSWR(
     ['canvas-modal-version', canvasId, version ?? 'latest'],
@@ -31,7 +32,7 @@ const CanvasModalContent = ({ canvasId, version }: CanvasModalProps) => {
         void mutate();
       }}
     >
-      {data && <CanvasFrame canvasId={data.canvasId} version={data.version} />}
+      {data && <CanvasFrame canvasId={data.canvasId} page={page} version={data.version} />}
     </AsyncBoundary>
   );
 };
@@ -41,9 +42,9 @@ const CanvasModalTitle = () => {
   return t('canvas.frameTitle');
 };
 
-export const createCanvasModal = (canvasId: string, version?: number) =>
+export const createCanvasModal = (canvasId: string, version?: number, page?: string) =>
   createModal({
-    content: <CanvasModalContent canvasId={canvasId} version={version} />,
+    content: <CanvasModalContent canvasId={canvasId} page={page} version={version} />,
     footer: null,
     maskClosable: true,
     styles: { content: { display: 'flex', height: '75vh', minHeight: 0, padding: 0 } },

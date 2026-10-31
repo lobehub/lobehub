@@ -80,6 +80,7 @@ export * from './work';
 // it more likes the UI message payload
 export * from './acceptanceComment';
 export * from './acceptanceFlow';
+export * from './acceptanceFrame';
 export * from './acceptanceReview';
 export * from './agentRuntime';
 export * from './oauthApp';
