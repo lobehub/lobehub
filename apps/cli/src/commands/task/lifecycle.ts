@@ -128,6 +128,11 @@ export function registerLifecycleCommands(task: Command) {
     .description('Run a task — trigger agent execution')
     .option('-p, --prompt <text>', 'Additional context for the agent')
     .option('-c, --continue <topicId>', 'Continue running on an existing topic')
+    .option('--model <model>', "Replace the task's pinned model, for this run and later ones")
+    .option(
+      '--provider <provider>',
+      "Provider of --model (default: the agent's provider, not checked against the model)",
+    )
     .option(
       '--device <target>',
       'Target device ID, or use "local" for the current connected device',
@@ -146,7 +151,9 @@ export function registerLifecycleCommands(task: Command) {
           device?: string;
           follow?: boolean;
           json?: boolean;
+          model?: string;
           prompt?: string;
+          provider?: string;
           topics?: string;
           verbose?: boolean;
         },
@@ -198,6 +205,9 @@ export function registerLifecycleCommands(task: Command) {
             ...(deviceId && { deviceId }),
             ...(i === 0 && options.prompt && { prompt: options.prompt }),
             ...(i === 0 && options.continue && { continueTopicId: options.continue }),
+            // Persisted on the task, so later topics in this sequence inherit it.
+            ...(i === 0 && options.model && { model: options.model }),
+            ...(i === 0 && options.provider && { provider: options.provider }),
           })) as any;
 
           if (!result.success) {

@@ -3,7 +3,11 @@ import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ChatTopicMetadata, ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
-import { getHeterogeneousTaskModelProvider, readTaskExecutionConfig } from '@lobechat/types';
+import {
+  getHeterogeneousTaskModelProvider,
+  readTaskExecutionConfig,
+  resolveHeterogeneousModelOverride,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -48,8 +52,15 @@ export interface RunTaskParams {
   extraPrompt?: string;
   /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
   maxSteps?: number;
+  /**
+   * Replaces the Task's pinned model once the run starts. Persisted on the Task, so
+   * retries, continued runs and scheduled ticks stay on it instead of the old pin.
+   */
+  model?: string;
   /** Persist the dispatch owner's operation link before any execution starts. */
   onOperationCreated?: (operationId: string) => Promise<void>;
+  /** Provider for `model`. Omitted means it resolves like a model-only Task override. */
+  provider?: string;
   taskId: string;
   /**
    * What triggered this run. Defaults to `'manual'` — the ad-hoc "run now"
@@ -159,7 +170,9 @@ export class TaskRunnerService {
       deviceId,
       extraPrompt,
       maxSteps,
+      model,
       onOperationCreated,
+      provider,
       trigger = 'manual',
     } = params;
 
@@ -321,6 +334,29 @@ export class TaskRunnerService {
       // the batch's plan skill — so a re-run or a manual run loads them too.
       pluginIds.push(...readTaskSkillIds(taskConfig));
 
+      // The pin never follows later Agent changes, so a stale pin is corrected
+      // here. A model-only override drops the previous provider and resolves one
+      // from the assignee in the backfill below; that pairing is not checked
+      // against what the provider serves.
+      if (model) {
+        // A heterogeneous runtime ignores a pair it cannot use, so the run would
+        // report success on the Agent's own model. Refuse it instead.
+        if (provider) {
+          const { heterogeneousProvider } =
+            (await this.agentModel.getAgentAgencyConfig(agentRef)) ?? {};
+          if (
+            heterogeneousProvider &&
+            !resolveHeterogeneousModelOverride(heterogeneousProvider, { model, provider })
+          ) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `This agent's runtime cannot run ${model} on provider ${provider}.`,
+            });
+          }
+        }
+        Object.assign(taskConfig, { model, provider });
+      }
+
       // Backfill model snapshot for tasks created before the snapshot logic
       // landed, or whose assignee was set after creation. Once written, the
       // task is pinned to this model regardless of later agent default changes.
@@ -334,7 +370,8 @@ export class TaskRunnerService {
             snapshot,
             getHeterogeneousTaskModelProvider(agencyConfig?.heterogeneousProvider),
           );
-          await this.taskModel.updateTaskConfig(task.id, missing);
+          // A replacement is only written once its run starts, below.
+          if (!model) await this.taskModel.updateTaskConfig(task.id, missing);
           Object.assign(taskConfig, missing);
         }
       }
@@ -374,7 +411,7 @@ export class TaskRunnerService {
         );
       }
 
-      log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
+      log('runTask: %s (continue=%s, model=%s)', taskIdentifier, continueTopicId, model);
 
       const result = await aiAgentService.execAgent({
         ...(onOperationCreated ? { onOperationCreated } : {}),
@@ -502,6 +539,15 @@ export class TaskRunnerService {
               : `The task was ${recorded} while its run was starting, and stopping that run (operation ${result.operationId}) could not be confirmed.`,
           });
         }
+      }
+
+      // Written only now so a replacement that cannot start never costs the Task
+      // its previous pin. `null` clears the stale provider when none was resolved.
+      if (model) {
+        await this.taskModel.updateTaskConfig(task.id, {
+          model,
+          provider: typeof taskConfig.provider === 'string' ? taskConfig.provider : null,
+        });
       }
 
       await this.taskModel.updateHeartbeat(task.id);

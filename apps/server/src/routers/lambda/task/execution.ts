@@ -19,11 +19,23 @@ export const createTaskExecutionRouter = (
           z.object({
             continueTopicId: z.string().optional(),
             deviceId: z.string().optional(),
+            model: z.string().optional(),
             prompt: z.string().optional(),
+            provider: z.string().optional(),
           }),
         ),
       )
       .mutation(async ({ input, ctx }) => {
+        // Tool-calling models fill optional fields with "", which must not read as a choice.
+        const model = input.model?.trim() || undefined;
+        const provider = input.provider?.trim() || undefined;
+        if (provider && !model) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'provider requires model: the Task model may not be served by that provider',
+          });
+        }
+
         try {
           const task = await resolveTaskOrThrow(ctx.taskModel, input.id);
 
@@ -36,6 +48,8 @@ export const createTaskExecutionRouter = (
             continueTopicId: input.continueTopicId,
             deviceId: input.deviceId,
             extraPrompt: input.prompt,
+            model,
+            provider,
             taskId: task.id,
             ...(onOperationCreated ? { onOperationCreated } : {}),
           });
