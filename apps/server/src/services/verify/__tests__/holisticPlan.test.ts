@@ -13,6 +13,7 @@ const {
   findByIdsMock,
   generateObjectMock,
   getCriteriaMock,
+  getUserSettingsMock,
   setCriteriaMock,
   setPlanMock,
 } = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ const {
   findByIdsMock: vi.fn(async () => [] as any[]),
   generateObjectMock: vi.fn(),
   getCriteriaMock: vi.fn(async () => [] as any[]),
+  getUserSettingsMock: vi.fn(async (): Promise<any> => undefined),
   setCriteriaMock: vi.fn(),
   setPlanMock: vi.fn(async (_runId: string, _items: any[]) => {}),
 }));
@@ -51,6 +53,11 @@ vi.mock('@/database/models/verifyCriterion', () => ({
       create: createCriterionMock,
       findByIds: findByIdsMock,
     };
+  }),
+}));
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn(function () {
+    return { getUserSettings: getUserSettingsMock };
   }),
 }));
 vi.mock('@/database/models/document', () => ({
@@ -198,5 +205,50 @@ describe('verify plan generation model', () => {
       expect.objectContaining(VERIFY_PLAN_MODEL_CONFIG),
       expect.any(Object),
     );
+  });
+
+  /**
+   * Regression: a Task's run goal opens with English scaffolding ("Verify only
+   * this Task…") around a Chinese brief, and "write in the language of the run
+   * goal" produced English check titles on a Chinese account's acceptance page.
+   */
+  describe('output language', () => {
+    const systemPrompt = () =>
+      (generateObjectMock.mock.calls.at(-1)![0] as { messages: { content: string }[] }).messages[0]
+        .content;
+    const taskGoal = 'Verify only this Task: 挤水分 A/C。\n\nRequired Task outcome: 删除死代码';
+
+    it("writes criteria in the account's response language", async () => {
+      generateObjectMock.mockResolvedValue({ criteria: [] });
+      getUserSettingsMock.mockResolvedValue({ general: { responseLanguage: 'zh-CN' } });
+
+      await new VerifyPlanGeneratorService(db, 'user-1').generateDraftPlan({
+        enableAiGeneration: true,
+        goal: taskGoal,
+        operationId: 'op-1',
+      });
+
+      expect(systemPrompt()).toContain(
+        'title, description, instruction and every requiredEvidence hint in zh-CN',
+      );
+    });
+
+    it('falls back to the goal content language, not its English scaffolding, when unset', async () => {
+      generateObjectMock.mockResolvedValue({ criteria: [] });
+      getUserSettingsMock.mockResolvedValue({ general: {} });
+
+      await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({ goal: taskGoal });
+
+      expect(systemPrompt()).toContain('Ignore the English system wording');
+    });
+
+    it('does not let a settings read failure block plan generation', async () => {
+      generateObjectMock.mockResolvedValue({ criteria: [] });
+      getUserSettingsMock.mockRejectedValue(new Error('db down'));
+
+      await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({ goal: taskGoal });
+
+      expect(systemPrompt()).toContain('Ignore the English system wording');
+    });
   });
 });
