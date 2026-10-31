@@ -6,7 +6,8 @@ Generate text, images, videos, and audio. Alias: \`lh generate\`.
 
 - \`lh gen text <prompt> [-m <model>] [-p <provider>] [--temperature <t>]\` - Generate text
 - \`lh gen json <prompt> [-m <model>] [-p <provider>] [--schema <json|file>] [--schema-name <name>] [--strict]\` - Generate a JSON object (structured output)
-- \`lh gen image <prompt> [-m <model>] [-n <count>] [--width <w>] [--height <h>]\` - Generate image
+- \`lh gen image-params -m <model> -p <provider>\` - Show the parameters an image model accepts (e.g. \`size\`, \`aspectRatio\`, \`quality\`)
+- \`lh gen image <prompt> [-m <model>] [-p <provider>] [-n <count>] [--param <key=value>...]\` - Generate image; pass only parameters listed by \`image-params\` (unsupported ones are rejected)
 - \`lh gen video <prompt> -m <model> -p <provider> [--aspect-ratio <r>] [--duration <d>] [--resolution <res>]\` - Generate video
 - \`lh gen tts <text> [-m <model>] [-p <provider>] [-o <output>] [--voice <v>] [--speed <s>]\` - Text-to-speech using the selected provider's saved configuration
 - \`lh gen asr <audioFile> [--model <m>] [--language <l>]\` - Speech-to-text

@@ -77,14 +77,14 @@ describe('bot-wake settings fields', () => {
     for (const field of botWakeFields) expect(keys).toContain(field.key);
   });
 
-  it('stay hidden until the bot_wake rollout reaches the user', () => {
-    for (const field of botWakeFields) expect(field.featureFlag).toBe('enableBotWake');
+  it('are released to every user, behind no feature flag', () => {
+    for (const field of botWakeFields) expect(field.featureFlag).toBeUndefined();
   });
 
   it('show only the master switch until it is on, and the scheduler timings until it batches', () => {
     const unconditional = botWakeFields.filter((field) => !field.visibleWhen);
 
-    expect(unconditional.map((field) => field.key)).toEqual([BOT_WAKE_SETTING_KEYS.enabled]);
+    expect(unconditional.map((field) => field.key)).toEqual([BOT_WAKE_SETTING_KEYS.disabled]);
     for (const key of [
       BOT_WAKE_SETTING_KEYS.collectSeconds,
       BOT_WAKE_SETTING_KEYS.cooldownSeconds,
@@ -135,7 +135,7 @@ describe('bot-wake settings fields', () => {
       botWake: { classifier: { threshold: 0.8 }, enabled: true, rules: { scope: 'bot-threads' } },
     });
 
-    expect(settings[BOT_WAKE_SETTING_KEYS.enabled]).toBe(false);
+    expect(settings[BOT_WAKE_SETTING_KEYS.disabled]).toBe(false);
 
     const parsed = parseBotWakeSettings(settings);
     expect(parsed.config.enabled).toBe(true);
@@ -144,7 +144,7 @@ describe('bot-wake settings fields', () => {
   });
 
   it('enable the pipeline from the form once its switch is on', () => {
-    const settings = mergeWithDefaults(discordSchema, { [BOT_WAKE_SETTING_KEYS.enabled]: true });
+    const settings = mergeWithDefaults(discordSchema, { [BOT_WAKE_SETTING_KEYS.disabled]: false });
 
     const parsed = parseBotWakeSettings(settings);
     expect(parsed.config.enabled).toBe(true);
@@ -152,7 +152,7 @@ describe('bot-wake settings fields', () => {
     expect(parsed.rules.classifier.mode).toBe('enforce');
   });
 
-  it('leave a bot that saved the form untouched exactly as it was before: off, with the stock rules', () => {
+  it('leave a bot that saved the form untouched on, with the stock rules', () => {
     const untouched = Object.fromEntries(
       botWakeFields
         .filter((field) => field.default !== undefined)
@@ -161,10 +161,10 @@ describe('bot-wake settings fields', () => {
 
     const parsed = parseBotWakeSettings(untouched);
 
-    expect(parsed.config.enabled).toBe(false);
+    expect(parsed.config.enabled).toBe(true);
     expect(parsed.rules).toEqual({ ...DEFAULT_WAKE_RULES, customInstructions: undefined });
     expect(parsed.scheduler.mode).toBe('off');
-    // Off is the master switch; once it is on, everything enforces.
+    // The off switch is the master switch; while it is not set, everything enforces.
     expect(parsed.ruleMode).toBe('enforce');
   });
 
