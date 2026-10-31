@@ -5,6 +5,8 @@ import {
   toTaskExecutionConfigPatch,
 } from '@lobechat/types';
 
+import { isUniqueViolation } from '../../utils/uniqueViolation';
+
 export const DEFAULT_TASK_IDENTIFIER_PREFIX = 'T';
 
 /** Columns whose change is worth a line in the task activity feed. */
@@ -127,19 +129,5 @@ export const withStaleReposCleared = (
   };
 };
 
-export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error);
-  const code =
-    typeof error === 'object' && error && 'code' in error
-      ? String((error as { code?: unknown }).code)
-      : '';
-  const cause = error instanceof Error ? error.cause : undefined;
-
-  return (
-    code === '23505' ||
-    message.includes('23505') ||
-    message.includes('duplicate') ||
-    message.includes('unique') ||
-    (!!cause && isTaskIdentifierUniqueViolation(cause))
-  );
-};
+/** Kept under its historical name for callers outside this package. */
+export const isTaskIdentifierUniqueViolation = isUniqueViolation;

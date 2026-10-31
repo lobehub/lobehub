@@ -51,9 +51,9 @@ describe('WorkModel · linear', () => {
     });
     expect(first).toBeDefined();
 
-    // Simulate losing the version-number race: the first insert attempt fails
-    // with a unique violation while a concurrent registration commits a
-    // version that renames the issue.
+    // Simulate losing the version-number race: a concurrent registration
+    // commits a version that renames the issue, then the first attempt fails
+    // with a real unique violation on (work_id, version).
     const originalTransaction = serverDB.transaction.bind(serverDB);
     let raced = false;
     // Drizzle's transaction signature gained an optional config param upstream;
@@ -73,9 +73,10 @@ describe('WorkModel · linear', () => {
         title: 'Winner title',
       });
 
-      throw new Error(
-        'duplicate key value violates unique constraint "work_versions_work_id_version_unique"',
-      );
+      // Re-insert the winner's version number to raise the real violation our
+      // insert would hit; drizzle wraps it with the code on `cause`.
+      const { id: _id, ...winnerVersion } = await currentVersionRow(first!.id);
+      await serverDB.insert(workVersions).values(winnerVersion);
     }) as never);
 
     try {

@@ -3,8 +3,9 @@ import { and, eq, inArray, ne, or, sql } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
 import type { LobeChatDatabase } from '../../type';
+import { isUniqueViolation } from '../../utils/uniqueViolation';
 import { seqOwnership, type TaskModelContext, taskOwnership } from './context';
-import { isTaskIdentifierUniqueViolation, normalizeTaskRefs } from './utils';
+import { normalizeTaskRefs } from './utils';
 
 /**
  * Insert a task under the next free `seq` in scope, retrying when a concurrent
@@ -51,8 +52,7 @@ export const insertWithNextSeq = async (
       return task;
     } catch (error: any) {
       // Retry on unique constraint violation (concurrent seq conflict)
-      // Check error itself, cause, and stringified message for PG error code 23505
-      if (isTaskIdentifierUniqueViolation(error) && attempt < maxRetries - 1) {
+      if (isUniqueViolation(error) && attempt < maxRetries - 1) {
         continue;
       }
       throw error;
