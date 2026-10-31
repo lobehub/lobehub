@@ -5,6 +5,22 @@ import type {
 } from '@lobechat/types';
 
 /**
+ * Provider names this codebase implements, reserved whether or not the
+ * deployment currently has credentials for them.
+ *
+ * Registration is credential-gated — a missing key omits the provider — so the
+ * registry alone cannot answer "is this name ours?". It must not: an account
+ * mounted while the key is absent would become usable, and would act with the
+ * deployment-wide key, the moment the key comes back. Keep this list in sync
+ * with the providers under `./providers`.
+ */
+export const RESERVED_AGENT_ACCOUNT_PROVIDERS = ['agent-mail', 'linq'] as const;
+
+/** Whether a provider name belongs to this codebase, credentials aside. */
+export const isReservedAgentAccountProvider = (provider: string): boolean =>
+  (RESERVED_AGENT_ACCOUNT_PROVIDERS as readonly string[]).includes(provider);
+
+/**
  * The set of account providers this deployment can issue accounts from.
  *
  * Registration is explicit and provider-name keyed, so a caller can never

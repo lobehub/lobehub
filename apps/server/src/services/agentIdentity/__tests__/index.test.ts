@@ -208,6 +208,29 @@ describe('AgentAccountService — provisioning', () => {
     expect(calls).toEqual([]);
   });
 
+  it('keeps a reserved provider name unmountable while its key is absent', async () => {
+    // A deployment without the Agent Mail key does not register the provider.
+    // That omission must not make its handles mountable: the row would speak
+    // and delete with the deployment-wide key once the key is restored.
+    const service = new AgentAccountService(serverDB, userId, {
+      gateKeeper,
+      registry: new AgentAccountProviderRegistry(),
+    });
+
+    await expect(
+      service.create({
+        agentId,
+        capabilities: { receive: true, send: true },
+        identifier: 'someone-else@lobe.id',
+        kind: 'mail',
+        metadata: { inboxId: 'inb_someone_else' },
+        provider: 'agent-mail',
+      }),
+    ).rejects.toMatchObject({ code: 'provider_managed', reason: 'invalid' });
+
+    expect(await service.list()).toHaveLength(0);
+  });
+
   it('refuses to open an account on an agent the caller does not own', async () => {
     const { calls, fetchImpl } = createMailFetch();
     const service = buildService(fetchImpl);
@@ -574,6 +597,19 @@ describe('AgentAccountService — actions', () => {
     await serverDB.delete(agentAccounts);
     await serverDB.delete(agents).where(eq(agents.id, useAgentId));
     await serverDB.delete(workspaces);
+  });
+
+  it('does not release the provider resource again when revoking a revoked account', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    await service.revoke(created.id);
+    await service.revoke(created.id);
+
+    // The second revoke targets a row that no longer holds the inbox: it must
+    // stay side-effect free, or a replaced row would delete the live inbox.
+    expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(1);
   });
 
   it('releases on the provider and purges the credential when revoking', async () => {

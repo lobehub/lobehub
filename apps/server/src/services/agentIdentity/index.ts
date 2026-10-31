@@ -25,6 +25,7 @@ import {
 
 import { AgentAccountError } from './errors';
 import type { AgentAccountProviderRegistry } from './registry';
+import { isReservedAgentAccountProvider } from './registry';
 
 const PG_UNIQUE_VIOLATION = '23505';
 
@@ -139,7 +140,14 @@ export class AgentAccountService {
   create = async (params: CreateAgentAccountParams): Promise<AgentAccountView> => {
     await this.assertCanEditAgent(params.agentId);
 
-    if (this.options.registry.has(params.provider)) {
+    // A reserved name is refused even when its provider is not registered: a
+    // missing key only hides the provider, it does not make its handles
+    // mountable. Otherwise an account mounted during that window would speak
+    // and delete with the deployment-wide key once the key is restored.
+    if (
+      this.options.registry.has(params.provider) ||
+      isReservedAgentAccountProvider(params.provider)
+    ) {
       throw new AgentAccountError(
         'provider_managed',
         `Accounts on the "${params.provider}" provider are opened through provisioning, not mounted.`,
@@ -284,7 +292,11 @@ export class AgentAccountService {
     const account = await this.findEditable(id);
     if (!account) return undefined;
 
-    if ('metadata' in patch && this.options.registry.has(account.provider)) {
+    if (
+      'metadata' in patch &&
+      (this.options.registry.has(account.provider) ||
+        isReservedAgentAccountProvider(account.provider))
+    ) {
       throw new AgentAccountError(
         'provider_owned_field',
         `Agent account metadata is owned by the "${account.provider}" provider and is not patchable.`,
@@ -319,7 +331,14 @@ export class AgentAccountService {
     const account = await this.findEditable(id);
     if (!account) return undefined;
 
-    if (release && this.options.registry.has(account.provider)) {
+    // Only the row that still holds the provider resource may release it.
+    // Revoking an already-revoked row — or one revoked with `{ release: false }`
+    // and then replaced by a re-provision on the deterministic client id — must
+    // be side-effect free, or it deletes the inbox the live row now speaks
+    // through.
+    const holdsResource = ROUTING_KEY_HELD_STATUSES.includes(account.status);
+
+    if (release && holdsResource && this.options.registry.has(account.provider)) {
       const credential = await this.model.getCredential(id);
       await this.options.registry.get(account.provider).release(this.toRef(account, credential));
     }
