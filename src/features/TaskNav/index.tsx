@@ -8,6 +8,7 @@ import { type ComponentProps, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AsyncError from '@/components/AsyncError';
 import { projectIcon } from '@/features/HomeSidebar/Body/Project/ProjectItem';
 import { ListHeader } from '@/features/MessageList';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -15,6 +16,7 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 import { NAV_PANEL_TASKS_KEY } from '@/features/NavPanel/railRouteKey';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import { resolveProjectListState } from '@/features/Projects/projectListState';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -69,14 +71,17 @@ const Entry = memo<EntryProps>(({ active, icon, title, url }) => {
 
 Entry.displayName = 'TaskNavEntry';
 
-const Body = memo(() => {
+export const TaskNavBody = memo(() => {
   const { t } = useTranslation('common');
   const { pathname, search } = useActiveLocation();
   const activeSlug = useActiveWorkspaceSlug();
   const enableGoals = useUserStore(labPreferSelectors.enableGoals);
   const enableProjects = useUserStore(labPreferSelectors.enableProjects);
   const projects = useLoadedProjectList();
-  useProjectStore((s) => s.useFetchProjectList)(enableProjects);
+  const { error, isHydrated, isValidating, revalidate } = useProjectStore(
+    (s) => s.useFetchProjectList,
+  )(enableProjects);
+  const projectListState = resolveProjectListState({ error, isHydrated, isValidating, projects });
 
   const scope = resolveTaskScope(pathname, search ?? '', activeSlug);
 
@@ -99,12 +104,14 @@ const Body = memo(() => {
       {enableProjects && (
         <>
           <div {...stylex.props(styles.sectionTitle)}>{t('tab.projects')}</div>
-          {projects === undefined ? (
+          {projectListState === 'error' ? (
+            <AsyncError error={error} variant="inline" onRetry={() => revalidate()} />
+          ) : projectListState === 'loading' ? (
             <SkeletonList rows={3} />
-          ) : projects.length === 0 ? (
+          ) : projectListState === 'empty' ? (
             <div {...stylex.props(styles.empty)}>{t('taskNav.noProjects')}</div>
           ) : (
-            projects.map((project) => (
+            projects?.map((project) => (
               <Entry
                 active={scope.type === 'project' && scope.projectId === project.id}
                 icon={projectIcon(project)}
@@ -120,7 +127,7 @@ const Body = memo(() => {
   );
 });
 
-Body.displayName = 'TaskNavBody';
+TaskNavBody.displayName = 'TaskNavBody';
 
 const Header = memo(() => {
   const { t } = useTranslation('common');
@@ -136,7 +143,7 @@ Header.displayName = 'TaskNavHeader';
  */
 const TaskNavPortal = () => (
   <NavPanelPortal navKey={NAV_PANEL_TASKS_KEY}>
-    <SideBarLayout body={<Body />} header={<Header />} />
+    <SideBarLayout body={<TaskNavBody />} header={<Header />} />
   </NavPanelPortal>
 );
 
