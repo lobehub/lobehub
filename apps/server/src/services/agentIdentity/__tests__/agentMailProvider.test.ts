@@ -508,3 +508,41 @@ describe('agent-mail provider — outbound', () => {
     expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
   });
 });
+
+describe('agent-mail provider — reply ownership', () => {
+  it('refuses to reply to a message that lives in another account’s inbox', async () => {
+    // One deployment API key spans every inbox, and the reply route sends as the
+    // inbox that owns the message. Answering a foreign id would speak as another
+    // agent, skipping every lifecycle and capability check done for this one.
+    const { calls, fetchImpl } = createMailFetch({ detail: { inboxId: 'inb_other' } });
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    await expect(
+      provider.send(ref(), {
+        replyToProviderMessageId: 'msg_in_1',
+        text: 'hi back',
+        to: 'human@example.com',
+      }),
+    ).rejects.toMatchObject({ code: 'reply_target_not_owned', name: 'AgentAccountError' });
+
+    // The refusal happens before the send: nothing was written to the provider.
+    expect(calls.filter((call) => call.method === 'POST')).toEqual([]);
+  });
+
+  it('replies when the target belongs to the account’s own inbox', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    const result = await provider.send(ref(), {
+      replyToProviderMessageId: 'msg_in_1',
+      text: 'hi back',
+      to: 'human@example.com',
+    });
+
+    expect(calls).toEqual([
+      { body: undefined, method: 'GET', path: '/v1/messages/msg_in_1' },
+      { body: { text: 'hi back' }, method: 'POST', path: '/v1/messages/msg_in_1/reply' },
+    ]);
+    expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
+  });
+});

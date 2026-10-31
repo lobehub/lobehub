@@ -1,6 +1,6 @@
 import type { LinqWebhookDedupeStore } from '@lobechat/agent-address-linq';
 import { createInMemoryLinqWebhookDedupeStore } from '@lobechat/agent-address-linq';
-import type { EmailWebhookEvent } from '@lobechat/agent-address-mail';
+import type { EmailMessageDetail, EmailWebhookEvent } from '@lobechat/agent-address-mail';
 import {
   checkInboundEmail,
   LobeMailApiClient,
@@ -19,6 +19,8 @@ import type {
   AgentAccountProvisionResult,
   AgentAccountRef,
 } from '@lobechat/types';
+
+import { AgentAccountError } from '../errors';
 
 /** Server-side configuration for the Agent Mail (`lobe.id`) provider. */
 export interface AgentMailProviderConfig {
@@ -103,6 +105,34 @@ export const createAgentMailProvider = (
       : ref.identifier;
   };
 
+  /**
+   * Answer `providerMessageId` as the account behind `ref`.
+   *
+   * The reply route acts on the inbox that owns the message, not on the inbox
+   * the caller asked us to send from — and one deployment API key spans every
+   * inbox. Replying to an id from another account would therefore speak as that
+   * account, skipping the lifecycle and capability checks this call already
+   * passed for `ref`. The target is resolved first and refused unless it lives
+   * in this account's inbox.
+   */
+  const replyInOwningInbox = async (
+    ref: AgentAccountRef,
+    providerMessageId: string,
+    text: string,
+  ): Promise<EmailMessageDetail> => {
+    const inboxId = inboxIdOf(ref);
+    const target = await client.getMessage(providerMessageId);
+    if (target.inboxId !== inboxId) {
+      throw new AgentAccountError(
+        'reply_target_not_owned',
+        `Message ${providerMessageId} belongs to another agent's inbox, so it cannot be ` +
+          `answered as ${inboxId}. Reply from the account that received it.`,
+      );
+    }
+
+    return client.replyToMessage(providerMessageId, { text });
+  };
+
   return {
     /** A mailbox can receive and send, and nothing else today. */
     capabilities: { receive: true, send: true },
@@ -172,7 +202,7 @@ export const createAgentMailProvider = (
       // and drop the human's thread. `threadKey` is the RFC root key, which is
       // not a message id, so it cannot address the reply.
       const detail = message.replyToProviderMessageId
-        ? await client.replyToMessage(message.replyToProviderMessageId, { text: message.text })
+        ? await replyInOwningInbox(ref, message.replyToProviderMessageId, message.text)
         : await client.sendMessage(inboxIdOf(ref), {
             subject: message.subject ?? '',
             text: message.text,
