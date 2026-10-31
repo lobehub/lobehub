@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 
+import { agentAccountWebhook, agentAccountWebhookBodyLimit } from './handlers/agentAccountWebhook';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
@@ -120,6 +121,12 @@ app.post('/webhooks/group-member-callback', qstashAuth(), groupMemberCallback);
 
 // POST /api/agent/webhooks/:platform[/:appId] — Chat SDK bot platform webhooks
 app.post('/webhooks/:platform/:appId?', platformWebhook);
+
+// POST /api/agent/accounts/webhooks/:provider — inbound mail deliveries
+// for the agent's own accounts. Auth is the provider signature, verified inside
+// the handler, so the only middleware is a body cap that runs before anything
+// is buffered.
+app.post('/accounts/webhooks/:provider', agentAccountWebhookBodyLimit, agentAccountWebhook);
 
 // GET /api/agent/messenger/:platform/install — start per-tenant OAuth install
 app.get('/messenger/:platform/install', messengerInstall);

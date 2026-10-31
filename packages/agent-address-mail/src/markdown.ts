@@ -56,7 +56,12 @@ interface Block {
   ordered?: boolean;
 }
 
-const BLOCK_START = /^(?:#{1,6}\s|```|---|\*\*\*|>\s?|\s*(?:[-*+]|\d+[.)])\s)/;
+/** A whole line of three or more `-`, `*` or `_` — not a line that merely starts or ends with them. */
+const HR = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
+
+const BLOCK_START = /^(?:#{1,6}\s|```|>\s?|\s*(?:[-*+]|\d+[.)])\s)/;
+
+const startsBlock = (line: string): boolean => HR.test(line) || BLOCK_START.test(line);
 
 /** Split into block tokens; consecutive non-block lines merge into one paragraph. */
 const tokenize = (markdown: string): Block[] => {
@@ -79,7 +84,7 @@ const tokenize = (markdown: string): Block[] => {
       continue;
     }
 
-    if (/(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line.trim())) {
+    if (HR.test(line)) {
       blocks.push({ kind: 'hr', lines: [] });
       index += 1;
       continue;
@@ -126,12 +131,11 @@ const tokenize = (markdown: string): Block[] => {
       continue;
     }
 
-    const paragraph: string[] = [];
-    while (
-      index < lines.length &&
-      lines[index]!.trim() !== '' &&
-      !BLOCK_START.test(lines[index]!)
-    ) {
+    // The first line is always taken: it reached here because no block claimed
+    // it, so stopping on it as a "block start" would never advance the index.
+    const paragraph: string[] = [line];
+    index += 1;
+    while (index < lines.length && lines[index]!.trim() !== '' && !startsBlock(lines[index]!)) {
       paragraph.push(lines[index]!);
       index += 1;
     }

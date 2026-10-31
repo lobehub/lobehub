@@ -5,6 +5,8 @@ import {
   checkInboundEmail,
   LobeMailApiClient,
   LobeMailApiError,
+  markdownToHtml,
+  markdownToPlainText,
   parseRawHeaders,
   stripQuotedReply,
   verifyAgentMailSignature,
@@ -37,6 +39,8 @@ export interface AgentMailProviderConfig {
   dedupeStore?: LinqWebhookDedupeStore;
   /** Injected fetch, for tests and offline acceptance. */
   fetchImpl?: typeof fetch;
+  /** Injectable clock, in milliseconds (webhook signature tolerance). */
+  now?: () => number;
   /**
    * Shared webhook signing secret. Used only when the account itself carries no
    * per-inbox secret; a per-account secret always wins.
@@ -118,7 +122,7 @@ export const createAgentMailProvider = (
   const replyInOwningInbox = async (
     ref: AgentAccountRef,
     providerMessageId: string,
-    text: string,
+    body: { html: string; text: string },
   ): Promise<EmailMessageDetail> => {
     const inboxId = inboxIdOf(ref);
     const target = await client.getMessage(providerMessageId);
@@ -130,7 +134,7 @@ export const createAgentMailProvider = (
       );
     }
 
-    return client.replyToMessage(providerMessageId, { text });
+    return client.replyToMessage(providerMessageId, body);
   };
 
   return {
@@ -146,6 +150,9 @@ export const createAgentMailProvider = (
         clientId: input.agentId,
         displayName: input.displayName,
         endUserId: input.agentId,
+        // The caller's preferred local part. The provider either honours it or
+        // answers with the address it minted — never a silent substitute.
+        username: input.prefix,
       });
       const identity: AgentAccountProvisionResult = {
         identifier: inbox.address,
@@ -200,20 +207,34 @@ export const createAgentMailProvider = (
       }
     },
 
+    releaseInbound: async (eventId: string): Promise<void> => {
+      await dedupeStore.release?.(eventId);
+    },
+
     send: async (
       ref: AgentAccountRef,
       message: AgentAccountOutboundMessage,
     ): Promise<{ providerMessageId: string }> => {
+      // An agent's reply is Markdown; email is HTML. Render both bodies from
+      // the same token walk so the `text/html` part and its `text/plain`
+      // alternative never disagree about the content — the plain-text half is
+      // also what a non-HTML client (and every quote-stripper downstream)
+      // reads. Rendering happens here, at the provider boundary, so nothing
+      // above has to know the transport is HTML at all.
+      const html = markdownToHtml(message.text);
+      const text = markdownToPlainText(message.text);
+
       // Answering a specific message goes through the reply route: the mail API
       // threads it (`In-Reply-To`/`References`, recipients inherited), while
       // `sendMessage` would open a second conversation carrying the same subject
       // and drop the human's thread. `threadKey` is the RFC root key, which is
       // not a message id, so it cannot address the reply.
       const detail = message.replyToProviderMessageId
-        ? await replyInOwningInbox(ref, message.replyToProviderMessageId, message.text)
+        ? await replyInOwningInbox(ref, message.replyToProviderMessageId, { html, text })
         : await client.sendMessage(inboxIdOf(ref), {
+            html,
             subject: message.subject ?? '',
-            text: message.text,
+            text,
             to: message.to,
           });
 
@@ -235,6 +256,7 @@ export const createAgentMailProvider = (
       const verified = verifyAgentMailSignature({
         body: request.body,
         header: request.headers['x-agentmail-signature'],
+        now: config.now?.(),
         secret,
       });
       if (!verified) return null;
