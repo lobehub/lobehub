@@ -621,6 +621,7 @@ export const setupTurn = async (
         appContext,
         botContext,
         cronJobId,
+        deviceBindingPinned: Boolean(effectiveRequestedDeviceId),
         editingAgentId,
         projectDirectory,
         taskId: operationTaskId,
@@ -776,18 +777,25 @@ export const setupTurn = async (
       // session live there, so the agent-level target (the default for NEW
       // topics) must not move a later turn elsewhere. An explicit request device
       // (the picker's in-process preset, a task/sub-agent override) and a fixed
-      // workspace target still win. `auto` opted into picking a fresh online
-      // device every run, so an earlier pick never pins it.
+      // workspace target still win. `auto` picked a fresh online device every
+      // run, so its own earlier pick never pins the conversation — but a device
+      // the caller chose explicitly did (see `deviceBindingPinned` below).
       const topicPinnedDeviceId = canUseTopicPin
         ? existingTopic?.metadata?.boundDeviceId
         : undefined;
+      // A binding the caller chose for this conversation (`--device`, the
+      // composer preset, a project directory) is a promise, not an auto pick:
+      // later turns stay there even for an `auto` agent, which would otherwise
+      // grab whichever machine is online now.
+      const topicDeviceBindingPinned =
+        canUseTopicPin && existingTopic?.metadata?.deviceBindingPinned === true;
       // A project-directory topic already routed to its directory's device above.
       if (
         !requestedDeviceId &&
         !existingTopic?.projectWorkingDirectoryId &&
         topicPinnedDeviceId &&
         !isFixedExecutionTargetSelection &&
-        agentConfig.agencyConfig?.executionTarget !== 'auto'
+        (agentConfig.agencyConfig?.executionTarget !== 'auto' || topicDeviceBindingPinned)
       ) {
         resolvedRequestedDeviceId = topicPinnedDeviceId;
         effectiveRequestedDeviceId = topicPinnedDeviceId;

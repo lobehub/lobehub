@@ -135,6 +135,14 @@ export interface ChatTopicMetadata {
   boundDeviceId?: string;
   cronJobId?: string;
   /**
+   * The conversation's device was chosen explicitly for it (the composer's
+   * picker preset, a project directory, or `lh topic send --new --device`), not
+   * picked automatically by an `auto` agent. Later turns honour that choice
+   * instead of picking a fresh online device, because the caller was told the
+   * work stays on that machine.
+   */
+  deviceBindingPinned?: boolean;
+  /**
    * Set on a topic created by editing and resending a user message of a
    * runtime whose native history cannot be rewound (Codex). The topic holds a
    * copy of the source ancestry but no native session, so a fresh local run
