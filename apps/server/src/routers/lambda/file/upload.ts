@@ -5,7 +5,10 @@ import { TRPCError } from '@trpc/server';
 import isEqual from 'fast-deep-equal';
 import { z } from 'zod';
 
-import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
+import {
+  businessFileUploadCheck,
+  businessGetFileStorageQuota,
+} from '@/business/server/lambda-routers/file';
 import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { router } from '@/libs/trpc/lambda';
@@ -297,6 +300,13 @@ export const uploadRouter = router({
 
       return { id, url: await ctx.fileService.getFileAccessUrl({ id, url: input.url }) };
     }),
+  // Read-only and deliberately not behind `checkFileStorageUsage`: it explains
+  // the rejection that middleware produces.
+  getStorageQuota: fileProcedure
+    .use(withScopedPermission('file:upload'))
+    .query(({ ctx }) =>
+      businessGetFileStorageQuota({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
+    ),
   rehostImage: fileProcedure
     .use(withScopedPermission('file:upload'))
     .use(checkFileStorageUsage)

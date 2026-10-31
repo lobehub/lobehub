@@ -111,7 +111,7 @@ const logger = createLogger('controllers:LocalFileCtr');
 const formatUploadFailure = ({ kind, reason }: UploadFailure): string => {
   switch (kind) {
     case 'storage_quota': {
-      return `the user's LobeHub file storage is full (${reason}), so the model cannot view this image. Retrying will not help; the user needs to free up space in their file library or upgrade their plan`;
+      return `the user's LobeHub file storage is full, so the model cannot view this image. Retrying will not help; the user needs to free up space in their file library or upgrade their plan. Details: ${reason}`;
     }
     case 'network': {
       return `network error while uploading (${reason}), already retried, so the model cannot view this image. It may work if the file is read again later`;
