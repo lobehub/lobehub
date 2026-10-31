@@ -22,7 +22,7 @@ describe('Droid server-default binding lifecycle', () => {
     const params = {
       agentType: 'droid',
       appStoragePath,
-      args: ['--settings=/unmanaged/settings.json'],
+      args: ['--tag', 'lobe'],
       driver: droidDriver,
       endpoint: 'https://example.test',
       env: { FACTORY_API_KEY: 'native-identity', LOBEHUB_DROID_API_KEY: 'expired-token' },
@@ -32,7 +32,8 @@ describe('Droid server-default binding lifecycle', () => {
     const first = await prepareHostedServerDefaultBinding(params);
     const settingsPath = path.join(first.profileDir, 'settings.json');
     const settings = await readFile(settingsPath, 'utf8');
-    expect(first.args).toEqual(['--settings', settingsPath]);
+    expect(first.args).toEqual(['--tag', 'lobe']);
+    expect(first.settingsPath).toBe(settingsPath);
     expect(first.env).toEqual({ FACTORY_API_KEY: 'native-identity' });
     expect(first.operationTokenEnvKey).toBe('LOBEHUB_DROID_API_KEY');
     expect(settings).toContain('${LOBEHUB_DROID_API_KEY}');
