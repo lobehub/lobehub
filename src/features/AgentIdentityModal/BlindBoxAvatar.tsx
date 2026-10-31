@@ -1,9 +1,10 @@
 'use client';
 
 import * as stylex from '@stylexjs/stylex';
-import { memo } from 'react';
+import { memo, type Ref } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import { pickDomProps } from '@/components/AgentAvatar/resolve';
 
 import { useBlindBoxSeed } from './useBlindBoxSeed';
 
@@ -51,8 +52,10 @@ const styles = stylex.create({
 });
 
 interface BlindBoxAvatarProps {
+  [key: string]: unknown;
   className?: string;
   name?: string;
+  ref?: Ref<HTMLSpanElement>;
   size: number;
 }
 
@@ -60,11 +63,18 @@ interface BlindBoxAvatarProps {
  * The generated agent character, cross-fading to a new one every couple of
  * seconds: the agent's real character is decided by an id it does not have yet.
  */
-const BlindBoxAvatar = memo<BlindBoxAvatarProps>(({ className, name, size }) => {
+const BlindBoxAvatar = memo<BlindBoxAvatarProps>(({ className, name, ref, size, ...rest }) => {
   const { seed, previousSeed } = useBlindBoxSeed(true);
 
+  // It renders as the emoji picker's trigger, so the handlers, aria and anchor
+  // ref the picker injects must reach the DOM — dropping them leaves the picker
+  // unopenable. Same forwarding as AgentAvatar's generated branch.
   return (
-    <span className={[stylex.props(styles.stack).className, className].filter(Boolean).join(' ')}>
+    <span
+      {...pickDomProps(rest)}
+      className={[stylex.props(styles.stack).className, className].filter(Boolean).join(' ')}
+      ref={ref}
+    >
       {/* Keyed by seed so each swap remounts both layers and replays the fades. */}
       <span {...stylex.props(styles.incoming)} key={seed}>
         <AgentAvatar agentId={seed} name={name} size={size} />
