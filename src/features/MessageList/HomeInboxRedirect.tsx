@@ -1,37 +1,32 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { useEffect } from 'react';
-import { useLocation } from 'react-router';
+import { Navigate } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useImLayout } from '@/features/NavRail/useImLayout';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 
-export const isHomePath = (pathname: string, activeWorkspaceSlug: string | null) =>
-  pathname === '/' ||
-  (!!activeWorkspaceSlug &&
-    (pathname === `/${activeWorkspaceSlug}` || pathname === `/${activeWorkspaceSlug}/`));
-
 /**
- * In the rail layout the Messages tab opens on the Lobe AI conversation, so the
- * bare home path lands there (replacing the entry, so Back does not bounce).
+ * The Web home route element. Under the `im_layout` trial the Messages tab
+ * opens on the Lobe AI conversation, so `/` redirects there (replacing the
+ * entry, so Back does not bounce). Rendered as the index route element rather
+ * than from the layout, so it only runs once the router has hydrated and
+ * cannot race the initial navigation. Off renders nothing: the layout shows
+ * the home dashboard as before.
  */
 const HomeInboxRedirect = () => {
-  const { pathname } = useLocation();
+  const imLayout = useImLayout();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const navigate = useWorkspaceAwareNavigate();
-  const isHome = isHomePath(pathname, activeWorkspaceSlug);
 
-  useEffect(() => {
-    if (!isHome) return;
-    navigate(AGENT_CHAT_URL(resolveInboxAgentRouteId(inboxAgentId), false), { replace: true });
-  }, [inboxAgentId, isHome, navigate]);
+  if (!imLayout) return null;
 
-  return null;
+  const to = AGENT_CHAT_URL(resolveInboxAgentRouteId(inboxAgentId), false);
+  return <Navigate replace to={buildWorkspaceAwarePath(to, activeWorkspaceSlug)} />;
 };
 
 export default HomeInboxRedirect;

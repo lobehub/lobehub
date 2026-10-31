@@ -3,13 +3,18 @@
 import type { RouteObject } from 'react-router';
 
 import { acceptanceRouteMeta } from '@/features/Acceptance/routeMeta';
+import HomeInboxRedirect from '@/features/MessageList/HomeInboxRedirect';
 import { dynamicElement, dynamicLayout, ErrorBoundary } from '@/utils/router';
 
 import { createMainAreaRouteFactory, createSharedDesktopRoutes } from './desktopRouter.shared';
 
 export { sharedMainAreaChildren } from './desktopRouter.shared';
 
-export const createMainAreaChildren = createMainAreaRouteFactory();
+// Web home: the layout renders the dashboard; under the `im_layout` trial the
+// index element redirects `/` to the Lobe AI conversation instead.
+export const createMainAreaChildren = createMainAreaRouteFactory({
+  createHomeElement: () => <HomeInboxRedirect />,
+});
 
 // Electron consumers resolve tab metadata against the same complete content
 // tree. The Web root also renders this tree directly.

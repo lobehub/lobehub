@@ -44,7 +44,6 @@ vi.mock('@/features/Electron/titlebar/TitleBar', nullComponent);
 vi.mock('@/features/HotkeyHelperPanel', nullComponent);
 vi.mock('@/features/NavPanel/Shell', nullComponent);
 vi.mock('@/features/NavRail', nullComponent);
-vi.mock('@/features/MessageList/HomeInboxRedirect', nullComponent);
 vi.mock('@/features/NavRail/wrapStyle', () => ({ wrapStyles: {} }));
 vi.mock('@/features/NavRail/useImLayout', () => ({
   useImLayout: () => false,
