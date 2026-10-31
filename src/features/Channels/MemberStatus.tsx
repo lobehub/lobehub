@@ -5,11 +5,14 @@ import { UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
 
+import { canInviteMembers } from './channelAccess';
 import { openInviteMembers } from './CreateChannel';
 import { FailureIndicator } from './FailureIndicator';
 import { MemberList, StatusAvatar, useMemberEntries } from './MemberList';
+import { channelPath } from './paths';
 import { statusStyles, styles } from './styles';
 
 /** Header avatars before the rest fold into a count; the list shows everyone. */
@@ -29,10 +32,12 @@ export function MemberStatus({
   const { t } = useTranslation('channel');
   const [open, setOpen] = useState(false);
   const popoverKey = useCloseOnNavigate(open, () => setOpen(false));
+  const navigate = useWorkspaceAwareNavigate();
   const { channel, members: allMembers = [] } = detail;
-  // An archived channel is read-only: no new members or environment changes until reopened.
-  const manageable = channel.canDelete && channel.status !== 'archived';
   const entries = useMemberEntries(detail);
+  const directAgent = channel.agentId
+    ? entries.find((entry) => entry.member.agentId === channel.agentId)
+    : undefined;
   const overflow = entries.length - MAX_VISIBLE;
   const title = t('membersCount', { count: entries.length });
 
@@ -78,20 +83,25 @@ export function MemberStatus({
           </Button>
         </Popover>
       )}
-      {manageable && (
+      {canInviteMembers(channel) && (
         <ActionIcon
           aria-label={t('invite.title')}
           icon={UserPlus}
           size="small"
           title={t('invite.title')}
           onClick={() =>
-            openInviteMembers({
-              agentIds: allMembers.flatMap((member) =>
-                member.status === 'active' && member.agentId ? [member.agentId] : [],
-              ),
-              id: channel.id,
-              workspaceId: channel.workspaceId,
-            })
+            openInviteMembers(
+              {
+                agentIds: allMembers.flatMap((member) =>
+                  member.status === 'active' && member.agentId ? [member.agentId] : [],
+                ),
+                directAgentName: channel.agentId ? (directAgent?.name ?? '') : undefined,
+                id: channel.id,
+                workspaceId: channel.workspaceId,
+              },
+              // Inviting from a direct conversation opens the group it starts.
+              (id) => navigate(channelPath(id)),
+            )
           }
         />
       )}

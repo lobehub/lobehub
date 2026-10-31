@@ -73,7 +73,11 @@ export function truncate(str: string, maxWidth: number): string {
   return str;
 }
 
-export function printTable(rows: string[][], header: string[]) {
+/** A line break inside a cell (multi-line topic titles) would split its table row. */
+const singleLine = (cell: string) => cell.replaceAll(/\s*[\r\n]\s*/g, ' ');
+
+export function printTable(rawRows: string[][], header: string[]) {
+  const rows = rawRows.map((row) => row.map((cell) => singleLine(cell || '')));
   const allRows = [header, ...rows];
   const colWidths = header.map((_, i) => Math.max(...allRows.map((r) => displayWidth(r[i] || ''))));
 

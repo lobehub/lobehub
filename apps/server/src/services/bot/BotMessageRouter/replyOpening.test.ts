@@ -38,7 +38,7 @@ describe('createReplyOpening', () => {
       client,
       mode: 'agent',
       opener,
-      rolledOut: async () => true,
+      decides: true,
       ...overrides,
     });
 
@@ -120,15 +120,7 @@ describe('createReplyOpening', () => {
 
   it.each([
     ['the owner keeps threads', { mode: 'thread' as const }],
-    ['the rollout is off', { rolledOut: async () => false }],
-    [
-      'the rollout cannot be read',
-      {
-        rolledOut: async () => {
-          throw new Error('down');
-        },
-      },
-    ],
+    ['the wake switch is off', { decides: false }],
   ])('does not decide when %s', async (_, overrides) => {
     const service = create(overrides);
 

@@ -15,10 +15,12 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { UserModel } from '@/database/models/user';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getServerGlobalConfig } from '@/server/globalConfig';
 import { createAsyncCaller } from '@/server/routers/async/caller';
 import { FileService } from '@/server/services/file';
 import {
@@ -27,9 +29,14 @@ import {
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@/types/asyncTask';
+import { type ProviderConfig } from '@/types/user/settings';
 import { generateUniqueSeeds } from '@/utils/number';
 
-import { applyLookupPricingParamDefaults, validateNoUrlsInConfig } from './utils';
+import {
+  applyLookupPricingParamDefaults,
+  findUnsupportedImageParams,
+  validateNoUrlsInConfig,
+} from './utils';
 
 const log = debug('lobe-image:lambda');
 
@@ -63,7 +70,7 @@ const createImageInputSchema = z.object({
       cfg: z.number().optional(),
       height: z.number().optional(),
       imageUrls: z.array(z.string()).optional(),
-      prompt: z.string(),
+      prompt: z.string().refine((prompt) => prompt.trim().length > 0, 'prompt is required'),
       seed: z.number().nullish(),
       steps: z.number().optional(),
       width: z.number().optional(),
@@ -114,6 +121,32 @@ export const imageRouter = router({
           code: 'BAD_REQUEST',
           message: ChatErrorType.LobeHubModelDeprecated,
         });
+      }
+
+      // Reject params the model does not declare before anything is queued or charged. The
+      // schema comes from the same merged model list the image page and image tool read, so a
+      // user-customized model is validated against its own declaration. Models without a
+      // declared schema (e.g. custom ids) are passed through unchanged.
+      const { aiProvider } = await getServerGlobalConfig();
+      const aiInfraRepos = new AiInfraRepos(
+        serverDB,
+        userId,
+        aiProvider as Record<string, ProviderConfig>,
+        wsId,
+      );
+      const modelCard = (
+        await aiInfraRepos.getAiProviderModelList(provider, { type: 'image' })
+      ).find((item) => item.id === model);
+      const parametersSchema =
+        modelCard && 'parameters' in modelCard ? modelCard.parameters : undefined;
+      if (parametersSchema) {
+        const unsupportedParams = findUnsupportedImageParams(params, parametersSchema);
+        if (unsupportedParams.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Unsupported parameters for ${model}: ${unsupportedParams.join(', ')}. Supported: ${Object.keys(parametersSchema).join(', ')}`,
+          });
+        }
       }
 
       // Normalize reference image addresses, store S3 keys uniformly (avoid storing expiring presigned URLs in database)

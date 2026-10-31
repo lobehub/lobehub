@@ -199,25 +199,9 @@ export const isFieldReleased = (
   featureFlags: Record<string, unknown> | undefined,
 ): boolean => !field.featureFlag || featureFlags?.[field.featureFlag] === true;
 
-/** The master switch of the bot-wake options. The page no longer asks: once the options are released, they are on. */
-export const WAKE_MASTER_KEY = 'botWakeEnabled';
-
-/** Whether the bot-wake options (and so their master switch) are released to the signed-in user. */
-export const isWakeMasterReleased = (
-  schema: FieldSchema[] | undefined,
-  featureFlags: Record<string, unknown> | undefined,
-): boolean => {
-  const fields = schema?.find((field) => field.key === 'settings')?.properties ?? [];
-  const master = fields.find((field) => field.key === WAKE_MASTER_KEY);
-  return !!master?.featureFlag && isFieldReleased(master, featureFlags);
-};
-
 /**
- * Settings for the form with the bot-wake master switch on, for a user the options are released
- * to. Anyone else keeps the stored value, so a bot the options were never shown for is not
- * switched on by saving it.
+ * The master switch of the bot-wake options, stored as the off switch: a bot that never touched it
+ * speaks up on its own. A plain on/off, so it saves the moment it changes, like the reply display
+ * options.
  */
-export const withWakeMasterOn = <T extends Record<string, unknown>>(
-  settings: T,
-  released: boolean,
-): T => (released ? { ...settings, [WAKE_MASTER_KEY]: true } : settings);
+export const WAKE_MASTER_KEY = 'botWakeDisabled';
