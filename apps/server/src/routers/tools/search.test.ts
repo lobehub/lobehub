@@ -53,6 +53,7 @@ describe('searchRouter', () => {
         'firecrawl',
         'jina',
         'naive',
+        'outcrawl',
         'search1api',
         'tavily',
       ] as const;

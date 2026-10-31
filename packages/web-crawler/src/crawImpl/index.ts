@@ -3,6 +3,7 @@ import { exa } from './exa';
 import { firecrawl } from './firecrawl';
 import { jina } from './jina';
 import { naive } from './naive';
+import { outcrawl } from './outcrawl';
 import { search1api } from './search1api';
 import { tavily } from './tavily';
 
@@ -12,6 +13,7 @@ export const crawlImpls = {
   firecrawl,
   jina,
   naive,
+  outcrawl,
   search1api,
   tavily,
 };
