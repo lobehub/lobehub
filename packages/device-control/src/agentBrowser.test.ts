@@ -63,11 +63,50 @@ describe('buildAgentBrowserCommands', () => {
     ]);
   });
 
+  // agent-browser answered success for any key name, so a typo or an unknown
+  // key reached the model as a key press that never happened.
+  it('presses a normalized combo and rejects unknown keys', () => {
+    expect(buildAgentBrowserCommands('press', { key: 'ctrl+shift+down' }, '/s.png')).toEqual([
+      ['press', 'Control+Shift+ArrowDown'],
+    ]);
+    expect(() => buildAgentBrowserCommands('press', { key: 'Bogus+Key' }, '/s.png')).toThrow(
+      'Unknown modifier "Bogus"',
+    );
+  });
+
+  // Headless Chrome on macOS sends Meta+A to the page but never selects anything.
+  it('runs the macOS editing command behind Meta shortcuts', () => {
+    expect(
+      buildAgentBrowserCommands('press', { key: 'ControlOrMeta+a' }, '/s.png', {
+        platform: 'darwin',
+      }),
+    ).toEqual([
+      ['press', 'Meta+a'],
+      ['eval', 'document.execCommand("selectAll")'],
+    ]);
+    expect(
+      buildAgentBrowserCommands('press', { key: 'ControlOrMeta+a' }, '/s.png', {
+        platform: 'linux',
+      }),
+    ).toEqual([['press', 'Control+a']]);
+  });
+
+  it('sets the viewport, or restores the default without a size', () => {
+    expect(
+      buildAgentBrowserCommands('setViewport', { height: 900, width: 1440 }, '/s.png'),
+    ).toEqual([['set', 'viewport', '1440', '900']]);
+    expect(buildAgentBrowserCommands('setViewport', {}, '/s.png')).toEqual([
+      ['set', 'viewport', '1280', '720'],
+    ]);
+  });
+
   it.each([
     ['navigate', { url: 'file:///etc/passwd' }, 'absolute http(s) URL'],
     ['click', { ref: 'body' }, 'Invalid ref'],
     ['click', {}, 'x must be a number'],
     ['fill', { ref: 'e1' }, 'text is required'],
+    ['press', {}, 'key is required'],
+    ['setViewport', { width: 1440 }, 'height must be'],
     ['unknown', {}, 'not available on this device'],
   ])('rejects %s %j', (apiName, args, message) => {
     expect(() => buildAgentBrowserCommands(apiName, args, '/s.png')).toThrow(message);
@@ -177,6 +216,25 @@ describe('runAgentBrowserCall', () => {
       content: '',
       error: 'Unknown ref: e99',
       success: false,
+    });
+  });
+
+  it('reports a macOS editing command the page refused', async () => {
+    const exec = vi
+      .fn()
+      .mockResolvedValue(
+        JSON.stringify([step(['press'], { pressed: 'Meta+v' }), step(['eval'], { result: false })]),
+      );
+
+    await expect(
+      runAgentBrowserCall(
+        'press',
+        { key: 'Meta+v' },
+        { exec, platform: 'darwin', readFile: vi.fn(), screenshotPath: '/s.png' },
+      ),
+    ).resolves.toEqual({
+      content: 'Pressed Meta+v, but the page did not run paste.',
+      success: true,
     });
   });
 

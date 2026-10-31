@@ -122,6 +122,16 @@ export function createGithubStore(options) {
     return assertSha(commit.sha, 'Resolved OSS');
   }
 
+  // PR base.sha is a historical snapshot, not necessarily the merge's first parent.
+  async function resolvePrBase(pr) {
+    if (pr.base?.ref !== 'main') throw new Error('Release PR must target main');
+    if (pr.merged !== true) return resolveCommit('main');
+    const mergeSha = assertSha(pr.merge_commit_sha, 'Release merge');
+    const commit = await (await request(`${root}/commits/${mergeSha}`)).json();
+    if (commit.sha !== mergeSha) throw new Error('Release merge commit SHA mismatch');
+    return assertSha(commit.parents?.[0]?.sha, 'Actual merge parent');
+  }
+
   async function cloudCommit(ref) {
     if (!options.cloudToken) throw new Error('A Cloud read token is required');
     const cloud = repositoryPath(options.cloudRepository);
@@ -135,6 +145,7 @@ export function createGithubStore(options) {
     release,
     listAssets,
     resolveCommit,
+    resolvePrBase,
     readSources: (version) => readAsset(version, sourceAssetName),
     createSources: (version, record) => createAsset(version, sourceAssetName, record),
     readPublication: (version) => readAsset(version, publicationAssetName),
@@ -203,7 +214,7 @@ export function createGithubStore(options) {
         pr.merged !== true ||
         pr.merge_commit_sha !== intent.mergeSha ||
         pr.base?.ref !== 'main' ||
-        pr.base.sha !== intent.prBaseSha
+        (await resolvePrBase(pr)) !== intent.prBaseSha
       )
         throw new Error('Release intent does not match the actual merged PR identity/base');
     },

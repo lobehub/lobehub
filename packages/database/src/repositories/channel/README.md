@@ -34,6 +34,13 @@ messages directly to the bound Agent. Group channels leave `agentId` NULL, inclu
 only one Agent. A group whose only active members are one person and one Agent also skips routing:
 every message that mentions no Agent, in the main timeline or any Thread, goes to that Agent,
 which then follows the Thread. Deleting a bound Agent cascades its direct conversations and their public history.
+While Channels are on, creating an Agent opens its creator's conversation, titled with the Agent's
+name, with the Agent on the device and directory a new Channel would give it
+(`createAgentDirectChannel`).
+Inviting from a direct conversation leaves it as it is and starts a group instead
+(`createGroupFromDirect`): its person and Agent, the Agent in the same channel-local environment,
+plus the invited Agents and, in a workspace, people. `userCandidates` lists those people from a
+workspace direct conversation; `addUser` still refuses it.
 
 Group history survives deletion of an author or Agent. Message sender references use `SET NULL`;
 new writes require exactly one actual sender. Human requests have `userId`, Agent replies have
