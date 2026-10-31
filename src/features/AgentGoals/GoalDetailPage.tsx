@@ -38,6 +38,7 @@ import { goalManagerConversation } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import { GoalSupervision } from './GoalSupervision';
 import GoalSupervisorToggle from './GoalSupervisorToggle';
+import GoalVisibilitySelector from './GoalVisibilitySelector';
 import GoalWorkspaceBreadcrumb from './GoalWorkspaceBreadcrumb';
 import NorthStarMetrics from './NorthStarMetrics';
 import ProcessControl from './ProcessControl';
@@ -370,6 +371,7 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                       canEdit ? t('goalDetail.agentManagedByOwner') : editBlockedReason
                     }
                   />
+                  <GoalVisibilitySelector goalId={goal.id} />
                   {goal.status === 'draft' && (
                     <Text fontSize={12} type={'secondary'}>
                       {t('goalProcess.draft')}

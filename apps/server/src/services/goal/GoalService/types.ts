@@ -1,4 +1,9 @@
-import type { GoalCreateConfig, GoalNodeKind, GoalNodeStatus } from '@lobechat/types';
+import type {
+  GoalCreateConfig,
+  GoalNodeKind,
+  GoalNodeStatus,
+  GoalVisibility,
+} from '@lobechat/types';
 import type { GoalSeedTask } from '@lobechat/utils/goalSeeds';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -157,6 +162,12 @@ export interface CreateGoalGraphInput {
    * `topic` subject so the conversation can find and show it.
    */
   topicId?: string;
+  /**
+   * Workspace visibility. Omitted, it follows the agents: a private goal or
+   * task agent makes the goal private, otherwise it is public. An explicit
+   * 'public' with a private agent is rejected.
+   */
+  visibility?: GoalVisibility;
 }
 
 export interface CreateGoalNodeInput {

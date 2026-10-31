@@ -27,6 +27,7 @@ export interface PreflightOptions {
   planOnly: boolean;
   pullRequest?: { baseRef: string; headRepository: string; number: number; repository: string };
   repository: string;
+  screenshots?: boolean;
   verifierHash: string;
 }
 
@@ -130,6 +131,7 @@ export const runPreflight = async (options: PreflightOptions) => {
         fixture: getStyleFixture(options.fixture.id),
         output: options.output,
         sourceDirectory: options.fixture.sourceDirectory,
+        screenshots: options.screenshots,
       });
     }
     if (options.fixtureBatch && snapshots) {
@@ -141,6 +143,7 @@ export const runPreflight = async (options: PreflightOptions) => {
         fixtures: options.fixtureBatch.ids.map(getStyleFixture),
         output: options.output,
         sourceDirectory: options.fixtureBatch.sourceDirectory,
+        screenshots: options.screenshots,
       });
     }
     const gate = evaluateGate({

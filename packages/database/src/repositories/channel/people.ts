@@ -22,20 +22,29 @@ const requireWorkspaceMember = async (tx: Transaction, workspaceId: string, user
   if (!member) throw new ChannelError('NOT_FOUND', 'Workspace member not found');
 };
 
-const requireGroupWorkspace = async (tx: Transaction, { channel, member }: ChannelAccess) => {
-  if (!channel.workspaceId || channel.agentId)
+const requireWorkspace = async (tx: Transaction, { channel, member }: ChannelAccess) => {
+  if (!channel.workspaceId)
     throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
   await requireWorkspaceMember(tx, channel.workspaceId, member.userId!);
   return channel.workspaceId;
 };
 
-/** Only active people in this workspace; search the full directory, not a client-side page. */
+const requireGroupWorkspace = async (tx: Transaction, access: ChannelAccess) => {
+  if (access.channel.agentId)
+    throw new ChannelError('BAD_REQUEST', 'People can only be added to workspace group channels');
+  return requireWorkspace(tx, access);
+};
+
+/**
+ * Only active people in this workspace; search the full directory, not a client-side page. A
+ * direct conversation lists them for the group that inviting from it starts.
+ */
 export const channelUserCandidates = async (
   tx: Transaction,
   access: ChannelAccess,
   search = '',
 ) => {
-  const workspaceId = await requireGroupWorkspace(tx, access);
+  const workspaceId = await requireWorkspace(tx, access);
   const query = search.trim();
   return tx
     .select({
