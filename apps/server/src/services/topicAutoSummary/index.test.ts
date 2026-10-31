@@ -82,9 +82,6 @@ describe('TopicAutoSummaryService', () => {
       provider: 'deepseek',
     });
     mocks.updateSummaryIfCurrent.mockResolvedValue(true);
-    mocks.isTopicAnalysisEnabled.mockReturnValue(false);
-    mocks.analyzeTopic.mockResolvedValue(null);
-    mocks.saveTopicAnalysis.mockResolvedValue(undefined);
   });
 
   it('rolls the previous summary into the next bounded summary', async () => {
@@ -92,7 +89,7 @@ describe('TopicAutoSummaryService', () => {
 
     const result = await service.summarize('topic-1');
 
-    expect(result).toEqual({ analyzed: false, summarized: true });
+    expect(result).toEqual({ summarized: true });
     const request = mocks.generateObject.mock.calls[0][0];
     expect(request.messages[1].content).toContain(
       'Previous rolling summary:\nEarlier decision: use PostgreSQL.',
@@ -154,7 +151,7 @@ describe('TopicAutoSummaryService', () => {
 
     const result = await service.summarize('topic-1', { force: true });
 
-    expect(result).toEqual({ analyzed: false, summarized: true });
+    expect(result).toEqual({ summarized: true });
     expect(mocks.generateObject).toHaveBeenCalled();
   });
 
@@ -179,7 +176,7 @@ describe('TopicAutoSummaryService', () => {
     await expect(service.summarize('topic-1', { force: true })).rejects.toThrow('provider down');
   });
 
-  describe('topic analysis', () => {
+  describe('analyze', () => {
     const analysis = {
       category: 'coding',
       intent: 'doing',
@@ -191,29 +188,31 @@ describe('TopicAutoSummaryService', () => {
     beforeEach(() => {
       mocks.isTopicAnalysisEnabled.mockReturnValue(true);
       mocks.analyzeTopic.mockResolvedValue(analysis);
+      mocks.saveTopicAnalysis.mockResolvedValue({ id: 'row-1' });
     });
 
-    it('does not analyze when the deployment has no analysis', async () => {
+    it('does nothing when the deployment has no topic analysis', async () => {
       mocks.isTopicAnalysisEnabled.mockReturnValue(false);
-      const service = new TopicAutoSummaryService(createDb(), 'user-1');
+      const db = createDb();
 
-      const result = await service.summarize('topic-1');
+      const result = await new TopicAutoSummaryService(db, 'user-1').analyze('topic-1');
 
-      expect(result).toEqual({ analyzed: false, summarized: true });
+      expect(result).toEqual({ analyzed: false, reason: 'disabled' });
+      expect(mocks.getUserSettings).not.toHaveBeenCalled();
       expect(mocks.analyzeTopic).not.toHaveBeenCalled();
-      expect(mocks.saveTopicAnalysis).not.toHaveBeenCalled();
     });
 
-    it('analyzes the summarized transcript with the summary model and saves the snapshot', async () => {
+    it('classifies the rolling summary and recent transcript and saves the snapshot', async () => {
       const service = new TopicAutoSummaryService(createDb(), 'user-1', 'ws-1');
 
-      const result = await service.summarize('topic-1');
+      const result = await service.analyze('topic-1');
 
-      expect(result).toEqual({ analyzed: true, summarized: true });
+      expect(result).toEqual({ analyzed: true });
       expect(mocks.analyzeTopic).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'deepseek-v4-flash',
           provider: 'deepseek',
+          summary: 'Earlier decision: use PostgreSQL.',
           topicId: 'topic-1',
           transcript: 'USER: What is next?',
           userId: 'user-1',
@@ -226,39 +225,58 @@ describe('TopicAutoSummaryService', () => {
         result: analysis,
         topicId: 'topic-1',
       });
+      expect(mocks.generateObject).not.toHaveBeenCalled();
     });
 
-    it('keeps the summary when the analysis fails', async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-      mocks.analyzeTopic.mockRejectedValue(new Error('provider down'));
-      const service = new TopicAutoSummaryService(createDb(), 'user-1');
+    it('applies the same opt-in and visitor guards as the summary', async () => {
+      mocks.getUserSettings.mockResolvedValue({});
+      expect(await new TopicAutoSummaryService(createDb(), 'user-1').analyze('topic-1')).toEqual({
+        analyzed: false,
+        reason: 'disabled',
+      });
 
-      const result = await service.summarize('topic-1');
-
-      expect(result).toEqual({ analyzed: false, summarized: true });
-      expect(mocks.saveTopicAnalysis).not.toHaveBeenCalled();
-      expect(consoleError).toHaveBeenCalled();
-      consoleError.mockRestore();
-    });
-
-    it('records nothing when the analysis has no result', async () => {
-      mocks.analyzeTopic.mockResolvedValue(null);
-      const service = new TopicAutoSummaryService(createDb(), 'user-1');
-
-      const result = await service.summarize('topic-1');
-
-      expect(result).toEqual({ analyzed: false, summarized: true });
-      expect(mocks.saveTopicAnalysis).not.toHaveBeenCalled();
-    });
-
-    it('does not analyze a topic whose summary went stale', async () => {
-      mocks.updateSummaryIfCurrent.mockResolvedValue(false);
-      const service = new TopicAutoSummaryService(createDb(), 'user-1');
-
-      const result = await service.summarize('topic-1');
-
-      expect(result).toEqual({ reason: 'stale', summarized: false });
+      mocks.getUserSettings.mockResolvedValue({
+        systemAgent: { topicAutoSummary: { enabled: true } },
+      });
+      const visitorDb = createDb([[{ historySummary: null, senderId: 'visitor-9' }]]);
+      expect(await new TopicAutoSummaryService(visitorDb, 'creator-1').analyze('topic-1')).toEqual({
+        analyzed: false,
+        reason: 'disabled',
+      });
       expect(mocks.analyzeTopic).not.toHaveBeenCalled();
+    });
+
+    it('records nothing when the analysis has no usable result', async () => {
+      mocks.analyzeTopic.mockResolvedValue(null);
+
+      const result = await new TopicAutoSummaryService(createDb(), 'user-1').analyze('topic-1');
+
+      expect(result).toEqual({ analyzed: false, reason: 'invalid-output' });
+      expect(mocks.saveTopicAnalysis).not.toHaveBeenCalled();
+    });
+
+    it('reports a stale result when a newer analysis is already stored', async () => {
+      mocks.saveTopicAnalysis.mockResolvedValue(undefined);
+
+      const result = await new TopicAutoSummaryService(createDb(), 'user-1').analyze('topic-1');
+
+      expect(result).toEqual({ analyzed: false, reason: 'stale' });
+    });
+
+    it('skips device-only models and rethrows other failures for the step to retry', async () => {
+      mocks.analyzeTopic.mockRejectedValueOnce({
+        errorType: 'ClientLlmExecutorUnavailable',
+      });
+      expect(await new TopicAutoSummaryService(createDb(), 'user-1').analyze('topic-1')).toEqual({
+        analyzed: false,
+        reason: 'no-executor',
+      });
+
+      mocks.analyzeTopic.mockRejectedValueOnce(new Error('provider down'));
+      await expect(
+        new TopicAutoSummaryService(createDb(), 'user-1').analyze('topic-1'),
+      ).rejects.toThrow('provider down');
+      expect(mocks.saveTopicAnalysis).not.toHaveBeenCalled();
     });
   });
 });

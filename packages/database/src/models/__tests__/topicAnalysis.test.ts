@@ -90,6 +90,23 @@ describe('TopicAnalysisModel', () => {
     });
   });
 
+  it('never lets an analysis of older messages replace a newer one', async () => {
+    await personalModel.save({
+      lastMessageId: 'msg_2',
+      lastMessageUpdatedAt: new Date('2026-10-30T11:00:00Z'),
+      result: result({ category: 'research' }),
+      topicId,
+    });
+
+    const stale = await personalModel.save({ ...snapshot, result: result(), topicId });
+
+    expect(stale).toBeUndefined();
+    expect(await personalModel.findByTopic(topicId, 'v1')).toMatchObject({
+      category: 'research',
+      lastMessageId: 'msg_2',
+    });
+  });
+
   it('keeps one row per taxonomy version', async () => {
     await personalModel.save({ ...snapshot, result: result(), topicId });
     await personalModel.save({ ...snapshot, result: result({ taxonomyVersion: 'v2' }), topicId });
