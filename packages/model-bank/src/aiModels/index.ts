@@ -71,6 +71,7 @@ import { default as streamlake } from './streamlake';
 import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
+import { default as tensorix } from './tensorix';
 import { default as togetherai } from './togetherai';
 import { typeSafeModels as typesafe } from './typesafe';
 import { default as unsloth } from './unsloth';
@@ -185,6 +186,7 @@ const staticModelMap: ModelsMap = {
   supergrok,
   taichu,
   tencentcloud,
+  tensorix,
   togetherai,
   typesafe,
   unsloth,
@@ -305,6 +307,7 @@ export { default as streamlake } from './streamlake';
 export { default as supergrok } from './superGrok';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
+export { default as tensorix } from './tensorix';
 export { default as togetherai } from './togetherai';
 export { typeSafeModels as typesafe } from './typesafe';
 export { default as unsloth } from './unsloth';
