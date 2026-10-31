@@ -11,7 +11,11 @@ import { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
 import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
-import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
+import {
+  isBuiltinProvider,
+  isLinkOnlyProvider,
+  normalizeProviderId,
+} from '@/libs/better-auth/utils/client';
 import {
   buildOnboardingRedirectUrl,
   sanitizeRedirectPath,
@@ -394,7 +398,10 @@ export const useSignIn = () => {
     handleBackToEmail();
   };
 
-  const resolvedProviders = enableBusinessFeatures ? ssoProviders : oAuthSSOProviders;
+  // Link-only providers (e.g. X) are configured for account linking, never as a sign-in option.
+  const resolvedProviders = (enableBusinessFeatures ? ssoProviders : oAuthSSOProviders).filter(
+    (provider) => !isLinkOnlyProvider(provider),
+  );
   const sortedProviders = lastAuthProvider
     ? [...resolvedProviders].sort((a, b) => {
         if (a === lastAuthProvider) return -1;
