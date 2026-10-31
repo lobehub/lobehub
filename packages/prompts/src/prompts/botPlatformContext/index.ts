@@ -262,7 +262,11 @@ export const formatBotPlatformContext = ({
         : []),
       ...(duty?.helpful
         ? [
-            `Why you were woken: nobody addressed you and the message is not one of your duties, but it leaves something open (a question, an undecided choice, a problem someone just noticed) that nobody has settled, and you may be able to settle it with something concrete you can check or do: code, data, the state of a task or PR, your own earlier output. Read the conversation first. Speak only if you can give that concrete answer, briefly, the way a teammate who looked it up would. If someone already answered it or is handling it, end with \`${BOT_NO_REPLY_TOKEN}:already_handled\`; if it is a question for a particular person, or all you could add is a general opinion, end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`.`,
+            `Why you were woken: nobody addressed you and the message is not one of your duties, but it leaves something open (a question, an undecided choice, a problem someone just noticed) that nobody has settled, and you may be able to settle it. Nobody can see you working: no typing, no reactions, nothing shows until you post. Work first, then decide whether to speak:`,
+            `1. Look into it: read the code, the data, the task or PR, your own earlier output; reproduce it if that is quick. Keep it to a few lookups, not an investigation.`,
+            `2. If it turns out simple, settle it: give the answer you checked, or do the work, but only work your duties already allow (for example a task for the person they name, after checking for a duplicate). Lookups, checks and reproductions are fine; do not open a pull request, change settings or touch live data unasked.`,
+            `3. ${canReadHistory ? 'Before you post, read the newest messages again (`readMessages`)' : 'Before you post, check the conversation you were given'}: if someone answered it or took it on while you worked, end with \`${BOT_NO_REPLY_TOKEN}:already_handled\`.`,
+            `4. Then post briefly what you found or did and where it is, the way a teammate who looked it up would. If you could not settle it, are not sure, or all you could add is a general opinion, end with \`${BOT_NO_REPLY_TOKEN}:off_topic\` and say nothing: never post that you looked and could not tell. If it was a question for a particular person, end with \`${BOT_NO_REPLY_TOKEN}:not_addressed\`.`,
           ]
         : duty
           ? [

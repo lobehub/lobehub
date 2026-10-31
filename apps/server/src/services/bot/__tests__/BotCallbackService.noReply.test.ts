@@ -304,6 +304,14 @@ describe('BotCallbackService no_reply (queue mode)', () => {
       expect(mockTriggerTyping).not.toHaveBeenCalled();
     });
 
+    it('quiet followup: shows nothing while it works, not even once it acts', async () => {
+      await service.handleCallback(step({ quiet: true, wakeKind: 'followup' }));
+
+      expect(mockReplaceReaction).not.toHaveBeenCalled();
+      expect(mockTriggerTyping).not.toHaveBeenCalled();
+      expect(mockCreateMessage).not.toHaveBeenCalled();
+    });
+
     it('mention: step callbacks do not add the held-back feedback', async () => {
       await service.handleCallback(step({ wakeKind: 'mention' }));
 

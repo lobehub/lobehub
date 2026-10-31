@@ -138,6 +138,9 @@ export async function executeWithCallback(
     wakeKind = 'mention',
   } = opts;
   const deferFeedback = wakeKind === 'followup';
+  // A wake to settle an open question looks things up first and may still end in silence after
+  // several tool steps: nothing is shown, not even once it starts acting, until a reply goes out.
+  const quiet = deferFeedback && opts.duty?.helpful === true;
 
   // For platforms that can't read history at runtime, surface a compact
   // cross-session summary of this channel (recent topics, each with its last
@@ -351,6 +354,7 @@ export async function executeWithCallback(
     // The completion callback runs in another process (queue mode) and needs this to decide
     // whether an empty / `NO_REPLY` finish is silence or a fault, and to defer feedback.
     wakeKind,
+    ...(quiet && { quiet: true }),
     workspaceId: deps.workspaceId,
   };
 
@@ -401,7 +405,8 @@ export async function executeWithCallback(
     prompt,
     reactionMode,
     replyLocale,
-    showFeedback: deferFeedback ? showFeedback : undefined,
+    quiet,
+    showFeedback: deferFeedback && !quiet ? showFeedback : undefined,
     toolModeOverride,
     topicId,
     trigger,
