@@ -226,7 +226,7 @@ export class ChannelExecutionRepository {
     withChannelLock(this.db, channelId, (tx, channel) => claimJob(tx, channel, jobId, options));
 
   /**
-   * What a claimed job's run receives: only the triggering request. Reads
+   * What a claimed job's run receives: the request and its explicit quote. Reads
    * without the channel lock, since nothing at or before the cutoff changes after the claim.
    */
   input = async (channelId: string, jobId: string): Promise<ChannelContextMessage[]> => {
@@ -242,9 +242,15 @@ export class ChannelExecutionRepository {
       );
     if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
 
-    return readManifestMessages(this.db, channelId, job.manifest, {
+    const request = await readManifestMessages(this.db, channelId, job.manifest, {
       messageId: job.manifest.requestMessageId,
     });
+    const replyToId = request[0]?.replyToId;
+    if (!replyToId) return request;
+    const quoted = await readManifestMessages(this.db, channelId, job.manifest, {
+      messageId: replyToId,
+    });
+    return [...quoted, ...request];
   };
 
   /** The runtime took the input; only now may the job publish. */

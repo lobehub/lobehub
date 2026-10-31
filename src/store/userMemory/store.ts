@@ -16,6 +16,8 @@ import { type BaseAction } from './slices/base';
 import { createBaseSlice } from './slices/base';
 import { type ContextAction } from './slices/context';
 import { createContextSlice } from './slices/context';
+import { type ContextStoryAction } from './slices/contextStory';
+import { createContextStorySlice } from './slices/contextStory';
 import { type ExperienceAction } from './slices/experience';
 import { createExperienceSlice } from './slices/experience';
 import { type HomeAction } from './slices/home';
@@ -30,6 +32,7 @@ export type UserMemoryStore = UserMemoryStoreState &
   AgentMemoryAction &
   BaseAction &
   ContextAction &
+  ContextStoryAction &
   ExperienceAction &
   HomeAction &
   IdentityAction &
@@ -40,6 +43,7 @@ type UserMemoryStoreAction = ActivityAction &
   AgentMemoryAction &
   BaseAction &
   ContextAction &
+  ContextStoryAction &
   ExperienceAction &
   HomeAction &
   IdentityAction &
@@ -61,6 +65,7 @@ const createStore: StateCreator<UserMemoryStore, [['zustand/devtools', never]]> 
     createAgentMemorySlice(set, get, store),
     createBaseSlice(set, get, store),
     createContextSlice(set, get, store),
+    createContextStorySlice(set, get, store),
     createExperienceSlice(set, get, store),
     createHomeSlice(set, get, store),
     createIdentitySlice(set, get, store),

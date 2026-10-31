@@ -203,6 +203,10 @@ class GoalService {
   setTaskAgent = async (id: string, agentId: string | null) =>
     lambdaClient.goal.setTaskAgent.mutate({ agentId, id });
 
+  /** Make a workspace goal private or public; its own Tasks follow. */
+  setVisibility = async (id: string, visibility: 'private' | 'public') =>
+    lambdaClient.goal.setVisibility.mutate({ id, visibility });
+
   /** The model the goal agent plans with; `null` falls back to the agent's own. */
   setModel = async (id: string, modelConfig: { model: string; provider: string } | null) =>
     lambdaClient.goal.setModel.mutate({ id, modelConfig });

@@ -8,6 +8,8 @@ import type {
   BrowserControlResult,
   BrowserControlScreenshotResult,
   BrowserControlScrollParams,
+  BrowserControlSetViewportParams,
+  BrowserControlSetViewportResult,
   BrowserControlSnapshotResult,
   BrowserControlWaitForParams,
   BrowserGatewayToolResultParams,
@@ -54,6 +56,11 @@ class ElectronBrowserControlService {
   scroll(params: BrowserControlScrollParams): Promise<BrowserControlResult> {
     browserWebviewRegistry.touch(params.sessionId);
     return this.ipc.browserControl.scroll(params);
+  }
+
+  setViewport(params: BrowserControlSetViewportParams): Promise<BrowserControlSetViewportResult> {
+    browserWebviewRegistry.touch(params.sessionId);
+    return this.ipc.browserControl.setViewport(params);
   }
 
   snapshot(params: BrowserControlParams): Promise<BrowserControlSnapshotResult> {

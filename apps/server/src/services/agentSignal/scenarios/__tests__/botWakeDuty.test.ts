@@ -27,7 +27,7 @@ const rules = (threshold = 0.7, duties: string | undefined = DUTIES) =>
     [K.customInstructions]: 'Leave release chatter alone.',
     [K.duties]: duties,
     [K.dutiesThreshold]: threshold,
-    [K.enabled]: true,
+    [K.disabled]: false,
   }).rules;
 
 const judgeScoring = (inDuty: number, duty = '评估需求') =>
@@ -75,7 +75,7 @@ describe('duty policy', () => {
   it('defaults to 0.65 and takes the threshold from the settings', async () => {
     const at = (score: number) =>
       createDutyPolicy(
-        parseBotWakeSettings({ [K.duties]: DUTIES, [K.enabled]: true }).rules,
+        parseBotWakeSettings({ [K.duties]: DUTIES, [K.disabled]: false }).rules,
         judgeScoring(score),
       ).evaluate({ signal: signal(), state: {} });
 
