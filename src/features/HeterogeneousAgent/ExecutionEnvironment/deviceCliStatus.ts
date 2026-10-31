@@ -1,4 +1,5 @@
 import type { HeterogeneousAgentScanMap } from '@lobechat/heterogeneous-agents';
+import { coerce, gt } from 'semver';
 
 import type { getBoundDevicePresence } from './boundDevicePresence';
 
@@ -53,10 +54,26 @@ export const resolveDeviceCliState = ({
 };
 
 /**
- * Install commands that can run on the device's OS. Homebrew is offered as the
- * macOS alternative, so it is dropped for a known non-macOS device.
+ * The newer release a device's CLI can move to, or `undefined` when it is
+ * already current or either version cannot be read. Coerced so a version
+ * string with a suffix (`2.1.0 (Claude Code)`) still compares.
  */
-export const getDeviceInstallCommands = (
+export const getNewerAgentCliVersion = (
+  current: string | undefined,
+  latest: string | null | undefined,
+): string | undefined => {
+  const currentVersion = current ? coerce(current, { includePrerelease: true }) : null;
+  const latestVersion = latest ? coerce(latest, { includePrerelease: true }) : null;
+  if (!currentVersion || !latestVersion) return undefined;
+  return gt(latestVersion, currentVersion) ? latestVersion.version : undefined;
+};
+
+/**
+ * Install or update commands that can run on the device's OS. Homebrew is
+ * offered as the macOS alternative, so it is dropped for a known non-macOS
+ * device.
+ */
+export const getDeviceCommands = (
   commands: readonly string[],
   platform: string | null | undefined,
 ): string[] =>

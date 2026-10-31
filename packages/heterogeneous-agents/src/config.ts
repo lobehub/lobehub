@@ -2,6 +2,7 @@ import type {
   HeterogeneousAgentDescriptor,
   HeterogeneousAgentMenuLabelKey,
   HeterogeneousAgentType,
+  HeterogeneousAgentUpdateDescriptor,
   LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
   LocalRuntimeHeterogeneousAgentDescriptor,
@@ -20,6 +21,7 @@ export type {
   HeterogeneousAgentDescriptor,
   HeterogeneousAgentMenuLabelKey,
   HeterogeneousAgentType,
+  HeterogeneousAgentUpdateDescriptor,
   LocalHeterogeneousAgentDescriptor,
   LocalHeterogeneousAgentType,
   LocalRuntimeHeterogeneousAgentDescriptor,
@@ -66,6 +68,14 @@ export const getHeterogeneousAgentConfigOrThrow = (
   const config = getHeterogeneousAgentConfig(type);
   if (!config) throw new Error(`Unknown local heterogeneous agent type: "${type}"`);
   return config;
+};
+
+/** How an agent's CLI updates, or `undefined` when it offers no update. */
+export const getHeterogeneousAgentUpdate = (
+  type: string,
+): HeterogeneousAgentUpdateDescriptor | undefined => {
+  const config = getHeterogeneousAgentConfig(type);
+  return config && 'update' in config ? config.update : undefined;
 };
 
 export const resolveHeterogeneousAgentCommand = (type: string, command?: string): string => {

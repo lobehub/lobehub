@@ -1,10 +1,12 @@
 import {
+  getHeterogeneousAgentUpdate,
   type HeterogeneousAgentScanMap,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from '@lobechat/heterogeneous-agents';
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
+import { agentCliRelease } from '@/server/services/agentCliRelease';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { deviceProcedure } from './procedures';
@@ -68,6 +70,19 @@ export const agentsRouter = router({
       } catch {
         return { available: false, reason: 'Invalid response from device' };
       }
+    }),
+  /**
+   * Newest release of an agent CLI, so a device card can tell its CLI is
+   * behind. Not device-scoped: one registry read serves every device. `null`
+   * when the agent offers no update or the release cannot be read.
+   */
+  getAgentCliLatestVersion: deviceProcedure
+    .input(z.object({ agentType: z.string() }))
+    .query(async ({ input }): Promise<{ latestVersion: string | null }> => {
+      const update = getHeterogeneousAgentUpdate(input.agentType);
+      return {
+        latestVersion: update ? await agentCliRelease.getLatestVersion(update.npmPackage) : null,
+      };
     }),
   /**
    * Scan the given device for every known heterogeneous agent type in one
