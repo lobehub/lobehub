@@ -1,5 +1,14 @@
 import { z } from 'zod';
 
+/**
+ * Transport backstop for document markdown, in UTF-16 code units. The plan limit
+ * is enforced in the service; this only bounds what the router will parse.
+ */
+export const DOCUMENT_CONTENT_MAX_LENGTH = 10_000_000;
+
+/** Transport backstop for serialized editor state, which is larger than its markdown. */
+export const DOCUMENT_EDITOR_DATA_MAX_LENGTH = 50_000_000;
+
 export const documentHistorySaveSourceSchema = z.enum([
   'autosave',
   'manual',
@@ -37,8 +46,8 @@ export const compareDocumentHistoryItemsInputSchema = z.object({
 
 export const updateDocumentInputSchema = z.object({
   breakAutosaveWindow: z.boolean().optional(),
-  content: z.string().optional(),
-  editorData: z.string().optional(),
+  content: z.string().max(DOCUMENT_CONTENT_MAX_LENGTH).optional(),
+  editorData: z.string().max(DOCUMENT_EDITOR_DATA_MAX_LENGTH).optional(),
   /**
    * Optimistic-concurrency predicate: when set, the save succeeds only if the
    * stored row's `updatedAt` still equals this value (compared atomically
@@ -59,7 +68,7 @@ export const updateDocumentInputSchema = z.object({
 
 export const saveDocumentHistoryInputSchema = z.object({
   documentId: z.string(),
-  editorData: z.string(),
+  editorData: z.string().max(DOCUMENT_EDITOR_DATA_MAX_LENGTH),
   lockOwnerId: z.string().optional(),
   saveSource: documentHistorySaveSourceSchema,
 });

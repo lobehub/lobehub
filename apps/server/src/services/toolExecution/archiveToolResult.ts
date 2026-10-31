@@ -172,7 +172,11 @@ export const archiveToolResultIfNeeded = async ({
         path: string,
         outcome: ArchiveHandle['outcome'],
       ): Promise<ArchiveHandle> => {
-        const stats = await vfsService.write(path, content, ctx, { contentFormat: 'raw' });
+        const stats = await vfsService.write(path, content, ctx, {
+          contentFormat: 'raw',
+          // Archiving a tool result is not a user or agent authored write.
+          source: 'system',
+        });
         const persisted = await vfsService.read(path, ctx);
 
         // Never tell the model that a full result exists unless the VFS can return it losslessly.

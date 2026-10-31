@@ -1,3 +1,5 @@
+import type { DocumentWriteSource } from '@lobechat/types';
+
 import type { AgentAccess } from '@/database/models/agentDocuments';
 
 /**
@@ -206,6 +208,11 @@ export interface AgentDocumentWriteOptions {
    */
   contentFormat?: 'markdown' | 'raw';
   createMode?: 'always-new' | 'if-missing' | 'must-exist';
+  /**
+   * Who asked for the write, for the per-document character limit. Defaults to
+   * `user` (the CLI and API); copies and the tool-result archive pass `system`.
+   */
+  source?: DocumentWriteSource;
 }
 
 export interface AgentDocumentMkdirOptions {

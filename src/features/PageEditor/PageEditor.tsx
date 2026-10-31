@@ -14,6 +14,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
+import CharLimitBanner from './CharLimitBanner';
 import { usePageCollabEligible, usePageCollabEnabled } from './collab/usePageCollab';
 import DocumentComments from './DocumentComments';
 import BlockCommentMarker from './DocumentComments/BlockCommentMarker';
@@ -388,6 +389,8 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
               {/* Prominent in-body notice when another member holds the lock; the
                   compact status badge lives in the Header (EditingIndicator). */}
               <LockedAlert />
+              {/* Plan page-size limit: refused-save notice and near-limit warning. */}
+              <CharLimitBanner />
               <EditorCanvas askCopilotTarget={askCopilotTarget} />
               <BlockCommentMarker hostRef={editorContentRef} />
               {documentId && <DocumentLikes documentId={documentId} key={documentId} />}

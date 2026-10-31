@@ -36,7 +36,12 @@ vi.mock('../dbSession', () => ({
   },
 }));
 
-const writer = { saveSource: 'llm_call' as const, userId: 'u2', workspaceId: 'ws_1' };
+const writer = {
+  saveSource: 'llm_call' as const,
+  userId: 'u2',
+  workspaceId: 'ws_1',
+  writeSource: 'agent' as const,
+};
 
 describe('createPageSessions', () => {
   beforeEach(() => {

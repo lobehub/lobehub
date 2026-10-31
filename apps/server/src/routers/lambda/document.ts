@@ -43,6 +43,8 @@ import {
 import { resolveRootOperation } from './_helpers/runProvenance';
 import {
   compareDocumentHistoryItemsInputSchema,
+  DOCUMENT_CONTENT_MAX_LENGTH,
+  DOCUMENT_EDITOR_DATA_MAX_LENGTH,
   getDocumentHistoryItemInputSchema,
   listDocumentHistoryInputSchema,
   saveDocumentHistoryInputSchema,
@@ -203,8 +205,8 @@ export const documentRouter = router({
     .use(withScopedPermission('document:create'))
     .input(
       z.object({
-        content: z.string().optional(),
-        editorData: z.string().optional(),
+        content: z.string().max(DOCUMENT_CONTENT_MAX_LENGTH).optional(),
+        editorData: z.string().max(DOCUMENT_EDITOR_DATA_MAX_LENGTH).optional(),
         fileType: z.string().optional(),
         knowledgeBaseId: z.string().optional(),
         metadata: z.record(z.string(), z.any()).optional(),
@@ -266,8 +268,8 @@ export const documentRouter = router({
       z.object({
         documents: z.array(
           z.object({
-            content: z.string().optional(),
-            editorData: z.string().optional(),
+            content: z.string().max(DOCUMENT_CONTENT_MAX_LENGTH).optional(),
+            editorData: z.string().max(DOCUMENT_EDITOR_DATA_MAX_LENGTH).optional(),
             fileType: z.string().optional(),
             knowledgeBaseId: z.string().optional(),
             metadata: z.record(z.string(), z.any()).optional(),
@@ -469,6 +471,7 @@ export const documentRouter = router({
         saveSource: input.saveSource,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
+        writeSource: 'user',
       });
       return { recorded };
     }),

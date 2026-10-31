@@ -1,3 +1,5 @@
+import type { DocumentWriteSource } from '@lobechat/types';
+
 import type { AgentDocumentModel } from '@/database/models/agentDocuments';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -26,12 +28,13 @@ export const writeSnapshotThroughRoom = (
   writer: AgentDocumentBodyWriter,
   documentId: string,
   snapshot: BodySnapshot,
+  writeSource: DocumentWriteSource = 'agent',
 ) =>
   writePageBodyThroughRoom(
     writer.db,
     documentId,
     { editorData: snapshot.editorData, markdown: snapshot.content },
-    { saveSource: 'llm_call', userId: writer.userId, workspaceId: writer.workspaceId },
+    { saveSource: 'llm_call', userId: writer.userId, workspaceId: writer.workspaceId, writeSource },
   );
 
 /**
@@ -47,9 +50,18 @@ export const writeAgentDocumentBody = async (
     /** The pre-edit state, when the stored one is stale (it forced a Markdown recovery). */
     previousEditorData?: Record<string, any>;
     recordHistory?: boolean;
+    /**
+     * Runs before the row write, only when there is no live room: a room checks
+     * the character limit against its own body, which may be ahead of the row.
+     */
+    beforeRowWrite?: () => Promise<void>;
+    /** Who asked for the write, for the room's character-limit check; defaults to `agent`. */
+    writeSource?: DocumentWriteSource;
   } = {},
 ) => {
-  if (await writeSnapshotThroughRoom(writer, target.documentId, snapshot)) return;
+  if (await writeSnapshotThroughRoom(writer, target.documentId, snapshot, options.writeSource))
+    return;
+  await options.beforeRowWrite?.();
 
   if (options.recordHistory !== false) {
     const { documentService } = writer;

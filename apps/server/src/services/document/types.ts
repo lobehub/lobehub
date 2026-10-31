@@ -1,3 +1,5 @@
+import type { DocumentWriteSource } from '@lobechat/types';
+
 import type { LobeChatDatabase, Transaction } from '@/database/type';
 
 export type DocumentHistorySaveSource = 'autosave' | 'manual' | 'restore' | 'system' | 'llm_call';
@@ -87,6 +89,12 @@ export interface UpdateDocumentParams {
   restoreFromHistoryId?: string;
   saveSource?: DocumentHistorySaveSource;
   title?: string;
+  /**
+   * Who asked for the write; decides whether the per-document character limit
+   * applies. Defaults to `user`. Restores, rollbacks and other writes the user
+   * did not type pass `system`.
+   */
+  writeSource?: DocumentWriteSource;
 }
 
 export interface UpdateDocumentResult {

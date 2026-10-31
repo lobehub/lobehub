@@ -69,6 +69,7 @@ export class DbPageSessions implements PageSessions {
             expectedUpdatedAt: row.updatedAt,
             history: historyAttributionOf(this.writer),
             saveSource: this.writer.saveSource,
+            writeSource: this.writer.writeSource,
           });
         } catch (error) {
           throw toPageChangedError(error) ?? error;

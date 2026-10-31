@@ -37,7 +37,12 @@ export const writeGoalReportPage = async (
     const previous = await new DocumentModel(db, userId, workspaceId).findById(previousPageId);
     if (previous?.fileType === HTML_DOCUMENT_FILE_TYPE) {
       const updated = await documentService
-        .updateDocument(previousPageId, { content: html, saveSource: 'llm_call', title })
+        .updateDocument(previousPageId, {
+          content: html,
+          saveSource: 'llm_call',
+          title,
+          writeSource: 'system',
+        })
         .then(() => true)
         .catch((error) => {
           console.warn('[GoalReportPage] could not rewrite the previous page:', error);
@@ -51,6 +56,7 @@ export const writeGoalReportPage = async (
     content: html,
     fileType: HTML_DOCUMENT_FILE_TYPE,
     title,
+    writeSource: 'system',
     ...(workspaceId ? { visibility: 'public' as const } : {}),
   });
   if (workspaceId && page.visibility !== 'private') {

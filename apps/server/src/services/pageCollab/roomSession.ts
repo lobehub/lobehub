@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import type { LobeChatDatabase } from '@/database/type';
 import { DocumentService } from '@/server/services/document';
 import type { DocumentHistorySaveSource } from '@/server/services/document/types';
+import { assertDocumentWriteWithinLimit } from '@/server/services/document/writeLimit';
 
 import { editorDataFromRow } from './editorData';
 import { openPageFork, PAGE_META_KEY, type PageFork, readPageTitle } from './fork';
@@ -78,11 +79,22 @@ export class RoomPageSessions implements PageSessions {
   ): Promise<RoomPageSession> {
     const fork = await openPageFork(state.update);
     const title = readPageTitle(fork.doc) ?? (await this.getStoredTitle(documentId));
+    // Length when the session opened, so a commit that does not grow the page passes.
+    const initialCharCount =
+      this.writer.writeSource === 'system' ? 0 : fork.editor.export().markdown.length;
     const actor = `${this.writer.saveSource === 'llm_call' ? 'agent' : 'external'}:${this.writer.userId}`;
 
     return {
       commit: async () => {
         if (!fork.hasChanges()) return false;
+        // Refuse before anything reaches the room, so a refused write leaves no partial state.
+        await assertDocumentWriteWithinLimit({
+          charCount: fork.editor.export().markdown.length,
+          previousCharCount: initialCharCount,
+          source: this.writer.writeSource,
+          userId: this.writer.userId,
+          workspaceId: this.writer.workspaceId,
+        });
         await room.pushUpdate(documentId, fork.diff(), { actor });
         await this.persist(documentId, fork);
         return true;
