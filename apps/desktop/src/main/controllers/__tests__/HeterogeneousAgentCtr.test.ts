@@ -2195,6 +2195,50 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
+    it('forwards the selected Devin session mode to the ACP session', async () => {
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send: vi.fn() },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'devin',
+        command: 'devin',
+        permissionMode: 'plan',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-devin-mode', prompt: 'work', sessionId });
+
+      expect(devinAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({ permissionMode: 'plan' }),
+      );
+    });
+
+    it('leaves the Devin session mode unset when none was selected', async () => {
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send: vi.fn() },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'devin', command: 'devin' });
+
+      await ctr.sendPrompt({ operationId: 'op-devin-mode', prompt: 'work', sessionId });
+
+      expect(devinAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({ permissionMode: undefined }),
+      );
+    });
+
     it('forwards Devin permission choices through the intervention bridge', async () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([

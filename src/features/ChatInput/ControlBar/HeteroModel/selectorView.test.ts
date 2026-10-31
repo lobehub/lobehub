@@ -53,6 +53,7 @@ describe('resolveSelectorShape', () => {
   it('gives a catalog provider with another dimension the full menu', () => {
     expect(resolveSelectorShape({ type: 'codebuddy' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
+    expect(resolveSelectorShape({ type: 'devin' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'qoder' }, true).kind).toBe('menu');
   });
 
@@ -102,6 +103,32 @@ describe('dimensions per provider', () => {
       'medium',
       'high',
       'ultra',
+    ]);
+  });
+
+  it('offers the Devin session modes beside its catalog model picker', () => {
+    const view = viewOf({ mode: 'ask', type: 'devin' });
+
+    expect(view.isCatalogModel).toBe(true);
+    const mode = view.dimensions.find((dimension) => dimension.key === 'mode');
+    expect(mode).toMatchObject({
+      current: 'ask',
+      label: 'heteroAgent.modelSelector.mode.label',
+      valueLabel: 'heteroAgent.modelSelector.mode.ask',
+    });
+    expect(mode?.options.map((option) => option.value)).toEqual([
+      'default',
+      'accept-edits',
+      'ask',
+      'plan',
+      'bypass',
+    ]);
+    expect(mode?.options.map((option) => option.label)).toEqual([
+      'heteroAgent.modelSelector.default',
+      'heteroAgent.modelSelector.mode.acceptEdits',
+      'heteroAgent.modelSelector.mode.ask',
+      'heteroAgent.modelSelector.mode.plan',
+      'heteroAgent.modelSelector.mode.bypass',
     ]);
   });
 

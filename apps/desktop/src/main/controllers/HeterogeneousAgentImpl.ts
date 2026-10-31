@@ -115,6 +115,7 @@ import {
   resolveHeteroSpawnCwd,
 } from '@lobechat/heterogeneous-agents/workingDirectory';
 import type {
+  DevinSessionMode,
   HeterogeneousAgentModelCatalog,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
@@ -301,6 +302,8 @@ interface StartSessionParams {
   env?: Record<string, string>;
   /** Protocol-native model selected after session setup (TRAE ACP only). */
   initialModel?: string;
+  /** Devin ACP session mode, applied via `session/set_config_option` (Devin only). */
+  permissionMode?: DevinSessionMode;
   /** Credential-free LobeHub Provider reference. Desktop main resolves its secrets. */
   providerBinding?: HeterogeneousProviderBindingReference;
   /** Session ID to resume (for multi-turn) */
@@ -1626,6 +1629,7 @@ export default class HeterogeneousAgentCtr {
           ? params.providerBinding.apiConfig
           : undefined,
       model,
+      permissionMode: params.permissionMode,
       sessionId,
       resumeSessionId,
       useClaudeCodeSdk: params.useClaudeCodeSdk,
@@ -2554,6 +2558,7 @@ export default class HeterogeneousAgentCtr {
         return this.appendCliTraceFile(traceSession, 'stderr.log', data);
       },
       operationId: params.operationId,
+      permissionMode: session.permissionMode,
       prompt,
       resumeSessionId: session.agentSessionId,
       sessionId: session.sessionId,

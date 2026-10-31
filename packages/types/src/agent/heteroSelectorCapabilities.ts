@@ -22,7 +22,23 @@ export const AMP_AGENT_MODES = ['low', 'medium', 'high', 'ultra'] as const;
 
 export type AmpAgentMode = (typeof AMP_AGENT_MODES)[number];
 
-export type HeterogeneousAgentMode = AmpAgentMode | HeterogeneousAgentDefaultSelection;
+/**
+ * Devin ACP session modes, mirrored 1:1 with the `mode` config option the
+ * `session/new` response advertises. Applied after session setup via
+ * `session/set_config_option`, never through argv — Devin's global
+ * `--permission-mode` flag is a different enum
+ * (`normal|accept-edits|smart|dangerous|autonomous`) and must not be confused
+ * with these values.
+ */
+export const DEVIN_SESSION_MODES = ['accept-edits', 'ask', 'plan', 'bypass'] as const;
+
+export type DevinSessionMode = (typeof DEVIN_SESSION_MODES)[number];
+
+export type HeterogeneousAgentMode =
+  AmpAgentMode | DevinSessionMode | HeterogeneousAgentDefaultSelection;
+
+/** The concrete (non-default) modes a provider's selector may offer. */
+export type HeterogeneousAgentModeLevel = AmpAgentMode | DevinSessionMode;
 
 /**
  * Claude Code reasoning-effort levels, mirrored 1:1 with the CLI's
@@ -135,6 +151,9 @@ const CODEX_FAST_SERVICE_TIER_VALUES = ['fast', 'priority'] as const;
 export const isAmpAgentMode = (value: string | undefined): value is AmpAgentMode =>
   !!value && AMP_AGENT_MODES.includes(value as AmpAgentMode);
 
+export const isDevinSessionMode = (value: string | undefined): value is DevinSessionMode =>
+  !!value && DEVIN_SESSION_MODES.includes(value as DevinSessionMode);
+
 export const isClaudeCodeReasoningEffort = (
   value: string | undefined,
 ): value is ClaudeCodeReasoningEffort =>
@@ -207,6 +226,20 @@ export const resolveAmpAgentMode = (
 ): HeterogeneousAgentMode => {
   const mode = (getCliFlagValue(source?.args, '--mode') ?? source?.mode)?.trim();
   return isAmpAgentMode(mode) ? mode : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+};
+
+/**
+ * Devin's session mode lives only in the persisted `mode` field and reaches
+ * the agent through `session/set_config_option`. `args` is deliberately not
+ * consulted: the spellable flag there is the global `--permission-mode`,
+ * whose enum differs from the ACP session modes, so reading it back would
+ * surface a CLI-level choice as a session-mode pick.
+ */
+export const resolveDevinSessionMode = (
+  source: HeteroSelectionSource | null | undefined,
+): HeterogeneousAgentMode => {
+  const mode = source?.mode?.trim();
+  return isDevinSessionMode(mode) ? mode : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
 };
 
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
@@ -329,7 +362,7 @@ export interface HeteroSelectorSpeedCapability {
 
 export interface HeteroSelectorModeCapability {
   encodings: readonly HeteroCliEncoding[];
-  levels: readonly AmpAgentMode[];
+  levels: readonly HeterogeneousAgentModeLevel[];
   resolve: (source: HeteroSelectionSource | null | undefined) => HeterogeneousAgentMode;
 }
 
@@ -411,6 +444,14 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
   },
   'devin': {
+    mode: {
+      // Protocol-native: the pick is applied through
+      // `session/set_config_option` once the ACP session exists, so there is
+      // no argv spelling to clear or read back.
+      encodings: [],
+      levels: DEVIN_SESSION_MODES,
+      resolve: resolveDevinSessionMode,
+    },
     model: {
       encodings: [{ flags: ['--model'], kind: 'flag' }],
       resolve: resolvePersistedModel,

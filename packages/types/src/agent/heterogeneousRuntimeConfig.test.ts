@@ -131,6 +131,17 @@ describe('resolveHeterogeneousRuntimeConfig', () => {
     });
   });
 
+  it('reports the Devin session mode beside its catalog model', () => {
+    expect(resolveHeterogeneousRuntimeConfig({ mode: 'plan', type: 'devin' })).toEqual([
+      { key: 'runtime', source: 'agent', value: 'devin' },
+      { key: 'model', source: 'runtime', value: 'default' },
+      { key: 'mode', source: 'agent', value: 'plan' },
+    ]);
+    expect(
+      resolveHeterogeneousRuntimeConfig({ type: 'devin' }).find((field) => field.key === 'mode'),
+    ).toEqual({ key: 'mode', source: 'runtime', value: 'default' });
+  });
+
   it('does not invent values for device-resolved defaults', () => {
     expect(resolveHeterogeneousRuntimeConfig({ type: 'codex' }).slice(1)).toEqual([
       { key: 'model', source: 'runtime', value: 'default' },

@@ -35,6 +35,7 @@ import {
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { isDevinSessionMode } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
@@ -206,7 +207,7 @@ interface ExecOptions {
   effort?: string;
   image?: string[];
   inputJson?: string;
-  /** Amp agent mode, forwarded as the native `--mode` flag. */
+  /** Amp agent mode (native `--mode` flag) or Devin ACP session mode. */
   mode?: string;
   model?: string;
   operationId?: string;
@@ -1251,10 +1252,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
     pathEnv: resolvedCommand.pathEnv,
     topicId: options.topic,
   });
-  // Devin ACP's `--permission-mode` is a global flag; default to bypass so
-  // headless connected-device runs do not block on permission prompts. The mode
-  // response must not overwrite the model selected by `initialModel`.
-  const permissionMode = options.type === 'devin' ? 'bypass' : undefined;
+  // Devin's ACP session mode reaches the agent via `session/set_config_option`,
+  // so it arrives through the wrapper's `--mode` option rather than agent args.
+  // Default to bypass so headless connected-device runs do not block on
+  // permission prompts; an unrecognised value falls back to bypass for the
+  // same reason. The mode response must not overwrite the model selected by
+  // `initialModel`.
+  const permissionMode =
+    options.type === 'devin'
+      ? isDevinSessionMode(options.mode)
+        ? options.mode
+        : 'bypass'
+      : undefined;
 
   const spawnOptions = {
     agentType: options.type,
@@ -1441,7 +1450,10 @@ export function registerHeteroCommand(program: Command) {
     .option('--codex-app-server', 'Run Codex through its native app-server protocol')
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
-    .option('--mode <mode>', 'Forward a resolved Amp agent mode selection to the agent CLI')
+    .option(
+      '--mode <mode>',
+      'Forward a resolved mode selection: Amp agent mode for amp, ACP session mode for devin',
+    )
     .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
     .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
     .option(

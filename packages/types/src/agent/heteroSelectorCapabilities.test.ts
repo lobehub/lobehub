@@ -44,6 +44,13 @@ describe('selector availability', () => {
     expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('droid')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('devin')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('devin')?.mode?.levels).toEqual([
+      'accept-edits',
+      'ask',
+      'plan',
+      'bypass',
+    ]);
+    expect(getHeteroSelectorCapability('devin')?.mode?.encodings).toEqual([]);
     expect(getHeteroSelectorCapability('grok-build')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('kimi-code')?.model?.source).toBe('catalog');
     expect(getHeteroSelectorCapability('grok-build')?.effort?.levels('grok-4.6')).toEqual([
@@ -172,6 +179,35 @@ describe('applyHeteroSelection', () => {
       'plan',
       '--model',
       'claude-sonnet-4-6-thinking',
+    ]);
+  });
+
+  it('resolves the Devin session mode only from the persisted field', () => {
+    const resolve = getHeteroSelectorCapability('devin')!.mode!.resolve;
+
+    // The global `--permission-mode` flag accepts a different enum
+    // (normal|smart|dangerous|autonomous), so it must not be read back as the
+    // ACP session mode — not even `accept-edits`, which appears in both.
+    expect(resolve({ args: ['--permission-mode', 'dangerous'] })).toBe('default');
+    expect(resolve({ args: ['--permission-mode=normal'], mode: 'plan' })).toBe('plan');
+    expect(resolve({ mode: 'accept-edits' })).toBe('accept-edits');
+    expect(resolve({ mode: 'high' })).toBe('default');
+    expect(resolve(undefined)).toBe('default');
+  });
+
+  it('keeps user-authored Devin args when picking a session mode', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--permission-mode', 'dangerous'],
+      type: 'devin',
+    };
+    const patch = applyHeteroSelection(provider, { mode: 'ask' });
+
+    // The mode has no argv spelling to clear — the global flag stays because
+    // it controls CLI-level permissions, not the ACP session mode.
+    expect(patch).toEqual({ args: ['--permission-mode', 'dangerous'], mode: 'ask' });
+    expect(buildHeteroSpawnArgs({ ...provider, ...patch })).toEqual([
+      '--permission-mode',
+      'dangerous',
     ]);
   });
 

@@ -2465,6 +2465,44 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
     });
 
+    it('should pass the Devin session mode through ACP, never through native args', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      await executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        heterogeneousProvider: {
+          args: ['--agent-type', 'coding'],
+          command: 'devin',
+          mode: 'plan',
+          type: 'devin' as const,
+        },
+      });
+
+      const params = mockStartSession.mock.calls.at(-1)?.[0];
+      expect(params).toEqual(
+        expect.objectContaining({ agentType: 'devin', permissionMode: 'plan' }),
+      );
+      expect(params.args).toEqual(['--agent-type', 'coding']);
+    });
+
+    it('should leave the Devin session mode unset on Default or foreign values', async () => {
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+
+      for (const mode of ['default', 'high'] as const) {
+        await executeHeterogeneousAgent(get, {
+          ...defaultParams,
+          heterogeneousProvider: { command: 'devin', mode, type: 'devin' as const },
+        });
+      }
+
+      for (const [params] of mockStartSession.mock.calls.slice(-2)) {
+        expect(params.agentType).toBe('devin');
+        expect(params.permissionMode).toBeUndefined();
+      }
+    });
+
     it('should execute a persisted legacy provider config without type', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);

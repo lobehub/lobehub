@@ -44,6 +44,7 @@ import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+  isDevinSessionMode,
   normalizeHeterogeneousProviderConfig,
   ThreadStatus,
   ThreadType,
@@ -1958,6 +1959,14 @@ export const executeHeterogeneousAgent = async (
         heterogeneousProvider.model &&
         heterogeneousProvider.model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION
           ? heterogeneousProvider.model
+          : undefined,
+      // Devin's session mode reaches the agent through ACP
+      // `session/set_config_option`, not argv — it rides the same IPC channel
+      // as `initialModel`. Only the ACP-session enum counts here; an Amp-style
+      // value persisted on a recycled config is dropped rather than forwarded.
+      permissionMode:
+        adapterType === 'devin' && isDevinSessionMode(heterogeneousProvider.mode)
+          ? heterogeneousProvider.mode
           : undefined,
       providerBinding,
       resumeSessionId,

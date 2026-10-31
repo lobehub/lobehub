@@ -784,6 +784,33 @@ describe('hetero exec command', () => {
     );
   });
 
+  it('maps the wrapper --mode to the Devin ACP session mode instead of agent args', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    await runCmd(['hetero', 'exec', '--type', 'devin', '--prompt', 'hi', '--mode', 'plan']);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'devin',
+        // A session mode is applied via `session/set_config_option`, not argv.
+        extraArgs: [],
+        permissionMode: 'plan',
+      }),
+    );
+  });
+
+  it('keeps the bypass default when the Devin --mode value is not a session mode', async () => {
+    mockSpawnAgent.mockReturnValue(createFakeHandle());
+
+    // An Amp-style value is not a valid Devin ACP session mode; headless runs
+    // must still default to bypass rather than block on permission prompts.
+    await runCmd(['hetero', 'exec', '--type', 'devin', '--prompt', 'hi', '--mode', 'high']);
+
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agentType: 'devin', permissionMode: 'bypass' }),
+    );
+  });
+
   it('runs TRAE Enterprise with ACP model selection and only native provider arguments', async () => {
     mockResolveHeteroSpawnCommand.mockResolvedValue({ command: 'traecli' });
     mockSpawnAgent.mockReturnValue(createFakeHandle());

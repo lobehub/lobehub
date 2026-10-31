@@ -499,13 +499,39 @@ describe('DevinAcpSession', () => {
     expect(options.onSessionId).toHaveBeenCalledWith('devin-session-1');
   });
 
-  it('lets a user-supplied --permission-mode in args override the default', async () => {
+  it('keeps a user-supplied --permission-mode on argv without feeding the session mode', async () => {
     const fake = createAcpProcess();
     spawnMock.mockReturnValue(fake.child);
     vi.spyOn(process, 'kill').mockImplementation(() => true);
     const options = createSessionOptions({
       args: ['--permission-mode', 'dangerous', '--model', 'sonnet'],
-      permissionMode: 'bypass',
+    });
+
+    await new DevinAcpSession(options).run();
+
+    // The global CLI flag is a different enum (normal|smart|dangerous|…) from
+    // the ACP session mode — it is hoisted before `acp` but must never be sent
+    // as `configId: 'mode'`.
+    expect(spawnMock).toHaveBeenCalledWith(
+      'devin',
+      ['--permission-mode', 'dangerous', 'acp', '--model', 'sonnet'],
+      expect.objectContaining({ cwd: '/workspace', stdio: ['pipe', 'pipe', 'pipe'] }),
+    );
+    expect(
+      fake.requests.some(
+        ({ method, params }) =>
+          method === 'session/set_config_option' && params?.configId === 'mode',
+      ),
+    ).toBe(false);
+  });
+
+  it('prefers the explicit permissionMode over a --permission-mode in args', async () => {
+    const fake = createAcpProcess();
+    spawnMock.mockReturnValue(fake.child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const options = createSessionOptions({
+      args: ['--permission-mode', 'dangerous', '--model', 'sonnet'],
+      permissionMode: 'plan',
     });
 
     await new DevinAcpSession(options).run();
@@ -520,7 +546,7 @@ describe('DevinAcpSession', () => {
     ).toEqual({
       configId: 'mode',
       sessionId: 'devin-session-1',
-      value: 'dangerous',
+      value: 'plan',
     });
   });
 
