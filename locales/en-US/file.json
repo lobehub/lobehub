@@ -525,6 +525,7 @@
   "work.retry": "Retry",
   "work.topicGroup.other": "Other",
   "work.totalCost": "Total cost {{cost}}",
+  "work.type.board": "Board",
   "work.type.canvas": "Canvas",
   "work.type.document": "Document",
   "work.type.file": "File",

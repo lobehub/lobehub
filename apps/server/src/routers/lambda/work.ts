@@ -155,7 +155,10 @@ export const workRouter = router({
         limit: z.number().min(1).max(100).default(30),
         originAgentId: z.string().nullable().optional(),
         provider: z.enum(WORK_SKILL_PROVIDERS).optional(),
-        type: z.enum(['task', 'document', 'external', 'file', 'canvas']).nullable().optional(),
+        type: z
+          .enum(['task', 'document', 'external', 'file', 'canvas', 'board'])
+          .nullable()
+          .optional(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )

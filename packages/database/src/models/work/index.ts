@@ -19,6 +19,12 @@ import {
 
 import type { LobeChatDatabase } from '../../type';
 import {
+  chooseBoardOption,
+  findBoardWork,
+  registerBoardWork,
+  type RegisterBoardWorkParams,
+} from './board';
+import {
   findCanvasIdByWorkId,
   findCanvasIdsByDeploymentIds,
   findCanvasWork,
@@ -122,6 +128,14 @@ export class WorkModel {
   listCanvases = (params: { agentId?: string | null; limit?: number }) =>
     listCanvasWorks(this.ctx, params);
 
+  registerBoard = (params: RegisterBoardWorkParams): Promise<WorkItem> =>
+    registerBoardWork(this.ctx, params);
+
+  findBoard = (boardId: string, version?: number) => findBoardWork(this.ctx, boardId, version);
+
+  chooseBoardOption = (params: Parameters<typeof chooseBoardOption>[1]) =>
+    chooseBoardOption(this.ctx, params);
+
   registerGoalReport = (params: RegisterGoalReportWorkParams): Promise<WorkItem> =>
     registerGoalReportWork(this.ctx, params);
 
@@ -219,3 +233,5 @@ export class WorkModel {
 
   listVersions = (workId: string) => queries.listVersions(this.ctx, workId);
 }
+
+export { createArtifactBoardId } from './board';

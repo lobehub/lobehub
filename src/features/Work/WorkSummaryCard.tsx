@@ -7,6 +7,7 @@ import { CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openArtifactBoard } from '@/features/ArtifactBoard/opener';
 import { useChatStore } from '@/store/chat';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
@@ -197,6 +198,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       if (!openTarget) return;
 
       switch (openTarget.kind) {
+        case 'board': {
+          openArtifactBoard(openTarget.boardId);
+          return;
+        }
         case 'canvas': {
           openCanvas(openTarget.canvasId, openTarget.version);
           return;

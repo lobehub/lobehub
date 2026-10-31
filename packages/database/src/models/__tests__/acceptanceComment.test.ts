@@ -148,6 +148,33 @@ describe('AcceptanceCommentModel', () => {
       });
     });
 
+    it('pins a root on a frames-board point and keeps replies unanchored', async () => {
+      const frameAnchor = { frameId: 'frame-1', versionId: 'version-b', x: 0.8, y: 0.2 };
+      const { comment } = await model.create({
+        acceptanceId,
+        authorUserId: reviewer,
+        clientId: 'frame-pin',
+        content: 'search box crowds the auth hint',
+        frameAnchor,
+      });
+      expect(comment).toMatchObject({
+        anchorRect: null,
+        anchorType: 'frame',
+        evidenceId: null,
+        metadata: { frameAnchor },
+      });
+
+      const { comment: reply } = await model.create({
+        acceptanceId,
+        authorUserId: owner,
+        clientId: 'frame-reply',
+        content: 'only above ten repos',
+        frameAnchor,
+        parentCommentId: comment.id,
+      });
+      expect(reply).toMatchObject({ anchorType: 'acceptance', metadata: null });
+    });
+
     it('flattens a reply to a reply onto the thread root', async () => {
       const { comment: root } = await model.create({
         acceptanceId,

@@ -4,6 +4,7 @@ import { bundleRouter } from './bundle';
 import { collaborationRouter } from './collaboration';
 import { deliveryLinksRouter } from './deliveryLinks';
 import { flowRouter } from './flow';
+import { framesRouter } from './frames';
 import { listManagementRouter } from './listManagement';
 import { repairRouter } from './repair';
 import { reviewRouter } from './review';
@@ -15,6 +16,7 @@ export const acceptanceRouter = mergeRouters(
   reviewRouter,
   repairRouter,
   flowRouter,
+  framesRouter,
   deliveryLinksRouter,
   subjectRouter,
   bundleRouter,

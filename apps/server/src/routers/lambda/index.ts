@@ -44,6 +44,7 @@ import { aiChatRouter } from './aiChat';
 import { aiModelRouter } from './aiModel';
 import { aiProviderRouter } from './aiProvider';
 import { apiKeyRouter } from './apiKey';
+import { artifactBoardRouter } from './artifactBoard';
 import { asrRouter } from './asr';
 import { botMessageRouter } from './botMessage';
 import { briefRouter } from './brief';
@@ -125,6 +126,7 @@ import { workspaceUserSettingsRouter } from './workspaceUserSettings';
 export const lambdaRouter = router({
   acceptance: acceptanceRouter,
   acceptanceComment: acceptanceCommentRouter,
+  artifactBoard: artifactBoardRouter,
   agent: agentRouter,
   agentBotProvider: agentBotProviderRouter,
   agentBotWake: agentBotWakeRouter,

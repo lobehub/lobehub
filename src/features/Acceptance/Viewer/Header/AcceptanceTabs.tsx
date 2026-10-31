@@ -1,10 +1,12 @@
 'use client';
 
 import { createStaticStyles, Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
-import { ListChecks, MessagesSquare, Paperclip, Route } from 'lucide-react';
+import { GalleryHorizontal, ListChecks, MessagesSquare, Paperclip, Route } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-export type AcceptanceTabKey = 'checks' | 'discussion' | 'resources' | 'flow';
+import type { AcceptanceTabKey } from './tabKeys';
+
+export type { AcceptanceTabKey } from './tabKeys';
 
 const styles = createStaticStyles(({ css }) => ({
   // The square variant underlines its whole list; the band below already draws
@@ -22,8 +24,12 @@ interface AcceptanceTabsProps {
   /** Visible contributions: round notes, comments and replies, excluding status events. */
   discussionCount: number;
   flowCount?: number;
+  /** Nodes on the frames board; the tab only exists when there is a board. */
+  frameCount?: number;
   onChange: (key: AcceptanceTabKey) => void;
   resourceCount: number;
+  /** Whether the frames tab shows; defaults to having at least one frame. */
+  showFrames?: boolean;
 }
 
 /**
@@ -40,8 +46,10 @@ const AcceptanceTabs = ({
   checkCount,
   discussionCount,
   flowCount = 0,
+  frameCount = 0,
   onChange,
   resourceCount,
+  showFrames = frameCount > 0,
 }: AcceptanceTabsProps) => {
   const { t } = useTranslation('verify');
   const tabs = [
@@ -59,6 +67,12 @@ const AcceptanceTabs = ({
     },
     { count: flowCount, icon: Route, key: 'flow' as const, label: t('flow.title') },
     {
+      count: frameCount,
+      icon: GalleryHorizontal,
+      key: 'frames' as const,
+      label: t('frames.tab'),
+    },
+    {
       count: resourceCount,
       icon: Paperclip,
       key: 'resources' as const,
@@ -74,6 +88,7 @@ const AcceptanceTabs = ({
       variant={'square'}
       items={tabs
         .filter((tab) => tab.key !== 'flow' || flowCount > 0)
+        .filter((tab) => tab.key !== 'frames' || showFrames)
         .map((tab) => ({
           icon: <Icon icon={tab.icon} size={16} />,
           key: tab.key,

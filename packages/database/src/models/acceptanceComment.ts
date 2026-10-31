@@ -6,6 +6,7 @@ import type {
   AcceptanceCommentMetadata,
   AcceptanceCommentSource,
   AcceptanceCommentTime,
+  AcceptanceFrameAnchor,
   AcceptanceReviewAnnotation,
   DocumentCommentJson,
 } from '@lobechat/types';
@@ -48,6 +49,8 @@ export interface CreateAcceptanceCommentParams {
   contextRunId?: string;
   /** The editor's JSON, when a person wrote the body in one. */
   editorData?: DocumentCommentJson;
+  /** A pin on a frames-board node; exclusive with `anchor`. */
+  frameAnchor?: AcceptanceFrameAnchor;
   kind?: AcceptanceCommentKind;
   /** Open, server-written per-remark facts. */
   metadata?: AcceptanceCommentMetadata;
@@ -146,12 +149,18 @@ export class AcceptanceCommentModel {
       const isReaction = params.kind === 'reaction';
       const isReply = Boolean(parentCommentId) && !isReaction;
       const anchor = parentCommentId ? undefined : params.anchor;
+      const frameAnchor = parentCommentId || anchor ? undefined : params.frameAnchor;
+      const metadata = anchor?.time
+        ? { ...params.metadata, evidenceAnchor: { time: anchor.time } }
+        : frameAnchor
+          ? { ...params.metadata, frameAnchor }
+          : (params.metadata ?? null);
       const [inserted] = await tx
         .insert(acceptanceComments)
         .values({
           acceptanceId: params.acceptanceId,
           anchorRect: anchor?.rect ?? null,
-          anchorType: anchor ? 'evidence' : 'acceptance',
+          anchorType: anchor ? 'evidence' : frameAnchor ? 'frame' : 'acceptance',
           attachments: params.attachments?.length ? params.attachments : null,
           authorAgentId: params.authorAgentId ?? null,
           authorUserId: params.authorUserId,
@@ -163,9 +172,7 @@ export class AcceptanceCommentModel {
           evidenceId: anchor?.evidenceId ?? null,
           kind: isReply ? 'comment' : (params.kind ?? 'comment'),
           parentCommentId: parentCommentId ?? null,
-          metadata: anchor?.time
-            ? { ...params.metadata, evidenceAnchor: { time: anchor.time } }
-            : (params.metadata ?? null),
+          metadata,
           // A page belongs to the thread it opened, never to a reply or reaction.
           source: parentCommentId ? null : (params.source ?? null),
           workspaceId: params.workspaceId ?? null,

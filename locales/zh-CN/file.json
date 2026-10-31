@@ -525,6 +525,7 @@
   "work.retry": "重试",
   "work.topicGroup.other": "其他",
   "work.totalCost": "累计开销 {{cost}}",
+  "work.type.board": "画板",
   "work.type.canvas": "画布",
   "work.type.document": "文档",
   "work.type.file": "文件",

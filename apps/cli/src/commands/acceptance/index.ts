@@ -19,6 +19,7 @@ import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from '../resourceU
 import { collectCommentFeedback } from './commentFeedback';
 import { attachCriterionCommands } from './criterion';
 import { attachAcceptanceFlowCommands } from './flow';
+import { attachAcceptanceFramesCommands } from './frames';
 import {
   assertReportLanguage,
   languageSummary,
@@ -99,6 +100,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
     );
 
   attachAcceptanceFlowCommands(acceptance);
+  attachAcceptanceFramesCommands(acceptance);
 
   withPublishOptions(
     acceptance

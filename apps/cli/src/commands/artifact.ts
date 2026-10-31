@@ -22,6 +22,7 @@ import { formatError } from '../utils/error';
 import { outputJson } from '../utils/format';
 import { log } from '../utils/logger';
 import { readLocalHtmlAsset } from '../utils/readLocalHtmlAsset';
+import { attachArtifactBoardCommands } from './artifactBoard';
 import { publishCanvasArtifact } from './artifactCanvas';
 
 interface PreparedUploadTarget {
@@ -86,6 +87,8 @@ const warnList = (label: string, items: string[]) => {
 
 export function registerArtifactCommand(program: Command) {
   const artifact = program.command('artifact').description('Publish local pages as artifacts');
+
+  attachArtifactBoardCommands(artifact);
 
   artifact
     .command('guide <type>')

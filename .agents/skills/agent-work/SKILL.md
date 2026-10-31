@@ -15,9 +15,9 @@ Two tables (`packages/database/src/schemas/work.ts`):
 
 ## Type registry
 
-`packages/database/src/models/work/registry.ts` is the single registry of Work types (`document` / `external` / `file` / `task`): `WORK_TYPE_ADAPTERS` is `satisfies Record<WorkType, WorkTypeAdapter>`, so a type added to `@lobechat/types` without an adapter is a compile error.
+`packages/database/src/models/work/registry.ts` is the single registry of Work types (`board` / `canvas` / `document` / `external` / `file` / `goal_report` / `task`): `WORK_TYPE_ADAPTERS` is `satisfies Record<WorkType, WorkTypeAdapter>`, so a type added to `@lobechat/types` without an adapter is a compile error.
 
-**Read-path compatibility gate**: `OPT_IN_WORK_TYPES` (currently `{'file'}`) hides newer types from clients that did not opt in (`includeFileWorks`). Released Electron clients lag by weeks and crash on unknown type descriptors (`descriptor.getIcon` on `undefined`), so a request without the opt-in receives exactly the pre-`file` set. Any NEW Work type must ship behind the same kind of opt-in.
+**Read-path compatibility gate**: `OPT_IN_WORK_TYPES` (currently `{'board', 'canvas', 'file'}`) hides newer types from clients that did not opt in (`includeFileWorks`). The opt-in shipped together with the client's unknown-type fallback descriptor, so a client that sends it renders a type it predates as an inert generic card; a type added after that (`canvas`, `board`) can reuse the same opt-in. Released Electron clients lag by weeks and crash on unknown type descriptors (`descriptor.getIcon` on `undefined`), so a request without the opt-in receives exactly the pre-`file` set. Any NEW Work type must ship behind the same kind of opt-in.
 
 The gate has two kinds of emission points, and both must honor the client's declaration:
 
