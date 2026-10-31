@@ -164,7 +164,9 @@ class ChannelActionImpl {
     await this.#refreshAfterWrite(() =>
       Promise.all([
         this.refreshDetail({ channelId: input.channelId, threadId: data.threadId }),
-        ...(input.rootMessageId ? [this.refreshDetail({ channelId: input.channelId })] : []),
+        ...(input.rootMessageId || (input.replyToId && data.threadId)
+          ? [this.refreshDetail({ channelId: input.channelId })]
+          : []),
         this.refreshList(),
       ]),
     );

@@ -155,6 +155,7 @@ export const channelRouter = router({
         fileIds: z.array(z.string().min(1)).max(CHANNEL_LIMITS.attachments).optional(),
         mentions: z.array(z.uuid()).max(100).optional(),
         requestKey: z.string().min(1).max(200),
+        replyToId: z.uuid().optional(),
         rootMessageId: z.uuid().optional(),
         threadId: threadId.nullish(),
       }),

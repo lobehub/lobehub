@@ -185,4 +185,13 @@ export default {
   'unarchiveSuccess': 'Channel unarchived',
   'unarchiveThread': 'Unarchive thread',
   'unarchiveThreadSuccess': 'Thread unarchived',
+  'reply.action': 'Reply',
+  'reply.to': 'Replying to {{name}}',
+  'reply.cancel': 'Cancel reply',
+  'reply.attachment': 'Attachment',
+  'reply.viewOriginal': 'View original message',
+  'reply.unavailable': 'Original message unavailable',
+  'reply.personHint': 'Quote only. No Agent will be triggered.',
+  'reply.agentHint': 'Continue in a thread with this Agent and any Agents you @mention.',
+  'reply.threadHint': 'Continue in this thread. Agents you @mention will also join.',
 };

@@ -66,6 +66,23 @@ describe('Channel first-send cache refresh', () => {
     expect(state.listMap.all).toEqual([data.channel]);
   });
 
+  it('refreshes the main feed and follower list when a reply is routed to a thread', async () => {
+    vi.mocked(channelService.send).mockResolvedValue({
+      data: { threadId: 'thread' },
+      success: true,
+    } as never);
+    await channelActions.send({
+      channelId: 'channel',
+      content: 'Follow up',
+      mentions: [],
+      replyToId: 'root',
+      requestKey: 'reply',
+    });
+    const state = useChannelStore.getState();
+    expect(state.detailMap[channelViewKey(main)]?.threads).toEqual(data.threads);
+    expect(state.detailMap[channelViewKey(thread)]).toEqual(data);
+  });
+
   it('does not introduce a thread into the cache when the write fails', async () => {
     vi.mocked(channelService.send).mockRejectedValue(new Error('offline'));
     await expect(channelActions.send(input)).rejects.toThrow('offline');

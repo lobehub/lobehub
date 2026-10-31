@@ -155,6 +155,7 @@ export interface ChannelContextMessage {
   /** Stable references; URLs and document contents are resolved at execution time. */
   fileIds?: string[];
   id: string;
+  replyToId?: string | null;
   sequence: number;
   threadId: string | null;
 }
@@ -254,6 +255,11 @@ export interface ChannelPublicMessage {
   id: string;
   mentions: string[];
   recipientMemberIds: string[];
+  /** Bounded public quote, including when its original is outside the loaded page. */
+  replyTo?: Pick<
+    ChannelPublicMessage,
+    'id' | 'author' | 'content' | 'sequence' | 'threadId'
+  > | null;
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
   sequence: number;

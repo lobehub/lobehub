@@ -63,6 +63,7 @@ export const styles = stylex.create({
       [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
     },
   },
+  highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
   messageAvatar: {
     position: 'absolute',
     insetBlockStart: 12,

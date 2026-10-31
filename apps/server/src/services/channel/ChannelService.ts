@@ -242,16 +242,18 @@ export class ChannelService {
   };
 
   send = async (channelId: string, input: Omit<ChannelSendInput, 'routing'>) => {
-    // The repository directs any mentioned message itself and never reads its routing mode.
-    const config = input.mentions?.length
-      ? null
-      : await resolveChannelRoutingConfig(this.db, this.userId);
+    // Explicit reply and mention routing is decided by the repository.
+    const config =
+      input.replyToId || input.mentions?.length
+        ? null
+        : await resolveChannelRoutingConfig(this.db, this.userId);
     const message = await this.repository.send(channelId, {
       ...input,
       routing: config ? 'decision' : 'fallback',
     });
-    // Do not swallow a queue failure: the client can retry the SAME request key safely.
-    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    // Human quotes only update the public feed; they never schedule Agent work.
+    if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
+    else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
   };
 
