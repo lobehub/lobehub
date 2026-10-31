@@ -950,6 +950,10 @@ export default {
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
   'input.agentSlugUnconfirmed':
     'Couldn’t confirm which agent this link opens. Check your connection, then try again.',
+  'input.concurrencyLimit':
+    'You have too many agent tasks running at once. Send again when one finishes.',
+  'input.concurrencyLimitWithCount':
+    'Your plan runs up to {{count}} agent tasks at once. Send again when one finishes.',
   'input.costEstimate.creditsPerMillionTokens': '{{credits}} credits/M tokens',
   'input.costEstimate.hint': 'Estimated cost: ~{{credits}} credits',
   'input.costEstimate.inputLabel': 'Input',

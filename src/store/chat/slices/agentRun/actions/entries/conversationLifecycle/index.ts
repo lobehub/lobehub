@@ -138,6 +138,7 @@ import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../p
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
 import { type ContextCompressionOptions, executeContextCompression } from './compression';
+import { showSendErrorInContext } from './sendErrorNotice';
 
 /**
  * Extended params for sendMessage with context
@@ -1356,18 +1357,15 @@ export class ConversationLifecycleActionImpl {
         messageMapKey({ ...operationContext, topicId: null }),
       );
       if (this.#get().activeTopicId === optimisticTopic.id) {
-        // Cancelling restores the editor before the optimistic topic rolls back.
-        // Read the live editor: the user may have edited or cleared the restored draft
-        // while the cancelled request was unwinding. Preserve it across the topic switch.
-        if (
-          !hasNotifiedMessageAccepted &&
-          this.#get().operations[operationId]?.status === 'cancelled' &&
-          jsonState
-        ) {
-          saveDraft(
-            messageMapKey({ ...operationContext, topicId: null }),
-            targetInputEditor?.getJSONState() ?? jsonState,
-          );
+        const op = this.#get().operations[operationId];
+        // A cancel or a refused send restores the editor before the topic rolls back. Read the
+        // live editor (the user may have edited it meanwhile) and carry it, plus the refusal
+        // notice, to the blank conversation: both are keyed by the topic being discarded.
+        const sendError = op?.status === 'failed' ? op.metadata.inputSendErrorMsg : undefined;
+        if (!hasNotifiedMessageAccepted && (op?.status === 'cancelled' || sendError) && jsonState) {
+          const blankContext = { ...operationContext, topicId: null };
+          saveDraft(messageMapKey(blankContext), targetInputEditor?.getJSONState() ?? jsonState);
+          if (sendError) showSendErrorInContext(this.#get(), blankContext, sendError);
         }
         void this.#get().switchTopic(null, { skipRefreshMessage: true });
         // Adopting the minted topic consumed the staging; the topic never came

@@ -1610,6 +1610,8 @@
   "input.agentModeUnsupportedModel": "当前模型不支持 Agentic 工具调用，建议切换为具备 Agent 能力的模型以获得最佳体验。",
   "input.agentSlugMoved": "该链接现在指向另一个助理，正在切换，打开后请重试。输入框中的草稿会保留。",
   "input.agentSlugUnconfirmed": "暂时无法确认该链接对应的助理，请检查网络后重试。",
+  "input.concurrencyLimit": "同时运行的助理任务太多了，等其中一个结束后再发送",
+  "input.concurrencyLimitWithCount": "当前套餐最多同时运行 {{count}} 个助理任务，等其中一个结束后再发送",
   "input.costEstimate.creditsPerMillionTokens": "{{credits}} 积分/百万标记",
   "input.costEstimate.hint": "预计费用：约{{credits}}积分",
   "input.costEstimate.inputLabel": "输入",

@@ -3,6 +3,7 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { deriveAgentInterventionContinuationOperationId } from '@/business/server/agent-run/agentInterventionIdentity';
+import { releaseAgentRunSlot } from '@/business/server/agent-run/runConcurrency';
 import type { AgentOperationModel } from '@/database/models/agentOperation';
 import type { TopicModel } from '@/database/models/topic';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
@@ -122,6 +123,9 @@ export const supersedeRunningForegroundOperation = async (
   if (!interrupted.success) {
     console.warn('[execAgent] supersede of %s was not confirmed', holderId, { topicId });
   }
+  // The interrupted run settles at its next step boundary; free its slot now
+  // so the send that replaces it is not refused for the run it just stopped.
+  await releaseAgentRunSlot(deps.userId, holderId);
   return { holderId, kind };
 };
 
@@ -268,6 +272,7 @@ export const runWithTopicStart = async (
     if (interruption.deviceCancellationConfirmed === false) {
       throw new Error('Replaced heterogeneous agent process did not confirm termination');
     }
+    await releaseAgentRunSlot(deps.userId, replacesOperationId);
   }
   const reserved = await acquireTopicStartReservation({
     allowSameReservationReentry: !params.approvalResolutionRequestId,
