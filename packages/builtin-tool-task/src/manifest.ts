@@ -325,9 +325,19 @@ export const TaskManifest: BuiltinToolManifest = {
               'The task identifier to run (e.g. "T-1"). Accepts identifiers or ids returned by previous results; prefer stable ids.',
             type: 'string',
           },
+          model: {
+            description:
+              "A task stays on the model pinned when it was created; changing the agent's model later does not move it. Set this only when the user names the model to use; never pick one yourself. It replaces the pin once the run starts, so later runs stay on it.",
+            type: 'string',
+          },
           prompt: {
             description:
               'Optional extra prompt prepended to the task instruction for this run only.',
+            type: 'string',
+          },
+          provider: {
+            description:
+              "Provider of model. Requires model. When omitted, the assignee agent's provider is used without checking that it serves model.",
             type: 'string',
           },
         },
@@ -346,6 +356,16 @@ export const TaskManifest: BuiltinToolManifest = {
               'Identifiers of tasks to run, in execution order (e.g. ["T-1", "T-2"]). Accepts identifiers or ids returned by previous results; prefer stable ids.',
             items: { type: 'string' },
             type: 'array',
+          },
+          model: {
+            description:
+              "Applied to every task in the batch. A task stays on the model pinned when it was created; changing the agent's model later does not move it. Set this only when the user names the model to use; never pick one yourself. It replaces the pin once the run starts, so later runs stay on it.",
+            type: 'string',
+          },
+          provider: {
+            description:
+              "Provider of model. Requires model. When omitted, the assignee agent's provider is used without checking that it serves model.",
+            type: 'string',
           },
         },
         required: ['identifiers'],

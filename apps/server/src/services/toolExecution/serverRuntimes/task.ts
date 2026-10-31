@@ -754,7 +754,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
     },
 
-    runTask: async (args: { continueTopicId?: string; identifier?: string; prompt?: string }) => {
+    runTask: async (args: {
+      continueTopicId?: string;
+      identifier?: string;
+      model?: string;
+      prompt?: string;
+      provider?: string;
+    }) => {
       const id = args.identifier?.trim() || taskId;
       if (!id) {
         return {
@@ -768,7 +774,9 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         const result = await taskCaller().run({
           continueTopicId: args.continueTopicId,
           id: task.id,
+          model: args.model,
           prompt: args.prompt,
+          provider: args.provider,
         });
 
         const topicId = (result as { topicId?: string } | undefined)?.topicId;
@@ -784,7 +792,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
     },
 
-    runTasks: async (args: { identifiers: string[] }) => {
+    runTasks: async (args: { identifiers: string[]; model?: string; provider?: string }) => {
       const identifiers = Array.isArray(args.identifiers)
         ? args.identifiers.filter(
             (value): value is string => typeof value === 'string' && !!value.trim(),
@@ -808,7 +816,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       for (const task of resolved.tasks) {
         const refs = identifiers.filter((ref) => resolved.byRef.get(ref)?.id === task.id);
         try {
-          await taskCaller().run({ id: task.id });
+          await taskCaller().run({ id: task.id, model: args.model, provider: args.provider });
           results.push({ taskId: task.id, identifier: task.identifier, refs, success: true });
         } catch (error) {
           results.push({
