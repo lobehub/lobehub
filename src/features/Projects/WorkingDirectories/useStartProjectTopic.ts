@@ -1,44 +1,39 @@
-import { toast } from '@lobehub/ui';
-import { useTranslation } from 'react-i18next';
-
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
-import { getProjectTopicPath } from '../Layout/navigation';
-import { startProjectTopicDraft } from './startProjectTopicDraft';
+import { canStageDraftOn, startProjectTopicDraft } from './startProjectTopicDraft';
+import { useAgentFixedDeviceId } from './useAgentFixedDeviceId';
 
 /**
  * Every project "new topic" goes straight into the agent's conversation, never
- * through a picker. It opens a blank draft — on `directoryId` when the agent
- * can run there, else conversation-only in the project — that the first
- * message turns into a topic. Only `bindDirectoryId`, a directory the caller
- * names that a draft can't stage on, creates the topic up front.
+ * through a picker, and never creates a row up front. It opens a blank draft —
+ * on `directoryId` when the agent can run there, else conversation-only in the
+ * project — that the first message turns into a topic.
  */
 export const useStartProjectTopic = (projectId: string | undefined) => {
-  const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
-  const startDirectoryTopic = useProjectDirectoryStore((s) => s.startTopic);
 
-  return async ({
-    agentId,
-    bindDirectoryId,
-    directoryId,
-  }: {
-    agentId: string;
-    bindDirectoryId?: string;
-    directoryId?: string;
-  }) => {
+  return ({ agentId, directoryId }: { agentId: string; directoryId?: string }) => {
     if (!projectId) return;
-    if (!bindDirectoryId) {
-      startProjectTopicDraft({ agentId, directoryId, navigate, projectId });
-      return;
-    }
-    try {
-      const topic = await startDirectoryTopic(bindDirectoryId, agentId, t('directories.untitled'));
-      navigate(getProjectTopicPath(projectId, topic.id));
-    } catch (error) {
-      console.error('Failed to start a project topic', error);
-      toast.error(t('overview.sendFailed'));
-    }
+    startProjectTopicDraft({ agentId, directoryId, navigate, projectId });
+  };
+};
+
+/**
+ * "Start a conversation" on one project directory: a blank draft on it when
+ * `agentId` can run there, else a conversation-only draft in the project.
+ */
+export const useStartDirectoryConversation = (
+  projectId: string | undefined,
+  agentId: string | undefined,
+) => {
+  const startTopic = useStartProjectTopic(projectId);
+  const fixedDeviceId = useAgentFixedDeviceId(agentId);
+
+  return (directory: Parameters<typeof canStageDraftOn>[0] & { id: string }) => {
+    if (!agentId) return;
+    startTopic({
+      agentId,
+      directoryId: canStageDraftOn(directory, fixedDeviceId) ? directory.id : undefined,
+    });
   };
 };
