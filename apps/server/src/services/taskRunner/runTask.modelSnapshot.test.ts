@@ -227,6 +227,9 @@ describe('TaskRunnerService.runTask model snapshot backfill', () => {
 
     expect(mocks.execAgent).not.toHaveBeenCalled();
     expect(taskModel.updateTaskConfig).not.toHaveBeenCalled();
+    /** @example A refused input leaves the Task's status untouched. */
+    expect(taskModel.updateStatusIfCurrent).not.toHaveBeenCalled();
+    expect(taskModel.updateStatus).not.toHaveBeenCalled();
   });
 
   /** @example Without an override the run keeps the pinned pair and writes nothing. */

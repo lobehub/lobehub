@@ -249,6 +249,22 @@ export class TaskRunnerService {
         }
       }
 
+      // A heterogeneous runtime ignores a pair it cannot use, so the run would
+      // report success on the Agent's own model. Refuse it before the Task moves.
+      if (model && provider) {
+        const { heterogeneousProvider } =
+          (await this.agentModel.getAgentAgencyConfig(task.assigneeAgentId!)) ?? {};
+        if (
+          heterogeneousProvider &&
+          !resolveHeterogeneousModelOverride(heterogeneousProvider, { model, provider })
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `This agent's runtime cannot run ${model} on provider ${provider}.`,
+          });
+        }
+      }
+
       const {
         acceptanceEnabled,
         fileIds: attachmentFileIds,
@@ -339,21 +355,6 @@ export class TaskRunnerService {
       // from the assignee in the backfill below; that pairing is not checked
       // against what the provider serves.
       if (model) {
-        // A heterogeneous runtime ignores a pair it cannot use, so the run would
-        // report success on the Agent's own model. Refuse it instead.
-        if (provider) {
-          const { heterogeneousProvider } =
-            (await this.agentModel.getAgentAgencyConfig(agentRef)) ?? {};
-          if (
-            heterogeneousProvider &&
-            !resolveHeterogeneousModelOverride(heterogeneousProvider, { model, provider })
-          ) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: `This agent's runtime cannot run ${model} on provider ${provider}.`,
-            });
-          }
-        }
         Object.assign(taskConfig, { model, provider });
       }
 
