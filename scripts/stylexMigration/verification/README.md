@@ -41,6 +41,23 @@ bun run stylex:verify self-test
 
 CLI 由 Bun 编译后交给 Node 运行。不使用 tsx 启动浏览器采集，避免序列化到页面中的函数被插入外部 helper。
 
+## 本地测试入口
+
+验证器、实验采集和 `sx()` 类型契约的测试是本地工具测试，不参与普通 App / Server CI 的测试发现；原有迁移 codemod 测试和产品 `src/styles/sx.test.ts` 仍照常运行。没有关闭应用测试、E2E 或覆盖率检查。
+
+```bash
+# 显式运行这套本地工具测试，不启动全仓 App / Server 测试
+bun run stylex:verify:test
+
+# 也可只运行一个用例文件
+bun run stylex:verify:test scripts/stylexMigration/verification/__tests__/cliIntegration.test.ts
+
+# 浏览器语料仍使用独立的显式本地入口
+bun run stylex:verify self-test
+```
+
+独立配置使用 Node 环境、不加载应用 setup，以有限并发运行；包含多次 CLI 子进程的测试使用 60 秒外层超时，每次子进程仍保留自己的超时。`testDiscovery.test.ts` 验证实际 App / Server 测试发现结果和本地配置，防止本地测试再次混入 CI；它自身也只在本地入口中运行。
+
 ## 当前能够保证什么
 
 - 固定 B/H，生成实际合并候选 M，比较 B → M。base 的并行改动不会丢失。
