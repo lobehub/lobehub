@@ -2,34 +2,33 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ClaudeCodeApiName, type TaskStopArgs } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    alignItems: 'center',
+    minWidth: '0',
+    marginInlineStart: '6px',
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    background: cssVar.colorFillTertiary,
+  },
+});
 
 /**
  * CC's tool for terminating a background task. Falls back to the legacy
@@ -53,7 +52,7 @@ export const TaskStopInspector = memo<BuiltinInspectorProps<TaskStopArgs>>(
         <span className={cx(isShiny && shinyTextStyles.shinyText)}>
           {taskId ? `${label}:` : label}
         </span>
-        {taskId && <span className={styles.chip}>{taskId}</span>}
+        {taskId && <span {...stylex.props(styles.chip)}>{taskId}</span>}
       </div>
     );
   },

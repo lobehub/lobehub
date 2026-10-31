@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps, VideoGenerationAsset } from '@lobechat/types';
-import { Block } from '@lobehub/ui';
-import { Alert, Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Alert, Block, Button, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,89 +24,78 @@ import { resolveGenerationDisplayState } from '../utils/resolveGenerationDisplay
 
 const POLLING_INTERVAL = 3000;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 180px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  error: css`
-    color: ${cssVar.colorError};
-  `,
-  header: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-width: 0;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  meta: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-
-    min-width: 0;
-  `,
-  model: css`
-    overflow: hidden;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  prompt: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  statusBody: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 180px;
-    padding: 20px;
-
-    text-align: center;
-  `,
-  statusChip: css`
-    flex-shrink: 0;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  video: css`
-    display: block;
-    width: 100%;
-    max-height: 560px;
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '180px',
+    background: cssVar.colorFillTertiary,
+  },
+  error: { color: cssVar.colorError },
+  header: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: '0',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  meta: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: '0',
+  },
+  model: {
+    overflow: 'hidden',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  prompt: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  statusBody: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '180px',
+    padding: '20px',
+    textAlign: 'center',
+  },
+  statusChip: {
+    flexShrink: 0,
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    background: cssVar.colorFillTertiary,
+  },
+  video: {
+    display: 'block',
+    width: '100%',
+    maxHeight: '560px',
+    background: cssVar.colorFillTertiary,
+  },
+});
 
 const isTerminalStatus = (status?: string) => status === 'success' || status === 'error';
 
@@ -230,21 +219,27 @@ export const GenerateVideoRender = memo<
 
   return (
     <Block variant={'outlined'} width={'100%'}>
-      <div className={styles.header}>
-        <div className={styles.meta}>
-          <div className={styles.prompt}>{prompt}</div>
-          <div className={styles.model}>{[provider, model].filter(Boolean).join('/')}</div>
+      <div {...stylex.props(styles.header)}>
+        <div {...stylex.props(styles.meta)}>
+          <div {...stylex.props(styles.prompt)}>{prompt}</div>
+          <div {...stylex.props(styles.model)}>{[provider, model].filter(Boolean).join('/')}</div>
         </div>
-        <span className={styles.statusChip}>
+        <span {...stylex.props(styles.statusChip)}>
           {t(`builtins.lobe-video-generation.render.status.${status}`)}
         </span>
       </div>
       {url ? (
-        <div className={styles.body}>
-          <video controls className={styles.video} poster={poster} preload={'metadata'} src={url} />
+        <div {...stylex.props(styles.body)}>
+          <video
+            controls
+            {...stylex.props(styles.video)}
+            poster={poster}
+            preload={'metadata'}
+            src={url}
+          />
         </div>
       ) : (
-        <div className={styles.statusBody}>
+        <div {...stylex.props(styles.statusBody)}>
           {isGenerating ? (
             <>
               <GenerationProgress
@@ -252,7 +247,12 @@ export const GenerateVideoRender = memo<
                 toolCallId={toolCallId}
               />
               {statusCheckFailed && (
-                <Text as={'span'} className={styles.error} color={cssVar.colorError} fontSize={12}>
+                <Text
+                  as={'span'}
+                  className={stylex.props(styles.error).className}
+                  color={cssVar.colorError}
+                  fontSize={12}
+                >
                   {t('builtins.lobe-video-generation.render.statusCheckFailed')}
                 </Text>
               )}
@@ -260,7 +260,7 @@ export const GenerateVideoRender = memo<
           ) : (
             <Text
               as={'span'}
-              className={status === 'error' ? styles.error : undefined}
+              className={stylex.props(status === 'error' ? styles.error : undefined).className}
               color={status === 'error' ? cssVar.colorError : cssVar.colorTextSecondary}
               fontSize={12}
             >

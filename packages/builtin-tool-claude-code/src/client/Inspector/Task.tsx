@@ -2,7 +2,9 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,50 +20,34 @@ const RING_STROKE = 2;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUM = 2 * Math.PI * RING_RADIUS;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    flex-shrink: 1;
-
-    min-width: 0;
-    margin-inline-start: 4px;
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  countChip: css`
-    flex-shrink: 0;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  ring: css`
-    transform: rotate(-90deg);
-    flex-shrink: 0;
-    margin-inline-end: 6px;
-  `,
-  ringProgress: css`
-    transition:
-      stroke-dashoffset 240ms ease,
-      stroke 240ms ease;
-  `,
-  ringTrack: css`
-    stroke: ${cssVar.colorFillSecondary};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    flexShrink: 1,
+    minWidth: '0',
+    marginInlineStart: '4px',
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    background: cssVar.colorFillSecondary,
+  },
+  countChip: {
+    flexShrink: 0,
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    background: cssVar.colorFillTertiary,
+  },
+  ring: { transform: 'rotate(-90deg)', flexShrink: 0, marginInlineEnd: '6px' },
+  ringProgress: { transition: 'stroke-dashoffset 240ms ease,\n      stroke 240ms ease' },
+  ringTrack: { stroke: cssVar.colorFillSecondary },
+});
 
 /**
  * Items shape the CC adapter emits on `pluginState.todos` — normalized
@@ -109,9 +95,9 @@ const ProgressRing = memo<ProgressRingProps>(({ stats }) => {
   const color = allDone ? cssVar.colorSuccess : cssVar.colorInfo;
 
   return (
-    <svg className={styles.ring} height={RING_SIZE} width={RING_SIZE}>
+    <svg {...stylex.props(styles.ring)} height={RING_SIZE} width={RING_SIZE}>
       <circle
-        className={styles.ringTrack}
+        {...stylex.props(styles.ringTrack)}
         cx={RING_SIZE / 2}
         cy={RING_SIZE / 2}
         fill="none"
@@ -119,7 +105,7 @@ const ProgressRing = memo<ProgressRingProps>(({ stats }) => {
         strokeWidth={RING_STROKE}
       />
       <circle
-        className={styles.ringProgress}
+        {...stylex.props(styles.ringProgress)}
         cx={RING_SIZE / 2}
         cy={RING_SIZE / 2}
         fill="none"
@@ -192,7 +178,7 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
         <div className={inspectorTextStyles.root}>
           <ProgressRing stats={stats} />
           {stats.total > 0 && (
-            <span className={styles.countChip}>
+            <span {...stylex.props(styles.countChip)}>
               {stats.completed}/{stats.total}
             </span>
           )}
@@ -238,7 +224,7 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
           <div className={inspectorTextStyles.root}>
             <ProgressRing stats={stats} />
             {stats.total > 0 && (
-              <span className={styles.countChip}>
+              <span {...stylex.props(styles.countChip)}>
                 {stats.completed}/{stats.total}
               </span>
             )}
@@ -272,7 +258,7 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
           <div className={inspectorTextStyles.root}>
             <ProgressRing stats={stats} />
             {stats.total > 0 && (
-              <span className={styles.countChip}>
+              <span {...stylex.props(styles.countChip)}>
                 {stats.completed}/{stats.total}
               </span>
             )}
@@ -336,7 +322,7 @@ export const TaskInspector = memo<BuiltinInspectorProps<TaskInspectorArgs, TaskP
         {detail && (
           <>
             <span>:</span>
-            <span className={styles.chip}>{detail}</span>
+            <span {...stylex.props(styles.chip)}>{detail}</span>
           </>
         )}
       </div>

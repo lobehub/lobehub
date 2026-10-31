@@ -2,33 +2,32 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SendMessageArgs } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    alignItems: 'center',
+    minWidth: '0',
+    marginInlineStart: '6px',
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    background: cssVar.colorFillTertiary,
+  },
+});
 
 /**
  * Chip for the multi-agent `SendMessage` tool. Leads with the human-readable
@@ -53,7 +52,7 @@ export const SendMessageInspector = memo<BuiltinInspectorProps<SendMessageArgs>>
         <span className={cx(isShiny && shinyTextStyles.shinyText)}>
           {recap ? `${label}:` : label}
         </span>
-        {recap && <span className={styles.chip}>{recap}</span>}
+        {recap && <span {...stylex.props(styles.chip)}>{recap}</span>}
       </div>
     );
   },

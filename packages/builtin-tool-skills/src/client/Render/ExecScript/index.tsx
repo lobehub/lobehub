@@ -2,24 +2,21 @@
 
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Highlighter } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import type { ExecScriptParams, ExecScriptState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow: hidden;
-    padding-inline: 8px 0;
-  `,
-}));
+const styles = stylex.create({
+  container: { overflow: 'hidden', paddingInlineStart: '8px', paddingInlineEnd: '0' },
+});
 
 const ExecScript = memo<BuiltinRenderProps<ExecScriptParams, ExecScriptState>>(
   ({ args, content, pluginState }) => {
     const { command } = pluginState || {};
 
     return (
-      <Flexbox className={styles.container} gap={8}>
+      <Flexbox className={stylex.props(styles.container).className} gap={8}>
         <Block gap={8} padding={8} variant={'outlined'}>
           <Highlighter
             wrap

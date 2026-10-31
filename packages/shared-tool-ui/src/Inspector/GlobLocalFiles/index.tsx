@@ -2,34 +2,29 @@
 
 import type { GlobFilesState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  baseline: css`
-    align-items: baseline;
-  `,
-  statusIcon: css`
-    align-self: center;
-    margin-inline-start: 4px;
-  `,
-  tag: css`
-    margin-inline-start: 6px;
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  baseline: { alignItems: 'baseline' },
+  statusIcon: { alignSelf: 'center', marginInlineStart: '4px' },
+  tag: {
+    marginInlineStart: '6px',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    background: cssVar.colorFillTertiary,
+  },
+});
 
 interface GlobFilesArgs {
   directory?: string;
@@ -52,9 +47,9 @@ export const createGlobLocalFilesInspector = (translationKey: string) => {
           );
 
         return (
-          <div className={cx(inspectorTextStyles.root, styles.baseline)}>
+          <div className={cx(stylex.props(styles.baseline).className, inspectorTextStyles.root)}>
             <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}:</span>
-            <span className={styles.tag}>{pattern}</span>
+            <span {...stylex.props(styles.tag)}>{pattern}</span>
           </div>
         );
       }
@@ -62,16 +57,24 @@ export const createGlobLocalFilesInspector = (translationKey: string) => {
       const hasFiles = (pluginState?.totalCount ?? 0) > 0;
 
       return (
-        <div className={cx(inspectorTextStyles.root, styles.baseline)}>
+        <div className={cx(stylex.props(styles.baseline).className, inspectorTextStyles.root)}>
           <span className={cx(isLoading && shinyTextStyles.shinyText)}>
             {t(translationKey as any)}:
           </span>
-          {pattern && <span className={styles.tag}>{pattern}</span>}
+          {pattern && <span {...stylex.props(styles.tag)}>{pattern}</span>}
           {isLoading ? null : pluginState ? (
             hasFiles ? (
-              <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+              <Check
+                className={stylex.props(styles.statusIcon).className}
+                color={cssVar.colorSuccess}
+                size={14}
+              />
             ) : (
-              <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
+              <X
+                className={stylex.props(styles.statusIcon).className}
+                color={cssVar.colorError}
+                size={14}
+              />
             )
           ) : null}
         </div>

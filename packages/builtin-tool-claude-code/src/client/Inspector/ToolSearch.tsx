@@ -6,7 +6,9 @@ import {
   shinyTextStyles,
 } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,33 +16,27 @@ import { ClaudeCodeApiName, type ToolSearchArgs } from '../../types';
 
 const SELECT_PREFIX = 'select:';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  baseline: css`
-    align-items: baseline;
-  `,
-  tag: css`
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  tagsList: css`
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  baseline: { alignItems: 'baseline' },
+  tag: {
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    background: cssVar.colorFillTertiary,
+  },
+  tagsList: {
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '4px',
+    alignItems: 'center',
+    minWidth: '0',
+    marginInlineStart: '6px',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface ParsedQuery {
   names: string[] | null;
@@ -79,11 +75,11 @@ export const ToolSearchInspector = memo<BuiltinInspectorProps<ToolSearchArgs>>(
 
     if (parsed?.names) {
       return (
-        <div className={cx(inspectorTextStyles.root, styles.baseline)}>
+        <div className={cx(stylex.props(styles.baseline).className, inspectorTextStyles.root)}>
           <span className={cx(isShiny && shinyTextStyles.shinyText)}>{label}:</span>
-          <span className={styles.tagsList}>
+          <span {...stylex.props(styles.tagsList)}>
             {parsed.names.map((name, index) => (
-              <span className={styles.tag} key={`${index}-${name}`}>
+              <span {...stylex.props(styles.tag)} key={`${index}-${name}`}>
                 {name}
               </span>
             ))}

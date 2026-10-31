@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Accordion, Avatar, Spin, Steps, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Accordion, Avatar, Flexbox, Spin, Steps, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
@@ -11,75 +11,63 @@ import { highlightTextStyles } from '@/styles';
 
 import type { AddPreferenceMemoryParams } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-
-    width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  content: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
-  detail: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  directive: css`
-    font-size: 14px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-  `,
-  header: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  section: css`
-    padding: 4px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  stepContent: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    white-space: pre-wrap;
-  `,
-  suggestion: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 8px;
-
-    font-size: 13px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  summary: css`
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  tags: css`
-    padding-block-start: 8px;
-    border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    overflow: 'hidden',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    background: cssVar.colorBgContainer,
+  },
+  content: { paddingBlock: '12px', paddingInline: '16px' },
+  detail: { fontSize: '13px', lineHeight: 1.6, color: cssVar.colorTextSecondary },
+  directive: { fontSize: '14px', lineHeight: 1.6, color: cssVar.colorText },
+  header: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  section: {
+    padding: '4px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  stepContent: {
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'pre-wrap',
+  },
+  suggestion: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+    background: cssVar.colorFillQuaternary,
+  },
+  summary: { fontSize: '14px', fontWeight: 500, color: cssVar.colorTextSecondary },
+  tags: {
+    paddingBlockStart: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+});
 
 export interface PreferenceMemoryCardProps {
   data?: AddPreferenceMemoryParams;
@@ -134,11 +122,16 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
   ].filter((item) => item.content);
 
   return (
-    <Flexbox className={styles.container}>
+    <Flexbox className={stylex.props(styles.container).className}>
       {/* Header */}
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={8}
+      >
         <Flexbox flex={1}>
-          <div className={styles.title}>{title || 'Preference Memory'}</div>
+          <div {...stylex.props(styles.title)}>{title || 'Preference Memory'}</div>
         </Flexbox>
         {type && <Tag>{type}</Tag>}
         {loading && <Spin size="middle" variant="network" />}
@@ -155,10 +148,15 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                 {
                   children: (
                     <Flexbox gap={8} paddingBlock={'8px 12px'} paddingInline={8}>
-                      {summary && <div className={styles.summary}>{summary}</div>}
-                      {details && <div className={styles.detail}>{details}</div>}
+                      {summary && <div {...stylex.props(styles.summary)}>{summary}</div>}
+                      {details && <div {...stylex.props(styles.detail)}>{details}</div>}
                       {safeTags.length > 0 && (
-                        <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
+                        <Flexbox
+                          horizontal
+                          className={stylex.props(styles.tags).className}
+                          gap={8}
+                          wrap={'wrap'}
+                        >
                           {safeTags.map((tag, index) => (
                             <Tag key={index}>{tag}</Tag>
                           ))}
@@ -183,7 +181,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
           {/* Origin Context Steps */}
           {hasContextContent && (
             <Accordion
-              className={styles.section}
+              className={stylex.props(styles.section).className}
               defaultValue={['context']}
               gap={0}
               items={[
@@ -193,7 +191,9 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                       <Steps
                         orientation="vertical"
                         items={contextItems.map((item) => ({
-                          description: <div className={styles.stepContent}>{item.content}</div>,
+                          description: (
+                            <div {...stylex.props(styles.stepContent)}>{item.content}</div>
+                          ),
                           icon: (
                             <Avatar
                               shadow
@@ -229,7 +229,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
           {/* App Context */}
           {hasAppContext && (
             <Accordion
-              className={styles.section}
+              className={stylex.props(styles.section).className}
               gap={0}
               items={[
                 {
@@ -238,7 +238,9 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                       <Steps
                         orientation="vertical"
                         items={appContextItems.map((item) => ({
-                          description: <div className={styles.stepContent}>{item.content}</div>,
+                          description: (
+                            <div {...stylex.props(styles.stepContent)}>{item.content}</div>
+                          ),
                           icon: (
                             <Avatar
                               shadow
@@ -274,21 +276,21 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
           {/* Conclusion Directive */}
           {conclusionDirectives && (
             <Flexbox
-              className={styles.section}
+              className={stylex.props(styles.section).className}
               gap={8}
               style={{ paddingBlock: 16, paddingInline: 12 }}
             >
               <Text fontSize={12} weight={500}>
                 <span className={highlightTextStyles.primary}>Directive</span>
               </Text>
-              <div className={styles.directive}>{conclusionDirectives}</div>
+              <div {...stylex.props(styles.directive)}>{conclusionDirectives}</div>
             </Flexbox>
           )}
 
           {/* Suggestions */}
           {hasSuggestions && (
             <Flexbox
-              className={styles.section}
+              className={stylex.props(styles.section).className}
               gap={8}
               style={{ paddingBlock: 16, paddingInline: 12 }}
             >
@@ -297,7 +299,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
               </Text>
               <Flexbox gap={8}>
                 {safeSuggestions.map((suggestion, index) => (
-                  <div className={styles.suggestion} key={index}>
+                  <div {...stylex.props(styles.suggestion)} key={index}>
                     {suggestion}
                   </div>
                 ))}
@@ -307,19 +309,19 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
         </>
       ) : (
         /* When no context content: show summary and details */
-        <Flexbox className={styles.content} gap={8}>
+        <Flexbox className={stylex.props(styles.content).className} gap={8}>
           {!summary && loading ? (
             <BubblesLoading />
           ) : (
             <>
-              {summary && <div className={styles.summary}>{summary}</div>}
+              {summary && <div {...stylex.props(styles.summary)}>{summary}</div>}
               {details && <StreamingMarkdown>{details}</StreamingMarkdown>}
               {conclusionDirectives && (
                 <Flexbox gap={4} paddingBlock={8}>
                   <Text fontSize={12} weight={500}>
                     <span className={highlightTextStyles.primary}>Directive</span>
                   </Text>
-                  <div className={styles.directive}>{conclusionDirectives}</div>
+                  <div {...stylex.props(styles.directive)}>{conclusionDirectives}</div>
                 </Flexbox>
               )}
               {hasSuggestions && (
@@ -329,7 +331,7 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                   </Text>
                   <Flexbox gap={8}>
                     {safeSuggestions.map((suggestion, index) => (
-                      <div className={styles.suggestion} key={index}>
+                      <div {...stylex.props(styles.suggestion)} key={index}>
                         {suggestion}
                       </div>
                     ))}
@@ -337,7 +339,12 @@ export const PreferenceMemoryCard = memo<PreferenceMemoryCardProps>(({ data, loa
                 </Flexbox>
               )}
               {safeTags.length > 0 && (
-                <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
+                <Flexbox
+                  horizontal
+                  className={stylex.props(styles.tags).className}
+                  gap={8}
+                  wrap={'wrap'}
+                >
                   {safeTags.map((tag, index) => (
                     <Tag key={index}>{tag}</Tag>
                   ))}

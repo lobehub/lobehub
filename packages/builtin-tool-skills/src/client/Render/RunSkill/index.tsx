@@ -2,39 +2,33 @@
 
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Markdown, ScrollShadow } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import type { ActivateSkillParams, ActivateSkillState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-
-    width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  content: css`
-    padding-block: 8px;
-    padding-inline: 16px;
-    font-size: 14px;
-  `,
-  description: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  header: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  name: css`
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    overflow: 'hidden',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    background: cssVar.colorBgContainer,
+  },
+  content: { paddingBlock: '8px', paddingInline: '16px', fontSize: '14px' },
+  description: { fontSize: '12px', color: cssVar.colorTextSecondary },
+  header: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  name: { fontWeight: 500 },
+});
 
 const RunSkill = memo<BuiltinRenderProps<ActivateSkillParams, ActivateSkillState>>(
   ({ content, pluginState }) => {
@@ -44,13 +38,18 @@ const RunSkill = memo<BuiltinRenderProps<ActivateSkillParams, ActivateSkillState
     if (!displayName) return null;
 
     return (
-      <Flexbox className={styles.container}>
-        <Flexbox className={styles.header} gap={4}>
-          <span className={styles.name}>{displayName}</span>
-          {description && <span className={styles.description}>{description}</span>}
+      <Flexbox className={stylex.props(styles.container).className}>
+        <Flexbox className={stylex.props(styles.header).className} gap={4}>
+          <span {...stylex.props(styles.name)}>{displayName}</span>
+          {description && <span {...stylex.props(styles.description)}>{description}</span>}
         </Flexbox>
         {content && (
-          <ScrollShadow className={styles.content} offset={12} size={12} style={{ maxHeight: 400 }}>
+          <ScrollShadow
+            className={stylex.props(styles.content).className}
+            offset={12}
+            size={12}
+            style={{ maxHeight: 400 }}
+          >
             <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
               {content}
             </Markdown>

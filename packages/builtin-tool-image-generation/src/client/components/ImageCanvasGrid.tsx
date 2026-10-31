@@ -1,16 +1,10 @@
 'use client';
 
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  grid: css`
-    display: grid;
-    gap: 8px;
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({ grid: { display: 'grid', gap: '8px', width: '100%' } });
 
 // A lone image is the hero of the message; several share the same footprint.
 const SINGLE_MAX_HEIGHT = 420;
@@ -36,7 +30,7 @@ export const ImageCanvasGrid = memo<ImageCanvasGridProps>(({ children, count, ra
 
   return (
     <div
-      className={styles.grid}
+      className={stylex.props(styles.grid).className}
       style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, maxWidth }}
     >
       {children}

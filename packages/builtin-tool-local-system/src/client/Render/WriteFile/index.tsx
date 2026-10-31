@@ -1,8 +1,8 @@
 import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Icon, Markdown, PatchDiff } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown, PatchDiff, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import path from 'path-browserify-esm';
 import { memo } from 'react';
@@ -10,16 +10,10 @@ import { memo } from 'react';
 import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import { LocalFile, LocalFolder } from '@/features/LocalFile';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 4px;
-  `,
-  previewBox: css`
-    overflow: hidden;
-    border-radius: 8px;
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  container: { paddingBlock: '4px' },
+  previewBox: { overflow: 'hidden', borderRadius: '8px', background: cssVar.colorFillTertiary },
+});
 
 const buildNewFilePatch = (filePath: string, content: string) => {
   const hasTrailingNewline = content.endsWith('\n');
@@ -64,7 +58,7 @@ const WriteFile = memo<BuiltinRenderProps<WriteFileArgs>>(({ args }) => {
   }
 
   return (
-    <Flexbox className={styles.container} gap={12}>
+    <Flexbox className={stylex.props(styles.container).className} gap={12}>
       <Flexbox horizontal align={'center'}>
         <LocalFolder path={dir} />
         <Icon icon={ChevronRight} />
@@ -72,7 +66,10 @@ const WriteFile = memo<BuiltinRenderProps<WriteFileArgs>>(({ args }) => {
       </Flexbox>
 
       {args.content && (
-        <Flexbox className={styles.previewBox} style={{ height: isHtml ? 260 : undefined }}>
+        <Flexbox
+          className={stylex.props(styles.previewBox).className}
+          style={{ height: isHtml ? 260 : undefined }}
+        >
           {isHtml ? (
             <InlineHtmlPreview content={args.content} />
           ) : (

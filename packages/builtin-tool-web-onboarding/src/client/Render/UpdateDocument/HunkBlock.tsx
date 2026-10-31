@@ -1,85 +1,81 @@
 'use client';
 
 import type { MarkdownPatchHunk } from '@lobechat/markdown-patch';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  added: css`
-    overflow: auto;
-
-    max-height: 200px;
-    margin: 0;
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-inline-start: 2px solid ${cssVar.colorSuccess};
-    border-radius: 0 6px 6px 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorText};
-    word-break: break-word;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorSuccessBg};
-  `,
-  block: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  `,
-  count: css`
-    flex-shrink: 0;
-
-    margin-inline-start: auto;
-
-    font-size: 12px;
-    font-weight: 400;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  label: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  lineRange: css`
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  removed: css`
-    overflow: auto;
-
-    max-height: 200px;
-    margin: 0;
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-inline-start: 2px solid ${cssVar.colorError};
-    border-radius: 0 6px 6px 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-word;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorErrorBg};
-  `,
-}));
+const styles = stylex.create({
+  added: {
+    overflow: 'auto',
+    maxHeight: '200px',
+    margin: '0',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorSuccess,
+    borderTopLeftRadius: '0',
+    borderTopRightRadius: '6px',
+    borderBottomRightRadius: '6px',
+    borderBottomLeftRadius: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorText,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+    background: cssVar.colorSuccessBg,
+  },
+  block: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  count: {
+    flexShrink: 0,
+    marginInlineStart: 'auto',
+    fontSize: '12px',
+    fontWeight: 400,
+    color: cssVar.colorTextTertiary,
+  },
+  label: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  lineRange: {
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    background: cssVar.colorFillTertiary,
+  },
+  removed: {
+    overflow: 'auto',
+    maxHeight: '200px',
+    margin: '0',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorError,
+    borderTopLeftRadius: '0',
+    borderTopRightRadius: '6px',
+    borderBottomRightRadius: '6px',
+    borderBottomLeftRadius: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+    background: cssVar.colorErrorBg,
+  },
+});
 
 interface HunkBlockProps {
   countLabel?: string;
@@ -144,23 +140,23 @@ const HunkBlock = memo<HunkBlockProps>(({ countLabel, hunk }) => {
   const blocks: ReactNode[] = [];
   if (removed)
     blocks.push(
-      <pre className={styles.removed} key="removed">
+      <pre {...stylex.props(styles.removed)} key="removed">
         {removed}
       </pre>,
     );
   if (added)
     blocks.push(
-      <pre className={styles.added} key="added">
+      <pre {...stylex.props(styles.added)} key="added">
         {added}
       </pre>,
     );
 
   return (
-    <div className={styles.block}>
-      <div className={styles.label}>
+    <div {...stylex.props(styles.block)}>
+      <div {...stylex.props(styles.label)}>
         <span>{t(labelKey)}</span>
-        {lineRange && <span className={styles.lineRange}>{lineRange}</span>}
-        {countLabel && <span className={styles.count}>{countLabel}</span>}
+        {lineRange && <span {...stylex.props(styles.lineRange)}>{lineRange}</span>}
+        {countLabel && <span {...stylex.props(styles.count)}>{countLabel}</span>}
       </div>
       {blocks}
     </div>

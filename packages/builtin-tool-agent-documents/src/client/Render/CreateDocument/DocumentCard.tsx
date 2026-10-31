@@ -1,8 +1,16 @@
 'use client';
 
-import { CopyButton, Flexbox, Markdown, ScrollShadow, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  CopyButton,
+  Flexbox,
+  Markdown,
+  ScrollShadow,
+  TooltipGroup,
+} from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileTextIcon, Maximize2, Minimize2, PencilLine } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,48 +18,42 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    position: relative;
-
-    overflow: hidden;
-
-    width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  content: css`
-    padding-inline: 16px;
-    font-size: 14px;
-  `,
-  expandButton: css`
-    position: absolute;
-    inset-block-end: 16px;
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-
-    box-shadow: ${cssVar.boxShadow};
-  `,
-  header: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  icon: css`
-    color: ${cssVar.colorPrimary};
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    background: cssVar.colorBgContainer,
+  },
+  content: { paddingInline: '16px', fontSize: '14px' },
+  expandButton: {
+    position: 'absolute',
+    insetBlockEnd: '16px',
+    insetInlineStart: '50%',
+    transform: 'translateX(-50%)',
+    boxShadow: cssVar.boxShadow,
+  },
+  header: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  icon: { color: cssVar.colorPrimary },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+    fontWeight: 500,
+    color: cssVar.colorText,
+  },
+});
 
 interface DocumentCardProps {
   content: string;
@@ -80,11 +82,16 @@ const DocumentCard = memo<DocumentCardProps>(({ content, documentId, readonly, t
   };
 
   return (
-    <Flexbox className={styles.container}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
-        <FileTextIcon className={styles.icon} size={16} />
+    <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={8}
+      >
+        <FileTextIcon className={stylex.props(styles.icon).className} size={16} />
         <Flexbox flex={1}>
-          <div className={styles.title}>{title}</div>
+          <div {...stylex.props(styles.title)}>{title}</div>
         </Flexbox>
         <TooltipGroup>
           <Flexbox horizontal gap={4}>
@@ -104,7 +111,12 @@ const DocumentCard = memo<DocumentCardProps>(({ content, documentId, readonly, t
           </Flexbox>
         </TooltipGroup>
       </Flexbox>
-      <ScrollShadow className={styles.content} offset={12} size={12} style={{ maxHeight: 400 }}>
+      <ScrollShadow
+        className={stylex.props(styles.content).className}
+        offset={12}
+        size={12}
+        style={{ maxHeight: 400 }}
+      >
         <Markdown style={{ overflow: 'unset', paddingBottom: 40 }} variant={'chat'}>
           {content}
         </Markdown>
@@ -112,7 +124,7 @@ const DocumentCard = memo<DocumentCardProps>(({ content, documentId, readonly, t
 
       {documentId && !readonly && (
         <Button
-          className={styles.expandButton}
+          className={stylex.props(styles.expandButton).className}
           icon={isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           shape={'round'}
           type={'default'}

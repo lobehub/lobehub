@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { PreviewGroup } from '@lobehub/ui';
-import { Alert, Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Alert, Button, PreviewGroup, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,22 +24,17 @@ import {
   useGenerationStatus,
 } from '../components/useGenerationStatus';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  caption: css`
-    overflow: hidden;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  root: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  `,
-}));
+const styles = stylex.create({
+  caption: {
+    overflow: 'hidden',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  root: { display: 'flex', flexDirection: 'column', gap: '8px' },
+});
 
 const GenerationTile = memo<{
   index: number;
@@ -130,7 +125,7 @@ export const GenerateImageRender = memo<
   const isGrid = generations.length > 1;
 
   return (
-    <div className={styles.root}>
+    <div {...stylex.props(styles.root)}>
       <PreviewGroup preview={{ onDownload: downloadPreviewImage }}>
         <ImageCanvasGrid count={generations.length} ratio={gridRatio}>
           {generations.map((task, index) => (
@@ -145,7 +140,9 @@ export const GenerateImageRender = memo<
           ))}
         </ImageCanvasGrid>
       </PreviewGroup>
-      {model && <div className={styles.caption}>{[provider, model].filter(Boolean).join('/')}</div>}
+      {model && (
+        <div {...stylex.props(styles.caption)}>{[provider, model].filter(Boolean).join('/')}</div>
+      )}
     </div>
   );
 });

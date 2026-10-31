@@ -11,25 +11,19 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { TextArea } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, TextArea } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { CreatePlanParams } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  description: css`
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    font-size: 28px;
-    font-weight: 600;
-  `,
-}));
+const styles = stylex.create({
+  description: { fontSize: '14px', color: cssVar.colorTextSecondary },
+  title: { fontSize: '28px', fontWeight: 600 },
+});
 
 const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
   ({ args, onArgsChange, registerBeforeApprove }) => {
@@ -143,7 +137,7 @@ const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
         {/* Goal - Main Title */}
         <TextArea
           autoSize={{ minRows: 1 }}
-          className={styles.title}
+          className={stylex.props(styles.title).className}
           placeholder={t('lobe-agent.createPlan.goal.placeholder')}
           style={{ padding: 0, resize: 'none' }}
           value={goal}
@@ -155,7 +149,7 @@ const CreatePlanIntervention = memo<BuiltinInterventionProps<CreatePlanParams>>(
         {/* Description - Subtitle */}
         <TextArea
           autoSize={{ minRows: 1 }}
-          className={styles.description}
+          className={stylex.props(styles.description).className}
           data-testid="plan-description"
           placeholder={t('lobe-agent.createPlan.description.placeholder')}
           style={{ padding: 0, resize: 'none' }}

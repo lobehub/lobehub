@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,49 +19,43 @@ import type {
 } from '../../../types';
 import { TaskApiName } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 220px;
-    margin-inline-start: 6px;
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  contentChip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 260px;
-    margin-inline-start: 6px;
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    alignItems: 'center',
+    minWidth: '0',
+    maxWidth: '220px',
+    marginInlineStart: '6px',
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    background: cssVar.colorFillTertiary,
+  },
+  contentChip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    alignItems: 'center',
+    minWidth: '0',
+    maxWidth: '260px',
+    marginInlineStart: '6px',
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    background: cssVar.colorFillTertiary,
+  },
+});
 
 interface TaskCommentInspectorProps extends BuiltinInspectorProps<
   AddTaskCommentParams | UpdateTaskCommentParams | DeleteTaskCommentParams,
@@ -99,9 +95,9 @@ export const TaskCommentInspector = memo<TaskCommentInspectorProps>(
         <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
           {t(selectLabelKey(apiName))}
         </span>
-        {identifier && <span className={styles.chip}>{identifier}</span>}
-        {commentId && <span className={styles.chip}>{commentId}</span>}
-        {content && <span className={styles.contentChip}>{content}</span>}
+        {identifier && <span {...stylex.props(styles.chip)}>{identifier}</span>}
+        {commentId && <span {...stylex.props(styles.chip)}>{commentId}</span>}
+        {content && <span {...stylex.props(styles.contentChip)}>{content}</span>}
       </div>
     );
   },

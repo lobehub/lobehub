@@ -8,9 +8,9 @@ import {
   LineStats,
 } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, PatchDiff } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, PatchDiff, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,50 +22,21 @@ import {
   getFileChangeStats,
 } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  emptyState: css`
-    padding: 4px;
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  list: css`
-    gap: 2px;
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 4px;
-  `,
-  patch: css`
-    overflow: hidden;
-    padding-block-end: 8px;
-    padding-inline-start: 16px;
-  `,
-  rowMain: css`
-    display: flex;
-    flex: 1;
-    gap: 10px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  path: css`
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    min-width: 0;
-  `,
-  row: css`
-    gap: 8px;
-    align-items: center;
-
-    min-height: 26px;
-    padding-block: 3px;
-    padding-inline: 0;
-  `,
-  unknownPath: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  emptyState: { padding: '4px', fontSize: '13px', color: cssVar.colorTextTertiary },
+  list: { gap: '2px', minWidth: '0', paddingBlock: '2px', paddingInline: '4px' },
+  patch: { overflow: 'hidden', paddingBlockEnd: '8px', paddingInlineStart: '16px' },
+  rowMain: { display: 'flex', flex: '1', gap: '10px', alignItems: 'center', minWidth: '0' },
+  path: { overflow: 'hidden', display: 'flex', alignItems: 'center', minWidth: '0' },
+  row: {
+    gap: '8px',
+    alignItems: 'center',
+    minHeight: '26px',
+    paddingBlock: '3px',
+    paddingInline: '0',
+  },
+  unknownPath: { fontSize: '13px', color: cssVar.colorTextTertiary },
+});
 
 const FileChangeRender = memo<BuiltinRenderProps<CodexFileChangeArgs, CodexFileChangeState>>(
   ({ args, pluginState }) => {
@@ -75,28 +46,28 @@ const FileChangeRender = memo<BuiltinRenderProps<CodexFileChangeArgs, CodexFileC
 
     if (stats.total === 0) {
       return (
-        <Text className={styles.emptyState}>
+        <Text className={stylex.props(styles.emptyState).className}>
           {t('builtins.codex.fileChange.noChanges', { defaultValue: 'No file changes' })}
         </Text>
       );
     }
 
     return (
-      <Flexbox className={styles.list}>
+      <Flexbox className={stylex.props(styles.list).className}>
         {data.changes.map((change, index) => {
           const kind = getFileChangeKind(change.kind);
           const path = change.path || '';
 
           return (
             <Flexbox key={`${path}-${index}`}>
-              <Flexbox horizontal className={styles.row}>
+              <Flexbox horizontal className={stylex.props(styles.row).className}>
                 <KindDot kind={kind} />
-                <div className={styles.rowMain}>
-                  <div className={styles.path}>
+                <div {...stylex.props(styles.rowMain)}>
+                  <div {...stylex.props(styles.path)}>
                     {path ? (
                       <FilePathDisplay filePath={path} />
                     ) : (
-                      <Text className={styles.unknownPath}>
+                      <Text className={stylex.props(styles.unknownPath).className}>
                         {t('builtins.codex.fileChange.unknownFile', {
                           defaultValue: 'Unknown file',
                         })}
@@ -107,7 +78,7 @@ const FileChangeRender = memo<BuiltinRenderProps<CodexFileChangeArgs, CodexFileC
                 </div>
               </Flexbox>
               {change.diffText && (
-                <div className={styles.patch}>
+                <div {...stylex.props(styles.patch)}>
                   <PatchDiff
                     fileName={getFileName(path)}
                     language={getFileLanguage(path)}

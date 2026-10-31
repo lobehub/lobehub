@@ -1,8 +1,8 @@
 'use client';
 
-import { CodeDiff, CopyButton, Flexbox, ScrollShadow, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, CodeDiff, CopyButton, Flexbox, ScrollShadow, TooltipGroup } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,81 +19,61 @@ const INSPECTOR_CHECK_COLUMN = 24;
 const withTrailingNewline = (value: string) =>
   value === '' || value.endsWith('\n') ? value : `${value}\n`;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-    width: 100%;
-    min-width: 0;
-    font-size: 13px;
-  `,
-  contentBox: css`
-    overflow: hidden;
-
-    width: 100%;
-    min-width: 0;
-    padding: 12px;
-    border-inline-start: 3px solid ${cssVar.colorSuccess};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  diff: css`
-    overflow: hidden;
-    width: 100%;
-    min-width: 0;
-  `,
-  diffPanel: css`
-    border-radius: 0;
-  `,
-  fileIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  promptContent: css`
-    min-width: 0;
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-    word-break: break-word;
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  `,
-  promptLabel: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  statusIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-  `,
-  statusRow: css`
-    width: calc(100% - 12px);
-    min-width: 0;
-    margin-inline-start: 4px;
-    color: ${cssVar.colorSuccess};
-  `,
-  statusText: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  container: { overflow: 'hidden', width: '100%', minWidth: '0', fontSize: '13px' },
+  contentBox: {
+    overflow: 'hidden',
+    width: '100%',
+    minWidth: '0',
+    padding: '12px',
+    borderInlineStartWidth: '3px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorSuccess,
+    background: cssVar.colorFillTertiary,
+  },
+  diff: { overflow: 'hidden', width: '100%', minWidth: '0' },
+  diffPanel: { borderRadius: '0' },
+  fileIcon: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  promptContent: {
+    minWidth: '0',
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorText,
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+    whiteSpace: 'pre-wrap',
+  },
+  promptLabel: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  statusIcon: {
+    display: 'flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+  },
+  statusRow: {
+    width: 'calc(100% - 12px)',
+    minWidth: '0',
+    marginInlineStart: '4px',
+    color: cssVar.colorSuccess,
+  },
+  statusText: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 export interface PromptDiffViewProps {
   /**
@@ -151,32 +131,32 @@ const PromptDiffView = memo<PromptDiffViewProps>(({ newPrompt = '', previousProm
   );
 
   return (
-    <Flexbox className={styles.container} gap={8}>
+    <Flexbox className={stylex.props(styles.container).className} gap={8}>
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.statusRow}
+        className={stylex.props(styles.statusRow).className}
         distribution={'space-between'}
         gap={8}
       >
         <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-          <span className={styles.statusIcon}>
+          <span {...stylex.props(styles.statusIcon)}>
             <CheckCircle size={14} />
           </span>
-          <span className={styles.statusText}>{t(statusKey)}</span>
+          <span {...stylex.props(styles.statusText)}>{t(statusKey)}</span>
         </Flexbox>
         {actions}
       </Flexbox>
 
       {hasDiff && (
         <ScrollShadow
-          className={styles.diff}
+          className={stylex.props(styles.diff).className}
           offset={12}
           size={12}
           style={{ maxHeight: contentMaxHeight }}
         >
           <CodeDiff
-            className={styles.diffPanel}
+            className={stylex.props(styles.diffPanel).className}
             language={'markdown'}
             newContent={withTrailingNewline(newPrompt)}
             oldContent={withTrailingNewline(previousPrompt)}
@@ -188,17 +168,17 @@ const PromptDiffView = memo<PromptDiffViewProps>(({ newPrompt = '', previousProm
       )}
 
       {showPreview && (
-        <Flexbox className={styles.contentBox} gap={8}>
+        <Flexbox className={stylex.props(styles.contentBox).className} gap={8}>
           <Flexbox horizontal align={'center'} gap={6}>
-            <FileText className={styles.fileIcon} size={14} />
-            <span className={styles.promptLabel}>
+            <FileText className={stylex.props(styles.fileIcon).className} size={14} />
+            <span {...stylex.props(styles.promptLabel)}>
               {t('builtins.lobe-agent-builder.render.updatePrompt.newPrompt', {
                 count: newPrompt.length,
               })}
             </span>
           </Flexbox>
           <ScrollShadow
-            className={styles.promptContent}
+            className={stylex.props(styles.promptContent).className}
             offset={12}
             size={12}
             style={{ maxHeight: contentMaxHeight }}

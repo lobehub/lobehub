@@ -2,63 +2,53 @@
 
 import type { ModifyNodesArgs, ModifyOperation } from '@lobechat/editor-runtime';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Block, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, DiffIcon, Minus, Plus, X } from 'lucide-react';
 import { memo } from 'react';
 
 import type { ModifyNodesState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  content: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  index: css`
-    flex-shrink: 0;
-
-    width: 18px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: end;
-  `,
-  position: css`
-    flex-shrink: 0;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  row: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  content: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  index: {
+    flexShrink: 0,
+    width: '18px',
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'end',
+  },
+  position: {
+    flexShrink: 0,
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    background: cssVar.colorFillTertiary,
+  },
+  row: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'dashed', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const actionMeta = {
   insert: { color: cssVar.colorSuccess, icon: Plus },
@@ -99,11 +89,13 @@ export const ModifyNodesRender = memo<BuiltinRenderProps<ModifyNodesArgs, Modify
           const failed = result?.success === false;
 
           return (
-            <div className={styles.row} key={index}>
-              <span className={styles.index}>{index + 1}.</span>
+            <div {...stylex.props(styles.row)} key={index}>
+              <span {...stylex.props(styles.index)}>{index + 1}.</span>
               <Icon icon={meta.icon} size={14} style={{ color: meta.color, flexShrink: 0 }} />
-              {details.position && <span className={styles.position}>{details.position}</span>}
-              {details.content && <span className={styles.content}>{details.content}</span>}
+              {details.position && (
+                <span {...stylex.props(styles.position)}>{details.position}</span>
+              )}
+              {details.content && <span {...stylex.props(styles.content)}>{details.content}</span>}
               {success && (
                 <Icon
                   icon={Check}

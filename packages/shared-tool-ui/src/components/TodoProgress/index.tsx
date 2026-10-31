@@ -1,7 +1,8 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleArrowRight, CircleCheckBig, ListTodo } from 'lucide-react';
 import { memo } from 'react';
 
@@ -29,87 +30,67 @@ const RING_STROKE = 2;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUM = 2 * Math.PI * RING_RADIUS;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  countChip: css`
-    flex-shrink: 0;
-
-    margin-inline-end: 8px;
-    padding-block: 1px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  header: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  headerCount: css`
-    flex-shrink: 0;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  headerDetail: css`
-    overflow: hidden;
-    min-width: 0;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-  `,
-  headerLabel: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    gap: 0;
-    align-items: center;
-
-    min-width: 0;
-
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  ring: css`
-    transform: rotate(-90deg);
-    flex-shrink: 0;
-    margin-inline-end: 6px;
-  `,
-  ringProgress: css`
-    transition:
-      stroke-dashoffset 240ms ease,
-      stroke 240ms ease;
-  `,
-  ringTrack: css`
-    stroke: ${cssVar.colorFillSecondary};
-  `,
-  summaryDetail: css`
-    color: ${cssVar.colorText};
-  `,
-  summaryText: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  countChip: {
+    flexShrink: 0,
+    marginInlineEnd: '8px',
+    paddingBlock: '1px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    background: cssVar.colorFillTertiary,
+  },
+  header: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    background: cssVar.colorFillQuaternary,
+  },
+  headerCount: {
+    flexShrink: 0,
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    background: cssVar.colorFillTertiary,
+  },
+  headerDetail: {
+    overflow: 'hidden',
+    minWidth: '0',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+  },
+  headerLabel: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    gap: '0',
+    alignItems: 'center',
+    minWidth: '0',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  ring: { transform: 'rotate(-90deg)', flexShrink: 0, marginInlineEnd: '6px' },
+  ringProgress: { transition: 'stroke-dashoffset 240ms ease,\n      stroke 240ms ease' },
+  ringTrack: { stroke: cssVar.colorFillSecondary },
+  summaryDetail: { color: cssVar.colorText },
+  summaryText: {
+    overflow: 'hidden',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const STATE_ICONS = {
   allDone: CircleCheckBig,
@@ -143,9 +124,9 @@ export const TodoProgressRing = memo<TodoProgressRingProps>(({ completed, total 
   const color = allDone ? cssVar.colorSuccess : cssVar.colorInfo;
 
   return (
-    <svg className={styles.ring} height={RING_SIZE} width={RING_SIZE}>
+    <svg {...stylex.props(styles.ring)} height={RING_SIZE} width={RING_SIZE}>
       <circle
-        className={styles.ringTrack}
+        {...stylex.props(styles.ringTrack)}
         cx={RING_SIZE / 2}
         cy={RING_SIZE / 2}
         fill="none"
@@ -153,7 +134,7 @@ export const TodoProgressRing = memo<TodoProgressRingProps>(({ completed, total 
         strokeWidth={RING_STROKE}
       />
       <circle
-        className={styles.ringProgress}
+        {...stylex.props(styles.ringProgress)}
         cx={RING_SIZE / 2}
         cy={RING_SIZE / 2}
         fill="none"
@@ -187,16 +168,16 @@ export const TodoInspectorSummary = memo<TodoSummaryContentProps>(({ label, shin
     <>
       {total > 0 && <TodoProgressRing completed={completed} total={total} />}
       {total > 0 && state !== 'allDone' && (
-        <span className={styles.countChip}>
+        <span {...stylex.props(styles.countChip)}>
           {completed}/{total}
         </span>
       )}
-      <span className={styles.summaryText}>
+      <span {...stylex.props(styles.summaryText)}>
         <span className={cx(shiny && shinyTextStyles.shinyText)}>{label}</span>
         {detail && (
           <>
             {': '}
-            <span className={styles.summaryDetail}>{detail}</span>
+            <span {...stylex.props(styles.summaryDetail)}>{detail}</span>
           </>
         )}
       </span>
@@ -214,22 +195,22 @@ export const TodoPanelHeader = memo<TodoSummaryContentProps>(({ label, summary }
   const { completed, detail, state, total } = summary;
 
   return (
-    <div className={styles.header}>
+    <div {...stylex.props(styles.header)}>
       <Icon
         icon={STATE_ICONS[state]}
         size={16}
         style={{ color: stateColor(state), flexShrink: 0 }}
       />
-      <div className={styles.headerLabel}>
+      <div {...stylex.props(styles.headerLabel)}>
         <span>{label}</span>
         {detail && (
           <>
             <span>{': '}</span>
-            <span className={styles.headerDetail}>{detail}</span>
+            <span {...stylex.props(styles.headerDetail)}>{detail}</span>
           </>
         )}
       </div>
-      <span className={styles.headerCount}>
+      <span {...stylex.props(styles.headerCount)}>
         {completed}/{total}
       </span>
     </div>

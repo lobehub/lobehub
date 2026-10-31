@@ -2,69 +2,56 @@
 
 import type { InterestAreaKey } from '@lobechat/const';
 import type { BuiltinRenderProps, SaveUserQuestionInput } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  avatar: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    box-sizing: border-box;
-    width: 48px;
-    height: 48px;
-    border-radius: 16px;
-
-    font-size: 28px;
-    line-height: 1;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  chip: css`
-    display: inline-flex;
-    align-items: center;
-
-    padding-block: 4px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  detailCard: css`
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-    background: ${cssVar.colorFillTertiary};
-  `,
-  name: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  sectionLabel: css`
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  value: css`
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  avatar: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxSizing: 'border-box',
+    width: '48px',
+    height: '48px',
+    borderRadius: '16px',
+    fontSize: '28px',
+    lineHeight: 1,
+    background: cssVar.colorFillQuaternary,
+  },
+  chip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    background: cssVar.colorFillQuaternary,
+  },
+  detailCard: {
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    background: cssVar.colorFillTertiary,
+  },
+  name: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+    fontSize: '16px',
+    fontWeight: 600,
+    color: cssVar.colorText,
+  },
+  sectionLabel: { fontSize: '12px', fontWeight: 600, color: cssVar.colorTextSecondary },
+  value: { fontSize: '14px', fontWeight: 500, color: cssVar.colorText },
+});
 
 const SaveUserQuestion = memo<BuiltinRenderProps<SaveUserQuestionInput, unknown, unknown>>(
   ({ args }) => {
@@ -94,13 +81,13 @@ const SaveUserQuestion = memo<BuiltinRenderProps<SaveUserQuestionInput, unknown,
       <Flexbox gap={16}>
         {hasAgentIdentity && (
           <Flexbox gap={8}>
-            <Text className={styles.sectionLabel}>
+            <Text className={stylex.props(styles.sectionLabel).className}>
               {t('builtins.lobe-web-onboarding.render.agent')}
             </Text>
-            <div className={styles.detailCard}>
+            <div {...stylex.props(styles.detailCard)}>
               <Flexbox horizontal align="center" gap={12}>
-                <div className={styles.avatar}>{agentEmoji || '🤖'}</div>
-                {agentName && <div className={styles.name}>{agentName}</div>}
+                <div {...stylex.props(styles.avatar)}>{agentEmoji || '🤖'}</div>
+                {agentName && <div {...stylex.props(styles.name)}>{agentName}</div>}
               </Flexbox>
             </div>
           </Flexbox>
@@ -108,23 +95,23 @@ const SaveUserQuestion = memo<BuiltinRenderProps<SaveUserQuestionInput, unknown,
 
         {hasUserProfile && (
           <Flexbox gap={8}>
-            <Text className={styles.sectionLabel}>
+            <Text className={stylex.props(styles.sectionLabel).className}>
               {t('builtins.lobe-web-onboarding.render.fullName')}
             </Text>
-            <div className={styles.detailCard}>
-              <div className={styles.value}>{fullName}</div>
+            <div {...stylex.props(styles.detailCard)}>
+              <div {...stylex.props(styles.value)}>{fullName}</div>
             </div>
           </Flexbox>
         )}
 
         {hasInterests && (
           <Flexbox gap={8}>
-            <Text className={styles.sectionLabel}>
+            <Text className={stylex.props(styles.sectionLabel).className}>
               {t('builtins.lobe-web-onboarding.render.interests')}
             </Text>
             <Flexbox horizontal style={{ flexWrap: 'wrap', gap: 8 }}>
               {interestLabels.map((label) => (
-                <span className={styles.chip} key={label}>
+                <span {...stylex.props(styles.chip)} key={label}>
                   {label}
                 </span>
               ))}

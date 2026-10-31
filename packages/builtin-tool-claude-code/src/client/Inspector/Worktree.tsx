@@ -2,7 +2,9 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { GitForkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,55 +41,43 @@ const REMOVE_LABEL_KEYS = {
   loading: 'builtins.lobe-claude-code.worktree.remove.loading',
 } as const;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: min(420px, 60vw);
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  icon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextDescription};
-  `,
-  leadingIcon: css`
-    margin-inline-end: 6px;
-  `,
-  risk: css`
-    flex-shrink: 0;
-
-    margin-inline-start: 6px;
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorError};
-
-    background: ${cssVar.colorErrorBg};
-  `,
-  target: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    maxWidth: 'min(420px, 60vw)',
+    marginInlineStart: '6px',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    background: cssVar.colorFillTertiary,
+  },
+  icon: { flexShrink: 0, color: cssVar.colorTextDescription },
+  leadingIcon: { marginInlineEnd: '6px' },
+  risk: {
+    flexShrink: 0,
+    marginInlineStart: '6px',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorError,
+    background: cssVar.colorErrorBg,
+  },
+  target: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 const resolvePhase = (
   isArgumentsStreaming: boolean | undefined,
@@ -106,9 +96,9 @@ interface WorktreeTargetProps {
 }
 
 const WorktreeTarget = memo<WorktreeTargetProps>(({ target }) => (
-  <span className={styles.chip} title={target}>
-    <GitForkIcon className={styles.icon} size={12} />
-    <span className={styles.target}>{target}</span>
+  <span {...stylex.props(styles.chip)} title={target}>
+    <GitForkIcon className={stylex.props(styles.icon).className} size={12} />
+    <span {...stylex.props(styles.target)}>{target}</span>
   </span>
 ));
 
@@ -156,12 +146,15 @@ export const ExitWorktreeInspector = memo<BuiltinInspectorProps<ExitWorktreeArgs
 
     return (
       <div className={inspectorTextStyles.root}>
-        <GitForkIcon className={cx(styles.icon, styles.leadingIcon)} size={12} />
+        <GitForkIcon
+          className={cx(stylex.props(styles.icon, styles.leadingIcon).className)}
+          size={12}
+        />
         <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
           {label}
         </span>
         {action === 'remove' && discardChanges && (
-          <span className={styles.risk}>
+          <span {...stylex.props(styles.risk)}>
             {t('builtins.lobe-claude-code.worktree.discardChanges')}
           </span>
         )}

@@ -1,36 +1,26 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { RadioGroup } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, RadioGroup } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ClearTodosParams } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding: 12px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillTertiary};
-  `,
-  dangerText: css`
-    font-size: 13px;
-    color: ${cssVar.colorError};
-  `,
-  header: css`
-    color: ${cssVar.colorWarning};
-  `,
-  label: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  normalText: css`
-    font-size: 13px;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    padding: '12px',
+    borderRadius: cssVar.borderRadius,
+    background: cssVar.colorFillTertiary,
+  },
+  dangerText: { fontSize: '13px', color: cssVar.colorError },
+  header: { color: cssVar.colorWarning },
+  label: { fontSize: '13px', color: cssVar.colorTextSecondary },
+  normalText: { fontSize: '13px' },
+});
 
 /**
  * ClearTodos Intervention component
@@ -52,13 +42,18 @@ const ClearTodosIntervention = memo<BuiltinInterventionProps<ClearTodosParams>>(
 
     return (
       <Flexbox gap={12}>
-        <Flexbox horizontal align="center" className={styles.header} gap={8}>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.header).className}
+          gap={8}
+        >
           <Trash2 size={16} />
           <span style={{ fontSize: 14, fontWeight: 500 }}>{t('lobe-agent.clearTodos.header')}</span>
         </Flexbox>
 
-        <Flexbox className={styles.container} gap={8}>
-          <span className={styles.label}>{t('lobe-agent.clearTodos.label')}</span>
+        <Flexbox className={stylex.props(styles.container).className} gap={8}>
+          <span {...stylex.props(styles.label)}>{t('lobe-agent.clearTodos.label')}</span>
           <RadioGroup
             gap={8}
             horizontal={false}
@@ -66,7 +61,7 @@ const ClearTodosIntervention = memo<BuiltinInterventionProps<ClearTodosParams>>(
             options={[
               {
                 label: (
-                  <span className={styles.normalText}>
+                  <span {...stylex.props(styles.normalText)}>
                     {t('lobe-agent.clearTodos.option.completed')}
                   </span>
                 ),
@@ -74,7 +69,9 @@ const ClearTodosIntervention = memo<BuiltinInterventionProps<ClearTodosParams>>(
               },
               {
                 label: (
-                  <span className={styles.dangerText}>{t('lobe-agent.clearTodos.option.all')}</span>
+                  <span {...stylex.props(styles.dangerText)}>
+                    {t('lobe-agent.clearTodos.option.all')}
+                  </span>
                 ),
                 value: 'all',
               },

@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Avatar, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Users } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,44 +12,38 @@ import ToolTag from '@/features/ToolTag';
 
 import type { BatchCreateAgentsParams, BatchCreateAgentsState } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 4px;
-    padding-inline: 16px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextDescription};
-    text-overflow: ellipsis;
-  `,
-  empty: css`
-    padding: 16px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  item: css`
-    padding-block: 12px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  title: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    paddingBlock: '4px',
+    paddingInline: '16px',
+    borderRadius: '8px',
+    background: cssVar.colorFillQuaternary,
+  },
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextDescription,
+    textOverflow: 'ellipsis',
+  },
+  empty: { padding: '16px', color: cssVar.colorTextTertiary },
+  item: {
+    paddingBlock: '12px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  title: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: 500,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface AgentItemProps {
   agent: {
@@ -71,7 +65,7 @@ const AgentItem = memo<AgentItemProps>(({ agent, definition }) => {
   const tools = definition?.tools;
 
   return (
-    <Flexbox horizontal align="flex-start" className={styles.item} gap={12}>
+    <Flexbox horizontal align="flex-start" className={stylex.props(styles.item).className} gap={12}>
       <Avatar
         avatar={avatar}
         size={24}
@@ -79,8 +73,8 @@ const AgentItem = memo<AgentItemProps>(({ agent, definition }) => {
         title={agent.title}
       />
       <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-        <span className={styles.title}>{agent.title}</span>
-        {description && <span className={styles.description}>{description}</span>}
+        <span {...stylex.props(styles.title)}>{agent.title}</span>
+        {description && <span {...stylex.props(styles.description)}>{description}</span>}
         {tools && tools.length > 0 && (
           <Flexbox horizontal gap={4} style={{ marginTop: 8 }} wrap={'wrap'}>
             {tools.map((tool) => (
@@ -102,7 +96,7 @@ const BatchCreateAgentsRender = memo<
 
   if (!resultAgents || resultAgents.length === 0) {
     return (
-      <Flexbox align="center" className={styles.empty} gap={8}>
+      <Flexbox align="center" className={stylex.props(styles.empty).className} gap={8}>
         <Users size={24} />
         <span>{t('builtins.lobe-group-agent-builder.inspector.noResults')}</span>
       </Flexbox>
@@ -110,7 +104,7 @@ const BatchCreateAgentsRender = memo<
   }
 
   return (
-    <Flexbox className={styles.container}>
+    <Flexbox className={stylex.props(styles.container).className}>
       {resultAgents.map((agent, index) => (
         <AgentItem agent={agent} definition={definitions[index]} key={agent.agentId || index} />
       ))}

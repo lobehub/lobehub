@@ -1,19 +1,15 @@
 'use client';
 
 import { type BuiltinRenderProps } from '@lobechat/types';
-import { Block, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, Flexbox, Highlighter, Markdown, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import type { ReadReferenceParams, ReadReferenceState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow: hidden;
-    padding-inline: 8px 0;
-  `,
-}));
+const styles = stylex.create({
+  container: { overflow: 'hidden', paddingInlineStart: '8px', paddingInlineEnd: '0' },
+});
 
 const getFileExtension = (path: string): string => {
   const parts = path.split('.');
@@ -66,7 +62,7 @@ const ReadReference = memo<BuiltinRenderProps<ReadReferenceParams, ReadReference
     const sizeText = size ? formatSize(size) : '';
 
     return (
-      <Flexbox className={styles.container} gap={8}>
+      <Flexbox className={stylex.props(styles.container).className} gap={8}>
         <Flexbox horizontal align={'center'} justify={'space-between'}>
           <Text code ellipsis as={'span'} fontSize={12}>
             {displayPath}

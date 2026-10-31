@@ -2,34 +2,23 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Markdown } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import type { UpdateAgentParams } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  field: css`
-    margin-block-end: 8px;
-
-    &:last-child {
-      margin-block-end: 0;
-    }
-  `,
-  label: css`
-    margin-block-end: 4px;
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  value: css`
-    font-size: 13px;
-  `,
-}));
+const styles = stylex.create({
+  container: { padding: '12px', borderRadius: '8px', background: cssVar.colorFillQuaternary },
+  field: { marginBlockEnd: { 'default': '8px', ':last-child': '0' } },
+  label: {
+    marginBlockEnd: '4px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  value: { fontSize: '13px' },
+});
 
 const safeParse = (val: unknown): Record<string, any> | undefined => {
   if (!val) return undefined;
@@ -55,22 +44,22 @@ export const UpdateAgentRender = memo<BuiltinRenderProps<UpdateAgentParams>>(({ 
   if (!hasConfig && !hasMeta) return null;
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       {meta?.title && (
-        <div className={styles.field}>
-          <div className={styles.label}>Title</div>
-          <div className={styles.value}>{meta.title}</div>
+        <div {...stylex.props(styles.field)}>
+          <div {...stylex.props(styles.label)}>Title</div>
+          <div {...stylex.props(styles.value)}>{meta.title}</div>
         </div>
       )}
       {meta?.description && (
-        <div className={styles.field}>
-          <div className={styles.label}>Description</div>
-          <div className={styles.value}>{meta.description}</div>
+        <div {...stylex.props(styles.field)}>
+          <div {...stylex.props(styles.label)}>Description</div>
+          <div {...stylex.props(styles.value)}>{meta.description}</div>
         </div>
       )}
       {config?.systemRole && (
-        <div className={styles.field}>
-          <div className={styles.label}>System Prompt</div>
+        <div {...stylex.props(styles.field)}>
+          <div {...stylex.props(styles.label)}>System Prompt</div>
           <Block paddingBlock={8} paddingInline={12} variant={'outlined'} width="100%">
             <Markdown fontSize={13} variant={'chat'}>
               {config.systemRole as string}
@@ -79,9 +68,9 @@ export const UpdateAgentRender = memo<BuiltinRenderProps<UpdateAgentParams>>(({ 
         </div>
       )}
       {config?.model && (
-        <div className={styles.field}>
-          <div className={styles.label}>Model</div>
-          <div className={styles.value}>{config.model as string}</div>
+        <div {...stylex.props(styles.field)}>
+          <div {...stylex.props(styles.label)}>Model</div>
+          <div {...stylex.props(styles.value)}>{config.model as string}</div>
         </div>
       )}
     </div>

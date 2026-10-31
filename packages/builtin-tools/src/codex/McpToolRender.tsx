@@ -3,9 +3,9 @@
 import { LINEAR_TOOL_NAMES } from '@lobechat/shared-tool-ui/inspectors';
 import { GitHubRender, LinearRender } from '@lobechat/shared-tool-ui/renders';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Flexbox, Highlighter, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { ComponentType } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,13 +24,9 @@ import {
   getMcpToolName,
 } from './mcpToolUtils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  sectionLabel: css`
-    margin-block-end: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  sectionLabel: { marginBlockEnd: '4px', fontSize: '12px', color: cssVar.colorTextSecondary },
+});
 
 const LINEAR_TOOL_NAME_SET = new Set<string>([...LINEAR_TOOL_NAMES, 'fetch', 'search']);
 const SharedLinearRender = LinearRender as ComponentType<
@@ -97,7 +93,7 @@ const McpToolRender = memo<BuiltinRenderProps<CodexMcpToolArgs, CodexMcpToolStat
       <Flexbox gap={12}>
         {input && (
           <div>
-            <Text className={styles.sectionLabel}>
+            <Text className={stylex.props(styles.sectionLabel).className}>
               {t('builtins.codex.mcpTool.input', { defaultValue: 'Input' })}
             </Text>
             <Highlighter
@@ -113,7 +109,7 @@ const McpToolRender = memo<BuiltinRenderProps<CodexMcpToolArgs, CodexMcpToolStat
         )}
         {output && (
           <div>
-            <Text className={styles.sectionLabel}>
+            <Text className={stylex.props(styles.sectionLabel).className}>
               {t('builtins.codex.mcpTool.result', { defaultValue: 'Result' })}
             </Text>
             <Highlighter
@@ -129,7 +125,10 @@ const McpToolRender = memo<BuiltinRenderProps<CodexMcpToolArgs, CodexMcpToolStat
         )}
         {error && (
           <div>
-            <Text className={styles.sectionLabel} style={{ color: cssVar.colorError }}>
+            <Text
+              className={stylex.props(styles.sectionLabel).className}
+              style={{ color: cssVar.colorError }}
+            >
               {t('builtins.codex.mcpTool.error', { defaultValue: 'Error' })}
             </Text>
             <Highlighter

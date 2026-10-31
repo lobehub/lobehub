@@ -1,8 +1,8 @@
 'use client';
 
-import { Block, Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ListChecksIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -12,27 +12,23 @@ import type { Plan } from '../../../types';
 
 const MAX_CONTENT_HEIGHT = 100;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  content: css`
-    overflow: hidden auto;
-
-    max-height: ${MAX_CONTENT_HEIGHT}px;
-    padding: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  header: css`
-    cursor: pointer;
-    padding-block: 4px;
-    padding-inline: 0;
-    transition: opacity 0.2s;
-
-    &:hover {
-      opacity: 0.8;
-    }
-  `,
-}));
+const styles = stylex.create({
+  content: {
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    maxHeight: `${MAX_CONTENT_HEIGHT}px`,
+    padding: '12px',
+    borderRadius: cssVar.borderRadius,
+    background: cssVar.colorFillQuaternary,
+  },
+  header: {
+    cursor: 'pointer',
+    paddingBlock: '4px',
+    paddingInline: '0',
+    transition: 'opacity 0.2s',
+    opacity: { 'default': null, ':hover': 0.8 },
+  },
+});
 
 interface PlanCardProps {
   plan: Plan;
@@ -53,7 +49,7 @@ const PlanCard = memo<PlanCardProps>(({ plan }) => {
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.header}
+        className={stylex.props(styles.header).className}
         gap={8}
         style={{ overflow: 'hidden' }}
         onClick={handleHeaderClick}
@@ -73,7 +69,7 @@ const PlanCard = memo<PlanCardProps>(({ plan }) => {
 
       {/* Context content */}
       {hasContext && (
-        <div className={styles.content}>
+        <div {...stylex.props(styles.content)}>
           <Markdown fontSize={13} variant={'chat'}>
             {plan.context!}
           </Markdown>

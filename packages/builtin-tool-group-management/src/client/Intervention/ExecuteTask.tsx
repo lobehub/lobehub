@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Avatar, InputNumber, TextArea } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Avatar, Flexbox, InputNumber, TextArea, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Clock } from 'lucide-react';
 import type { ChangeEvent } from 'react';
@@ -15,52 +15,11 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import type { ExecuteTaskParams } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  agentCard: css`
-    padding: 4px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillTertiary};
-  `,
-  agentDescription: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  agentTitle: css`
-    font-size: 14px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  container: css`
-    padding-block: 12px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  header: css`
-    font-size: 14px;
-    font-weight: 600;
-  `,
-  icon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 32px;
-    height: 32px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorPrimary};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-  timeoutInput: css`
-    width: 100px;
-  `,
-}));
+const styles = stylex.create({
+  agentTitle: { fontSize: '14px', fontWeight: 600, color: cssVar.colorText },
+  container: { paddingBlock: '12px', borderRadius: cssVar.borderRadius },
+  timeoutInput: { width: '100px' },
+});
 
 const DEFAULT_TIMEOUT = 1_800_000; // 30 minutes
 
@@ -122,7 +81,7 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
     }, [registerBeforeApprove, hasChanges, instruction, timeout, args, onArgsChange]);
 
     return (
-      <Flexbox className={styles.container} gap={12}>
+      <Flexbox className={stylex.props(styles.container).className} gap={12}>
         {/* Header: Agent info + Timeout */}
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
@@ -133,7 +92,7 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
               style={{ borderRadius: 8, flexShrink: 0 }}
             />
             <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-              <span className={styles.agentTitle}>
+              <span {...stylex.props(styles.agentTitle)}>
                 {agent?.title || t('agentGroupManagement.executeTask.intervention.unknownAgent')}
               </span>
             </Flexbox>
@@ -143,7 +102,7 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
               <Clock size={14} />
             </Tooltip>
             <InputNumber
-              className={styles.timeoutInput}
+              className={stylex.props(styles.timeoutInput).className}
               max={120}
               min={1}
               size={'small'}

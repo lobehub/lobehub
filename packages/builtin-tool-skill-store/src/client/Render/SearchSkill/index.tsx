@@ -1,58 +1,41 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { MarketSkillItem, SearchSkillParams, SearchSkillState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow: hidden;
-
-    width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  description: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  empty: css`
-    padding: 24px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  identifier: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  item: css`
-    padding-block: 12px;
-    padding-inline: 14px;
-    border-block-end: 1px dashed ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  title: css`
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    overflow: 'hidden',
+    width: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    background: cssVar.colorBgContainer,
+  },
+  description: { fontSize: '13px', lineHeight: 1.6, color: cssVar.colorTextSecondary },
+  empty: { padding: '24px', color: cssVar.colorTextTertiary, textAlign: 'center' },
+  identifier: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  item: {
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'dashed', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  meta: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  title: { fontSize: '14px', fontWeight: 500, color: cssVar.colorText },
+});
 
 interface SkillItemProps {
   skill: MarketSkillItem;
@@ -62,13 +45,13 @@ const SkillItem = memo<SkillItemProps>(({ skill }) => {
   const { t } = useTranslation('plugin');
 
   return (
-    <Flexbox className={styles.item} gap={6}>
+    <Flexbox className={stylex.props(styles.item).className} gap={6}>
       <Flexbox gap={2}>
-        <div className={styles.title}>{skill.name}</div>
-        <div className={styles.identifier}>{skill.identifier}</div>
+        <div {...stylex.props(styles.title)}>{skill.name}</div>
+        <div {...stylex.props(styles.identifier)}>{skill.identifier}</div>
       </Flexbox>
       {(skill.description || skill.summary) && (
-        <div className={styles.description}>{skill.summary || skill.description}</div>
+        <div {...stylex.props(styles.description)}>{skill.summary || skill.description}</div>
       )}
       <Flexbox horizontal gap={6} wrap={'wrap'}>
         {skill.version && (
@@ -82,7 +65,7 @@ const SkillItem = memo<SkillItemProps>(({ skill }) => {
         {skill.category && <Tag size={'small'}>{skill.category}</Tag>}
       </Flexbox>
       {skill.repository && (
-        <Text ellipsis className={styles.meta}>
+        <Text ellipsis className={stylex.props(styles.meta).className}>
           {`${t('builtins.lobe-skill-store.render.repository')}: ${skill.repository}`}
         </Text>
       )}
@@ -100,14 +83,16 @@ const SearchSkill = memo<BuiltinRenderProps<SearchSkillParams, SearchSkillState>
 
     if (items.length === 0) {
       return (
-        <div className={styles.container}>
-          <div className={styles.empty}>{t('builtins.lobe-skill-store.inspector.noResults')}</div>
+        <div {...stylex.props(styles.container)}>
+          <div {...stylex.props(styles.empty)}>
+            {t('builtins.lobe-skill-store.inspector.noResults')}
+          </div>
         </div>
       );
     }
 
     return (
-      <Flexbox className={styles.container}>
+      <Flexbox className={stylex.props(styles.container).className}>
         {items.map((skill) => (
           <SkillItem key={skill.identifier} skill={skill} />
         ))}

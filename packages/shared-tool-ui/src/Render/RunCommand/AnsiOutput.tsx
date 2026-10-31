@@ -1,28 +1,26 @@
 'use client';
 
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import Anser from 'anser';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  pre: css`
-    overflow: auto;
-
-    max-height: 200px;
-    margin: 0;
-    padding: 8px;
-    border-radius: 6px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-    word-break: break-word;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  pre: {
+    overflow: 'auto',
+    maxHeight: '200px',
+    margin: '0',
+    padding: '8px',
+    borderRadius: '6px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    lineHeight: 1.6,
+    color: cssVar.colorText,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+    background: cssVar.colorFillTertiary,
+  },
+});
 
 interface AnsiOutputProps {
   text: string;
@@ -40,7 +38,7 @@ const AnsiOutput = memo<AnsiOutputProps>(({ text }) => {
   );
 
   return (
-    <pre className={styles.pre}>
+    <pre {...stylex.props(styles.pre)}>
       {segments.map((seg, i) => {
         const decorations = seg.decorations ?? [];
         const isDim = decorations.includes('dim');

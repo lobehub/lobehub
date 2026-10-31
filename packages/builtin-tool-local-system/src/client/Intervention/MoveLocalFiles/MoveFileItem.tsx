@@ -1,32 +1,23 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowRight } from 'lucide-react';
 import { memo } from 'react';
 
 import { useElectronStore } from '@/store/electron';
 import { desktopStateSelectors } from '@/store/electron/selectors';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  icon: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  item: css`
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  path: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    word-break: break-all;
-  `,
-}));
+const styles = stylex.create({
+  icon: { color: cssVar.colorTextQuaternary },
+  item: {
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'all 0.2s ease',
+    background: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
+  path: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', wordBreak: 'break-all' },
+});
 
 interface MoveFileItemProps {
   newPath: string;
@@ -38,15 +29,21 @@ const MoveFileItem = memo<MoveFileItemProps>(({ oldPath, newPath }) => {
   const displayNewPath = useElectronStore(desktopStateSelectors.displayRelativePath(newPath));
 
   return (
-    <Flexbox horizontal align="center" className={styles.item} gap={8} width="100%">
+    <Flexbox
+      horizontal
+      align="center"
+      className={stylex.props(styles.item).className}
+      gap={8}
+      width="100%"
+    >
       <Flexbox flex={1}>
-        <Text className={styles.path} type="secondary">
+        <Text className={stylex.props(styles.path).className} type="secondary">
           {displayOldPath}
         </Text>
       </Flexbox>
-      <Icon className={styles.icon} icon={ArrowRight} />
+      <Icon className={stylex.props(styles.icon).className} icon={ArrowRight} />
       <Flexbox flex={2}>
-        <Text className={styles.path}>{displayNewPath}</Text>
+        <Text className={stylex.props(styles.path).className}>{displayNewPath}</Text>
       </Flexbox>
     </Flexbox>
   );

@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps, TaskStatus } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,34 +21,26 @@ const STATUS_TONE: Partial<Record<TaskStatus, { bg: string; fg: string }>> = {
   scheduled: { bg: cssVar.colorInfoBg, fg: cssVar.colorInfo },
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  identifierChip: css`
-    flex-shrink: 0;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  separator: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  statusChip: css`
-    flex-shrink: 0;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-  `,
-}));
+const styles = stylex.create({
+  identifierChip: {
+    flexShrink: 0,
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    background: cssVar.colorFillTertiary,
+  },
+  separator: { flexShrink: 0, color: cssVar.colorTextQuaternary },
+  statusChip: {
+    flexShrink: 0,
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+  },
+});
 
 export const UpdateTaskStatusInspector = memo<
   BuiltinInspectorProps<UpdateTaskStatusParams, UpdateTaskStatusState>
@@ -62,12 +56,12 @@ export const UpdateTaskStatusInspector = memo<
       <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
         {t('builtins.lobe-task.apiName.updateTaskStatus')}
       </span>
-      {identifier && <span className={styles.identifierChip}>{identifier}</span>}
+      {identifier && <span {...stylex.props(styles.identifierChip)}>{identifier}</span>}
       {status && (
         <>
-          <span className={styles.separator}>·</span>
+          <span {...stylex.props(styles.separator)}>·</span>
           <span
-            className={styles.statusChip}
+            className={stylex.props(styles.statusChip).className}
             style={{
               background: tone?.bg ?? cssVar.colorFillTertiary,
               color: tone?.fg ?? cssVar.colorTextSecondary,

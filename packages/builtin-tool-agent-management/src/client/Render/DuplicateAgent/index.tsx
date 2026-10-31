@@ -2,27 +2,18 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DuplicateAgentParams, DuplicateAgentState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding: 12px;
-    border-radius: 8px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  label: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  value: css`
-    font-size: 13px;
-  `,
-}));
+const styles = stylex.create({
+  container: { padding: '12px', borderRadius: '8px', background: cssVar.colorFillQuaternary },
+  label: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextSecondary },
+  value: { fontSize: '13px' },
+});
 
 export const DuplicateAgentRender = memo<
   BuiltinRenderProps<DuplicateAgentParams, DuplicateAgentState>
@@ -32,19 +23,19 @@ export const DuplicateAgentRender = memo<
   if (!pluginState?.success) return null;
 
   return (
-    <div className={styles.container}>
+    <div {...stylex.props(styles.container)}>
       <Flexbox gap={8}>
         <Flexbox gap={2}>
-          <span className={styles.label}>
+          <span {...stylex.props(styles.label)}>
             {t('builtins.lobe-agent-management.render.duplicateAgent.sourceId')}
           </span>
-          <span className={styles.value}>{pluginState.sourceAgentId}</span>
+          <span {...stylex.props(styles.value)}>{pluginState.sourceAgentId}</span>
         </Flexbox>
         <Flexbox gap={2}>
-          <span className={styles.label}>
+          <span {...stylex.props(styles.label)}>
             {t('builtins.lobe-agent-management.render.duplicateAgent.newId')}
           </span>
-          <span className={styles.value}>{pluginState.newAgentId}</span>
+          <span {...stylex.props(styles.value)}>{pluginState.newAgentId}</span>
         </Flexbox>
       </Flexbox>
     </div>

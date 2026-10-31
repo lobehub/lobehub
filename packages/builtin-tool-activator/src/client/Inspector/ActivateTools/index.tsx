@@ -1,9 +1,9 @@
 'use client';
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { AlertTriangle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,46 +12,34 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { ActivatedToolInfo, ActivateToolsParams, ActivateToolsState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  notFoundHint: css`
-    flex-shrink: 0;
-    max-width: 100%;
-    font-size: 12px;
-    color: ${cssVar.colorWarning};
-  `,
-  tool: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  toolName: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  tools: css`
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    align-items: center;
-
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({
+  notFoundHint: { flexShrink: 0, maxWidth: '100%', fontSize: '12px', color: cssVar.colorWarning },
+  tool: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    background: cssVar.colorFillTertiary,
+  },
+  toolName: { overflow: 'hidden', minWidth: '0', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  tools: {
+    display: 'inline-flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    alignItems: 'center',
+    marginInlineStart: '4px',
+  },
+});
 
 export const ActivateToolsInspector = memo<
   BuiltinInspectorProps<ActivateToolsParams, ActivateToolsState>
@@ -74,10 +62,10 @@ export const ActivateToolsInspector = memo<
           {t('builtins.lobe-activator.apiName.activateTools')}
         </span>
         {identifiers && identifiers.length > 0 && (
-          <span className={styles.tools}>
+          <span {...stylex.props(styles.tools)}>
             {identifiers.map((id) => (
-              <span className={styles.tool} key={id}>
-                <span className={styles.toolName}>{id}</span>
+              <span {...stylex.props(styles.tool)} key={id}>
+                <span {...stylex.props(styles.toolName)}>{id}</span>
               </span>
             ))}
           </span>
@@ -101,7 +89,7 @@ export const ActivateToolsInspector = memo<
       <span>{t('builtins.lobe-activator.apiName.activateTools')}</span>
       {hasNotFound && (
         <Tooltip title={notFoundTitle}>
-          <Flexbox horizontal className={styles.notFoundHint} gap={4}>
+          <Flexbox horizontal className={stylex.props(styles.notFoundHint).className} gap={4}>
             <Icon color={cssVar.colorWarning} icon={AlertTriangle} />
             <span>
               {t('builtins.lobe-activator.inspector.activateTools.notFoundCount', {
@@ -112,11 +100,11 @@ export const ActivateToolsInspector = memo<
         </Tooltip>
       )}
       {visibleTools.length > 0 && (
-        <span className={styles.tools}>
+        <span {...stylex.props(styles.tools)}>
           {visibleTools.map((tool) => (
-            <span className={styles.tool} key={tool.identifier}>
+            <span {...stylex.props(styles.tool)} key={tool.identifier}>
               {tool.avatar && <Avatar avatar={tool.avatar} size={14} title={tool.name} />}
-              <span className={styles.toolName}>{tool.name}</span>
+              <span {...stylex.props(styles.toolName)}>{tool.name}</span>
             </span>
           ))}
         </span>

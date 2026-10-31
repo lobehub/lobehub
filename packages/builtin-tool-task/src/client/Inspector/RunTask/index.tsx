@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
+import { cx, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Play } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,44 +12,37 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { RunTaskParams, RunTaskState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  identifierChip: css`
-    flex-shrink: 0;
-
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  promptChip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 240px;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  separator: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  identifierChip: {
+    flexShrink: 0,
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  promptChip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    alignItems: 'center',
+    minWidth: '0',
+    maxWidth: '240px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  separator: { flexShrink: 0, color: cssVar.colorTextQuaternary },
+});
 
 export const RunTaskInspector = memo<BuiltinInspectorProps<RunTaskParams, RunTaskState>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
@@ -65,13 +60,16 @@ export const RunTaskInspector = memo<BuiltinInspectorProps<RunTaskParams, RunTas
           {t('builtins.lobe-task.apiName.runTask')}
         </span>
         {identifier && (
-          <span className={styles.identifierChip} style={{ marginInlineStart: 4 }}>
+          <span
+            className={stylex.props(styles.identifierChip).className}
+            style={{ marginInlineStart: 4 }}
+          >
             {identifier}
           </span>
         )}
         {continueTopicId && (
           <>
-            <span className={styles.separator}>·</span>
+            <span {...stylex.props(styles.separator)}>·</span>
             <span style={{ color: cssVar.colorTextTertiary, fontSize: 12 }}>
               {t('builtins.lobe-task.run.continueTopic')}
             </span>
@@ -79,8 +77,8 @@ export const RunTaskInspector = memo<BuiltinInspectorProps<RunTaskParams, RunTas
         )}
         {prompt && (
           <>
-            <span className={styles.separator}>·</span>
-            <span className={styles.promptChip}>{prompt}</span>
+            <span {...stylex.props(styles.separator)}>·</span>
+            <span {...stylex.props(styles.promptChip)}>{prompt}</span>
           </>
         )}
       </div>

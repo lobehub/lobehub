@@ -1,7 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,23 +11,20 @@ import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { ActivateDeviceParams, ActivateDeviceState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  device: css`
-    overflow: hidden;
-
-    max-width: 240px;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  device: {
+    overflow: 'hidden',
+    maxWidth: '240px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadiusSM,
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    background: cssVar.colorFillTertiary,
+  },
+});
 
 export const ActivateDeviceInspector = memo<
   BuiltinInspectorProps<ActivateDeviceParams, ActivateDeviceState>
@@ -43,7 +42,7 @@ export const ActivateDeviceInspector = memo<
       <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
         {t('builtins.lobe-remote-device.apiName.activateDevice')}
       </span>
-      {deviceLabel && <span className={styles.device}>{deviceLabel}</span>}
+      {deviceLabel && <span {...stylex.props(styles.device)}>{deviceLabel}</span>}
     </div>
   );
 });

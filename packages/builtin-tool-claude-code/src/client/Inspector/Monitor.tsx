@@ -2,64 +2,55 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Check, Monitor as MonitorIcon, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ClaudeCodeApiName, type MonitorArgs } from '../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  command: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  description: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  monitorIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextDescription};
-  `,
-  statusIcon: css`
-    margin-inline-start: 4px;
-  `,
-  timeout: css`
-    flex-shrink: 0;
-    margin-inline-start: 8px;
-    font-feature-settings: 'tnum';
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    marginInlineStart: '6px',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    background: cssVar.colorFillTertiary,
+  },
+  command: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  description: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '12px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  monitorIcon: { flexShrink: 0, color: cssVar.colorTextDescription },
+  statusIcon: { marginInlineStart: '4px' },
+  timeout: {
+    flexShrink: 0,
+    marginInlineStart: '8px',
+    fontFeatureSettings: "'tnum'",
+    color: cssVar.colorTextDescription,
+  },
+});
 
 const formatTimeout = (ms: number | undefined): string | undefined => {
   if (typeof ms !== 'number' || !Number.isFinite(ms) || ms <= 0) return undefined;
@@ -116,16 +107,26 @@ export const MonitorInspector = memo<BuiltinInspectorProps<MonitorArgs>>(
       <div className={inspectorTextStyles.root}>
         <span className={cx(isShiny && shinyTextStyles.shinyText)}>{label}:</span>
         {chipText && (
-          <span className={styles.chip}>
-            <MonitorIcon className={styles.monitorIcon} size={12} />
-            <span className={showAsCommand ? styles.command : styles.description}>{chipText}</span>
+          <span {...stylex.props(styles.chip)}>
+            <MonitorIcon className={stylex.props(styles.monitorIcon).className} size={12} />
+            <span {...stylex.props(showAsCommand ? styles.command : styles.description)}>
+              {chipText}
+            </span>
           </span>
         )}
-        {timeoutLabel && <span className={styles.timeout}>· {timeoutLabel}</span>}
+        {timeoutLabel && <span {...stylex.props(styles.timeout)}>· {timeoutLabel}</span>}
         {isLoading ? null : isSuccess ? (
-          <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
+          <Check
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorSuccess}
+            size={14}
+          />
         ) : isError ? (
-          <X className={styles.statusIcon} color={cssVar.colorError} size={14} />
+          <X
+            className={stylex.props(styles.statusIcon).className}
+            color={cssVar.colorError}
+            size={14}
+          />
         ) : null}
       </div>
     );

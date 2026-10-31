@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Progress, Spin, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Flexbox, Progress, Spin, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
@@ -11,18 +11,19 @@ import StreamingMarkdown from '@/components/StreamingMarkdown';
 import type { IdentityMemoryViewModel } from './identityMemoryViewModel';
 import { memoryCardStyles as styles, MemorySection, SummaryAccordion } from './MemoryCardParts';
 
-const localStyles = createStaticStyles(({ css, cssVar }) => ({
-  evidence: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-
-    font-size: 13px;
-    font-style: italic;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const localStyles = stylex.create({
+  evidence: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorder,
+    fontSize: '13px',
+    fontStyle: 'italic',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 export interface IdentityMemoryCardProps {
   data: IdentityMemoryViewModel;
@@ -125,7 +126,7 @@ export const IdentityMemoryCard = memo<IdentityMemoryCardProps>(
 
             {sourceEvidence && (
               <MemorySection title={'Evidence'} tone={'gold'}>
-                <div className={localStyles.evidence}>{sourceEvidence}</div>
+                <div {...stylex.props(localStyles.evidence)}>{sourceEvidence}</div>
               </MemorySection>
             )}
 

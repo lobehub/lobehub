@@ -1,8 +1,8 @@
 'use client';
 
-import { Icon, MaterialFileTypeIcon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Icon, MaterialFileTypeIcon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ImageIcon } from 'lucide-react';
 import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
@@ -24,16 +24,10 @@ const IMAGE_EXTENSIONS = new Set([
   '.webp',
 ]);
 
-const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    flex-shrink: 0;
-    margin-inline-end: 4px;
-  `,
-  text: css`
-    padding-block: 1px;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  icon: { flexShrink: 0, marginInlineEnd: '4px' },
+  text: { paddingBlock: '1px', color: cssVar.colorText },
+});
 
 interface FilePathDisplayProps {
   filePath: string;
@@ -65,10 +59,10 @@ export const FilePathDisplay = memo<FilePathDisplayProps>(({ filePath, isDirecto
     <>
       {name &&
         (isImage && !isDirectory ? (
-          <Icon className={styles.icon} icon={ImageIcon} size={16} />
+          <Icon className={stylex.props(styles.icon).className} icon={ImageIcon} size={16} />
         ) : (
           <MaterialFileTypeIcon
-            className={styles.icon}
+            className={stylex.props(styles.icon).className}
             fallbackUnknownType={false}
             filename={name}
             size={16}
@@ -78,7 +72,7 @@ export const FilePathDisplay = memo<FilePathDisplayProps>(({ filePath, isDirecto
         ))}
       {displayPath && (
         <Text
-          className={styles.text}
+          className={stylex.props(styles.text).className}
           ellipsis={{
             tooltipWhenOverflow: true,
           }}

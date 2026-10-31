@@ -3,7 +3,9 @@
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { createStaticStyles, Flexbox, useTheme } from '@lobehub/ui';
+import { Flexbox, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,66 +13,57 @@ import AgentAvatar from '@/components/AgentAvatar';
 
 import type { AgentSearchItem, SearchAgentParams, SearchAgentState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  agentItem: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 6px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  agentRole: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  agentTitle: css`
-    font-size: 13px;
-    font-weight: 500;
-  `,
-  container: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-
-    padding: 12px;
-    border-radius: 8px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  description: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  heteroBadge: css`
-    padding-block: 2px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-size: 10px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  marketBadge: css`
-    padding-block: 2px;
-    padding-inline: 6px;
-    border-radius: 4px;
-
-    font-size: 10px;
-    color: ${cssVar.colorPrimary};
-
-    background: ${cssVar.colorPrimaryBg};
-  `,
-  noResults: css`
-    padding: 12px;
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({
+  agentItem: {
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: '6px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  agentRole: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  agentTitle: { fontSize: '13px', fontWeight: 500 },
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  description: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  heteroBadge: {
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  marketBadge: {
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    color: cssVar.colorPrimary,
+    backgroundColor: cssVar.colorPrimaryBg,
+    backgroundImage: 'none',
+  },
+  noResults: {
+    padding: '12px',
+    fontSize: '13px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+});
 
 export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, SearchAgentState>>(
   ({ pluginState }) => {
@@ -80,14 +73,14 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
 
     if (agents.length === 0) {
       return (
-        <div className={styles.noResults}>
+        <div {...stylex.props(styles.noResults)}>
           {t('builtins.lobe-agent-builder.inspector.noResults')}
         </div>
       );
     }
 
     return (
-      <div className={styles.container}>
+      <div {...stylex.props(styles.container)}>
         {agents.map((agent: AgentSearchItem) => {
           const displayName = agentDisplayName(agent, agent.id);
           const role = agentSecondaryDisplayName(agent);
@@ -96,7 +89,7 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.agentItem}
+              className={stylex.props(styles.agentItem).className}
               gap={12}
               key={agent.id}
             >
@@ -110,17 +103,17 @@ export const SearchAgentRender = memo<BuiltinRenderProps<SearchAgentParams, Sear
               />
               <Flexbox flex={1} gap={2}>
                 <Flexbox horizontal align={'center'} gap={8}>
-                  <span className={styles.agentTitle}>{displayName}</span>
-                  {role && <span className={styles.agentRole}>{role}</span>}
+                  <span {...stylex.props(styles.agentTitle)}>{displayName}</span>
+                  {role && <span {...stylex.props(styles.agentRole)}>{role}</span>}
                   {agent.heteroType && (
-                    <span className={styles.heteroBadge}>
+                    <span {...stylex.props(styles.heteroBadge)}>
                       {HETEROGENEOUS_TYPE_LABELS[agent.heteroType] ?? agent.heteroType}
                     </span>
                   )}
-                  {agent.isMarket && <span className={styles.marketBadge}>Market</span>}
+                  {agent.isMarket && <span {...stylex.props(styles.marketBadge)}>Market</span>}
                 </Flexbox>
                 {agent.description && (
-                  <span className={styles.description}>{agent.description}</span>
+                  <span {...stylex.props(styles.description)}>{agent.description}</span>
                 )}
               </Flexbox>
             </Flexbox>

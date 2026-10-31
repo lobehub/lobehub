@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,74 +17,56 @@ interface SubmitAgentPickState {
   summaries?: InstallMarketplaceAgentSummary[];
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding: 12px;
-    border: 1px solid ${cssVar.colorFillSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  cardSkipped: css`
-    opacity: 0.65;
-  `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  list: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 8px;
-    width: 100%;
-  `,
-  meta: css`
-    flex-shrink: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  skippedTag: css`
-    flex-shrink: 0;
-
-    margin-inline-start: 4px;
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 999px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  title: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    font-size: 14px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  titleRow: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    background: cssVar.colorBgElevated,
+  },
+  cardSkipped: { opacity: 0.65 },
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+  },
+  list: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+    gap: '8px',
+    width: '100%',
+  },
+  skippedTag: {
+    flexShrink: 0,
+    marginInlineStart: '4px',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    background: cssVar.colorFillTertiary,
+  },
+  title: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  titleRow: { display: 'flex', gap: '6px', alignItems: 'center', width: '100%' },
+});
 
 export type SubmitAgentPickRenderProps = Pick<
   BuiltinRenderProps<SubmitAgentPickArgs, SubmitAgentPickState>,
@@ -107,24 +89,24 @@ const SubmitAgentPick = memo<SubmitAgentPickRenderProps>(({ pluginState }) => {
         {skippedCount > 0 &&
           ` · ${t('agentMarketplace.render.alreadyInLibrary', { count: skippedCount })}`}
       </Text>
-      <div className={styles.list}>
+      <div {...stylex.props(styles.list)}>
         {summaries.map((summary) => (
           <div
-            className={cx(styles.card, summary.skipped && styles.cardSkipped)}
+            {...stylex.props(styles.card, summary.skipped && styles.cardSkipped)}
             key={summary.templateId}
           >
             <Avatar avatar={summary.avatar || '🤖'} shape="square" size={36} />
             <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-              <div className={styles.titleRow}>
-                <span className={styles.title}>{summary.title || summary.templateId}</span>
+              <div {...stylex.props(styles.titleRow)}>
+                <span {...stylex.props(styles.title)}>{summary.title || summary.templateId}</span>
                 {summary.skipped && (
-                  <span className={styles.skippedTag}>
+                  <span {...stylex.props(styles.skippedTag)}>
                     {t('agentMarketplace.render.alreadyInLibraryTag')}
                   </span>
                 )}
               </div>
               {summary.description && (
-                <div className={styles.description}>{summary.description}</div>
+                <div {...stylex.props(styles.description)}>{summary.description}</div>
               )}
             </Flexbox>
           </div>

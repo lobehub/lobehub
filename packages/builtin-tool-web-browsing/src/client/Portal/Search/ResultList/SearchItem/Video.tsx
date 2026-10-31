@@ -1,63 +1,52 @@
 import type { UniformSearchResult } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useState } from 'react';
 
 import { ENGINE_ICON_MAP } from '../../../../../const';
 import TitleExtra from './TitleExtra';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    container: css`
-      display: flex;
-      flex: 1;
-
-      padding: 8px;
-      border-radius: 8px;
-
-      color: initial;
-
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-    `,
-    desc: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-
-      color: ${cssVar.colorTextTertiary};
-      text-overflow: ellipsis;
-    `,
-    displayLink: css`
-      color: ${cssVar.colorTextQuaternary};
-    `,
-    iframe: css`
-      border: 1px solid ${cssVar.colorBorder};
-      border-radius: 8px;
-    `,
-    title: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 1;
-
-      font-size: 16px;
-      color: ${cssVar.colorLink};
-      text-overflow: ellipsis;
-    `,
-    url: css`
-      overflow: hidden;
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 1;
-
-      color: ${cssVar.colorTextDescription};
-      text-overflow: ellipsis;
-    `,
-  };
+const styles = stylex.create({
+  container: {
+    display: 'flex',
+    flex: '1',
+    padding: '8px',
+    borderRadius: '8px',
+    color: 'initial',
+    background: { 'default': null, ':hover': cssVar.colorFillTertiary },
+  },
+  desc: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+  },
+  iframe: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '8px',
+  },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+    fontSize: '16px',
+    color: cssVar.colorLink,
+    textOverflow: 'ellipsis',
+  },
+  url: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '1',
+    color: cssVar.colorTextDescription,
+    textOverflow: 'ellipsis',
+  },
 });
 
 interface SearchResultProps extends UniformSearchResult {
@@ -70,13 +59,16 @@ const VideoItem = memo<SearchResultProps>(
     const videoUrl = iframeSrc || (res as any).iframe_src; // iframe_src is a SearchXNG field, for backward compatibility with old data structure
     return (
       <Flexbox gap={12}>
-        <Flexbox className={styles.container} onClick={() => setExpand(!expand)}>
+        <Flexbox
+          className={stylex.props(styles.container).className}
+          onClick={() => setExpand(!expand)}
+        >
           <Flexbox horizontal flex={1} gap={8} padding={12}>
             {videoUrl && (
               <Flexbox>
                 <iframe
                   // alt={title}
-                  className={styles.iframe}
+                  className={stylex.props(styles.iframe).className}
                   height={100}
                   src={videoUrl}
                   width={200}
@@ -106,7 +98,7 @@ const VideoItem = memo<SearchResultProps>(
                       title: engine,
                     }))}
                   />
-                  <Flexbox className={styles.title}>{title}</Flexbox>
+                  <Flexbox className={stylex.props(styles.title).className}>{title}</Flexbox>
                 </Flexbox>
                 <TitleExtra
                   category={category}
@@ -115,16 +107,16 @@ const VideoItem = memo<SearchResultProps>(
                   score={score}
                 />
               </Flexbox>
-              <Text className={styles.url} type={'secondary'}>
+              <Text className={stylex.props(styles.url).className} type={'secondary'}>
                 {url}
               </Text>
-              <Flexbox className={styles.desc}>{content}</Flexbox>
+              <Flexbox className={stylex.props(styles.desc).className}>{content}</Flexbox>
             </Flexbox>
           </Flexbox>
         </Flexbox>
         {expand && videoUrl && (
           <Flexbox>
-            <iframe className={styles.iframe} height={440} src={videoUrl} width={'100%'} />
+            <iframe {...stylex.props(styles.iframe)} height={440} src={videoUrl} width={'100%'} />
           </Flexbox>
         )}
       </Flexbox>

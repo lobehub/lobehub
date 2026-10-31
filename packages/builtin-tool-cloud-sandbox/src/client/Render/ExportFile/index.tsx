@@ -1,20 +1,17 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleCheckIcon, CircleXIcon, DownloadIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
 import type { ExportFileState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow: hidden;
-    padding-inline: 8px 0;
-  `,
-}));
+const styles = stylex.create({
+  container: { overflow: 'hidden', paddingInlineStart: '8px', paddingInlineEnd: '0' },
+});
 
 interface ExportFileParams {
   path: string;
@@ -50,7 +47,7 @@ const ExportFile = memo<BuiltinRenderProps<ExportFileParams, ExportFileState>>(
     }, [pluginState?.downloadUrl, pluginState?.filename]);
 
     return (
-      <Flexbox className={styles.container} gap={8}>
+      <Flexbox className={stylex.props(styles.container).className} gap={8}>
         <Flexbox horizontal align={'center'} gap={8}>
           {pluginState === undefined ? null : isSuccess ? (
             <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={12} />

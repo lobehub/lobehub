@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleCheckBig, SendHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,27 +20,18 @@ const parseResult = (content: unknown): SendMessageResult | undefined => {
   }
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  bodyBox: css`
-    overflow: hidden;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: 8px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  container: css`
-    padding-block: 4px;
-  `,
-  header: css`
-    padding-inline: 4px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  status: css`
-    padding-inline: 4px;
-  `,
-}));
+const styles = stylex.create({
+  bodyBox: {
+    overflow: 'hidden',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    borderRadius: '8px',
+    background: cssVar.colorFillTertiary,
+  },
+  container: { paddingBlock: '4px' },
+  header: { paddingInline: '4px', color: cssVar.colorTextSecondary },
+  status: { paddingInline: '4px' },
+});
 
 const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }) => {
   const { t } = useTranslation('plugin');
@@ -55,8 +46,13 @@ const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }
   const delivered = result?.success === true;
 
   return (
-    <Flexbox className={styles.container} gap={8}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+    <Flexbox className={stylex.props(styles.container).className} gap={8}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={8}
+      >
         <Icon icon={SendHorizontal} size={'small'} />
         <Text ellipsis strong>
           {summary || t('builtins.lobe-claude-code.sendMessage.title')}
@@ -64,7 +60,7 @@ const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }
       </Flexbox>
 
       {body && (
-        <Flexbox className={styles.bodyBox}>
+        <Flexbox className={stylex.props(styles.bodyBox).className}>
           <Markdown style={{ maxHeight: 240, overflow: 'auto' }} variant={'chat'}>
             {body}
           </Markdown>
@@ -72,7 +68,12 @@ const SendMessage = memo<BuiltinRenderProps<SendMessageArgs>>(({ args, content }
       )}
 
       {delivered && (
-        <Flexbox horizontal align={'center'} className={styles.status} gap={6}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.status).className}
+          gap={6}
+        >
           <Icon icon={CircleCheckBig} size={'small'} style={{ color: cssVar.colorSuccess }} />
           <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
             {t('builtins.lobe-claude-code.sendMessage.queued')}
