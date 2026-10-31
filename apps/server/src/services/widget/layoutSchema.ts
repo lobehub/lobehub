@@ -179,10 +179,32 @@ const literalIssues = (n: WidgetLayoutNode): string | undefined => {
   }
 };
 
+/**
+ * Beyond its shape, a layout must stay small once drawn: a repeat multiplies
+ * its template by its item count, so templates are weighed by `limit` (the
+ * renderer's cap when unset), and a repeat may not sit inside another — nested
+ * caps would multiply into millions of nodes from a small tree.
+ */
 export const widgetLayoutSchema = node.superRefine((root, ctx) => {
   let count = 0;
-  const walk = (n: WidgetLayoutNode, depth: number, at: (string | number)[]) => {
+  let expanded = 0;
+  const walk = (
+    n: WidgetLayoutNode,
+    depth: number,
+    at: (string | number)[],
+    weight = 1,
+    inRepeat = false,
+  ) => {
     count += 1;
+    expanded += weight;
+    if (n.type === 'repeat' && inRepeat) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'a repeat cannot be nested in another repeat',
+        path: at,
+      });
+      return;
+    }
     if (depth > WIDGET_LAYOUT_LIMITS.depth) {
       ctx.addIssue({
         code: 'custom',
@@ -193,15 +215,24 @@ export const widgetLayoutSchema = node.superRefine((root, ctx) => {
     }
     const issue = literalIssues(n);
     if (issue) ctx.addIssue({ code: 'custom', message: issue, path: at });
+    const repeat = n.type === 'repeat';
     childrenOf(n).forEach((child, index) =>
       walk(
         child,
         depth + 1,
-        n.type === 'repeat' ? [...at, 'template'] : [...at, 'children', index],
+        repeat ? [...at, 'template'] : [...at, 'children', index],
+        repeat ? weight * (n.limit ?? WIDGET_LAYOUT_LIMITS.repeat) : weight,
+        inRepeat || repeat,
       ),
     );
   };
   walk(root, 1, []);
+  if (expanded > WIDGET_LAYOUT_LIMITS.expandedNodes) {
+    ctx.addIssue({
+      code: 'custom',
+      message: `layout draws up to ${expanded} nodes once repeats expand; the limit is ${WIDGET_LAYOUT_LIMITS.expandedNodes} — lower repeat limits or simplify their templates`,
+    });
+  }
   if (count > WIDGET_LAYOUT_LIMITS.nodes) {
     ctx.addIssue({
       code: 'custom',

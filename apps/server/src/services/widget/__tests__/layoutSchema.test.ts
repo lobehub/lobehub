@@ -54,6 +54,30 @@ describe('widgetLayoutSchema', () => {
     expect(JSON.stringify(result.error?.issues)).toContain('nested deeper');
   });
 
+  it('rejects a repeat nested in another repeat', () => {
+    const repeat = (template: unknown) => ({ items: 'data.items', template, type: 'repeat' });
+
+    const result = widgetLayoutSchema.safeParse(repeat(repeat(repeat(repeat(text('x'))))));
+
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('cannot be nested');
+  });
+
+  it('rejects a layout whose repeats expand past the drawn-node limit', () => {
+    const row = { children: Array.from({ length: 30 }, () => text('x')), type: 'stack' };
+    const repeat = (limit?: number) => ({
+      items: 'data.items',
+      limit,
+      template: row,
+      type: 'repeat',
+    });
+
+    expect(widgetLayoutSchema.safeParse(repeat(10)).success).toBe(true);
+    const result = widgetLayoutSchema.safeParse(repeat());
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('once repeats expand');
+  });
+
   it('rejects a layout with more nodes than the limit', () => {
     const result = widgetLayoutSchema.safeParse({
       children: Array.from({ length: 200 }, () => text('x')),

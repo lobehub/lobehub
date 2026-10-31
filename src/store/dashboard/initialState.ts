@@ -4,9 +4,9 @@ import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import type {
   DashboardDetail,
   DashboardListItem,
+  DashboardProjectWidgetItem,
   DashboardTrendSeries,
   DashboardWidgetDetail,
-  DashboardWidgetItem,
   DashboardWidgetRunDetail,
   DashboardWidgetRunItem,
   DashboardWidgetVersionItem,
@@ -30,9 +30,9 @@ export interface DashboardState {
   /** Replica bookkeeping for `projectDashboardsMap`. */
   projectDashboardsReplica: ReplicaState<DashboardListItem[]>;
   /** Every widget of a project (with or without an agent), keyed by project id. */
-  projectWidgetsMap: Record<string, DashboardWidgetItem[]>;
+  projectWidgetsMap: Record<string, DashboardProjectWidgetItem[]>;
   /** Replica bookkeeping for `projectWidgetsMap`. */
-  projectWidgetsReplica: ReplicaState<DashboardWidgetItem[]>;
+  projectWidgetsReplica: ReplicaState<DashboardProjectWidgetItem[]>;
   /** Widgets with a board placement request in flight. */
   widgetAddingIds: string[];
   /** Widgets opened on their own (outside a board), keyed by widget id. */

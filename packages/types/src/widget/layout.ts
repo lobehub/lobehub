@@ -308,6 +308,8 @@ export type WidgetLayoutNodeType = WidgetLayoutNode['type'];
 /** Bounds every stored layout stays within. */
 export const WIDGET_LAYOUT_LIMITS = {
   depth: 12,
+  /** Nodes drawn once every repeat expands to its limit; repeats never nest. */
+  expandedNodes: 1000,
   nodes: 200,
   repeat: 48,
 } as const;

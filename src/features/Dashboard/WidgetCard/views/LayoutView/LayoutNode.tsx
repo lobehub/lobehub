@@ -253,6 +253,8 @@ const LayoutNodeBody = ({
       );
     }
     case 'repeat': {
+      // Validation rejects nested repeats; never multiply caps for one that slipped through.
+      if ('item' in scope) return null;
       const items = getPath(scope, node.items);
       if (!Array.isArray(items)) return null;
       const limit = Math.min(
