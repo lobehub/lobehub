@@ -1,7 +1,8 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { createStaticStyles, Flexbox, ScrollArea } from '@lobehub/ui';
+import { Flexbox, ScrollArea } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { RefObject } from 'react';
 import { memo, useMemo } from 'react';
 
@@ -9,18 +10,19 @@ import { resolveAssistantGroupFromMessages } from '../utils/resolveAssistantGrou
 import ContentBlock from './ContentBlock';
 import type { RenderableAssistantContentBlock } from './types';
 
-const styles = createStaticStyles(({ css }) => ({
-  scrollRoot: css`
-    border-radius: 0;
-    background: transparent;
-  `,
-  scrollTask: css`
-    max-height: min(50vh, 300px);
-  `,
-  scrollWorkflow: css`
-    max-height: min(40vh, 320px);
-  `,
-}));
+const styles = stylex.create({
+  scrollRoot: {
+    borderRadius: '0',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  scrollTask: {
+    maxHeight: 'min(50vh, 300px)',
+  },
+  scrollWorkflow: {
+    maxHeight: 'min(40vh, 320px)',
+  },
+});
 
 interface ContentBlocksScrollBaseProps {
   disableEditing?: boolean;
@@ -84,13 +86,15 @@ const ContentBlocksScroll = memo<ContentBlocksScrollProps>((props) => {
     return body;
   }
 
-  const scrollClass = variant === 'task' ? styles.scrollTask : styles.scrollWorkflow;
+  const scrollClass = stylex.props(
+    variant === 'task' ? styles.scrollTask : styles.scrollWorkflow,
+  ).className;
 
   return (
     <ScrollArea
       disableContentFit
       scrollFade
-      className={styles.scrollRoot}
+      className={stylex.props(styles.scrollRoot).className}
       contentProps={{ style: { paddingInlineEnd: 12 } }}
       scrollbarProps={{
         style: {

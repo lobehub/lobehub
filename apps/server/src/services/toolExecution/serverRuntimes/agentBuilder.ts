@@ -22,6 +22,7 @@ import { DiscoverService } from '@/server/services/discover';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import { searchMarketTools } from './marketToolSearch';
 import {
   NEXT_RUN_NOTE,
   resolveOrInstallMarketPlugin,
@@ -164,40 +165,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         }
       },
 
-      searchMarketTools: async (params: SearchMarketToolsParams): Promise<ToolExecutionResult> => {
-        try {
-          const response = await discoverService.getMcpList({
-            category: params.category,
-            pageSize: params.pageSize || 10,
-            q: params.query,
-          });
-
-          const tools = response.items.map((item) => ({
-            author: item.author,
-            description: item.description,
-            identifier: item.identifier,
-            name: item.name,
-            tags: item.tags,
-          }));
-
-          let summary = `Found ${response.totalCount} tool(s) in the marketplace.`;
-          if (params.query) {
-            summary = `Found ${response.totalCount} tool(s) matching "${params.query}".`;
-          }
-
-          const toolLines = tools
-            .map((t) => `- ${t.name} (${t.identifier})${t.description ? ': ' + t.description : ''}`)
-            .join('\n');
-
-          return {
-            content: `${summary}\n\n${toolLines}`,
-            state: { query: params.query, tools, totalCount: response.totalCount },
-            success: true,
-          };
-        } catch (error) {
-          return handleError(error, 'Failed to search market tools');
-        }
-      },
+      searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
+        searchMarketTools({ discoverService, pluginModel }, params),
 
       updateConfig: async (
         params: UpdateAgentConfigParams,

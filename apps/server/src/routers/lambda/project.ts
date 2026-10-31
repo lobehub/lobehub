@@ -12,6 +12,7 @@ import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoo
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 /**
@@ -187,11 +188,15 @@ export const projectRouter = router({
         if (input.coordinatorAgentId) {
           await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
         }
-        return {
-          data: await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input)),
-          message: 'Project created',
-          success: true,
-        };
+        const project = await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input));
+        await createDefaultChannel({
+          agentId: project.coordinatorAgentId,
+          db: ctx.serverDB,
+          projectId: project.id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data: project, message: 'Project created', success: true };
       } catch (error) {
         mapProjectError(error, 'create');
       }

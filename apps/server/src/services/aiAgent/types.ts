@@ -246,6 +246,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   queuedSuccessor?: boolean;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /**
+   * The run must take place on the requested `deviceId`: refuse it, before
+   * anything is written, when the agent's effective execution target would drop
+   * that device (a workspace agent fixed to another target). Without it the
+   * device is a preference the target policy may override.
+   */
+  requireDevice?: boolean;
   /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
   reservedOperationId?: string;
   /** Whether to continue execution from an existing persisted message */

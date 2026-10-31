@@ -4,7 +4,7 @@ import {
   AGENT_DOCUMENT_SKILL_CATEGORY,
   AGENT_SIGNAL_SOURCE_TYPE,
 } from '@lobechat/const';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type * as ReactRouterDom from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -106,7 +106,9 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => navigateMock,
 }));
 
-vi.mock('@/features/SkillsList', () => {
+vi.mock('@/features/SkillsList', async () => {
+  const { filterSkillItems } = await import('@/features/SkillsList/filterSkillItems');
+  const { default: SkillsSearchBar } = await import('@/features/SkillsList/SkillsSearchBar');
   type Item = { fileCount?: number; id: string; name: string };
   const SkillsList = ({
     items,
@@ -158,7 +160,7 @@ vi.mock('@/features/SkillsList', () => {
     </div>
   );
   const useProjectSkills = (...args: unknown[]) => useProjectSkillsMock(...args);
-  return { SkillSection, SkillsList, useProjectSkills };
+  return { filterSkillItems, SkillSection, SkillsList, SkillsSearchBar, useProjectSkills };
 });
 
 // UserLevelSkills owns its own store wiring and is exercised separately. We
@@ -648,6 +650,70 @@ describe('AgentDocumentsGroup', () => {
     // placeholder rather than rendering an empty section per source.
     expect(screen.getByText('No skills found')).toBeInTheDocument();
     expect(screen.queryByTestId('skills-list')).not.toBeInTheDocument();
+  });
+
+  describe('skill search', () => {
+    const search = (value: string) =>
+      fireEvent.change(screen.getByLabelText('workingPanel.skills.searchPlaceholder'), {
+        target: { value },
+      });
+
+    beforeEach(() => {
+      documentListMock.mockReturnValue({
+        data: [skillBundleRow, skillIndexRow],
+        error: undefined,
+        isLoading: false,
+        mutate: vi.fn(),
+      });
+    });
+
+    it('filters skills and shows a no-match state while keeping the input', async () => {
+      render(<AgentDocumentsGroup />);
+      expect(screen.getByText('YouTube Comment Retrieval Workflow')).toBeInTheDocument();
+
+      search('no-such-skill');
+      await waitFor(() =>
+        expect(screen.getByText('workingPanel.skills.noSearchResults')).toBeInTheDocument(),
+      );
+      expect(screen.queryByText('YouTube Comment Retrieval Workflow')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('workingPanel.skills.searchPlaceholder')).toHaveValue(
+        'no-such-skill',
+      );
+
+      search('youtube');
+      await waitFor(() =>
+        expect(screen.getByText('YouTube Comment Retrieval Workflow')).toBeInTheDocument(),
+      );
+    });
+
+    it('does not keep filtering after the search bar unmounts with the Skills tab', async () => {
+      render(<AgentDocumentsGroup />);
+
+      search('no-such-skill');
+      await waitFor(() =>
+        expect(screen.getByText('workingPanel.skills.noSearchResults')).toBeInTheDocument(),
+      );
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Documents' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
+
+      expect(screen.getByLabelText('workingPanel.skills.searchPlaceholder')).toHaveValue('');
+      expect(screen.getByText('YouTube Comment Retrieval Workflow')).toBeInTheDocument();
+    });
+
+    it('hides the search bar when there are no skills at all', () => {
+      documentListMock.mockReturnValue({
+        data: [fileDocRow],
+        error: undefined,
+        isLoading: false,
+        mutate: vi.fn(),
+      });
+      render(<AgentDocumentsGroup />);
+
+      expect(
+        screen.queryByLabelText('workingPanel.skills.searchPlaceholder'),
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('shows the web empty state when no web items are present', () => {

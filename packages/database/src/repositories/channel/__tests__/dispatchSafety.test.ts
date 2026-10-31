@@ -163,14 +163,14 @@ describe('Channel dispatch reservation', () => {
       routing: 'decision',
     });
     const [first] = await jobsOf(db, blocked.id);
-    await db.insert(channelJobs).values(
-      Array.from({ length: 120 }, (_, index) => ({
-        ...first,
-        createdAt: new Date(first.createdAt.getTime() + index + 1),
-        deliveryKey: `backlog-${index}`,
-        id: undefined,
-      })),
-    );
+    for (let index = 0; index < 120; index++) {
+      await asOwner.send(channel.id, {
+        content: `Backlog ${index}`,
+        mentions: [offline.id],
+        requestKey: `backlog-${index}`,
+        routing: 'decision',
+      });
+    }
     const fresh = await asOwner.send(channel.id, {
       content: 'Answer me',
       mentions: [healthy.id],

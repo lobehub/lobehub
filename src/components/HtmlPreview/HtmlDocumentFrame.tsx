@@ -1,18 +1,13 @@
-import { createStaticStyles, HtmlPreviewIframe } from '@lobehub/ui';
+import { HtmlPreviewIframe } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useEffect, useRef, useState } from 'react';
 
 import { nextWidenBaseline } from './widenRemount';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    width: 100%;
-  `,
-  frame: css`
-    display: block;
-    width: 100%;
-    border: 0;
-  `,
-}));
+const styles = stylex.create({
+  container: { width: '100%' },
+  frame: { display: 'block', width: '100%', borderStyle: 'none' },
+});
 
 interface HtmlDocumentFrameProps {
   content: string;
@@ -53,9 +48,9 @@ const HtmlDocumentFrame = ({ content, title }: HtmlDocumentFrameProps) => {
   }, []);
 
   return (
-    <div className={styles.container} ref={containerRef}>
+    <div {...stylex.props(styles.container)} ref={containerRef}>
       <HtmlPreviewIframe
-        className={styles.frame}
+        className={stylex.props(styles.frame).className}
         content={content}
         defaultHeight={480}
         key={frameKey}

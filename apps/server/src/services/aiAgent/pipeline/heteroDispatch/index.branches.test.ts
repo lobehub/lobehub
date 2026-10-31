@@ -62,7 +62,10 @@ vi.mock('@/server/modules/AgentRuntime/factory', () => ({
 
 vi.mock('@/server/services/agentQuota', () => ({
   AgentQuotaService: vi.fn(function () {
-    return { planDeviceRouting: mocks.planDeviceRouting };
+    return {
+      planDeviceRouting: mocks.planDeviceRouting,
+      resolveDeviceRowId: async (id?: string) => (id ? `row-${id}` : undefined),
+    };
   }),
 }));
 
@@ -549,7 +552,11 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
 
     await dispatchHeteroAgent(deps, createCtx(deviceCtx), createInput('claude-code'));
 
-    expect(mocks.planDeviceRouting).toHaveBeenCalledWith('agent-1', { provider: 'claude-code' });
+    // The routing is asked for this device, so its own account choice applies.
+    expect(mocks.planDeviceRouting).toHaveBeenCalledWith('agent-1', {
+      deviceId: 'row-dev-1',
+      provider: 'claude-code',
+    });
     expect(mocks.dispatchAgentRun.mock.calls[0][0].claudeAccountRouting).toEqual(routing);
   });
 

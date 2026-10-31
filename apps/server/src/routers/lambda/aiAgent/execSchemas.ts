@@ -200,6 +200,12 @@ export const ExecAgentFieldsSchema = z.object({
   clientIds: execAgentClientIdsSchema,
   /** Explicit device ID to bind to the topic and activate for this run */
   deviceId: z.string().optional(),
+  /**
+   * The run must take place on `deviceId`: refuse it (`PRECONDITION_FAILED`,
+   * nothing written) when the agent's effective execution target would drop
+   * that device. Sent by `lh topic send --new --device`.
+   */
+  requireDevice: z.boolean().optional(),
   /** Current desktop device hint, honored only for an effective local target */
   localDeviceId: z.string().optional(),
   /** Optional existing message IDs to include in context */
@@ -312,6 +318,12 @@ export const ExecAgentFieldsSchema = z.object({
    * the message behind that run instead.
    */
   supersedeLiveRun: z.boolean().optional(),
+  /**
+   * Title of the topic this send creates (`lh topic send --new --title`).
+   * Ignored when the send continues an existing topic; without it the topic is
+   * named after the prompt.
+   */
+  title: z.string().max(255).optional(),
   trigger: z
     .string()
     .refine((value) => value !== RequestTrigger.Bot, {

@@ -59,10 +59,3 @@ export const userMemoriesExperiences = pgTable(
     index('user_memories_experiences_user_memory_id_index').on(table.userMemoryId),
   ],
 );
-
-export type UserMemoryExperience = typeof userMemoriesExperiences.$inferSelect;
-export type UserMemoryExperiencesWithoutVectors = Omit<
-  UserMemoryExperience,
-  'situationVector' | 'actionVector' | 'keyLearningVector'
->;
-export type NewUserMemoryExperience = typeof userMemoriesExperiences.$inferInsert;

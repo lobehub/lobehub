@@ -39,6 +39,7 @@ import {
   type ChannelTab,
   defaultTab,
   footerSaveHidden,
+  isRecordTab,
   resolveTabs,
   tabsWithIssues,
 } from './channelTabs';
@@ -65,6 +66,7 @@ import {
   tabOfModule,
 } from './saveModules';
 import { getSchemaFields, groupSettingsFields, REPLY_KEYS } from './settingsGroups';
+import { useFoldPreviewOnRecords } from './useFoldPreviewOnRecords';
 import { useNarrowLayout } from './useNarrowLayout';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -271,11 +273,13 @@ const PlatformDetail = memo<PlatformDetailProps>(
           groupSettingsFields(getSchemaFields(platformDef.schema, 'settings', featureFlags)).map(
             (group) => group.key,
           ),
+          { hasConfig: !!currentConfig },
         ),
-      [featureFlags, platformDef.schema],
+      [featureFlags, platformDef.schema, currentConfig],
     );
     const activeTab =
       pickedTab && tabs.includes(pickedTab) ? pickedTab : defaultTab(tabs, !!currentConfig);
+    useFoldPreviewOnRecords(activeTab, previewOpen, setPreviewOpen);
     // The blocks the page saves one by one. A platform with its own credential body (WeChat)
     // connects through its own flow, so it has no credentials block.
     const saveModules = useMemo(() => {
@@ -1036,6 +1040,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
                   currentConfig={currentConfig}
                   form={form}
                   hasConfig={!!currentConfig}
+                  hideSetupHints={isRecordTab(activeTab)}
                   platformDef={platformDef}
                   saveResult={saveResult}
                   testResult={testResult}

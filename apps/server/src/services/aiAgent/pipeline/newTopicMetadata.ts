@@ -5,6 +5,8 @@ export interface NewTopicMetadataInput {
   appContext?: InternalExecAgentParams['appContext'];
   botContext?: InternalExecAgentParams['botContext'];
   cronJobId?: string;
+  /** The bound device was chosen explicitly for this conversation, not auto-picked. */
+  deviceBindingPinned?: boolean;
   editingAgentId?: string;
   /** Working directory the topic is born in; overrides the client-supplied one. */
   projectDirectory?: { path: string };
@@ -24,6 +26,7 @@ export const buildNewTopicMetadata = ({
   appContext,
   botContext,
   cronJobId,
+  deviceBindingPinned,
   editingAgentId,
   projectDirectory,
   taskId,
@@ -58,6 +61,7 @@ export const buildNewTopicMetadata = ({
     bot: botContext,
     boundDeviceId: topicBoundDeviceId,
     cronJobId: cronJobId || undefined,
+    ...(deviceBindingPinned && { deviceBindingPinned }),
     ...(editingAgentId && { editingAgentId }),
     ...(editingGroupId && { editingGroupId }),
     taskId,
