@@ -222,7 +222,12 @@ export class MessageKeywordSearchQueries extends MessageScope {
             // `metadata.taskId` is a verifier topic. In production every such
             // topic is one (16,216 of 16,216 over 60 days); human chats about
             // a task carry `trigger: 'chat'`.
-            and(isNull(topics.trigger), sql`${topics.metadata} ->> 'taskId' IS NULL`),
+            and(
+              isNull(topics.trigger),
+              // `->> ... IS NULL` on an extracted jsonb value crashes the planner
+              // under pg_search, so ask the same question with a COALESCE sentinel.
+              sql`COALESCE(${topics.metadata} ->> 'taskId', '') = ''`,
+            ),
             notInArray(topics.trigger, AUTOMATED_PROMPT_TOPIC_TRIGGERS),
           ),
     ];
