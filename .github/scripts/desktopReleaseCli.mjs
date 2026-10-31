@@ -77,7 +77,7 @@ export async function runReleaseCli(command, env = process.env) {
       ...intent,
       mergeSha: pr.merge_commit_sha,
       prNumber: pr.number,
-      ...(intent.mode === 'hotfix' && { prBaseSha: pr.base.sha }),
+      ...(['hotfix', 'recovery'].includes(intent.mode) && { prBaseSha: pr.base.sha }),
     };
     const file = path.join(env.RUNNER_TEMP, 'desktop-release-body.md');
     await writeFile(
@@ -108,6 +108,18 @@ export async function runReleaseCli(command, env = process.env) {
         cloudSha,
         baseSourcesHash: sourcesHash(baseline),
         ...(env.CLOUD_OVERRIDE_REASON && { overrideReason: env.CLOUD_OVERRIDE_REASON }),
+      }),
+    );
+    return;
+  }
+  if (command === 'recovery-intent') {
+    console.log(
+      formatIntent({
+        schemaVersion: 1,
+        mode: 'recovery',
+        cloudSha: env.CLOUD_REF,
+        recoveryBaseSha: env.RECOVERY_BASE_SHA,
+        overrideReason: env.CLOUD_OVERRIDE_REASON,
       }),
     );
     return;
@@ -157,20 +169,26 @@ export async function runReleaseCli(command, env = process.env) {
     intent = validateReleaseIntent(event.release?.body || '', ossSha);
     mode = intent?.mode || 'rebuild';
   }
-  if (mode === 'hotfix') {
+  if (mode === 'hotfix' || mode === 'recovery') {
     intent ||= validateReleaseIntent(targetRelease.body || '', ossSha);
-    if (intent?.mode !== 'hotfix')
-      throw new Error('Hotfix requires bound release intent metadata from its merged PR');
+    if (intent?.mode !== mode)
+      throw new Error(
+        'Hotfix/recovery requires matching bound release intent metadata from its merged PR',
+      );
     if (
-      (env.BASE_VERSION && normalizeVersion(env.BASE_VERSION) !== intent.baseVersion) ||
+      (env.BASE_VERSION &&
+        (mode !== 'hotfix' || normalizeVersion(env.BASE_VERSION) !== intent.baseVersion)) ||
       (env.CLOUD_REF && env.CLOUD_REF !== intent.cloudSha) ||
       (env.BASE_SOURCES_HASH && env.BASE_SOURCES_HASH !== intent.baseSourcesHash) ||
-      (env.CLOUD_OVERRIDE_REASON && env.CLOUD_OVERRIDE_REASON.trim() !== intent.overrideReason)
+      (env.CLOUD_OVERRIDE_REASON && env.CLOUD_OVERRIDE_REASON.trim() !== intent.overrideReason) ||
+      (env.RECOVERY_BASE_SHA && env.RECOVERY_BASE_SHA !== intent.recoveryBaseSha)
     )
       throw new Error('Manual hotfix inputs conflict with the bound release intent');
-    const baseline = await deliveredBaseline(store, intent.baseVersion, intent.baseSourcesHash);
     await store.assertReleasePr(intent);
-    await store.assertHotfixBase(baseline, intent.prBaseSha);
+    if (mode === 'hotfix') {
+      const baseline = await deliveredBaseline(store, intent.baseVersion, intent.baseSourcesHash);
+      await store.assertHotfixBase(baseline, intent.prBaseSha);
+    }
   }
   const result = await resolveSources(
     {
@@ -183,6 +201,7 @@ export async function runReleaseCli(command, env = process.env) {
       baseVersion: intent?.baseVersion || env.BASE_VERSION || undefined,
       baseSourcesHash: intent?.baseSourcesHash || env.BASE_SOURCES_HASH || undefined,
       overrideReason: intent?.overrideReason || env.CLOUD_OVERRIDE_REASON || undefined,
+      recoveryBaseSha: intent?.recoveryBaseSha || env.RECOVERY_BASE_SHA || undefined,
       evidence: {
         runId: mode === 'import' ? env.EVIDENCE_RUN_ID : env.GITHUB_RUN_ID,
         runAttempt: Number(mode === 'import' ? env.EVIDENCE_RUN_ATTEMPT : env.GITHUB_RUN_ATTEMPT),
