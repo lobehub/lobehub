@@ -1,4 +1,5 @@
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
+import type { QuotaDeviceAccount } from '@lobechat/types';
 
 import { defineReplica } from '@/libs/replica';
 import type { agentQuotaService } from '@/services/agentQuota';
@@ -57,6 +58,31 @@ export const quotaAccountsResource = defineReplica<string, QuotaAccount[]>({
 export const quotaBindingsResource = defineReplica<string, QuotaBinding[]>({
   key: (agentId) => agentId,
   name: 'agentQuotaBindings',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+export type { QuotaDeviceAccount } from '@lobechat/types';
+
+/** Replica key of one agent's account choice on one device (gateway id). */
+export const quotaDeviceAccountKey = (agentId: string, deviceId: string) =>
+  `${agentId}|${deviceId}`;
+
+/** Inverse of `quotaDeviceAccountKey`; agent ids never contain `|`. */
+export const parseQuotaDeviceAccountKey = (key: string) => {
+  const index = key.indexOf('|');
+  return { agentId: key.slice(0, index), deviceId: key.slice(index + 1) };
+};
+
+/**
+ * One agent's account choice on one device, keyed `quotaDeviceAccountKey`. A
+ * login lives on one machine, so the Manual pick is made per device; a device
+ * without one falls back to the legacy agent-wide pin, then Auto.
+ */
+export const quotaDeviceAccountResource = defineReplica<string, QuotaDeviceAccount>({
+  key: (key) => key,
+  name: 'agentQuotaDeviceAccount',
   persist: { maxEntries: 50 },
   storage: 'indexedDB',
   version: 1,

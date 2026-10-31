@@ -2,6 +2,8 @@ import { MemorySourceType } from '@lobechat/types';
 import { type WorkflowContext } from '@upstash/workflow';
 import { chunk } from 'es-toolkit/compat';
 
+import { listConsolidatedUserIds } from '@/database/models/userMemory/consolidation';
+import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import {
@@ -28,6 +30,49 @@ const WORKFLOW_PATH = 'api/workflows/memory-user-memory/call-cron-hourly-analysi
 const { webhook, upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
 const resolveBaseUrl = () => webhook.baseUrl || appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
+
+/**
+ * Starts the nightly incremental consolidation of every consolidated user, once per day, on the
+ * page that ends the hourly chain. With the real executor that is the empty page after the last
+ * nonempty one, because a nonempty page always returns a cursor.
+ */
+const scheduleNightlyConsolidation = async (
+  context: WorkflowContext<MemoryExtractionHourlyWorkflowPayload>,
+  baseUrl: string,
+) => {
+  // NOTICE: The window decision is time-dependent, so it must be evaluated inside a step that
+  // Upstash can replay with the same result. Reading the clock before branching would let a
+  // replayed page that crosses the hour boundary skip the fan-out it already committed to.
+  const inNightlyWindow = await runStep(
+    context,
+    'memory:user-memory:hourly:consolidation-window',
+    () => {
+      const { consolidationNightlyHourUtc } = parseMemoryExtractionConfig();
+      if (consolidationNightlyHourUtc === undefined) return false;
+
+      return new Date().getUTCHours() === consolidationNightlyHourUtc;
+    },
+  );
+  if (!inNightlyWindow) return;
+
+  const stepName = 'memory:user-memory:hourly:schedule-consolidation';
+  const guard = await checkGuard(context, WORKFLOW_PATH, {
+    response: { processedUsers: 0 },
+    stepName,
+  });
+  if (!guard.result) return guard.response;
+
+  await runStep(context, stepName, async () => {
+    const db = await getServerDB();
+    const userIdsToConsolidate = await listConsolidatedUserIds(db);
+    for (const userId of userIdsToConsolidate) {
+      await MemoryExtractionWorkflowService.triggerConsolidation(userId, baseUrl, {
+        extraHeaders: upstashWorkflowExtraHeaders,
+      });
+    }
+    return userIdsToConsolidate.length;
+  });
+};
 
 export const hourlyWorkflowHandler = async (
   context: WorkflowContext<MemoryExtractionHourlyWorkflowPayload>,
@@ -122,6 +167,11 @@ export const hourlyWorkflowHandler = async (
 
   const userIds = userBatch.ids;
   if (userIds.length === 0) {
+    if (!dryRun) {
+      const response = await scheduleNightlyConsolidation(context, baseUrl);
+      if (response) return response;
+    }
+
     await markHourlyMemoryExtractionSuccess(hourlyTaskId, {
       processedUsers: 0,
       scheduledBatches: 0,
@@ -204,6 +254,11 @@ export const hourlyWorkflowHandler = async (
       ),
     );
     await appendHourlyWorkflowRunId(hourlyTaskId, result.workflowRunId);
+  }
+
+  if (!nextCursor && !dryRun) {
+    const response = await scheduleNightlyConsolidation(context, baseUrl);
+    if (response) return response;
   }
 
   if (!nextCursor) {

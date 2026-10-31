@@ -70,6 +70,26 @@ describe('OIDC HTTP adapter', () => {
       }
     });
 
+    it('pins the host to APP_URL even when a proxy forwards another domain', async () => {
+      const request = new Request('https://lobehub-cloud-next-stable.vercel.app/oidc/device/auth', {
+        headers: {
+          'host': 'lobehub-cloud-next-stable.vercel.app',
+          'x-forwarded-host': 'lobehub-cloud-next-stable.vercel.app',
+          'x-forwarded-proto': 'http',
+        },
+        method: 'POST',
+      }) as unknown as NextRequest;
+
+      const { createNodeRequest } = await import('./http-adapter');
+      const nodeRequest = await createNodeRequest(request);
+
+      expect(nodeRequest.headers).toMatchObject({
+        'host': 'example.com',
+        'x-forwarded-host': 'example.com',
+        'x-forwarded-proto': 'https',
+      });
+    });
+
     it('passes POST bodies through as a readable Node stream without pre-parsing', async () => {
       const body = 'grant_type=authorization_code&code=test-code';
       const request = new Request('https://example.com/oidc/token?client_id=test', {

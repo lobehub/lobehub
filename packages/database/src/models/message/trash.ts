@@ -11,6 +11,7 @@ import {
 } from '../../utils/softDelete';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { recomputeTopicUsage } from '../topicUsage';
+import { nonNull } from '../utils/rows';
 import type { MessageBranchSnapshots } from './branchSnapshots';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
@@ -84,8 +85,8 @@ export class MessageTrashMutations extends MessageScope {
           .from(messagePlugins)
           .where(inArray(messagePlugins.toolCallId, toolCallIds));
         for (const row of companionRows) {
-          /* v8 ignore next -- unreachable: `toolCallId` is never null: `inArray(messagePlugins.toolCallId, …)` excludes NULL */
-          const owner = row.toolCallId ? toolCallOwner.get(row.toolCallId) : undefined;
+          // `inArray(messagePlugins.toolCallId, …)` excludes NULL.
+          const owner = toolCallOwner.get(nonNull(row.toolCallId, 'message_plugins.tool_call_id'));
           if (owner && !requestedIds.has(row.id)) companionOwner.set(row.id, owner);
         }
         const companionIds = [...companionOwner.keys()];

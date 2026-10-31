@@ -1,24 +1,24 @@
 import { type DivProps } from '@lobehub/ui';
-import { Avatar, createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Avatar, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  banner: css`
-    position: relative;
+import { sx } from '@/styles/sx';
 
-    overflow: hidden;
-
-    height: 64px;
-    margin-block-end: -56px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  bannerImg: css`
-    position: absolute;
-    filter: blur(40px) saturate(1.5);
-  `,
-}));
+const styles = stylex.create({
+  banner: {
+    position: 'relative',
+    overflow: 'hidden',
+    height: '64px',
+    marginBlockEnd: '-56px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  bannerEmpty: { backgroundColor: cssVar.colorFillTertiary },
+  bannerImg: { position: 'absolute', filter: 'blur(40px) saturate(1.5)' },
+});
 
 interface CardBannerProps extends DivProps {
   avatar?: string | ReactNode;
@@ -33,17 +33,16 @@ const CardBanner = memo<CardBannerProps>(
     return (
       <Flexbox
         align={'center'}
-        className={cx(styles.banner, className)}
         justify={'center'}
-        style={avatar ? {} : { backgroundColor: cssVar.colorFillTertiary }}
         width={'100%'}
+        {...sx([styles.banner, !avatar && styles.bannerEmpty], className)}
         {...props}
       >
         {avatar && (
           <Avatar
             alt={'banner'}
             avatar={avatar}
-            className={styles.bannerImg}
+            className={stylex.props(styles.bannerImg).className}
             shape={'square'}
             size={size}
           />

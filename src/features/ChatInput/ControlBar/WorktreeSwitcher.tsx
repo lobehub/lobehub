@@ -1,9 +1,6 @@
 import { deriveWorktreePath, type DeviceGitWorktreeListItem } from '@lobechat/types';
 import {
   confirmModal,
-  createStaticStyles,
-  cssVar,
-  cx,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
@@ -16,6 +13,8 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CheckIcon,
   FolderPlusIcon,
@@ -40,290 +39,224 @@ import { useTranslation } from 'react-i18next';
 import { gitService } from '@/services/git';
 
 import { openCreateWorktreeModal } from './CreateWorktreeModal';
-import { gitMenuTriggerStyles } from './gitMenuTriggerStyles';
+import gitMenuTriggerStyles from './gitMenuTrigger.module.css';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { getPathName, isDisabled, normalizeDisplayPath } from './worktreeHelpers';
 
-const styles = createStaticStyles(({ css }) => ({
-  badge: css`
-    flex: none;
+const spin = stylex.keyframes({ to: { transform: 'rotate(360deg)' } });
 
-    padding-block: 1px;
-    padding-inline: 5px;
-    border-radius: 999px;
-
-    font-size: 11px;
-    line-height: 15px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  branch: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    min-width: 40px;
-    max-width: 300px;
-
-    font-size: 13px;
-    line-height: 18px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  check: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 18px;
-
-    color: ${cssVar.colorPrimary};
-  `,
-  actionCell: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-  `,
-  container: css`
-    display: flex;
-    flex-direction: column;
-
-    width: 460px;
-    max-width: calc(100vw - 48px);
-    height: 380px;
-
-    /* Cancel DropdownMenuPopup's default 4px padding so our sections align edge-to-edge */
-    margin: -4px;
-  `,
-  diffStat: css`
-    display: inline-flex;
-    flex: none;
-    gap: 3px;
-    justify-content: flex-end;
-
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-  `,
-  diffStatAdded: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  diffStatDeleted: css`
-    color: ${cssVar.colorError};
-  `,
-  diffStatModified: css`
-    color: ${cssVar.colorWarning};
-  `,
-  emptyState: css`
-    padding-block: 16px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  searchBar: css`
-    padding-block: 4px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-  `,
-  section: css`
-    flex: 1;
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sectionRow: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 4px 2px;
-    padding-inline: 8px;
-  `,
-  refreshButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  spinning: css`
-    animation: worktree-switcher-spin 0.8s linear infinite;
-
-    @keyframes worktree-switcher-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-  item: css`
-    cursor: pointer;
-
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(44px, auto) 20px;
-    gap: 10px;
-    align-items: center;
-
-    min-height: 48px;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: 8px;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &:hover .worktree-row-action {
-      display: flex;
-    }
-
-    &[data-current='true'] {
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &[aria-disabled='true'] {
-      cursor: not-allowed;
-      opacity: 0.55;
-    }
-  `,
-  itemMain: css`
-    overflow: hidden;
-    min-width: 0;
-  `,
-  dirtyCell: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: flex-end;
-
-    min-width: 44px;
-  `,
-  list: css`
-    overflow-y: auto;
-    flex: 1;
-    padding: 6px;
-  `,
-  createItemWrapper: css`
-    padding: 6px;
-    border-block-start: 1px solid ${cssVar.colorSplit};
-  `,
-  createItem: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: 8px;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  createItemIcon: css`
-    flex: none;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  name: css`
-    overflow: hidden;
-    flex: 0 1 auto;
-
-    max-width: 240px;
-
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 18px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  path: css`
-    overflow: hidden;
-
-    margin-block-start: 1px;
-
-    font-size: 11px;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  rowTitle: css`
-    overflow: hidden;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-
-    white-space: nowrap;
-  `,
-  rowAction: css`
-    cursor: pointer;
-
-    display: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorError};
-      background: ${cssVar.colorErrorBg};
-    }
-  `,
-  trigger: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 22px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition: background 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  actionCell: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+  },
+  badge: {
+    flex: 'none',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    lineHeight: '15px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  branch: {
+    overflow: 'hidden',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: '40px',
+    maxWidth: '300px',
+    fontSize: '13px',
+    lineHeight: '18px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  check: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    color: cssVar.colorPrimary,
+  },
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '460px',
+    maxWidth: 'calc(100vw - 48px)',
+    height: '380px',
+    // Cancel DropdownMenuPopup's default 4px padding so our sections align edge-to-edge
+    margin: '-4px',
+  },
+  createItem: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    color: cssVar.colorText,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  createItemIcon: { flex: 'none', color: cssVar.colorTextSecondary },
+  createItemWrapper: {
+    padding: '6px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorSplit,
+  },
+  diffStat: {
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '3px',
+    justifyContent: 'flex-end',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+  },
+  diffStatAdded: { color: cssVar.colorSuccess },
+  diffStatDeleted: { color: cssVar.colorError },
+  diffStatModified: { color: cssVar.colorWarning },
+  dirtyCell: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: '44px',
+  },
+  emptyState: {
+    paddingBlock: '16px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  item: {
+    cursor: 'pointer',
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) minmax(44px, auto) 20px',
+    gap: '10px',
+    alignItems: 'center',
+    minHeight: '48px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    color: cssVar.colorText,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  // [data-current='true'] — declared after the hover rule, so it wins on hover too.
+  itemCurrent: { backgroundColor: cssVar.colorFillSecondary, backgroundImage: 'none' },
+  // [aria-disabled='true']
+  itemDisabled: { cursor: 'not-allowed', opacity: 0.55 },
+  itemMain: { overflow: 'hidden', minWidth: '0' },
+  list: { overflowY: 'auto', flex: '1', padding: '6px' },
+  name: {
+    overflow: 'hidden',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    maxWidth: '240px',
+    fontSize: '13px',
+    fontWeight: 400,
+    lineHeight: '18px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  path: {
+    overflow: 'hidden',
+    marginBlockStart: '1px',
+    fontSize: '11px',
+    lineHeight: '16px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  refreshButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  // Revealed while the row (the `defaultMarker` on `item`) is hovered.
+  rowAction: {
+    cursor: 'pointer',
+    display: {
+      default: 'none',
+      [stylex.when.ancestor(':hover')]: 'flex',
+    },
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorError },
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorErrorBg },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowTitle: {
+    overflow: 'hidden',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    whiteSpace: 'nowrap',
+  },
+  searchBar: {
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+  },
+  section: { flex: '1', fontSize: '11px', fontWeight: 500, color: cssVar.colorTextTertiary },
+  sectionRow: {
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '2px',
+    paddingInline: '8px',
+  },
+  spinning: {
+    animationName: spin,
+    animationDuration: '0.8s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+  trigger: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '22px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    transition: 'background 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 const TEMP_PATH_PREFIXES = ['/tmp', '/var/tmp', '/private/tmp'];
 
@@ -401,10 +334,14 @@ const DirtyStat = memo<DirtyStatProps>(({ status }) => {
   if (!status || status.clean) return null;
 
   return (
-    <span className={styles.diffStat}>
-      {status.added > 0 && <span className={styles.diffStatAdded}>+{status.added}</span>}
-      {status.modified > 0 && <span className={styles.diffStatModified}>±{status.modified}</span>}
-      {status.deleted > 0 && <span className={styles.diffStatDeleted}>-{status.deleted}</span>}
+    <span {...stylex.props(styles.diffStat)}>
+      {status.added > 0 && <span {...stylex.props(styles.diffStatAdded)}>+{status.added}</span>}
+      {status.modified > 0 && (
+        <span {...stylex.props(styles.diffStatModified)}>±{status.modified}</span>
+      )}
+      {status.deleted > 0 && (
+        <span {...stylex.props(styles.diffStatDeleted)}>-{status.deleted}</span>
+      )}
     </span>
   );
 });
@@ -633,7 +570,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     const trigger = children ?? (
       <div
         aria-label={t('workingDirectory.worktreesHeading')}
-        className={styles.trigger}
+        {...stylex.props(styles.trigger)}
         role="button"
       >
         <Icon icon={triggerIcon} size={13} />
@@ -659,8 +596,8 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>
             <DropdownMenuPopup>
-              <div className={styles.container}>
-                <div className={styles.searchBar}>
+              <div {...stylex.props(styles.container)}>
+                <div {...stylex.props(styles.searchBar)}>
                   <Input
                     autoFocus
                     placeholder={t('workingDirectory.worktreeSearchPlaceholder')}
@@ -674,20 +611,28 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                   />
                 </div>
 
-                <div className={styles.list}>
-                  <div className={styles.sectionRow}>
-                    <div className={styles.section}>{t('workingDirectory.worktreesHeading')}</div>
-                    <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
+                <div {...stylex.props(styles.list)}>
+                  <div {...stylex.props(styles.sectionRow)}>
+                    <div {...stylex.props(styles.section)}>
+                      {t('workingDirectory.worktreesHeading')}
+                    </div>
+                    <div
+                      {...stylex.props(styles.refreshButton)}
+                      role="button"
+                      onClick={handleRefresh}
+                    >
                       <Icon
-                        className={cx(isRefreshing && styles.spinning)}
                         icon={RefreshCwIcon}
                         size={12}
+                        className={
+                          isRefreshing ? stylex.props(styles.spinning).className : undefined
+                        }
                       />
                     </div>
                   </div>
 
                   {filtered.length === 0 ? (
-                    <div className={styles.emptyState}>
+                    <div {...stylex.props(styles.emptyState)}>
                       {search.trim()
                         ? t('workingDirectory.worktreesNoMatch')
                         : t('workingDirectory.worktreesEmpty')}
@@ -706,61 +651,74 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                       return (
                         <DropdownMenuItem
                           aria-disabled={disabled}
-                          className={styles.item}
                           closeOnClick={false}
                           data-current={worktree.current}
                           key={worktree.path}
                           ref={worktree.path === currentPath ? currentRowRef : undefined}
+                          className={
+                            stylex.props(
+                              stylex.defaultMarker(),
+                              styles.item,
+                              worktree.current && styles.itemCurrent,
+                              disabled && styles.itemDisabled,
+                            ).className
+                          }
                           onClick={() => void commitWorktree(worktree)}
                         >
-                          <div className={styles.itemMain}>
-                            <div className={styles.rowTitle}>
-                              <span className={styles.name}>{getPathName(worktree.path)}</span>
-                              <span className={styles.branch}>{branch}</span>
+                          <div {...stylex.props(styles.itemMain)}>
+                            <div {...stylex.props(styles.rowTitle)}>
+                              <span {...stylex.props(styles.name)}>
+                                {getPathName(worktree.path)}
+                              </span>
+                              <span {...stylex.props(styles.branch)}>{branch}</span>
                               {worktree.current && (
-                                <span className={styles.badge}>
+                                <span {...stylex.props(styles.badge)}>
                                   {t('workingDirectory.currentWorktree')}
                                 </span>
                               )}
                               {worktree.detached && (
-                                <span className={styles.badge}>
+                                <span {...stylex.props(styles.badge)}>
                                   {t('workingDirectory.detachedWorktree')}
                                 </span>
                               )}
                               {worktree.locked && (
-                                <span className={styles.badge}>
+                                <span {...stylex.props(styles.badge)}>
                                   {t('workingDirectory.lockedWorktree')}
                                 </span>
                               )}
                               {worktree.prunable && (
-                                <span className={styles.badge}>
+                                <span {...stylex.props(styles.badge)}>
                                   {t('workingDirectory.prunableWorktree')}
                                 </span>
                               )}
                               {worktree.bare && (
-                                <span className={styles.badge}>
+                                <span {...stylex.props(styles.badge)}>
                                   {t('workingDirectory.bareWorktree')}
                                 </span>
                               )}
                             </div>
-                            <div className={styles.path} title={worktree.path}>
+                            <div {...stylex.props(styles.path)} title={worktree.path}>
                               {displayPath}
                             </div>
                           </div>
-                          <div className={styles.dirtyCell}>
+                          <div {...stylex.props(styles.dirtyCell)}>
                             <DirtyStat status={worktree.status} />
                           </div>
-                          <div className={styles.actionCell}>
+                          <div {...stylex.props(styles.actionCell)}>
                             {removing ? (
                               <Spin size={13} />
                             ) : worktree.current ? (
-                              <Icon className={styles.check} icon={CheckIcon} size={14} />
+                              <Icon
+                                className={stylex.props(styles.check).className}
+                                icon={CheckIcon}
+                                size={14}
+                              />
                             ) : (
                               removable && (
                                 <Tooltip title={t('workingDirectory.removeWorktreeAction')}>
                                   <div
                                     aria-label={t('workingDirectory.removeWorktreeAction')}
-                                    className={`${styles.rowAction} worktree-row-action`}
+                                    {...stylex.props(styles.rowAction)}
                                     role="button"
                                     onClick={(event) => handleRemoveWorktree(event, worktree)}
                                   >
@@ -776,13 +734,17 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
                   )}
                 </div>
 
-                <div className={styles.createItemWrapper}>
+                <div {...stylex.props(styles.createItemWrapper)}>
                   <DropdownMenuItem
-                    className={styles.createItem}
+                    className={stylex.props(styles.createItem).className}
                     closeOnClick={false}
                     onClick={openCreateWorktree}
                   >
-                    <Icon className={styles.createItemIcon} icon={FolderPlusIcon} size={14} />
+                    <Icon
+                      className={stylex.props(styles.createItemIcon).className}
+                      icon={FolderPlusIcon}
+                      size={14}
+                    />
                     <div>{t('workingDirectory.createWorktreeAction')}</div>
                   </DropdownMenuItem>
                 </div>

@@ -10,8 +10,13 @@ import {
 
 import { sx } from '@/styles/sx';
 
-import moduleStyles from './TailMarquee.module.css';
 import { getMarqueeDuration, shouldRevealOnPointerDown } from './utils';
+
+const scrollToHead = stylex.keyframes({
+  '0%, 20%': { transform: 'translateX(0)' },
+  '40%, 60%': { transform: 'translateX(var(--tail-marquee-offset))' },
+  '80%, 100%': { transform: 'translateX(0)' },
+});
 
 const styles = stylex.create({
   container: {
@@ -28,6 +33,101 @@ const styles = stylex.create({
   content: {
     flex: 'none',
     whiteSpace: 'nowrap',
+  },
+  overflowing: {
+    maskImage: {
+      'default': 'linear-gradient(to right, transparent, #000 16px)',
+      ':is(:focus-visible > *, :focus-visible > * > *)': 'none',
+      ':is([data-revealing])': 'none',
+      '@media (hover: hover)': { 'default': null, ':hover': 'none' },
+    },
+  },
+  animated: {
+    animationName: {
+      'default': null,
+      ':is(:focus-visible > * > span, :focus-visible > * > * > span)': scrollToHead,
+      ':is([data-revealing] > span)': scrollToHead,
+      '@media (hover: hover)': {
+        'default': null,
+        ':is(:hover > span)': scrollToHead,
+        '@media (prefers-reduced-motion: reduce)': {
+          'default': 'none',
+          ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'none',
+          ':is([data-revealing] > span)': 'none',
+          ':is(:hover > span)': 'none',
+        },
+      },
+      '@media (prefers-reduced-motion: reduce)': {
+        'default': 'none',
+        ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'none',
+        ':is([data-revealing] > span)': 'none',
+        ':is(:hover > span)': 'none',
+      },
+    },
+    animationDuration: {
+      'default': null,
+      ':is(:focus-visible > * > span, :focus-visible > * > * > span)':
+        'var(--tail-marquee-duration)',
+      ':is([data-revealing] > span)': 'var(--tail-marquee-duration)',
+      '@media (hover: hover)': {
+        'default': null,
+        ':is(:hover > span)': 'var(--tail-marquee-duration)',
+        '@media (prefers-reduced-motion: reduce)': {
+          'default': '0s',
+          ':is(:focus-visible > * > span, :focus-visible > * > * > span)': '0s',
+          ':is([data-revealing] > span)': '0s',
+          ':is(:hover > span)': '0s',
+        },
+      },
+      '@media (prefers-reduced-motion: reduce)': {
+        'default': '0s',
+        ':is(:focus-visible > * > span, :focus-visible > * > * > span)': '0s',
+        ':is([data-revealing] > span)': '0s',
+        ':is(:hover > span)': '0s',
+      },
+    },
+    animationTimingFunction: {
+      'default': null,
+      ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'ease-in-out',
+      ':is([data-revealing] > span)': 'ease-in-out',
+      '@media (hover: hover)': {
+        'default': null,
+        ':is(:hover > span)': 'ease-in-out',
+        '@media (prefers-reduced-motion: reduce)': {
+          'default': 'ease',
+          ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'ease',
+          ':is([data-revealing] > span)': 'ease',
+          ':is(:hover > span)': 'ease',
+        },
+      },
+      '@media (prefers-reduced-motion: reduce)': {
+        'default': 'ease',
+        ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'ease',
+        ':is([data-revealing] > span)': 'ease',
+        ':is(:hover > span)': 'ease',
+      },
+    },
+    animationIterationCount: {
+      'default': null,
+      ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 'infinite',
+      ':is([data-revealing] > span)': 1,
+      '@media (hover: hover)': {
+        'default': null,
+        ':is(:hover > span)': 'infinite',
+        '@media (prefers-reduced-motion: reduce)': {
+          'default': 1,
+          ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 1,
+          ':is([data-revealing] > span)': 1,
+          ':is(:hover > span)': 1,
+        },
+      },
+      '@media (prefers-reduced-motion: reduce)': {
+        'default': 1,
+        ':is(:focus-visible > * > span, :focus-visible > * > * > span)': 1,
+        ':is([data-revealing] > span)': 1,
+        ':is(:hover > span)': 1,
+      },
+    },
   },
 });
 
@@ -80,19 +180,15 @@ const TailMarquee = ({ children, className, style }: TailMarqueeProps) => {
       data-revealing={revealing || undefined}
       ref={containerRef}
       title={overflow > 0 ? fullText : undefined}
-      {...sx(
-        [styles.container],
-        [overflow > 0 && moduleStyles.overflowing, className].filter(Boolean).join(' '),
-        {
-          ...style,
-          '--tail-marquee-duration': `${duration}s`,
-          '--tail-marquee-offset': `${overflow}px`,
-        } as CSSProperties,
-      )}
+      {...sx([styles.container, overflow > 0 && styles.overflowing], className, {
+        ...style,
+        '--tail-marquee-duration': `${duration}s`,
+        '--tail-marquee-offset': `${overflow}px`,
+      } as CSSProperties)}
       onAnimationEnd={() => setRevealing(false)}
       onPointerDown={handlePointerDown}
     >
-      <span ref={contentRef} {...stylex.props(styles.content)}>
+      <span ref={contentRef} {...stylex.props(styles.content, overflow > 0 && styles.animated)}>
         {children}
       </span>
     </div>

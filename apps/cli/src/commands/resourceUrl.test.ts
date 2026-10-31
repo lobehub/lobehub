@@ -30,10 +30,10 @@ describe('resourcePath', () => {
       '/group/grp_1/tpc_1#msg_1',
     ],
     [resourcePath.message({ groupId: 'grp_1', id: 'msg_1' }), '/group/grp_1#msg_1'],
-    [resourcePath.document({ id: 'docs_1' }), '/page/docs_1'],
+    [resourcePath.document({ id: 'docs_1' }), '/resource/page/docs_1'],
     [
       resourcePath.document({ id: 'docs_1', knowledgeBaseId: 'kb_1' }),
-      '/resource/library/kb_1?file=docs_1',
+      '/resource/library/kb_1/docs/docs_1',
     ],
     [resourcePath.file({ id: 'file_1' }), '/resource/file/file_1'],
     [resourcePath.dashboard({ id: 'dsh_1', projectId: 'prj_1' }), '/project/prj_1/dashboard/dsh_1'],

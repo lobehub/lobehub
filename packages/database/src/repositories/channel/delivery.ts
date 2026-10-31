@@ -112,7 +112,7 @@ export const pairedAgent = async (
 };
 
 /**
- * Queues one job per Agent. Idempotent through the delivery key. Skips Agents whose
+ * Queues one job per message and Agent member. Skips Agents whose
  * environment changed after the message, so a late route cannot run an old instruction
  * in a new directory. Returns the ids of the Agents that received a job.
  */
