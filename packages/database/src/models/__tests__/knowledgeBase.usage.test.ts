@@ -62,7 +62,10 @@ afterEach(async () => {
   await serverDB.delete(globalFiles);
 });
 
-describe('KnowledgeBaseModel.countFileUsage', () => {
+describe('KnowledgeBaseModel.countAddedStorageBytes', () => {
+  // A personal space with no files yet.
+  const target = { userId: 'kb-usage-target' };
+
   it('sums the size of every file linked to the knowledge base', async () => {
     const { id: kbId } = await model.create({ name: 'Usage' });
     await seedFile('usage-a', 120);
@@ -70,13 +73,33 @@ describe('KnowledgeBaseModel.countFileUsage', () => {
     await linkFile(kbId, 'usage-a');
     await linkFile(kbId, 'usage-b');
 
-    await expect(model.countFileUsage(kbId)).resolves.toBe(200);
+    await expect(model.countAddedStorageBytes(kbId, target)).resolves.toBe(200);
   });
 
   it('returns 0 when the knowledge base has no files', async () => {
     const { id: kbId } = await model.create({ name: 'Empty' });
 
-    await expect(model.countFileUsage(kbId)).resolves.toBe(0);
+    await expect(model.countAddedStorageBytes(kbId, target)).resolves.toBe(0);
+  });
+
+  it('counts files that share one stored object once', async () => {
+    const { id: kbId } = await model.create({ name: 'Duplicates' });
+    await seedFile('usage-original', 600);
+    await serverDB.insert(files).values({
+      fileHash: 'hash-usage-original',
+      fileType: 'application/pdf',
+      id: 'usage-renamed',
+      name: 'renamed.pdf',
+      size: 600,
+      url: 'https://example.com/usage-original.pdf',
+      userId,
+    });
+    await linkFile(kbId, 'usage-original');
+    await linkFile(kbId, 'usage-renamed');
+
+    await expect(model.countAddedStorageBytes(kbId, target)).resolves.toBe(600);
+    // The caller's personal space already stores the object.
+    await expect(model.countAddedStorageBytes(kbId, { userId })).resolves.toBe(0);
   });
 
   it("does not count another user's links for the same knowledge base", async () => {
@@ -86,7 +109,7 @@ describe('KnowledgeBaseModel.countFileUsage', () => {
     await linkFile(kbId, 'usage-mine');
     await linkFile(kbId, 'usage-theirs', otherUserId);
 
-    await expect(model.countFileUsage(kbId)).resolves.toBe(50);
+    await expect(model.countAddedStorageBytes(kbId, target)).resolves.toBe(50);
   });
 });
 

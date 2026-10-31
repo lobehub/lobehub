@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { businessFileTransferStorageCheck } from '@/business/server/lambda-routers/file';
+import { FileModel } from '@/database/models/file';
 import { router } from '@/libs/trpc/lambda';
 import { GoalCopyService } from '@/server/services/goal/copy';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
@@ -53,7 +54,11 @@ export const transferRouter = router({
 
         if (fixtures.files.length > 0) {
           await businessFileTransferStorageCheck({
-            additionalSize: fixtures.files.reduce((total, file) => total + file.size, 0),
+            additionalSize: await FileModel.sumAddedStorageBytes(
+              ctx.serverDB,
+              { userId: ctx.userId, workspaceId: targetWorkspaceId },
+              fixtures.files.map((file) => file.id),
+            ),
             targetUserId: ctx.userId,
             targetWorkspaceId,
           });

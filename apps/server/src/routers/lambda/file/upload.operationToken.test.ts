@@ -28,9 +28,12 @@ vi.mock('@/database/models/knowledgeBase', () => ({ KnowledgeBaseModel: vi.fn() 
 vi.mock('@/database/repositories/knowledge', () => ({ KnowledgeRepo: vi.fn() }));
 vi.mock('@/server/services/document', () => ({ DocumentService: vi.fn() }));
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(function () {
-    return { checkHash: mocks.checkHash, create: mocks.create };
-  }),
+  FileModel: Object.assign(
+    vi.fn(function () {
+      return { checkHash: mocks.checkHash, create: mocks.create };
+    }),
+    { addedStorageBytesForObject: vi.fn(async () => 0) },
+  ),
 }));
 vi.mock('@/server/services/file', () => ({
   FileService: vi.fn(function () {

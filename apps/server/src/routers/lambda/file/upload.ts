@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
 import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { FileModel } from '@/database/models/file';
 import { router } from '@/libs/trpc/lambda';
 import type { FileService } from '@/server/services/file';
 import { downloadRemoteImage } from '@/server/services/file/downloadRemoteImage';
@@ -282,8 +283,15 @@ export const uploadRouter = router({
           return file;
         }
 
+        // A renamed or re-parented re-upload of bytes this space already
+        // stores reuses that object, so only the bytes it actually adds count
+        // against the quota.
         await businessFileUploadCheck({
-          actualSize,
+          actualSize: await FileModel.addedStorageBytesForObject(
+            trx,
+            { userId: ctx.userId, workspaceId: ctx.workspaceId },
+            { fileHash: input.hash, size: actualSize, url: input.url },
+          ),
           clientIp: ctx.clientIp ?? undefined,
           inputSize: input.size,
           transaction: trx,
