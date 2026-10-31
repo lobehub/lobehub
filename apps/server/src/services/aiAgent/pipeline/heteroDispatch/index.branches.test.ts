@@ -224,7 +224,11 @@ describe('Channel history context', () => {
       expect(result.success).toBe(true);
       const dispatched = mocks.dispatchAgentRun.mock.calls[0][0];
       expect((dispatched.systemContext ?? '').includes('channel history --json')).toBe(channel);
-      expect((dispatched.systemContext ?? '').includes('Only the current request')).toBe(channel);
+      expect(
+        (dispatched.systemContext ?? '').includes(
+          'The request to answer is the `channel_request` block',
+        ),
+      ).toBe(channel);
       const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
       expect(signed.capabilities.includes('channel:read')).toBe(channel);
     },
