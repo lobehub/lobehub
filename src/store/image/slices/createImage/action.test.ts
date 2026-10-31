@@ -426,8 +426,8 @@ describe('CreateImageAction', () => {
       });
       expect((caught as Error)?.message).toBe('Service error');
 
-      // Verify batch was removed before the error
-      expect(mockRemoveGenerationBatch).toHaveBeenCalledWith('batch-id', 'active-topic-id');
+      // The original batch survives a rejected regeneration
+      expect(mockRemoveGenerationBatch).not.toHaveBeenCalled();
       expect(isGenerationPromptModerationErrorMock).toHaveBeenCalledWith(error);
     });
 
@@ -456,23 +456,28 @@ describe('CreateImageAction', () => {
     it('should handle batch removal error', async () => {
       const error = new Error('Removal error');
       const mockRemoveGenerationBatch = vi.fn().mockRejectedValueOnce(error);
+      const mockRefreshGenerationBatches = vi.fn().mockResolvedValue(undefined);
 
       const { result } = renderHook(() => useImageStore());
 
       act(() => {
         useImageStore.setState({
+          refreshGenerationBatches: mockRefreshGenerationBatches,
           removeGenerationBatch: mockRemoveGenerationBatch,
         });
       });
 
-      await expect(
-        act(async () => {
-          await result.current.recreateImage('batch-id');
-        }),
-      ).rejects.toThrow('Removal error');
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // Verify image service was not called after removal error
-      expect(mockImageService.createImage).not.toHaveBeenCalled();
+      // The replacement is already queued, so a failed cleanup must not fail the regenerate
+      await act(async () => {
+        await result.current.recreateImage('batch-id');
+      });
+
+      expect(mockImageService.createImage).toHaveBeenCalled();
+      expect(mockRefreshGenerationBatches).toHaveBeenCalled();
+      expect(result.current.isCreating).toBe(false);
+      consoleErrorSpy.mockRestore();
     });
   });
 });

@@ -71,6 +71,8 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
    * @default false
    */
   showAvatar?: boolean;
+  /** Omit the identity row for a continuation in a grouped message feed. */
+  showHeader?: boolean;
   /**
    * @description Whether to show the title of the chat item
    */

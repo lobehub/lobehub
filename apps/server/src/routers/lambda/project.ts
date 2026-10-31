@@ -13,6 +13,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
+import { GoalService } from '@/server/services/goal';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 /**
@@ -432,6 +433,7 @@ export const projectRouter = router({
     )
     .mutation(async ({ ctx, input: { id, ...input } }) => {
       try {
+        let previousVisibility: string | undefined;
         if (input.visibility !== undefined) {
           const project = requireResult(await ctx.projectModel.findById(id));
           if (project.userId !== ctx.userId) {
@@ -440,12 +442,18 @@ export const projectRouter = router({
               message: 'Only the project creator can change its visibility',
             });
           }
+          previousVisibility = project.visibility;
         }
+        const updated = requireResult(await ctx.projectModel.update(id, input));
+        // Members can no longer see the project, so they must not keep opening its goals.
+        if (input.visibility === 'private' && previousVisibility === 'public')
+          await new GoalService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).privatizeProjectGoals(id);
         return {
-          data: await withMainAgent(
-            ctx.projectModel,
-            requireResult(await ctx.projectModel.update(id, input)),
-          ),
+          data: await withMainAgent(ctx.projectModel, updated),
           message: 'Project updated',
           success: true,
         };

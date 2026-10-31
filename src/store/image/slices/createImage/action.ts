@@ -142,10 +142,8 @@ export class CreateImageActionImpl {
     const imageNum = batch.generations.length;
 
     try {
-      // 1. Delete generation batch
-      await removeGenerationBatch(generationBatchId, activeGenerationTopicId);
-
-      // 2. Create image via service
+      // 1. Create the replacement first: the server can reject the stored config (e.g. a param
+      // the model no longer declares), and the original batch must survive that rejection.
       await imageService.createImage({
         generationTopicId: activeGenerationTopicId,
         provider: batch.provider,
@@ -153,6 +151,14 @@ export class CreateImageActionImpl {
         imageNum,
         params: batch.config as any,
       });
+
+      // 2. Delete the batch being replaced. The replacement is already queued, so a failed
+      // cleanup must not surface as a failed regenerate: retrying would queue and charge again.
+      try {
+        await removeGenerationBatch(generationBatchId, activeGenerationTopicId);
+      } catch (error) {
+        console.error('[recreateImage] failed to remove the replaced batch', error);
+      }
 
       // 3. Refresh generation batches to show the real data
       await store.refreshGenerationBatches();

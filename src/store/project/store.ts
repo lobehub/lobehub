@@ -17,10 +17,10 @@ import {
   type ProjectKnowledgeBaseBindingPatch,
   projectService,
 } from '@/services/project';
+import { refreshChannelListIfEnabled } from '@/store/channel/refreshIfEnabled';
 import { createDevtools } from '@/store/middleware/createDevtools';
 import { expose } from '@/store/middleware/expose';
 import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
-import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 
 import {
   PROJECT_LIST_KEY,
@@ -114,18 +114,6 @@ const syncProjectFavorite = (project: Pick<ProjectListItem, 'avatar' | 'id' | 'n
     .catch((error) => console.error('[project] failed to sync the favorite snapshot', error));
 };
 
-/**
- * With Channels on, the server opens a new project's default Channel alongside it; refetch the
- * Channel list instead of waiting for its idle poll. Loaded on demand, like the favorite sync.
- */
-const refreshChannels = (): void => {
-  const serverConfig = getServerConfigStoreState();
-  if (!serverConfig || !serverConfigSelectors.enableChannels(serverConfig)) return;
-  void import('@/store/channel')
-    .then(({ channelActions }) => channelActions.refreshList())
-    .catch((error) => console.error('[project] failed to refresh Channels', error));
-};
-
 export const useProjectStore = createWithEqualityFn<ProjectStore>()(
   devtools((set, get) => {
     const list = createReplicaSlice(projectListResource, {
@@ -206,7 +194,7 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
           items && !items.some((item) => item.id === project.id) ? [project, ...items] : items,
         );
         void refreshList();
-        refreshChannels();
+        refreshChannelListIfEnabled();
         return project;
       },
       deleteProject: async (id) => {

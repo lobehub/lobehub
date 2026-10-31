@@ -18,10 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # Only trusted base scripts execute; PR text is data read from the event file.
+      # Tooling follows the trusted workflow revision, independently of an older product base.
+      # PR text stays data; no PR-head scripts execute with the target event's token.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.workflow_sha }}
           sparse-checkout: .github/scripts
       - uses: actions/setup-node@v6
         with:
