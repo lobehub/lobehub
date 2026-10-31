@@ -132,6 +132,8 @@ const renderFooter = async ({
     return selector(mockServerConfigState);
   }
   vi.doMock('@/store/serverConfig', () => ({
+    // `useActiveNavKey` reads the `im_layout` flag through these.
+    featureFlagsSelectors: () => ({}),
     serverConfigSelectors: {
       enableBusinessFeatures: (s: Record<string, unknown>) => !!s.enableBusinessFeatures,
     },

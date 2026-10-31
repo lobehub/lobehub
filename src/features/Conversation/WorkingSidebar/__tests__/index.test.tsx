@@ -26,6 +26,9 @@ import {
   workspace,
 } from './harness';
 
+// The `im_layout` trial reads the server-config store; these tests cover the default layout.
+vi.mock('@/features/NavRail/useImLayout', () => ({ useImLayout: () => false }));
+
 // Loaded after the mock harness so module mocks are registered first.
 let AgentWorkingSidebar: ComponentType<{ availableWidth?: number }>;
 

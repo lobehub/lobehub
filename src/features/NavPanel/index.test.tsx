@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import NavPanel from './index';
 import { NavPanelPortal } from './NavPanelPortal';
@@ -58,6 +58,24 @@ vi.mock('./components/NavPanelDraggable', () => ({
 vi.mock('@/features/HomeSidebar/Content', () => ({
   default: () => <div>Home sidebar</div>,
 }));
+
+const layout = vi.hoisted(() => ({ imLayout: false }));
+
+vi.mock('@/features/NavRail/useImLayout', () => ({ useImLayout: () => layout.imLayout }));
+
+// Under `im_layout` the shell registers the Messages list as `home` instead.
+vi.mock('@/features/MessageList', async () => {
+  const { NavPanelPortal } = await import('./NavPanelPortal');
+  return {
+    default: () => (
+      <NavPanelPortal navKey="home">
+        <div>Messages list</div>
+      </NavPanelPortal>
+    ),
+  };
+});
+vi.mock('@/features/ContactList', () => ({ default: () => null }));
+vi.mock('@/features/TaskNav', () => ({ default: () => null }));
 
 describe('NavPanel', () => {
   beforeEach(() => {
@@ -280,5 +298,36 @@ describe('SideBarLayout scroll restoration', () => {
     pathname = '/memory';
     const second = render(<SideBarLayout body={<div>body</div>} />);
     expect(getViewport(second.container).scrollTop).toBe(0);
+  });
+});
+
+describe('NavPanel under the im_layout trial', () => {
+  beforeEach(() => {
+    clearNavPanelRegistry();
+    layout.imLayout = true;
+  });
+
+  afterEach(() => {
+    layout.imLayout = false;
+  });
+
+  it('renders no list column on the full-page project index', () => {
+    pathname = '/projects';
+    registerNavPanelContent('home', Symbol('home'), <div>Home sidebar</div>);
+
+    render(<NavPanel />);
+
+    expect(screen.queryByTestId('nav-panel')).not.toBeInTheDocument();
+  });
+
+  it('registers the Messages list as the home entry', async () => {
+    pathname = '/';
+
+    render(<NavPanelShell />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Messages list')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Home sidebar')).not.toBeInTheDocument();
   });
 });

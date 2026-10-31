@@ -22,6 +22,21 @@ export const recentListResource = defineReplica<RecentListParams, RecentItem[]>(
   version: 1,
 });
 
+/** Entry key of one conversation-recents query (`conversationRecentMap[limit:N]`). */
+export const createConversationRecentQueryKey = (limit: number): string => `limit:${limit}`;
+
+/**
+ * Latest topics per owner, for the IM conversation list. Kept apart from
+ * `recentListResource`: the sidebar and the drawer want documents and tasks,
+ * while this list needs topics with their reply previews.
+ */
+export const conversationRecentResource = defineReplica<RecentListParams, RecentItem[]>({
+  key: ({ limit }) => createConversationRecentQueryKey(limit),
+  name: 'conversationRecent',
+  storage: 'localStorage',
+  version: 1,
+});
+
 export type DocsHomeTab = 'mine' | 'recent' | 'shared';
 
 export interface DocsHomeParams {

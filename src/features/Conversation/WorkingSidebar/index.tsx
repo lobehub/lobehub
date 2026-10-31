@@ -1,7 +1,7 @@
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   BoxesIcon,
@@ -41,6 +41,7 @@ import {
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
+import { useImLayout } from '@/features/NavRail/useImLayout';
 import { getPortalViewWidth } from '@/features/Portal/portalWidth';
 import TopicCommentsSidebar from '@/features/Portal/TopicComments/Sidebar';
 import RightPanel from '@/features/RightPanel';
@@ -143,6 +144,18 @@ const styles = createStaticStyles(({ css }) => ({
     background: ${cssVar.colorBgContainer};
     box-shadow: ${cssVar.boxShadowTertiary};
   `,
+  // `im_layout`: docked as a full-height right column (the agent's profile),
+  // not a floating card, so it reads as the conversation's side panel.
+  overviewPanelDocked: css`
+    max-height: none;
+    height: 100%;
+    margin: 0;
+    border: none;
+    border-inline-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 0;
+
+    box-shadow: none;
+  `,
   overviewSlot: css`
     overflow: hidden;
     display: flex;
@@ -200,6 +213,7 @@ interface AgentWorkingSidebarProps {
 
 const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) => {
   const { t } = useTranslation(['chat', 'setting']);
+  const imLayout = useImLayout();
   // Keep the panel frame + tabs on the navigation commit; the pane contents
   // mount in a deferred follow-up pass behind a skeleton.
   const contentReady = useDeferredMount();
@@ -934,13 +948,15 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - 32);
+  // The floating card keeps a 16px margin on each side; the docked panel has none.
+  const overviewGutter = imLayout ? 0 : 32;
+  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - overviewGutter);
   const overviewPanel = (
     <OverviewSlot>
       <AnimatePresence initial={false}>
         {showWorkingOverview && overviewFits && (
           <m.div
-            animate={{ width: overviewWidth + 32 }}
+            animate={{ width: overviewWidth + overviewGutter }}
             className={styles.overviewSlot}
             exit={{ transition: overviewExitTransition, width: 0 }}
             initial={{ width: 0 }}
@@ -948,7 +964,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           >
             <m.div
               animate={{ opacity: 1, x: 0 }}
-              className={styles.overviewPanel}
+              className={cx(styles.overviewPanel, imLayout && styles.overviewPanelDocked)}
               exit={{ opacity: 0, transition: overviewExitTransition, x: 12 }}
               initial={{ opacity: 0, x: 12 }}
               role={'complementary'}

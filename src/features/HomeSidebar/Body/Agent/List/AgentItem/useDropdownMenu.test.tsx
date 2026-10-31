@@ -318,6 +318,26 @@ describe('useAgentDropdownMenu', () => {
     expect(mocks.setSidebarItemVisible).toHaveBeenCalledWith('agent-1', false);
   });
 
+  it('omits the hide action for lists that ignore the sidebar preference', () => {
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'agent-1',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        sidebarVisibilityEnabled: false,
+        title: 'Public Agent',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    const keys = (result.current() ?? []).map((item) =>
+      item && typeof item === 'object' && 'key' in item ? item.key : undefined,
+    );
+    expect(keys).not.toContain('hideFromSidebar');
+  });
+
   it('tells the user to wait when delete is refused by a pending history migration', async () => {
     // Regression: a 409 TRANSFER_IN_PROGRESS used to fall through to the
     // generic "operation failed, please try again", which invited immediate

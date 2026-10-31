@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import NavigationBar from './NavigationBar';
 
 const mocks = vi.hoisted(() => ({
+  imLayout: false,
   isMac: false,
   handlers: new Map<string, () => void>(),
   leftPanelVisible: false,
@@ -12,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   openAllAgentsDrawer: vi.fn(),
 }));
+
+vi.mock('@/features/NavRail/useImLayout', () => ({ useImLayout: () => mocks.imLayout }));
 
 vi.mock('@lobechat/electron-client-ipc', () => ({
   useWatchBroadcast: (event: string, handler: () => void) => mocks.handlers.set(event, handler),
@@ -64,6 +67,7 @@ vi.mock('./TrayMenu/useTrayMenuSync', () => ({ useTrayMenuSync: vi.fn() }));
 describe('NavigationBar tray broadcasts', () => {
   beforeEach(() => {
     mocks.handlers.clear();
+    mocks.imLayout = false;
     mocks.isMac = false;
     mocks.leftPanelVisible = false;
     mocks.leftPanelWidth = 0;
@@ -100,6 +104,16 @@ describe('NavigationBar tray broadcasts', () => {
     const expanded = render(<NavigationBar />);
 
     expect(expanded.container.querySelector('.root')).toHaveStyle({ width: '268px' });
+  });
+
+  it('spans the icon rail too under the im_layout trial', () => {
+    mocks.imLayout = true;
+    mocks.leftPanelVisible = true;
+    mocks.leftPanelWidth = 280;
+    const { container } = render(<NavigationBar />);
+
+    // Icon rail (48) plus the list column, minus the 12px gutter.
+    expect(container.querySelector('.root')).toHaveStyle({ width: '316px' });
   });
 
   it('follows the sidebar width without a transition while it is being resized', () => {

@@ -1,0 +1,139 @@
+import type { RecentItem, SidebarAgentItem } from '@lobechat/types';
+
+export interface Conversation {
+  /** Latest activity: the newer of the item itself and its latest topic. */
+  activeAt: Date;
+  item: SidebarAgentItem;
+  /** One-line preview from the latest topic (assistant reply, else title). */
+  preview?: string;
+}
+
+export interface ConversationSections {
+  pinned: Conversation[];
+  recent: Conversation[];
+}
+
+const recentOwnerId = (recent: RecentItem): string | undefined => {
+  if (recent.type !== 'topic') return;
+  if (recent.agentId) return recent.agentId;
+  // Group topics carry no agentId; their route names the group.
+  return recent.routePath.match(/\/group\/([^/?#]+)/)?.[1];
+};
+
+const toTime = (value: Date | string) => new Date(value).getTime();
+
+/** Newest topic per owner (agent id, or the group named by the topic route). */
+const topicsByOwner = (recents: RecentItem[] | undefined): Map<string, RecentItem> => {
+  const latest = new Map<string, RecentItem>();
+  for (const recent of recents ?? []) {
+    const owner = recentOwnerId(recent);
+    if (!owner) continue;
+    const current = latest.get(owner);
+    if (!current || toTime(recent.updatedAt) > toTime(current.updatedAt)) latest.set(owner, recent);
+  }
+  return latest;
+};
+
+/**
+ * One owner's latest topic. The inbox row is not part of `items`, so it asks
+ * for its own activity instead of going through the sections builder.
+ */
+export const latestTopicOf = (
+  recents: RecentItem[] | undefined,
+  ownerId: string | undefined,
+): RecentItem | undefined => (ownerId ? topicsByOwner(recents).get(ownerId) : undefined);
+
+/** The newer of an entity's own timestamp and its latest topic. */
+export const latestActivity = (
+  own: Date | string | undefined,
+  topic: RecentItem | undefined,
+): Date | undefined => {
+  const ownTime = own ? toTime(own) : 0;
+  const topicTime = topic ? toTime(topic.updatedAt) : 0;
+  if (!ownTime && !topicTime) return undefined;
+  return new Date(Math.max(ownTime, topicTime));
+};
+
+/**
+ * Turn the sidebar agent/group list into IM-style conversations: each row
+ * carries a preview of its latest topic and is ordered by latest activity,
+ * pinned rows first.
+ */
+export const buildConversationSections = (
+  items: SidebarAgentItem[],
+  recents: RecentItem[] | undefined,
+): ConversationSections => {
+  const latestByOwner = topicsByOwner(recents);
+
+  const seen = new Set<string>();
+  const conversations: Conversation[] = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+
+    const latest = latestByOwner.get(item.id);
+    const itemTime = toTime(item.updatedAt);
+    const latestTime = latest ? toTime(latest.updatedAt) : 0;
+
+    conversations.push({
+      activeAt: new Date(Math.max(itemTime, latestTime)),
+      item,
+      preview:
+        (latest?.lastAssistantMessage || latest?.title || item.description || '')
+          .replaceAll(/\s+/g, ' ')
+          .trim() || undefined,
+    });
+  }
+
+  conversations.sort((a, b) => b.activeAt.getTime() - a.activeAt.getTime());
+
+  return {
+    pinned: conversations.filter((c) => c.item.pinned),
+    recent: conversations.filter((c) => !c.item.pinned),
+  };
+};
+
+export type ConversationEntry =
+  { activeAt: Date; type: 'inbox' } | (Conversation & { type: 'item' });
+
+/**
+ * One IM list like WeChat's: pinned rows first, then everything else by latest
+ * activity. Lobe AI is an ordinary row placed by its own activity, not pinned
+ * to the top; a name / title filter narrows the whole list.
+ */
+export const buildConversationEntries = (
+  { pinned, recent }: ConversationSections,
+  inbox: { activeAt?: Date; title: string } | undefined,
+  query = '',
+): ConversationEntry[] => {
+  const keyword = query.trim().toLowerCase();
+  const matches = (...names: (string | null | undefined)[]) =>
+    !keyword || names.some((name) => (name ?? '').toLowerCase().includes(keyword));
+
+  // Rows show the personal name when set (`agentDisplayName`), so match it as
+  // well as the role title.
+  const items = (list: Conversation[]): ConversationEntry[] =>
+    list
+      .filter((c) => matches(c.item.name, c.item.title))
+      .map((c) => ({ ...c, type: 'item' as const }));
+
+  const rest = items(recent);
+  if (inbox && matches(inbox.title)) {
+    const activeAt = inbox.activeAt ?? new Date(0);
+    const index = rest.findIndex((entry) => entry.activeAt.getTime() < activeAt.getTime());
+    rest.splice(index === -1 ? rest.length : index, 0, { activeAt, type: 'inbox' });
+  }
+
+  return [...items(pinned), ...rest];
+};
+
+/** IM-style timestamp: time today, weekday this week, date otherwise. */
+export const formatConversationTime = (date: Date, now: Date = new Date()): string => {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const time = date.getTime();
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  if (time >= startOfToday) return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}/${date.getDate()}`;
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+};

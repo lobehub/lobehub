@@ -76,6 +76,15 @@ export const FeatureFlagsSchema = z.object({
   dashboard: FeatureFlagValue.optional(),
 
   /**
+   * Trial gate for the rail layout: icon rail + one wrapped list column and
+   * content, the IM-style Messages list (Lobe AI opens by default), Contacts,
+   * the Tasks scope list and the agent profile side panel. Off keeps the
+   * current sidebar layout untouched. Array values are user ids, so it can be
+   * tried by an allowlist before anyone else sees it.
+   */
+  im_layout: FeatureFlagValue.optional(),
+
+  /**
    * Multi-agent Channels: the sidebar section, Channel pages and every Channel API, including
    * Agent history reads (`lobe-channel`, `lh channel`). Off: none of it is reachable. Work that
    * was already queued still finishes. Array values are user ids, checked per member.
@@ -157,6 +166,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
 
+  // Off: a personal-trial layout, enabled per user id.
+  im_layout: false,
+
   // Off until an admin publishes a user allowlist or flips it to true.
   channel: false,
 
@@ -198,6 +210,7 @@ export const mapFeatureFlagsEnvToState = (
     enableGatewayMuxMobile: evaluateFeatureFlag(config.agent_gateway_mux_mobile, userId),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId),
+    enableImLayout: evaluateFeatureFlag(config.im_layout, userId),
     enableChannels: evaluateFeatureFlag(config.channel, userId),
     enableTopicPreview: evaluateFeatureFlag(config.topic_preview, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
