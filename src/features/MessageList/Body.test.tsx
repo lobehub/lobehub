@@ -32,11 +32,11 @@ vi.mock('@/features/AgentRoute/useResolvedAgentRouteId', () => ({
 
 vi.mock('@/store/home', () => ({
   useHomeStore: (selector: (state: object) => unknown) =>
-    selector({ useFetchAllRecents: () => {} }),
+    selector({ useFetchConversationRecents: () => {} }),
 }));
 vi.mock('@/store/home/selectors', () => ({
   homeAgentListSelectors: { allAgents: () => home.items, isAgentListInit: () => home.isInit },
-  homeRecentSelectors: { query: () => () => [] },
+  homeRecentSelectors: { conversationRecents: () => () => [] },
 }));
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: object) => unknown) => selector({ agentMap: {} }),

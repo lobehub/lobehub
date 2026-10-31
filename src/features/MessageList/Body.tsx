@@ -19,7 +19,7 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors, homeRecentSelectors } from '@/store/home/selectors';
 import { ALL_RECENTS_LIMIT } from '@/store/home/slices/recent/action';
-import { createRecentQueryKey } from '@/store/home/slices/recent/projection';
+import { createConversationRecentQueryKey } from '@/store/home/slices/recent/projection';
 
 import AgentConversation from './AgentConversation';
 import {
@@ -32,7 +32,7 @@ import InboxConversation from './InboxConversation';
 import { useMessageSearch } from './SearchContext';
 import { styles } from './style';
 
-const RECENTS_QUERY_KEY = createRecentQueryKey(ALL_RECENTS_LIMIT);
+const RECENTS_QUERY_KEY = createConversationRecentQueryKey(ALL_RECENTS_LIMIT);
 
 /** `/agent/:id/...` or `/group/:id/...` → the routed conversation id. */
 const useActiveRouteId = () => {
@@ -62,10 +62,10 @@ const Body = memo(() => {
   const { t } = useTranslation('common');
   const { error: agentsError, mutate: retryAgents } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-  useHomeStore((s) => s.useFetchAllRecents)(true);
+  useHomeStore((s) => s.useFetchConversationRecents)(ALL_RECENTS_LIMIT);
 
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
-  const recents = useHomeStore(homeRecentSelectors.query(RECENTS_QUERY_KEY));
+  const recents = useHomeStore(homeRecentSelectors.conversationRecents(RECENTS_QUERY_KEY));
   const activeRouteId = useActiveRouteId();
 
   const { query } = useMessageSearch();
