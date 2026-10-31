@@ -1,3 +1,4 @@
+import { SiX } from '@icons-pack/react-simple-icons';
 import { Apple, Aws, Google, Microsoft } from '@lobehub/icons';
 import {
   Auth0,
@@ -25,6 +26,7 @@ const iconComponents: { [key: string]: any } = {
   'logto': Logto.Color,
   'microsoft': Microsoft.Color,
   'microsoft-entra-id': MicrosoftEntra.Color,
+  'twitter': SiX,
   'zitadel': Zitadel.Color,
 };
 
