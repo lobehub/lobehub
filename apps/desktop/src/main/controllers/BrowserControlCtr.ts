@@ -30,6 +30,8 @@ import {
   overlayControllingScript,
   overlayCursorScript,
 } from '@/modules/browser/agentOverlayScript';
+import type { GuestViewport } from '@/modules/browser/guestViewport';
+import { guestViewports, guestViewportScale } from '@/modules/browser/guestViewport';
 import { createLogger } from '@/utils/logger';
 
 import BrowserSidebarCtr from './BrowserSidebarCtr';
@@ -97,19 +99,6 @@ export const keyInputEvents = ({ key, modifiers }: BrowserKeyCombo) => {
   events.push({ keyCode, modifiers: electronModifiers, type: 'keyUp' });
   return events;
 };
-
-/**
- * A fixed viewport the agent asked for. The page lays out at `width`×`height`
- * and the panel draws it shrunk by `scale` to fit, so input coordinates (panel
- * pixels) are the page's CSS pixels times `scale`.
- */
-interface GuestViewport {
-  height: number;
-  /** Panel size the scale was fitted to; emulation hides it from the page. */
-  panel: { height: number; width: number };
-  scale: number;
-  width: number;
-}
 
 const fitViewport = (
   size: { height: number; width: number },
@@ -319,8 +308,6 @@ export default class BrowserControlCtr extends ControllerModule {
   static override readonly groupName = 'browserControl';
 
   private idleTimers = new Map<string, NodeJS.Timeout>();
-  /** Kept per page, not per session: a remounted guest starts at the panel size again. */
-  private viewports = new WeakMap<WebContents, GuestViewport>();
   /** Latest panel size per session, reported by the renderer as the panel resizes. */
   private panelSizes = new Map<string, GuestViewport['panel']>();
   private pendingGatewayCalls = new Map<
@@ -428,7 +415,7 @@ export default class BrowserControlCtr extends ControllerModule {
       await sleep(CURSOR_TRAVEL_MS);
 
       // The cursor overlay lives in the page (CSS pixels); input lands on the panel.
-      const scale = this.viewports.get(guest)?.scale ?? 1;
+      const scale = guestViewportScale(guest);
       const at = { x: Math.round(x * scale), y: Math.round(y * scale) };
       guest.sendInputEvent({ type: 'mouseMove', ...at });
       guest.sendInputEvent({ button: 'left', clickCount: 1, type: 'mouseDown', ...at });
@@ -489,10 +476,10 @@ export default class BrowserControlCtr extends ControllerModule {
     }
 
     return this.withGuest(params.sessionId, async (guest) => {
-      const current = this.viewports.get(guest);
+      const current = guestViewports.get(guest);
       if (!size) {
         if (current) {
-          this.viewports.delete(guest);
+          guestViewports.delete(guest);
           guest.disableDeviceEmulation();
         }
         return { scale: 1, success: true };
@@ -509,11 +496,11 @@ export default class BrowserControlCtr extends ControllerModule {
       // Chromium drops the emulation with each new document, so re-apply it.
       if (!current) {
         guest.on('did-navigate', () => {
-          const latest = this.viewports.get(guest);
+          const latest = guestViewports.get(guest);
           if (latest) emulateViewport(guest, latest);
         });
       }
-      this.viewports.set(guest, viewport);
+      guestViewports.set(guest, viewport);
       emulateViewport(guest, viewport);
       return { scale: viewport.scale, success: true };
     });
@@ -531,12 +518,12 @@ export default class BrowserControlCtr extends ControllerModule {
     this.panelSizes.set(params.sessionId, panel);
 
     const guest = this.sidebar.getSessionWebContents(params.sessionId);
-    const current = guest && !guest.isDestroyed() ? this.viewports.get(guest) : undefined;
+    const current = guest && !guest.isDestroyed() ? guestViewports.get(guest) : undefined;
     if (!guest || !current) return;
     if (current.panel.width === panel.width && current.panel.height === panel.height) return;
 
     const viewport = fitViewport(current, panel);
-    this.viewports.set(guest, viewport);
+    guestViewports.set(guest, viewport);
     emulateViewport(guest, viewport);
   }
 
@@ -561,7 +548,7 @@ export default class BrowserControlCtr extends ControllerModule {
       await evaluate(guest, OVERLAY_REMOVE_SCRIPT).catch(() => {});
 
       // A fitted viewport leaves the rest of the panel blank; capture the page only.
-      const viewport = this.viewports.get(guest);
+      const viewport = guestViewports.get(guest);
       let image = await captureGuest(
         guest,
         viewport && {
