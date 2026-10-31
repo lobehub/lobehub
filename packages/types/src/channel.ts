@@ -76,6 +76,11 @@ export interface ChannelMemberConfig {
    * creator, so a workspace channel can use another member's device after its owner approves.
    */
   deviceOwnerId?: string;
+  /**
+   * `workingDirectory` is the device's home folder because no directory was chosen. Such runs
+   * take no directory lock, so these Agents do not queue behind each other across the device.
+   */
+  implicitWorkingDirectory?: boolean;
   /** Set only from a device's canonical-path acknowledgement before claiming work. */
   workingDirectory?: string;
 }

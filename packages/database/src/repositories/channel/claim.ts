@@ -135,12 +135,17 @@ const deviceBlock = async (
     return { code: 'unavailable', reason: 'The device owner did not allow this environment' };
 };
 
+/** The device directory a run locks; a home-folder fallback locks none. */
+const lockedDirectory = (config: ChannelMemberItem['config']) =>
+  config?.deviceId && !config.implicitWorkingDirectory ? config.workingDirectory : undefined;
+
 /** Another channel's live writer in the same device directory. */
 const directoryBlock = async (
   tx: Transaction,
   member: ChannelMemberItem,
 ): Promise<Block | undefined> => {
-  const { deviceId, workingDirectory } = member.config ?? {};
+  const deviceId = member.config?.deviceId;
+  const workingDirectory = lockedDirectory(member.config);
   if (!deviceId || !workingDirectory) return;
 
   const [busy] = await tx
@@ -346,7 +351,7 @@ export const claimJob = async (
           operationId,
           topicId: topic.id,
           status: 'running',
-          workingDirectory: member.config!.workingDirectory,
+          workingDirectory: lockedDirectory(member.config),
           writerHeld: true,
         })
         .where(eq(channelJobs.id, job.id))
