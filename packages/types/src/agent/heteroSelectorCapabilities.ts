@@ -35,10 +35,6 @@ const CLAUDE_CODE_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', '
 
 export type ClaudeCodeReasoningEffort = (typeof CLAUDE_CODE_REASONING_EFFORT_LEVELS)[number];
 
-/** Antigravity CLI 1.4 accepts these native `--effort` values. */
-const ANTIGRAVITY_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
-type AntigravityReasoningEffort = (typeof ANTIGRAVITY_REASONING_EFFORT_LEVELS)[number];
-
 /** Grok Build reasoning-effort levels accepted by the CLI's `--effort` flag. */
 const GROK_BUILD_REASONING_EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh'] as const;
 
@@ -365,16 +361,6 @@ const MODEL_FLAGS_ENCODING = { flags: ['-m', '--model'], kind: 'flag' } as const
  */
 export const HETERO_SELECTOR_CAPABILITIES = {
   'antigravity': {
-    effort: {
-      encodings: [{ flags: ['--effort'], kind: 'flag' }],
-      levels: () => ANTIGRAVITY_REASONING_EFFORT_LEVELS,
-      resolve: (source: HeteroSelectionSource | null | undefined): HeterogeneousReasoningEffort => {
-        const effort = (getCliFlagValue(source?.args, '--effort') ?? source?.effort)?.trim();
-        return ANTIGRAVITY_REASONING_EFFORT_LEVELS.includes(effort as AntigravityReasoningEffort)
-          ? (effort as AntigravityReasoningEffort)
-          : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-      },
-    },
     model: {
       encodings: [{ flags: ['--model'], kind: 'flag' }],
       resolve: resolvePersistedModel,
@@ -693,11 +679,11 @@ export const buildHeteroSpawnArgs = (
     if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
   }
 
-  if (provider.type === 'antigravity' || provider.type === 'claude-code' || provider.type === 'codebuddy') {
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
-    const effort = provider.type === 'antigravity' ? HETERO_SELECTOR_CAPABILITIES.antigravity.effort.resolve(provider) : getExplicitClaudeCodeReasoningEffort(provider);
-    if (effort && effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
   }
 
   if (provider.type === 'codex') {
@@ -762,7 +748,7 @@ export const buildHeteroSpawnArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&
@@ -837,11 +823,11 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'antigravity' || provider.type === 'claude-code' || provider.type === 'codebuddy') {
+  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
-    const effort = provider.type === 'antigravity' ? HETERO_SELECTOR_CAPABILITIES.antigravity.effort.resolve(provider) : getExplicitClaudeCodeReasoningEffort(provider);
-    if (effort && effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION && !hasCliFlag(baseArgs, '--effort')) selectorArgs.push('--effort', effort);
+    const effort = getExplicitClaudeCodeReasoningEffort(provider);
+    if (effort && !hasCliFlag(baseArgs, '--effort')) selectorArgs.push('--effort', effort);
   }
 
   if (provider.type === 'codex') {
@@ -920,7 +906,7 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'cursor' || provider.type === 'devin') {
+  if (provider.type === 'antigravity' || provider.type === 'cursor' || provider.type === 'devin') {
     const model = provider.model?.trim();
     if (
       model &&
