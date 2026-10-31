@@ -15,6 +15,7 @@ import {
   AcceptanceFrameBoardError,
   AcceptanceFrameBoardModel,
 } from '@/database/models/acceptanceFrameBoard';
+import { FileModel } from '@/database/models/file';
 import { WorkModel } from '@/database/models/work';
 import { acceptances } from '@/database/schemas/verify';
 import { isUuid } from '@/database/utils/uuid';
@@ -122,6 +123,19 @@ export const framesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await resolveAcceptanceForWrite(ctx, input.id);
+      // A verdict is judged against this capture, so it has to be an image the caller can see.
+      if (input.operation.type === 'addCapture') {
+        const file = await new FileModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(input.operation.fileId);
+        if (!file?.fileType?.startsWith('image/'))
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'A real capture must be an uploaded image',
+          });
+      }
       try {
         return await new AcceptanceFrameBoardModel(ctx.serverDB).apply(
           input.id,
