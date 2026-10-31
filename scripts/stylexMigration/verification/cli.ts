@@ -6,6 +6,7 @@ import { fixtureIds, getStyleFixture } from './fixtures/fixtureRegistry';
 import { exitCode } from './gate/gate';
 import { runPreflight } from './pipeline/preflight';
 import { fingerprintSources, writeJson } from './reporting/report';
+import { recordSourceCleanup } from './source/cleanupSnapshots';
 import { resolvePullRequest } from './source/pullRequest';
 
 const help = `StyleX migration verification — local M1 foundation (advisory only)
@@ -19,6 +20,8 @@ const help = `StyleX migration verification — local M1 foundation (advisory on
   bun run stylex:verify self-test [--browser <executable>]
 
 Options: --output <parent-directory>, --repository <local-path>, --help
+--screenshots captures up to three diagnostic A/A/B viewport image sets per component.
+Temporary source/dependency exports are removed after success or failure; --keep-sources retains them for debugging.
 Available fixtures: ${fixtureIds.join(', ')}
 Revision objects must exist locally. No Git fetch, GitHub writes or PR merges.
 Dependency restore is opt-in, offline by default; --dependency-network explicitly enables public npm preparation.
@@ -41,11 +44,13 @@ const main = async () => {
       'fixtures': { type: 'string' },
       'fixture-dependencies': { type: 'boolean' },
       'help': { short: 'h', type: 'boolean' },
+      'keep-sources': { type: 'boolean' },
       'output': { type: 'string' },
       'plan-only': { type: 'boolean' },
       'pr': { type: 'string' },
       'pnpm': { type: 'string' },
       'restore-dependencies': { type: 'boolean' },
+      'screenshots': { type: 'boolean' },
       'repo': { type: 'string' },
       'repository': { type: 'string' },
     },
@@ -66,6 +71,8 @@ const main = async () => {
   if (values['restore-dependencies'] && (selfTest || values['plan-only']))
     throw new Error('DEPENDENCY_RESTORE_REQUIRES_FULL_SOURCE');
   if (values.fixture && values.fixtures) throw new Error('CONFLICTING_FIXTURE_OPTIONS');
+  if (values.screenshots && !values.fixture && !values.fixtures)
+    throw new Error('SCREENSHOTS_REQUIRE_FIXTURE');
   const selectedFixtures = values.fixtures?.split(',').map((id) => id.trim());
   if (
     selectedFixtures &&
@@ -166,6 +173,7 @@ const main = async () => {
       pullRequest,
       repository,
       verifierHash,
+      screenshots: values.screenshots,
     });
     console.log(
       JSON.stringify({
@@ -193,6 +201,7 @@ const main = async () => {
     process.exitCode = 3;
   } finally {
     clearTimeout(watchdog);
+    if (!selfTest && !values['keep-sources']) await recordSourceCleanup(output);
   }
 };
 
