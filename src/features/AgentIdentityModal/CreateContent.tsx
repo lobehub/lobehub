@@ -1,10 +1,10 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { Button, Center, Flexbox, toast, useModalContext } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import EmojiPicker from '@/components/EmojiPicker';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
@@ -47,7 +47,17 @@ const CreateAgentIdentityContent = memo<CreateAgentIdentityContentProps>(
             popupProps={{ placement: 'bottom' }}
             shape={'square'}
             size={72}
-            value={form.avatar ?? DEFAULT_AVATAR}
+            value={form.avatar}
+            // Same avatar the agent wears everywhere else: without an emoji or
+            // image it is the generated character, never a placeholder image.
+            customRender={() => (
+              <AgentAvatar
+                avatar={form.avatar}
+                className={'lobe-emoji-picker-avatar'}
+                name={form.name}
+                size={72}
+              />
+            )}
             onChange={(avatar) => form.setAvatar(avatar)}
             onDelete={() => form.setAvatar(undefined)}
             onUpload={async (file) => {
