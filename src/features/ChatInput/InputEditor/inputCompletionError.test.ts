@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
+import {
+  createInputCompletionError,
+  isInputCompletionAbortError,
+  isInputCompletionCredentialError,
+} from './inputCompletionError';
 
 describe('inputCompletionError', () => {
   describe('isInputCompletionAbortError', () => {
@@ -40,6 +44,24 @@ describe('inputCompletionError', () => {
         httpStatus: 402,
         message: 'Insufficient budget for model',
       });
+    });
+  });
+
+  describe('isInputCompletionCredentialError', () => {
+    it('treats a missing or rejected provider key as a credential error', () => {
+      expect(
+        isInputCompletionCredentialError(
+          createInputCompletionError(new Error('InvalidProviderAPIKey')),
+        ),
+      ).toBe(true);
+    });
+
+    it('does not treat budget failures as credential errors', () => {
+      expect(
+        isInputCompletionCredentialError(
+          createInputCompletionError(new Error('InsufficientBudgetForModel')),
+        ),
+      ).toBe(false);
     });
   });
 });

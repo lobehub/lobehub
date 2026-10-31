@@ -18,6 +18,10 @@ import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'r
 import { useHotkeysContext } from 'react-hotkeys-hook';
 import { useTranslation } from 'react-i18next';
 
+import {
+  getActiveWorkspaceId,
+  useActiveWorkspaceId,
+} from '@/business/client/hooks/useActiveWorkspaceId';
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
@@ -48,7 +52,11 @@ import {
   type InsertActionTagPayload,
   useSlashActionItems,
 } from './ActionTag';
-import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
+import {
+  createInputCompletionError,
+  isInputCompletionAbortError,
+  isInputCompletionCredentialError,
+} from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
 import { mentionPlainClassName } from './mentionStyle';
@@ -274,9 +282,18 @@ const InputEditor = memo<{
   const inputCompletionConfig = useUserStore(systemAgentSelectors.inputCompletion);
   const isAutoCompleteEnabled = isInputCompletionEnabled && inputCompletionConfig.enabled;
 
+  const activeWorkspaceId = useActiveWorkspaceId();
+
+  // The completion model is a personal preference, but providers and their
+  // keys are scoped per workspace: a model the user set up with their own key
+  // has no credentials inside a workspace. Once it fails there for that
+  // reason, this composer switches to the deployment's default model.
+  const fallbackToDefaultRef = useRef(false);
+
   useEffect(() => {
+    fallbackToDefaultRef.current = false;
     storeApi.getState().clearInputCompletionError();
-  }, [inputCompletionConfig.model, inputCompletionConfig.provider, storeApi]);
+  }, [activeWorkspaceId, inputCompletionConfig.model, inputCompletionConfig.provider, storeApi]);
 
   const getMessagesRef = useSingleton(() => ({
     current: storeApi.getState().getMessages,
@@ -318,7 +335,9 @@ const InputEditor = memo<{
       // mid-text causes nested editor updates that freeze the input
       if (afterText.trim()) return null;
 
-      const config = systemAgentSelectors.inputCompletion(useUserStore.getState());
+      const userState = useUserStore.getState();
+      const personalConfig = systemAgentSelectors.inputCompletion(userState);
+      const defaultConfig = systemAgentSelectors.defaultInputCompletion(userState);
       const context = getMessagesRef.current?.();
       const { messages, schema } = chainInputCompletion(input, afterText, context);
 
@@ -327,9 +346,12 @@ const InputEditor = memo<{
 
       const currentTopicId = useChatStore.getState().activeTopicId;
 
-      let envelope: { data?: { completion?: string } | null; tracingId?: string } | null;
-      try {
-        envelope = (await aiChatService.generateJSON(
+      type CompletionEnvelope = {
+        data?: { completion?: string } | null;
+        tracingId?: string;
+      } | null;
+      const requestCompletion = async (config: { model: string; provider: string }) =>
+        (await aiChatService.generateJSON(
           {
             messages,
             metadata: { trigger: RequestTrigger.InputCompletion },
@@ -349,12 +371,39 @@ const InputEditor = memo<{
             },
           },
           abortController,
-        )) as { data?: { completion?: string } | null; tracingId?: string } | null;
+        )) as CompletionEnvelope;
+
+      const config = fallbackToDefaultRef.current ? defaultConfig : personalConfig;
+
+      let envelope: CompletionEnvelope;
+      try {
+        envelope = await requestCompletion(config);
       } catch (error) {
-        if (!isInputCompletionAbortError(error)) {
-          storeApi.getState().pauseInputCompletion(createInputCompletionError(error));
+        if (isInputCompletionAbortError(error)) return null;
+
+        const completionError = createInputCompletionError(error);
+        const canFallBack =
+          !fallbackToDefaultRef.current &&
+          !!getActiveWorkspaceId() &&
+          isInputCompletionCredentialError(completionError) &&
+          (config.model !== defaultConfig.model || config.provider !== defaultConfig.provider);
+
+        if (!canFallBack) {
+          storeApi.getState().pauseInputCompletion(completionError);
+          return null;
         }
-        return null;
+
+        fallbackToDefaultRef.current = true;
+        if (abortSignal.aborted) return null;
+
+        try {
+          envelope = await requestCompletion(defaultConfig);
+        } catch (fallbackError) {
+          if (!isInputCompletionAbortError(fallbackError)) {
+            storeApi.getState().pauseInputCompletion(createInputCompletionError(fallbackError));
+          }
+          return null;
+        }
       }
 
       if (abortSignal.aborted) return null;
