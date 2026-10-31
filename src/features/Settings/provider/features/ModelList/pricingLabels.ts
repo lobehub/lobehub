@@ -8,7 +8,14 @@ import {
   getTextOutputUnitRate,
 } from '@/utils/pricing';
 
-type Translate = (key: string, options: { amount: string }) => string;
+type PricingLabelKey =
+  | 'providerModels.item.pricing.audioOutputTokens'
+  | 'providerModels.item.pricing.inputCharts'
+  | 'providerModels.item.pricing.inputMinutes'
+  | 'providerModels.item.pricing.inputTokens'
+  | 'providerModels.item.pricing.outputTokens';
+
+type Translate = (key: PricingLabelKey, options: { amount: string }) => string;
 
 const findUnit = (pricing: Pricing, name: PricingUnitName) =>
   pricing.units?.find((unit) => unit.name === name);
