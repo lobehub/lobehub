@@ -69,6 +69,7 @@ export * from './systemBotProvider';
 export * from './task';
 export * from './taskExternalLink';
 export * from './topic';
+export * from './topicAnalysis';
 export * from './topicComment';
 export * from './trash';
 export * from './user';

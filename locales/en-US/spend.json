@@ -49,6 +49,7 @@
   "table.columns.trigger.enums.task": "Task",
   "table.columns.trigger.enums.thread_title": "Thread Title",
   "table.columns.trigger.enums.topic": "Topic Title (Legacy)",
+  "table.columns.trigger.enums.topic_analysis": "Topic Analysis",
   "table.columns.trigger.enums.topic_summary": "Topic Summary",
   "table.columns.trigger.enums.topic_title": "Topic Title",
   "table.columns.trigger.enums.translate": "Translation",

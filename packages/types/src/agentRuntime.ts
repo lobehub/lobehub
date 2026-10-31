@@ -68,6 +68,8 @@ export enum RequestTrigger {
    * {@link RequestTrigger.GenerationTopicTitle}; kept so historical logs still resolve a label.
    */
   Topic = 'topic',
+  /** Server-side topic classification that runs after the auto summary. */
+  TopicAnalysis = 'topic_analysis',
   /** Server-side topic auto summary (description + rolling summary). */
   TopicSummary = 'topic_summary',
   /** Chat topic title summaries, both client and server generated. */

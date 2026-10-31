@@ -4450,6 +4450,33 @@ table topics {
   }
 }
 
+table topic_analyses {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  topic_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  taxonomy_version text [not null]
+  category text [not null]
+  secondary_category text
+  intent text
+  outcome text
+  labels jsonb
+  model text
+  provider text
+  last_message_id text
+  last_message_updated_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (topic_id, taxonomy_version) [name: 'topic_analyses_topic_version_unique', unique]
+    (user_id, created_at) [name: 'topic_analyses_user_id_created_at_idx']
+    (workspace_id, created_at) [name: 'topic_analyses_workspace_id_created_at_idx']
+    (taxonomy_version, category) [name: 'topic_analyses_version_category_idx']
+  }
+}
+
 table topic_comment_mentions {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   comment_id text [not null]
