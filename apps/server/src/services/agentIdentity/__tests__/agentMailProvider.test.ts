@@ -646,7 +646,11 @@ describe('agent-mail provider — reply ownership', () => {
 
     expect(calls).toEqual([
       { body: undefined, method: 'GET', path: '/v1/messages/msg_in_1' },
-      { body: { text: 'hi back' }, method: 'POST', path: '/v1/messages/msg_in_1/reply' },
+      {
+        body: { html: '<p>hi back</p>', text: 'hi back' },
+        method: 'POST',
+        path: '/v1/messages/msg_in_1/reply',
+      },
     ]);
     expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
   });
