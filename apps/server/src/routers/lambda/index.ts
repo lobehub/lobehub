@@ -32,6 +32,7 @@ import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
 import { agentGroupRouter } from './agentGroup';
 import { agentLabelRouter } from './agentLabel';
+import { agentLikeRouter } from './agentLike';
 import { agentNotifyRouter } from './agentNotify';
 import { agentQuotaRouter } from './agentQuota';
 import { agentShareRouter } from './agentShare';
@@ -134,6 +135,7 @@ export const lambdaRouter = router({
   agentEval: agentEvalRouter,
   agentEvalExternal: agentEvalExternalRouter,
   agentLabel: agentLabelRouter,
+  agentLike: agentLikeRouter,
   agentSkills: agentSkillsRouter,
   environment: environmentRouter,
   favorite: favoriteRouter,

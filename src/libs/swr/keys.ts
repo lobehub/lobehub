@@ -205,6 +205,14 @@ export const documentCommentKeys = {
   ),
 };
 
+// ---- agent like ---------------------------------------------------------
+export const agentLikeKeys = {
+  summaries: def('agentLike:summaries', (workspaceId: string) => [
+    'agentLike:summaries',
+    workspaceId,
+  ]),
+};
+
 // ---- document like ------------------------------------------------------
 export const documentLikeKeys = {
   summary: def('documentLike:summary', (workspaceId: string | null, documentId: string) => [
@@ -1046,6 +1054,7 @@ export const swrKeys = {
   acceptanceComment: acceptanceCommentKeys,
   documentComment: documentCommentKeys,
   documentLike: documentLikeKeys,
+  agentLike: agentLikeKeys,
   topicAction: topicActionKeys,
   user: userKeys,
   userMemory: userMemoryKeys,

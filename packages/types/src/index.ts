@@ -4,6 +4,7 @@ export * from './agentExecution';
 export * from './agentGroup';
 export * from './agentHook';
 export * from './agentHookResponse';
+export * from './agentLike';
 export * from './agentMail';
 export * from './agentOperation';
 export * from './aiChat';
