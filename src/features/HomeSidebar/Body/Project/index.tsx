@@ -1,5 +1,6 @@
 'use client';
 
+import { Github } from '@lobehub/icons';
 import {
   AccordionHeader,
   AccordionItem,
@@ -13,13 +14,14 @@ import {
   Flexbox,
   Text,
 } from '@lobehub/ui';
-import { ArrowDownUpIcon, ArrowRightIcon, PlusIcon } from 'lucide-react';
+import { ArrowDownUpIcon, ArrowRightIcon, FolderPlusIcon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { openCreateProjectFromGithubModal } from '@/features/Projects/CreateFromGithub';
 import { openCreateProjectModal } from '@/features/Projects/CreateProjectModal';
 import { resolveProjectListState } from '@/features/Projects/projectListState';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -62,6 +64,24 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
     [sortBy, t, updateSystemStatus],
   );
 
+  const createMenuItems = useMemo<DropdownItem[]>(
+    () => [
+      {
+        icon: FolderPlusIcon,
+        key: 'blank',
+        label: t('create.blank'),
+        onClick: () => openCreateProjectModal(),
+      },
+      {
+        icon: Github,
+        key: 'github',
+        label: t('create.fromGithub'),
+        onClick: () => openCreateProjectFromGithubModal(),
+      },
+    ],
+    [t],
+  );
+
   if (!enabled) return null;
 
   return (
@@ -89,12 +109,9 @@ const Project = memo<ProjectProps>(({ itemKey }) => {
               title={t('list.viewAll')}
               onClick={() => navigate('/projects')}
             />
-            <ActionIcon
-              icon={PlusIcon}
-              size="small"
-              title={t('create.title')}
-              onClick={() => openCreateProjectModal()}
-            />
+            <DropdownMenu items={createMenuItems} placement={'bottomRight'}>
+              <ActionIcon icon={PlusIcon} size="small" title={t('create.title')} />
+            </DropdownMenu>
           </Flexbox>
         </div>
       </AccordionHeader>

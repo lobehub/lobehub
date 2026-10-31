@@ -50,6 +50,8 @@ interface ProjectStore extends ProjectStoreState {
     coordinatorAgentId?: string;
     identifier?: string;
     name: string;
+    /** GitHub repository to attach as the project's environment, in the same write. */
+    repository?: { defaultBranch?: string; name: string; url: string };
     slug?: string;
   }) => Promise<ProjectListItem>;
   deleteProject: (id: string) => Promise<void>;

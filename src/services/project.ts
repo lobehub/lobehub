@@ -61,6 +61,7 @@ class ProjectService {
       description?: string;
       identifier?: string;
       name: string;
+      repository?: { defaultBranch?: string; name: string; url: string };
       slug?: string;
       visibility?: ProjectVisibility;
     },

@@ -1002,6 +1002,58 @@ describe('ProjectModel', () => {
     );
   });
 
+  it('creates a project from a GitHub repository with its environment attached', async () => {
+    const project = await createProject(model, {
+      name: 'lobehub',
+      repository: {
+        defaultBranch: 'canary',
+        name: 'lobehub/lobehub',
+        url: 'https://github.com/lobehub/lobehub.git',
+      },
+    });
+
+    expect(await model.listEnvironments(project.id)).toEqual([
+      expect.objectContaining({
+        configuration: expect.objectContaining({
+          kind: 'code',
+          sources: [{ kind: 'git', ref: 'canary', url: 'https://github.com/lobehub/lobehub' }],
+        }),
+        name: 'lobehub/lobehub',
+      }),
+    ]);
+
+    // A second project on the same repository shares the definition.
+    const second = await createProject(model, {
+      name: 'lobehub again',
+      repository: { name: 'lobehub/lobehub', url: 'git@github.com:lobehub/lobehub.git' },
+    });
+    const [first] = await model.listEnvironments(project.id);
+    expect(await model.listEnvironments(second.id)).toEqual([
+      expect.objectContaining({ id: first.id }),
+    ]);
+  });
+
+  it('names the unique index a taken slug violates, so the router can map it', async () => {
+    await createProject(model, { name: 'Taken', slug: 'taken' });
+    const error = await createProject(model, { name: 'Taken again', slug: 'taken' }).catch(
+      (e: unknown) => e,
+    );
+    let cause: any = error;
+    while (cause && !cause.constraint) cause = cause.cause;
+    expect(cause).toMatchObject({ code: '23505', constraint: 'projects_slug_user_id_unique' });
+  });
+
+  it('creates nothing when the repository URL is not a GitHub repository', async () => {
+    await expect(
+      createProject(model, {
+        name: 'Broken',
+        repository: { name: 'broken', url: 'https://example.com/a/b' },
+      }),
+    ).rejects.toThrow('GitHub');
+    expect(await model.list()).toEqual([]);
+    expect(await serverDB.select().from(environments)).toEqual([]);
+  });
+
   it('lists project conversations with or without directories, retaining each agent', async () => {
     const project = await createProject(model, { name: 'Topics host' });
     const topicModel = new TopicModel(serverDB, userId);

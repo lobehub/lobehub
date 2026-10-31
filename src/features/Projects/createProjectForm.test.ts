@@ -5,6 +5,7 @@ import {
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
   isProjectSlugValid,
+  PROJECT_SLUG_MAX_LENGTH,
 } from './createProjectForm';
 
 describe('createProjectForm', () => {
@@ -16,6 +17,19 @@ describe('createProjectForm', () => {
 
   it('returns an empty suggestion when the project name is empty', () => {
     expect(getProjectFieldSuggestions('  ')).toEqual({ slug: '' });
+  });
+
+  it('bounds the generated slug so a long name still creates a project', () => {
+    const longName = 'a'.repeat(120);
+    const { slug } = getProjectFieldSuggestions(longName);
+
+    expect(slug).toBe('a'.repeat(PROJECT_SLUG_MAX_LENGTH));
+    expect(isProjectSlugValid(slug)).toBe(true);
+    expect(getCreateProjectInput({ identifier: 'LOBE', name: longName, slug })).toEqual({
+      identifier: 'LOBE',
+      name: longName,
+      slug: 'a'.repeat(PROJECT_SLUG_MAX_LENGTH),
+    });
   });
 
   it('omits an empty identifier so tasks keep the default prefix', () => {
@@ -59,6 +73,15 @@ describe('createProjectForm', () => {
     expect(isProjectSlugValid('contains spaces')).toBe(false);
     expect(
       getCreateProjectInput({ identifier: 'LOBE', name: 'LobeHub Project', slug: '-invalid' }),
+    ).toBeNull();
+  });
+
+  it('rejects a user-provided slug longer than the backend limit', () => {
+    const overLongSlug = 'a'.repeat(PROJECT_SLUG_MAX_LENGTH + 1);
+
+    expect(isProjectSlugValid(overLongSlug)).toBe(false);
+    expect(
+      getCreateProjectInput({ identifier: 'LOBE', name: 'LobeHub Project', slug: overLongSlug }),
     ).toBeNull();
   });
 });

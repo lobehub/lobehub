@@ -64,6 +64,19 @@ export interface ScmInstallationRepository {
   private?: boolean;
 }
 
+/** A repository a connected installation can read, as the "new project from GitHub" picker lists it. */
+export interface ScmRepositoryListItem {
+  defaultBranch: string;
+  description: string | null;
+  /** `owner/name` as the provider prints it. */
+  fullName: string;
+  htmlUrl: string;
+  ownerAvatarUrl: string | null;
+  private: boolean;
+  /** ISO timestamp of the latest push; what "recent" sorts by. */
+  pushedAt: string | null;
+}
+
 /**
  * Open bag for provider-specific installation facts that are safe to read
  * without decryption (display names, avatar, granted permissions).

@@ -14,6 +14,8 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
+import { rethrowDuplicateProjectField } from './_helpers/projectConstraintErrors';
+
 /**
  * Reads `workspaceRole` as an optional context field: the cloud workspace-auth
  * override injects it, while the OSS stub leaves it absent.
@@ -178,6 +180,13 @@ export const projectRouter = router({
         description: z.string().optional(),
         identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
+        repository: z
+          .object({
+            defaultBranch: z.string().max(255).optional(),
+            name: z.string().trim().min(1).max(255),
+            url: z.string().min(1).max(2048),
+          })
+          .optional(),
         slug: projectSlugInput.optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
       }),
@@ -188,7 +197,10 @@ export const projectRouter = router({
           await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
         }
         return {
-          data: await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input)),
+          data: await withMainAgent(
+            ctx.projectModel,
+            await ctx.projectModel.create(input).catch(rethrowDuplicateProjectField),
+          ),
           message: 'Project created',
           success: true,
         };

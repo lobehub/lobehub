@@ -13,10 +13,6 @@ import { useTranslation } from 'react-i18next';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useHomeStore } from '@/store/home';
-import { homeAgentListSelectors } from '@/store/home/selectors';
 import { type ProjectListItem, useProjectStore } from '@/store/project';
 
 import {
@@ -26,11 +22,8 @@ import {
   isProjectSlugValid,
 } from './createProjectForm';
 import MainAgentField from './MainAgentField';
-import {
-  readRememberedMainAgent,
-  resolveDefaultMainAgent,
-  writeRememberedMainAgent,
-} from './mainAgentStorage';
+import { writeRememberedMainAgent } from './mainAgentStorage';
+import { useDefaultMainAgent } from './useDefaultMainAgent';
 
 export interface CreateProjectOptions {
   /**
@@ -69,17 +62,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
     slug: '',
     slugEdited: false,
   });
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const [remembered] = useState(() => readRememberedMainAgent(getActiveWorkspaceId()));
-  const defaultMainAgentId = useHomeStore((s) =>
-    resolveDefaultMainAgent({
-      // New projects are shared, so a private agent is not a valid default.
-      agentExists: (id) => homeAgentListSelectors.sharedAgents(s).some((agent) => agent.id === id),
-      inboxAgentId,
-      listLoaded: homeAgentListSelectors.isAgentListInit(s),
-      remembered,
-    }),
-  );
+  const defaultMainAgentId = useDefaultMainAgent();
   const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
   const createInput = getCreateProjectInput(form);
   const identifierInvalid =

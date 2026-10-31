@@ -611,6 +611,10 @@ export const scmKeys = {
     'scm:installations',
     workspaceId ?? null,
   ]),
+  repositories: def('scm:repositories', (workspaceId: string | null | undefined) => [
+    'scm:repositories',
+    workspaceId ?? null,
+  ]),
   wakeTarget: def('scm:wakeTarget', (topicId: string) => ['scm:wakeTarget', topicId]),
 };
 

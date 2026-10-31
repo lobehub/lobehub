@@ -35,6 +35,8 @@ export interface CreateProjectInput {
   /** Task prefix for this project; omit to keep the scope's default prefix. */
   identifier?: string | null;
   name: string;
+  /** GitHub repository the project works on; attached as the project's environment. */
+  repository?: { defaultBranch?: string; name: string; url: string };
   slug?: string;
   visibility?: ProjectVisibility;
 }
@@ -145,7 +147,7 @@ export class ProjectModel {
       : this.ownedByCaller();
   }
 
-  async create(input: CreateProjectInput) {
+  async create({ repository, ...input }: CreateProjectInput) {
     const identifier = input.identifier?.trim().toUpperCase() || null;
     if (identifier && (identifier.length < 3 || identifier.length > 6)) {
       throw new Error('Project identifier must be between 3 and 6 characters');
@@ -191,6 +193,26 @@ export class ProjectModel {
         role: 'coordinator',
         workspaceId: this.workspaceId ?? null,
       });
+
+      // In the same transaction, so a repository the environment cannot accept
+      // leaves no half-made project behind.
+      if (repository) {
+        const environment = await new EnvironmentModel(
+          tx as LobeChatDatabase,
+          this.userId,
+          this.workspaceId,
+        ).ensureForRepository({
+          defaultBranch: repository.defaultBranch,
+          name: repository.name,
+          repositoryUrl: repository.url,
+        });
+        await tx.insert(projectEnvironments).values({
+          addedByUserId: this.userId,
+          environmentId: environment.id,
+          projectId: project.id,
+          workspaceId: this.workspaceId,
+        });
+      }
 
       return project;
     });

@@ -161,6 +161,8 @@ export default {
   'acceptance.success.start': 'Project started',
   'acceptance.title': 'Acceptance',
   'create.action': 'Create project',
+  'create.blank': 'Blank project',
+  'create.fromGithub': 'From GitHub repository',
   'create.identifierDescription':
     'Replaces the task number prefix for this project, for example ACE. Leave it empty to use the default prefix.',
   'create.identifierInvalid': 'Use 3–6 uppercase letters or numbers, starting with a letter.',
@@ -177,6 +179,32 @@ export default {
   'create.slugLabel': 'Slug (optional)',
   'create.slugPlaceholder': 'my-project',
   'create.title': 'New project',
+  'createFromGithub.connect': 'Connect GitHub',
+  'createFromGithub.disconnected':
+    'Connect GitHub to choose from your repositories, or paste a public repository URL above.',
+  'createFromGithub.duplicateIdentifier':
+    'Another project already uses this identifier. Choose a different one.',
+  'createFromGithub.duplicateName':
+    'A project with this name already exists, including in the trash. Choose a different name.',
+  'createFromGithub.empty':
+    "The connected GitHub accounts haven't given LobeHub access to any repositories yet.",
+  'createFromGithub.environmentHint':
+    "The repository becomes this project's environment, so agents can check it out when they work on the project.",
+  'createFromGithub.loadFailed': "Couldn't load repositories from GitHub.",
+  'createFromGithub.manageAccess': 'Manage access',
+  'createFromGithub.private': 'Private',
+  'createFromGithub.repositoriesLabel': 'Your repositories',
+  'createFromGithub.searchEmpty': 'No matching repositories',
+  'createFromGithub.searchPlaceholder': 'Search repositories…',
+  'createFromGithub.title': 'New project from GitHub',
+  'createFromGithub.truncated':
+    "Only {{count}} repositories are listed. If yours isn't here, paste its URL above.",
+  'createFromGithub.unconfigured':
+    "GitHub isn't set up on this server. Paste a public repository URL above.",
+  'createFromGithub.urlInvalid':
+    'Enter a GitHub repository URL, such as https://github.com/owner/repo.',
+  'createFromGithub.urlLabel': 'Repository URL',
+  'createFromGithub.urlPlaceholder': 'https://github.com/owner/repo',
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
   'goals.create': 'Create goal',
