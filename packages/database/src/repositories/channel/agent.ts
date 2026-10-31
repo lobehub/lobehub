@@ -11,6 +11,7 @@ import { agents, channelMembers, userSettings } from '../../schemas';
 import type { Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
+import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { ChannelError } from './error';
 
 /** Explicitly select environment fields so legacy or untyped copies cannot override an Agent. */
@@ -37,12 +38,13 @@ export const requireChannelAgent = async (
   agentId: string,
 ) => {
   const [agent] = await tx
-    .select({ name: agents.name, title: agents.title })
+    .select({ name: agents.name, slug: agents.slug, title: agents.title })
     .from(agents)
     .where(agentUsableByWhere(agentId, { userId, workspaceId: workspaceId ?? undefined }))
     .for('share');
   if (!agent) throw new ChannelError('NOT_FOUND', 'Agent not found');
-  return agent;
+  // LobeAI rows are stored without a title; label it the way the rest of the product does.
+  return { name: agent.name, title: normalizeInboxAgentTitle(agent.title, agent) };
 };
 
 /** Called under the Channel lock after the caller's admin role has been checked. */

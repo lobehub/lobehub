@@ -1,4 +1,0 @@
-/* Vendor pseudo-element of the native player; StyleX cannot target it. */
-.video::-webkit-media-controls-panel {
-  background: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 30%) 100%);
-}

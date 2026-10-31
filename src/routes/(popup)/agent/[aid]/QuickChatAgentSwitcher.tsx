@@ -2,7 +2,9 @@
 
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { createStaticStyles, cx, Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -31,85 +33,60 @@ interface SwitchItem {
   title: string;
 }
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  active: css`
-    border-color: ${cssVar.colorPrimary};
-    box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBgHover};
-  `,
-  itemBtn: css`
-    cursor: pointer;
-
-    box-sizing: content-box;
-    padding: 0;
-    border: 1.5px solid transparent;
-    border-radius: 8px;
-
-    opacity: 0.65;
-    background: transparent;
-
-    transition:
-      opacity 0.15s,
-      border-color 0.15s,
-      box-shadow 0.15s;
-
-    &:hover {
-      opacity: 1;
-    }
-  `,
-  more: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: ${AVATAR_SIZE}px;
-    height: ${AVATAR_SIZE}px;
-    border: 1.5px solid transparent;
-    border-radius: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  popover: css`
-    padding: 0;
-  `,
-  popoverContent: css`
-    width: 240px;
-    padding: 8px;
-  `,
-  popoverEmpty: css`
-    padding-block: 16px;
-    padding-inline: 8px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-  `,
-  popoverList: css`
-    overflow: auto;
-    max-height: 240px;
-  `,
-  popoverRow: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    color: ${cssVar.colorText};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  active: {
+    borderColor: cssVar.colorPrimary,
+    boxShadow: `0 0 0 2px ${cssVar.colorPrimaryBgHover}`,
+  },
+  itemBtn: {
+    cursor: 'pointer',
+    boxSizing: 'content-box',
+    padding: '0',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: '8px',
+    opacity: { 'default': 0.65, ':hover': 1 },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: 'opacity 0.15s,\n      border-color 0.15s,\n      box-shadow 0.15s',
+  },
+  more: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: `${AVATAR_SIZE}px`,
+    height: `${AVATAR_SIZE}px`,
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: '8px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  popover: { padding: '0' },
+  popoverContent: { width: '240px', padding: '8px' },
+  popoverEmpty: {
+    paddingBlock: '16px',
+    paddingInline: '8px',
+    color: cssVar.colorTextTertiary,
+    textAlign: 'center',
+  },
+  popoverList: { overflow: 'auto', maxHeight: '240px' },
+  popoverRow: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    color: cssVar.colorText,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 const useSwitchItems = (): SwitchItem[] => {
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
@@ -198,7 +175,7 @@ const QuickChatAgentSwitcher = memo(() => {
         <Tooltip key={item.id} title={item.title}>
           <button
             aria-label={item.title}
-            className={cx(styles.itemBtn, isActive(item) && styles.active)}
+            {...stylex.props(styles.itemBtn, isActive(item) && styles.active)}
             type={'button'}
             onClick={() => handleSelect(item)}
           >
@@ -215,12 +192,12 @@ const QuickChatAgentSwitcher = memo(() => {
       {remaining.length > 0 && (
         <Popover
           arrow={false}
-          classNames={{ content: styles.popover }}
+          classNames={{ content: stylex.props(styles.popover).className }}
           open={popoverOpen}
           placement={'bottom'}
           trigger={'click'}
           content={
-            <div className={styles.popoverContent}>
+            <div {...stylex.props(styles.popoverContent)}>
               <Input
                 allowClear
                 placeholder={t('quickChatSwitcher.searchPlaceholder')}
@@ -228,13 +205,13 @@ const QuickChatAgentSwitcher = memo(() => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <div className={styles.popoverList} style={{ marginTop: 8 }}>
+              <div className={stylex.props(styles.popoverList).className} style={{ marginTop: 8 }}>
                 {filteredRemaining.length === 0 ? (
-                  <div className={styles.popoverEmpty}>{t('quickChatSwitcher.empty')}</div>
+                  <div {...stylex.props(styles.popoverEmpty)}>{t('quickChatSwitcher.empty')}</div>
                 ) : (
                   filteredRemaining.map((item) => (
                     <div
-                      className={styles.popoverRow}
+                      {...stylex.props(styles.popoverRow)}
                       key={item.id}
                       onClick={() => handleSelect(item)}
                     >
@@ -262,7 +239,11 @@ const QuickChatAgentSwitcher = memo(() => {
           }
           onOpenChange={setPopoverOpen}
         >
-          <button aria-label={t('quickChatSwitcher.more')} className={styles.more} type={'button'}>
+          <button
+            aria-label={t('quickChatSwitcher.more')}
+            {...stylex.props(styles.more)}
+            type={'button'}
+          >
             <Icon icon={MoreHorizontalIcon} size={16} />
           </button>
         </Popover>

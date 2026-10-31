@@ -1,8 +1,11 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
+export const styles = stylex.create({
   // Header container
-  headerContainer: css`
-    border-block-end: 1px solid var(--header-border-color, ${cssVar.colorBorderSecondary});
-  `,
-}));
+  headerContainer: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: `var(--header-border-color, ${cssVar.colorBorderSecondary})`,
+  },
+});

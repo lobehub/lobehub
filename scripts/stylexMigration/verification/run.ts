@@ -3,13 +3,13 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { fingerprintSources } from './report';
+import { fingerprintSources } from './reporting/report';
 
 /** Bun compiles; Node owns Playwright. Avoid tsx's function-serialization helpers. */
 const main = async () => {
   const sourceDirectory = import.meta.dirname;
   const repository = path.resolve(sourceDirectory, '../../..');
-  const sourceDirectories = [sourceDirectory, path.resolve(sourceDirectory, '../experiment')];
+  const sourceDirectories = [sourceDirectory];
   const verifierHash = await fingerprintSources(sourceDirectories);
   const parent = path.join(repository, '.records/stylex-verification/runners');
   await mkdir(parent, { recursive: true });

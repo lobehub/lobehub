@@ -232,6 +232,9 @@ class GoalService {
 
   updateRequirement = async (id: string, requirement: string) =>
     lambdaClient.goal.updateRequirement.mutate({ id, requirement });
+
+  updateTitle = async (id: string, title: string) =>
+    lambdaClient.goal.updateTitle.mutate({ id, title });
 }
 
 export const goalService = new GoalService();

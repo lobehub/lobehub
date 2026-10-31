@@ -1,10 +1,14 @@
 'use client';
 
-import { Center, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileImage, FileText, FileUpIcon, FolderIcon } from 'lucide-react';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { useDragUploadContext } from './DragUploadProvider';
 import { type DroppedLocalPath, useLocalDragUpload } from './useLocalDragUpload';
@@ -26,78 +30,59 @@ const LOCAL_PATH_TONE = {
   iconSoftBg: `color-mix(in srgb, ${cssVar.purple} 64%, white)`,
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: relative;
-  `,
-  content: css`
-    position: relative;
-    z-index: 1;
-
-    box-sizing: border-box;
-    width: 100%;
-    height: 100%;
-    padding-block: 24px;
-    padding-inline: 28px;
-  `,
-  desc: css`
-    font-size: 12px;
-    line-height: 18px;
-    color: #fff;
-  `,
-  icon: css`
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-  iconGroup: css`
-    margin-block-start: 0;
-  `,
-  overlay: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 100;
-    inset: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    background: ${cssVar.colorBgMask};
-
-    transition: all 0.2s ease-in-out;
-  `,
-  overlayContent: css`
-    position: relative;
-
-    box-sizing: border-box;
-    width: min(460px, 72vw);
-    padding: ${OVERLAY_INSET}px;
-    border-radius: 16px;
-
-    background: ${cssVar.geekblue};
-    box-shadow: 0 16px 48px color-mix(in srgb, ${cssVar.geekblue} 32%, transparent);
-
-    &::before {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      inset: ${OVERLAY_BORDER_INSET}px;
-
-      border: 1.5px dashed #fff;
-      border-radius: ${cssVar.borderRadiusLG};
-    }
-  `,
-  overlayContentLocalPath: css`
-    background: color-mix(in srgb, ${cssVar.purple} 82%, ${cssVar.geekblue});
-    box-shadow: 0 16px 48px color-mix(in srgb, ${cssVar.purple} 32%, transparent);
-  `,
-  title: css`
-    font-size: 16px;
-    font-weight: bold;
-    color: #fff;
-  `,
-}));
+const styles = stylex.create({
+  container: { position: 'relative' },
+  content: {
+    position: 'relative',
+    zIndex: 1,
+    boxSizing: 'border-box',
+    width: '100%',
+    height: '100%',
+    paddingBlock: '24px',
+    paddingInline: '28px',
+  },
+  desc: { fontSize: '12px', lineHeight: '18px', color: '#fff' },
+  icon: { borderRadius: cssVar.borderRadiusSM },
+  iconGroup: { marginBlockStart: '0' },
+  overlay: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 100,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+    transition: 'all 0.2s ease-in-out',
+  },
+  overlayContent: {
+    'position': 'relative',
+    'boxSizing': 'border-box',
+    'width': 'min(460px, 72vw)',
+    'padding': `${OVERLAY_INSET}px`,
+    'borderRadius': '16px',
+    'backgroundColor': cssVar.geekblue,
+    'backgroundImage': 'none',
+    'boxShadow': `0 16px 48px color-mix(in srgb, ${cssVar.geekblue} 32%, transparent)`,
+    '::before': {
+      pointerEvents: 'none',
+      content: '""',
+      position: 'absolute',
+      inset: `${OVERLAY_BORDER_INSET}px`,
+      borderWidth: '1.5px',
+      borderStyle: 'dashed',
+      borderColor: '#fff',
+      borderRadius: cssVar.borderRadiusLG,
+    },
+  },
+  overlayContentLocalPath: {
+    backgroundColor: `color-mix(in srgb, ${cssVar.purple} 82%, ${cssVar.geekblue})`,
+    backgroundImage: 'none',
+    boxShadow: `0 16px 48px color-mix(in srgb, ${cssVar.purple} 32%, transparent)`,
+  },
+  title: { fontSize: '16px', fontWeight: 'bold', color: '#fff' },
+});
 
 export interface DragUploadZoneProps {
   /**
@@ -212,21 +197,24 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     const tone = isLocalPathReferenceOverlay ? LOCAL_PATH_TONE : DEFAULT_TONE;
 
     return (
-      <div className={cx(styles.container, className)} style={style} {...getContainerProps()}>
+      <div {...sx([styles.container], className, style)} {...getContainerProps()}>
         {children}
         {showOverlay && (
-          <div className={styles.overlay}>
+          <div {...stylex.props(styles.overlay)}>
             <div
-              style={{ minHeight: overlayMinHeight }}
-              className={cx(
-                styles.overlayContent,
-                isLocalPathReferenceOverlay && styles.overlayContentLocalPath,
+              {...sx(
+                [
+                  styles.overlayContent,
+                  isLocalPathReferenceOverlay && styles.overlayContentLocalPath,
+                ],
+                undefined,
+                { minHeight: overlayMinHeight },
               )}
             >
-              <Center className={styles.content} gap={8}>
-                <Flexbox horizontal className={styles.iconGroup}>
+              <Center className={stylex.props(styles.content).className} gap={8}>
+                <Flexbox horizontal className={stylex.props(styles.iconGroup).className}>
                   <Center
-                    className={styles.icon}
+                    className={stylex.props(styles.icon).className}
                     height={BLOCK_SIZE * 1.2}
                     width={BLOCK_SIZE}
                     style={{
@@ -238,7 +226,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
                     <Icon icon={overlayIcons[0]} size={ICON_SIZE} />
                   </Center>
                   <Center
-                    className={styles.icon}
+                    className={stylex.props(styles.icon).className}
                     height={BLOCK_SIZE * 1.2}
                     width={BLOCK_SIZE}
                     style={{
@@ -251,7 +239,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
                     <Icon icon={overlayIcons[1]} size={ICON_SIZE} />
                   </Center>
                   <Center
-                    className={styles.icon}
+                    className={stylex.props(styles.icon).className}
                     height={BLOCK_SIZE * 1.2}
                     width={BLOCK_SIZE}
                     style={{
@@ -264,8 +252,12 @@ const DragUploadZone = memo<DragUploadZoneProps>(
                   </Center>
                 </Flexbox>
                 <Flexbox align={'center'} gap={4} style={{ textAlign: 'center' }}>
-                  <Flexbox className={styles.title}>{overlayCopy.title}</Flexbox>
-                  <Flexbox className={styles.desc}>{overlayCopy.desc}</Flexbox>
+                  <Flexbox className={stylex.props(styles.title).className}>
+                    {overlayCopy.title}
+                  </Flexbox>
+                  <Flexbox className={stylex.props(styles.desc).className}>
+                    {overlayCopy.desc}
+                  </Flexbox>
                 </Flexbox>
               </Center>
             </div>

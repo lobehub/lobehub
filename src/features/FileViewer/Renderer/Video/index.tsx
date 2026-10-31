@@ -5,7 +5,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-import moduleStyles from './index.module.css';
+const CONTROLS = '::-webkit-media-controls-panel';
 
 const styles = stylex.create({
   container: {
@@ -24,6 +24,17 @@ const styles = stylex.create({
     outlineOffset: { 'default': null, ':focus': '2px' },
     outlineStyle: { 'default': null, ':focus': 'solid' },
     outlineWidth: { 'default': null, ':focus': '2px' },
+    backgroundColor: { default: null, [CONTROLS]: 'transparent' },
+    backgroundImage: {
+      default: null,
+      [CONTROLS]: 'linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 30%) 100%)',
+    },
+    backgroundPosition: { default: null, [CONTROLS]: '0% 0%' },
+    backgroundSize: { default: null, [CONTROLS]: 'auto' },
+    backgroundRepeat: { default: null, [CONTROLS]: 'repeat' },
+    backgroundOrigin: { default: null, [CONTROLS]: 'padding-box' },
+    backgroundClip: { default: null, [CONTROLS]: 'border-box' },
+    backgroundAttachment: { default: null, [CONTROLS]: 'scroll' },
   },
 });
 
@@ -39,7 +50,7 @@ const VideoViewer = memo<VideoViewerProps>(({ url }) => {
     <Center className={stylex.props(styles.container).className} height={'100%'} width={'100%'}>
       <video
         controls
-        className={`${stylex.props(styles.video).className} ${moduleStyles.video}`}
+        className={stylex.props(styles.video).className}
         height={'100%'}
         src={url}
         width={'100%'}

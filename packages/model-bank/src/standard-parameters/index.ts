@@ -337,4 +337,5 @@ export function extractDefaultValues(paramsSchema: ModelParamsSchema) {
   ) as RuntimeImageGenParams;
 }
 
+export * from './tts';
 export * from './video';

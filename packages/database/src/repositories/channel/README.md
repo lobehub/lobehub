@@ -65,6 +65,25 @@ Updating Agent settings affects the next claim, including already queued request
 rewrites an earlier job snapshot. A private, trashed, deleted or moved Agent fails the requester
 access check before any topic or operation is created.
 
+## Delivery-key retirement rollout
+
+Migration `0197_channel_jobs_message_member_unique` enforces one job per message and Agent
+member, but deliberately retains the physical `delivery_key` column and its `initial` default.
+Older binaries still include that column in ORM reads and writes; new binaries omit it.
+The generated snapshot and DBML describe the new application schema, not this temporary
+compatibility column. Do not add the column back to the runtime schema or drop it in this release.
+
+Deploy this version normally; no separate manual database step is required. Only after it has
+been deployed and all earlier instances, workers and in-flight tasks have drained should a later
+release drop the column with a **custom** migration (the generated snapshot already omits it).
+Do not ship that cleanup in the same deployment, and retire rollback targets that still reference
+the column before applying it.
+
+The migration fails rather than deleting jobs if historical `(message_id, member_id)` pairs are
+duplicated. The migrator transaction restores the previous index and leaves the data and migration
+history unchanged on failure. Rebuilding the index still takes a table lock; column compatibility
+does not promise a lock-free migration.
+
 ## Topic continuation
 
 Every claim reserves a new operation, but normally continues the previous topic for the same

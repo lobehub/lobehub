@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
@@ -12,113 +14,97 @@ import { memo, type ReactNode } from 'react';
  * same bar and are read as one control surface — a second copy of the styles
  * would drift into looking like a different kind of thing.
  */
-const styles = createStaticStyles(({ css }) => ({
-  check: css`
-    flex: none;
-    margin-inline-start: auto;
-    color: ${cssVar.colorPrimary};
-  `,
-  desc: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  extra: css`
-    display: flex;
-    flex: none;
-    gap: 4px;
-    align-items: center;
-
-    margin-inline-start: auto;
-  `,
-  option: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  optionActive: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
+const styles = stylex.create({
+  check: { flex: 'none', marginInlineStart: 'auto', color: cssVar.colorPrimary },
+  desc: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: '11px',
+    color: cssVar.colorTextDescription,
+  },
+  extra: {
+    display: 'flex',
+    flex: 'none',
+    gap: '4px',
+    alignItems: 'center',
+    marginInlineStart: 'auto',
+  },
+  option: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  optionActive: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  optionActiveDisabled: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': 'transparent' },
+    backgroundImage: 'none',
+  },
+  optionDisabled: {
+    cursor: 'not-allowed',
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
   /* Dims the row's own content rather than the row. Its trailing action is the
      way OUT of that state — dimming it would read as "also unavailable" — and
      opacity on the row cannot be undone by a child, so the action is left out
-     of the selector instead. */
-  optionDisabled: css`
-    cursor: not-allowed;
-
-    & > :not([data-option-extra]) {
-      opacity: 0.55;
-    }
-
-    &:hover {
-      background: transparent;
-    }
-  `,
-  optionIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  optionMeta: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 1px;
-
-    min-width: 0;
-  `,
-  optionTitle: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  tag: css`
-    flex: none;
-
-    padding-block: 0;
-    padding-inline: 5px;
-    border-radius: 4px;
-
-    font-size: 10px;
-    line-height: 16px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-}));
+     of the dimmed elements instead. */
+  dimmed: { opacity: 0.55 },
+  optionIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  optionMeta: {
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    gap: '1px',
+    minWidth: '0',
+  },
+  optionTitle: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  tag: {
+    flex: 'none',
+    paddingBlock: '0',
+    paddingInline: '5px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    lineHeight: '16px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+});
 
 export interface OptionRowProps {
   active?: boolean;
-  className?: string;
   desc?: ReactNode;
   disabled?: boolean;
   /** Trailing action, kept live while the row itself is disabled. */
@@ -130,38 +116,41 @@ export interface OptionRowProps {
   tag?: ReactNode;
   /** Several tags, each in its own pill rather than one pill holding them all. */
   tags?: ReactNode[];
+  /** Restyles the row; applied last so it wins over the defaults. */
+  xstyle?: stylex.StyleXStyles;
 }
 
 const OptionRow = memo<OptionRowProps>(
-  ({ active, className, desc, disabled, extra, icon, label, onClick, tag, tags }) => (
+  ({ active, desc, disabled, extra, icon, label, onClick, tag, tags, xstyle }) => (
     <div
-      className={cx(
-        styles.option,
-        active && styles.optionActive,
-        disabled && styles.optionDisabled,
-        className,
-      )}
       onClick={() => {
         if (!disabled) onClick();
       }}
+      {...stylex.props(
+        styles.option,
+        active && styles.optionActive,
+        disabled && styles.optionDisabled,
+        active && disabled && styles.optionActiveDisabled,
+        xstyle,
+      )}
     >
-      <div className={styles.optionIcon}>{icon}</div>
-      <div className={styles.optionMeta}>
+      <div {...stylex.props(styles.optionIcon, disabled && styles.dimmed)}>{icon}</div>
+      <div {...stylex.props(styles.optionMeta, disabled && styles.dimmed)}>
         <Flexbox horizontal align={'center'} gap={6}>
-          <span className={styles.optionTitle}>{label}</span>
-          {tag ? <span className={styles.tag}>{tag}</span> : null}
+          <span {...stylex.props(styles.optionTitle)}>{label}</span>
+          {tag ? <span {...stylex.props(styles.tag)}>{tag}</span> : null}
           {tags?.map((item, index) => (
-            <span className={styles.tag} key={index}>
+            <span key={index} {...stylex.props(styles.tag)}>
               {item}
             </span>
           ))}
         </Flexbox>
-        {desc ? <div className={styles.desc}>{desc}</div> : null}
+        {desc ? <div {...stylex.props(styles.desc)}>{desc}</div> : null}
       </div>
       {extra ? (
         <div
           data-option-extra
-          className={styles.extra}
+          {...stylex.props(styles.extra)}
           onClick={(event) => {
             event.stopPropagation();
           }}
@@ -169,7 +158,13 @@ const OptionRow = memo<OptionRowProps>(
           {extra}
         </div>
       ) : null}
-      {active ? <Icon className={styles.check} icon={CheckIcon} size={14} /> : null}
+      {active ? (
+        <Icon
+          className={stylex.props(styles.check, disabled && styles.dimmed).className}
+          icon={CheckIcon}
+          size={14}
+        />
+      ) : null}
     </div>
   ),
 );

@@ -5,10 +5,14 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { exportSourceTree, prepareSourceSnapshots } from '../buildSnapshots';
-import { git } from '../git';
-import { closeRevisionSession, createRevisionSession, resolveCommit } from '../revisionResolver';
-import { inventoryScope } from '../scopeInventory';
+import { inventoryScope } from '../analysis/scopeInventory';
+import { exportSourceTree, prepareSourceSnapshots } from '../source/buildSnapshots';
+import { git } from '../source/git';
+import {
+  closeRevisionSession,
+  createRevisionSession,
+  resolveCommit,
+} from '../source/revisionResolver';
 
 const owned: string[] = [];
 const sessions: Awaited<ReturnType<typeof createRevisionSession>>[] = [];

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCreateMenuItems } from './useCreateMenuItems';
 
-const createAgentMock = vi.hoisted(() => vi.fn().mockResolvedValue({ agentId: 'agent-codex' }));
+const openIdentityModalMock = vi.hoisted(() => vi.fn());
 const refreshAgentListMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const addGroupMock = vi.hoisted(() => vi.fn());
 const switchToGroupMock = vi.hoisted(() => vi.fn());
@@ -18,7 +18,12 @@ const navigateMock = vi.hoisted(() => vi.fn());
 const openConnectAgentModalMock = vi.hoisted(() => vi.fn());
 const openCreateGroupModalMock = vi.hoisted(() => vi.fn());
 const agentModalMock = vi.hoisted(() => ({
-  current: undefined as { openCreateGroupModal: (id?: string, v?: string) => void } | undefined,
+  current: undefined as
+    | {
+        openCreateGroupModal?: (id?: string, v?: string) => void;
+        openCreateModal?: (type: 'agent' | 'group', options?: object) => void;
+      }
+    | undefined,
 }));
 
 vi.mock('@lobechat/const', () => ({
@@ -50,6 +55,10 @@ vi.mock('@/components/ChatGroupWizard/templates', () => ({
   useGroupTemplates: () => [],
 }));
 
+vi.mock('@/features/AgentIdentityModal/useOpenCreateAgentModal', () => ({
+  useOpenCreateAgentModal: () => openIdentityModalMock,
+}));
+
 vi.mock('@/features/ConnectAgent', () => ({
   openConnectAgentModal: openConnectAgentModalMock,
 }));
@@ -62,13 +71,6 @@ vi.mock('@/services/chatGroup', () => ({
   chatGroupService: {
     createGroupWithMembers: vi.fn(),
   },
-}));
-
-vi.mock('@/store/agent', () => ({
-  useAgentStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      createAgent: createAgentMock,
-    }),
 }));
 
 vi.mock('@/store/agentGroup', () => ({
@@ -104,6 +106,33 @@ describe('useCreateMenuItems', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     agentModalMock.current = undefined;
+  });
+
+  it('opens the identity form through the provider when one is mounted', () => {
+    const openCreateModal = vi.fn();
+    agentModalMock.current = { openCreateModal };
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    const item = result.current.createAgentMenuItem({ groupId: 'grp', visibility: 'private' });
+    act(() => {
+      void (item as any).onClick({ domEvent: { stopPropagation: vi.fn() } });
+    });
+
+    expect(openCreateModal).toHaveBeenCalledWith('agent', {
+      groupId: 'grp',
+      visibility: 'private',
+    });
+    expect(openIdentityModalMock).not.toHaveBeenCalled();
+  });
+
+  // Surfaces outside the provider (desktop File menu, ⌘K) used to create a
+  // blank agent here; every entry now goes through the form.
+  it('opens the identity form directly without a provider instead of creating a blank agent', () => {
+    const { result } = renderHook(() => useCreateMenuItems());
+
+    result.current.openCreateAgentModal({ visibility: 'private' });
+
+    expect(openIdentityModalMock).toHaveBeenCalledWith({ visibility: 'private' });
   });
 
   it('adds Agent-list and Market entries while omitting Page creation', async () => {

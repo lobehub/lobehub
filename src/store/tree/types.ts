@@ -17,6 +17,11 @@ export interface TreeItem {
    */
   fileId?: string | null;
   fileType: string;
+  /**
+   * Something sits under this row. Folders are expandable regardless; this is
+   * what lets a document that holds other documents expand too.
+   */
+  hasChildren?: boolean;
   id: string;
   isFolder: boolean;
   metadata?: Record<string, any>;

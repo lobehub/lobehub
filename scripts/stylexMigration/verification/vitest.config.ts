@@ -8,11 +8,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     hookTimeout: 30_000,
-    include: [
-      'scripts/stylexMigration/experiment/**/*.test.ts',
-      'scripts/stylexMigration/verification/**/*.test.ts',
-      'scripts/stylexMigration/sxArguments.test.ts',
-    ],
+    include: ['scripts/stylexMigration/verification/**/*.test.ts'],
     maxWorkers: 2,
     name: 'stylex-local',
     // CLI contract cases start several bounded subprocesses sequentially.

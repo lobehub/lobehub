@@ -8,12 +8,12 @@ import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import useNotionImport from '@/features/ResourceManager/components/Header/hooks/useNotionImport';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
 import { pageActions } from '@/store/page';
 import { DocumentSourceType } from '@/types/document';
-import { standardizeIdentifier } from '@/utils/identifier';
 
 const ICON_SIZE = 80;
 
@@ -200,9 +200,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             pageActions.setSelectedPageId(parsedDocument.id, false);
 
             // Update URL with stripped ID (without prefix)
-            const cleanId = standardizeIdentifier(parsedDocument.id);
-            const newPath = cleanId ? `/page/${cleanId}` : '/page';
-            window.history.replaceState({}, '', newPath);
+            window.history.replaceState({}, '', docsPagePath(parsedDocument.id));
           } catch (error) {
             console.error('Failed to upload and parse file:', error);
             // Remove temp document on error

@@ -1,3 +1,4 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { isChannelRuntime } from '@lobechat/types';
@@ -29,6 +30,13 @@ export interface ChannelAgentSelection {
   workingDirectory?: string;
 }
 
+type ChannelAgentConfig = NonNullable<Awaited<ReturnType<AgentService['getAgentConfigById']>>>;
+
+/** An Agent's own runtime: external when it names a heterogeneous provider or model. */
+const agentRuntime = (agent: Pick<ChannelAgentConfig, 'agencyConfig' | 'model'>) =>
+  agent.agencyConfig?.heterogeneousProvider?.type ??
+  (isHeterogeneousAgentModelId(agent.model) ? agent.model : 'native');
+
 export class ChannelService {
   readonly repository: ChannelRepository;
   private readonly agentService: AgentService;
@@ -49,9 +57,7 @@ export class ChannelService {
   private async resolveAgent(input: ChannelAgentSelection): Promise<ChannelAddAgentInput> {
     const agent = await this.agentService.getAgentConfigById(input.agentId);
     if (!agent) throw new ChannelError('NOT_FOUND', 'Agent not found');
-    const runtime =
-      agent.agencyConfig?.heterogeneousProvider?.type ??
-      (isHeterogeneousAgentModelId(agent.model) ? agent.model : 'native');
+    const runtime = agentRuntime(agent);
     if (!isChannelRuntime(runtime))
       throw new ChannelError('BAD_REQUEST', 'Unsupported Channel runtime');
     const config: NonNullable<ChannelAddAgentInput['config']> = {};
@@ -122,6 +128,32 @@ export class ChannelService {
     });
     return this.repository.create({ agents, projectId: input.projectId, title: input.title });
   };
+
+  /**
+   * The Channel a new workspace or project starts with. Callers pass a project they just created
+   * in this scope, so its readability is not checked again.
+   */
+  createDefault = async (input: { agentId: string; projectId?: string; title: string }) => {
+    const agentId = await this.defaultChannelAgent(input.agentId);
+    return this.repository.create({
+      agents: [{ agentId }],
+      projectId: input.projectId,
+      title: input.title,
+    });
+  };
+
+  /**
+   * The main Agent when it runs natively. An external Agent needs a device and directory that a
+   * member picks when adding it, so the scope's LobeAI answers in the meantime.
+   */
+  private async defaultChannelAgent(agentId: string) {
+    const agent = await this.agentService.getAgentConfigById(agentId);
+    if (agent && agentRuntime(agent) === 'native') return agentId;
+    const inbox = await this.agentService.getBuiltinAgent(BUILTIN_AGENT_SLUGS.inbox);
+    if (!inbox?.id || agentRuntime(inbox) !== 'native')
+      throw new ChannelError('NOT_FOUND', 'No Agent can answer in the default Channel');
+    return inbox.id;
+  }
 
   addAgent = async (channelId: string, input: ChannelAgentSelection) => {
     // Check membership before probing a device; the write rechecks the current admin role.
