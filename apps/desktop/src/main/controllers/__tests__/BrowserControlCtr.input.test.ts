@@ -6,6 +6,7 @@ import type { App } from '@/core/App';
 import BrowserControlCtr, { keyInputEvents } from '../BrowserControlCtr';
 
 vi.mock('electron', () => ({
+  clipboard: { readText: vi.fn().mockResolvedValue('from "clipboard"') },
   ipcMain: { handle: vi.fn() },
 }));
 
@@ -34,7 +35,6 @@ const createGuest = () => {
     on: vi.fn((event: string, listener: () => void) => {
       listeners[event] = listener;
     }),
-    selectAll: vi.fn(),
     sendInputEvent: vi.fn(),
   };
 };
@@ -90,19 +90,37 @@ describe('BrowserControlCtr input', () => {
     expect(guest.sendInputEvent).not.toHaveBeenCalled();
   });
 
-  it('runs the native editing command behind a macOS Meta shortcut', async () => {
-    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
-    try {
+  describe('on macOS', () => {
+    let platform: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+      return () => platform.mockRestore();
+    });
+
+    // `guest.selectAll()` acted on the guest's focused frame, which the in-app
+    // <webview> did not have, so Meta+A selected nothing in the real app.
+    it('runs the editing command behind a Meta shortcut inside the page', async () => {
       await expect(controller.press({ key: 'ControlOrMeta+a', sessionId: 's' })).resolves.toEqual({
         success: true,
       });
-    } finally {
-      platform.mockRestore();
-    }
-    expect(guest.sendInputEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ keyCode: 'a', modifiers: ['meta'], type: 'keyDown' }),
-    );
-    expect(guest.selectAll).toHaveBeenCalledOnce();
+
+      expect(guest.sendInputEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ keyCode: 'a', modifiers: ['meta'], type: 'keyDown' }),
+      );
+      expect(guest.mainFrame.executeJavaScript).toHaveBeenCalledWith(
+        'document.execCommand("selectAll")',
+        true,
+      );
+    });
+
+    it('pastes the clipboard text, which the page cannot read itself', async () => {
+      await controller.press({ key: 'Meta+v', sessionId: 's' });
+
+      expect(guest.mainFrame.executeJavaScript).toHaveBeenCalledWith(
+        `document.execCommand('insertText', false, "from \\"clipboard\\"")`,
+        true,
+      );
+    });
   });
 
   it('fits a fixed viewport into the panel and keeps it across navigations', async () => {

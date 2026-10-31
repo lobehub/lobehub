@@ -22,6 +22,7 @@ import type {
   BrowserToolCallResult,
 } from '@lobechat/electron-client-ipc';
 import type { KeyboardInputEvent, NativeImage, Rectangle, WebContents } from 'electron';
+import { clipboard } from 'electron';
 
 import {
   OVERLAY_REMOVE_SCRIPT,
@@ -436,7 +437,7 @@ export default class BrowserControlCtr extends ControllerModule {
 
       if (params.submit) {
         await sleep(80);
-        this.sendKey(guest, parseBrowserKey('Enter'));
+        await this.sendKey(guest, parseBrowserKey('Enter'));
       }
 
       return { success: true };
@@ -452,9 +453,9 @@ export default class BrowserControlCtr extends ControllerModule {
       return { error: (error as Error).message, success: false };
     }
 
-    return this.withGuest(params.sessionId, (guest) => {
+    return this.withGuest(params.sessionId, async (guest) => {
       this.markControlling(params.sessionId, guest);
-      this.sendKey(guest, combo);
+      await this.sendKey(guest, combo);
       return { success: true };
     });
   }
@@ -598,13 +599,23 @@ export default class BrowserControlCtr extends ControllerModule {
     }
   }
 
-  private sendKey(guest: WebContents, combo: BrowserKeyCombo) {
+  private async sendKey(guest: WebContents, combo: BrowserKeyCombo) {
     guest.focus();
     for (const event of keyInputEvents(combo)) guest.sendInputEvent(event);
     // On macOS, Chromium leaves Meta+A/C/V/X/Z to the app menu, which a
     // synthesized key event never reaches.
     const editCommand = browserEditCommandOf(combo);
-    if (editCommand) guest[editCommand]();
+    if (!editCommand) return;
+    // `guest.selectAll()`/`paste()` act on the guest's focused frame, which the
+    // in-app <webview> often does not have, so they silently did nothing. The
+    // page runs the command itself; the user gesture lets copy/cut through.
+    // Pages may not read the clipboard, so paste inserts the text read here
+    // (`readText` resolves asynchronously since Electron 44).
+    const script =
+      editCommand === 'paste'
+        ? `document.execCommand('insertText', false, ${JSON.stringify(await clipboard.readText())})`
+        : `document.execCommand(${JSON.stringify(editCommand)})`;
+    await guest.mainFrame.executeJavaScript(script, true);
   }
 
   /**
