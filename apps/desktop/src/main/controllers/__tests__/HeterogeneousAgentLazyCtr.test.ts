@@ -6,12 +6,19 @@ import type { RemoteServerAuth } from '@/modules/heterogeneousAgent/fileStorePor
 import HeterogeneousAgentCtr from '../HeterogeneousAgentCtr';
 
 const implementationMocks = vi.hoisted(() => ({
+  quota: vi.fn(async (..._args: unknown[]) => ({ status: 'ok', groups: [] })),
   afterAppReady: vi.fn(),
   constructor: vi.fn<(app: App, remoteServerAuth?: RemoteServerAuth) => void>(),
   startSession: vi.fn(async (..._args: unknown[]) => ({ sessionId: 'session-1' })),
 }));
 
+vi.mock('@lobechat/device-control', () => ({ getAntigravityQuota: implementationMocks.quota }));
+vi.mock('@/modules/networkProxy/envBuilder', () => ({
+  buildProxyEnv: () => ({ HTTPS_PROXY: 'desktop-proxy' }),
+}));
+
 vi.mock('../HeterogeneousAgentImpl', () => ({
+  buildInheritedSpawnEnv: () => ({ PATH: '/base/bin' }),
   default: class MockHeterogeneousAgentImplementation {
     constructor(app: App, remoteServerAuth?: RemoteServerAuth) {
       implementationMocks.constructor(app, remoteServerAuth);
@@ -30,6 +37,22 @@ vi.mock('../HeterogeneousAgentImpl', () => ({
 describe('HeterogeneousAgentCtr lazy implementation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('queries Antigravity quota with the Desktop proxy and explicit profile overrides', async () => {
+    const app = { storeManager: { get: vi.fn() } } as unknown as App;
+    const controller = new HeterogeneousAgentCtr(app);
+    await controller.getAntigravityQuota({
+      command: '/custom/agy',
+      force: true,
+      env: { HTTPS_PROXY: 'profile-proxy' },
+    });
+    expect(implementationMocks.quota).toHaveBeenCalledWith({
+      command: '/custom/agy',
+      force: true,
+      env: { PATH: '/base/bin', HTTPS_PROXY: 'profile-proxy' },
+    });
+    expect(implementationMocks.constructor).not.toHaveBeenCalled();
   });
 
   it('defers the heavy implementation and initializes it exactly once on first use', async () => {

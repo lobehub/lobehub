@@ -1,9 +1,29 @@
 export default {
+  'heteroAgent.antigravityQuota.title': 'Antigravity quota',
+  'heteroAgent.antigravityQuota.tooltip': 'View Antigravity model quotas',
+  'heteroAgent.antigravityQuota.fiveHour': '5 hours',
+  'heteroAgent.antigravityQuota.remainingAmount': '{{amount}} remaining',
+  'heteroAgent.antigravityQuota.unknown': 'Unknown',
+  'heteroAgent.antigravityQuota.disabled': 'Unavailable',
+  'heteroAgent.antigravityQuota.resetUnconfirmed':
+    'Reset time reached. Refresh to check the latest quota.',
+  'heteroAgent.antigravityQuota.stale': 'Showing the last query. Refresh to confirm current quota.',
+  'heteroAgent.antigravityQuota.authRequired': 'Run agy in a terminal to sign in, then refresh.',
+  'heteroAgent.antigravityQuota.cliNotFound':
+    'Antigravity CLI was not found on this device. Install agy, then refresh.',
+  'heteroAgent.antigravityQuota.unsupported':
+    'Update agy to a version that supports structured quota queries, then refresh.',
+  'heteroAgent.antigravityQuota.timeout':
+    'The quota query timed out. Check the device connection and try again.',
+  'heteroAgent.antigravityQuota.error':
+    'Could not query Antigravity quota. Check the device and try again.',
+
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
   'sharePage.app.helpDescription':
     'If this browser prevents opening the app, use its menu to open this page in your system browser. You can also keep reading here.',
 
+  'newAntigravityAgent': 'Add Antigravity',
   'backgroundActivity.alertDesc': '{{name}} is using {{memory}} of memory and {{cpu}} CPU.',
   'backgroundActivity.cpu': 'CPU',
   'backgroundActivity.details': 'View details',
@@ -1207,6 +1227,16 @@ export default {
     "Skill wasn't added. Retry, or create an Agent anyway.",
   'createModal.skillSuggestion.title': 'A Skill may fit better',
   'createModal.title': 'What should this Agent do?',
+  'antigravityInstallGuide.actions.openDocs': 'Open Install Guide',
+  'antigravityInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'antigravityInstallGuide.afterInstall':
+    'After installing, run `agy` and sign in with your Google account, then retry your message or click Re-detect in System Tools.',
+  'antigravityInstallGuide.desc':
+    'Antigravity needs the native agy CLI with stream-json support. Follow the install guide for your operating system and make sure the `agy` command is available.',
+  'antigravityInstallGuide.menuNotification.title': 'Antigravity CLI not found',
+  'antigravityInstallGuide.reason': 'LobeHub could not start Antigravity: {{message}}',
+  'antigravityInstallGuide.title': 'Install Antigravity CLI',
+  'connectAgent.providerDesc.antigravity': 'Google coding agent CLI',
   'ampInstallGuide.actions.openDocs': 'Open Install Guide',
   'ampInstallGuide.actions.openSystemTools': 'Open System Tools',
   'ampInstallGuide.afterInstall':

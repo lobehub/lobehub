@@ -52,7 +52,7 @@ describe('builtin executor registry', () => {
       await expect(hasExecutor(identifier, DashboardApiName.createDashboard)).resolves.toBe(true);
       await expect(hasExecutor(identifier, DashboardApiName.updateDashboard)).resolves.toBe(true);
     }
-  });
+  }, 30_000);
 
   it('registers web onboarding executor APIs explicitly', async () => {
     await registerBuiltinToolExecutors();

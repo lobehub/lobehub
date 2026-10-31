@@ -217,6 +217,12 @@ export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
  * All CLI agent binaries
  */
 export const heterogeneousCliAgentBinaries = {
+  'antigravity': {
+    description: 'Antigravity CLI - Google agentic coding CLI',
+    detect: () => detectHeterogeneousCliCommand('antigravity', 'agy'),
+    name: 'agy',
+    priority: 8,
+  },
   'amp': ampBinary,
   'claude-code': claudeCodeBinary,
   'codebuddy': codeBuddyBinary,

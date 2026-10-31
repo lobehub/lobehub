@@ -303,6 +303,10 @@ export class DeviceGateway {
     return agents.claudeCodeQuota(this.clientGetter, ...args);
   }
 
+  antigravityQuota(...args: DeviceRpcArgs<typeof agents.antigravityQuota>) {
+    return agents.antigravityQuota(this.clientGetter, ...args);
+  }
+
   codexQuota(...args: DeviceRpcArgs<typeof agents.codexQuota>) {
     return agents.codexQuota(this.clientGetter, ...args);
   }
