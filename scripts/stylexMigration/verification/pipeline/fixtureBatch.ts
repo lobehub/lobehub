@@ -16,6 +16,7 @@ export const runFixtureBatch = async (options: {
   fixtures: StyleFixture[];
   output: string;
   sourceDirectory: string;
+  screenshots?: boolean;
 }) => {
   const started = performance.now();
   const errors: string[] = [];

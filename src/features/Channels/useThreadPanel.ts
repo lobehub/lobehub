@@ -22,6 +22,8 @@ export const useThreadPanel = (channelId: string) => {
   const scope = cacheScope.use();
   const [selection, setSelection] = useState<DraftSelection | null>(null);
   const selected = useRef(selection);
+  const selectionRevision = useRef(0);
+  const renderedRevision = selectionRevision.current;
   const mounted = useRef(false);
   const latest = useRef({ channelId, pathname: location.pathname, setParams, threadId });
   latest.current = { channelId, pathname: location.pathname, setParams, threadId };
@@ -43,14 +45,18 @@ export const useThreadPanel = (channelId: string) => {
       { replace },
     );
   const clearDraft = () => {
+    selectionRevision.current += 1;
     selected.current = null;
     setSelection(null);
   };
-  const openThread = (id: string) => {
+  const openThread = (id: string, toggle = true) => {
+    // A completed main-feed send must not replace a newer local preview or its dismissal.
+    if (!toggle && renderedRevision !== selectionRevision.current) return;
     clearDraft();
-    setThread(threadId === id ? null : id);
+    setThread(toggle && threadId === id ? null : id);
   };
   const openDraft = (value: ChannelThreadDraft) => {
+    selectionRevision.current += 1;
     const next = { channelId, pathname: location.pathname, scope, value };
     selected.current = next;
     setSelection(next);

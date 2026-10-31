@@ -55,4 +55,48 @@ describe('Channel request prompt', () => {
     expect(JSON.parse(prompt)).not.toHaveProperty('conversation');
     expect(JSON.parse(prompt).currentRequestId).toBe('current');
   });
+
+  it('includes only the explicit quote with attribution and bounded content', () => {
+    const manifest: ChannelInputManifest = {
+      cutoffSequence: 3,
+      requestMessageId: 'current',
+      requesterMemberId: 'member',
+      self: { agentId: 'agent', memberId: 'agent-member', name: 'Agent' },
+      threadId: 'thread',
+      threadRootSequence: 2,
+    };
+    const author = { id: 'agent', name: 'Author', type: 'agent' as const };
+    const messages: ChannelContextMessage[] = [
+      { author, content: 'UNRELATED_HISTORY', id: 'old', sequence: 1, threadId: null },
+      {
+        author,
+        content: 'q'.repeat(7000),
+        fileIds: ['attachment'],
+        id: 'quoted',
+        sequence: 2,
+        threadId: null,
+      },
+      {
+        author: { id: 'user', name: 'Caller', type: 'user' },
+        content: 'Why?',
+        id: 'current',
+        replyToId: 'quoted',
+        sequence: 3,
+        threadId: 'thread',
+      },
+    ];
+    const prompt = buildChannelPrompt(manifest, messages);
+    expect(prompt).not.toContain('UNRELATED_HISTORY');
+    expect(JSON.parse(prompt).quotedMessage).toEqual({
+      author,
+      content: 'q'.repeat(6000),
+      fileIds: ['attachment'],
+      id: 'quoted',
+      truncated: true,
+    });
+    expect(JSON.parse(prompt).messages).toHaveLength(1);
+    expect(
+      JSON.parse(buildChannelPrompt(manifest, messages.slice(2))).quotedMessage,
+    ).toBeUndefined();
+  });
 });

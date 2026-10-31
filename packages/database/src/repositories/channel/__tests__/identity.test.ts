@@ -113,6 +113,25 @@ describe('direct Channel identity', () => {
     expect(personal.channel.workspaceId).toBeNull();
   });
 
+  it('seats the bound Agent in the environment its caller resolved', async () => {
+    const agent = await createAgent(null);
+    const environment = {
+      deviceId: 'device-1',
+      deviceOwnerId: fixture.ownerId,
+      workingDirectory: '/repo',
+    };
+    const { channel } = await new ChannelRepository(db, fixture.ownerId).create({
+      agentConfig: environment,
+      agentId: agent.id,
+      title: 'Direct',
+    });
+    const [member] = await db
+      .select()
+      .from(channelMembers)
+      .where(and(eq(channelMembers.channelId, channel.id), eq(channelMembers.actorType, 'agent')));
+    expect(member).toMatchObject({ agentId: agent.id, config: environment });
+  });
+
   it('keeps a group unbound even when it contains a single Agent', async () => {
     const team = await fixture.createTeamChannel();
     await fixture.addAgent(team.channel.id, 'Only Agent');

@@ -25,6 +25,7 @@ import { captureComponent } from '../browser/capture';
 import { compareComponents } from '../browser/compareSnapshots';
 import { collectRulesInPage } from '../browser/ruleInventory';
 import { readRuntimeCompositions } from '../browser/runtimeCompositions';
+import { captureScreenshotEvidence } from '../browser/screenshotEvidence';
 import { buildComponentFixture } from '../build/buildFixtures';
 import { digestFile } from '../dependencies/dependencySnapshot';
 import type { StyleFixture } from '../fixtures/fixtureRegistry';
@@ -183,6 +184,7 @@ export const runComponentFixture = async (options: {
   fixture: StyleFixture;
   output: string;
   sourceDirectory: string;
+  screenshots?: boolean;
 }) => {
   const { fixture, output } = options;
   const builds = {
@@ -202,6 +204,7 @@ export const runComponentFixture = async (options: {
     fixture,
     output,
     provenance: 'component-build',
+    screenshots: options.screenshots,
   });
   return { ...result, artifactFiles: ['fixture-builds.json', ...result.artifactFiles] };
 };
@@ -217,6 +220,7 @@ export const runFixtureComparison = async (options: {
   probeBudget?: Partial<ProbeShardBudget>;
   planConditions?: boolean;
   provenance: 'component-build' | 'infrastructure-corpus';
+  screenshots?: boolean;
 }) => {
   const { builds, fixture, output } = options;
   const started = performance.now();
@@ -248,6 +252,10 @@ export const runFixtureComparison = async (options: {
   const fixtureResults: GateInput['fixtures'] = [];
   const artifactFiles = ['probe-plan.json'];
   const results: ProbeResult[] = [];
+  const screenshots: Array<{
+    probeId: string;
+    result: Awaited<ReturnType<typeof captureScreenshotEvidence>>;
+  }> = [];
   const rulePlans: Array<{ plan: RuleWitnessPlan; side: 'base' | 'candidate'; variant: string }> =
     [];
   const ruleEvidence: RuleProbeEvidence[] = [];
@@ -412,6 +420,21 @@ export const runFixtureComparison = async (options: {
             JSON.stringify(comparison.differences) === JSON.stringify(confirmation.differences);
         }
         timing.confirmation = performance.now() - phaseStarted;
+        if (
+          options.screenshots &&
+          screenshots.length < 3 &&
+          (screenshots.length === 0 || comparison.raw.length > 0)
+        ) {
+          const image = await shardController.runOperation(() =>
+            captureScreenshotEvidence(
+              pages.slice(0, 3).map((entry) => entry.page),
+              output,
+              `pixels-${screenshots.length}`,
+            ),
+          );
+          screenshots.push({ probeId: probe.id, result: image });
+          artifactFiles.push(...image.artifactFiles);
+        }
         phaseStarted = performance.now();
         if (comparison.differences.length)
           findings.push({
@@ -549,6 +572,19 @@ export const runFixtureComparison = async (options: {
       );
     }
     const probeShards = shardController.report(probes.map((probe) => probe.id));
+    if (options.screenshots) {
+      await writeJson(output, 'screenshots.json', {
+        advisoryOnly: true,
+        captures: screenshots,
+        maxCaptures: 3,
+        limitations: [
+          'VIEWPORT_ONLY',
+          'PIXEL_EQUALITY_DOES_NOT_OVERRIDE_STYLE_FAILURE',
+          'UNSAMPLED_STATES_NOT_PROVEN',
+        ],
+      });
+      artifactFiles.push('screenshots.json');
+    }
     await writeJson(output, 'probe-shards.json', probeShards);
     artifactFiles.push('probe-shards.json');
     for (const [index, reasonCode] of probeShards.gaps.entries())

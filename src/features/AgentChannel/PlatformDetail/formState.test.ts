@@ -8,11 +8,9 @@ import {
   findOverLimitSettings,
   getChannelFormValues,
   isFieldReleased,
-  isWakeMasterReleased,
   mergeCredentialsForSave,
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
-  withWakeMasterOn,
 } from './formState';
 
 const slackSchema: FieldSchema[] = [
@@ -323,45 +321,5 @@ describe('findOverLimitSettings', () => {
   it('ignores values that are not lists at all', () => {
     expect(findOverLimitSettings(listSchema, { allowChannels: '1,2,3' })).toEqual([]);
     expect(findOverLimitSettings(undefined, { allowChannels: [{ id: '1' }] })).toEqual([]);
-  });
-});
-
-describe('bot-wake master switch', () => {
-  const schema = [
-    {
-      key: 'settings',
-      label: 'settings',
-      properties: [
-        {
-          default: false,
-          featureFlag: 'enableBotWake',
-          key: 'botWakeEnabled',
-          label: 'x',
-          type: 'boolean',
-        },
-        { key: 'charLimit', label: 'y', type: 'number' },
-      ],
-      type: 'object',
-    },
-  ] as FieldSchema[];
-
-  it('is released only when the rollout flag is on', () => {
-    expect(isWakeMasterReleased(schema, { enableBotWake: true })).toBe(true);
-    expect(isWakeMasterReleased(schema, { enableBotWake: false })).toBe(false);
-    expect(isWakeMasterReleased(schema, undefined)).toBe(false);
-    expect(isWakeMasterReleased([], { enableBotWake: true })).toBe(false);
-  });
-
-  it('is switched on in the form for a released user, whatever was stored', () => {
-    expect(withWakeMasterOn({ botWakeEnabled: false, charLimit: 2000 }, true)).toEqual({
-      botWakeEnabled: true,
-      charLimit: 2000,
-    });
-  });
-
-  it('is left alone for everyone else, so saving a bot never switches the options on for them', () => {
-    const settings = { botWakeEnabled: false };
-
-    expect(withWakeMasterOn(settings, false)).toBe(settings);
   });
 });
