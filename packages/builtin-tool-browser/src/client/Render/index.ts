@@ -14,6 +14,7 @@ export const BrowserRenders = {
   [BrowserApiName.readPage]: PageDump,
   [BrowserApiName.screenshot]: Screenshot,
   [BrowserApiName.scroll]: PageAction,
+  [BrowserApiName.setViewport]: PageAction,
   [BrowserApiName.snapshot]: PageDump,
 };
 

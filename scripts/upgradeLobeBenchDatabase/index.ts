@@ -25,7 +25,7 @@ if (!envName || !process.env[envName] || !values.database) {
 const connectionString = process.env[envName]!;
 const target = new URL(connectionString);
 if (!['localhost', '127.0.0.1', '[::1]'].includes(target.hostname)) {
-  throw new Error('This unpublished-branch repair supports local databases only.');
+  throw new Error('This development-history repair supports local databases only.');
 }
 if (decodeURIComponent(target.pathname.slice(1)) !== values.database) {
   throw new Error('The explicit database name does not match the selected connection.');

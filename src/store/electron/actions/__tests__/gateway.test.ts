@@ -1,8 +1,9 @@
-import { act } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { useElectronStore } from '@/store/electron';
+import { electronGatewaySelectors } from '@/store/electron/selectors';
 
 const service = vi.hoisted(() => ({
   getDeviceInfo: vi.fn(),
@@ -123,5 +124,39 @@ describe('ElectronGatewayActionImpl', () => {
     });
 
     expect(useElectronStore.getState().gatewayConnectionError).toBeUndefined();
+  });
+});
+
+describe('useFetchGatewayStableDeviceId', () => {
+  it('holds this machine’s stable id in the replica and corrects a cached fallback id', async () => {
+    useElectronStore.setState({
+      gatewayDeviceInfo: { deviceId: 'fallback-uuid', hostname: 'mac', platform: 'darwin' },
+      gatewayStableDeviceIdMap: {},
+    });
+    service.getStableDeviceId.mockResolvedValue('stable-1');
+
+    renderHook(() => useElectronStore.getState().useFetchGatewayStableDeviceId());
+
+    await waitFor(() =>
+      expect(electronGatewaySelectors.gatewayStableDeviceId(useElectronStore.getState())).toBe(
+        'stable-1',
+      ),
+    );
+    expect(useElectronStore.getState().gatewayDeviceInfo?.deviceId).toBe('stable-1');
+  });
+
+  it('records no device while signed out, and fetches nothing when disabled', async () => {
+    useElectronStore.setState({ gatewayStableDeviceIdMap: {} });
+    service.getStableDeviceId.mockResolvedValue(undefined);
+
+    renderHook(() => useElectronStore.getState().useFetchGatewayStableDeviceId(false));
+    expect(service.getStableDeviceId).not.toHaveBeenCalled();
+
+    renderHook(() => useElectronStore.getState().useFetchGatewayStableDeviceId());
+    await waitFor(() =>
+      expect(electronGatewaySelectors.gatewayStableDeviceId(useElectronStore.getState())).toBe(
+        null,
+      ),
+    );
   });
 });

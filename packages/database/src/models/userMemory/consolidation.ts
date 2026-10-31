@@ -290,6 +290,8 @@ export class UserMemoryConsolidationModel {
   enqueue = async (
     runId: string,
     entries: { id: string; key: string; route: ConsolidationRoute }[],
+    /** The run whose queue this continues (see `adoptQueue`); the run itself when it is new. */
+    origin: string = runId,
   ) => {
     if (entries.length === 0) return;
     const items = await this.getLegacyContextsByIds(entries.map((e) => e.id));
@@ -302,7 +304,7 @@ export class UserMemoryConsolidationModel {
           .update(userMemories)
           .set({
             metadata: sql`coalesce(${userMemories.metadata}, '{}'::jsonb) || ${JSON.stringify({
-              consolidationQueue: { key: e.key, route: e.route, runId },
+              consolidationQueue: { key: e.key, origin, route: e.route, runId },
             })}::jsonb`,
           })
           .where(and(eq(userMemories.id, memoryId), eq(userMemories.userId, this.userId)));
@@ -333,6 +335,99 @@ export class UserMemoryConsolidationModel {
       )
       .orderBy(asc(userMemoriesContexts.capturedAt), asc(userMemoriesContexts.id));
     return rows;
+  };
+
+  /**
+   * The newest queue a stopped run left behind: evidence it classified (or routed) but never
+   * synthesized. A new run adopts it instead of starting over. `origin` is the run that first
+   * built the queue, kept across resumes; rows queued before `origin` existed fall back to `runId`.
+   */
+  findResumableQueue = async (): Promise<{
+    count: number;
+    keys: string[];
+    origin: string;
+    runId: string;
+  } | null> => {
+    const queue = sql`${userMemories.metadata} -> 'consolidationQueue'`;
+    const [row] = await this.db
+      .select({
+        count: sql<number>`count(*)::int`,
+        keys: sql<string[]>`array_agg(DISTINCT ${queue} ->> 'key')`,
+        origin: sql<string>`COALESCE(${queue} ->> 'origin', ${queue} ->> 'runId')`,
+        runId: sql<string>`${queue} ->> 'runId'`,
+      })
+      .from(userMemoriesContexts)
+      .innerJoin(userMemories, legacyParentJoin)
+      .where(
+        and(
+          eq(userMemoriesContexts.userId, this.userId),
+          isNull(userMemoriesContexts.synthesizedAt),
+          eq(userMemories.userId, this.userId),
+          isNull(userMemories.state),
+          notConsolidated,
+          sql`${queue} ->> 'route' = 'evidence'`,
+        ),
+      )
+      .groupBy(
+        sql`COALESCE(${queue} ->> 'origin', ${queue} ->> 'runId')`,
+        sql`${queue} ->> 'runId'`,
+      )
+      .orderBy(sql`max(${userMemories.updatedAt}) DESC`)
+      .limit(1);
+    return row ?? null;
+  };
+
+  /** Move a stopped run's unsynthesized queue to `runId`, keeping the queue's origin. */
+  adoptQueue = async (fromRunId: string, origin: string, runId: string): Promise<number> => {
+    const rows = await this.db
+      .update(userMemories)
+      .set({
+        metadata: sql`jsonb_set(${userMemories.metadata}, '{consolidationQueue}', (${userMemories.metadata} -> 'consolidationQueue') || ${JSON.stringify({ origin, runId })}::jsonb)`,
+      })
+      .where(
+        and(
+          eq(userMemories.userId, this.userId),
+          isNull(userMemories.state),
+          notConsolidated,
+          sql`${userMemories.metadata} -> 'consolidationQueue' ->> 'runId' = ${fromRunId}`,
+        ),
+      )
+      .returning({ id: userMemories.id });
+    return rows.length;
+  };
+
+  /**
+   * Every evidence row of a queue lineage (all runs sharing `origin`), by queue key, with the
+   * context it was filed into (null while waiting). Resumed runs read the domain mix and the
+   * contexts earlier attempts built from it.
+   */
+  listQueueEvidence = async (
+    origin: string,
+  ): Promise<{ contextId: string | null; count: number; key: string }[]> => {
+    const queue = sql`${userMemories.metadata} -> 'consolidationQueue'`;
+    return this.db
+      .select({
+        contextId: userMemoriesDossiers.contextId,
+        count: sql<number>`count(*)::int`,
+        key: sql<string>`${queue} ->> 'key'`,
+      })
+      .from(userMemories)
+      .leftJoin(
+        userMemoriesActivities,
+        and(
+          sql`${userMemoriesActivities.id} = ${userMemories.metadata} -> 'consolidation' ->> 'activityId'`,
+          eq(userMemoriesActivities.userId, this.userId),
+        ),
+      )
+      .leftJoin(userMemoriesDossiers, eq(userMemoriesDossiers.id, userMemoriesActivities.dossierId))
+      .where(
+        and(
+          eq(userMemories.userId, this.userId),
+          sql`COALESCE(${queue} ->> 'origin', ${queue} ->> 'runId') = ${origin}`,
+          sql`${queue} ->> 'route' = 'evidence'`,
+        ),
+      )
+      .groupBy(userMemoriesDossiers.contextId, sql`${queue} ->> 'key'`);
   };
 
   /** Mark legacy rows that consolidation saw but keeps in place (facts, preferences, noise). */

@@ -4,16 +4,16 @@ import {
   Accordion,
   Block,
   Button,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Markdown,
-  responsive,
   ScrollShadow,
   Tag,
   Text,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useCallback } from 'react';
@@ -23,58 +23,39 @@ import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
 import { skillSelectors } from '@/store/discover/selectors';
+import { sx } from '@/styles/sx';
 
 import { useDetailActionContext, useDetailContext } from '../../DetailProvider';
+import moduleStyles from './Overview.module.css';
 import RelatedSkillCard from './RelatedSkillCard';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  relatedGrid: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-
-    ${responsive.sm} {
-      grid-template-columns: 1fr;
-    }
-  `,
-  sectionLabel: css`
-    margin: 0;
-
-    font-size: 20px;
-    font-weight: 700;
-    line-height: 1.25;
-    color: ${cssVar.colorText};
-
-    ${responsive.sm} {
-      font-size: 18px;
-    }
-  `,
-  more: css`
-    display: flex;
-    align-items: center;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  summary: css`
-    font-size: 15px;
-    line-height: 1.7;
-    color: ${cssVar.colorTextSecondary};
-
-    p {
-      margin-block: 0 0.8em;
-    }
-  `,
-  tag: css`
-    border-color: color-mix(in srgb, ${cssVar.colorBorderSecondary} 84%, transparent) !important;
-    border-radius: 8px !important;
-  `,
-  versionCard: css`
-    border-color: color-mix(in srgb, ${cssVar.colorBorderSecondary} 88%, transparent) !important;
-    border-radius: 8px !important;
-  `,
-}));
+const styles = stylex.create({
+  relatedGrid: {
+    display: 'grid',
+    gridTemplateColumns: { default: 'repeat(2, minmax(0, 1fr))', [media.sm]: '1fr' },
+    gap: '12px',
+  },
+  sectionLabel: {
+    margin: '0',
+    fontSize: { default: '20px', [media.sm]: '18px' },
+    fontWeight: 700,
+    lineHeight: 1.25,
+    color: cssVar.colorText,
+  },
+  more: { display: 'flex', alignItems: 'center', color: cssVar.colorTextSecondary },
+  summary: { fontSize: '15px', lineHeight: 1.7, color: cssVar.colorTextSecondary },
+  tag: {
+    borderColor: `color-mix(in srgb, ${cssVar.colorBorderSecondary} 84%, transparent)`,
+    borderRadius: '8px',
+  },
+  versionCard: {
+    borderColor: `color-mix(in srgb, ${cssVar.colorBorderSecondary} 88%, transparent)`,
+    borderRadius: '8px',
+  },
+});
 
 const SectionLabel = memo<{ children: string }>(({ children }) => (
-  <Text as={'h2'} className={styles.sectionLabel}>
+  <Text as={'h2'} className={stylex.props(styles.sectionLabel).className}>
     {children}
   </Text>
 ));
@@ -114,7 +95,7 @@ const Overview = memo(() => {
       {/* ABOUT */}
       <Flexbox gap={12}>
         <SectionLabel>{t('skills.details.overview.about')}</SectionLabel>
-        <div className={styles.summary}>
+        <div {...sx(styles.summary, moduleStyles.summary)}>
           <Markdown variant={'chat'}>{overview?.summary || description || ''}</Markdown>
         </div>
       </Flexbox>
@@ -145,7 +126,7 @@ const Overview = memo(() => {
           <SectionLabel>{t('skills.details.overview.features')}</SectionLabel>
           <Flexbox horizontal gap={8} wrap={'wrap'}>
             {tags.map((tag) => (
-              <Tag className={styles.tag} key={tag}>
+              <Tag className={stylex.props(styles.tag).className} key={tag}>
                 {tag}
               </Tag>
             ))}
@@ -158,7 +139,7 @@ const Overview = memo(() => {
         <Flexbox gap={12}>
           <SectionLabel>{t('skills.details.overview.whatsNew')}</SectionLabel>
           <Block
-            className={styles.versionCard}
+            className={stylex.props(styles.versionCard).className}
             gap={12}
             paddingBlock={16}
             paddingInline={16}
@@ -185,7 +166,7 @@ const Overview = memo(() => {
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <SectionLabel>{t('skills.details.related.listTitle')}</SectionLabel>
             <Button
-              className={styles.more}
+              className={stylex.props(styles.more).className}
               style={{ paddingInline: 6 }}
               type={'text'}
               onClick={handleMoreRelated}
@@ -194,7 +175,7 @@ const Overview = memo(() => {
               <Icon icon={ChevronRight} />
             </Button>
           </Flexbox>
-          <div className={styles.relatedGrid}>
+          <div {...stylex.props(styles.relatedGrid)}>
             {related.map((item) => (
               <RelatedSkillCard key={item.identifier} {...item} />
             ))}

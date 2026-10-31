@@ -24,6 +24,12 @@ export const legacyLobeBenchMigrations = [
   },
 ] as const;
 
+/** Public draft at 0add593474, before upstream assigned 0198 to goal visibility. */
+const publishedLobeBenchMigration = {
+  created_at: 1793442088212,
+  hash: '3ae81e3241c84b47974a78b4fee2212ed788b35581b1a9d97b7397ee5c18d9d7',
+} as const;
+
 interface MigrationRow {
   created_at: number | string;
   hash: string;
@@ -47,15 +53,29 @@ export function planLobeBenchUpgrade(history: MigrationRow[], migrationsFolder: 
     created_at: folderMillis,
     hash,
   }));
-  if (historyMatches(history, canonical)) return { kind: 'current' as const, pending: [] };
+  if (historyMatches(history, canonical))
+    return { kind: 'current' as const, pending: [], replaced: [] };
 
   const expectedLegacy = [...canonical.slice(0, 182), ...legacyLobeBenchMigrations];
-  if (!historyMatches(history, expectedLegacy)) {
-    throw new Error(
-      'Unknown migration history: no changes made. Restore/review the database separately.',
-    );
+  if (historyMatches(history, expectedLegacy)) {
+    return {
+      kind: 'legacy' as const,
+      pending: migrations.slice(182),
+      replaced: legacyLobeBenchMigrations,
+    };
   }
-  return { kind: 'legacy' as const, pending: migrations.slice(182) };
+
+  const expectedPublished = [...canonical.slice(0, 198), publishedLobeBenchMigration];
+  if (historyMatches(history, expectedPublished)) {
+    return {
+      kind: 'published' as const,
+      pending: migrations.slice(198),
+      replaced: [publishedLobeBenchMigration],
+    };
+  }
+  throw new Error(
+    'Unknown migration history: no changes made. Restore/review the database separately.',
+  );
 }
 
 /**
@@ -76,7 +96,7 @@ export async function upgradeLobeBenchDatabase(
       'SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at, id',
     );
     const plan = planLobeBenchUpgrade(rows, options.migrationsFolder);
-    if (plan.kind === 'legacy') {
+    if (plan.kind !== 'current') {
       // Only the final branch schema is supported. Never drop a live old scope,
       // delete synthetic owners, or reinterpret a partially migrated database.
       const schema = await client.query(`SELECT
@@ -96,10 +116,10 @@ export async function upgradeLobeBenchDatabase(
       return { applied: false, kind: plan.kind, migrations: plan.pending.length };
     }
 
-    for (const legacy of legacyLobeBenchMigrations) {
+    for (const replaced of plan.replaced) {
       await client.query(
         'DELETE FROM drizzle.__drizzle_migrations WHERE hash = $1 AND created_at = $2',
-        [legacy.hash, legacy.created_at],
+        [replaced.hash, replaced.created_at],
       );
     }
     for (const migration of plan.pending) {

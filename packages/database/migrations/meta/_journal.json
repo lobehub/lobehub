@@ -1390,8 +1390,15 @@
     {
       "idx": 198,
       "version": "7",
-      "when": 1793442088212,
-      "tag": "0198_lobe_bench_environments_and_memory",
+      "when": 1793450092790,
+      "tag": "0198_goal_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 199,
+      "version": "7",
+      "when": 1793476771486,
+      "tag": "0199_lobe_bench_environments_and_memory",
       "breakpoints": true
     }
   ],

@@ -13,12 +13,18 @@ import type { ChannelAgentDraft } from './agentEnvironment';
 import { canSubmitChannelAgents, toChannelAgentSelection } from './agentEnvironment';
 import { defaultChannelTitle } from './channelTitle';
 import { MemberSelection } from './MemberSelection';
+import { usePersonName } from './PeopleOptions';
 import { getChannelSaveErrorKey } from './saveError';
 import { useChannelAgentOptions } from './useChannelAgentOptions';
 
 interface ExistingChannel {
   /** Agents already in the Channel. */
   agentIds: string[];
+  /**
+   * Set for a direct conversation, which stays one person and one Agent: inviting starts a new
+   * group with that Agent instead.
+   */
+  directAgentName?: string;
   id: string;
   /** People can be invited only into workspace Channels. */
   workspaceId: string | null;
@@ -44,7 +50,8 @@ export const openCreateChannel = (onCreated?: (id: string) => void, projectId?: 
   openMemberDialog({ onCreated, projectId });
 
 /** The single entry for adding people and Agents to an existing Channel. */
-export const openInviteMembers = (existing: ExistingChannel) => openMemberDialog({ existing });
+export const openInviteMembers = (existing: ExistingChannel, onCreated?: (id: string) => void) =>
+  openMemberDialog({ existing, onCreated });
 
 /**
  * Like starting a group chat: choose members first. The name is optional and defaults to the
@@ -59,7 +66,9 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const [people, setPeople] = useState<ChannelPersonOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
-  const options = useChannelAgentOptions();
+  const options = useChannelAgentOptions(existing ? undefined : projectId);
+  const direct = existing?.directAgentName !== undefined;
+  const nameOf = usePersonName();
   const dirty = !!title.trim() || agents.length > 0 || people.length > 0;
 
   // A mask click must not drop what the user typed or picked; ✕ and Esc still close.
@@ -67,13 +76,16 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
     setCanDismissByClickOutside(!dirty && !busy);
   }, [busy, dirty, setCanDismissByClickOutside]);
 
-  const autoTitle = defaultChannelTitle(
-    agents.map(({ agentId }) =>
-      agentDisplayName(
-        options.agents?.find((agent) => agent.id === agentId),
-        t('unnamedAgent'),
-      ),
+  const agentNames = agents.map(({ agentId }) =>
+    agentDisplayName(
+      options.agents?.find((agent) => agent.id === agentId),
+      t('unnamedAgent'),
     ),
+  );
+  const autoTitle = defaultChannelTitle(
+    direct
+      ? [existing?.directAgentName || t('unnamedAgent'), ...agentNames, ...people.map(nameOf)]
+      : agentNames,
     {
       more: (names, count, total) => t('autoTitle.more', { count, names, total }),
       separator: t('autoTitle.separator'),
@@ -88,7 +100,16 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
     setError(undefined);
     try {
       const selections = agents.map(toChannelAgentSelection);
-      if (existing) {
+      if (existing && direct) {
+        const id = await channelActions.createGroupFromDirect({
+          agents: selections,
+          channelId: existing.id,
+          title: title.trim() || autoTitle,
+          userIds: people.map((person) => person.userId),
+        });
+        close();
+        onCreated?.(id);
+      } else if (existing) {
         await channelActions.addMembers(existing.id, {
           agents: selections,
           userIds: people.map((person) => person.userId),
@@ -113,6 +134,11 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
 
   return (
     <Flexbox gap={16}>
+      {direct && (
+        <Text fontSize={12} type="secondary">
+          {t('invite.directHint', { name: existing?.directAgentName || t('unnamedAgent') })}
+        </Text>
+      )}
       <Flexbox gap={8} inert={busy}>
         <MemberSelection
           exclude={existing?.agentIds}
@@ -126,7 +152,7 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
           onChange={setAgents}
         />
       </Flexbox>
-      {!existing && (
+      {(!existing || direct) && (
         <Flexbox gap={6} inert={busy}>
           <label htmlFor="channel-title" style={{ fontWeight: 500 }}>
             {t('nameOptional')}
@@ -155,7 +181,7 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
           {t('cancel')}
         </Button>
         <Button disabled={!canSubmit} loading={busy} type="primary" onClick={() => void submit()}>
-          {t(existing ? 'invite.submit' : 'submit')}
+          {t(existing && !direct ? 'invite.submit' : 'submit')}
         </Button>
       </Flexbox>
     </Flexbox>

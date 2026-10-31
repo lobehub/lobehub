@@ -958,7 +958,6 @@
   "heterogeneousStatus.device.detecting": "正在 {{device}} 上检测 {{name}} CLI…",
   "heterogeneousStatus.device.installDesc": "在 {{device}} 的终端中运行以下任一命令：",
   "heterogeneousStatus.device.installTitle": "在 {{device}} 上安装",
-  "heterogeneousStatus.device.label": "设备",
   "heterogeneousStatus.device.missing": "绑定的设备已不可用，请在上方重新选择执行环境。",
   "heterogeneousStatus.device.offline": "{{device}} 已离线，设备上线后再重新检测。",
   "heterogeneousStatus.device.openDocs": "安装指南",

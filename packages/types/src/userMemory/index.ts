@@ -1,5 +1,6 @@
 export * from './activity';
 export * from './base';
+export * from './contextStory';
 export * from './experience';
 export * from './identity';
 export * from './layers';

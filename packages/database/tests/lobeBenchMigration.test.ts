@@ -10,26 +10,41 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { upgradeLobeBenchDatabase } from '../../../scripts/upgradeLobeBenchDatabase/plan';
+import {
+  planLobeBenchUpgrade,
+  upgradeLobeBenchDatabase,
+} from '../../../scripts/upgradeLobeBenchDatabase/plan';
 import journal from '../migrations/meta/_journal.json';
 import legacyEntries from './fixtures/lobeBenchLegacy/journal.json';
+import publishedEntries from './fixtures/lobeBenchPublished/journal.json';
 
 const migrationsFolder = path.join(__dirname, '../migrations');
 const legacyFolder = path.join(__dirname, 'fixtures/lobeBenchLegacy');
+const publishedFolder = path.join(__dirname, 'fixtures/lobeBenchPublished');
 const temporaryFolders: string[] = [];
 
-async function historicalFolder(legacy: boolean) {
+async function historicalFolder(kind: 'canary' | 'legacy' | 'published') {
   const folder = await mkdtemp(path.join(tmpdir(), 'lobe-bench-migration-'));
   temporaryFolders.push(folder);
   await mkdir(path.join(folder, 'meta'));
-  const entries = legacy
-    ? [...journal.entries.slice(0, 182), ...legacyEntries]
-    : journal.entries.slice(0, -1);
+  const entries =
+    kind === 'legacy'
+      ? [...journal.entries.slice(0, 182), ...legacyEntries]
+      : kind === 'published'
+        ? [...journal.entries.slice(0, 198), ...publishedEntries]
+        : journal.entries.slice(0, -1);
   await writeFile(path.join(folder, 'meta/_journal.json'), JSON.stringify({ ...journal, entries }));
   await Promise.all(
     entries.map(({ idx, tag }) =>
       copyFile(
-        path.join(legacy && idx >= 182 ? legacyFolder : migrationsFolder, `${tag}.sql`),
+        path.join(
+          kind === 'legacy' && idx >= 182
+            ? legacyFolder
+            : kind === 'published' && idx === 198
+              ? publishedFolder
+              : migrationsFolder,
+          `${tag}.sql`,
+        ),
         path.join(folder, `${tag}.sql`),
       ),
     ),
@@ -45,6 +60,20 @@ async function schema(client: PGlite) {
   ).rows;
 }
 
+async function expectGoalVisibility(client: PGlite) {
+  expect(
+    (
+      await client.query(`SELECT is_nullable, column_default FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'goals' AND column_name = 'visibility'`)
+    ).rows,
+  ).toEqual([{ column_default: expect.stringContaining("'public'"), is_nullable: 'NO' }]);
+  const indexes = await client.query<{ indexdef: string }>(
+    "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'goals_workspace_visibility_idx'",
+  );
+  expect(indexes.rows).toHaveLength(1);
+  expect(indexes.rows[0].indexdef).toContain('(workspace_id, visibility, user_id)');
+}
+
 const evidenceTables = [
   'agent_eval_datasets',
   'agent_eval_test_cases',
@@ -55,6 +84,7 @@ const evidenceTables = [
   'topics',
   'messages',
   'users',
+  'goals',
 ];
 
 async function evidence(client: PGlite) {
@@ -63,7 +93,7 @@ async function evidence(client: PGlite) {
       async (table) =>
         (
           await client.query(
-            `SELECT to_jsonb(t) AS value FROM ${table} t ORDER BY to_jsonb(t)::text`,
+            `SELECT to_jsonb(t) ${table === 'goals' ? "- 'visibility'" : ''} AS value FROM ${table} t ORDER BY to_jsonb(t)::text`,
           )
         ).rows,
     ),
@@ -73,6 +103,7 @@ async function evidence(client: PGlite) {
 async function seedLegacyEvidence(client: PGlite) {
   await client.exec(`
     INSERT INTO users (id) VALUES ('migration-user');
+    INSERT INTO goals (id, user_id, title) VALUES ('migration-goal', 'migration-user', 'Saved goal');
     INSERT INTO agent_eval_datasets (id, identifier, name) VALUES ('migration-dataset', 'saved-cases', 'Saved cases');
     INSERT INTO agent_eval_environments (id, name, config) VALUES ('migration-env', 'System environment', '{}');
     INSERT INTO agent_eval_test_cases (id, dataset_id, environment_id, content)
@@ -102,6 +133,7 @@ describe('LobeBench migration integration', () => {
     const client = new PGlite({ extensions: { vector } });
     try {
       await migrate(drizzle({ client }), { migrationsFolder });
+      await expectGoalVisibility(client);
       const columns = await schema(client);
       expect(columns).toEqual(
         expect.arrayContaining([
@@ -138,14 +170,19 @@ describe('LobeBench migration integration', () => {
   it('upgrades a canary database and keeps its existing cases and run records', async () => {
     const client = new PGlite({ extensions: { vector } });
     try {
-      await migrate(drizzle({ client }), { migrationsFolder: await historicalFolder(false) });
+      await migrate(drizzle({ client }), { migrationsFolder: await historicalFolder('canary') });
       await client.exec(`INSERT INTO users (id) VALUES ('existing-user');
         INSERT INTO agent_eval_datasets (id, identifier, name) VALUES ('existing-dataset', 'existing-cases', 'Existing dataset');
         INSERT INTO agent_eval_test_cases (id, user_id, dataset_id, content)
           VALUES ('existing-case', 'existing-user', 'existing-dataset', '{"input":"Existing"}');
-        INSERT INTO agent_eval_runs (id, user_id, dataset_id) VALUES ('existing-run', 'existing-user', 'existing-dataset');`);
+        INSERT INTO agent_eval_runs (id, user_id, dataset_id) VALUES ('existing-run', 'existing-user', 'existing-dataset');
+        INSERT INTO goals (id, user_id, title, visibility) VALUES ('existing-goal', 'existing-user', 'Private goal', 'private');`);
       const before = (await client.query('SELECT * FROM agent_eval_runs')).rows;
       await migrate(drizzle({ client }), { migrationsFolder });
+      await expectGoalVisibility(client);
+      expect(
+        (await client.query("SELECT visibility FROM goals WHERE id = 'existing-goal'")).rows,
+      ).toEqual([{ visibility: 'private' }]);
       expect((await client.query('SELECT * FROM agent_eval_runs')).rows).toEqual(before);
       expect(
         (await client.query("SELECT content FROM agent_eval_test_cases WHERE id = 'existing-case'"))
@@ -167,7 +204,7 @@ describe('LobeBench migration integration', () => {
     const client = new PGlite({ extensions: { vector } });
     const fresh = new PGlite({ extensions: { vector } });
     try {
-      await migrate(drizzle({ client }), { migrationsFolder: await historicalFolder(true) });
+      await migrate(drizzle({ client }), { migrationsFolder: await historicalFolder('legacy') });
       await seedLegacyEvidence(client);
       const before = await evidence(client);
       const historyBefore = (
@@ -178,7 +215,7 @@ describe('LobeBench migration integration', () => {
       expect(await upgradeLobeBenchDatabase(client, { apply: false, migrationsFolder })).toEqual({
         applied: false,
         kind: 'legacy',
-        migrations: 17,
+        migrations: 18,
       });
       expect(await evidence(client)).toEqual(before);
 
@@ -198,7 +235,7 @@ describe('LobeBench migration integration', () => {
         upgradeLobeBenchDatabase(
           {
             query: async (sql, params) => {
-              if (sql.includes('CREATE TABLE') && sql.includes('channels'))
+              if (sql.includes('CREATE TABLE') && sql.includes('agent_eval_memories'))
                 throw new Error('injected DDL failure');
               return client.query(sql, params);
             },
@@ -214,8 +251,9 @@ describe('LobeBench migration integration', () => {
       expect(await upgradeLobeBenchDatabase(client, { apply: true, migrationsFolder })).toEqual({
         applied: true,
         kind: 'legacy',
-        migrations: 17,
+        migrations: 18,
       });
+      await expectGoalVisibility(client);
       expect(await evidence(client)).toEqual(before);
       await migrate(drizzle({ client: fresh }), { migrationsFolder });
       expect(await schema(client)).toEqual(await schema(fresh));
@@ -231,4 +269,121 @@ describe('LobeBench migration integration', () => {
       await fresh.close();
     }
   }, 60_000);
+
+  it('normally migrates the exact published 0198 history without skipping goal visibility', async () => {
+    const client = new PGlite({ extensions: { vector } });
+    try {
+      const published = await historicalFolder('published');
+      const publishedMigration = readMigrationFiles({ migrationsFolder: published }).at(-1)!;
+      expect(publishedMigration.folderMillis).toBe(1793442088212);
+      expect(publishedMigration.hash).toBe(
+        '3ae81e3241c84b47974a78b4fee2212ed788b35581b1a9d97b7397ee5c18d9d7',
+      );
+      expect(publishedMigration.folderMillis).toBeLessThan(journal.entries.at(-2)!.when);
+      expect(journal.entries.at(-1)!.when).toBeGreaterThan(journal.entries.at(-2)!.when);
+      await migrate(drizzle({ client }), { migrationsFolder: published });
+      await seedLegacyEvidence(client);
+      const before = await evidence(client);
+      await migrate(drizzle({ client }), { migrationsFolder });
+      await expectGoalVisibility(client);
+      expect(await evidence(client)).toEqual(before);
+      // Normal migration keeps the historical draft journal row; it does not canonicalize history.
+      expect(
+        (await client.query('SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations'))
+          .rows,
+      ).toEqual([{ count: journal.entries.length + 1 }]);
+    } finally {
+      await client.close();
+    }
+  }, 60_000);
+
+  it('strictly diagnoses and atomically replaces the known published 0198 history', async () => {
+    const client = new PGlite({ extensions: { vector } });
+    const fresh = new PGlite({ extensions: { vector } });
+    try {
+      await migrate(drizzle({ client }), { migrationsFolder: await historicalFolder('published') });
+      await seedLegacyEvidence(client);
+      const before = await evidence(client);
+      const beforeSchema = await schema(client);
+      const historyBefore = (
+        await client.query('SELECT * FROM drizzle.__drizzle_migrations ORDER BY id')
+      ).rows;
+      expect(await upgradeLobeBenchDatabase(client, { apply: false, migrationsFolder })).toEqual({
+        applied: false,
+        kind: 'published',
+        migrations: 2,
+      });
+      expect(await evidence(client)).toEqual(before);
+      await expect(
+        upgradeLobeBenchDatabase(
+          {
+            query: async (sql, params) => {
+              if (sql.includes('CREATE TABLE') && sql.includes('agent_eval_memories'))
+                throw new Error('injected failure after goal visibility');
+              return client.query(sql, params);
+            },
+          },
+          { apply: true, migrationsFolder },
+        ),
+      ).rejects.toThrow('injected failure after goal visibility');
+      expect(await schema(client)).toEqual(beforeSchema);
+      expect(
+        (
+          await client.query(
+            "SELECT indexname FROM pg_indexes WHERE indexname = 'goals_workspace_visibility_idx'",
+          )
+        ).rows,
+      ).toEqual([]);
+      expect(
+        (await client.query('SELECT * FROM drizzle.__drizzle_migrations ORDER BY id')).rows,
+      ).toEqual(historyBefore);
+      expect(await evidence(client)).toEqual(before);
+      expect(await upgradeLobeBenchDatabase(client, { apply: true, migrationsFolder })).toEqual({
+        applied: true,
+        kind: 'published',
+        migrations: 2,
+      });
+      await expectGoalVisibility(client);
+      expect(await evidence(client)).toEqual(before);
+      await migrate(drizzle({ client: fresh }), { migrationsFolder });
+      expect(await schema(client)).toEqual(await schema(fresh));
+      expect(await upgradeLobeBenchDatabase(client, { apply: true, migrationsFolder })).toEqual({
+        applied: false,
+        kind: 'current',
+        migrations: 0,
+      });
+      await migrate(drizzle({ client }), { migrationsFolder });
+      expect(await evidence(client)).toEqual(before);
+    } finally {
+      await client.close();
+      await fresh.close();
+    }
+  }, 60_000);
+
+  it('refuses changed, partial, or extra published history without weakening the exact-prefix check', () => {
+    const canonical = readMigrationFiles({ migrationsFolder }).map((entry) => ({
+      created_at: entry.folderMillis,
+      hash: entry.hash,
+    }));
+    const published = [
+      ...canonical.slice(0, 198),
+      {
+        created_at: 1793442088212,
+        hash: '3ae81e3241c84b47974a78b4fee2212ed788b35581b1a9d97b7397ee5c18d9d7',
+      },
+    ];
+    for (const history of [
+      published.slice(1),
+      published.slice(0, -1),
+      [...published, published[0]],
+      published.map((entry, i) => (i === 198 ? { ...entry, hash: 'unknown' } : entry)),
+      published.map((entry, i) =>
+        i === 198 ? { ...entry, created_at: entry.created_at + 1 } : entry,
+      ),
+    ]) {
+      expect(() => planLobeBenchUpgrade(history, migrationsFolder)).toThrow(
+        'Unknown migration history',
+      );
+    }
+  });
 });

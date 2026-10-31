@@ -1,7 +1,9 @@
 'use client';
 
 import type { KimiCodeQuotaSnapshot } from '@lobechat/heterogeneous-agents/quota';
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { WalletIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,12 +15,14 @@ import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
 
-const styles = createStaticStyles(({ css }) => ({
-  extraUsage: css`
-    padding-block-start: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  extraUsage: {
+    paddingBlockStart: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+});
 
 const createErrorSnapshot = (error: unknown): KimiCodeQuotaSnapshot => ({
   error: error instanceof Error ? error.message : String(error),
@@ -108,7 +112,7 @@ const KimiCodeQuotaMenu = memo<KimiCodeQuotaMenuProps>(({ deviceId, env }) => {
       if (!extraUsage) return null;
 
       return (
-        <Flexbox className={styles.extraUsage} gap={4}>
+        <Flexbox className={stylex.props(styles.extraUsage).className} gap={4}>
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={WalletIcon} size={14} />

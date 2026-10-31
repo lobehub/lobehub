@@ -2424,6 +2424,7 @@ table goals {
   subject_id text
   started_at "timestamp with time zone"
   completed_at "timestamp with time zone"
+  visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -2432,6 +2433,7 @@ table goals {
   indexes {
     user_id [name: 'goals_user_id_idx']
     workspace_id [name: 'goals_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'goals_workspace_visibility_idx']
     agent_id [name: 'goals_agent_id_idx']
     project_id [name: 'goals_project_id_idx']
     status [name: 'goals_status_idx']
