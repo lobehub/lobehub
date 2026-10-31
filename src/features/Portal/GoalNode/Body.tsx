@@ -1,13 +1,4 @@
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Markdown,
-  Tag,
-  Text,
-} from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
@@ -195,18 +186,6 @@ const Body = memo(() => {
 
   return (
     <Flexbox flex={1} gap={16} padding={16} style={{ minHeight: 0, overflowY: 'auto' }}>
-      {/* A gate's raw node status stays `proposed` while it releases waves;
-          its verdict below says what state it is really in. */}
-      {!batchGate && (
-        <Flexbox horizontal align={'center'} gap={8}>
-          <Tag size={'small'}>{t(`goalProcess.kind.${node.kind}` as const)}</Tag>
-          <Tag size={'small'}>{t(`goalProcess.nodeStatus.${node.status}` as const)}</Tag>
-          {nodeView.humanTouches.length > 0 && (
-            <Tag size={'small'}>{t('goalProcess.node.humanTouched')}</Tag>
-          )}
-        </Flexbox>
-      )}
-
       {batchGate && (
         <GateDetail
           decide={decide}
@@ -225,9 +204,7 @@ const Body = memo(() => {
           // is load-bearing: Markdown's root is `overflow: hidden`, so as a flex
           // item its automatic minimum size collapses to 0 and a long handoff
           // would be squeezed (and clipped) to fit instead of scrolling the panel.
-          <Markdown fontSize={13} style={{ flexShrink: 0 }} variant={'chat'}>
-            {node.description}
-          </Markdown>
+          <Markdown style={{ flexShrink: 0 }}>{node.description}</Markdown>
         ) : (
           <Section
             title={
