@@ -178,4 +178,16 @@ export default {
   'workingDirectory.drive.drives.personal': 'Personal drive',
   'workingDirectory.drive.rebuildInPersonal':
     'Private environment folders ({{names}}) are hidden here. Their owners can rebuild them on their personal drives.',
+  'workingDirectory.createWorktreeBaseIgnored':
+    'This device did not apply the chosen base: its app is too old, so the worktree forked from the current HEAD',
+  'workingDirectory.createWorktreeBasedOn': 'Worktree created from {{base}}',
+  'workingDirectory.createWorktreeBasedOnDetached': 'Worktree created from {{sha}} (detached HEAD)',
+  'workingDirectory.newWorktreeBaseDetached':
+    'Forks from {{sha}} (detached HEAD): the source repo has no branch checked out',
+  'workingDirectory.newWorktreeBaseHint': 'Forks from {{base}}',
+  'workingDirectory.newWorktreeBaseLabel': 'Base',
+  'workingDirectory.newWorktreeBasePlaceholder': 'Branch, remote branch or commit SHA',
+  'workingDirectory.newWorktreeBaseResolveOnCreate': 'Forks from {{ref}} (resolved when created)',
+  'workingDirectory.worktreeForkPoint': 'based on {{branch}}@{{sha}}',
+  'workingDirectory.worktreeForkPointAtTip': 'based on {{branch}}',
 };

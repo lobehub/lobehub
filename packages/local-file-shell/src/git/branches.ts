@@ -85,13 +85,16 @@ export const listGitRemoteBranches = async (
   try {
     const { stdout } = await execFileAsync(
       'git',
-      ['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)', 'refs/remotes/origin'],
+      // Full ref names, stripped below: `refname:short` shortens the
+      // `refs/remotes/origin/HEAD` symref to a bare `origin`, which no
+      // `/HEAD` check can catch.
+      ['for-each-ref', '--sort=-committerdate', '--format=%(refname)', 'refs/remotes/origin'],
       { cwd: dirPath, timeout: 5000 },
     );
     return stdout
       .replaceAll('\r', '')
       .split('\n')
-      .map((line) => line.trim())
+      .map((line) => line.trim().replace(/^refs\/remotes\//, ''))
       .filter((name) => name.length > 0 && name !== 'origin/HEAD' && !name.endsWith('/HEAD'))
       .map((name) => ({ isDefault: name === defaultRef, name }));
   } catch (error: any) {

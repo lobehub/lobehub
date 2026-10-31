@@ -158,6 +158,7 @@ class ElectronGitService {
   }
 
   async addGitWorktree(params: {
+    baseRef?: string;
     branch: string;
     path: string;
     worktreePath: string;

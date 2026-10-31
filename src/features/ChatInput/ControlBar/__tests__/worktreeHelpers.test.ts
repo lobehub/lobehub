@@ -1,7 +1,11 @@
 import type { DeviceGitWorktreeListItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { findWorktreeForBranch } from '../worktreeHelpers';
+import {
+  findWorktreeForBranch,
+  getForkPointLabelArgs,
+  getWorktreeBaseDefault,
+} from '../worktreeHelpers';
 
 const worktree = (
   overrides: Partial<DeviceGitWorktreeListItem> & Pick<DeviceGitWorktreeListItem, 'path'>,
@@ -46,5 +50,52 @@ describe('findWorktreeForBranch', () => {
     ];
 
     expect(findWorktreeForBranch(worktrees, 'feat/x')).toBeUndefined();
+  });
+});
+
+describe('getWorktreeBaseDefault', () => {
+  const sha = '9a1b3127deadbeefcafe';
+
+  it('defaults to the current branch and its HEAD', () => {
+    expect(
+      getWorktreeBaseDefault(
+        worktree({ branch: 'canary', current: true, head: sha, path: '/r' }),
+        'x',
+      ),
+    ).toEqual({ branch: 'canary', sha, value: 'canary' });
+  });
+
+  it('falls back to the short SHA, flagged, on a detached HEAD', () => {
+    expect(
+      getWorktreeBaseDefault(
+        worktree({ current: true, detached: true, head: sha, path: '/r' }),
+        '',
+      ),
+    ).toEqual({ detached: true, sha, value: '9a1b3127' });
+  });
+
+  it('uses the known branch when the worktree list has not loaded', () => {
+    expect(getWorktreeBaseDefault(undefined, 'main')).toEqual({
+      branch: 'main',
+      sha: undefined,
+      value: 'main',
+    });
+  });
+});
+
+describe('getForkPointLabelArgs', () => {
+  it('names only the default branch while the fork point is its tip', () => {
+    expect(getForkPointLabelArgs({ atTip: true, baseBranch: 'origin/canary', sha: 'abc' })).toEqual(
+      { key: 'workingDirectory.worktreeForkPointAtTip', values: { branch: 'origin/canary' } },
+    );
+  });
+
+  it('adds the short SHA once the default branch has moved on', () => {
+    expect(
+      getForkPointLabelArgs({ atTip: false, baseBranch: 'main', sha: '9a1b3127deadbeef' }),
+    ).toEqual({
+      key: 'workingDirectory.worktreeForkPoint',
+      values: { branch: 'main', sha: '9a1b3127' },
+    });
   });
 });

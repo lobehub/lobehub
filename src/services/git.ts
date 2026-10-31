@@ -138,21 +138,24 @@ class GitService {
    * A remote device derives the target path server-side from `path` + `branch`
    * (never trusting a client-supplied absolute path), so `worktreePath` is only
    * forwarded on the local IPC route where this machine owns the filesystem.
+   * `baseRef` is the commit-ish to fork from; omitted, the repo's current HEAD.
    */
   addGitWorktree({
+    baseRef,
     branch,
     deviceId,
     path,
     worktreePath,
   }: {
+    baseRef?: string;
     branch: string;
     deviceId?: string;
     path: string;
     worktreePath: string;
   }): Promise<DeviceGitAddWorktreeResult> {
     return deviceId
-      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path })
-      : electronGitService.addGitWorktree({ branch, path, worktreePath });
+      ? lambdaClient.device.addGitWorktree.mutate({ baseRef, branch, deviceId, path })
+      : electronGitService.addGitWorktree({ baseRef, branch, path, worktreePath });
   }
 
   /** Pull (`--ff-only`) the current branch of a working directory. */

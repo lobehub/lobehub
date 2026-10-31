@@ -197,6 +197,7 @@ export default class GitController extends ControllerModule {
 
   @IpcMethod()
   async addGitWorktree(payload: {
+    baseRef?: string;
     branch: string;
     path: string;
     worktreePath: string;

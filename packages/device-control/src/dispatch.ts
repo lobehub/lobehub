@@ -436,7 +436,9 @@ export const executeDeviceRpc = async (
     }
 
     case 'addGitWorktree': {
-      return addGitWorktree(params as { branch: string; path: string; worktreePath: string });
+      return addGitWorktree(
+        params as { baseRef?: string; branch: string; path: string; worktreePath: string },
+      );
     }
 
     case 'pullGitBranch': {
