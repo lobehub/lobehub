@@ -99,8 +99,9 @@ export function requestFromPr(pr) {
 export async function validatePrIntent(pr, store) {
   const intent = requestFromPr(pr);
   if (!intent || intent.mode === 'initialize') return intent;
+  const baseSha = await store.resolvePrBase(pr);
   if (intent.mode === 'recovery') {
-    if (pr.base?.ref !== 'main' || pr.base.sha !== intent.recoveryBaseSha)
+    if (baseSha !== intent.recoveryBaseSha)
       throw new Error(
         'Recovery requires its explicitly selected main base SHA; reselect sources if main changed',
       );
@@ -109,7 +110,7 @@ export async function validatePrIntent(pr, store) {
   const baseline = await deliveredBaseline(store, intent.baseVersion, intent.baseSourcesHash);
   if (intent.cloudSha !== baseline.cloudSha && !intent.overrideReason)
     throw new Error('A different Cloud SHA needs a repair reason');
-  await store.assertHotfixBase(baseline, pr.base.sha);
+  await store.assertHotfixBase(baseline, baseSha);
   return { ...intent, baseSourcesHash: sourcesHash(baseline) };
 }
 

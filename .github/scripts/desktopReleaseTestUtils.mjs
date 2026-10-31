@@ -23,7 +23,11 @@ export async function startGithubFixture() {
     ['v2.2.21', fixtureOss],
     ['v2.2.22', fixtureNextOss],
     ['main', fixtureNextOss],
+    [fixtureOss, fixtureOss],
+    [fixtureNextOss, fixtureNextOss],
+    [fixtureCloud, fixtureCloud],
   ]);
+  const parents = new Map([[fixtureNextOss, [fixtureOss]]]);
   let serial = 100;
   const state = { cloud: fixtureNextCloud, error: null, rejectHead: false, intercept: null };
   const json = (response, status, value) => {
@@ -45,7 +49,13 @@ export async function startGithubFixture() {
     }
     if (route.startsWith('/commits/')) {
       const sha = commits.get(decodeURIComponent(route.slice('/commits/'.length)));
-      return json(response, sha ? 200 : 404, sha ? { sha } : { message: 'not found' });
+      return json(
+        response,
+        sha ? 200 : 404,
+        sha
+          ? { sha, parents: (parents.get(sha) || []).map((sha) => ({ sha })) }
+          : { message: 'not found' },
+      );
     }
     if (route.startsWith('/actions/runs/'))
       return json(response, 200, { id: 40841847688, head_sha: fixtureOss, run_attempt: 1 });
@@ -122,6 +132,7 @@ export async function startGithubFixture() {
     state,
     releases,
     commits,
+    parents,
     assets,
     addAsset,
     addRelease,

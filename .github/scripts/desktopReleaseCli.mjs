@@ -67,6 +67,8 @@ export async function runReleaseCli(command, env = process.env) {
     const event = JSON.parse(await readFile(env.GITHUB_EVENT_PATH, 'utf8'));
     const pr = event.pull_request;
     if (!pr) throw new Error('A pull request event is required');
+    if (command === 'prepare-release' && pr.merged !== true)
+      throw new Error('Release preparation requires a merged PR');
     const intent = await validatePrIntent(pr, store);
     if (command === 'check-pr') {
       await output(env, { release_mode: intent?.mode || 'none' });
@@ -77,7 +79,9 @@ export async function runReleaseCli(command, env = process.env) {
       ...intent,
       mergeSha: pr.merge_commit_sha,
       prNumber: pr.number,
-      ...(['hotfix', 'recovery'].includes(intent.mode) && { prBaseSha: pr.base.sha }),
+      ...(['hotfix', 'recovery'].includes(intent.mode) && {
+        prBaseSha: await store.resolvePrBase(pr),
+      }),
     };
     const file = path.join(env.RUNNER_TEMP, 'desktop-release-body.md');
     await writeFile(

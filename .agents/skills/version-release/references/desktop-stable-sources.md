@@ -36,7 +36,9 @@ GITHUB_REPOSITORY=lobehub/lobehub \
   node .github/scripts/desktopReleaseCli.mjs recovery-intent
 ```
 
-Replace both SHA placeholders with verified full commits. Read the base from the actual PR (`gh api repos/lobehub/lobehub/pulls/PR_NUMBER --jq .base.sha`), and append the generated comment to that PR. The PR check requires the base still matches; if main moves, reselect and verify the source combination. Auto-tag binds the intent to the actual PR number, base and merge SHA. Stable verifies that identity again, records `selection=recovery` with its frozen base/reason, and checks out the explicit Cloud SHA. It never selects HEAD or invents delivery proof for the old version.
+Replace both SHA placeholders with verified full commits. Read the current main tip (`gh api repos/lobehub/lobehub/commits/main --jq .sha`), and append the generated comment to the PR. GitHub's PR `base.sha` can be an older snapshot. The open-PR check reads live main; after merge the check reads the actual merge commit's first parent. If either differs from the frozen base, reselect and verify the source combination. Auto-tag binds the intent to the actual PR number, merge parent and merge SHA. Stable verifies that identity again, records `selection=recovery` with its frozen base/reason, and checks out the explicit Cloud SHA. It never selects HEAD or invents delivery proof for the old version.
+
+Use Merge or Squash for hotfix/recovery PRs, so the resulting commit's first parent is the target main tip. Rebasing multiple PR commits does not preserve this boundary and is unsupported.
 
 Manual `release_mode=recovery` only resumes a Release with that bound recovery intent; supplied Cloud SHA and reason must agree. The first-attempt/create-only rules still apply. Later rebuilds read the saved record. The new version becomes a delivered baseline only after its own complete publication succeeds.
 
