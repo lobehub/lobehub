@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
 
-const { executions, execAgent, notifyChannel } = vi.hoisted(() => ({
+const { executions, execAgent, notifyChannel, route } = vi.hoisted(() => ({
   executions: {
     accepted: vi.fn(),
     candidates: vi.fn(),
@@ -14,6 +14,7 @@ const { executions, execAgent, notifyChannel } = vi.hoisted(() => ({
   },
   execAgent: vi.fn(),
   notifyChannel: vi.fn(),
+  route: vi.fn(),
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
@@ -36,7 +37,7 @@ vi.mock('@/server/services/queue/impls', () => ({ isQueueAgentRuntimeEnabled: ()
 vi.mock('./attachments', () => ({ resolveChannelAttachments: vi.fn().mockResolvedValue({}) }));
 vi.mock('./ChannelRoutingService', () => ({
   ChannelRoutingService: class {
-    advance = vi.fn().mockResolvedValue(undefined);
+    advance = route;
   },
 }));
 vi.mock('./notify', () => ({ notifyChannel }));
@@ -65,7 +66,7 @@ const coordinator = (count = 3, recovering = false) => {
   };
   const select = vi
     .fn()
-    .mockReturnValueOnce(query([{ id: 'channel', workspaceId: null }]))
+    .mockReturnValueOnce(query([{ id: 'channel', status: 'active', workspaceId: null }]))
     .mockReturnValueOnce(query([]));
   return new ChannelCoordinator({ select } as never);
 };
@@ -97,6 +98,73 @@ describe('Channel concurrent startup', () => {
     }));
   });
   afterEach(() => vi.restoreAllMocks());
+
+  it('starts an eligible job without waiting for unrelated routing', async () => {
+    const routing = Promise.withResolvers<void>();
+    route.mockReturnValue(routing.promise);
+    const advancing = coordinator(1).advance('channel');
+    try {
+      await vi.waitFor(() => expect(executions.accepted).toHaveBeenCalledWith('channel', 'job-0'));
+    } finally {
+      routing.resolve();
+      await advancing;
+    }
+  });
+
+  it('recovers an existing run while routing is pending', async () => {
+    const routing = Promise.withResolvers<void>();
+    route.mockReturnValue(routing.promise);
+    const instance = coordinator(0, true);
+    const complete = vi.spyOn(instance, 'complete').mockResolvedValue(undefined);
+    const advancing = instance.advance('channel');
+    try {
+      await vi.waitFor(() =>
+        expect(complete).toHaveBeenCalledWith('channel', 'previous', undefined),
+      );
+    } finally {
+      routing.resolve();
+      await advancing;
+    }
+  });
+
+  it('still dispatches eligible jobs when routing fails', async () => {
+    route.mockRejectedValue(new Error('Routing failed'));
+    await expect(coordinator(1).advance('channel')).rejects.toThrow();
+    expect(executions.accepted).toHaveBeenCalledWith('channel', 'job-0');
+  });
+
+  it('waits for active dispatch to settle before reporting a routing failure', async () => {
+    const startup = Promise.withResolvers<{ success: boolean }>();
+    execAgent.mockReturnValue(startup.promise);
+    route.mockRejectedValue(new Error('Routing failed'));
+    const settled = vi.fn();
+    const advancing = coordinator(1).advance('channel').then(settled, settled);
+    try {
+      await vi.waitFor(() => expect(execAgent).toHaveBeenCalledTimes(1));
+      expect(settled).not.toHaveBeenCalled();
+    } finally {
+      startup.resolve({ success: true });
+      await advancing;
+    }
+    expect(executions.accepted).toHaveBeenCalledWith('channel', 'job-0');
+    expect(settled).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('waits for active routing to settle before reporting an execution failure', async () => {
+    const routing = Promise.withResolvers<void>();
+    route.mockReturnValue(routing.promise);
+    executions.claim.mockRejectedValue(new Error('Claim failed'));
+    const settled = vi.fn();
+    const advancing = coordinator(1).advance('channel').then(settled, settled);
+    try {
+      await vi.waitFor(() => expect(executions.claim).toHaveBeenCalledTimes(1));
+      expect(settled).not.toHaveBeenCalled();
+    } finally {
+      routing.resolve();
+      await advancing;
+    }
+    expect(settled).toHaveBeenCalledWith(expect.any(Error));
+  });
 
   it('notifies the claimed reply state before runtime startup resolves', async () => {
     const gate = Promise.withResolvers<{ success: boolean }>();

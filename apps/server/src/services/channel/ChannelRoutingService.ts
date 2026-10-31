@@ -19,7 +19,10 @@ import { wakeChannel } from './queue';
 import { resolveChannelRoutingConfig } from './routingConfig';
 
 export const CHANNEL_ROUTING_TIMEOUT_MS = 10_000;
-type RoutingInput = NonNullable<Awaited<ReturnType<ChannelRoutingRepository['claim']>>>;
+type RoutingInput = Extract<
+  Awaited<ReturnType<ChannelRoutingRepository['claim']>>,
+  { status: 'claimed' }
+>;
 
 /** Only calibrated boolean probabilities are thresholded, never choice concentration/confidence. */
 export const selectChannelResponders = (
@@ -70,22 +73,24 @@ export class ChannelRoutingService {
     if (!pending.length) return;
     // Persist the recovery wakeup before taking a lease or making a billable call.
     await wakeChannel(channelId, CHANNEL_ROUTING_LEASE_MS);
-    let resolved = 0;
     await pMap(
       pending,
       async ({ id }) => {
         const input = await this.routing.claim(channelId, id);
         if (!input) return;
+        if (input.status === 'settled') {
+          await wakeChannel(channelId);
+          return;
+        }
         const decision = await this.decide(channelId, input);
+        // Every committed decision can unblock jobs or deferred Thread replies, even
+        // without recipients. Wake them without waiting for this batch's slower decisions.
         if (await this.executions.resolveRouting(channelId, id, input.attempt, decision))
-          resolved += 1;
+          await wakeChannel(channelId);
       },
-      { concurrency: 3 },
+      { concurrency: 3, stopOnError: false },
     );
     await notifyChannel(this.db, channelId);
-    // A resolved root may unlock replies skipped by this batch. Revisit immediately,
-    // but do not hot-loop when every pending attempt belongs to another worker.
-    if (resolved) await wakeChannel(channelId);
   };
 
   private async decide(channelId: string, input: RoutingInput): Promise<ChannelRoutingDecision> {
