@@ -1,4 +1,5 @@
 declare module 'verification:component' {
+  import type { ListProps } from '@lobehub/ui';
   import type { ComponentType, CSSProperties, ReactNode } from 'react';
 
   interface Row {
@@ -22,7 +23,7 @@ declare module 'verification:component' {
     tableLayout: 'auto' | 'fixed';
   }
   export const LiteTable: ComponentType<Props>;
-  export const Menu: ComponentType<import('@lobehub/ui').ListProps>;
+  export const Menu: ComponentType<ListProps>;
   export const CommandLine: ComponentType<{ command: string }>;
   export const DotsLoading: ComponentType<{ color?: string; gap?: number; size?: number }>;
   export const UnreadDot: ComponentType<{ label?: string }>;
