@@ -36,6 +36,7 @@ import {
   useAgentQuotaStore,
 } from '@/store/agentQuota';
 import { useElectronStore } from '@/store/electron';
+import { electronGatewaySelectors } from '@/store/electron/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -172,12 +173,16 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   // Until it settles a write could not tell this device from "no device" and
   // would fall back to the agent-wide pin, so the controls wait for it.
   const needsLocalDevice = isDesktop && !deviceId;
-  const { isLoading: localDeviceLoading } = useFetchGatewayStableDeviceId(needsLocalDevice);
-  const localDeviceSettled = !needsLocalDevice || !localDeviceLoading;
+  useFetchGatewayStableDeviceId(needsLocalDevice);
+  const stableDeviceId = useElectronStore(electronGatewaySelectors.gatewayStableDeviceId);
+  // The replica entry is `undefined` until this device is resolved (or hydrated).
+  const localDeviceSettled = !needsLocalDevice || stableDeviceId !== undefined;
   const managesLocalLogins = isDesktop && (!deviceId || deviceId === currentDeviceId);
   // A login lives on one machine, so the Manual pick belongs to one device.
   // The web without a bound device has none and keeps the agent-wide pin.
-  const targetDeviceId = deviceId ?? (isDesktop ? currentDeviceId : undefined);
+  // Never the cached `gatewayDeviceInfo` id: before the gateway connects that
+  // is the install's fallback UUID, not the row the server knows this machine by.
+  const targetDeviceId = deviceId ?? (isDesktop ? (stableDeviceId ?? undefined) : undefined);
   useFetchQuotaDeviceAccount(agentId, targetDeviceId);
   const deviceAccount = useAgentQuotaStore(
     agentQuotaSelectors.deviceAccount(agentId, targetDeviceId),

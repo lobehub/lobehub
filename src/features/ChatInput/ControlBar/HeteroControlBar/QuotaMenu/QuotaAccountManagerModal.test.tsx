@@ -6,7 +6,9 @@ import { type ReactElement } from 'react';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createReplicaState } from '@/libs/replica';
 import { agentQuotaService } from '@/services/agentQuota';
+import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { useAgentQuotaStore } from '@/store/agentQuota';
 import {
@@ -209,14 +211,20 @@ describe('QuotaAccountManager on the desktop', () => {
     } as never);
     vi.spyOn(agentQuotaService, 'getDeviceAccount').mockResolvedValue({ accountId: null });
     vi.spyOn(agentQuotaService, 'syncDeviceLogins').mockResolvedValue(undefined as never);
-    vi.spyOn(useElectronStore.getState(), 'resolveGatewayDeviceId').mockImplementation(
-      async () => useElectronStore.getState().gatewayDeviceInfo?.deviceId,
+    // The desktop IPC behind this machine's stable device id answers with the
+    // id each case sets on `gatewayDeviceInfo`.
+    vi.spyOn(gatewayConnectionService, 'getStableDeviceId').mockImplementation(
+      async () => useElectronStore.getState().gatewayDeviceInfo?.deviceId ?? null,
     );
   });
 
   afterEach(() => {
     desktop.value = false;
-    useElectronStore.setState({ gatewayDeviceInfo: undefined });
+    useElectronStore.setState({
+      gatewayDeviceInfo: undefined,
+      gatewayStableDeviceIdMap: {},
+      gatewayStableDeviceIdReplica: createReplicaState(),
+    });
     vi.restoreAllMocks();
   });
 

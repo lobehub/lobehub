@@ -981,8 +981,6 @@ export const electronKeys = {
   appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
   desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
   gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),
-  /** This machine's stable gateway device id (corrects a cached fallback id). */
-  gatewayStableDeviceId: def('electron:getStableDeviceId', () => ['electron:getStableDeviceId']),
   proxySettings: def('electron:getProxySettings', () => ['electron:getProxySettings']),
   remoteServerConfig: def('electron:getRemoteServerConfig', () => [
     'electron:getRemoteServerConfig',
