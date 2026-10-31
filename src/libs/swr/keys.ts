@@ -418,6 +418,11 @@ export const deviceKeys = {
     'device:agentCliLatestVersion',
     agentType,
   ]),
+  agentCliUpdate: def('device:agentCliUpdate', (deviceId: string, agentType: string) => [
+    'device:agentCliUpdate',
+    deviceId,
+    agentType,
+  ]),
   cliUpdateState: def('device:cliUpdateState', (workspaceId: string | null, deviceId: string) => [
     'device:cliUpdateState',
     workspaceId,

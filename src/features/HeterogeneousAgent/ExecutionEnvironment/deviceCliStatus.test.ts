@@ -22,6 +22,23 @@ describe('resolveDeviceCliState', () => {
     ).toEqual({ status: 'available', version: '2.1.0' });
   });
 
+  it('carries whether the device can update the CLI, absent from older clients', () => {
+    expect(
+      resolveDeviceCliState({
+        agentType: 'claude-code',
+        presence: 'online',
+        scan: { agents: { 'claude-code': { available: true, updatable: true, version: '2.1.0' } } },
+      }),
+    ).toEqual({ status: 'available', updatable: true, version: '2.1.0' });
+    expect(
+      resolveDeviceCliState({
+        agentType: 'claude-code',
+        presence: 'online',
+        scan: { agents: { 'claude-code': { available: true, version: '2.1.0' } } },
+      }),
+    ).not.toHaveProperty('updatable', true);
+  });
+
   it('reports the CLI missing only when the online device answered without it', () => {
     expect(
       resolveDeviceCliState({

@@ -4,7 +4,7 @@ import { coerce, gt } from 'semver';
 import type { getBoundDevicePresence } from './boundDevicePresence';
 
 export type DeviceCliState =
-  | { status: 'available'; version?: string }
+  | { status: 'available'; updatable?: boolean; version?: string }
   | { status: 'checking' }
   | { status: 'deviceMissing' }
   | { status: 'offline' }
@@ -49,7 +49,7 @@ export const resolveDeviceCliState = ({
   if (!entry) return { status: 'scanFailed' };
 
   return entry.available
-    ? { status: 'available', version: entry.version }
+    ? { status: 'available', updatable: entry.updatable, version: entry.version }
     : { status: 'unavailable' };
 };
 

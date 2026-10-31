@@ -24,6 +24,12 @@ export interface HeterogeneousAgentUpdateDescriptor {
   commands: readonly string[];
   /** npm package whose `latest` dist-tag names the newest release. */
   npmPackage: string;
+  /**
+   * Arguments that make the CLI update itself (`claude update`), so a device
+   * can update it remotely. Omit when the CLI has no self-updater; the device
+   * card then only shows `commands`.
+   */
+  selfUpdateArgs?: readonly string[];
 }
 
 /**
@@ -120,6 +126,7 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
     update: {
       commands: ['claude update', 'brew upgrade --cask claude-code'],
       npmPackage: '@anthropic-ai/claude-code',
+      selfUpdateArgs: ['update'],
     },
   },
   {

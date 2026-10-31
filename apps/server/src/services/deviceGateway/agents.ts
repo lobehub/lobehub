@@ -8,7 +8,10 @@ import {
   type DeviceToolCallResult,
   type GatewayMcpParams,
 } from '@lobechat/device-gateway-client';
-import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type {
+  HeterogeneousAgentCliUpdateJob,
+  HeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
 import type {
   ClaudeCodeAccountRouting,
   ClaudeCodeQuotaSnapshot,
@@ -83,6 +86,45 @@ export function kimiCodeQuota(
     env: params.env,
     force: params.force,
   });
+}
+
+/** A remote agent CLI update as the server relays it. */
+export type AgentCliUpdateResult =
+  | { job: HeterogeneousAgentCliUpdateJob | null; status: 'ok' }
+  | { message: string; status: 'unavailable' | 'unsupported' };
+
+/**
+ * Start or read a remote agent CLI update on a device. The device runs the
+ * update in the background, so both calls return at once and the caller polls
+ * `getHeterogeneousAgentCliUpdate` until the job ends.
+ */
+export async function invokeAgentCliUpdate(
+  getClient: DeviceClientGetter,
+  method: 'getHeterogeneousAgentCliUpdate' | 'startHeterogeneousAgentCliUpdate',
+  params: { deviceId: string; type: string; userId: string; workspaceId?: string },
+): Promise<AgentCliUpdateResult> {
+  const { deviceId, type, userId, workspaceId } = params;
+  const client = getClient();
+  if (!client) return { message: 'Device Gateway is not configured', status: 'unavailable' };
+
+  try {
+    const result = await client.invokeRpc<HeterogeneousAgentCliUpdateJob | null>(
+      { deviceId, timeout: 15_000, userId, workspaceId },
+      { method, params: { type } },
+    );
+    if (result.success) return { job: result.data ?? null, status: 'ok' };
+
+    const message = result.error || `${method} failed`;
+    log('%s: failed for deviceId=%s — %s', method, deviceId, message);
+    return {
+      message,
+      status: message.includes('Unknown device RPC method') ? 'unsupported' : 'unavailable',
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log('%s: error for deviceId=%s — %s', method, deviceId, message);
+    return { message, status: 'unavailable' };
+  }
 }
 
 /** Query a heterogeneous CLI's model catalog on the device that will execute it. */

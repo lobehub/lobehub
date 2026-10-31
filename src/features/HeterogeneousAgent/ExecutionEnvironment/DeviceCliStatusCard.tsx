@@ -17,15 +17,15 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { ArrowUpCircle, ExternalLink, RefreshCw, XCircle } from 'lucide-react';
+import { ExternalLink, RefreshCw, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
 
-import { type DeviceCliState, getDeviceCommands, getNewerAgentCliVersion } from './deviceCliStatus';
-import { useAgentCliLatestVersion } from './useAgentCliLatestVersion';
+import { type DeviceCliState, getDeviceCommands } from './deviceCliStatus';
+import { DeviceCliUpdate } from './DeviceCliUpdate';
 import { useDeviceCliStatus } from './useDeviceCliStatus';
 
 const styles = stylex.create({
@@ -41,9 +41,6 @@ const styles = stylex.create({
   metaText: {
     color: cssVar.colorTextSecondary,
     fontSize: 13,
-  },
-  popoverContent: {
-    maxWidth: 'min(400px, 80vw)',
   },
   reasonDetails: {
     maxHeight: 200,
@@ -96,16 +93,6 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
   const deviceName =
     device?.friendlyName || device?.hostname || t('chat:heteroAgent.executionTarget.unknownDevice');
 
-  const { data: latestVersion } = useAgentCliLatestVersion(
-    update && state.status === 'available' ? provider.type : undefined,
-  );
-  const newerVersion =
-    state.status === 'available'
-      ? getNewerAgentCliVersion(state.version, latestVersion)
-      : undefined;
-  const updateCommands =
-    newerVersion && update ? getDeviceCommands(update.commands, device?.platform) : [];
-
   const renderStatusTag = (current: DeviceCliState) => {
     switch (current.status) {
       case 'available': {
@@ -134,27 +121,18 @@ export const DeviceCliStatusCard = memo<DeviceCliStatusCardProps>(({ deviceId, p
         return (
           <>
             {current.version && <Tag color="processing">{current.version}</Tag>}
-            {newerVersion && updateCommands.length > 0 && (
-              <Popover
-                placement={'bottomLeft'}
-                trigger={'click'}
-                content={
-                  <Flexbox gap={8} {...stylex.props(styles.popoverContent)}>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('heterogeneousStatus.update.desc', params)}
-                    </Text>
-                    {updateCommands.map((command) => (
-                      <Snippet key={command} language={'bash'}>
-                        {command}
-                      </Snippet>
-                    ))}
-                  </Flexbox>
-                }
-              >
-                <Button icon={<ArrowUpCircle size={14} />} size={'small'} type={'text'}>
-                  {t('heterogeneousStatus.update.available', { version: newerVersion })}
-                </Button>
-              </Popover>
+            {update && (
+              <DeviceCliUpdate
+                agentType={provider.type}
+                device={device}
+                deviceId={deviceId}
+                deviceName={deviceName}
+                displayName={displayName}
+                updatable={current.updatable}
+                update={update}
+                version={current.version}
+                onFinish={redetect}
+              />
             )}
           </>
         );

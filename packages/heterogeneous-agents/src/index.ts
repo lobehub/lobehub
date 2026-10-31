@@ -127,7 +127,11 @@ export {
   SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES,
 } from './providerBinding';
 export { createAdapter, listAgentTypes, listLocalAgentTypes } from './registry';
-export type { HeterogeneousAgentScanMap, HeterogeneousAgentScanStatus } from './scan/types';
+export type {
+  HeterogeneousAgentCliUpdateJob,
+  HeterogeneousAgentScanMap,
+  HeterogeneousAgentScanStatus,
+} from './scan/types';
 export type {
   CreateMessageIntent,
   CreateThreadIntent,

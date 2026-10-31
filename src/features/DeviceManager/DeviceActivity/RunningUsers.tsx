@@ -58,13 +58,18 @@ RunUserAvatar.displayName = 'RunUserAvatar';
 
 /**
  * Running-topic counts for every device in the list, from one request. Keyed
- * per workspace by `useClientDataSWR`, like the device list itself.
+ * per workspace by `useClientDataSWR`, like the device list itself. Pass
+ * `false` to skip the request.
  */
-export const useDeviceRunningSummary = () =>
-  useClientDataSWR(['device/runningSummary'], () => deviceService.getRunningSummary(), {
-    focusThrottleInterval: 1000,
-    refreshInterval: REFRESH_INTERVAL_MS,
-  });
+export const useDeviceRunningSummary = (enabled = true) =>
+  useClientDataSWR(
+    enabled ? ['device/runningSummary'] : null,
+    () => deviceService.getRunningSummary(),
+    {
+      focusThrottleInterval: 1000,
+      refreshInterval: REFRESH_INTERVAL_MS,
+    },
+  );
 
 /**
  * How many topics a device is running and whose they are — the card-sized

@@ -26,6 +26,13 @@ import {
 import type { DeviceControlDeps } from '../types';
 import { WORKSPACE_ESCAPE_MESSAGE } from '../workspaceGuard';
 
+const agentCliUpdateMocks = vi.hoisted(() => ({
+  getAgentCliUpdate: vi.fn(),
+  startAgentCliUpdate: vi.fn(),
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/agentCliUpdate', () => agentCliUpdateMocks);
+
 let root: string;
 let deviceHome: string;
 
@@ -81,6 +88,28 @@ describe('executeDeviceRpc', () => {
       expect(DEVICE_RPC_METHODS).toContain(method);
     },
   );
+
+  it('starts an agent CLI update and reads its job back', async () => {
+    expect(DEVICE_RPC_METHODS).toEqual(
+      expect.arrayContaining([
+        'startHeterogeneousAgentCliUpdate',
+        'getHeterogeneousAgentCliUpdate',
+      ]),
+    );
+    const job = { agentType: 'claude-code', startedAt: 1, status: 'running' };
+    agentCliUpdateMocks.startAgentCliUpdate.mockReturnValue(job);
+    agentCliUpdateMocks.getAgentCliUpdate.mockReturnValue(job);
+
+    await expect(
+      executeDeviceRpc('startHeterogeneousAgentCliUpdate', { type: 'claude-code' }, makeDeps()),
+    ).resolves.toBe(job);
+    expect(agentCliUpdateMocks.startAgentCliUpdate).toHaveBeenCalledWith('claude-code');
+
+    await expect(
+      executeDeviceRpc('getHeterogeneousAgentCliUpdate', { type: 'claude-code' }, makeDeps()),
+    ).resolves.toBe(job);
+    expect(agentCliUpdateMocks.getAgentCliUpdate).toHaveBeenCalledWith('claude-code');
+  });
 
   it('dispatches CLI maintenance and preserves the restart idempotency key', async () => {
     const state = {
