@@ -1,4 +1,4 @@
-import type { GoalEdgeKind, GoalItem } from '@lobechat/types';
+import type { GoalEdgeKind, GoalItem, GoalVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import { GoalModel } from '@/database/models/goal';
@@ -6,6 +6,7 @@ import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
+import { TaskSubtreeRepository } from '@/database/repositories/taskSubtree';
 
 import { TaskService } from '../../task';
 import { GoalAssignmentService } from '../assignment';
@@ -16,6 +17,7 @@ import {
 } from '../decideNextMove';
 import { managerTurnsSpent } from '../recoveryPolicy';
 import { isGoalReportNode } from '../report';
+import { assertGoalAgentVisibilityCompat, goalTasksToCascade } from '../visibility';
 import type { CreateGoalNodeInput, GoalServiceContext } from './types';
 
 /**
@@ -121,6 +123,46 @@ export const setTaskAgent = (
   ctx: GoalServiceContext,
   ...args: Parameters<GoalAssignmentService['setTaskAgent']>
 ) => assignmentFor(ctx).setTaskAgent(...args);
+
+/**
+ * Move a workspace goal to a new visibility; its own Tasks follow (see
+ * `goalTasksToCascade`). Only the creator may: a private goal is invisible to
+ * everyone else, and making someone's public goal private would take it out
+ * of their hands. A public goal needs public agents, as a public Task does.
+ */
+export const setVisibility = async (
+  ctx: GoalServiceContext,
+  goalId: string,
+  visibility: GoalVisibility,
+): Promise<{ goal: GoalItem; taskIds: string[] }> => {
+  if (!ctx.workspaceId)
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Visibility only applies to workspace goals',
+    });
+  const goal = await ctx.goalModel.findById(goalId);
+  if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+  if (goal.userId !== ctx.userId)
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the goal creator can change its visibility',
+    });
+  if (goal.visibility === visibility) return { goal, taskIds: [] };
+  await assertGoalAgentVisibilityCompat(ctx.db, { ...goal, visibility }, [
+    goal.agentId,
+    goal.config?.taskAgentId,
+  ]);
+
+  // The goal first: on the way to private, a failure partway through the
+  // Tasks leaves the goal already hidden rather than a public goal over
+  // half-private work. A retry picks up the Tasks that did not move.
+  const updated = await ctx.goalModel.update(goalId, { visibility });
+  if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+  const subtree = new TaskSubtreeRepository(ctx.db, ctx.userId, ctx.workspaceId);
+  const taskIds = await goalTasksToCascade(ctx.db, goal, visibility);
+  for (const taskId of taskIds) await subtree.updateVisibility(taskId, visibility);
+  return { goal: updated, taskIds };
+};
 
 /** The model planning turns run on; see `GoalAssignmentService.setModel`. */
 export const setModel = (

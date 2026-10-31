@@ -13,6 +13,7 @@ import { GoalAssignmentService, staleModelSlots } from '../assignment';
 import { GoalManagerService } from '../manager';
 import { DEFAULT_MANAGER_MAX_TURNS } from '../recoveryPolicy';
 import { seedGoalTasks } from '../seedTasks';
+import { assertGoalAgentVisibilityCompat, resolveGoalVisibility } from '../visibility';
 import type { CreateGoalGraphInput, GoalServiceContext } from './types';
 
 /**
@@ -138,6 +139,10 @@ export const bindTopic = async (
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // Only a change of agent can break visibility; re-binding the same agent is a no-op here.
+  const current = await ctx.goalModel.findById(goalId);
+  if (current && current.agentId !== agentId)
+    await assertGoalAgentVisibilityCompat(ctx.db, current, [agentId]);
 
   // One transaction: the agent change and the Task moves it implies commit
   // together. Committed apart, a failed move left the goal already on the new
@@ -279,6 +284,12 @@ export const create = async (
     }
     config = { ...config, exploration: { maxExperiments, instruction } };
   }
+  // Resolved before any write: a refused visibility must not leave criteria behind.
+  const visibility = await resolveGoalVisibility(ctx.db, input.visibility, [
+    goalAgentId,
+    config?.taskAgentId,
+  ]);
+
   if (input.criteria?.length) {
     const criteriaIds = await new VerifyPlanGeneratorService(
       ctx.db,
@@ -312,6 +323,7 @@ export const create = async (
       ? { subjectId: input.topicId, subjectType: 'topic' as const }
       : { subjectType: 'standalone' as const }),
     title: input.title,
+    visibility,
   });
   // `/goal` is an agent making the call. Seeding through the user-attributed
   // model would file the whole opening graph under the goal's owner, which is

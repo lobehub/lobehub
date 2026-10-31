@@ -48,6 +48,7 @@ import {
   setModel,
   setTaskAgent,
   setTaskModel,
+  setVisibility,
   stopFencedTasks,
   updateRequirement,
   updateTitle,
@@ -400,6 +401,8 @@ export class GoalService {
   setModel = (...args: MethodArgs<typeof setModel>) => setModel(this.context, ...args);
 
   setTaskModel = (...args: MethodArgs<typeof setTaskModel>) => setTaskModel(this.context, ...args);
+  setVisibility = (...args: MethodArgs<typeof setVisibility>) =>
+    setVisibility(this.context, ...args);
 
   private resolveTaskAssignee = (...args: MethodArgs<typeof resolveTaskAssignee>) =>
     resolveTaskAssignee(this.context, ...args);

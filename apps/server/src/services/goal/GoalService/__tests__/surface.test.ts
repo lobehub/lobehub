@@ -110,6 +110,7 @@ const METHODS = [
   'setPauseReason',
   'setTaskAgent',
   'setTaskModel',
+  'setVisibility',
   'settleTerminalAcceptance',
   'status',
   'stopFencedTasks',
