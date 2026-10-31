@@ -4,6 +4,7 @@ import AnthropicRoutes from './anthropic.route';
 import ApiKeysRoutes from './api-keys.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
+import { ConnectorsRoutes } from './connectors.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
@@ -35,6 +36,7 @@ export default {
   'api-keys': ApiKeysRoutes,
   'chat': ChatRoutes,
   'chat-groups': ChatGroupsRoutes,
+  'connectors': ConnectorsRoutes,
   'eval': EvalRoutes,
   'plugins': PluginsRoutes,
   'files': FileRoutes,

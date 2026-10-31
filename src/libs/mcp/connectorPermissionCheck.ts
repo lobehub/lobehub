@@ -4,6 +4,9 @@ import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { ConnectorToolPermission } from '@/database/schemas';
 
+import { isAgentPluginDisabled } from './agentPluginAccess';
+import { canCallNativeConnectorTool, hasNativeConnectorPolicy } from './connectorAccessPolicy';
+
 // Re-exported from a pure module so the same patch logic is usable client-side.
 export { patchManifestWithPermissions } from './patchManifestPermissions';
 
@@ -29,17 +32,21 @@ export async function getConnectorToolPermission(
   agentId?: string,
 ): Promise<ConnectorToolPermission | null> {
   try {
+    if (agentId && (await isAgentPluginDisabled(db, agentId, identifier))) return 'disabled';
     const connectorModel = new ConnectorModel(db, userId, workspaceId);
     const [connector] = await connectorModel.resolveByIdentifiers([identifier], agentId);
     if (!connector) return null;
+    if (!canCallNativeConnectorTool(connector, agentId, toolName)) return 'disabled';
 
     const toolModel = new ConnectorToolModel(db, userId, workspaceId);
     const tools = await toolModel.queryByConnector(connector.id);
-    return (
-      (tools.find((t) => t.toolName === toolName)?.permission as ConnectorToolPermission) ?? null
-    );
+    const tool = tools.find((t) => t.toolName === toolName);
+    if (hasNativeConnectorPolicy(connector) && !tool) return 'disabled';
+    return (tool?.permission as ConnectorToolPermission) ?? null;
   } catch {
-    return null; // never block execution due to DB error
+    // A lookup failure cannot establish that this is an unmanaged connection.
+    // Continuing here would bypass grants/revocation during a database outage.
+    return 'disabled';
   }
 }
 
@@ -50,11 +57,11 @@ export function buildBlockedToolResponse(toolName: string): {
   success: boolean;
 } {
   const message =
-    `The tool "${toolName}" has been disabled by the user and cannot be executed. ` +
-    `Please inform the user that this tool is currently disabled and can be re-enabled in Settings > Connectors.`;
+    `The tool "${toolName}" cannot be executed with the current connection access. ` +
+    `Please ask the user to check the account and agent access in Settings > Connectors.`;
   return {
     content: message,
-    state: { content: [{ text: message, type: 'text' }], isError: false },
-    success: true,
+    state: { content: [{ text: message, type: 'text' }], isError: true },
+    success: false,
   };
 }

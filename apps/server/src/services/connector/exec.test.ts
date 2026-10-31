@@ -49,6 +49,23 @@ beforeEach(() => {
 });
 
 describe('callConnectorToolById', () => {
+  it('cannot bypass a managed connection grant through the manual connector call route', async () => {
+    const ctx = makeCtx(
+      [
+        {
+          ...connector,
+          status: 'connected',
+          metadata: { nativeAccess: { agentIds: ['toby'], readToolNames: ['do_thing'] } },
+        },
+      ],
+      [tool()],
+    );
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
+    ).rejects.toHaveProperty('code', 'FORBIDDEN');
+    expect(mcpService.callTool).not.toHaveBeenCalled();
+  });
+
   it('rejects when the connector is not found', async () => {
     await expect(
       callConnectorToolById({ identifier: 'x', toolName: 'do_thing' }, makeCtx([], [])),

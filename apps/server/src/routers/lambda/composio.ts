@@ -1,29 +1,32 @@
 import { createGmailConnectorClient, hasGmailReadPermission } from '@lobechat/connector-data/gmail';
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { type ToolManifest } from '@lobechat/types';
+import { type ToolManifest, upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { getServerComposioAuthConfigId } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import {
+  agents,
   type ComposioConnectorMetadata,
   type ConnectorMetadata,
   ConnectorSourceType,
   ConnectorStatus,
 } from '@/database/schemas';
 import { getComposioClient } from '@/libs/composio';
+import { withNativeConnectorLock } from '@/libs/mcp/nativeConnectorLock';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { createComposioAuthorization } from '@/server/services/composio/authorization';
 
 import { assertConnectorMaintainable } from './_helpers/connectorManagePolicy';
 
@@ -107,8 +110,7 @@ const assertSupportedComposioApp = (identifier: string, appSlug: string): void =
  * projection so new connections run off metadata while old ones fall back.
  */
 async function upsertComposioConnector(
-  connectorModel: ConnectorModel,
-  connectorToolModel: ConnectorToolModel,
+  ctx: { serverDB: LobeChatDatabase; userId: string; workspaceId?: string | null },
   params: {
     /**
      * When set, the Composio connection is bound to this agent: the account
@@ -133,65 +135,118 @@ async function upsertComposioConnector(
     tools?: ComposioToolInput[];
   },
 ): Promise<void> {
-  const metadata: ConnectorMetadata = {
-    avatar: '🔌',
-    composio: params.composio,
-    description: `Composio: ${params.label}`,
+  const write = async (db: LobeChatDatabase) => {
+    const connectorModel = new ConnectorModel(db, ctx.userId, ctx.workspaceId ?? undefined);
+    const connectorToolModel = new ConnectorToolModel(db, ctx.userId, ctx.workspaceId ?? undefined);
+    const metadata: ConnectorMetadata = {
+      avatar: '🔌',
+      composio: params.composio,
+      description: `Composio: ${params.label}`,
+    };
+
+    const status =
+      params.composio.status === 'ACTIVE'
+        ? ConnectorStatus.connected
+        : params.composio.status === 'FAILED'
+          ? ConnectorStatus.error
+          : ConnectorStatus.disconnected;
+
+    // Exact-scope idempotency: an agent connection updates/creates the agent's own
+    // row, a personal connection the base row — never crossing scopes.
+    const existing = await connectorModel.findScopedByIdentifier(params.identifier, params.agentId);
+    let connectorId: string;
+    if (existing) {
+      const identityChanged =
+        !!existing.metadata?.nativeAccess &&
+        (existing.metadata.composio?.connectedAccountId !== params.composio.connectedAccountId ||
+          params.composio.status === 'PENDING');
+      const preservedMetadata = { ...existing.metadata, ...metadata };
+      if (identityChanged) {
+        const selectedIds = existing.metadata!.nativeAccess!.agentIds;
+        if (selectedIds.length) {
+          const affected = await db
+            .select({ id: agents.id, plugins: agents.plugins })
+            .from(agents)
+            .where(
+              and(
+                eq(agents.userId, ctx.userId),
+                isNull(agents.workspaceId),
+                inArray(agents.id, selectedIds),
+              ),
+            );
+          for (const agent of affected)
+            await db
+              .update(agents)
+              .set({
+                plugins: upsertPluginMode(
+                  agent.plugins ?? undefined,
+                  params.identifier,
+                  'disabled',
+                ) as unknown as string[],
+              })
+              .where(eq(agents.id, agent.id));
+        }
+        preservedMetadata.nativeAccess = {
+          agentIds: [],
+          readToolNames: [],
+          readToolVersions: {},
+          revision: Math.max(Date.now(), (existing.metadata!.nativeAccess!.revision ?? 0) + 1),
+        };
+        delete preservedMetadata.personalConnection;
+        delete preservedMetadata.nativeReadEvidence;
+      }
+      await connectorModel.update(
+        existing.id,
+        {
+          metadata: preservedMetadata,
+          ...(identityChanged ? { isEnabled: false } : {}),
+          name: params.label,
+          sourceType: ConnectorSourceType.marketplace,
+          status,
+        },
+        undefined,
+        { nativeTransition: true },
+      );
+      connectorId = existing.id;
+    } else {
+      const created = await connectorModel.create({
+        agentId: params.agentId ?? null,
+        identifier: params.identifier,
+        isEnabled: true,
+        metadata,
+        name: params.label,
+        sourceType: ConnectorSourceType.marketplace,
+        status,
+      });
+      connectorId = created.id;
+    }
+
+    if (params.tools) {
+      if (params.tools.length > 0) {
+        await connectorToolModel.upsertMany(
+          connectorId,
+          params.tools.map((t) => ({
+            crudType: inferCrudType(t.name),
+            description: t.description,
+            inputSchema: t.inputSchema,
+            toolName: t.name,
+          })),
+        );
+      }
+
+      // Replace (not merge) so tools removed upstream stop being advertised.
+      if (params.replaceTools) {
+        await connectorToolModel.deleteToolsNotIn(
+          connectorId,
+          params.tools.map((t) => t.name),
+        );
+      }
+    }
   };
-
-  const status =
-    params.composio.status === 'ACTIVE'
-      ? ConnectorStatus.connected
-      : params.composio.status === 'FAILED'
-        ? ConnectorStatus.error
-        : ConnectorStatus.disconnected;
-
-  // Exact-scope idempotency: an agent connection updates/creates the agent's own
-  // row, a personal connection the base row — never crossing scopes.
-  const existing = await connectorModel.findScopedByIdentifier(params.identifier, params.agentId);
-  let connectorId: string;
-  if (existing) {
-    await connectorModel.update(existing.id, {
-      metadata,
-      name: params.label,
-      sourceType: ConnectorSourceType.marketplace,
-      status,
-    });
-    connectorId = existing.id;
-  } else {
-    const created = await connectorModel.create({
-      agentId: params.agentId ?? null,
-      identifier: params.identifier,
-      isEnabled: true,
-      metadata,
-      name: params.label,
-      sourceType: ConnectorSourceType.marketplace,
-      status,
-    });
-    connectorId = created.id;
-  }
-
-  if (params.tools) {
-    if (params.tools.length > 0) {
-      await connectorToolModel.upsertMany(
-        connectorId,
-        params.tools.map((t) => ({
-          crudType: inferCrudType(t.name),
-          description: t.description,
-          inputSchema: t.inputSchema,
-          toolName: t.name,
-        })),
-      );
-    }
-
-    // Replace (not merge) so tools removed upstream stop being advertised.
-    if (params.replaceTools) {
-      await connectorToolModel.deleteToolsNotIn(
-        connectorId,
-        params.tools.map((t) => t.name),
-      );
-    }
-  }
+  if (ctx.workspaceId) return write(ctx.serverDB);
+  return withNativeConnectorLock(ctx.serverDB, ctx.userId, params.identifier, (tx) =>
+    write(tx as LobeChatDatabase),
+  );
 }
 
 /** Remove the connector projection for a Composio identifier (tools cascade). */
@@ -247,46 +302,18 @@ export const composioRouter = router({
 
       const callbackUrl = `${process.env.APP_URL || process.env.NEXTAUTH_URL || ''}/api/composio/oauth/callback`;
 
-      // Prefer a pre-configured auth config (e.g. a custom/white-label config
-      // created in the Composio dashboard), pinned per toolkit via env. Falls
-      // back to discovering an existing config for this toolkit, and finally to
-      // auto-creating a Composio-managed one.
-      let authConfigId = getServerComposioAuthConfigId(identifier);
-      if (!authConfigId) {
-        const authConfigs = await (ctx.composioClient.authConfigs as any).list();
-        let authConfig = authConfigs?.items?.find(
-          (c: any) => c.toolkit?.slug?.toLowerCase() === appSlug.toLowerCase(),
-        );
-        if (!authConfig) {
-          authConfig = await (ctx.composioClient.authConfigs as any).create(appSlug, {
-            name: appSlug,
-            type: 'use_composio_managed_auth',
-          });
-        }
-        authConfigId = authConfig.id;
-      }
-
-      if (!authConfigId) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: `Failed to resolve a Composio auth config for "${appSlug}".`,
-        });
-      }
-
-      // Composio-managed OAuth auth configs no longer support `initiate`; use
-      // `link` (POST /api/v3/connected_accounts/link) to get the redirect URL.
-      //
-      // `allowMultiple` for agent connections: Composio rejects a second linked
-      // account for the same (user entity, auth config) unless this is set. An
-      // agent connector is intentionally a *separate* account from the user's
-      // (and from other agents'), all under the same Composio user entity but
-      // distinguished by connectedAccountId — so agent links must allow multiple.
-      // Personal connections keep the default (one account per auth config).
-      const connReq = await (ctx.composioClient.connectedAccounts as any).link(
+      const authorization = await createComposioAuthorization(ctx.composioClient as any, {
+        identifier,
+        appSlug,
         userId,
-        authConfigId,
-        { callbackUrl, ...(agentId ? { allowMultiple: true } : {}) },
-      );
+        callbackUrl,
+        ...(agentId ? { allowMultiple: true } : {}),
+      });
+      const authConfigId = authorization.authConfigId;
+      const connReq = {
+        id: authorization.connectedAccountId,
+        redirectUrl: authorization.redirectUrl,
+      };
 
       let rawTools: any[] = [];
       try {
@@ -346,7 +373,7 @@ export const composioRouter = router({
       // Dual-write: mirror the (pending) connection into user_connectors so the
       // runtime can resolve it off metadata once it goes ACTIVE. Tools sync on
       // updateComposioPlugin; seed them here too when already fetched.
-      await upsertComposioConnector(ctx.connectorModel, ctx.connectorToolModel, {
+      await upsertComposioConnector(ctx, {
         agentId,
         composio: {
           appSlug,
@@ -557,7 +584,7 @@ export const composioRouter = router({
       // Dual-write: project the active connection + tool list into the connector
       // tables so the runtime resolves this Composio server without the plugin
       // table. `tools` already carries the full manifest from the client.
-      await upsertComposioConnector(ctx.connectorModel, ctx.connectorToolModel, {
+      await upsertComposioConnector(ctx, {
         agentId,
         composio: {
           appSlug,

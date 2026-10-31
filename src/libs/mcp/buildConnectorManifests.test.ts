@@ -73,3 +73,23 @@ describe('buildConnectorManifests mcpParams headers', () => {
     expect(params.headers).toBeUndefined();
   });
 });
+
+describe('managed MCP discovery', () => {
+  const managed = () => ({
+    ...httpConnector(null, { nativeAccess: { agentIds: ['toby'], readToolNames: ['doThing'] } }),
+    status: 'connected',
+  });
+
+  it('does not expose connection credentials or tools without a granted agent', () => {
+    expect(buildConnectorManifests([managed()], [tool()], 'other-agent')).toEqual([]);
+  });
+
+  it('does not advertise unapproved tools even if their permission is auto', () => {
+    const manifests = buildConnectorManifests(
+      [managed()],
+      [tool(), { ...tool(), id: 't2', toolName: 'writeSomething' }],
+      'toby',
+    );
+    expect(manifests.map((item) => item.api.map((api) => api.name))).toEqual([['doThing']]);
+  });
+});

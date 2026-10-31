@@ -147,13 +147,17 @@ export class ConnectorToolModel {
    * Query all tools for the given connector UUIDs, including disabled ones.
    * Used for manifest building where disabled tools must be visible (blocking description).
    */
-  queryAllByConnectorIds = async (connectorIds: string[]): Promise<UserConnectorToolItem[]> => {
+  queryAllByConnectorIds = async (
+    connectorIds: string[],
+    options?: { lock?: boolean },
+  ): Promise<UserConnectorToolItem[]> => {
     if (connectorIds.length === 0) return [];
 
-    return this.db
+    const query = this.db
       .select()
       .from(userConnectorTools)
       .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)));
+    return options?.lock ? query.for('share') : query;
   };
 
   /**

@@ -4525,6 +4525,1927 @@ paths:
           description: Internal server error
       tags:
         - chat-groups
+  /api/v1/connectors/catalog:
+    get:
+      operationId: getApiV1ConnectorsCatalog
+      summary: List supported personal services
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        available:
+                          type: boolean
+                        unavailableReason:
+                          type: string
+                      required:
+                        - id
+                        - name
+                        - available
+                      additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/connectors:
+    get:
+      operationId: getApiV1Connectors
+      summary: List personal service connections
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        providerId:
+                          type: string
+                        name:
+                          type: string
+                        agentId:
+                          type:
+                            - string
+                            - "null"
+                        status:
+                          type: string
+                          enum:
+                            - authorizing
+                            - ready
+                            - disconnected
+                            - expired
+                            - permission_required
+                            - sync_failed
+                            - unavailable
+                            - disconnecting
+                            - disconnect_failed
+                        managed:
+                          type: boolean
+                        isEnabled:
+                          type: boolean
+                        revision:
+                          type: number
+                        agentIds:
+                          type: array
+                          items:
+                            type: string
+                        accountLabel:
+                          type: string
+                        grantedScopes:
+                          anyOf:
+                            - type: array
+                              items:
+                                type: string
+                            - type: "null"
+                        lastError:
+                          type: string
+                        authorization:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            expiresAt:
+                              type: number
+                            status:
+                              type: string
+                              enum:
+                                - pending
+                                - complete
+                                - cancelled
+                                - expired
+                                - unknown
+                            url:
+                              type: string
+                          required:
+                            - id
+                            - expiresAt
+                            - status
+                        reading:
+                          type: string
+                          enum:
+                            - unverified
+                            - verified
+                        accessRevision:
+                          type: number
+                        activeAgentIds:
+                          type: array
+                          items:
+                            type: string
+                        reads:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              agentId:
+                                type: string
+                              at:
+                                type: number
+                              connectionId:
+                                type: string
+                              operationId:
+                                type: string
+                              outcome:
+                                type: string
+                                enum:
+                                  - data
+                                  - empty
+                                  - unverified
+                                  - failed
+                              recordCount:
+                                type: number
+                              revision:
+                                type: number
+                              toolCallId:
+                                type: string
+                              toolName:
+                                type: string
+                              topicId:
+                                type: string
+                            required:
+                              - agentId
+                              - at
+                              - connectionId
+                              - outcome
+                              - recordCount
+                              - revision
+                              - toolCallId
+                              - toolName
+                              - topicId
+                      required:
+                        - id
+                        - providerId
+                        - name
+                        - agentId
+                        - status
+                        - managed
+                        - isEnabled
+                        - revision
+                        - agentIds
+                        - grantedScopes
+                        - reading
+                        - accessRevision
+                        - activeAgentIds
+                        - reads
+                      additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/connectors/authorizations:
+    post:
+      operationId: postApiV1ConnectorsAuthorizations
+      summary: Start or resume a service authorization
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      providerId:
+                        type: string
+                      name:
+                        type: string
+                      agentId:
+                        type:
+                          - string
+                          - "null"
+                      status:
+                        type: string
+                        enum:
+                          - authorizing
+                          - ready
+                          - disconnected
+                          - expired
+                          - permission_required
+                          - sync_failed
+                          - unavailable
+                          - disconnecting
+                          - disconnect_failed
+                      managed:
+                        type: boolean
+                      isEnabled:
+                        type: boolean
+                      revision:
+                        type: number
+                      agentIds:
+                        type: array
+                        items:
+                          type: string
+                      accountLabel:
+                        type: string
+                      grantedScopes:
+                        anyOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: "null"
+                      lastError:
+                        type: string
+                      authorization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          expiresAt:
+                            type: number
+                          status:
+                            type: string
+                            enum:
+                              - pending
+                              - complete
+                              - cancelled
+                              - expired
+                              - unknown
+                          url:
+                            type: string
+                        required:
+                          - id
+                          - expiresAt
+                          - status
+                      reading:
+                        type: string
+                        enum:
+                          - unverified
+                          - verified
+                      accessRevision:
+                        type: number
+                      activeAgentIds:
+                        type: array
+                        items:
+                          type: string
+                      reads:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            at:
+                              type: number
+                            connectionId:
+                              type: string
+                            operationId:
+                              type: string
+                            outcome:
+                              type: string
+                              enum:
+                                - data
+                                - empty
+                                - unverified
+                                - failed
+                            recordCount:
+                              type: number
+                            revision:
+                              type: number
+                            toolCallId:
+                              type: string
+                            toolName:
+                              type: string
+                            topicId:
+                              type: string
+                          required:
+                            - agentId
+                            - at
+                            - connectionId
+                            - outcome
+                            - recordCount
+                            - revision
+                            - toolCallId
+                            - toolName
+                            - topicId
+                    required:
+                      - id
+                      - providerId
+                      - name
+                      - agentId
+                      - status
+                      - managed
+                      - isEnabled
+                      - revision
+                      - agentIds
+                      - grantedScopes
+                      - reading
+                      - accessRevision
+                      - activeAgentIds
+                      - reads
+                    additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                providerId:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                requestId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                connectionId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                adoptReadOnly:
+                  type: boolean
+              required:
+                - providerId
+                - requestId
+              additionalProperties: false
+  /api/v1/connectors/authorizations/{sessionId}:
+    get:
+      operationId: getApiV1ConnectorsAuthorizationsBySessionId
+      summary: Reconcile authorization and tool readiness
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      providerId:
+                        type: string
+                      name:
+                        type: string
+                      agentId:
+                        type:
+                          - string
+                          - "null"
+                      status:
+                        type: string
+                        enum:
+                          - authorizing
+                          - ready
+                          - disconnected
+                          - expired
+                          - permission_required
+                          - sync_failed
+                          - unavailable
+                          - disconnecting
+                          - disconnect_failed
+                      managed:
+                        type: boolean
+                      isEnabled:
+                        type: boolean
+                      revision:
+                        type: number
+                      agentIds:
+                        type: array
+                        items:
+                          type: string
+                      accountLabel:
+                        type: string
+                      grantedScopes:
+                        anyOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: "null"
+                      lastError:
+                        type: string
+                      authorization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          expiresAt:
+                            type: number
+                          status:
+                            type: string
+                            enum:
+                              - pending
+                              - complete
+                              - cancelled
+                              - expired
+                              - unknown
+                          url:
+                            type: string
+                        required:
+                          - id
+                          - expiresAt
+                          - status
+                      reading:
+                        type: string
+                        enum:
+                          - unverified
+                          - verified
+                      accessRevision:
+                        type: number
+                      activeAgentIds:
+                        type: array
+                        items:
+                          type: string
+                      reads:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            at:
+                              type: number
+                            connectionId:
+                              type: string
+                            operationId:
+                              type: string
+                            outcome:
+                              type: string
+                              enum:
+                                - data
+                                - empty
+                                - unverified
+                                - failed
+                            recordCount:
+                              type: number
+                            revision:
+                              type: number
+                            toolCallId:
+                              type: string
+                            toolName:
+                              type: string
+                            topicId:
+                              type: string
+                          required:
+                            - agentId
+                            - at
+                            - connectionId
+                            - outcome
+                            - recordCount
+                            - revision
+                            - toolCallId
+                            - toolName
+                            - topicId
+                    required:
+                      - id
+                      - providerId
+                      - name
+                      - agentId
+                      - status
+                      - managed
+                      - isEnabled
+                      - revision
+                      - agentIds
+                      - grantedScopes
+                      - reading
+                      - accessRevision
+                      - activeAgentIds
+                      - reads
+                    additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: sessionId
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required: true
+  /api/v1/connectors/authorizations/{sessionId}/cancel:
+    post:
+      operationId: postApiV1ConnectorsAuthorizationsBySessionIdCancel
+      summary: Reconcile system cancellation
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      providerId:
+                        type: string
+                      name:
+                        type: string
+                      agentId:
+                        type:
+                          - string
+                          - "null"
+                      status:
+                        type: string
+                        enum:
+                          - authorizing
+                          - ready
+                          - disconnected
+                          - expired
+                          - permission_required
+                          - sync_failed
+                          - unavailable
+                          - disconnecting
+                          - disconnect_failed
+                      managed:
+                        type: boolean
+                      isEnabled:
+                        type: boolean
+                      revision:
+                        type: number
+                      agentIds:
+                        type: array
+                        items:
+                          type: string
+                      accountLabel:
+                        type: string
+                      grantedScopes:
+                        anyOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: "null"
+                      lastError:
+                        type: string
+                      authorization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          expiresAt:
+                            type: number
+                          status:
+                            type: string
+                            enum:
+                              - pending
+                              - complete
+                              - cancelled
+                              - expired
+                              - unknown
+                          url:
+                            type: string
+                        required:
+                          - id
+                          - expiresAt
+                          - status
+                      reading:
+                        type: string
+                        enum:
+                          - unverified
+                          - verified
+                      accessRevision:
+                        type: number
+                      activeAgentIds:
+                        type: array
+                        items:
+                          type: string
+                      reads:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            at:
+                              type: number
+                            connectionId:
+                              type: string
+                            operationId:
+                              type: string
+                            outcome:
+                              type: string
+                              enum:
+                                - data
+                                - empty
+                                - unverified
+                                - failed
+                            recordCount:
+                              type: number
+                            revision:
+                              type: number
+                            toolCallId:
+                              type: string
+                            toolName:
+                              type: string
+                            topicId:
+                              type: string
+                          required:
+                            - agentId
+                            - at
+                            - connectionId
+                            - outcome
+                            - recordCount
+                            - revision
+                            - toolCallId
+                            - toolName
+                            - topicId
+                    required:
+                      - id
+                      - providerId
+                      - name
+                      - agentId
+                      - status
+                      - managed
+                      - isEnabled
+                      - revision
+                      - agentIds
+                      - grantedScopes
+                      - reading
+                      - accessRevision
+                      - activeAgentIds
+                      - reads
+                    additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: sessionId
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required: true
+  /api/v1/connectors/{id}:
+    get:
+      operationId: getApiV1ConnectorsById
+      summary: Get a personal service connection
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      providerId:
+                        type: string
+                      name:
+                        type: string
+                      agentId:
+                        type:
+                          - string
+                          - "null"
+                      status:
+                        type: string
+                        enum:
+                          - authorizing
+                          - ready
+                          - disconnected
+                          - expired
+                          - permission_required
+                          - sync_failed
+                          - unavailable
+                          - disconnecting
+                          - disconnect_failed
+                      managed:
+                        type: boolean
+                      isEnabled:
+                        type: boolean
+                      revision:
+                        type: number
+                      agentIds:
+                        type: array
+                        items:
+                          type: string
+                      accountLabel:
+                        type: string
+                      grantedScopes:
+                        anyOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: "null"
+                      lastError:
+                        type: string
+                      authorization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          expiresAt:
+                            type: number
+                          status:
+                            type: string
+                            enum:
+                              - pending
+                              - complete
+                              - cancelled
+                              - expired
+                              - unknown
+                          url:
+                            type: string
+                        required:
+                          - id
+                          - expiresAt
+                          - status
+                      reading:
+                        type: string
+                        enum:
+                          - unverified
+                          - verified
+                      accessRevision:
+                        type: number
+                      activeAgentIds:
+                        type: array
+                        items:
+                          type: string
+                      reads:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            at:
+                              type: number
+                            connectionId:
+                              type: string
+                            operationId:
+                              type: string
+                            outcome:
+                              type: string
+                              enum:
+                                - data
+                                - empty
+                                - unverified
+                                - failed
+                            recordCount:
+                              type: number
+                            revision:
+                              type: number
+                            toolCallId:
+                              type: string
+                            toolName:
+                              type: string
+                            topicId:
+                              type: string
+                          required:
+                            - agentId
+                            - at
+                            - connectionId
+                            - outcome
+                            - recordCount
+                            - revision
+                            - toolCallId
+                            - toolName
+                            - topicId
+                    required:
+                      - id
+                      - providerId
+                      - name
+                      - agentId
+                      - status
+                      - managed
+                      - isEnabled
+                      - revision
+                      - agentIds
+                      - grantedScopes
+                      - reading
+                      - accessRevision
+                      - activeAgentIds
+                      - reads
+                    additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required: true
+  /api/v1/connectors/{id}/refresh:
+    post:
+      operationId: postApiV1ConnectorsByIdRefresh
+      summary: Refresh connection permissions and tools
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      providerId:
+                        type: string
+                      name:
+                        type: string
+                      agentId:
+                        type:
+                          - string
+                          - "null"
+                      status:
+                        type: string
+                        enum:
+                          - authorizing
+                          - ready
+                          - disconnected
+                          - expired
+                          - permission_required
+                          - sync_failed
+                          - unavailable
+                          - disconnecting
+                          - disconnect_failed
+                      managed:
+                        type: boolean
+                      isEnabled:
+                        type: boolean
+                      revision:
+                        type: number
+                      agentIds:
+                        type: array
+                        items:
+                          type: string
+                      accountLabel:
+                        type: string
+                      grantedScopes:
+                        anyOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: "null"
+                      lastError:
+                        type: string
+                      authorization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          expiresAt:
+                            type: number
+                          status:
+                            type: string
+                            enum:
+                              - pending
+                              - complete
+                              - cancelled
+                              - expired
+                              - unknown
+                          url:
+                            type: string
+                        required:
+                          - id
+                          - expiresAt
+                          - status
+                      reading:
+                        type: string
+                        enum:
+                          - unverified
+                          - verified
+                      accessRevision:
+                        type: number
+                      activeAgentIds:
+                        type: array
+                        items:
+                          type: string
+                      reads:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            at:
+                              type: number
+                            connectionId:
+                              type: string
+                            operationId:
+                              type: string
+                            outcome:
+                              type: string
+                              enum:
+                                - data
+                                - empty
+                                - unverified
+                                - failed
+                            recordCount:
+                              type: number
+                            revision:
+                              type: number
+                            toolCallId:
+                              type: string
+                            toolName:
+                              type: string
+                            topicId:
+                              type: string
+                          required:
+                            - agentId
+                            - at
+                            - connectionId
+                            - outcome
+                            - recordCount
+                            - revision
+                            - toolCallId
+                            - toolName
+                            - topicId
+                    required:
+                      - id
+                      - providerId
+                      - name
+                      - agentId
+                      - status
+                      - managed
+                      - isEnabled
+                      - revision
+                      - agentIds
+                      - grantedScopes
+                      - reading
+                      - accessRevision
+                      - activeAgentIds
+                      - reads
+                    additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required: true
+  /api/v1/connectors/{id}/agents:
+    put:
+      operationId: putApiV1ConnectorsByIdAgents
+      summary: Confirm agents allowed to use this connection
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      providerId:
+                        type: string
+                      name:
+                        type: string
+                      agentId:
+                        type:
+                          - string
+                          - "null"
+                      status:
+                        type: string
+                        enum:
+                          - authorizing
+                          - ready
+                          - disconnected
+                          - expired
+                          - permission_required
+                          - sync_failed
+                          - unavailable
+                          - disconnecting
+                          - disconnect_failed
+                      managed:
+                        type: boolean
+                      isEnabled:
+                        type: boolean
+                      revision:
+                        type: number
+                      agentIds:
+                        type: array
+                        items:
+                          type: string
+                      accountLabel:
+                        type: string
+                      grantedScopes:
+                        anyOf:
+                          - type: array
+                            items:
+                              type: string
+                          - type: "null"
+                      lastError:
+                        type: string
+                      authorization:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          expiresAt:
+                            type: number
+                          status:
+                            type: string
+                            enum:
+                              - pending
+                              - complete
+                              - cancelled
+                              - expired
+                              - unknown
+                          url:
+                            type: string
+                        required:
+                          - id
+                          - expiresAt
+                          - status
+                      reading:
+                        type: string
+                        enum:
+                          - unverified
+                          - verified
+                      accessRevision:
+                        type: number
+                      activeAgentIds:
+                        type: array
+                        items:
+                          type: string
+                      reads:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            agentId:
+                              type: string
+                            at:
+                              type: number
+                            connectionId:
+                              type: string
+                            operationId:
+                              type: string
+                            outcome:
+                              type: string
+                              enum:
+                                - data
+                                - empty
+                                - unverified
+                                - failed
+                            recordCount:
+                              type: number
+                            revision:
+                              type: number
+                            toolCallId:
+                              type: string
+                            toolName:
+                              type: string
+                            topicId:
+                              type: string
+                          required:
+                            - agentId
+                            - at
+                            - connectionId
+                            - outcome
+                            - recordCount
+                            - revision
+                            - toolCallId
+                            - toolName
+                            - topicId
+                    required:
+                      - id
+                      - providerId
+                      - name
+                      - agentId
+                      - status
+                      - managed
+                      - isEnabled
+                      - revision
+                      - agentIds
+                      - grantedScopes
+                      - reading
+                      - accessRevision
+                      - activeAgentIds
+                      - reads
+                    additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentIds:
+                  maxItems: 200
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+                    maxLength: 255
+                revision:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+                adoptReadOnly:
+                  type: boolean
+                replacements:
+                  maxItems: 200
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                      revision:
+                        type: integer
+                        minimum: 0
+                        maximum: 9007199254740991
+                    required:
+                      - id
+                      - revision
+                    additionalProperties: false
+              required:
+                - agentIds
+                - revision
+              additionalProperties: false
+  /api/v1/connectors/{id}/disconnect:
+    post:
+      operationId: postApiV1ConnectorsByIdDisconnect
+      summary: Stop local access and revoke the provider connection
+      tags:
+        - connectors
+      responses:
+        "200":
+          description: Connector operation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      connection:
+                        anyOf:
+                          - type: object
+                            properties:
+                              id:
+                                type: string
+                              providerId:
+                                type: string
+                              name:
+                                type: string
+                              agentId:
+                                type:
+                                  - string
+                                  - "null"
+                              status:
+                                type: string
+                                enum:
+                                  - authorizing
+                                  - ready
+                                  - disconnected
+                                  - expired
+                                  - permission_required
+                                  - sync_failed
+                                  - unavailable
+                                  - disconnecting
+                                  - disconnect_failed
+                              managed:
+                                type: boolean
+                              isEnabled:
+                                type: boolean
+                              revision:
+                                type: number
+                              agentIds:
+                                type: array
+                                items:
+                                  type: string
+                              accountLabel:
+                                type: string
+                              grantedScopes:
+                                anyOf:
+                                  - type: array
+                                    items:
+                                      type: string
+                                  - type: "null"
+                              lastError:
+                                type: string
+                              authorization:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                  expiresAt:
+                                    type: number
+                                  status:
+                                    type: string
+                                    enum:
+                                      - pending
+                                      - complete
+                                      - cancelled
+                                      - expired
+                                      - unknown
+                                  url:
+                                    type: string
+                                required:
+                                  - id
+                                  - expiresAt
+                                  - status
+                              reading:
+                                type: string
+                                enum:
+                                  - unverified
+                                  - verified
+                              accessRevision:
+                                type: number
+                              activeAgentIds:
+                                type: array
+                                items:
+                                  type: string
+                              reads:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    agentId:
+                                      type: string
+                                    at:
+                                      type: number
+                                    connectionId:
+                                      type: string
+                                    operationId:
+                                      type: string
+                                    outcome:
+                                      type: string
+                                      enum:
+                                        - data
+                                        - empty
+                                        - unverified
+                                        - failed
+                                    recordCount:
+                                      type: number
+                                    revision:
+                                      type: number
+                                    toolCallId:
+                                      type: string
+                                    toolName:
+                                      type: string
+                                    topicId:
+                                      type: string
+                                  required:
+                                    - agentId
+                                    - at
+                                    - connectionId
+                                    - outcome
+                                    - recordCount
+                                    - revision
+                                    - toolCallId
+                                    - toolName
+                                    - topicId
+                            required:
+                              - id
+                              - providerId
+                              - name
+                              - agentId
+                              - status
+                              - managed
+                              - isEnabled
+                              - revision
+                              - agentIds
+                              - grantedScopes
+                              - reading
+                              - accessRevision
+                              - activeAgentIds
+                              - reads
+                            additionalProperties: false
+                          - type: "null"
+                      localDisabled:
+                        type: boolean
+                      remoteDisconnected:
+                        type: boolean
+                    required:
+                      - connection
+                      - localDisabled
+                      - remoteDisconnected
+                    additionalProperties: false
+                  success:
+                    type: boolean
+                    const: true
+                  timestamp:
+                    type: string
+                  message:
+                    type: string
+                required:
+                  - data
+                  - success
+                  - timestamp
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                revision:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+              required:
+                - revision
+              additionalProperties: false
   /api/v1/eval/runs:
     post:
       operationId: postApiV1EvalRuns

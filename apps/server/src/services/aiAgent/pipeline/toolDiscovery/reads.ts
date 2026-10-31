@@ -10,6 +10,7 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
+import { canUseNativeConnector } from '@/libs/mcp/connectorAccessPolicy';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
 import { deviceGateway } from '@/server/services/deviceGateway';
@@ -167,7 +168,11 @@ const readConnectors = async (
     const connectorsMcp = await refreshConnectorTokens(
       deps,
       connectorGateKeeper,
-      connectors.filter((c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
+      connectors.filter(
+        (c) =>
+          canUseNativeConnector(c, resolvedAgentId) &&
+          (c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
+      ),
       onRefreshTimeout,
     );
 
@@ -242,7 +247,10 @@ const readDiscoverableConnectors = async (
       resolved = await deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper);
     }
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
-      (c) => !candidates.has(c.identifier) && (c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
+      (c) =>
+        canUseNativeConnector(c, ctx.resolvedAgentId) &&
+        !candidates.has(c.identifier) &&
+        (c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
     );
     if (connectorsMcp.length === 0) return none;
 
@@ -257,7 +265,11 @@ const readDiscoverableConnectors = async (
     );
     return {
       connectorsMcp: refreshed,
-      manifests: buildConnectorManifests(refreshed, tools) as LobeToolManifest[],
+      manifests: buildConnectorManifests(
+        refreshed,
+        tools,
+        ctx.resolvedAgentId,
+      ) as LobeToolManifest[],
       tools,
     };
   } catch (error) {
