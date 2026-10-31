@@ -26,7 +26,6 @@ import { sx } from '@/styles/sx';
 import { setCookie } from '@/utils/client/cookie';
 import { resolveLang } from '@/utils/client/switchLang';
 
-import moduleStyles from './AppTheme.module.css';
 import { resolveFontFamilyOverride } from './fontFamilyOverride';
 
 const styles = stylex.create({
@@ -141,7 +140,7 @@ const AppTheme = memo<AppThemeProps>(
           proxy: globalCDN ? 'unpkg' : undefined,
         }}
       >
-        <div {...sx([styles.app], moduleStyles.scrollbar)}>
+        <div {...sx(styles.app)}>
           {!!customFontURL && <FontLoader url={customFontURL} />}
           {children}
         </div>
