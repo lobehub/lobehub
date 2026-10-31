@@ -7,13 +7,13 @@ import {
   Block,
   Button,
   ContextMenuTrigger,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Text,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -29,18 +29,17 @@ import { createNotificationDetailModal } from './NotificationDetailModal';
 import { toNotificationPreview } from './toNotificationPreview';
 import { useNotificationAgentMeta } from './useNotificationAgentMeta';
 
-const styles = createStaticStyles(({ css }) => ({
-  unreadDot: css`
-    flex-shrink: 0;
-
-    width: 8px;
-    height: 8px;
-    margin-block-start: 7px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorInfo};
-  `,
-}));
+const styles = stylex.create({
+  unreadDot: {
+    flexShrink: 0,
+    width: '8px',
+    height: '8px',
+    marginBlockStart: '7px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorInfo,
+    backgroundImage: 'none',
+  },
+});
 
 const TYPE_ICON_MAP: Record<string, typeof BellIcon> = {
   image_generation_completed: ImageIcon,
@@ -148,7 +147,7 @@ const NotificationItem = memo<NotificationItemProps>(
           onClick={handleOpenDetail}
         >
           <Flexbox horizontal align="flex-start" gap={12}>
-            {!isRead && <span className={styles.unreadDot} />}
+            {!isRead && <span {...stylex.props(styles.unreadDot)} />}
             {actor ? (
               <Avatar
                 alt={actor.name}

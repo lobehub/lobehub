@@ -1,7 +1,9 @@
 'use client';
 
 import type { NotificationMetadata } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BellOffIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,18 +24,15 @@ import NotificationItem from './NotificationItem';
 import type { NotificationListHandle } from './useNotificationList';
 import { PAGE_SIZE, useNotificationList } from './useNotificationList';
 
-const styles = createStaticStyles(({ css }) => ({
-  // colorFillSecondary rather than colorBorderSecondary: see the note in
-  // ../InboxModal/index.tsx — the border token collapses into the modal's own
-  // surface in dark mode, which erased the separator between rows.
-  item: css`
-    border-block-end: 1px solid ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  item: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorFillSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+});
 
 interface ContentProps {
   category?: string;
@@ -182,7 +181,7 @@ const Content = memo<ContentProps>(
     // clip once several transfers (with their manifest rows) stack up.
     const transferItems = currentUserId
       ? liveRequests.map((request) => (
-          <Flexbox className={styles.item} key={request.id}>
+          <Flexbox className={stylex.props(styles.item).className} key={request.id}>
             <TransferRequestItem
               currentUserId={currentUserId}
               request={request}
@@ -216,7 +215,7 @@ const Content = memo<ContentProps>(
         <VList ref={virtuaRef} style={{ flex: 1 }} onScroll={handleScroll}>
           {transferItems}
           {visibleNotifications.map((item) => (
-            <Flexbox className={styles.item} key={item.id}>
+            <Flexbox className={stylex.props(styles.item).className} key={item.id}>
               <NotificationItem
                 actionUrl={item.actionUrl}
                 content={item.content}

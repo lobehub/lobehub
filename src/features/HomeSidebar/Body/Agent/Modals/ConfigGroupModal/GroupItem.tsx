@@ -1,11 +1,5 @@
-import {
-  ActionIcon,
-  confirmModal,
-  createStaticStyles,
-  EditableText,
-  SortableList,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, confirmModal, EditableText, SortableList, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Eye, EyeOff, PencilLine, Trash } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,24 +9,10 @@ import type { SessionGroupItemBase } from '@/types/session';
 
 import { useSidebarGroupVisibility } from '../../useSidebarGroupVisibility';
 
-const styles = createStaticStyles(({ css }) => ({
-  content: css`
-    position: relative;
-    overflow: hidden;
-    flex: 1;
-  `,
-  // Hidden folders stay in place (they're still shared, and still ordered) but
-  // read as inactive, so the row itself answers "is this in my sidebar?".
-  hiddenTitle: css`
-    opacity: 0.45;
-  `,
-  title: css`
-    flex: 1;
-    height: 28px;
-    line-height: 28px;
-    text-align: start;
-  `,
-}));
+const styles = stylex.create({
+  hiddenTitle: { opacity: 0.45 },
+  title: { flex: '1', height: '28px', lineHeight: '28px', textAlign: 'start' },
+});
 
 interface GroupItemProps extends SessionGroupItemBase {
   disabled?: boolean;
@@ -51,7 +31,7 @@ const GroupItem = memo<GroupItemProps>(({ id, name, disabled }) => {
       {!disabled && <SortableList.DragHandle />}
       {!editing ? (
         <>
-          <span className={`${styles.title} ${visible ? '' : styles.hiddenTitle}`}>{name}</span>
+          <span {...stylex.props(styles.title, !visible && styles.hiddenTitle)}>{name}</span>
           {/* Visibility is the caller's own view of a shared folder, so it is
               deliberately NOT gated on `disabled` (the edit permission). */}
           <ActionIcon
