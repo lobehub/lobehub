@@ -68,7 +68,6 @@ import {
   rendersAsMarkdown,
 } from './MarkdownEvidence';
 import { originTopicHref } from './originLink';
-import summaryStyles from './ReportViewer.module.css';
 import {
   type EvidenceCategory,
   evidenceCategory,
@@ -423,7 +422,7 @@ const styles = stylex.create({
   narrativeSummary: {
     cursor: 'pointer',
     userSelect: 'none',
-    display: 'inline-flex',
+    display: { 'default': 'inline-flex', '::-webkit-details-marker': 'none' },
     gap: '6px',
     alignItems: 'center',
     fontSize: '12px',
@@ -1289,7 +1288,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
 
           {report?.content && (
             <details {...stylex.props(styles.narrative, stylex.defaultMarker())}>
-              <summary {...sx([styles.narrativeSummary], summaryStyles.summary)}>
+              <summary {...stylex.props(styles.narrativeSummary)}>
                 <Icon icon={ChevronRight} size={13} />
                 {t('report.sections.details')}
               </summary>
@@ -1301,7 +1300,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
 
           {interactionCost && (
             <details {...stylex.props(styles.narrative, stylex.defaultMarker())}>
-              <summary {...sx([styles.narrativeSummary], summaryStyles.summary)}>
+              <summary {...stylex.props(styles.narrativeSummary)}>
                 <Icon icon={ChevronRight} size={13} />
                 {t('report.interaction.title')}
               </summary>

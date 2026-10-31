@@ -26,6 +26,7 @@ import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
 import { agentRouter } from './agent';
 import { agentBotProviderRouter } from './agentBotProvider';
+import { agentBotWakeRouter } from './agentBotWake';
 import { agentDocumentRouter } from './agentDocument';
 import { agentEvalRouter } from './agentEval';
 import { agentEvalExternalRouter } from './agentEvalExternal';
@@ -126,6 +127,7 @@ export const lambdaRouter = router({
   acceptanceComment: acceptanceCommentRouter,
   agent: agentRouter,
   agentBotProvider: agentBotProviderRouter,
+  agentBotWake: agentBotWakeRouter,
   agentNotify: agentNotifyRouter,
   botMessage: botMessageRouter,
   agentDocument: agentDocumentRouter,

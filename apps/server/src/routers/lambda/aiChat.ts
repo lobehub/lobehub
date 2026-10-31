@@ -22,6 +22,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { LOADING_FLAT } from '@/const/message';
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
+import { ProjectModel } from '@/database/models/project';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
@@ -308,6 +309,14 @@ export const aiChatRouter = router({
       // create topic if there should be a new topic
       if (input.newTopic) {
         log('creating new topic with title: %s', input.newTopic.title);
+        const { projectId } = input.newTopic;
+        if (
+          projectId &&
+          !(await new ProjectModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).findById(
+            projectId,
+          ))
+        )
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
         const topicItem = await runTimedStage(
           timingContext,
           'lambda.aiChat.topic.create',
@@ -318,6 +327,7 @@ export const aiChatRouter = router({
               messages: input.newTopic!.topicMessageIds,
               metadata: input.newTopic!.metadata,
               model: input.newTopic!.model,
+              projectId,
               provider: input.newTopic!.provider,
               sessionId,
               title: input.newTopic!.title,

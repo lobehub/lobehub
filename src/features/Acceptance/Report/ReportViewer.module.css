@@ -1,4 +1,0 @@
-/* StyleX has no vendor pseudo-element for the legacy WebKit <details> marker. */
-.summary::-webkit-details-marker {
-  display: none;
-}

@@ -108,7 +108,11 @@ describe('doc command', () => {
       await program.parseAsync(['node', 'test', 'doc', 'list', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify([{ ...docs[0], url: 'https://app.lobehub.com/page/doc1' }], null, 2),
+        JSON.stringify(
+          [{ ...docs[0], url: 'https://app.lobehub.com/resource/page/doc1' }],
+          null,
+          2,
+        ),
       );
     });
 
@@ -213,7 +217,7 @@ describe('doc command', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(
         JSON.stringify(
-          { ...doc, url: 'https://app.lobehub.com/resource/library/kb1?file=doc1' },
+          { ...doc, url: 'https://app.lobehub.com/resource/library/kb1/file/doc1' },
           null,
           2,
         ),
@@ -680,7 +684,11 @@ describe('doc command', () => {
       await program.parseAsync(['node', 'test', 'doc', 'topic-docs', 'topic_123', '--json']);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        JSON.stringify([{ ...docs[0], url: 'https://app.lobehub.com/page/doc1' }], null, 2),
+        JSON.stringify(
+          [{ ...docs[0], url: 'https://app.lobehub.com/resource/page/doc1' }],
+          null,
+          2,
+        ),
       );
     });
 

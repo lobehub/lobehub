@@ -2,11 +2,11 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { fixtureIds, getStyleFixture } from './fixtureRegistry';
-import { exitCode } from './gate';
-import { runPreflight } from './preflight';
-import { resolvePullRequest } from './pullRequest';
-import { fingerprintSources, writeJson } from './report';
+import { fixtureIds, getStyleFixture } from './fixtures/fixtureRegistry';
+import { exitCode } from './gate/gate';
+import { runPreflight } from './pipeline/preflight';
+import { fingerprintSources, writeJson } from './reporting/report';
+import { resolvePullRequest } from './source/pullRequest';
 
 const help = `StyleX migration verification — local M1 foundation (advisory only)
 
@@ -99,10 +99,7 @@ const main = async () => {
   const sourceDirectory = process.env.STYLEX_VERIFIER_SOURCE_DIRECTORY;
   if (!sourceDirectory)
     throw new Error('Run through bun run stylex:verify to bind verifier sources');
-  const verifierHash = await fingerprintSources([
-    sourceDirectory,
-    path.resolve(sourceDirectory, '../experiment'),
-  ]);
+  const verifierHash = await fingerprintSources([sourceDirectory]);
   if (verifierHash !== process.env.STYLEX_VERIFIER_SOURCE_HASH)
     throw new Error('VERIFIER_SOURCE_HASH_MISMATCH');
   const parent = path.resolve(

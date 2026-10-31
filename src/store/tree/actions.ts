@@ -6,7 +6,7 @@ import { resourceService } from '@/services/resource';
 import type { StoreSetter } from '@/store/types';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 
-import { revalidateHierarchySearch, sortTreeItems, toTreeItem } from './items';
+import { isExpandable, revalidateHierarchySearch, sortTreeItems, toTreeItem } from './items';
 import {
   buildLibraryTreeSnapshot,
   libraryTreeResource,
@@ -16,6 +16,7 @@ import {
 import type { TreeDataState, TreeItem, TreeState, TreeStoreHandle } from './types';
 
 export {
+  isExpandable,
   revalidateHierarchySearch,
   sortTreeItems,
   toTreeItem,
@@ -302,7 +303,7 @@ export class TreeActionImpl {
       const items = children[folderId];
       if (!items || result.includes(folderId)) continue;
       result.push(folderId);
-      for (const item of items) if (item.isFolder && expanded[item.id]) queue.push(item.id);
+      for (const item of items) if (isExpandable(item) && expanded[item.id]) queue.push(item.id);
     }
     return result;
   };
@@ -597,7 +598,7 @@ export class TreeActionImpl {
     while (pending.length > 0) {
       const id = pending.pop()!;
       const descendants = children[id];
-      if (descendants) pending.push(...descendants.filter((i) => i.isFolder).map((i) => i.id));
+      if (descendants) pending.push(...descendants.filter(isExpandable).map((i) => i.id));
       delete children[id];
       delete expanded[id];
       delete status[id];

@@ -69,7 +69,7 @@ import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
-import { type TopicData } from './initialState';
+import { type PendingNewTopicDirectory, type TopicData } from './initialState';
 import { type PendingTopicStatusSource, PendingTopicStatusWrites } from './pendingStatusWrites';
 import {
   applyTopicDispatchToBucket,
@@ -315,10 +315,7 @@ export class ChatTopicActionImpl {
    * Without it the deferred row would be born with only a path — outside the
    * project list, the sidebar's project grouping and its execution routing.
    */
-  setPendingNewTopicDirectory = (value?: {
-    agentId: string;
-    projectWorkingDirectoryId: string;
-  }): void => {
+  setPendingNewTopicDirectory = (value?: PendingNewTopicDirectory): void => {
     this.#set({ pendingNewTopicDirectory: value }, false, n('setPendingNewTopicDirectory'));
   };
 
@@ -1833,12 +1830,14 @@ export class ChatTopicActionImpl {
     // directory must never land on another agent's topic.
     const pending = this.#get().pendingNewTopicDirectory;
     const targetSessionId = params.sessionId ?? this.#get().activeAgentId;
-    const pendingDirectoryId =
-      pending && pending.agentId === targetSessionId
-        ? pending.projectWorkingDirectoryId
-        : undefined;
-    const createParams: CreateTopicParams = pendingDirectoryId
-      ? { ...params, projectWorkingDirectoryId: pendingDirectoryId }
+    const staged = pending?.agentId === targetSessionId ? pending : undefined;
+    const createParams: CreateTopicParams = staged
+      ? {
+          ...params,
+          ...(staged.projectWorkingDirectoryId
+            ? { projectWorkingDirectoryId: staged.projectWorkingDirectoryId }
+            : { projectId: staged.projectId }),
+        }
       : params;
 
     const tmpId = Date.now().toString();
@@ -1848,7 +1847,7 @@ export class ChatTopicActionImpl {
     );
 
     const topicId = await topicService.createTopic(createParams);
-    if (pendingDirectoryId) this.#get().setPendingNewTopicDirectory();
+    if (staged) this.#get().setPendingNewTopicDirectory();
     await this.#get().refreshTopic();
 
     return topicId;

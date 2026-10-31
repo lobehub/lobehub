@@ -117,6 +117,7 @@ const METHODS = [
   'tickOnce',
   'transitionStatus',
   'updateRequirement',
+  'updateTitle',
   'waitForDevice',
   'waitForQuotaReset',
 ];
