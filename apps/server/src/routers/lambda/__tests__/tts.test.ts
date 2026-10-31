@@ -136,4 +136,40 @@ describe('ttsRouter.synthesize', () => {
       caller.synthesize({ input: 'hello', model: 'tts-1', voice: 'alloy' }),
     ).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' });
   });
+
+  it('surfaces a readable message when the runtime rejects with an error payload', async () => {
+    // Runtimes reject with plain `{ errorType, error }` objects, which tRPC used to flatten
+    // into an INTERNAL_SERVER_ERROR without any message.
+    textToSpeechMock.mockRejectedValue({
+      error: { base_resp: { status_code: 2054, status_msg: 'voice id not exist' } },
+      errorType: 'ProviderBizError',
+    });
+
+    await expect(
+      caller.synthesize({
+        input: 'hello',
+        model: 'speech-2.8-hd',
+        provider: 'minimax',
+        voice: 'x',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_GATEWAY', message: 'voice id not exist' });
+  });
+
+  it('maps provider rate limits to TOO_MANY_REQUESTS', async () => {
+    textToSpeechMock.mockRejectedValue(
+      Object.assign(new Error('MiniMax API error: rate limit'), { errorType: 'RateLimitExceeded' }),
+    );
+
+    await expect(
+      caller.synthesize({
+        input: 'hello',
+        model: 'speech-2.8-hd',
+        provider: 'minimax',
+        voice: 'x',
+      }),
+    ).rejects.toMatchObject({
+      code: 'TOO_MANY_REQUESTS',
+      message: 'MiniMax API error: rate limit',
+    });
+  });
 });
