@@ -10,12 +10,14 @@ import {
 } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { FileTypeIcon as FileTypeBadge } from '@lobehub/ui';
+import { t } from 'i18next';
 import {
   ClipboardListIcon,
   FileBoxIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   FileTypeIcon,
+  LayoutDashboardIcon,
   LinkIcon,
   PanelsTopLeftIcon,
   PresentationIcon,
@@ -53,7 +55,8 @@ export type WorkOpenTarget =
    * chat portal (WorkGallery), so they don't recompute the file-metadata lookup.
    */
   | { fileId: string; kind: 'filePreview'; url?: string }
-  | { canvasId: string; kind: 'canvas'; version?: number };
+  | { canvasId: string; kind: 'canvas'; version?: number }
+  | { boardId: string; kind: 'board' };
 
 /**
  * Client-side allowlist for external Work URLs (defense in depth over the
@@ -161,6 +164,23 @@ const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
 export const WORK_TYPE_DESCRIPTORS: {
   [T in ListedWorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
+  // `status` is the latest choice (`R2 · B`), the line a reviewer scans for first.
+  board: {
+    getDescription: (item) => {
+      const choice = item.status?.match(/^R(\d+) · (.+)$/);
+      if (choice)
+        return t('artifactBoard.chosenSummary', {
+          label: choice[2],
+          ns: 'common',
+          round: choice[1],
+        });
+      return item.description?.trim() ?? null;
+    },
+    getIcon: () => LayoutDashboardIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) => (item.resourceId ? { boardId: item.resourceId, kind: 'board' } : null),
+    getTitle: (item) => item.title,
+  },
   canvas: {
     getDescription: (item) => item.description?.trim() ?? null,
     getIcon: () => PanelsTopLeftIcon,

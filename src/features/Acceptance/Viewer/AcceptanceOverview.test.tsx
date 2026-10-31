@@ -32,6 +32,8 @@ vi.mock('./Comments/CollaborationRequestBanner', () => ({ default: () => null })
 vi.mock('./Conversation/AcceptanceOriginTopic', () => ({ default: () => null }));
 vi.mock('./Evidence/AcceptanceResources', () => ({ default: () => null }));
 vi.mock('./Flow/AcceptanceFlow', () => ({ AcceptanceFlow: () => null }));
+vi.mock('./Frames/AcceptanceFrames', () => ({ AcceptanceFrames: () => null }));
+vi.mock('./Frames/useFrameBoard', () => ({ useFrameBoardData: () => ({ data: null }) }));
 vi.mock('./Focus/AcceptanceEnterFocus', () => ({ default: () => null }));
 vi.mock('./Gate/GateReview', () => ({ default: () => null }));
 vi.mock('./Header/AcceptanceGoal', () => ({ default: () => null }));

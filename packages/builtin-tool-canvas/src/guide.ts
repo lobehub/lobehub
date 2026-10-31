@@ -61,6 +61,10 @@ Controls (\`lobe-select\`, \`lobe-segmented\`, \`lobe-switch\`, \`lobe-input\`, 
 - Every successful save is a new version; the user sees the previous one until the new one validates.
 - A rejected save lists each problem as \`file:line\`. Fix exactly those and save again.
 
+## Comparing versions
+
+- With a shell, to let someone choose between designs, build each option as a Canvas version (or a page of one) and lay them out on a board: \`lh artifact board example\` prints the manifest, \`lh artifact board publish --file\` creates it. Options reference \`canvasId\` + \`canvasVersion\` + optional \`page\`; never write a comparison page by hand.
+
 # Component reference`;
 
 export const buildCanvasGuide = () => `${rules}\n\n${buildCanvasComponentReference()}`;

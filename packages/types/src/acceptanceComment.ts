@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { AcceptanceFrameAnchor } from './acceptanceFrame';
 import type { ReviewAnchor } from './acceptanceReview';
 import type { DocumentCommentJson } from './documentComment';
 import type { AcceptanceAttachment, AcceptanceReviewAnnotation } from './verify';
@@ -9,8 +10,9 @@ import type { AcceptanceAttachment, AcceptanceReviewAnnotation } from './verify'
  *
  * - `acceptance`: the delivery as a whole (the global discussion under the checklist).
  * - `evidence`: a region on one image or video frame of one check.
+ * - `frame`: a pin on one version or real capture of a frames-board node.
  */
-export type AcceptanceCommentAnchorType = 'acceptance' | 'evidence';
+export type AcceptanceCommentAnchorType = 'acceptance' | 'evidence' | 'frame';
 
 /**
  * What a root row means.
@@ -87,6 +89,7 @@ export interface AcceptanceCommentMetadata extends Record<string, unknown> {
   evidenceAnchor?: {
     time: AcceptanceCommentTime;
   };
+  frameAnchor?: AcceptanceFrameAnchor;
 }
 
 /** One emoji on one comment, already tallied for display. */
@@ -123,6 +126,8 @@ export interface AcceptanceCommentAnchor {
   contextRunId?: string | null;
   /** The evidence row the region was drawn on. */
   evidenceId?: string | null;
+  /** The frames-board point a `frame` comment is pinned to. */
+  frame?: AcceptanceFrameAnchor | null;
   /** Normalized (0–1) region on the evidence image. */
   rect?: AcceptanceReviewAnnotation['rect'] | null;
   /** Video time in seconds, pinned to this evidence version. */
@@ -213,6 +218,8 @@ export interface CreateAcceptanceCommentInput {
   contextRunId?: string;
   /** The editor's own JSON, when the body was written in one. */
   editorData?: DocumentCommentJson;
+  /** Pin the root on a frames-board node instead of evidence. */
+  frameAnchor?: AcceptanceFrameAnchor;
   /** Reactions and access requests have their own endpoints. */
   kind?: Exclude<AcceptanceCommentKind, 'access_request' | 'reaction'>;
   parentCommentId?: string;

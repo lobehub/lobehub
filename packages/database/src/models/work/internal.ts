@@ -186,7 +186,7 @@ export interface TaskWorkSummaryQueryRow {
  * Work types whose list rows are fully described by the `works` display columns
  * (unlike `task`, which additionally joins the live tasks table).
  */
-export type DisplayWorkType = 'canvas' | 'document' | 'external' | 'file';
+export type DisplayWorkType = 'board' | 'canvas' | 'document' | 'external' | 'file';
 
 /** Version-event row for display-backed types (each mutation event). */
 export interface DisplayVersionEventRow {

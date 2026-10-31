@@ -5,6 +5,7 @@ import { memo, useState } from 'react';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 import TaskStatusTag from '@/features/AgentTasks/features/TaskStatusTag';
+import { openArtifactBoardModal } from '@/features/ArtifactBoard/loader';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useResourceDeletedPrompt } from '@/features/Work/useResourceDeletedPrompt';
 import { useChatStore } from '@/store/chat';
@@ -92,6 +93,9 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
         return isSafeExternalUrl(openTarget.url)
           ? () => window.open(openTarget.url, '_blank', 'noopener,noreferrer')
           : undefined;
+      }
+      case 'board': {
+        return () => void openArtifactBoardModal(openTarget.boardId);
       }
       case 'canvas': {
         return () => openCanvas(openTarget.canvasId, openTarget.version);

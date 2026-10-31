@@ -144,6 +144,9 @@ const stopPropagation = (event: MouseEvent) => event.stopPropagation();
 
 const workTypeKey = (item: WorkSummaryItem) => {
   switch (item.resourceType) {
+    case 'board': {
+      return 'work.type.board';
+    }
     case 'canvas': {
       return 'work.type.canvas';
     }

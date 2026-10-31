@@ -7,7 +7,11 @@ import type {
   AcceptanceCommentList,
   AcceptanceCommentReaction,
 } from '@lobechat/types';
-import { acceptanceCommentTimeSchema, reviewAnchorSchema } from '@lobechat/types';
+import {
+  acceptanceCommentTimeSchema,
+  acceptanceFrameAnchorSchema,
+  reviewAnchorSchema,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -66,6 +70,7 @@ const createSchema = z
     contextRunId: z.string().uuid().optional(),
     // The editor's own tree — schemaless by nature, and never interpreted here.
     editorData: z.unknown().optional(),
+    frameAnchor: acceptanceFrameAnchorSchema.optional(),
     kind: z.enum(['approval', 'comment', 'proposal']).optional(),
     parentCommentId: z.string().trim().min(1).max(64).optional(),
     source: reviewAnchorSchema.optional(),
@@ -80,6 +85,20 @@ const createSchema = z
     message: 'A reply cannot carry its own anchor',
     path: ['anchor'],
   })
+  .refine((value) => !(value.parentCommentId && value.frameAnchor), {
+    message: 'A reply cannot carry its own frame pin',
+    path: ['frameAnchor'],
+  })
+  .refine((value) => !(value.anchor && value.frameAnchor), {
+    message: 'A comment sits on evidence or on a frame, not both',
+    path: ['frameAnchor'],
+  })
+  .refine(
+    (value) =>
+      !value.frameAnchor ||
+      Boolean(value.frameAnchor.versionId) !== Boolean(value.frameAnchor.captureId),
+    { message: 'A frame pin sits on exactly one version or one capture', path: ['frameAnchor'] },
+  )
   .refine((value) => !(value.parentCommentId && value.source), {
     message: 'A reply cannot carry its own page anchor',
     path: ['source'],
@@ -273,6 +292,12 @@ const enrich = async (
     return rest;
   };
 
+  const frameOf = (row: AcceptanceCommentRow) => {
+    if (row.anchorType !== 'frame') return null;
+    const parsed = acceptanceFrameAnchorSchema.safeParse(row.metadata?.frameAnchor);
+    return parsed.success ? parsed.data : null;
+  };
+
   const timeOf = (row: AcceptanceCommentRow) => {
     if (row.anchorType !== 'evidence') return null;
     const parsed = acceptanceCommentTimeSchema.safeParse(row.metadata?.evidenceAnchor?.time);
@@ -305,6 +330,7 @@ const enrich = async (
       deletedAt: row.deletedAt,
       editorData: row.editorData ?? null,
       evidenceId: row.evidenceId,
+      frame: frameOf(row),
       id: row.id,
       kind: row.kind,
       parentCommentId: row.parentCommentId,
@@ -434,6 +460,20 @@ const assertReferencesBelongToAcceptance = async (
   }
 };
 
+/** A frame pin must point at a version or capture that is on this acceptance's board. */
+const assertFrameAnchorOnBoard = (
+  acceptance: AcceptanceItem,
+  anchor: z.infer<typeof acceptanceFrameAnchorSchema>,
+) => {
+  const frame = acceptance.metadata?.frameBoard?.frames.find((item) => item.id === anchor.frameId);
+  const found =
+    frame &&
+    (anchor.versionId
+      ? frame.versions.some((version) => version.id === anchor.versionId)
+      : frame.captures.some((capture) => capture.id === anchor.captureId));
+  if (!found) throw new TRPCError({ code: 'NOT_FOUND', message: 'Frame not found' });
+};
+
 /**
  * What a visitor may land on one acceptance in one minute. The discussion is
  * open to whoever holds the link, so the cost of flooding it has to sit
@@ -479,6 +519,7 @@ export const acceptanceCommentRouter = router({
       { userId: ctx.userId, workspaceId: access.memberOfWorkspaceId },
       input.authorAgentId,
     );
+    if (input.frameAnchor) assertFrameAnchorOnBoard(access.acceptance, input.frameAnchor);
     const evidenceRunId = await assertReferencesBelongToAcceptance(
       ctx.serverDB,
       access.acceptance.id,
@@ -500,6 +541,7 @@ export const acceptanceCommentRouter = router({
         // Inherited evidence keeps its producing run; the comment belongs to the viewing run.
         contextRunId: input.contextRunId ?? evidenceRunId,
         editorData: input.editorData as never,
+        frameAnchor: input.frameAnchor,
         kind: input.kind,
         parentCommentId: input.parentCommentId,
         source: input.source,

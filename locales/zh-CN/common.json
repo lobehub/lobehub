@@ -41,6 +41,7 @@
   "appLoading.initAuth": "鉴权服务初始化中…",
   "appLoading.initUser": "用户状态初始化中…",
   "appLoading.showDetail": "查看详情",
+  "artifactBoard.chosenSummary": "第 {{round}} 轮已选 {{label}}",
   "autoGenerate": "自动补全",
   "autoGenerateTooltip": "基于助理档案自动补全描述",
   "autoGenerateTooltipDisabled": "请先填写助理档案，再使用自动补全",

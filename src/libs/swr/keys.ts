@@ -168,6 +168,13 @@ export const acceptanceCollaborationKeys = {
   ]),
 };
 
+export const acceptanceFrameKeys = {
+  board: def('acceptanceFrame:board', (acceptanceId: string) => [
+    'acceptanceFrame:board',
+    acceptanceId,
+  ]),
+};
+
 // ---- document comment ---------------------------------------------------
 export const documentCommentKeys = {
   anchors: def('documentComment:anchors', (workspaceId: string | null, documentId: string) => [
@@ -1046,6 +1053,7 @@ export const swrKeys = {
   topic: topicKeys,
   acceptanceCollaboration: acceptanceCollaborationKeys,
   acceptanceComment: acceptanceCommentKeys,
+  acceptanceFrame: acceptanceFrameKeys,
   documentComment: documentCommentKeys,
   documentLike: documentLikeKeys,
   topicAction: topicActionKeys,

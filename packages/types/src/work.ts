@@ -1,3 +1,4 @@
+import type { ArtifactBoardVersionMetadata, ArtifactBoardWorkMetadata } from './artifactBoard';
 import type { GoalReportMetadata } from './goalReport';
 import type { TaskStatus } from './task';
 
@@ -6,7 +7,8 @@ import type { TaskStatus } from './task';
  * version per acceptance result. It is read through the goal graph, not the
  * generic Work lists.
  */
-export type WorkType = 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
+export type WorkType =
+  'board' | 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
 /** Work types the generic Work lists return; a `goal_report` is read through its goal. */
 export type ListedWorkType = Exclude<WorkType, 'goal_report'>;
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
@@ -14,7 +16,7 @@ export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
 /** Every resource type backed by the unified `external` Work type. */
 export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
 export type WorkResourceType =
-  'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
+  'board' | 'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
@@ -52,6 +54,8 @@ export interface CanvasWorkPublishMetadata {
 
 export interface WorkMetadata {
   agentShare?: AgentShareWorkProvenance;
+  /** `board` Work — the option picked in each round. */
+  board?: ArtifactBoardWorkMetadata;
   canvasPublish?: CanvasWorkPublishMetadata;
 }
 
@@ -114,6 +118,8 @@ export interface CanvasStorageItem {
 
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
+  /** `board` Work — counts of the manifest held in the version `content`. */
+  board?: ArtifactBoardVersionMetadata;
   canvas?: CanvasWorkVersionMetadata;
   /**
    * `file` Work — the edited file's identity in the file store, when the entity
@@ -297,7 +303,14 @@ export interface CanvasWorkListItem extends WorkListBaseItem {
   type: 'canvas';
 }
 
+/** A board of Canvas options; `status` carries its latest choice, e.g. `R2 · B`. */
+export interface BoardWorkListItem extends WorkListBaseItem {
+  resourceType: 'board';
+  type: 'board';
+}
+
 export type WorkListItem =
+  | BoardWorkListItem
   | CanvasWorkListItem
   | DocumentWorkListItem
   | ExternalWorkListItem
@@ -324,7 +337,12 @@ export interface CanvasWorkVersionEventItem extends CanvasWorkListItem {
   version: WorkVersionPreview;
 }
 
+export interface BoardWorkVersionEventItem extends BoardWorkListItem {
+  version: WorkVersionPreview;
+}
+
 export type WorkVersionEventItem =
+  | BoardWorkVersionEventItem
   | CanvasWorkVersionEventItem
   | DocumentWorkVersionEventItem
   | ExternalWorkVersionEventItem
@@ -365,7 +383,14 @@ export interface CanvasWorkSummaryItem extends CanvasWorkListItem {
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
+export interface BoardWorkSummaryItem extends BoardWorkListItem {
+  event: WorkSummaryVersionPreview;
+  totalCost: number | null;
+  version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
+}
+
 export type WorkSummaryItem =
+  | BoardWorkSummaryItem
   | CanvasWorkSummaryItem
   | DocumentWorkSummaryItem
   | ExternalWorkSummaryItem

@@ -228,7 +228,7 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
           <DescriptorIcon size={17} />
         )}
       </div>
-      {!isLinear && !isGithub && status && (
+      {!isLinear && !isGithub && item.type !== 'board' && status && (
         <Tag className={styles.status} color={getStatusColor(status)} size={'small'}>
           {status}
         </Tag>

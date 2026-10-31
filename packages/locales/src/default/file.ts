@@ -567,6 +567,7 @@ export default {
   'work.loadErrorTitle': 'Couldn’t load works',
   'work.loadMoreError': 'Failed to load more works.',
   'work.retry': 'Retry',
+  'work.type.board': 'Board',
   'work.type.canvas': 'Canvas',
   'work.type.document': 'Document',
   'work.type.file': 'File',

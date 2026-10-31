@@ -43,6 +43,7 @@ export default {
   'appLoading.initAuth': 'Initializing authentication service...',
   'appLoading.initUser': 'Initializing user status...',
   'appLoading.showDetail': 'View details',
+  'artifactBoard.chosenSummary': 'Round {{round}}: {{label}} chosen',
   'autoGenerate': 'Autocomplete',
   'autoGenerateTooltip': 'Autocomplete the description from the Agent Profile',
   'autoGenerateTooltipDisabled': 'Add an Agent Profile first to use Autocomplete',

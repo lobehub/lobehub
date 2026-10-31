@@ -39,14 +39,22 @@ interface CanvasError {
 
 const MAX_ERRORS = 10;
 
-const CanvasDocumentFrame = memo<{ project: CanvasPreviewProject }>(({ project }) => {
+interface DocumentFrameProps {
+  page?: string;
+  project: CanvasPreviewProject;
+}
+
+const CanvasDocumentFrame = memo<DocumentFrameProps>(({ page, project }) => {
   const { t } = useTranslation('portal');
   const ref = useRef<HTMLIFrameElement>(null);
   const { isDarkMode } = useThemeMode();
   const primaryColor = useUserStore(userGeneralSettingsSelectors.primaryColor);
   const neutralColor = useUserStore(userGeneralSettingsSelectors.neutralColor);
   const [errors, setErrors] = useState<CanvasError[]>([]);
-  const [location, setLocation] = useState({ path: project.entry, hash: '' });
+  const [location, setLocation] = useState({
+    path: page && project.files[page] ? page : project.entry,
+    hash: '',
+  });
   // Serializing a project can include megabytes of assets; themes and errors must not rebuild it.
   const srcDoc = useMemo(
     () => createCanvasPreviewDocument(project, location.path, location.hash),
@@ -140,7 +148,14 @@ const CanvasDocumentFrame = memo<{ project: CanvasPreviewProject }>(({ project }
 
 CanvasDocumentFrame.displayName = 'CanvasDocumentFrame';
 
-const CanvasProjectFrame = ({ canvasId, version }: { canvasId: string; version: number }) => {
+interface CanvasFrameProps {
+  canvasId: string;
+  /** The page to open first; the project entry when absent or missing from the project. */
+  page?: string;
+  version: number;
+}
+
+const CanvasProjectFrame = ({ canvasId, page, version }: CanvasFrameProps) => {
   const { data, error, isLoading, mutate } = useFetchCanvasProject(canvasId, version);
   return (
     <AsyncBoundary
@@ -151,14 +166,14 @@ const CanvasProjectFrame = ({ canvasId, version }: { canvasId: string; version: 
         void mutate();
       }}
     >
-      {data && <CanvasDocumentFrame project={data} />}
+      {data && <CanvasDocumentFrame page={page} project={data} />}
     </AsyncBoundary>
   );
 };
 
 // Project bytes belong to this mounted preview, rather than the application's long-lived SWR cache.
 const previewCache = { provider: () => new Map() };
-const CanvasFrame = (props: { canvasId: string; version: number }) => (
+const CanvasFrame = (props: CanvasFrameProps) => (
   <SWRConfig value={previewCache}>
     <CanvasProjectFrame {...props} />
   </SWRConfig>
