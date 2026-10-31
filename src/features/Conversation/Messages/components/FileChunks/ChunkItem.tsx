@@ -1,5 +1,6 @@
 import { type ChatFileChunk } from '@lobechat/types';
-import { Center, cx, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';
@@ -21,9 +22,12 @@ const ChunkItem = memo<ChunkItemProps>(({ id, fileId, similarity, text, filename
     <Flexbox
       horizontal
       align={'center'}
-      className={cx(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)}
       gap={4}
       key={id}
+      className={
+        stylex.props(styles.container, isDarkMode ? styles.containerDark : styles.containerLight)
+          .className
+      }
       onClick={(e) => {
         e.stopPropagation();
         openFilePreview({ chunkId: id, chunkText: text, fileId });
@@ -34,7 +38,9 @@ const ChunkItem = memo<ChunkItemProps>(({ id, fileId, similarity, text, filename
         <Text ellipsis>{filename}</Text>
         {similarity && (
           <Tooltip title={similarity}>
-            <Center className={styles.badge}>{similarity.toFixed(1)}</Center>
+            <Center className={stylex.props(styles.badge).className}>
+              {similarity.toFixed(1)}
+            </Center>
           </Tooltip>
         )}
       </Flexbox>

@@ -1,58 +1,50 @@
-import { Center, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 
 import { useConversationStore } from '../../store';
 
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css }) => ({
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    transition: all 0.2s ease;
-
-    &:hover:not(.${prefixCls}-disabled) {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &.${prefixCls}-disabled {
-      cursor: not-allowed;
-      opacity: 0.4;
-    }
-  `,
-  container: css`
-    user-select: none;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    height: 20px;
-    padding-inline: 4px;
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-  text: css`
-    min-width: 24px;
-    height: 20px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-}));
+const styles = stylex.create({
+  button: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    color: cssVar.colorTextSecondary,
+    transition: 'all 0.2s ease',
+  },
+  buttonDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.4,
+  },
+  buttonEnabled: {
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  container: {
+    userSelect: 'none',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    height: '20px',
+    paddingInline: '4px',
+    borderRadius: cssVar.borderRadiusSM,
+  },
+  text: {
+    minWidth: '24px',
+    height: '20px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+});
 
 interface MessageBranchProps {
   activeBranchIndex: number;
@@ -79,20 +71,23 @@ const MessageBranch = memo<MessageBranchProps>(({ activeBranchIndex, count, mess
   const canGoNext = activeBranchIndex < count - 1;
 
   return (
-    <Flexbox horizontal className={styles.container}>
+    <Flexbox horizontal className={stylex.props(styles.container).className}>
       <div
-        className={cx(styles.button, !canGoPrevious && `${prefixCls}-disabled`)}
+        {...stylex.props(
+          styles.button,
+          canGoPrevious ? styles.buttonEnabled : styles.buttonDisabled,
+        )}
         role="button"
         tabIndex={canGoPrevious ? 0 : -1}
         onClick={handlePrevious}
       >
         <Icon icon={ChevronLeft} size={16} />
       </div>
-      <Center className={styles.text}>
+      <Center className={stylex.props(styles.text).className}>
         {activeBranchIndex + 1}/{count}
       </Center>
       <div
-        className={cx(styles.button, !canGoNext && `${prefixCls}-disabled`)}
+        {...stylex.props(styles.button, canGoNext ? styles.buttonEnabled : styles.buttonDisabled)}
         role="button"
         tabIndex={canGoNext ? 0 : -1}
         onClick={handleNext}
