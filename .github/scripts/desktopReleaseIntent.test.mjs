@@ -36,6 +36,7 @@ const pr = (overrides = {}) => ({
 
 async function delivered(t) {
   const github = await startGithubFixture();
+  github.commits.set('main', fixtureOss);
   t.after(github.close);
   const store = createGithubStore(github.options);
   await store.createSources('2.2.21', fixtureSources);
@@ -130,7 +131,8 @@ test('a different Cloud SHA needs a recorded repair reason', async (t) => {
 
 test('main may advance with release tooling, but undistributed product changes block hotfix inheritance', async (t) => {
   const { github, store } = await delivered(t);
-  const changed = pr({ base: { ref: 'main', sha: fixtureNextOss } });
+  const changed = pr();
+  github.commits.set('main', fixtureNextOss);
   github.state.comparison = {
     status: 'ahead',
     total_commits: 1,

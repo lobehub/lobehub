@@ -24,9 +24,15 @@ const setup = await readFile(
   new URL('../actions/desktop-build-setup/action.yml', import.meta.url),
   'utf8',
 );
+const requestWorkflow = await readFile(
+  new URL('../workflows/desktop-release-request.yml', import.meta.url),
+  'utf8',
+);
 
 function shippedStep(source, name) {
   const section = source.split(`- name: ${name}\n`)[1]?.split(/\n *- (?:name:|uses:)/)[0];
+  const inline = section?.match(/^ +run: ([^|\n].*)$/m);
+  if (inline) return inline[1];
   const block = section?.match(/^( +)run: \|\n/m);
   assert.ok(block, `shipped run step ${name} exists`);
   const indent = block[1].length + 2;
@@ -37,6 +43,99 @@ function shippedStep(source, name) {
   }
   return lines.join('\n').trimEnd();
 }
+
+test('PR validation loads trusted workflow tooling even when the product base predates it', async (t) => {
+  const github = await startGithubFixture();
+  t.after(github.close);
+  github.commits.set('main', fixtureSources.ossSha);
+  const root = await mkdtemp(path.join(os.tmpdir(), 'release-validator-bootstrap-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const repo = path.join(root, 'repo');
+  const checkout = path.join(root, 'checkout');
+  await mkdir(repo);
+  const git = (...args) => exec('git', ['-C', repo, ...args]);
+  const commit = async () => {
+    await git('add', '.');
+    await git(
+      '-c',
+      'core.hooksPath=/dev/null',
+      '-c',
+      'commit.gpgsign=false',
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'user.email=fixture@example.invalid',
+      'commit',
+      '-qm',
+      'fixture',
+    );
+    return (await git('rev-parse', 'HEAD')).stdout.trim();
+  };
+  await git('init', '-q');
+  await writeFile(path.join(repo, 'README.md'), 'Old product source without release tooling');
+  const productSha = await commit();
+  await mkdir(path.join(repo, '.github/scripts'), { recursive: true });
+  for (const name of ['Cli', 'Github', 'Intent', 'Sources'])
+    await copyFile(
+      path.join(repository, `.github/scripts/desktopRelease${name}.mjs`),
+      path.join(repo, `.github/scripts/desktopRelease${name}.mjs`),
+    );
+  const toolingSha = await commit();
+  const marker = path.join(root, 'untrusted-script-executed');
+  await writeFile(
+    path.join(repo, '.github/scripts/desktopReleaseCli.mjs'),
+    "import { writeFileSync } from 'node:fs'; writeFileSync(process.env.BOOTSTRAP_ATTACK_PATH, 'executed'); console.log(JSON.stringify({release_mode:'recovery'}));",
+  );
+  const headSha = await commit();
+  const context = {
+    'github.workflow_sha': toolingSha,
+    'github.event.pull_request.base.sha': productSha,
+    'github.event.pull_request.head.sha': headSha,
+  };
+  const ref = requestWorkflow.match(/^ +ref: \$\{\{ ([\w.]+) \}\}/m)?.[1];
+  assert.ok(context[ref], 'checkout selects a known GitHub context');
+  const archive = path.join(root, 'tooling.tar');
+  await git('archive', '--format=tar', `--output=${archive}`, context[ref]);
+  await mkdir(checkout);
+  await exec('tar', ['-xf', archive, '-C', checkout]);
+  const eventPath = path.join(root, 'event.json');
+  const request = {
+    schemaVersion: 1,
+    mode: 'recovery',
+    cloudSha: fixtureSources.cloudSha,
+    recoveryBaseSha: fixtureSources.ossSha,
+    overrideReason: 'Verified recovery of the pending release',
+  };
+  await writeFile(
+    eventPath,
+    JSON.stringify({
+      pull_request: {
+        title: 'fix: pending hotfix',
+        head: { ref: 'hotfix/pending' },
+        base: { ref: 'main', sha: fixtureSources.ossSha },
+        merged: false,
+        body: `<!-- desktop-release-request ${JSON.stringify(request)} -->`,
+      },
+    }),
+  );
+  const { stdout } = await exec(
+    'bash',
+    ['-c', shippedStep(requestWorkflow, 'Validate release intent')],
+    {
+      cwd: checkout,
+      env: {
+        ...process.env,
+        GITHUB_REPOSITORY: 'example/lobehub',
+        GITHUB_API_URL: github.apiUrl,
+        GH_TOKEN: 'oss-test-token',
+        GITHUB_EVENT_PATH: eventPath,
+        BOOTSTRAP_ATTACK_PATH: marker,
+      },
+    },
+  );
+  assert.equal(JSON.parse(stdout).release_mode, 'recovery');
+  await assert.rejects(readFile(marker), { code: 'ENOENT' });
+});
 
 test('the shipped Stable resolver reuses its old Cloud when the current HEAD has advanced', async (t) => {
   const github = await startGithubFixture();
