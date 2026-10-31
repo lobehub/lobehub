@@ -174,8 +174,9 @@ export const projectRouter = router({
     .input(
       z.object({
         avatar: z.string().optional(),
+        coordinatorAgentId: z.string().optional(),
         description: z.string().optional(),
-        identifier: projectIdentifierInput,
+        identifier: projectIdentifierInput.optional(),
         name: z.string().min(1).max(255),
         slug: projectSlugInput.optional(),
         visibility: z.enum(PROJECT_VISIBILITIES).optional(),
@@ -183,6 +184,9 @@ export const projectRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        if (input.coordinatorAgentId) {
+          await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
+        }
         return {
           data: await withMainAgent(ctx.projectModel, await ctx.projectModel.create(input)),
           message: 'Project created',

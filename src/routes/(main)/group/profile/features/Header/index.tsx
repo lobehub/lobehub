@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AddGroupMemberModal from '@/features/AddAgentMemberModal';
+import MobileHeaderNav from '@/features/NavHeader/MobileHeaderNav';
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { usePermission } from '@/hooks/usePermission';
 import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
@@ -15,6 +16,7 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 import AgentBuilderToggle from './AgentBuilderToggle';
 import { type ChromeTabItem } from './ChromeTabs';
@@ -129,7 +131,7 @@ const Header = memo(() => {
   return (
     <>
       <Flexbox horizontal align="center" className={styles.header} gap={4} justify="space-between">
-        {!showLeftPanel && <ToggleLeftPanelButton />}
+        {isMobileSurface() ? <MobileHeaderNav /> : !showLeftPanel && <ToggleLeftPanelButton />}
         <div className={styles.tabsWrapper}>
           <ChromeTabs
             activeId={selectedTabId}

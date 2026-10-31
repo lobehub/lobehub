@@ -15,7 +15,7 @@ export const useActiveTaskResult = (taskId?: string): ActiveTaskResultState => {
   const setActiveTaskId = useTaskStore((state) => state.setActiveTaskId);
   const useFetchTaskDetail = useTaskStore((state) => state.useFetchTaskDetail);
   const hasTaskDetail = useTaskStore((state) =>
-    taskId ? Boolean(state.taskDetailMap[taskId]) : false,
+    taskId ? Boolean(state.taskDetailMap[state.taskRefIndex?.[taskId] ?? taskId]) : false,
   );
 
   useEffect(() => {

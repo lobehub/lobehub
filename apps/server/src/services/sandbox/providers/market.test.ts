@@ -247,7 +247,7 @@ describe('MarketSandboxProvider', () => {
  * reach Market in the request body.
  */
 describe('MarketSandboxProvider · persistence fields on the wire', () => {
-  const callWithRealSDK = async () => {
+  const setupRealSDK = async () => {
     const { MarketSDK } = await import('@lobehub/market-sdk');
     const fetchMock = vi.fn(async () => ({
       headers: new Headers({ 'content-type': 'application/json' }),
@@ -260,7 +260,15 @@ describe('MarketSandboxProvider · persistence fields on the wire', () => {
 
     const sdk = new MarketSDK({ baseURL: 'https://market.test' });
     const provider = new MarketSandboxProvider({
-      marketService: { getSDK: () => sdk } as unknown as MarketService,
+      marketService: {
+        // The real MarketService.exportFile is the same thin pass-through;
+        // stubbing it this way keeps the wire assertion on the SDK boundary.
+        exportFile: (
+          params: { path: string; uploadUrl: string },
+          context: Record<string, unknown>,
+        ) => sdk.plugins.runBuildInTool('exportFile', params, context as never),
+        getSDK: () => sdk,
+      } as unknown as MarketService,
       sandboxCwd: 'inst-a',
       sandboxInstanceId: 'env-abc',
       sandboxMode: 'persistent',
@@ -268,13 +276,23 @@ describe('MarketSandboxProvider · persistence fields on the wire', () => {
       userId: 'user_1',
     } as never);
 
+    const requestBody = () => {
+      const call = fetchMock.mock.calls.find(([url]) =>
+        String(url).includes('/v1/plugins/run-buildin-tools'),
+      );
+      return call ? JSON.parse(String((call[1] as RequestInit).body)) : undefined;
+    };
+
+    return { provider, requestBody };
+  };
+
+  const callWithRealSDK = async () => {
+    const { provider, requestBody } = await setupRealSDK();
+
     await provider.callTool('runCommand', { command: 'pwd' }).catch(() => undefined);
     vi.unstubAllGlobals();
 
-    const call = fetchMock.mock.calls.find(([url]) =>
-      String(url).includes('/v1/plugins/run-buildin-tools'),
-    );
-    return call ? JSON.parse(String((call[1] as RequestInit).body)) : undefined;
+    return requestBody();
   };
 
   it('sends sandboxMode, sandboxInstanceId and sandboxCwd in the request body', async () => {
@@ -286,6 +304,28 @@ describe('MarketSandboxProvider · persistence fields on the wire', () => {
       sandboxCwd: 'inst-a',
       sandboxInstanceId: 'env-abc',
       sandboxMode: 'persistent',
+    });
+  });
+
+  // exportFile ran without the session fields, so in persistent topics it
+  // looked for the file in a throwaway sandbox and could never find it.
+  it('sends the same session fields for exportFile', async () => {
+    const { provider, requestBody } = await setupRealSDK();
+
+    await provider
+      .exportFileToUploadUrl({
+        filename: 'a.png',
+        path: '/root/work/a.png',
+        uploadUrl: 'https://uploads.example.com/put',
+      })
+      .catch(() => undefined);
+    vi.unstubAllGlobals();
+
+    expect(requestBody()).toMatchObject({
+      sandboxCwd: 'inst-a',
+      sandboxInstanceId: 'env-abc',
+      sandboxMode: 'persistent',
+      toolName: 'exportFile',
     });
   });
 });

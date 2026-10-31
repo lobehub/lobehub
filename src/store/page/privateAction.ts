@@ -19,6 +19,8 @@ import {
   pageDetailResource,
   pageListResource,
   type PageListValue,
+  pageSectionListResource,
+  type PageSectionListValue,
   pageSectionResource,
   type PageSectionScope,
 } from './projection';
@@ -36,6 +38,7 @@ export class PagePrivateAction {
   readonly entity;
   readonly list;
   readonly section;
+  readonly sectionList;
 
   constructor(set: Setter, get: () => PageState) {
     this.#get = get;
@@ -72,8 +75,20 @@ export class PagePrivateAction {
       stateKey: 'pageSectionReplica',
       view: recordLens<PageState, LobeDocument[]>('pageSectionMap'),
     });
+    this.sectionList = createReplicaSlice(pageSectionListResource, {
+      actionPrefix: 'pageSectionList',
+      get,
+      set,
+      stateKey: 'pageSectionListReplica',
+      view: recordLens<PageState, PageSectionListValue>('pageSectionListMap'),
+    });
     // A rename or delete in the editor reaches the sidebar sections' rows too.
-    this.entity = linkReplicaEntity<LobeDocument>([this.list, this.detail, this.section]);
+    this.entity = linkReplicaEntity<LobeDocument>([
+      this.list,
+      this.detail,
+      this.section,
+      this.sectionList,
+    ]);
   }
 
   insertListRow = (doc: LobeDocument): void => {
@@ -107,9 +122,10 @@ export class PagePrivateAction {
   revalidateList = (): Promise<unknown> =>
     Promise.all([
       this.list.revalidate(PAGE_LIST_KEY),
-      ...(['mine', 'shared'] satisfies PageSectionScope[]).map((scope) =>
+      ...(['mine', 'shared'] satisfies PageSectionScope[]).flatMap((scope) => [
         this.section.revalidate(scope),
-      ),
+        this.sectionList.revalidate(scope),
+      ]),
     ]);
 
   preHydrateList = (): Promise<boolean> => {

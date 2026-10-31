@@ -45,6 +45,7 @@ export type WorkingSidebarTab =
   | 'overview'
   | 'params'
   | 'review'
+  | 'search'
   | 'skills'
   | 'web'
   | (string & {});
@@ -153,7 +154,7 @@ export type TaskViewMode = 'kanban' | 'list';
 /** How topics inside one byProject sidebar group are sectioned. */
 export type ProjectTopicSubGroupMode = 'none' | 'byDevice' | 'byTime' | 'byStatus';
 
-export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['recents', 'agent', 'private'];
+export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['favorites', 'recents', 'agent', 'private'];
 
 /** How the agent document tree orders sibling rows. */
 export interface AgentDocumentSort {
@@ -161,6 +162,27 @@ export interface AgentDocumentSort {
   foldersFirst: boolean;
   order: 'asc' | 'desc';
 }
+
+/** Which Docs sidebar page section a view setting belongs to. */
+export type DocsPageSectionKey = 'mine' | 'shared';
+
+/** How a Docs sidebar page section (My docs / Shared docs) lists its pages. */
+export interface DocsPageSectionView {
+  /** `byTime` buckets rows by the sorted date; `byType` puts artifacts apart from pages. */
+  groupBy: 'byTime' | 'byType' | 'none';
+  /** Rows the section loads and shows; the rest are one click away in the full list. */
+  pageSize: number;
+  sortBy: 'createdAt' | 'title' | 'updatedAt';
+  /** `artifact` keeps HTML pages only, `page` keeps rich-text pages only. */
+  type: 'all' | 'artifact' | 'page';
+}
+
+export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
+  groupBy: 'none',
+  pageSize: 20,
+  sortBy: 'updatedAt',
+  type: 'all',
+};
 
 /** How the sidebar project list is ordered; `manual` follows the shared drag order. */
 export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
@@ -186,7 +208,7 @@ export interface SystemStatus {
    */
   agentListSidebarSectionCollapsed?: boolean;
   /**
-   * View mode of the agent view-all page (card grid vs table list)
+   * View mode of the agent view-all page (badge-wall card grid vs table list); defaults to card
    */
   agentListViewMode?: 'card' | 'list';
   /**
@@ -202,6 +224,12 @@ export interface SystemStatus {
    * number of agents (defaultList) to display
    */
   agentPageSize?: number;
+  /**
+   * Sidebar groups folded in the task assignee picker, keyed by group id.
+   * Nested booleans so the lodash `merge` in `updateSystemStatus` replaces
+   * scalars instead of index-merging arrays.
+   */
+  assigneeAgentSelectorCollapsedGroups?: Record<string, boolean>;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
@@ -225,6 +253,11 @@ export interface SystemStatus {
    */
   dismissedIslandItemKeys?: string[];
   /**
+   * List options of each Docs sidebar page section, kept apart so narrowing
+   * Shared docs never changes what My docs shows.
+   */
+  docsPageSectionViews?: Partial<Record<DocsPageSectionKey, Partial<DocsPageSectionView>>>;
+  /**
    * Per-agent expanded state of the agent sidebar's top-level sections
    * (Tasks / Topic), keyed by agentId. Lets each agent remember its own
    * collapse/expand state so switching agents doesn't share one accordion.
@@ -233,6 +266,11 @@ export interface SystemStatus {
    */
   expandAgentSidebarSectionsByAgent?: Record<string, Record<string, boolean>>;
   expandInputActionbar?: boolean;
+  /**
+   * Per-project expanded state of the project sidebar's sections (Channels / Topics), keyed by
+   * projectId. Nested booleans for the same `merge` reason as the agent sections above.
+   */
+  expandProjectSidebarSectionsByProject?: Record<string, Record<string, boolean>>;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
   fileManagerViewMode?: 'list' | 'masonry';
@@ -336,6 +374,11 @@ export interface SystemStatus {
   projectTopicSubGroupModeByGroup?: Record<string, ProjectTopicSubGroupMode>;
   readNotificationSlugs?: string[];
   /**
+   * Agents this device last picked as a task assignee, newest first, keyed by
+   * workspace id (`personal` outside a workspace). See `pushRecentAssignee`.
+   */
+  recentAssigneeAgentIds?: Record<string, string[]>;
+  /**
    * number of recent items to display
    */
   recentPageSize?: number;
@@ -421,8 +464,15 @@ export interface SystemStatus {
    */
   taskListViewMode?: TaskViewMode;
   taskListViewOptions?: {
+    /**
+     * Left out of the defaults on purpose: status is deep-merged over the
+     * persisted value, so a default here would override the legacy
+     * `hideCompleted` it replaces before normalization could migrate it.
+     */
+    completedTasks?: 'all' | 'day' | 'month' | 'none' | 'week';
     groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status';
-    hideCompleted: boolean;
+    /** @deprecated Replaced by `completedTasks`; read once to migrate. */
+    hideCompleted?: boolean;
     nestedSubTasks: boolean;
     orderBy: 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
     orderCompletedByRecency: boolean;
@@ -438,6 +488,12 @@ export interface SystemStatus {
    * Whether to display tokens in short format
    */
   tokenDisplayFormatShort?: boolean;
+  /**
+   * Workspace "only my topics" filter, keyed by the topic list's owner: the
+   * agentId of an agent sidebar, the groupId of a group, the projectId of a
+   * project sidebar. Device-local, so each agent keeps its own choice.
+   */
+  topicOnlyMineByAgent?: Record<string, boolean>;
   /**
    * number of topics to display per page
    */
@@ -517,6 +573,7 @@ export const createNavigationRef = (): GlobalNavigationRef => ({ current: null }
 export interface GlobalState {
   hasNewVersion?: boolean;
   isMobile?: boolean;
+  isNavPanelResizing?: boolean;
   /**
    * Server version is too old, does not support /api/version endpoint
    * Need to prompt user to update server
@@ -539,7 +596,7 @@ export const INITIAL_STATUS = {
   agentBuilderPanelWidth: 360,
   agentListExpandedGroupKeys: [] as string[],
   agentListSidebarSectionCollapsed: false,
-  agentListViewMode: 'list' as const,
+  agentListViewMode: 'card' as const,
   agentListViewOptions: {
     groupBy: 'none' as const,
     orderBy: 'updatedAt' as const,
@@ -552,7 +609,6 @@ export const INITIAL_STATUS = {
   recentPageSize: 5,
   taskListViewOptions: {
     groupBy: 'status',
-    hideCompleted: true,
     nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
@@ -597,7 +653,12 @@ export const INITIAL_STATUS = {
   showFilePanel: true,
   showHomePortrait: true,
   showHotkeyHelper: false,
-  showHomeRail: true,
+  /**
+   * One column by default: most people prefer the single-column Home. Only
+   * browsers without a stored preference get this, because `updateSystemStatus`
+   * persists the whole status, so earlier sessions already stored `true`.
+   */
+  showHomeRail: false,
   showImagePanel: true,
   showImageTopicPanel: true,
   showAgentBuilderPanel: false,
@@ -624,6 +685,16 @@ export const INITIAL_STATUS = {
 
 const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
 
+/** Keeps only `ownerId → boolean` entries of a persisted value of unknown shape. */
+const restoreTopicOnlyMineByAgent = (value: unknown): Record<string, boolean> | undefined => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, boolean] => typeof entry[1] === 'boolean',
+    ),
+  );
+};
+
 /**
  * Restore the shell-defining preferences before React's first render. The
  * remaining system status still follows the existing async initialization path,
@@ -631,6 +702,10 @@ const statusStorage = new AsyncLocalStorage<SystemStatus>('LOBE_SYSTEM_STATUS');
  * the boot shell reads them synchronously to draw a shell that lines up with
  * the real layout, and `NavPanelDraggable` would otherwise size its
  * pre-hydration placeholder to the default width.
+ *
+ * The per-agent "only mine" topic filter is restored here too: it is part of
+ * the topic list identity, and the route loader seeds that list before the
+ * async initialization runs — an unrestored filter seeds the unfiltered page.
  */
 export const createInitialSystemStatus = (): SystemStatus => {
   const persistedStatus = statusStorage.getFromLocalStorageSync();
@@ -660,6 +735,7 @@ export const createInitialSystemStatus = (): SystemStatus => {
       typeof persistedStatus.showRightPanel === 'boolean'
         ? persistedStatus.showRightPanel
         : INITIAL_STATUS.showRightPanel,
+    topicOnlyMineByAgent: restoreTopicOnlyMineByAgent(persistedStatus.topicOnlyMineByAgent),
     showWorkingOverview:
       typeof persistedStatus.showWorkingOverview === 'boolean'
         ? persistedStatus.showWorkingOverview

@@ -29,6 +29,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     define: { 'process.env.NODE_ENV': '"production"' },
+    // The dev server compiles this config inside a NODE_ENV=development process, which
+    // makes oxc emit jsxDEV; the production React selected by `define` has no jsxDEV.
+    oxc: { jsx: { development: false } },
     plugins: [react(), ...lobeUiImports()],
   };
 });

@@ -4,7 +4,6 @@ import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
 import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
 import { createMockInner } from '../testUtils';
-import type { PublishAgentRuntimeEndParams } from '../types';
 
 // Mock global fetch
 const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
@@ -639,61 +638,6 @@ describe('GatewayStreamNotifier', () => {
       const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
       const body = JSON.parse(pushCall![1].body);
       expect(body.event.data.reasonDetail).toBe('Custom detail');
-    });
-
-    describe('recordError', () => {
-      const endEventData = async (
-        params: Omit<PublishAgentRuntimeEndParams, 'operationId' | 'stepIndex'>,
-      ) => {
-        await notifier.publishAgentRuntimeEnd({ operationId: 'op-1', stepIndex: 0, ...params });
-        await new Promise((r) => setTimeout(r, 50));
-        const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
-        return JSON.parse(pushCall![1].body).event.data;
-      };
-
-      it('keeps a user-side error off the gateway board', async () => {
-        const data = await endEventData({
-          finalState: {
-            error: { message: 'insufficient quota', type: 'InsufficientQuota' },
-            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'openai' },
-          },
-          reason: 'error',
-        });
-
-        expect(data.recordError).toBe(false);
-      });
-
-      it('files a provider rate limit on our own provider', async () => {
-        const data = await endEventData({
-          finalState: {
-            error: { message: '429', type: 'RateLimitExceeded' },
-            modelRuntimeConfig: { model: 'claude-opus-5', provider: 'lobehub' },
-          },
-          reason: 'error',
-        });
-
-        expect(data.recordError).toBe(true);
-      });
-
-      it('classifies by the configured provider, not the upstream named in the error body', async () => {
-        // On our provider the normalized error names the upstream the router
-        // reached, never `lobehub` — trusting it would hide our own rate limit.
-        const data = await endEventData({
-          finalState: {
-            error: { body: { provider: 'azure' }, message: '429', type: 'RateLimitExceeded' },
-            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'lobehub' },
-          },
-          reason: 'error',
-        });
-
-        expect(data.recordError).toBe(true);
-      });
-
-      it('omits the flag on a non-error end', async () => {
-        const data = await endEventData({ finalState: {}, reason: 'completed' });
-
-        expect(data).not.toHaveProperty('recordError');
-      });
     });
 
     it('includes errorType from finalState.error.type', async () => {

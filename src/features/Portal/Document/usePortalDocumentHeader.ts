@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useSingleton } from '@/hooks/useSingleton';
 import { documentService } from '@/services/document';
@@ -13,7 +14,6 @@ import { invalidateDocumentMutation } from '@/services/document/invalidation';
 import { useAgentStore } from '@/store/agent';
 import { useDocumentStore } from '@/store/document';
 import { getDocumentRenderMode } from '@/utils/documentRenderMode';
-import { standardizeIdentifier } from '@/utils/identifier';
 import { isSkillMarkdownDocument } from '@/utils/skillMarkdown';
 
 import { useResolvedAgentDocumentId, useResolvedDocumentId } from './documentViewContext';
@@ -117,7 +117,7 @@ export const resolvePortalDocumentPath = (
 ): string | undefined => {
   if (!documentId) return undefined;
   if (agentId && agentDocumentId) return buildAgentDocumentPath(agentId, documentId);
-  return `/page/${standardizeIdentifier(documentId)}`;
+  return docsPagePath(documentId);
 };
 
 /**

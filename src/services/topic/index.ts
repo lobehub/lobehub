@@ -6,6 +6,7 @@ import type {
 } from '@lobechat/types';
 
 import { INBOX_SESSION_ID } from '@/const/session';
+import { TopicTrigger } from '@/const/topic';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type BatchTaskResult } from '@/types/service';
 import {
@@ -112,7 +113,8 @@ export class TopicService {
       editingAgentId: params.editingAgentId,
       editingGroupId: params.editingGroupId,
       excludeStatuses: params.excludeStatuses,
-      excludeTriggers: params.excludeTriggers,
+      // Filter before pagination so internal Channel runs consume neither rows nor totals.
+      excludeTriggers: [...new Set([TopicTrigger.Channel, ...(params.excludeTriggers ?? [])])],
       groupId: params.groupId,
       includeTriggers: params.includeTriggers,
       isInbox: params.isInbox,
@@ -169,18 +171,21 @@ export class TopicService {
     return result.data.hasFiles;
   };
 
-  searchTopics = (
+  searchTopics = async (
     keywords: string,
     agentId?: string,
     groupId?: string,
     onlyMine?: boolean,
   ): Promise<ChatTopic[]> => {
-    return lambdaClient.topic.searchTopics.query({
+    const topics = await lambdaClient.topic.searchTopics.query({
       agentId,
       groupId,
       keywords,
       onlyMine: onlyMine || undefined,
-    }) as any;
+    });
+    return topics.filter(
+      (topic) => topic.trigger !== TopicTrigger.Channel,
+    ) as unknown as ChatTopic[];
   };
 
   updateTopic = (id: string, data: Partial<ChatTopic>) => {

@@ -13,6 +13,12 @@ describe('formatValue', () => {
     expect(formatValue(120, undefined, 'ms')).toBe('120 ms');
     expect(formatValue('n/a')).toBe('n/a');
   });
+
+  it('attaches symbol units without a space', () => {
+    expect(formatValue(40, undefined, '%')).toBe('40%');
+    expect(formatValue(3, undefined, '‰')).toBe('3‰');
+    expect(formatValue(12, undefined, '万')).toBe('12 万');
+  });
 });
 
 describe('heatmapLevel', () => {

@@ -11,6 +11,7 @@ import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { topicsOwnership } from './task/context';
 
 export const TERMINAL_TOPIC_STATUSES = new Set([
   'canceled',
@@ -33,15 +34,10 @@ export class TaskTopicModel {
     this.workspaceId = workspaceId;
   }
 
+  // Same rule as the other task child rows: a private run is visible to the
+  // member who ran it and to the task's creator.
   private ownership = () =>
-    buildWorkspaceWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      {
-        userId: taskTopics.userId,
-        visibility: taskTopics.visibility,
-        workspaceId: taskTopics.workspaceId,
-      },
-    );
+    topicsOwnership({ db: this.db, userId: this.userId, workspaceId: this.workspaceId });
 
   /** Look up the parent task's visibility so newly added topics mirror it. */
   private async getTaskVisibility(taskId: string): Promise<'private' | 'public'> {
@@ -377,7 +373,9 @@ export class TaskTopicModel {
       .select({ value: count() })
       .from(taskTopics)
       .where(and(...conditions));
+    /* v8 ignore start -- unreachable: an ungrouped count() always returns one row */
     return rows[0]?.value ?? 0;
+    /* v8 ignore stop */
   }
 
   async findByTaskId(taskId: string): Promise<TaskTopicItem[]> {
@@ -513,10 +511,12 @@ export class TaskTopicModel {
     const byTask = rows.map((row) => ({
       runs: row.runs,
       taskId: row.taskId,
+      /* v8 ignore start -- unreachable: every sum is wrapped in coalesce(…, 0), never NULL */
       totalCost: Number(row.totalCost ?? 0),
       totalInputTokens: Number(row.totalInputTokens ?? 0),
       totalOutputTokens: Number(row.totalOutputTokens ?? 0),
       totalTokens: Number(row.totalTokens ?? 0),
+      /* v8 ignore stop */
     }));
 
     return {

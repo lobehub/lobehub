@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@lobechat/canvas": "workspace:*",
-    "pele": "^1.6.0",
-    "shiki": "^4.4.3"
+    "@pierre/highlights": "^0.2.0",
+    "pele": "^1.6.0"
   }
 }

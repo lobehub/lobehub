@@ -1,7 +1,7 @@
 export interface ProjectCoordinatorContext {
   avatar?: string;
   description?: string;
-  identifier: string;
+  identifier?: string | null;
   name: string;
 }
 

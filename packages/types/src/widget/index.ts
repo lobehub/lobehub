@@ -135,9 +135,46 @@ export interface WidgetEnvRequirement {
    * ignore it.
    */
   field?: string;
+  /**
+   * Where the platform sends a LobeHub Market connector's token, overriding
+   * the provider default (e.g. GitHub → `Authorization: Bearer …` on
+   * api.github.com). Market connectors never put the real token in the
+   * environment: the variable holds a placeholder and the sandbox's egress
+   * proxy sets `header` on requests to `host`. Every host must be listed in
+   * `manifest.network.allow`. Ignored for connectors holding a local secret.
+   */
+  inject?: WidgetEnvInject;
   /** Environment variable name the script reads, e.g. 'GITHUB_TOKEN'. */
   name: string;
   required?: boolean;
+}
+
+export interface WidgetEnvInject {
+  /** Request header to set; defaults to 'Authorization'. */
+  header?: string;
+  /** API host(s), exact or `*.domain`, e.g. 'api.github.com'. */
+  host: string | string[];
+  /**
+   * Literal prepended to the token; defaults to 'Bearer ' for the
+   * Authorization header and to nothing otherwise.
+   */
+  prefix?: string;
+}
+
+/**
+ * The user's standing approval to dry-run widget scripts with some access:
+ * a draft whose connectors and hosts all fall inside one grant of its own
+ * level runs without asking again. Stored in the user's tool settings.
+ */
+export interface WidgetDryRunGrant {
+  /** Connectors the approved scripts may read, e.g. ['github']. */
+  connectors: string[];
+  /** ISO time the user gave it. */
+  grantedAt: string;
+  /** Hosts the approved scripts may call, exactly as declared in `network.allow`. */
+  hosts: string[];
+  /** Workspace the grant holds in; `null` for the personal space. */
+  workspaceId: string | null;
 }
 
 /**
@@ -228,7 +265,7 @@ export const WIDGET_RUN_OUTPUT_STATUSES = [
 ] as const satisfies readonly WidgetRunFinalStatus[];
 
 export interface WidgetRunError {
-  /** Machine-readable reason, e.g. 'INVALID_OUTPUT', 'SANDBOX_ERROR', 'NON_ZERO_EXIT'. */
+  /** Machine-readable reason, e.g. 'INVALID_OUTPUT', 'SANDBOX_ERROR', 'SANDBOX_BUSY', 'NON_ZERO_EXIT'. */
   code: string;
   message: string;
 }

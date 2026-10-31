@@ -7,102 +7,32 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
-  Avatar,
   cx,
+  DropdownMenu,
   Flexbox,
-  Icon,
   Spin,
   Text,
   toast,
   Tooltip,
 } from '@lobehub/ui';
-import { FileTextIcon, MoreHorizontal, SquarePenIcon } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { ListFilter, MoreHorizontal, PanelRightOpenIcon, SquarePenIcon } from 'lucide-react';
+import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import Actions from '@/features/Pages/PageLayout/Body/List/Item/Actions';
-import { useDropdownMenu } from '@/features/Pages/PageLayout/Body/List/Item/useDropdownMenu';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { usePermission } from '@/hooks/usePermission';
 import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 import type { PageSectionScope } from '@/store/page/projection';
-import type { LobeDocument } from '@/types/document';
 
-import { docsPagePath, resolveResourceRoute } from '../../../paths';
-import RenameInput from './RenameInput';
+import { groupPageRows } from './group';
+import GroupTitle from './GroupTitle';
+import PageRow from './PageRow';
 import { buildPageTree } from './tree';
-
-/** Rows a section shows; the rest are in the Docs home list. */
-const SECTION_LIMIT = 20;
-const INDENT_PER_LEVEL = 12;
-
-interface PageRowProps {
-  depth: number;
-  doc: LobeDocument;
-  isOpen: boolean;
-  onOpen: (id: string) => void;
-}
-
-/**
- * One page row. It carries the same actions as the old Pages sidebar — hover
- * menu and right-click menu — because Docs is now the only place a page is
- * listed, so rename / duplicate / delete have to live here.
- */
-const PageRow = memo<PageRowProps>(({ depth, doc, isOpen, onOpen }) => {
-  const { t } = useTranslation('file');
-  const emoji = doc.metadata?.emoji;
-  const title = doc.title || t('pageList.untitled');
-  const editing = usePageStore((s) => s.renamingPageId === doc.id);
-
-  const toggleEditing = useCallback(
-    (visible?: boolean) => pageActions.setRenamingPageId(visible ? doc.id : null),
-    [doc.id],
-  );
-  const dropdownMenu = useDropdownMenu({ pageId: doc.id, toggleEditing });
-
-  return (
-    <NavItem
-      actions={<Actions dropdownMenu={dropdownMenu} />}
-      active={isOpen}
-      contextMenuItems={dropdownMenu}
-      // While the field is open the row is not a link: clicks there belong to
-      // the field, and an anchor would follow `href` and drop the edit.
-      href={editing ? undefined : docsPagePath(doc.id)}
-      style={depth ? { paddingInlineStart: 8 + depth * INDENT_PER_LEVEL } : undefined}
-      icon={
-        emoji ? (
-          <Avatar avatar={emoji} size={20} />
-        ) : (
-          <Icon icon={FileTextIcon} size={{ size: 16, strokeWidth: 1.5 }} />
-        )
-      }
-      title={
-        editing ? (
-          <RenameInput
-            id={doc.id}
-            title={title}
-            onDone={() => pageActions.setRenamingPageId(null)}
-          />
-        ) : (
-          title
-        )
-      }
-      onClick={() => {
-        // While the inline field is open a click belongs to the input, not to
-        // navigation — opening the page here would drop the edit.
-        if (editing) return;
-        onOpen(doc.id);
-      }}
-    />
-  );
-});
-
-PageRow.displayName = 'PageRow';
+import { useOpenPage } from './useOpenPage';
+import { isSectionNarrowed, useSectionView, useSectionViewMenu } from './useSectionView';
 
 interface PageSectionProps {
   itemKey: string;
@@ -116,21 +46,28 @@ interface PageSectionProps {
  */
 const PageSection = memo<PageSectionProps>(({ itemKey, scope }) => {
   const { t } = useTranslation('file');
-  const navigate = useWorkspaceAwareNavigate();
   const [creating, setCreating] = useState(false);
   const { allowed: canCreate, reason } = usePermission('create_content');
+  const [view] = useSectionView(scope);
+  const viewMenu = useSectionViewMenu(scope);
 
-  const { error, isValidating, revalidate } = pageActions.useFetchPageSection(scope, SECTION_LIMIT);
+  const { error, isValidating, revalidate } = pageActions.useFetchPageSection({
+    limit: view.pageSize,
+    scope,
+    sortBy: view.sortBy,
+    type: view.type,
+  });
   const docs = usePageStore(pageSelectors.pageSection(scope));
 
-  const rows = useMemo(() => (docs ? buildPageTree(docs.slice(0, SECTION_LIMIT)) : docs), [docs]);
-  const hasMore = (docs?.length ?? 0) > SECTION_LIMIT;
+  const groups = useMemo(
+    () => (docs ? groupPageRows(buildPageTree(docs.slice(0, view.pageSize)), view) : undefined),
+    [docs, view],
+  );
+  const hasMore = (docs?.length ?? 0) > view.pageSize;
+  const openFullList = () => pageActions.openSectionFullList(scope);
 
   // Pages open over the Docs home, keeping the user in Docs.
-  const location = useActiveLocation();
-  const openedView = resolveResourceRoute(location.pathname, new URLSearchParams(location.search));
-  const openFileId = openedView.kind === 'page' ? openedView.id : null;
-  const openPage = (id: string) => navigate(docsPagePath(id));
+  const { openPage, openPageId } = useOpenPage();
 
   const handleCreate = async () => {
     if (!canCreate || creating) return;
@@ -162,6 +99,13 @@ const PageSection = memo<PageSectionProps>(({ itemKey, scope }) => {
     />
   );
 
+  const narrowed = isSectionNarrowed(view);
+  const actionsClassName = cx(
+    'accordion-action',
+    accordionStyles.action,
+    accordionStyles.actionBorderless,
+  );
+
   return (
     <AccordionItem value={itemKey}>
       <AccordionHeader>
@@ -170,31 +114,50 @@ const PageSection = memo<PageSectionProps>(({ itemKey, scope }) => {
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
               {title}
             </Text>
-            {isValidating && !!rows?.length && <Spin size={'small'} variant={'network'} />}
+            {isValidating && !!groups?.length && <Spin size={'small'} variant={'network'} />}
           </Flexbox>
         </AccordionTrigger>
-        {scope === 'mine' && (
-          <div
-            className={cx(
-              'accordion-action',
-              accordionStyles.action,
-              accordionStyles.actionBorderless,
-            )}
-          >
-            {canCreate ? createButton : <Tooltip title={reason}>{createButton}</Tooltip>}
-          </div>
-        )}
+        {/* A type filter hides pages: keep its trigger on screen, not hover-only. */}
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={actionsClassName}
+          gap={2}
+          style={narrowed ? { opacity: 1 } : undefined}
+        >
+          <DropdownMenu items={viewMenu}>
+            <ActionIcon
+              active={narrowed}
+              icon={ListFilter}
+              size={'small'}
+              title={t('docs.sectionView.title')}
+            />
+          </DropdownMenu>
+          <ActionIcon
+            aria-label={t('docs.sectionView.openFullList')}
+            icon={PanelRightOpenIcon}
+            size={'small'}
+            title={t('docs.sectionView.openFullList')}
+            onClick={openFullList}
+          />
+          {scope === 'mine' &&
+            (canCreate ? createButton : <Tooltip title={reason}>{createButton}</Tooltip>)}
+        </Flexbox>
       </AccordionHeader>
       <AccordionPanel>
         <AsyncBoundary
-          data={rows}
+          data={groups}
           error={error}
           errorVariant={'inline'}
-          isEmpty={rows?.length === 0}
-          isLoading={rows === undefined && !error}
+          isEmpty={groups?.length === 0}
+          isLoading={groups === undefined && !error}
           loading={<SkeletonList paddingInline={4} rows={3} />}
           empty={
-            scope === 'mine' ? (
+            narrowed ? (
+              <Text fontSize={12} style={{ paddingInline: 12 }} type={'secondary'}>
+                {t('docs.sectionView.emptyFiltered')}
+              </Text>
+            ) : scope === 'mine' ? (
               <EmptyNavItem
                 disabled={!canCreate}
                 title={t('docs.myDocs.empty')}
@@ -209,23 +172,28 @@ const PageSection = memo<PageSectionProps>(({ itemKey, scope }) => {
           onRetry={() => revalidate()}
         >
           <Flexbox gap={1} paddingInline={4}>
-            {rows?.map(({ depth, doc }) => (
-              <PageRow
-                depth={depth}
-                doc={doc}
-                isOpen={openFileId === doc.id}
-                key={doc.id}
-                onOpen={openPage}
-              />
+            {groups?.map(({ id, rows }) => (
+              <Fragment key={id}>
+                {id !== 'all' && <GroupTitle id={id} />}
+                {rows.map(({ depth, doc }) => (
+                  <PageRow
+                    depth={depth}
+                    doc={doc}
+                    isOpen={openPageId === doc.id}
+                    key={doc.id}
+                    onOpen={openPage}
+                  />
+                ))}
+              </Fragment>
             ))}
             {hasMore && (
               <NavItem
                 icon={MoreHorizontal}
                 title={t('docs.viewAllPages')}
-                // Opens the paged all-pages drawer rather than the Docs home,
-                // whose mixed recent list is capped and mixes files in — an
-                // older page pushed out of both lists would be unreachable.
-                onClick={() => pageActions.openAllPagesDrawer()}
+                // Opens the section's paged full list rather than the Docs
+                // home, whose mixed recent list is capped and mixes files in —
+                // an older page pushed out of both lists would be unreachable.
+                onClick={openFullList}
               />
             )}
           </Flexbox>

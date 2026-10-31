@@ -1,8 +1,12 @@
+import { randomUUID } from 'node:crypto';
+import posixPath from 'node:path/posix';
+
 import {
   type SandboxCallToolResult,
   type SandboxExportFileResult,
   selectSandboxInitFiles,
 } from '@lobechat/builtin-tool-cloud-sandbox';
+import { getLocalImageMimeType, MAX_IMAGE_READ_BYTES } from '@lobechat/local-file-shell/read-image';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
 
@@ -17,8 +21,11 @@ import {
   buildSandboxEnvironmentInitCommand,
   environmentInitRan,
   environmentInitReport,
+  hasEnvironmentInitWork,
   SANDBOX_ENVIRONMENT_INIT_TIMEOUT_MS,
+  withEnvironmentVariables,
 } from './environmentInit';
+import { isSandboxAccessDeniedError, isSandboxAuthError } from './errors';
 import type {
   SandboxCommandResult,
   SandboxProvider,
@@ -29,6 +36,9 @@ import type {
 } from './types';
 
 const log = debug('lobe-server:sandbox:service');
+
+/** `readLocalFile` is the legacy name still used by ComputerRuntime and remote sandboxes. */
+const READ_FILE_TOOL_NAMES = new Set(['readFile', 'readLocalFile']);
 
 export class SandboxMiddlewareService implements SandboxService {
   readonly capabilities: SandboxProviderCapabilities;
@@ -54,7 +64,16 @@ export class SandboxMiddlewareService implements SandboxService {
     const report = await this.ensureEnvironmentInitialized();
     if (report) this.pendingEnvironmentReport = report;
     await this.ensureFilesInitialized();
-    const result = await this.provider.callTool(toolName, params);
+
+    if (READ_FILE_TOOL_NAMES.has(toolName) && typeof params.path === 'string') {
+      const mimeType = getLocalImageMimeType(params.path);
+      if (mimeType) return this.readSandboxImageFile(params.path, mimeType);
+    }
+
+    const result = await this.provider.callTool(
+      toolName,
+      this.applyEnvironmentVariables(toolName, params),
+    );
 
     // Held until a shell result can carry it: a first call that lists or
     // reads files has no output to put it in, and dropping it would hide a
@@ -64,6 +83,29 @@ export class SandboxMiddlewareService implements SandboxService {
     this.pendingEnvironmentReport = undefined;
 
     return withEnvironmentReport(toolName, result, pending);
+  }
+
+  /**
+   * A shell call with the topic's environment variables exported in front of
+   * its command, so the conversation's commands — and anything they start,
+   * like a coding agent — see what the environment declares, not only its
+   * clone and setup. Other tools, and calls without a string command, pass
+   * through unchanged.
+   */
+  private applyEnvironmentVariables(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const env = this.options.sandboxInitialization?.env;
+    if (
+      !env ||
+      !SHELL_TOOLS.has(toolName) ||
+      typeof params.command !== 'string' ||
+      !params.command.trim()
+    )
+      return params;
+
+    return { ...params, command: withEnvironmentVariables(params.command, env) };
   }
 
   /**
@@ -83,7 +125,9 @@ export class SandboxMiddlewareService implements SandboxService {
     this.environmentInitialized = true;
 
     const init = this.options.sandboxInitialization;
-    if (!init || !this.provider.capabilities.shell) return;
+    // An environment that only declares variables has nothing to apply to the
+    // folder: its variables go on each command instead.
+    if (!init || !hasEnvironmentInitWork(init) || !this.provider.capabilities.shell) return;
 
     try {
       const result = await this.provider.callTool('runCommand', {
@@ -111,6 +155,72 @@ export class SandboxMiddlewareService implements SandboxService {
 
       return environmentInitUnreachable(init.name);
     }
+  }
+
+  /**
+   * Sandbox counterpart of `readLocalImageFile`: remote readers decode files as
+   * UTF-8, so image bytes either fail or come back as mojibake. Upload the
+   * image through the export pipeline instead and return the same
+   * `{ isImage, imageUrl, imageFileId }` shape the device path produces, which
+   * ComputerRuntime routes to `state.images`. Failures degrade to an
+   * `[Image: name]` placeholder rather than failing the read.
+   */
+  private async readSandboxImageFile(
+    filePath: string,
+    mimeType: string,
+  ): Promise<SandboxCallToolResult> {
+    const filename = posixPath.basename(filePath);
+    const buildResult = (content: string, extra: Record<string, unknown> = {}) => ({
+      result: { content, fileType: mimeType, filename, isImage: true, ...extra },
+      success: true,
+    });
+
+    if (!this.provider.capabilities.exportFile || !this.options.fileService) {
+      return buildResult(
+        `[Image: ${filename}] (upload unavailable — this sandbox cannot export files; the model cannot view this image)`,
+      );
+    }
+
+    const exported = await this.exportAndUploadFile(filePath, filename, {
+      // A visitor's image preview gets the same share provenance the upload
+      // path stamps, so it never surfaces in the creator's library while
+      // `/f/:id` stays openable.
+      ...(this.options.agentShareVisitor
+        ? { metadata: { agentShare: this.options.agentShareVisitor } }
+        : {}),
+      storageName: `${randomUUID()}-${filename}`,
+    });
+
+    if (!exported.success) {
+      // Auth failures must stay failed so the execInSandbox route re-prompts
+      // for Market auth; access-denied refusals must stop the run. Neither may
+      // be softened into the upload-unavailable placeholder.
+      if (isSandboxAuthError(exported.error) || isSandboxAccessDeniedError(exported.error)) {
+        return { error: exported.error, result: null, success: false };
+      }
+
+      return buildResult(
+        `[Image: ${filename}] (upload unavailable — ${exported.error?.message || 'export failed'}; the model cannot view this image)`,
+      );
+    }
+
+    if (!exported.url) {
+      return buildResult(
+        `[Image: ${filename}] (upload unavailable — export failed; the model cannot view this image)`,
+      );
+    }
+
+    if (exported.size !== undefined && exported.size > MAX_IMAGE_READ_BYTES) {
+      return buildResult(
+        `Error: Image file is too large to preview (${exported.size} bytes, limit ${MAX_IMAGE_READ_BYTES}).`,
+      );
+    }
+
+    return buildResult(`[Image: ${filename}]`, {
+      fileType: exported.mimeType?.startsWith('image/') ? exported.mimeType : mimeType,
+      imageFileId: exported.fileId,
+      imageUrl: exported.url,
+    });
   }
 
   /**

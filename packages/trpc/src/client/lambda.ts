@@ -17,6 +17,11 @@ import superjson from 'superjson';
 import { isDesktop } from '@/const/version';
 import { type LambdaRouter } from '@/server/routers/lambda';
 
+import {
+  detectUnreadableServerResponse,
+  findUnreadableServerResponseError,
+} from './unreadableServerResponse';
+
 const log = debug('lobe-image:lambda-client');
 
 // 401 error debouncing: prevent showing multiple login notifications in short time
@@ -37,14 +42,19 @@ const isPublicShareRoute = () =>
 // says what actually happened.
 const TRANSFORM_RESULT_ERROR_MESSAGE = 'Unable to transform response from server';
 
+//
+// A body that is not JSON at all (a gateway HTML error page) is caught earlier,
+// in `linkOptions.fetch`, which still holds the response and can keep its
+// status and request id for the copy.
 const rewriteUnreadableResponseMessage = async (err: TRPCClientError<LambdaRouter>) => {
-  if (err.message !== TRANSFORM_RESULT_ERROR_MESSAGE) return;
+  const unreadable = findUnreadableServerResponseError(err);
+  if (!unreadable && err.message !== TRANSFORM_RESULT_ERROR_MESSAGE) return;
 
   // dynamic import to avoid circular dependency
   const { unreadableResponseMessage } =
     await import('@/components/Error/unreadableResponseMessage');
 
-  err.message = unreadableResponseMessage(err.meta?.responseJSON);
+  err.message = unreadableResponseMessage(err.meta?.responseJSON, unreadable);
 };
 
 // handle error
@@ -166,6 +176,13 @@ const linkOptions = {
     // Ensure credentials are included to send cookies (like mp_token)
     const response = await fetch(input, { ...init, credentials: 'include' });
     if (isDesktop && isProxyNetworkFailure(response)) void notifyRemoteServerNetworkError(response);
+
+    // Throw while the response is still in hand: past this point @trpc/client
+    // calls `res.json()` and, on an HTML error page, drops the response along
+    // with its status and the request id we need to trace the failure.
+    const unreadable = await detectUnreadableServerResponse(response);
+    if (unreadable) throw unreadable;
+
     return response;
   },
   headers: async () => {
@@ -208,7 +225,14 @@ const initialLoadProcedures = new Set(['user.getUserState', 'config.getGlobalCon
 // so every sibling procedure in the batch (e.g. `agent.getAgentConfigById`) fails
 // its `JSON.parse` with `Unexpected token '<'`. Split it out so a slow message
 // read only slows itself.
-const slowProcedures = new Set(['market.getAssistantList', 'message.getMessages']);
+// `project.detail` joins topic agents and reads members, tasks, works and
+// reviews; batched, it held the project's topic list sent beside it and a
+// project topic opened on a blank pane until the detail answered.
+const slowProcedures = new Set([
+  'market.getAssistantList',
+  'message.getMessages',
+  'project.detail',
+]);
 // Procedures whose latency is felt directly as "the UI is stuck". The gateway
 // token refresh gates every reconnect: until it answers, the client cannot
 // register the local operation that drives the status tray, the sidebar elapsed
@@ -251,6 +275,10 @@ const LARGE_INPUT_QUERY_PROCEDURES = new Set([
   // the batched GET's 2083-char budget, and a tool-heavy topic is exactly when
   // it is called.
   'message.getToolResultPayloads',
+  // The sidebar asks for every visible agent group's device binding at once;
+  // the supported 100-topic page can hold ~100 distinct agent ids, far past
+  // the batched GET's 2083-char budget.
+  'device.getAgentDeviceBindings',
 ]);
 
 /**

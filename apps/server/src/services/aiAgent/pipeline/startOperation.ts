@@ -9,6 +9,7 @@ import { isAbortError } from '@/server/services/agentRuntime/abort';
 
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
+import { resolveOperationInitSlots } from './operationInitSlots';
 import type { OperationPrepResult } from './operationPrep';
 import { traceStartStage } from './sendTracing';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -50,6 +51,7 @@ export interface StartOperationInput {
   includeFinalState?: boolean;
   /** Final runtime context — base prep context with 16b/16c overrides applied. */
   initialContext: OperationPrepResult['initialContext'];
+  initialLlmCalls?: number;
   initialStepCount?: number;
   /** Relay executor the calling client declared; lands on `state.host.llmExecutor`. */
   llmExecutor?: InternalExecAgentParams['llmExecutor'];
@@ -62,6 +64,8 @@ export interface StartOperationInput {
   providedApprovalResolutionRequestId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** See {@link InternalExecAgentParams.reservedOperationId}. */
+  reservedOperation?: boolean;
   signal?: AbortSignal;
   stream?: boolean;
   topicStartOwnerOperationId?: string;
@@ -119,6 +123,7 @@ export const startOperation = async (
     evalRuntime,
     hooks,
     initialContext,
+    initialLlmCalls,
     initialStepCount,
     maxSteps,
     operationId,
@@ -128,6 +133,7 @@ export const startOperation = async (
     providedApprovalResolutionRequestId,
     queueRetries,
     queueRetryDelay,
+    reservedOperation,
     signal,
     stream,
     topicStartOwnerOperationId,
@@ -136,7 +142,6 @@ export const startOperation = async (
     userInterventionConfig,
     userTimezone,
   } = input;
-  const { audio, video, vision } = discovery.modelMediaCapabilities;
   // A builder topic continued from another surface (scope `main`, an approval
   // resume) arrives without the group it edits; the group the topic was opened
   // on stands in, so the run still knows its target.
@@ -188,16 +193,19 @@ export const startOperation = async (
     const inheritedEditingGroupId = approvalSourceOperationId
       ? await deps.agentRuntimeService.getOperationEditingGroupId(approvalSourceOperationId)
       : undefined;
+    const { modelCapabilities, ...initSlots } = await resolveOperationInitSlots({
+      discovery,
+      initialContext,
+      prep,
+    });
     const result = await deps.agentRuntimeService.createOperation({
+      ...initSlots,
       acceptsFileWorks: fileWorksAccepted,
       acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,
       clientProtocol: input.clientProtocol,
       includeFinalState: input.includeFinalState,
       llmExecutor,
-      activeDeviceId: discovery.activeDeviceId,
-      activeDeviceScope: discovery.activeDeviceScope,
       agentConfig,
-      agentGroup: discovery.operationAgentGroup,
       agentShareVisitor: shareGate
         ? {
             agentId: shareGate.agentId,
@@ -238,11 +246,7 @@ export const startOperation = async (
             visitorUserId: shareGate.visitorUserId,
           }
         : undefined,
-      deviceSystemInfo:
-        Object.keys(prep.deviceSystemInfo).length > 0 ? prep.deviceSystemInfo : undefined,
       disabledPluginIds,
-      executionPlan: discovery.executionPlan,
-      searchDecision: discovery.searchDecision,
       userTimezone,
       appContext: {
         // Background self-iteration runs execute under a builtin slug (so they
@@ -252,6 +256,7 @@ export const startOperation = async (
         // context (state.origin.agentId) targets the reviewed agent; ordinary
         // runs (no marker) fall back to the resolved executing agent.
         agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
+        assistantMessageId,
         // Propagate the originating request's client IP / user agent into
         // state.metadata (via the `...appContext` spread in createOperation) so
         // downstream LLM-call metadata can carry them for auditing and spend
@@ -308,16 +313,10 @@ export const startOperation = async (
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
       discordContext,
-      // Run context the context engine injects into the system message —
-      // carried on the operation like `expertise`, not on the agent config.
-      connectorOwnershipNote: discovery.connectorOwnershipNote,
       evalContext,
       evalRuntime,
       enableExpertise,
-      expertise: prep.expertise,
-      projectInstructions: prep.projectInstructions,
-      initialContext,
-      initialMessages: prep.allMessages,
+      initialLlmCalls,
       initialStepCount,
       ...(providedApprovalResolutionRequestId && approvalSourceOperationId
         ? {
@@ -336,42 +335,17 @@ export const startOperation = async (
           }
         : {}),
       maxSteps,
-      modelRuntimeConfig: {
-        mediaCapabilities: {
-          ...(typeof audio === 'boolean' && { audio }),
-          ...(typeof video === 'boolean' && { video }),
-          ...(typeof vision === 'boolean' && { vision }),
-        },
-        // Read once during discovery: every LLM attempt of this run resolves its
-        // parameters from here, so no step re-reads the bank, the user's model
-        // row or the reasoning config — and none of them can change mid-run.
-        modelFacts: discovery.modelFacts,
-        model,
-        provider,
-      },
+      modelRuntimeConfig: { ...modelCapabilities, model, provider },
       hooks,
-      // Listed once during discovery: every step renders {{CREDS_LIST}} from
-      // here instead of asking the Market API again. Awaited only now, so the
-      // read overlapped with the operation preparation that ran in between.
-      operationCredentials: await discovery.credentialFactsPromise,
       operationId,
       parentOperationId,
+      reservedOperation,
       signal,
       queueRetries,
       queueRetryDelay,
       stream,
-      toolSet: {
-        activatableToolIds: prep.activatableToolIds,
-        enabledToolIds: discovery.toolsResult.enabledToolIds,
-        executorMap: discovery.toolExecutorMap,
-        manifestMap: discovery.toolManifestMap,
-        sourceMap: discovery.toolSourceMap,
-        tools: discovery.tools,
-      },
-      operationSkillSet: prep.operationSkillSet,
       userId: deps.userId,
       userInterventionConfig,
-      userMemory: prep.userMemory,
       workspaceId: deps.workspaceId,
     });
     approvalClaim.continuationStarted = true;

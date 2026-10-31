@@ -147,7 +147,10 @@ export const queryMemories = async (
   ];
 
   const filters = conditions.filter((condition): condition is SQL => condition !== undefined);
-  const whereClause = filters.length > 0 ? and(...filters) : undefined;
+  const whereClause =
+    filters.length > 0
+      ? and(...filters)
+      : /* v8 ignore next -- unreachable: eq()/inArray() always yield SQL, so filters is never empty */ undefined;
 
   const applyOrder = order === 'asc' ? asc : desc;
 
@@ -250,7 +253,7 @@ export const queryMemories = async (
               (condition): condition is SQL => condition !== undefined,
             ) as SQL[]),
           )
-        : undefined;
+        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
 
       const rowsQuery = ctx.db
         .select({
@@ -360,7 +363,7 @@ export const queryMemories = async (
               (condition): condition is SQL => condition !== undefined,
             ) as SQL[]),
           )
-        : undefined;
+        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
 
       const rowsQuery = ctx.db
         .select({
@@ -468,7 +471,7 @@ export const queryMemories = async (
               (condition): condition is SQL => condition !== undefined,
             ) as SQL[]),
           )
-        : undefined;
+        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
 
       const rowsQuery = ctx.db
         .select({
@@ -564,7 +567,7 @@ export const queryMemories = async (
               (condition): condition is SQL => condition !== undefined,
             ) as SQL[]),
           )
-        : undefined;
+        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
 
       const rowsQuery = ctx.db
         .select({
@@ -667,7 +670,7 @@ export const queryMemories = async (
               (condition): condition is SQL => condition !== undefined,
             ) as SQL[]),
           )
-        : undefined;
+        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
 
       const rowsQuery = ctx.db
         .select({

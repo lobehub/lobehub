@@ -1,4 +1,4 @@
-export { settleWithin } from '@lobechat/replica';
+export { settleWithin } from 'local-replica';
 
 /**
  * Upper bound for a route loader's pre-paint hydrate.

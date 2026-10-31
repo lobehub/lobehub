@@ -330,6 +330,11 @@ export const agentQuotaRouter = router({
       ),
     ),
 
+  /** Agent runs in flight on an account — who is spending it right now. */
+  listActiveRuns: quotaProcedure
+    .input(z.object({ accountId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.quotaService.listActiveRuns(input.accountId)),
+
   // ── load balancing ───────────────────────────────────────────────────────
   resolveAccountLoads: quotaProcedure
     .input(z.object({ accountIds: z.array(z.string()) }))

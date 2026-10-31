@@ -102,6 +102,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+const closePopoverMock = vi.hoisted(() => vi.fn());
+
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   const factories: ((original: typeof importOriginal) => unknown)[] = [
@@ -186,10 +188,13 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
     const part = (await factory(importOriginal)) as Record<string, unknown>;
     for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
   }
+  // The mocked Popover has no provider; the header switcher closes it before opening modals.
+  merged.usePopoverContext = () => ({ close: closePopoverMock });
   return merged;
 });
 
 beforeEach(() => {
+  closePopoverMock.mockReset();
   isolateQuotaReplica();
   confirmModalMock.mockReset();
   mockService.consumeCodexRateLimitResetCredit.mockReset();
@@ -222,6 +227,7 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     fireEvent.click(await screen.findByTestId('calendar'));
 
+    expect(closePopoverMock).toHaveBeenCalledTimes(1);
     expect(openQuotaCalendarModal).toHaveBeenCalledWith({
       externalAccountId: 'ext-1',
       provider: 'claude-code',

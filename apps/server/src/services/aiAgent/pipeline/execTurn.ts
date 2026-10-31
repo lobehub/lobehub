@@ -1,6 +1,7 @@
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { AgentSenderMetadata, ExecAgentResult, UserInterventionConfig } from '@lobechat/types';
+import { agentShareFileAccessScope, ordinaryFileAccessScope } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -20,10 +21,12 @@ import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
 import type { ComposioService } from '@/server/services/composio';
+import { DocumentService } from '@/server/services/document';
 import type { MarketService } from '@/server/services/market';
 
 import { createRunFacts, type RunFacts } from '../runFacts';
 import { applyShareGateToAgentConfig } from '../shareGate';
+import { assertAgentRelayHop } from '../sourceAttribution';
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
 import { claimApprovalResume, tryReuseInterventionContinuation } from './approvalResume';
@@ -123,6 +126,7 @@ export const execAgentTurn = async (
     evalRuntime,
     maxSteps,
     disableLocalSystem,
+    initialLlmCalls,
     initialStepCount,
     signal,
     userInterventionConfig: requestedUserInterventionConfig = { approvalMode: 'headless' },
@@ -188,6 +192,19 @@ export const execAgentTurn = async (
   // Determine the identifier to use (agentId takes precedence)
   const identifier = agentId || slug!;
 
+  if (params.reservedOperationId) {
+    const reserved = await deps.agentOperationModel.findById(params.reservedOperationId);
+    if (
+      !reserved ||
+      reserved.status !== 'idle' ||
+      reserved.agentId !== agentId ||
+      reserved.topicId !== appContext?.topicId ||
+      reserved.userId !== deps.userId ||
+      (reserved.workspaceId ?? undefined) !== deps.workspaceId
+    )
+      throw new Error('The reserved operation does not match this execution');
+  }
+
   log('execAgent: identifier=%s, prompt=%s', identifier, prompt.slice(0, 50));
 
   const operationTaskId = await deps.resolveOperationTaskId(taskId ?? appContext?.taskId);
@@ -249,6 +266,7 @@ export const execAgentTurn = async (
       {
         appContext,
         chatConfigOverride,
+        agentConfigSnapshot: params.agentConfigSnapshot,
         identifier,
         instructions,
         modelOverride,
@@ -369,10 +387,12 @@ export const execAgentTurn = async (
   // Agent → agent attribution: resolve the launching run's agent into a
   // display snapshot once, before the turn rows exist, so the persisted user
   // message carries a self-contained sender block.
-  const agentSender = await deps.resolveSourceAgentSnapshot(
-    resolvedAgentId,
-    params.sourceOperationId,
-  );
+  const agentSender =
+    params.agentSender ??
+    (await deps.resolveSourceAgentSnapshot(resolvedAgentId, params.sourceOperationId));
+  // Two agents told to report back to each other would otherwise wake each
+  // other forever; past the bound a person has to step in.
+  assertAgentRelayHop(agentSender);
 
   // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
   // model), device-access policy, hetero detection, attachment ingestion, and
@@ -461,8 +481,12 @@ export const execAgentTurn = async (
           }
         : appContext,
     assistantMessageId: turn.assistantMessageId,
+    botContext,
+    botPlatformContext,
     canUseDevice,
     deviceAccessReason,
+    disabledPluginIds,
+    discordContext,
     model,
     parentMessageId,
     persistAgentId,
@@ -507,6 +531,7 @@ export const execAgentTurn = async (
         memberDeviceOverride,
         operationTaskId,
         onOperationCreated: params.onOperationCreated,
+        reservedOperationId: params.reservedOperationId,
         parentOperationId,
         pinnedHeterogeneousTopicModel: turn.pinnedHeterogeneousTopicModel,
         pinnedHeterogeneousTopicSources: turn.pinnedHeterogeneousTopicSources,
@@ -560,7 +585,9 @@ export const execAgentTurn = async (
 
   // 15. Generate operation ID: op_{timestamp}_{agentId}_{topicId}_{random}
   const operationId =
-    continuationOperationId ?? `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
+    params.reservedOperationId ??
+    continuationOperationId ??
+    `op_${Date.now()}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
   // Stages 5–18 — the run's init: the tool surface, the message/context
   // assembly, and the human decision a resumed approval turns into the first
@@ -573,15 +600,12 @@ export const execAgentTurn = async (
     approvalOwnerAssistantId,
     approvedToolEntries,
     attachedFileIds,
-    botContext,
-    botPlatformContext,
     disableLocalSystem,
     disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
     disableTools: params.disableTools,
-    disabledPluginIds,
-    discordContext,
     ephemeralUserMessage,
     exclusivePluginIds,
+    existingMessageIds,
     files,
     functionTools,
     globalMemoryEnabled,
@@ -589,19 +613,22 @@ export const execAgentTurn = async (
     isFixedDeviceTarget: turn.isFixedDeviceTarget,
     localDeviceId,
     mentionedAgents,
-    operationId,
     parentMessageId,
+    prompt,
+    requestedTopicId: appContext?.topicId ?? undefined,
     requestTrigger: requestTriggerMetadata.trigger,
     requestedDeviceId: turn.requestedDeviceId,
     resumeApproval,
     resumeApprovalPlugin,
     resumeApprovals,
+    resume,
     resumeFromHistory: runFromHistory,
     resumeToolResult: resolvedToolResult,
     runAttachments,
     selectedSkillIds,
     selectedToolIds,
     topicBoundDeviceId: turn.topicBoundDeviceId,
+    viewedGoal: appContext?.viewedGoal,
   });
 
   const { discovery, initialContext, prep } = await traceSendStage('operation_init', () =>
@@ -619,6 +646,13 @@ export const execAgentTurn = async (
         loadHistoryMessages,
         messageModel: deps.messageModel,
         pluginModel: deps.pluginModel,
+        readFileContent: async (fileId) =>
+          (
+            await new DocumentService(deps.db, deps.userId, deps.workspaceId).parseFile(
+              fileId,
+              shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
+            )
+          ).content ?? undefined,
         throwIfExecutionAborted,
         topicModel: deps.topicModel,
         userId: deps.userId,
@@ -626,6 +660,7 @@ export const execAgentTurn = async (
       },
       runContext,
       initRequest,
+      operationId,
     ),
   );
 
@@ -712,6 +747,7 @@ export const execAgentTurn = async (
         evalRuntime,
         hooks,
         initialContext,
+        initialLlmCalls,
         initialStepCount,
         maxSteps,
         operationId,
@@ -721,6 +757,7 @@ export const execAgentTurn = async (
         providedApprovalResolutionRequestId,
         queueRetries,
         queueRetryDelay,
+        reservedOperation: !!params.reservedOperationId,
         signal,
         stream,
         clientProtocol: params.clientProtocol,

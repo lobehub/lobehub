@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * The cloud-sandbox entitlement, the composer picker's environment and
- * instance lists and a bound instance's directory are `@lobechat/replica`
+ * instance lists and a bound instance's directory are `local-replica`
  * resources: a cold start paints the persisted answer while the network
  * confirms it, only slim projections reach storage, the instance list is one
  * row however many conversations ask, and scopes stay isolated.

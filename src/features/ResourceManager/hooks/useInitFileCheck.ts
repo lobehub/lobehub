@@ -15,6 +15,7 @@ import { useResourceManagerStore } from '../store';
  * /resource/drive?file=xxxxxx
  *
  * `pathFileId` is the item a route path names (`/resource/file/:id`,
+ * `/resource/library/:id/{docs,file}/:itemId`,
  * `/resource/page/:id`); it wins over the `?file=` query.
  */
 export const useInitFileCheck = (pathFileId?: string | null) => {

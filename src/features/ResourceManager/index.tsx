@@ -7,13 +7,16 @@ import { useLocation, useSearchParams } from 'react-router';
 import DragUploadZone from '@/components/DragUploadZone';
 import { PageEditor } from '@/features/PageEditor';
 import { RESOURCE_HOME_PATH } from '@/features/ResourceHome/paths';
+import { useLibraryItemBackPath } from '@/features/ResourceManager/hooks/useLibraryItemBackPath';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { LIBRARY_ITEM_PATH } from '@/features/ResourceManager/utils/resourcePath';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import dynamic from '@/libs/next/dynamic';
 import { invalidateDocumentMutation } from '@/services/document/invalidation';
 import { useFileStore } from '@/store/file';
 import { documentSelectors } from '@/store/file/slices/document/selectors';
+import { pageSelectors, usePageStore } from '@/store/page';
 
 import FileEditor from './components/Editor';
 import Explorer from './components/Explorer';
@@ -85,6 +88,12 @@ const ResourceManager = memo<ResourceManagerProps>(({ content, explorerHero }) =
     ]);
 
   const currentDocument = useFileStore(documentSelectors.getDocumentById(currentViewItemId));
+  // The sidebar row the page was opened from already knows its title and emoji;
+  // without it the header reads "Untitled" until the page fetch lands.
+  const [listedTitle, listedEmoji] = usePageStore((s) => {
+    const row = pageSelectors.getDocumentById(currentViewItemId)(s);
+    return [row?.title, row?.metadata?.emoji as string | undefined] as const;
+  });
   const useFetchDocumentDetail = useFileStore((s) => s.useFetchDocumentDetail);
   const { allowed: canUpload } = usePermission('create_content');
   const uploadTopLevel = useTopLevelFileUpload();
@@ -111,12 +120,24 @@ const ResourceManager = memo<ResourceManagerProps>(({ content, explorerHero }) =
   // persisted projection on the first frame and the network only confirms it.
   useFetchDocumentDetail(currentViewItemId);
 
+  const isLibraryItemRoute = LIBRARY_ITEM_PATH.test(location.pathname);
+  const libraryBackPath = useLibraryItemBackPath(
+    libraryId,
+    isLibraryItemRoute ? currentViewItemId : undefined,
+  );
+
   const handleBack = () => {
     setMode('explorer');
     setCurrentViewItemId(undefined);
     // An item opened by path (`/resource/{file,page}/:id`) goes back to the Docs home.
     if (OPENED_ITEM_PATH.test(location.pathname)) {
       navigate(RESOURCE_HOME_PATH);
+      return;
+    }
+    // An item opened inside a library (`/resource/library/:id/{docs,file}/:itemId`)
+    // goes back to the folder that holds it.
+    if (isLibraryItemRoute && libraryBackPath) {
+      navigate(libraryBackPath);
       return;
     }
     // Remove the file query parameter from URL
@@ -159,10 +180,10 @@ const ResourceManager = memo<ResourceManagerProps>(({ content, explorerHero }) =
           {mode === 'page' && (
             <Flexbox className={styles.pageEditorOverlay}>
               <PageEditor
-                emoji={currentDocument?.metadata?.emoji as string | undefined}
+                emoji={(currentDocument?.metadata?.emoji as string | undefined) ?? listedEmoji}
                 knowledgeBaseId={libraryId}
                 pageId={currentViewItemId}
-                title={currentDocument?.title}
+                title={currentDocument?.title ?? (listedTitle || undefined)}
                 onBack={handleBack}
                 onEmojiChange={handleMetadataSaved}
                 onTitleChange={handleMetadataSaved}

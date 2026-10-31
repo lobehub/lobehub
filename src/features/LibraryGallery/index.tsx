@@ -77,8 +77,8 @@ const LibraryGallery = memo(() => {
           <Button
             disabled={!canCreate}
             icon={PlusIcon}
-            size={'small'}
             title={canCreate ? undefined : reason}
+            type={'primary'}
             onClick={handleCreate}
           >
             {t('library.new')}

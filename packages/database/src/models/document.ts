@@ -61,10 +61,17 @@ export interface QueryDocumentParams {
   excludeKnowledgeBaseIds?: string[];
   fileTypes?: string[];
   pageSize?: number;
+  /**
+   * Row order: `updatedAt` (default) and `createdAt` list the newest first,
+   * `title` lists A→Z. Ties fall back to the id so offset pages never overlap.
+   */
+  sortBy?: DocumentQuerySortBy;
   sourceTypes?: string[];
   /** Keep only documents that live outside every knowledge base. */
   standaloneOnly?: boolean;
 }
+
+export type DocumentQuerySortBy = 'createdAt' | 'title' | 'updatedAt';
 
 export const DOCUMENT_TRANSFER_FOREIGN_ROWS =
   'Document subtree contains content created by other users';
@@ -190,6 +197,7 @@ export class DocumentModel {
     pageSize = 9999,
     excludeKnowledgeBaseIds,
     fileTypes,
+    sortBy = 'updatedAt',
     sourceTypes,
     standaloneOnly,
   }: QueryDocumentParams = {}): Promise<{
@@ -255,6 +263,13 @@ export class DocumentModel {
     }
 
     const whereCondition = and(...conditions);
+    const orderBy =
+      sortBy === 'title'
+        ? [asc(documents.title), desc(documents.updatedAt), asc(documents.id)]
+        : [
+            desc(sortBy === 'createdAt' ? documents.createdAt : documents.updatedAt),
+            asc(documents.id),
+          ];
 
     // Fetch items and total count in parallel
     // Optimize: Exclude large JSONB fields (content, pages, editorData) for better performance
@@ -287,7 +302,7 @@ export class DocumentModel {
         })
         .from(documents)
         .where(whereCondition)
-        .orderBy(desc(documents.updatedAt))
+        .orderBy(...orderBy)
         .limit(pageSize)
         .offset(offset),
       this.db
@@ -828,6 +843,7 @@ export class DocumentModel {
         if (seen.has(currentId)) continue;
         seen.add(currentId);
         const original = byId.get(currentId);
+        /* v8 ignore next -- unreachable: the queue only holds documentId (the subtree root collectSubtree fetched by that id) and ids pushed from subtree rows, so byId always has it */
         if (!original) continue;
 
         const newParentId =

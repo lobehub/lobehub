@@ -450,13 +450,13 @@ describe('user memory query layer', () => {
     });
 
     it('deduplicates contexts before applying the lexical candidate limit', async () => {
-      const { memory: linkedMemoryOne } = await createContextPair({
+      const { context: linkedContextOne, memory: linkedMemoryOne } = await createContextPair({
         description: 'Atlas roadmap and staffing',
         memoryTags: ['atlas'],
         tags: ['atlas'],
         title: 'Atlas staffing',
       });
-      const { memory: linkedMemoryTwo } = await createContextPair({
+      const { context: linkedContextTwo, memory: linkedMemoryTwo } = await createContextPair({
         description: 'Atlas roadmap and staffing duplicate link',
         memoryTags: ['atlas'],
         tags: ['atlas'],
@@ -479,6 +479,16 @@ describe('user memory query layer', () => {
         tags: ['atlas'],
         title: 'Atlas dependency context',
       });
+
+      // Rows inserted back to back can share a capturedAt; give them a strict recency order so the
+      // limit always keeps the two newest contexts.
+      const byRecency = [linkedContextOne, linkedContextTwo, duplicatedContext, distinctContext];
+      for (const [index, context] of byRecency.entries()) {
+        await serverDB
+          .update(userMemoriesContexts)
+          .set({ capturedAt: new Date(Date.UTC(2026, 0, 1, 0, index)) })
+          .where(eq(userMemoriesContexts.id, context.id));
+      }
 
       const result = await memoryModel.searchMemory({
         layers: [LayersEnum.Context],

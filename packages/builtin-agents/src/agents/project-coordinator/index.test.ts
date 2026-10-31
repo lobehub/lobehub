@@ -33,4 +33,10 @@ describe('createProjectCoordinatorAgentConfig', () => {
     expect(config.systemRole).not.toContain('LobeHub');
     expect(config.systemRole).not.toContain('Ship the next release');
   });
+
+  it('builds the config for a project without an identifier', () => {
+    const config = createProjectCoordinatorAgentConfig({ name: 'LobeHub' });
+
+    expect(config.title).toBe('LobeHub Coordinator');
+  });
 });

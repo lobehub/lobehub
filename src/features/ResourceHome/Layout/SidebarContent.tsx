@@ -2,32 +2,38 @@
 
 import { AccordionRoot, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
-import AllPagesDrawer from '@/features/Pages/PageLayout/Body/AllPagesDrawer';
 import { pageActions, usePageStore } from '@/store/page';
 
 import SidebarBody from './Body';
 import PageSection from './Body/PageSection';
+import FullListDrawer from './Body/PageSection/FullListDrawer';
 import Header from './Header';
 
 /**
- * Every page, not just the first 20 a section lists. The sections only carry a
- * capped slice, and the home dashboard's mixed list is capped too, so without
- * this drawer an older page pushed out of the slice has no listing that can
- * reach it.
+ * Every page of a section, not just the first rows it lists. The sections only
+ * carry a capped slice, and the home dashboard's mixed list is capped too, so
+ * without this panel an older page pushed out of the slice has no listing that
+ * can reach it. One panel serves both sections; the last one opened wins.
  */
-const AllPagesDrawerHost = memo(() => {
-  // The drawer pages the global page list, which the sections never load — they
-  // read their own capped projection.
-  pageActions.useFetchDocuments();
-  const open = usePageStore((s) => s.allPagesDrawerOpen);
+const FullListDrawerHost = memo(() => {
+  const { t } = useTranslation('file');
+  const [open, scope] = usePageStore((s) => [s.sectionFullListOpen, s.sectionFullListScope]);
 
-  return <AllPagesDrawer open={open} onClose={pageActions.closeAllPagesDrawer} />;
+  return (
+    <FullListDrawer
+      open={open}
+      scope={scope}
+      title={t(scope === 'mine' ? 'docs.myDocs.title' : 'docs.shared.title')}
+      onClose={pageActions.closeSectionFullList}
+    />
+  );
 });
 
-AllPagesDrawerHost.displayName = 'DocsAllPagesDrawerHost';
+FullListDrawerHost.displayName = 'DocsFullListDrawerHost';
 
 export enum GroupKey {
   Library = 'library',
@@ -60,7 +66,7 @@ const ResourceSidebarContent = memo(() => {
               {workspaceId && <PageSection itemKey={GroupKey.Shared} scope={'shared'} />}
             </AccordionRoot>
           </Flexbox>
-          <AllPagesDrawerHost />
+          <FullListDrawerHost />
         </>
       }
     />

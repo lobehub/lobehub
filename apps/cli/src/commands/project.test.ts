@@ -86,6 +86,12 @@ describe('project command', () => {
     );
   });
 
+  it('creates a project without an identifier', async () => {
+    mockClient.project.create.mutate.mockResolvedValue({ data: { id: 'prj_2' } });
+    await createProgram().parseAsync(['node', 'test', 'project', 'create', '--name', 'Apollo']);
+    expect(mockClient.project.create.mutate).toHaveBeenCalledWith({ name: 'Apollo' });
+  });
+
   it('binds an agent with its project role', async () => {
     mockClient.project.addAgent.mutate.mockResolvedValue({ success: true });
     await createProgram().parseAsync([
@@ -110,7 +116,7 @@ describe('project command', () => {
     mockResolveWorkspaceId.mockReturnValue('ws-1');
     mockClient.workspace.getById.query.mockResolvedValue({ id: 'ws-1', slug: 'lobehub' });
     mockClient.task.create.mutate.mockResolvedValue({
-      data: { identifier: 'T-1' },
+      data: { id: 'task_1', identifier: 'T-1' },
     });
     await createProgram().parseAsync([
       'node',

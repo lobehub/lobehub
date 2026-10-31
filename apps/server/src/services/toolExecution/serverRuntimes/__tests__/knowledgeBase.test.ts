@@ -5,6 +5,7 @@ import type { ToolExecutionContext } from '../../types';
 import { knowledgeBaseRuntime } from '../knowledgeBase';
 
 const mocks = vi.hoisted(() => ({
+  createDocument: vi.fn(),
   getAgentAssignedKnowledge: vi.fn(),
   getEnabledKnowledgeBaseIds: vi.fn(),
   getEnabledKnowledgeBaseIdsForTask: vi.fn(),
@@ -29,7 +30,11 @@ vi.mock('@/database/models/project', () => ({
 vi.mock('@/database/models/file', () => ({ FileModel: vi.fn() }));
 vi.mock('@/database/models/knowledgeBase', () => ({ KnowledgeBaseModel: vi.fn() }));
 vi.mock('@/database/repositories/knowledge', () => ({ KnowledgeRepo: vi.fn() }));
-vi.mock('@/server/services/document', () => ({ DocumentService: vi.fn() }));
+vi.mock('@/server/services/document', () => ({
+  DocumentService: vi.fn().mockImplementation(function () {
+    return { createDocument: mocks.createDocument };
+  }),
+}));
 vi.mock('@/server/services/file', () => ({ FileService: vi.fn() }));
 
 vi.mock('@/server/services/knowledgeBase', () => ({
@@ -112,6 +117,34 @@ describe('knowledgeBaseRuntime searchKnowledgeBase scope', () => {
     expect(mocks.getEnabledKnowledgeBaseIdsForTask).not.toHaveBeenCalled();
     expect(mocks.semanticSearchForChat).toHaveBeenCalledWith(
       expect.objectContaining({ knowledgeIds: ['kb_agent', 'kb_project'] }),
+    );
+  });
+});
+
+describe('knowledgeBaseRuntime createDocument', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createDocument.mockResolvedValue({ id: 'docs_1' });
+  });
+
+  /**
+   * Regression: the document title renders as the page header, so a body that
+   * opened with the same `# Title` showed it twice, and the page was stored
+   * with an empty `{}` editor state instead of one built from the Markdown.
+   */
+  it('drops the body heading that repeats the title and stores real editor state', async () => {
+    await createRuntime().createDocument({
+      content: '# Launch checklist\n\n- ship it\n',
+      knowledgeBaseId: 'kb_product',
+      title: 'Launch checklist',
+    });
+
+    expect(mocks.createDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: '- ship it\n',
+        editorData: expect.objectContaining({ root: expect.anything() }),
+        title: 'Launch checklist',
+      }),
     );
   });
 });

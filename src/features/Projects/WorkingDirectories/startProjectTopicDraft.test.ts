@@ -78,6 +78,6 @@ describe('startProjectTopicDraft', () => {
       projectWorkingDirectoryId: 'pwd_1',
     });
     // The draft rides in the route so it stays with the pane that opened it.
-    expect(navigate).toHaveBeenCalledWith('/project/prj_1/conversation?agent=agt_1&dir=pwd_1');
+    expect(navigate).toHaveBeenCalledWith('/project/prj_1/topic?agent=agt_1&dir=pwd_1');
   });
 });

@@ -11,6 +11,7 @@ import NavHeader from '@/features/NavHeader';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { getExplorerSelectedCount } from '@/features/ResourceManager/store/selectors';
 import { openWorkspaceDeleteAllModal } from '@/features/WorkspaceDeleteAllModal';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
 
@@ -50,6 +51,7 @@ const Header = memo(() => {
     s.viewMode,
   ]);
   const { allowed: canEditResources, reason } = usePermission('edit_own_content');
+  const isMobile = useIsMobile();
   const total = useFileStore((s) => s.total);
   const selectCount = getExplorerSelectedCount({
     selectAllState,
@@ -163,7 +165,7 @@ const Header = memo(() => {
       />
     </Flexbox>
   ) : !libraryId ? (
-    <Flexbox style={{ marginLeft: 4 }}>
+    <Flexbox style={{ marginLeft: 4, minWidth: 0 }}>
       <DriveCategoryTabs />
     </Flexbox>
   ) : (
@@ -189,8 +191,9 @@ const Header = memo(() => {
           <SortDropdown />
           <BatchActionsDropdown selectCount={selectCount} onActionClick={onActionClick} />
           <ViewSwitcher />
-          <Flexbox style={{ marginLeft: 8 }}>
-            <AddButton />
+          <Flexbox style={{ marginLeft: isMobile ? 4 : 8 }}>
+            {/* A phone header has no room for the labelled button. */}
+            <AddButton iconOnly={isMobile} />
           </Flexbox>
         </>
       }

@@ -197,4 +197,33 @@ describe('search command', () => {
     expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(failure, null, 2));
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
+
+  it('opts untyped searches into goals', async () => {
+    mockTrpcClient.search.query.query.mockResolvedValue([
+      { id: 'goal_1', status: 'paused', title: 'Replica (STAMP)', type: 'goal' },
+    ]);
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'search', '-q', 'STAMP']);
+
+    expect(mockTrpcClient.search.query.query).toHaveBeenCalledWith(
+      expect.objectContaining({ includeGoals: true, query: 'STAMP' }),
+    );
+    const output = consoleSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(output).toContain('goal_1');
+  });
+
+  it.each(['goal', 'task'])('accepts the %s type', async (type) => {
+    mockTrpcClient.search.query.query.mockResolvedValue([]);
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'search', '-q', 'STAMP', '-t', type]);
+
+    expect(mockTrpcClient.search.query.query).toHaveBeenCalledWith(
+      expect.not.objectContaining({ includeGoals: true }),
+    );
+    expect(mockTrpcClient.search.query.query).toHaveBeenCalledWith(
+      expect.objectContaining({ type }),
+    );
+  });
 });

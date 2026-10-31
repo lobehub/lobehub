@@ -1,23 +1,25 @@
+import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCPClient } from './client';
 
 const connect = vi.hoisted(() => vi.fn());
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Client: class {
     connect = connect;
   },
 }));
+
+const httpError = (status: number, message: string) =>
+  new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, message, { status });
 
 beforeEach(() => connect.mockReset());
 
 describe('HTTP MCP authorization errors', () => {
   it('preserves a 401 challenge even when the SDK error message does not contain the status', async () => {
     connect.mockRejectedValueOnce(
-      Object.assign(
-        new Error('Streamable HTTP error: Error POSTing to endpoint: {"error":"invalid_token"}'),
-        { code: 401 },
-      ),
+      httpError(401, 'Error POSTing to endpoint: {"error":"invalid_token"}'),
     );
     const client = new MCPClient({
       name: 'oauth-mcp',
@@ -29,7 +31,7 @@ describe('HTTP MCP authorization errors', () => {
     });
   });
   it('leaves unrelated HTTP errors unchanged', async () => {
-    const error = Object.assign(new Error('Service unavailable'), { code: 503 });
+    const error = httpError(503, 'Service unavailable');
     connect.mockRejectedValueOnce(error);
     const client = new MCPClient({
       name: 'oauth-mcp',
@@ -40,7 +42,7 @@ describe('HTTP MCP authorization errors', () => {
   });
 
   it('does not mistake digits in an endpoint or message for an HTTP authorization status', async () => {
-    const error = Object.assign(new Error('Service not found at localhost:4010'), { code: 404 });
+    const error = httpError(404, 'Service not found at localhost:4010, HTTP 401 expected');
     connect.mockRejectedValueOnce(error);
     const client = new MCPClient({
       name: 'oauth-mcp',

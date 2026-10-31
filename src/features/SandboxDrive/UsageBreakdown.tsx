@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Avatar, Button, Flexbox, Icon, Text, toast, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import RetainedMemberDrives from '@/business/client/features/RetainedMemberDrives';
 import SandboxStorageOverQuotaAction from '@/business/client/features/SandboxStorageOverQuotaAction';
+import UserAvatar from '@/components/UserAvatar';
 import { formatSize } from '@/utils/format';
 
 import type { useDriveUsage } from './useDriveData';
@@ -332,7 +333,7 @@ export const UsageBreakdown = memo<{
                 flex={1}
                 gap={8}
               >
-                <Avatar avatar={member.avatar || member.name || member.userId} size={22} />
+                <UserAvatar avatar={member.avatar} name={member.name || member.userId} size={22} />
                 <Text ellipsis fontSize={13}>
                   {member.name || member.userId}
                 </Text>

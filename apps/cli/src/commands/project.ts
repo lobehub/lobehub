@@ -66,7 +66,10 @@ export function registerProjectCommand(program: Command) {
   project
     .command('create')
     .description('Create a project')
-    .requiredOption('-i, --identifier <identifier>', 'Task identifier prefix (for example LOBE)')
+    .option(
+      '-i, --identifier <identifier>',
+      'Task identifier prefix (for example ACE); omit to use the default prefix',
+    )
     .requiredOption('-n, --name <name>', 'Project name')
     .option('-d, --description <description>', 'Description')
     .option('--slug <slug>', 'Project slug')
@@ -74,7 +77,7 @@ export function registerProjectCommand(program: Command) {
     .action(
       async (options: {
         description?: string;
-        identifier: string;
+        identifier?: string;
         name: string;
         slug?: string;
         visibility?: (typeof PROJECT_VISIBILITIES)[number];

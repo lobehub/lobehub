@@ -28,6 +28,8 @@ it('keeps HTML and closing script tags inside the serialized bootstrap until it 
   expect(document.querySelectorAll('script')).toHaveLength(1);
   expect(document.querySelector('h1')).toBeNull();
   expect(() => new Function(document.querySelector('script')!.textContent!)).not.toThrow();
+  expect(html).toMatch(/script-src[^;]*'wasm-unsafe-eval'/);
+  expect(html).not.toContain("'unsafe-eval'");
 });
 
 it.each(['lowercase', 'uppercase'])(
@@ -76,6 +78,8 @@ it.each(['lowercase', 'uppercase'])(
     const html = String(write.mock.calls[0][0]);
     expect(blobs).toHaveLength(3);
     expect(html).toContain('type="importmap"');
+    expect(html).toMatch(/script-src[^;]*'wasm-unsafe-eval'/);
+    expect(html).not.toContain("'unsafe-eval'");
     expect(html).toContain('lobe-canvas-project/app.js');
     expect(html).toContain('src="blob:null/1#icon"');
     expect(html).not.toContain('href="css/app.css"');

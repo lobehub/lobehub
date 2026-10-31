@@ -24,15 +24,22 @@ A Canvas is a small web project (HTML, CSS, JS, JSON data and assets) that rende
 - \`<lobe-code>\` and \`<lobe-mermaid>\` hold plain text: write \`<\` as \`&lt;\` and \`&\` as \`&amp;\`. A tag inside them is rejected.
 - Colors follow the user's theme. Never hard-code colors on components (no \`style="color:#..."\`, no \`rgb()\`); use \`type\`, \`status\` or \`color\` attributes. Chart and tag colors are palette names: ${CANVAS_PALETTE.join(', ')}.
 
-## Report structure
+## Page layout
 
-1. Conclusion first: one \`<lobe-alert>\` stating the answer in a sentence.
-2. Key numbers: up to four \`<lobe-stat>\` in a \`<lobe-grid>\`.
-3. Evidence: charts and tables that support the conclusion, each with a heading that says what it shows.
-4. Recommendation and risks, if the user needs to act.
-5. Sources and coverage: what data this used, its time range and what it leaves out.
+There is no fixed template. Shape the page around what this content needs: a comparison leads with the comparison, a plan with its timeline, a data analysis with its main chart.
 
-Prefer one clear chart over several similar ones. Real numbers only; never placeholder data.
+- Say the answer early, in a heading or the first paragraph. \`<lobe-alert>\` is for a warning, a risk or a result the reader must not miss, not a default opener.
+- \`<lobe-stat>\` is for a few headline numbers the reader will track or compare. Many pages have none; never make up counts ("3 candidates", "5 projects") to fill a grid. Set \`trend\` only when the number is compared with an earlier value or a target.
+- Every chart and table backs a point stated in its heading. Prefer one clear chart over several similar ones.
+- Close with what the reader should do and with the data's sources, time range and gaps, when they matter.
+- Real numbers only; never placeholder data.
+
+## Display rules
+
+- \`<lobe-steps>\` \`status\` marks real progress. A list of recommendations or a sequence of actions has no status.
+- Chart \`index\` and \`categories\` values are shown to the reader as axis and legend labels: write them as readable names in the user's language, not code keys.
+- Do not style \`html\` or \`body\` (margin, padding, width, background); the host sets the page frame. Page CSS is for spacing inside your own layout.
+- Keep tables to about five columns; transpose or split a wider one. Keep Mermaid diagrams small and prefer top-down (\`flowchart TD\`); the page is often a narrow side panel.
 
 ## Interactivity
 

@@ -2,7 +2,6 @@
 
 import { Github } from '@lobehub/icons';
 import {
-  Avatar,
   Button,
   confirmModal,
   createStaticStyles,
@@ -20,6 +19,7 @@ import { EyeOffIcon, GlobeIcon, MoreHorizontalIcon, Trash2Icon } from 'lucide-re
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import UserAvatar from '@/components/UserAvatar';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 
 import { describeError } from './errorMessage';
@@ -262,14 +262,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
           // gives with the enroller's avatar.
           <Tooltip title={t('environments.meta.creatorTooltip', { name: creator })}>
             <span onClick={(event) => event.stopPropagation()}>
-              {/* The name is passed as the avatar itself, not only as
-                    `title`. `Avatar` derives its fallback text from
-                    `String(avatar)` first, so an undefined picture becomes the
-                    literal string "undefined" and every author without one
-                    renders the same "UN" — `title` never gets a turn. Since the
-                    row carries no badge, that placeholder would be the only
-                    thing left saying whose environment this is. */}
-              <Avatar avatar={environment.creator.avatar || creator} size={20} title={creator} />
+              <UserAvatar avatar={environment.creator.avatar} name={creator} size={20} />
             </span>
           </Tooltip>
         )}

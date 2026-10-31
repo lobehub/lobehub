@@ -31,6 +31,11 @@ export const RedisKeyNamespace = {
    */
   AGENT_IDENTITY: 'agent-identity',
   /**
+   * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
+   * silent-wake budget and the per-channel wake scheduler.
+   */
+  BOT_WAKE: 'bot-wake',
+  /**
    * AI generation related keys (agent welcome, placeholders, etc.)
    */
   AI_GENERATION: 'aiGeneration',
@@ -92,6 +97,54 @@ export const RedisKeys = {
      */
     nightlyTopics: (userId: string, localDate: string): string =>
       `nightly_topics:v1:${userId}:${localDate}`,
+  },
+  /**
+   * Bot-wake scope — see {@link RedisKeyNamespace.BOT_WAKE}. `{key}` is a channel or thread key
+   * built by the bot-wake scenario (`platform:applicationId:channel[:thread]`).
+   */
+  botWake: {
+    /**
+     * Classifier calls one bot made in one UTC hour.
+     * Full key: bot-wake:classifier_calls:v1:{applicationId}:{utcHour}
+     */
+    classifierCalls: (applicationId: string, utcHour: string): string =>
+      `classifier_calls:v1:${applicationId}:${utcHour}`,
+    /**
+     * Who spoke last in one channel or thread, the follow-up window and the silent-wake count.
+     * Full key: bot-wake:channel:v1:{key}
+     */
+    channel: (key: string): string => `channel:v1:${key}`,
+    /**
+     * The wake a bot already decided to start for one message, kept while the message is parked
+     * so its replay runs on that decision instead of judging the message a second time.
+     * Full key: bot-wake:initiation:v1:{applicationId}:{messageId}
+     */
+    initiation: (applicationId: string, messageId: string): string =>
+      `initiation:v1:${applicationId}:${messageId}`,
+    /**
+     * Set once a message has engaged a bot: it @-mentioned the bot when sent, the bot replied to
+     * it, or an edit already woke the bot on it. An edit that newly @-mentions the bot wakes it only
+     * while this key is absent, so one message never wakes the same bot twice.
+     * Full key: bot-wake:edit_wake:v1:{applicationId}:{messageId}
+     */
+    editWake: (applicationId: string, messageId: string): string =>
+      `edit_wake:v1:${applicationId}:${messageId}`,
+    /**
+     * The last messages said in one channel or thread, shared by every bot listening there, so it
+     * carries no application id.
+     * Full key: bot-wake:conversation_log:v1:{key}
+     */
+    conversationLog: (key: string): string => `conversation_log:v1:${key}`,
+    /**
+     * Wake scheduler state machine of one channel.
+     * Full key: bot-wake:scheduler:v1:{key}
+     */
+    scheduler: (key: string): string => `scheduler:v1:${key}`,
+    /**
+     * Short lock held while one writer updates a channel's scheduler state.
+     * Full key: bot-wake:scheduler_lock:v1:{key}
+     */
+    schedulerLock: (key: string): string => `scheduler_lock:v1:${key}`,
   },
   /**
    * Steer queue scope — see {@link RedisKeyNamespace.AGENT_STEER}.
@@ -167,7 +220,11 @@ export const RedisKeys = {
    * Lobechat core scope - for application-level caching
    */
   lobechat: {
-    // Add lobechat scope keys here as needed
+    /**
+     * Digest of the body the last projection of a page's collaboration room wrote.
+     * Full key: lobechat:page_projection:v1:{documentId}
+     */
+    pageProjection: (documentId: string): string => `page_projection:v1:${documentId}`,
   },
   /**
    * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.
@@ -206,6 +263,7 @@ export const RedisKeyScopeNamespace = {
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,
   sendPathCache: RedisKeyNamespace.SEND_PATH_CACHE,

@@ -219,7 +219,7 @@ export const CANVAS_COMPONENTS: readonly CanvasComponentSpec[] = [
     },
     category: 'text',
     children: 'content',
-    description: 'Callout for the conclusion or an important caveat.',
+    description: 'Callout for a warning, a risk or a result the reader must not miss.',
     example: '<lobe-alert type="info" title="Cost is up 23%">Almost all from Opus.</lobe-alert>',
     tag: 'lobe-alert',
   },
@@ -281,7 +281,8 @@ export const CANVAS_COMPONENTS: readonly CanvasComponentSpec[] = [
       'suffix': { description: 'Text after the value, e.g. "%".', type: 'string' },
       'title': { description: 'Label above the value.', required: true, type: 'string' },
       'trend': {
-        description: 'Direction of change, shown next to the value.',
+        description:
+          'Direction of change against an earlier value or a target, shown next to the value. Omit when there is no comparison.',
         type: 'enum',
         values: ['up', 'down', 'flat'],
       },
@@ -333,7 +334,7 @@ export const CANVAS_COMPONENTS: readonly CanvasComponentSpec[] = [
     attributes: {
       items: {
         description:
-          'JSON array of {"title","description"?,"status"?:"wait"|"process"|"finish"|"error"}.',
+          'JSON array of {"title","description"?,"status"?:"wait"|"process"|"finish"|"error"}. Set status only to track real progress.',
         required: true,
         type: 'json',
       },
@@ -342,7 +343,8 @@ export const CANVAS_COMPONENTS: readonly CanvasComponentSpec[] = [
     category: 'data',
     children: 'none',
     description: 'Ordered steps or a timeline.',
-    example: '<lobe-steps vertical items=\'[{"title":"Collect","status":"finish"}]\'></lobe-steps>',
+    example:
+      '<lobe-steps vertical items=\'[{"title":"Collect usage"},{"title":"Compare plans"}]\'></lobe-steps>',
     tag: 'lobe-steps',
   },
   {

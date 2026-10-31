@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The workspace-user preference bucket is a `@lobechat/replica` resource whose
+ * The workspace-user preference bucket is a `local-replica` resource whose
  * view is the user store's flat `workspaceUserPreference` field (+ the
  * `workspaceUserPreferenceWorkspaceId` loaded marker): a persisted projection
  * paints while the network confirms it, personal mode never hits the network,
@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { workspaceUserSettingsService } from '@/services/workspaceUserSettings';
+import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
 import { useUserStore } from '@/store/user';
 
 import { initialWorkspaceUserSettingsState } from './initialState';
@@ -33,6 +34,8 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   getActiveWorkspaceId: () => active.id,
   useActiveWorkspaceId: () => active.id,
 }));
+
+vi.mock('@/store/device/agentDeviceBinding', () => ({ refreshAgentDeviceBindings: vi.fn() }));
 
 vi.mock('@/services/workspaceUserSettings', () => ({
   workspaceUserSettingsService: {
@@ -138,34 +141,6 @@ describe('workspace user preference replica', () => {
     expect(entry('ws-1').source).toBe('server');
   });
 
-  // A route loader derives the topic list identity ("only mine") from this
-  // bucket before the route commits — nothing has mounted the sync yet.
-  it('seeds the persisted bucket before paint without a mounted sync', async () => {
-    await resource.storage!.set(
-      { queryKey: storageKey, scope },
-      { data: { topicOnlyMine: true }, updatedAt: 1 },
-    );
-
-    await expect(state().preHydrateWorkspaceUserPreference()).resolves.toBe(true);
-
-    expect(state().workspaceUserPreferenceWorkspaceId).toBe('ws-1');
-    expect(state().workspaceUserPreference).toEqual({ topicOnlyMine: true });
-    expect(workspaceUserSettingsService.getPreference).not.toHaveBeenCalled();
-  });
-
-  it('reports the preference as unknown when no local copy exists', async () => {
-    await expect(state().preHydrateWorkspaceUserPreference()).resolves.toBe(false);
-    expect(workspaceUserSettingsService.getPreference).not.toHaveBeenCalled();
-  });
-
-  it('skips the pre-paint seed in personal mode', async () => {
-    active.id = null;
-
-    // Personal mode has no row: nothing to wait for.
-    await expect(state().preHydrateWorkspaceUserPreference()).resolves.toBe(true);
-    expect(state().workspaceUserPreferenceWorkspaceId).toBeNull();
-  });
-
   it('never hits the network in personal mode (no active workspace)', async () => {
     active.id = null;
 
@@ -235,6 +210,46 @@ describe('workspace user preference replica', () => {
     expect(state().workspaceUserPreference.agentModeOverrides).toEqual({
       existing: true,
       selected: false,
+    });
+  });
+
+  describe('cached agent device bindings', () => {
+    beforeEach(() => {
+      vi.mocked(refreshAgentDeviceBindings).mockClear();
+      vi.mocked(workspaceUserSettingsService.getPreference).mockResolvedValue({});
+      vi.mocked(workspaceUserSettingsService.updatePreference).mockResolvedValue(undefined);
+      renderSync();
+    });
+
+    /** @example A member moving an agent to another device must update its sidebar dot. */
+    it('refreshes after a per-agent device override is written', async () => {
+      await act(() =>
+        state().updateWorkspaceUserPreference({
+          agentDeviceOverrides: { a1: { boundDeviceId: 'device-b', executionTarget: 'device' } },
+        }),
+      );
+
+      expect(refreshAgentDeviceBindings).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves them alone for a preference that does not move an agent', async () => {
+      await act(() => state().updateWorkspaceUserPreference({ agentModeOverrides: { a1: false } }));
+
+      expect(refreshAgentDeviceBindings).not.toHaveBeenCalled();
+    });
+
+    it('leaves them alone when the write fails', async () => {
+      vi.mocked(workspaceUserSettingsService.updatePreference).mockRejectedValue(new Error('nope'));
+
+      await act(async () => {
+        await expect(
+          state().updateWorkspaceUserPreference({
+            agentDeviceOverrides: { a1: { executionTarget: 'sandbox' } },
+          }),
+        ).rejects.toThrow('nope');
+      });
+
+      expect(refreshAgentDeviceBindings).not.toHaveBeenCalled();
     });
   });
 

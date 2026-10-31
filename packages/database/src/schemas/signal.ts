@@ -1,4 +1,5 @@
-import type { SignalStatus } from '@lobechat/types';
+import type { SignalMetadata, SignalStatus } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import { index, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -22,6 +23,13 @@ import { workspaces } from './workspace';
  * before the row is written, so an unauthenticated caller cannot fill this
  * table. `(source, external_id)` is unique, which makes a redelivery of the
  * same event idempotent.
+ *
+ * Retention is per `(user_id, scope_key, source)`: the retention sweep keeps the
+ * newest N rows of each and drops the rest, except rows a decision points at
+ * (`signal_decisions.signal_id`) or a mail was parsed from — those are evidence
+ * and stay. `payload` has its own, shorter clock: the sweep blanks it once
+ * `created_at` is past the payload TTL and stamps `payload_purged_at`, so the
+ * row's shape and its decisions outlive the raw content.
  */
 export const signals = pgTable(
   'signals',
@@ -48,8 +56,20 @@ export const signals = pgTable(
     accountId: uuid('account_id').references(() => agentAccounts.id, { onDelete: 'set null' }),
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
 
+    /**
+     * The channel the event arrived on, e.g. `discord:<applicationId>:<threadId>`. The retention
+     * sweep counts rows per `(user_id, scope_key, source)`, so a chatty channel cannot push
+     * another channel's history out. Null for sources with no channel (a mail provider's account
+     * feed); those rows form one bucket per source.
+     */
+    scopeKey: text('scope_key'),
+
     /** The event as the source delivered it (non-secret fields only). */
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    /** Set when the retention sweep blanked `payload`; null while the content is still held. */
+    payloadPurgedAt: timestamptz('payload_purged_at'),
+    /** How the event reached us and where it was addressed; survives the payload purge. Never content. */
+    metadata: jsonb('metadata').$type<SignalMetadata>().notNull().default({}),
 
     status: text('status').$type<SignalStatus>().notNull().default('pending'),
     /** Processing attempts so far, including the first. */
@@ -69,6 +89,17 @@ export const signals = pgTable(
     index('signals_status_created_at_idx').on(t.status, t.createdAt),
     index('signals_account_created_at_idx').on(t.accountId, t.createdAt),
     index('signals_user_id_idx').on(t.userId),
+    // Retention sweep: newest-first within one (user, channel, source) bucket.
+    index('signals_user_scope_source_created_at_idx').on(
+      t.userId,
+      t.scopeKey,
+      t.source,
+      t.createdAt,
+    ),
+    // Payload TTL sweep: only rows whose content is still held, oldest first.
+    index('signals_payload_unpurged_created_at_idx')
+      .on(t.createdAt)
+      .where(sql`${t.payloadPurgedAt} IS NULL`),
   ],
 );
 

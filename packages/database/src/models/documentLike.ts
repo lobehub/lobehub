@@ -121,6 +121,7 @@ export class DocumentLikeModel {
             .limit(1)
         ).length > 0);
 
+    /* v8 ignore next -- unreachable: count() without GROUP BY always returns exactly one non-null row */
     return { liked, likers, total: totals?.total ?? 0 };
   };
 

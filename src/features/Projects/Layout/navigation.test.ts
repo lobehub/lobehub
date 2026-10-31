@@ -3,14 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   getProjectAcceptancePath,
   getProjectAgentPath,
-  getProjectConversationPath,
-  getProjectConversationStartPath,
   getProjectDashboardPath,
   getProjectGoalsPath,
   getProjectHomePath,
   getProjectLibraryPath,
   getProjectSettingsPath,
   getProjectTasksPath,
+  getProjectTopicPath,
   isProjectSectionActive,
   toProjectPathname,
 } from './navigation';
@@ -32,11 +31,8 @@ describe('project workspace navigation', () => {
   });
 
   it('builds new and existing conversation routes inside the project', () => {
-    expect(getProjectConversationPath('prj_1')).toBe('/project/prj_1/conversation');
-    expect(getProjectConversationPath('prj_1', 'tpc_1')).toBe('/project/prj_1/conversation/tpc_1');
-    expect(getProjectConversationStartPath('prj_1', 'tpc_1', 'Plan Q3 & ship')).toBe(
-      '/project/prj_1/conversation/tpc_1?message=Plan%20Q3%20%26%20ship',
-    );
+    expect(getProjectTopicPath('prj_1')).toBe('/project/prj_1/topic');
+    expect(getProjectTopicPath('prj_1', 'tpc_1')).toBe('/project/prj_1/topic/tpc_1');
   });
 });
 

@@ -465,6 +465,8 @@ export interface OperationCreationParams {
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
+    /** Assistant row the run streams into, stored on `state.origin.assistantMessageId`. */
+    assistantMessageId?: string;
     /**
      * Client IP of the originating request. Spread onto `state.principal.audit.clientIp`
      * so downstream LLM-call metadata can carry it for auditing and spend
@@ -570,6 +572,8 @@ export interface OperationCreationParams {
   /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
   includeFinalState?: boolean;
   initialContext: AgentRuntimeContext;
+  /** Initial LLM-call count offset for resumed operations (accumulated from previous runs) */
+  initialLlmCalls?: number;
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
@@ -616,6 +620,11 @@ export interface OperationCreationParams {
   projectInstructions?: ProjectInstructionFile[];
   queueRetries?: number;
   queueRetryDelay?: string;
+  /**
+   * `operationId` names an idle row a durable dispatcher reserved for this exact run. Start
+   * must initialize that reservation or fail; it never inserts a fresh row.
+   */
+  reservedOperation?: boolean;
   /** Search route resolved once before the operation starts. */
   searchDecision?: SearchDecision;
   /** Abort startup before the first step is scheduled */

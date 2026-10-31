@@ -166,7 +166,7 @@ export const createMCPPluginStoreSlice = (set: Setter, get: () => ToolStore, _ap
 export class PluginMCPStoreActionImpl {
   readonly #get: () => ToolStore;
   /**
-   * The MCP marketplace list is a `@lobechat/replica` paged resource: the
+   * The MCP marketplace list is a `local-replica` paged resource: the
    * persisted head page paints before the network answers, and "load more"
    * appends further pages through the engine instead of a hand-rolled
    * `currentPage` + accumulator.

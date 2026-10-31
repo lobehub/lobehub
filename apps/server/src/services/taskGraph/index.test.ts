@@ -4,6 +4,7 @@ import { planSubtaskLayers, type SubtaskNode } from './index';
 
 const node = (identifier: string, status: string, dependsOn: string[] = []): SubtaskNode => ({
   dependsOn,
+  id: identifier,
   identifier,
   status,
 });

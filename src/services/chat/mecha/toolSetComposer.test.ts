@@ -91,35 +91,20 @@ describe('composeEnabledTools', () => {
     });
   });
 
-  describe('dropPageAgentIfEditorNotMounted', () => {
+  describe('page tools on the client transport', () => {
     it('keeps PageAgent when scope is not page', () => {
       const result = composeEnabledTools({
-        context: { isPageEditorReady: false, scope: undefined },
+        context: { scope: undefined },
         toolsDetailed: makeToolsDetailed([PAGE_AGENT_MANIFEST, OTHER_MANIFEST]),
       });
 
       expect(result.enabledToolIds).toContain(PageAgentIdentifier);
     });
 
-    it('keeps PageAgent when scope is page and editor is ready', () => {
+    it('drops PageAgent from all three outputs in page scope', () => {
       const result = composeEnabledTools({
-        context: { isPageEditorReady: true, scope: 'page' },
+        context: { scope: 'page' },
         toolsDetailed: makeToolsDetailed([PAGE_AGENT_MANIFEST, OTHER_MANIFEST]),
-      });
-
-      expect(result.enabledToolIds).toContain(PageAgentIdentifier);
-      expect(result.enabledManifests).toContainEqual(PAGE_AGENT_MANIFEST);
-      expect(
-        result.tools?.some((t) => t.function?.name?.startsWith(`${PageAgentIdentifier}____`)),
-      ).toBe(true);
-    });
-
-    it('drops PageAgent from all three outputs when scope is page and editor is not ready', () => {
-      const toolsDetailed = makeToolsDetailed([PAGE_AGENT_MANIFEST, OTHER_MANIFEST]);
-
-      const result = composeEnabledTools({
-        context: { isPageEditorReady: false, scope: 'page' },
-        toolsDetailed,
       });
 
       expect(result.enabledToolIds).toEqual(['lobe-agent-documents']);
@@ -132,7 +117,7 @@ describe('composeEnabledTools', () => {
 
     it('sets tools to undefined when dropping PageAgent leaves no tools', () => {
       const result = composeEnabledTools({
-        context: { isPageEditorReady: false, scope: 'page' },
+        context: { scope: 'page' },
         toolsDetailed: makeToolsDetailed([PAGE_AGENT_MANIFEST]),
       });
 
@@ -145,12 +130,11 @@ describe('composeEnabledTools', () => {
       const toolsDetailed = makeToolsDetailed([OTHER_MANIFEST]);
 
       const result = composeEnabledTools({
-        context: { isPageEditorReady: false, scope: 'page' },
+        context: { scope: 'page' },
         toolsDetailed,
       });
 
       expect(result.enabledToolIds).toEqual(['lobe-agent-documents']);
-      expect(result.enabledManifests).toEqual([OTHER_MANIFEST]);
       expect(result.tools).toEqual(toolsDetailed.tools);
     });
   });

@@ -1,12 +1,16 @@
 # Acceptance checker handoff
 
 The `acceptance-checker` checks plans and evidence in the **first acceptance
-round only**. The primary owns preparation, execution, evidence inspection,
-repairs, cleanup, and publication. Reuse one checker across both stages when
-supported; otherwise give its replacement the same handoff and prior findings.
+round only**. The primary coordinates decisions and code repairs; the runner
+owns environment, execution, capture, reports, authorized publication and cleanup.
+The checker is the default owner of original verdict-bearing media inspection,
+so primary and runner use its inspection records instead of opening the same
+artifacts first or again. Reuse one checker across both stages when supported;
+a replacement receives acquired facts, completed inspections and remaining work.
 Never assume a role name or model parameter exists: use the current host's
 supported agent controls. Prefer the cheapest model capable of inspecting every
-planned artifact, and record the actual selection when known; an inherited
+planned artifact, explicitly select it in a fresh context, and record the actual
+selection when known; an inherited
 model does not imply lower cost.
 
 The checker replaces routine user plan approval. Ask the user only for a
@@ -16,11 +20,15 @@ product decision that materially changes the plan.
 
 ## Shared contract
 
-Send one compact handoff per response with the stage, inputs, and requested
-output below. For code context, the primary supplies an explicit file list,
+Send one compact handoff per response with the stage, acquired source facts,
+inspection ownership, inputs, and requested output below. Load this contract
+once; the runner and primary do not load it separately. For code context, the primary supplies an explicit file list,
 relevant diff text or prepared diff artifact paths, and base/tested revisions.
 The checker must not run `git diff`, search the repository, or expand that
-list; return missing context to the primary.
+list; return missing context to its acquisition owner through the primary.
+Do not repeat source retrieval, repository discovery, environment/auth probes,
+or completed artifact inspection. Later handoffs contain only new plan/diff
+sections, artifacts, facts and changed case IDs; keep earlier inputs in this context.
 
 Reference existing plan/report files; do not create a second JSON schema or
 duplicate case tables. Keep review notes in the ignored acceptance directory
@@ -57,7 +65,8 @@ Primary input:
   preconditions, operations, observable expectations, and evidence requirements.
   Put additional explanation in existing method/text fields or handoff notes.
 
-Checker procedure: read the original sources, list their required outcomes,
+Checker procedure: use the supplied original requirement excerpts and acquired
+source facts, list their required outcomes,
 and compare them with the draft cases and supplied diff. State coverage limits
 when sources are incomplete. Look for missing boundaries, ambiguous
 criteria, and probes that cannot distinguish success from failure. Check how
@@ -115,7 +124,9 @@ Primary input:
   that the intervening transition was correct.
 
 Checker procedure: inspect each case's original evidence against
-its expectation and the primary's observations and verdict. Open images;
+its expectation and the runner's observations and proposed verdict. Open each
+uninspected original artifact once and record which cases/claims it supports;
+reuse valid inspection records for unchanged artifacts and claims. Open images;
 file existence and captions are not visual verification. For flicker or transitions,
 inspect the relevant sequence, extracting frames into the ignored review
 directory if necessary. Do not claim to have watched a video when only stills
@@ -123,7 +134,8 @@ were inspected. State sampling limits; sparse
 frames cannot establish the absence of a one-frame defect. Check that every
 plan item has a result and every declared evidence type is present.
 
-Checker output:
+Checker output (saved in the existing review directory, with a brief summary
+and the review path returned to the primary):
 
 - For every case: what the evidence shows, inspected paths/intervals, whether it
   meets the expectation, and whether the primary's proposed result is supported.
@@ -138,16 +150,22 @@ These are review notes, not new report status values. The primary maps unresolve
 findings to the existing schema without treating missing evidence as a pass.
 A checker label alone is not proof; the primary must resolve supported objections
 with evidence or disclose them, never silently override them.
-The primary resolves findings and verifies any corrections without another
-checker response. Disclose artifacts or verdicts changed after the check as
-primary-only in the narrative tail.
+The primary resolves findings without another full checker response. It assigns
+inspection of newly captured corrective evidence to one capable owner and
+records that inspection; neither it nor the runner repeats unchanged inspections.
+Disclose the post-review changes, inspection owner, and any missing independent
+review in the narrative tail. A replaced artifact is a new version, not covered
+by the old inspection.
 
 ## After the first round
 
-Follow-up rounds have no checker. The primary repairs, re-runs affected cases,
-inspects new artifacts, and discloses changes in the narrative tail. Preserve
+Follow-up rounds have no independent checker gate. The primary repairs code and
+coordinates the existing runner's affected cases, assigning each new artifact
+to one capable inspector. Preserve its attributable inspection record and disclose
+changes in the narrative tail. Preserve
 unaffected results with their original provenance. If scope,
 surface, or business goal materially changes, it obtains any user-owned decision
 and revises the plan. Published rounds remain immutable; follow existing
-new-round rules. No per-case approval loop, independent execution worker, or
-third audit agent.
+new-round rules. Reuse valid environment facts, plan sections, artifacts and
+inspection records rather than reacquiring them. No per-case approval loop or
+third full audit agent; bounded execution and new-artifact inspection may remain delegated.

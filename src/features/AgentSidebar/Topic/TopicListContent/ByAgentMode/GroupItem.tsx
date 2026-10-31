@@ -24,14 +24,11 @@ import { ListFilter, LucideCheck, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
-import { openProjectTopicModal } from '@/features/Projects/WorkingDirectories/StartDirectoryModal';
-import {
-  canStageDraftOn,
-  startProjectTopicDraft,
-} from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
+import AgentAvatar from '@/components/AgentAvatar';
+import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
+import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
 import { useAgentFixedDeviceId } from '@/features/Projects/WorkingDirectories/useAgentFixedDeviceId';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useStartProjectTopic } from '@/features/Projects/WorkingDirectories/useStartProjectTopic';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -42,12 +39,14 @@ import { useProjectDirectories } from '@/store/projectWorkingDirectory';
 import { useTopicListScope } from '../../TopicListScope';
 import ProjectTopicList from '../ByProjectMode/ProjectTopicList';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
+import DevicePresenceDot from './DevicePresenceDot';
 
 const AGENT_GROUP_PREFIX = 'agent:';
 const SUB_GROUP_MODES: ProjectTopicSubGroupMode[] = ['none', 'byDevice', 'byTime', 'byStatus'];
 
 const styles = createStaticStyles(({ css }) => ({
   avatarWrap: css`
+    position: relative;
     flex: none;
     border-radius: 50%;
     background: ${cssVar.colorFillTertiary};
@@ -88,15 +87,20 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
   // from its own rows or the agent registry to avoid mislabeling.
   const isOwnBucket = !agentId || agentId === activeAgentId;
 
+  const isCoordinator = !!agentId && agentId === scope?.coordinatorAgentId;
+  // An empty main-agent group has no row to read; the project knows its main agent.
+  const coordinatorMeta = isCoordinator ? scope?.coordinatorAgent : undefined;
+
   const avatar =
-    row?.agentAvatar || registeredMeta?.avatar || (isOwnBucket ? activeMeta.avatar : undefined);
+    row?.agentAvatar ||
+    registeredMeta?.avatar ||
+    coordinatorMeta?.avatar ||
+    (isOwnBucket ? activeMeta.avatar : undefined);
   const name =
     title ??
     agentDisplayName(registeredMeta) ??
     (isOwnBucket ? agentDisplayName(activeMeta) : undefined) ??
     t('groupTitle.byAgent.unknown');
-
-  const isCoordinator = !!agentId && agentId === scope?.coordinatorAgentId;
 
   // Only an attributed bucket in a project-scoped list can start a topic with
   // its agent preselected; the `no-agent` bucket has no agent to preselect.
@@ -110,25 +114,12 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
     [canAddTopic, directories, fixedDeviceId],
   );
 
-  const navigate = useWorkspaceAwareNavigate();
-  // Same habit as an agent's "+": open a blank conversation on a directory and
-  // let the first message create the topic. The modal is only the fallback for
-  // a project with no runnable directory yet — it offers to add one.
+  const startTopic = useStartProjectTopic(scope?.projectId);
+  // Same habit as an agent's "+": straight into this agent's conversation, on
+  // the first directory it can run in when there is one.
   const handleAddTopic = (initialDirectoryId?: string) => {
     if (!scope || !agentId) return;
-    const directoryId = initialDirectoryId ?? startDirectories?.[0]?.id;
-    if (directoryId) {
-      startProjectTopicDraft({ agentId, directoryId, navigate, projectId: scope.projectId });
-      return;
-    }
-    openProjectTopicModal({
-      coordinatorAgentId: scope.coordinatorAgentId ?? agentId,
-      directories,
-      initialAgentId: agentId,
-      initialDirectoryId,
-      projectId: scope.projectId,
-      title: tProject('sidebar.newConversation'),
-    });
+    void startTopic({ agentId, directoryId: initialDirectoryId ?? startDirectories?.[0]?.id });
   };
 
   // The agent bucket already sits inside one project, so its rows skip the
@@ -160,7 +151,14 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
         <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
           <Flexbox horizontal align="center" gap={8} height={24} style={{ overflow: 'hidden' }}>
             <Center className={styles.avatarWrap} flex={'none'} height={18} width={18}>
-              <Avatar avatar={avatar} name={name} size={18} />
+              <AgentAvatar
+                agentId={agentId ?? (isOwnBucket ? activeAgentId : undefined)}
+                avatar={avatar}
+                name={name}
+                shape={'circle'}
+                size={18}
+              />
+              {agentId && <DevicePresenceDot agentId={agentId} />}
             </Center>
             <Text ellipsis fontSize={14} style={{ flex: 1 }}>
               {name}
@@ -203,11 +201,18 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
         </div>
       </AccordionHeader>
       <AccordionPanel contentStyle={{ padding: 0 }}>
+        {!children.length && canAddTopic && (
+          <EmptyNavItem
+            title={tProject('sidebar.newConversation')}
+            onClick={() => handleAddTopic()}
+          />
+        )}
         <ProjectTopicList
           // The group header already names the owning agent — the row must not
           // repeat the avatar at its leading position.
           suppressAgentAvatar
           mode={subGroupMode}
+          startAgentId={agentId}
           startDirectories={startDirectories}
           topics={children}
           onStartInDirectory={canAddTopic ? handleAddTopic : undefined}

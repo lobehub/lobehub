@@ -201,3 +201,46 @@ describe('DocumentModel.query — standaloneOnly vs library-backed parsed files'
     });
   });
 });
+
+describe('DocumentModel.query — sortBy', () => {
+  beforeEach(async () => {
+    const at = (day: number) => new Date(`2026-10-${String(day).padStart(2, '0')}T00:00:00Z`);
+    // Created order b → c → a, updated order c → a → b, title order a → b → c.
+    for (const [id, createdDay, updatedDay] of [
+      ['page-a', 3, 5],
+      ['page-b', 1, 4],
+      ['page-c', 2, 6],
+    ] as const) {
+      await serverDB.insert(documents).values({
+        createdAt: at(createdDay),
+        fileType: 'custom/document',
+        id,
+        source: 'document',
+        sourceType: 'api',
+        title: id,
+        totalCharCount: 0,
+        totalLineCount: 0,
+        updatedAt: at(updatedDay),
+        userId: userA,
+        workspaceId,
+      });
+    }
+  });
+
+  const orderedIds = async (sortBy?: 'createdAt' | 'title' | 'updatedAt') => {
+    const result = await new DocumentModel(serverDB, userA, workspaceId).query({ sortBy });
+    return result.items.map((item) => item.id);
+  };
+
+  it('lists the most recently updated first by default', async () => {
+    expect(await orderedIds()).toEqual(['page-c', 'page-a', 'page-b']);
+  });
+
+  it('lists the newest created first for createdAt', async () => {
+    expect(await orderedIds('createdAt')).toEqual(['page-a', 'page-c', 'page-b']);
+  });
+
+  it('lists titles A→Z for title', async () => {
+    expect(await orderedIds('title')).toEqual(['page-a', 'page-b', 'page-c']);
+  });
+});

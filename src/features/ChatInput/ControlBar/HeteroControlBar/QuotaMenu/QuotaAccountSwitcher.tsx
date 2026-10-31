@@ -1,7 +1,15 @@
 'use client';
 
 import type { QuotaAccountIdentity } from '@lobechat/heterogeneous-agents/quota';
-import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Text,
+  usePopoverContext,
+} from '@lobehub/ui';
 import { CalendarDaysIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,10 +46,15 @@ const QuotaAccountSwitcher = memo<{
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const identity = snapshot.identity;
+  // Only rendered inside the quota popover; hand off to each modal without
+  // leaving the popover open underneath it.
+  const { close } = usePopoverContext();
 
   const openManager = useCallback(() => {
-    if (agentId) openQuotaAccountManagerModal(agentId, { deviceId });
-  }, [agentId, deviceId]);
+    if (!agentId) return;
+    close();
+    openQuotaAccountManagerModal(agentId, { deviceId });
+  }, [agentId, close, deviceId]);
 
   if (!agentId) return null;
 
@@ -67,9 +80,10 @@ const QuotaAccountSwitcher = memo<{
           size={'small'}
           style={{ flex: 'none' }}
           title={t('heteroAgent.claudeQuota.calendar.entry')}
-          onClick={() =>
-            openQuotaCalendarModal({ externalAccountId: identity?.externalAccountId, provider })
-          }
+          onClick={() => {
+            close();
+            openQuotaCalendarModal({ externalAccountId: identity?.externalAccountId, provider });
+          }}
         />
       </Flexbox>
       {/*

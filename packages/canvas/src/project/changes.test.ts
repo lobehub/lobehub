@@ -59,6 +59,53 @@ describe('applyCanvasChanges', () => {
     ).toMatchObject({ ok: false });
   });
 
+  // Regression: a model that omits `path` used to crash inside normalizeCanvasPath with
+  // `Cannot read properties of undefined (reading 'replaceAll')` instead of a usable error.
+  it('names the missing field when an edit has no path', () => {
+    const result = applyCanvasChanges(base, {
+      edits: [{ newText: 'New title', oldText: 'Old title' } as any],
+    });
+
+    expect(result).toEqual({
+      error: 'edits[0] is missing "path": every edit must name the file it targets, e.g. "index.html".',
+      ok: false,
+    });
+  });
+
+  it('names the missing field when a later edit in the list has no path', () => {
+    const result = applyCanvasChanges(base, {
+      edits: [
+        { newText: 'New title', oldText: 'Old title', path: 'index.html' },
+        { newText: 'x', oldText: 'y', path: '' } as any,
+      ],
+    });
+
+    expect(result).toMatchObject({ error: expect.stringContaining('edits[1] is missing "path"') });
+  });
+
+  it('names the missing field when an edit has no oldText or newText', () => {
+    expect(
+      applyCanvasChanges(base, { edits: [{ oldText: 'Old title', path: 'index.html' } as any] }),
+    ).toMatchObject({ error: expect.stringContaining('"oldText" and "newText"') });
+    expect(
+      applyCanvasChanges(base, { edits: [{ newText: 'x', path: 'index.html' } as any] }),
+    ).toMatchObject({ error: expect.stringContaining('"oldText" and "newText"') });
+  });
+
+  it('names the missing field when a write has no path', () => {
+    expect(applyCanvasChanges(base, { writes: [{ content: 'body{}' } as any] })).toEqual({
+      error: 'writes[0] is missing "path": every write must name the file it targets, e.g. "index.html".',
+      ok: false,
+    });
+  });
+
+  it('rejects a delete entry that is not a file path', () => {
+    expect(applyCanvasChanges(base, { deletes: [null as any] })).toEqual({
+      error: 'deletes[0] must be a file path, e.g. "index.html".',
+      ok: false,
+    });
+  });
+
   it('fills fileRef writes from the resolved contents', () => {
     const bytes = new Uint8Array([1, 2, 3]);
     const result = applyCanvasChanges(
@@ -77,6 +124,18 @@ describe('applyCanvasChanges', () => {
 
     expect(result).toEqual({
       error: '"img/logo.png": fileRef "file_missing" could not be resolved.',
+      ok: false,
+    });
+  });
+
+  it('names the missing path for a fileRef write before the fileRef is resolved', () => {
+    // Regression (codex review on #21529): collectCanvasFileRefs runs before applyCanvasChanges,
+    // so the missing path must be refused here too instead of crashing in the pre-resolution pass.
+    expect(
+      applyCanvasChanges(new Map(), { writes: [{ fileRef: 'msg_abc.image_1' } as any] }),
+    ).toEqual({
+      error:
+        'writes[0] is missing "path": every write must name the file it targets, e.g. "index.html".',
       ok: false,
     });
   });
@@ -101,5 +160,11 @@ describe('collectCanvasFileRefs', () => {
         ],
       }),
     ).toEqual([{ fileRef: 'msg_abc.image_1', path: 'img/photo.jpg' }]);
+  });
+
+  it('skips a fileRef write without a path instead of crashing', () => {
+    expect(
+      collectCanvasFileRefs({ writes: [{ fileRef: 'msg_abc.image_1' } as any] }),
+    ).toEqual([]);
   });
 });

@@ -45,7 +45,7 @@ const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
  */
 export type WorkOpenTarget =
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
-  | { identifier: string; kind: 'task'; name?: string | null }
+  | { taskId: string; identifier?: string; kind: 'task'; name?: string | null }
   | { kind: 'external'; url: string }
   /**
    * In-app preview of a cloud-persisted file (the FilePreview chat portal).
@@ -256,16 +256,15 @@ export const WORK_TYPE_DESCRIPTORS: {
     getDescription: (item) => item.task.instruction?.trim() ?? null,
     getIcon: () => ClipboardListIcon,
     getIdentifier: (item) => item.task.identifier,
-    // Resolve the task detail by its human identifier (`TASK-1`, live-coalesced
-    // with the persisted works column) when present, else its id — the same
-    // identifier the chat portal and standalone route both accept. The
-    // task-deleted orphan case is gated by the call site (it also renders a
-    // badge), not stripped here. A task Work always has a resourceId, but it is
-    // nullable on the base type, so drop the affordance when both are missing.
-    getOpenTarget: (item) => {
-      const identifier = item.task.identifier ?? item.resourceId;
-      return identifier ? { identifier, kind: 'task', name: item.task.name } : null;
-    },
+    getOpenTarget: (item) =>
+      item.resourceId
+        ? {
+            taskId: item.resourceId,
+            identifier: item.resourceDeleted ? undefined : (item.task.identifier ?? undefined),
+            kind: 'task',
+            name: item.task.name,
+          }
+        : null,
     getTitle: (item) => item.task.name,
   },
 };

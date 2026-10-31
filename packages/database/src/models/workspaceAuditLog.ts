@@ -19,6 +19,7 @@ export type WorkspaceAuditAction =
   | 'member.invited'
   | 'member.removed'
   | 'member.role_updated'
+  | 'member.profile_updated'
   | 'member.joined'
   | 'member.left'
   | 'member.promoted_to_owner'

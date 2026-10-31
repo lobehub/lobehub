@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -14,11 +14,35 @@ import { resolveToken } from '../auth/resolveToken';
 import { removeStatus, spawnDaemon, stopDaemon, writeStatus } from '../daemon/manager';
 import type * as DeviceRegister from '../device/register';
 import type * as SystemInfoModule from '../device/systemInfo';
+import { cliVersion } from '../pkg';
+import type * as ServiceStatusModule from '../service/status';
 import { loadDeviceGatewayUrl, saveDeviceGatewayUrl } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { registerConnectCommand } from './connect';
+
+const systemService = vi.hoisted(() => ({ enabled: false }));
+vi.mock('../service/status', async (importOriginal) => ({
+  ...(await importOriginal<typeof ServiceStatusModule>()),
+  readConnectServices: async () => ({
+    services: systemService.enabled
+      ? [
+          {
+            active: true,
+            enabled: true,
+            fragmentPath: '/etc/systemd/system/lobehub-connect.service',
+            mainPid: 4567,
+            scope: 'system',
+            serviceName: 'lobehub-connect.service',
+            subState: 'running',
+            user: 'ubuntu',
+          },
+        ]
+      : [],
+    unavailableScopes: [],
+  }),
+}));
 
 // Native runtime probing spawns Codex; connect.nativeRuntimes.test.ts covers it.
 vi.mock('../device/systemInfo', async (importOriginal) => ({
@@ -235,7 +259,11 @@ describe('connect command', () => {
     await program.parseAsync(['node', 'test', 'connect', '--daemon-child']);
 
     expect(writeStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionStatus: 'connecting', deviceId: 'mock-device-id' }),
+      expect.objectContaining({
+        cliVersion,
+        connectionStatus: 'connecting',
+        deviceId: 'mock-device-id',
+      }),
     );
 
     clientEventHandlers.connected?.();
@@ -746,9 +774,12 @@ describe('connect command', () => {
       auvBinary = path.join(auvDir, 'auv');
       await writeFile(auvBinary, `#!/bin/sh\nprintf '{"ok":true}'\n`);
       await chmod(auvBinary, 0o755);
+      // Keep a developer's own `agent-browser` on PATH out of `supportedTools`.
+      vi.stubEnv('PATH', [auvDir, '/usr/bin', '/bin'].join(path.delimiter));
     });
 
     afterEach(async () => {
+      vi.unstubAllEnvs();
       await rm(auvDir, { force: true, recursive: true });
     });
 
@@ -806,6 +837,101 @@ describe('connect command', () => {
       expect(vi.mocked(spawnDaemon).mock.calls[0]?.[0]).toEqual(
         expect.arrayContaining(['--auv', auvBinary]),
       );
+    });
+
+    describe.skipIf(process.platform === 'win32')('browser tool', () => {
+      let binDir: string;
+      let binary: string;
+
+      beforeEach(async () => {
+        binDir = await mkdtemp(path.join(os.tmpdir(), 'lh-connect-browser-'));
+        binary = path.join(binDir, 'agent-browser');
+        // Records its argv, stdin and AGENT_BROWSER_* env, then answers like
+        // `agent-browser --json batch`.
+        await writeFile(
+          binary,
+          `#!/bin/sh\nprintf '%s ' "$@" > "$0.argv"\nenv | grep '^AGENT_BROWSER_' > "$0.env"\ncat > "$0.stdin"\nprintf '[{"command":["open"],"error":null,"result":{"title":"T","url":"https://e.com/"},"success":true}]'\n`,
+        );
+        await chmod(binary, 0o755);
+        vi.stubEnv('PATH', `${binDir}${path.delimiter}/bin${path.delimiter}/usr/bin`);
+      });
+
+      afterEach(async () => {
+        vi.unstubAllEnvs();
+        await rm(binDir, { force: true, recursive: true });
+      });
+
+      const navigateCall = {
+        requestId: 'req-browser',
+        toolCall: {
+          apiName: 'navigate',
+          arguments: JSON.stringify({ __topicId: 'tpc_1', url: 'https://e.com' }),
+          identifier: 'lobe-browser',
+        },
+        type: 'tool_call_request',
+      };
+
+      it('advertises the browser tool from agent-browser on PATH and runs calls with it', async () => {
+        // A user's own agent-browser profile must not reach the model's browser.
+        vi.stubEnv('AGENT_BROWSER_PROFILE', 'Default');
+        await createProgram().parseAsync(['node', 'test', 'connect']);
+
+        await clientEventHandlers['system_info_request']?.({
+          requestId: 'r',
+          type: 'system_info_request',
+        });
+        expect(lastSentSystemInfoResponse.result.systemInfo.supportedTools).toEqual([
+          'lobe-browser',
+        ]);
+
+        await clientEventHandlers['tool_call_request']?.(navigateCall);
+        expect(executeToolCall).not.toHaveBeenCalled();
+        expect(lastSentToolResponse.result).toMatchObject({
+          state: { title: 'T', url: 'https://e.com/' },
+          success: true,
+        });
+        const argv = await readFile(`${binary}.argv`, 'utf8');
+        expect(argv).toMatch(
+          /^--namespace lobehub --config \S+agent-browser\.json --headed false --idle-timeout 10m --session lobehub-topic-tpc_1 --json batch --bail $/,
+        );
+        expect(await readFile(`${binary}.env`, 'utf8')).toBe('');
+        expect(JSON.parse(await readFile(`${binary}.stdin`, 'utf8'))).toEqual([
+          ['open', 'https://e.com'],
+        ]);
+      });
+
+      it('rejects browser calls when no agent-browser is available', async () => {
+        vi.stubEnv('PATH', '/nonexistent');
+        await createProgram().parseAsync(['node', 'test', 'connect']);
+
+        await clientEventHandlers['system_info_request']?.({
+          requestId: 'r',
+          type: 'system_info_request',
+        });
+        expect(lastSentSystemInfoResponse.result.systemInfo).not.toHaveProperty('supportedTools');
+
+        await clientEventHandlers['tool_call_request']?.(navigateCall);
+        expect(executeToolCall).not.toHaveBeenCalled();
+        expect(lastSentToolResponse.result).toMatchObject({
+          error: expect.stringContaining('agent-browser'),
+          success: false,
+        });
+      });
+
+      it('passes an explicit --agent-browser to the daemon child', async () => {
+        await createProgram().parseAsync([
+          'node',
+          'test',
+          'connect',
+          '--daemon',
+          '--agent-browser',
+          path.relative(process.cwd(), binary),
+        ]);
+
+        expect(vi.mocked(spawnDaemon).mock.calls[0]?.[0]).toEqual(
+          expect.arrayContaining(['--agent-browser', binary]),
+        );
+      });
     });
   });
 
@@ -868,11 +994,31 @@ describe('connect command', () => {
   });
 
   describe('connect status', () => {
+    it.each([['status'], ['service', 'status']])(
+      'finds a system-level connector through %j',
+      async (...command) => {
+        vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+        systemService.enabled = true;
+        try {
+          await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
+          const output = vi.mocked(log.info).mock.calls.flat().join('\n');
+          expect(output).toContain('system');
+          expect(output).toContain('4567');
+          expect(output).toContain('ubuntu');
+          expect(output).toContain('sudo systemctl --no-block restart lobehub-connect.service');
+          expect(output).not.toContain('No connect service is installed');
+          expect(output).not.toContain('No daemon is running');
+        } finally {
+          systemService.enabled = false;
+        }
+      },
+    );
+
     it('should show no daemon running', async () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'connect', 'status']);
 
-      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('No daemon'));
+      expect(log.info).toHaveBeenCalledWith(expect.stringContaining('No managed connect'));
     });
 
     it('should show daemon status', async () => {
@@ -894,6 +1040,24 @@ describe('connect command', () => {
   });
 
   describe('connect restart', () => {
+    it.each([['--daemon'], ['restart']])(
+      'does not create a competing daemon through %j',
+      async (...command) => {
+        systemService.enabled = true;
+        const exitCode = process.exitCode;
+        try {
+          await createProgram().parseAsync(['node', 'test', 'connect', ...command]);
+          expect(spawnDaemon).not.toHaveBeenCalled();
+          expect(log.error).toHaveBeenCalledWith(
+            expect.stringContaining('sudo systemctl --no-block restart lobehub-connect.service'),
+          );
+          expect(process.exitCode).toBe(1);
+        } finally {
+          systemService.enabled = false;
+          process.exitCode = exitCode;
+        }
+      },
+    );
     it('should stop and start daemon', async () => {
       mockRunningPid = 12345;
 

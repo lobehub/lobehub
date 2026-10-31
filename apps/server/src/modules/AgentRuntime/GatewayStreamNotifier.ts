@@ -379,6 +379,7 @@ export class GatewayStreamNotifier implements IStreamEventManager {
       // user-side / board-worthy decision lives here, next to the error spec.
       ...(reason === 'error' && {
         recordError: shouldRecordGatewayError({
+          error: finalState?.error,
           errorType: rawErrorType,
           provider: finalState?.modelRuntimeConfig?.provider,
         }),

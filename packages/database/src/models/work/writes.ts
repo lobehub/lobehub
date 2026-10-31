@@ -375,6 +375,35 @@ export const setTaskWorksVisibility = async (
 };
 
 /**
+ * Re-home the Work rows of tasks whose creator changed (a member taking a task
+ * over), in the same transaction as the task write. A task Work's `userId` is
+ * the task owner, so a row left on the previous creator would stay theirs and
+ * drop out of the new owner's lists once the task goes private.
+ *
+ * Scoped by workspace only: the caller is authorized on the tasks, not on the
+ * previous creator's Work rows.
+ */
+export const reassignTaskWorksOwner = async (
+  ctx: WorkContext,
+  taskIds: string[],
+  fromUserId: string,
+): Promise<void> => {
+  if (taskIds.length === 0 || !ctx.workspaceId) return;
+
+  await ctx.db
+    .update(works)
+    .set({ userId: ctx.userId })
+    .where(
+      and(
+        eq(works.resourceType, 'task'),
+        inArray(works.resourceId, taskIds),
+        eq(works.userId, fromUserId),
+        eq(works.workspaceId, ctx.workspaceId),
+      ),
+    );
+};
+
+/**
  * User-initiated removal of one Work card by its own id. Meant for orphaned
  * Works (the backing task / document is gone — see `resourceDeleted`), where
  * deleting the resource itself is no longer possible, so this is the only way

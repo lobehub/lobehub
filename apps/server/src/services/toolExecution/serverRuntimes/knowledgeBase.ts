@@ -7,6 +7,7 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { ProjectModel } from '@/database/models/project';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
 import { DocumentService } from '@/server/services/document';
+import { resolveDocumentWrite } from '@/server/services/document/editorData';
 import { FileService } from '@/server/services/file';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
 
@@ -155,9 +156,12 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
       },
       {
         createDocument: async ({ content, fileType, knowledgeBaseId, parentId, title }) => {
+          // Same Markdown write as `lh doc create`: real editor state, and no
+          // body heading that repeats the title.
+          const write = await resolveDocumentWrite({ content, fileType, title });
           const doc = await documentService.createDocument({
-            content,
-            editorData: {},
+            content: write.content,
+            editorData: write.editorData,
             fileType,
             knowledgeBaseId,
             parentId,

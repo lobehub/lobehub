@@ -144,15 +144,34 @@ export class MarketSandboxProvider implements SandboxProvider {
     path,
     uploadUrl,
   }: SandboxProviderFileExportRequest): Promise<SandboxProviderFileExportResult> {
-    const { marketService, topicId, userId } = this.options;
+    const {
+      marketService,
+      sandboxCwd,
+      sandboxInstanceId,
+      sandboxMode,
+      sandboxSpecification,
+      sandboxWorkingDir,
+      topicId,
+      userId,
+    } = this.options;
 
     try {
-      const response = await marketService.exportFile({
-        path,
-        topicId,
-        uploadUrl,
-        userId,
-      });
+      const response = await marketService.exportFile(
+        { path, uploadUrl },
+        {
+          // Named one by one for the same reason callTool's context is — see
+          // the comment there: a dropped field silently runs the export in a
+          // throwaway sandbox that cannot see the persistent volume's file.
+          sandboxCwd,
+          sandboxInstanceId,
+          // Widened for `drive` like callTool's; remove with the SDK bump.
+          sandboxMode: sandboxMode as Exclude<SandboxMode, 'drive'> | undefined,
+          sandboxSpecification: sandboxSpecification as Record<string, unknown> | undefined,
+          sandboxWorkingDir,
+          topicId,
+          userId,
+        },
+      );
 
       log('Sandbox exportFile response: %O', response);
 

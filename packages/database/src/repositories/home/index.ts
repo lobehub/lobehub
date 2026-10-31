@@ -21,13 +21,21 @@ import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { notShareVisitorTopic } from '../../utils/shareVisitor';
+import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import type { FtsSearchCandidateSource } from '../ftsSearch';
 
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
 // task_manager trigger. These topics are surfaced in their own product surfaces,
 // so counting them here can leave a badge the regular agent topic list cannot clear.
-const HOME_UNREAD_EXCLUDE_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+const HOME_UNREAD_EXCLUDE_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
+  'cron',
+  'eval',
+  'task_manager',
+  'task',
+  'document',
+];
 
 // Re-export types for backward compatibility
 export type {

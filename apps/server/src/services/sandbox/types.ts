@@ -4,6 +4,7 @@ import type {
   SandboxMode,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { AgentShareVisitorContext } from '@lobechat/types';
 
 import type { FileService } from '@/server/services/file';
 import type { MarketService } from '@/server/services/market';
@@ -89,6 +90,8 @@ export interface SandboxSessionContext {
 }
 
 export interface SandboxServiceOptions extends SandboxSessionContext {
+  /** Set for Agent Share visitor runs; image previews get the same `metadata.agentShare` provenance as other visitor file writes. */
+  agentShareVisitor?: Pick<AgentShareVisitorContext, 'shareId' | 'visitorUserId'>;
   fileService?: FileService;
   marketService: MarketService;
   /** Used to look up topic/session files when bootstrapping the sandbox. */

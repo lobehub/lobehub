@@ -8,12 +8,12 @@ import {
   type ReplicaResource,
   type ReplicaScope,
   type ReplicaStorage,
-} from '@lobechat/replica';
+} from 'local-replica';
 import {
   createReplicaSlice as createCoreReplicaSlice,
   type CreateReplicaSliceOptions,
   createSWRDriver,
-} from '@lobechat/replica/zustand';
+} from 'local-replica/zustand';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { getCacheScope, isScopeTrusted, useCacheScope } from '@/libs/swr/useCacheScope';
@@ -22,7 +22,7 @@ import { notifyReplicaDevtools, registerReplicaDevtools } from './devtools';
 import { AppIndexedDBStorage, AppLocalStorage } from './storage';
 
 /**
- * LobeHub wiring of `@lobechat/replica`: replicas are partitioned like the SWR
+ * LobeHub wiring of `local-replica`: replicas are partitioned like the SWR
  * cache (`${userId}:${workspaceId}`), persist to IndexedDB by default and
  * fetch through the app's SWR hook (workspace-augmented keys, retry policy).
  */
@@ -193,10 +193,10 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
 };
 
 export { AppIndexedDBStorage, AppLocalStorage } from './storage';
-export * from '@lobechat/replica';
+export * from 'local-replica';
 export {
   recordLens,
   type ReplicaLens,
   type ReplicaSyncResult,
   splitPagedLens,
-} from '@lobechat/replica/zustand';
+} from 'local-replica/zustand';

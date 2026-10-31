@@ -1,4 +1,4 @@
-import type { ReplicaStorage } from '@lobechat/replica';
+import type { ReplicaStorage } from 'local-replica';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
 
 import { AppIndexedDBStorage, defineReplica, stableQueryKey } from '@/libs/replica';
@@ -12,7 +12,7 @@ import type {
 
 /**
  * The aiProvider reads — the provider list, one provider detail, and the
- * derived runtime state — as `@lobechat/replica` resources. Each used to be a
+ * derived runtime state — as `local-replica` resources. Each used to be a
  * bare `useClientDataSWR`; the replica engine now owns hydration, scope
  * isolation and head revalidation.
  *

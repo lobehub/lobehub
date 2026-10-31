@@ -15,7 +15,7 @@ import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 import type { FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
-import type { ResourceItem } from '@/types/resource';
+import type { ResourceItem, ResourceQueryParams } from '@/types/resource';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State, ViewMode } from './initialState';
@@ -30,6 +30,7 @@ import {
   hierarchySearchResource,
   type HierarchySearchValue,
 } from './projection';
+import { getExplorerSearchParams } from './selectors';
 
 const n = setNamespace('resourceManager');
 
@@ -75,6 +76,17 @@ const toSearchPageResult = (
     (response.hasMore ? undefined : (cursor ?? 0) * pageSize + response.items.length),
 });
 
+/** The resource query an explorer search narrows to, without paging or preview. */
+const toExplorerSearchQuery = (params: ExplorerSearchParams): ResourceQueryParams => ({
+  category: params.category,
+  filesOnly: !params.libraryId,
+  libraryId: params.libraryId,
+  q: params.q,
+  showFilesInKnowledgeBase: !params.libraryId,
+  sourceFilter: params.sourceFilter,
+  visibility: params.visibility,
+});
+
 const fetchExplorerSearchPage = async (
   params: ExplorerSearchParams,
   cursor?: number,
@@ -83,16 +95,10 @@ const fetchExplorerSearchPage = async (
   const pageSize = params.pageSize ?? DEFAULT_SEARCH_PAGE_SIZE;
 
   const response = await resourceService.queryResources({
-    category: params.category,
-    filesOnly: !params.libraryId,
+    ...toExplorerSearchQuery(params),
     includeContentPreview: params.includeContentPreview,
-    libraryId: params.libraryId,
     limit: pageSize,
     offset: (cursor ?? 0) * pageSize,
-    q: params.q,
-    showFilesInKnowledgeBase: !params.libraryId,
-    sourceFilter: params.sourceFilter,
-    visibility: params.visibility,
   });
 
   return toSearchPageResult(response, cursor, pageSize);
@@ -354,6 +360,25 @@ export class ResourceManagerStoreActionImpl {
     void this.#searchHits.revalidate();
   };
 
+  /**
+   * The query "select all" stands for: the search overlay's while a keyword is
+   * typed, the folder list's otherwise. Resolving against the folder list while
+   * the overlay is up would act on rows the user never saw.
+   */
+  #selectionQuery = (): ResourceQueryParams | undefined => {
+    const searchParams = getExplorerSearchParams(this.#get());
+    if (searchParams) return toExplorerSearchQuery(searchParams);
+
+    return useFileStore.getState().queryParams;
+  };
+
+  #findSearchHit = (id: string): ResourceItem | undefined => {
+    for (const entry of Object.values(this.#get().explorerSearchEntries)) {
+      const hit = entry?.items.find((item) => item.id === id);
+      if (hit) return hit;
+    }
+  };
+
   clearSelectAllState = (): void => {
     this.#set({ selectAllState: 'none', selectedFileIds: [], selectionTotal: undefined });
   };
@@ -379,13 +404,17 @@ export class ResourceManagerStoreActionImpl {
         const { useTreeStore } = await import('@/store/tree');
         const currentFolderKey = fileStore.queryParams?.parentId ?? '';
 
-        if (selectAllState === 'all' && fileStore.queryParams) {
+        // Delete-by-query stands for whichever list the user acted on: the
+        // folder list, or the search overlay's query while a keyword is typed.
+        // Resolving a select-all into ids first would run one detail lookup per
+        // hit inside `deleteResources` before the batch delete starts, so a
+        // large search paid a lookup for every row it was about to delete.
+        const deleteQuery = selectAllState === 'all' ? this.#selectionQuery() : undefined;
+
+        if (deleteQuery) {
           const { resourceService } = await import('@/services/resource');
 
-          await resourceService.deleteResourcesByQuery(
-            fileStore.queryParams as any,
-            selectedFileIds,
-          );
+          await resourceService.deleteResourcesByQuery(deleteQuery, selectedFileIds);
           // The deleted set is only known to the server, so the cached searches
           // cannot drop those rows by id: invalidate the surfaces instead and
           // let the refetch paint whatever survived.
@@ -396,12 +425,15 @@ export class ResourceManagerStoreActionImpl {
           // caller's workspace role — members delete only their own rows, owners
           // the full query scope — so the revalidation repaints the survivors.
           await fileStore.evictResourceLists();
-          // The deleted set is only known to the server here, and every row in
-          // it was a child of the listed folder, so refetch that one folder.
-          // The persisted tree is dropped first: if that refetch never lands,
-          // a reload must not repaint the deleted rows.
+          // The deleted set is only known to the server here, so the persisted
+          // tree cannot drop those rows by id either: drop the snapshot and
+          // refetch every loaded folder — a library-wide search hits rows in
+          // folders the sidebar has expanded, and refreshing only the folder
+          // behind the explorer would leave those painting the deleted rows.
+          // Dropping it first means a refetch that never lands still cannot
+          // repaint the deleted rows on reload.
           useTreeStore.getState().forgetSnapshot();
-          void useTreeStore.getState().revalidate(currentFolderKey);
+          void useTreeStore.getState().revalidateLoaded(currentFolderKey);
 
           this.clearSelectAllState();
           return;
@@ -425,6 +457,11 @@ export class ResourceManagerStoreActionImpl {
         if (!libraryId) return;
 
         await kbStore.removeFilesFromKnowledgeBase(libraryId, resourceIds);
+        // The rows still exist, so they cannot be dropped from every cached
+        // search by id; but they no longer match this library's searches.
+        // Refetch the search surfaces so the hits and counts follow the server.
+        void this.#invalidateExplorerSearch();
+        void this.collapseHierarchySearch();
         this.clearSelectAllState();
         return;
       }
@@ -437,7 +474,8 @@ export class ResourceManagerStoreActionImpl {
       case 'batchChunking': {
         const resourceIds = await resolveSelectedResourceIds();
         const chunkableFileIds = resourceIds.filter((id) => {
-          const resource = fileStore.resourceMap?.get(id);
+          // Search hits from other folders are not in the folder list's map.
+          const resource = fileStore.resourceMap?.get(id) ?? this.#findSearchHit(id);
           // For server-resolved IDs not yet in the local map, include them
           // and let the server handle unsupported type filtering
           if (!resource) return selectAllState === 'all';
@@ -466,12 +504,11 @@ export class ResourceManagerStoreActionImpl {
     if (selectAllState !== 'all') return selectedFileIds;
 
     const { resourceService } = await import('@/services/resource');
-    const { useFileStore } = await import('@/store/file');
-    const queryParams = useFileStore.getState().queryParams;
+    const queryParams = this.#selectionQuery();
 
     if (!queryParams) return selectedFileIds;
 
-    const result = await resourceService.resolveSelectionIds(queryParams as any);
+    const result = await resourceService.resolveSelectionIds(queryParams);
     return result.ids.filter((id) => !selectedFileIds.includes(id));
   };
 
@@ -481,11 +518,11 @@ export class ResourceManagerStoreActionImpl {
 
   selectAllResources = async (): Promise<void> => {
     const { resourceService } = await import('@/services/resource');
-    const queryParams = useFileStore.getState().queryParams;
+    const queryParams = this.#selectionQuery();
 
     if (!queryParams) return;
 
-    const { total } = await resourceService.resolveSelectionIds(queryParams as any);
+    const { total } = await resourceService.resolveSelectionIds(queryParams);
     this.#set({ selectAllState: 'all', selectedFileIds: [], selectionTotal: total });
   };
 

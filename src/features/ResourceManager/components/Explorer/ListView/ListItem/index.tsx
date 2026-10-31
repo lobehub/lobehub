@@ -1,5 +1,4 @@
 import {
-  Avatar,
   Center,
   Checkbox,
   ContextMenuTrigger,
@@ -15,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import UserAvatar from '@/components/UserAvatar';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
@@ -162,7 +162,6 @@ const FileListItem = ({
   selected,
   showUploader = true,
   size,
-  slug,
   sourceType,
   uploader,
   url,
@@ -250,9 +249,12 @@ const FileListItem = ({
     isPage,
     libraryId: resourceManagerState.libraryId,
     openInPanel: true,
-    slug,
   });
-  const handleItemDoubleClick = useFileItemDoubleClick({ id, isPage });
+  const handleItemDoubleClick = useFileItemDoubleClick({
+    id,
+    isPage,
+    libraryId: resourceManagerState.libraryId,
+  });
   const { menuItems } = useFileItemDropdown({
     fileId,
     fileType,
@@ -396,9 +398,9 @@ const FileListItem = ({
                 {uploaderName ? (
                   <Tooltip title={t('file:listView.uploadedBy', { name: uploaderName })}>
                     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-                      <Avatar
-                        alt={uploaderName}
-                        avatar={uploader?.avatar || uploaderName}
+                      <UserAvatar
+                        avatar={uploader?.avatar}
+                        name={uploaderName}
                         shape={'circle'}
                         size={20}
                         style={{ flexShrink: 0 }}

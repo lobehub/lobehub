@@ -9,6 +9,8 @@ Generate text, images, videos, speech, and transcriptions.
 ```
 lh generate (alias: gen)
 ├── text <prompt>                          # Text generation
+├── json <prompt>                          # Structured output (JSON Schema)
+├── decide [state]                         # Decision model: typed questions → probabilities
 ├── image <prompt>                         # Image generation
 ├── video <prompt>                         # Video generation
 ├── tts <text>                             # Text-to-speech
@@ -87,6 +89,39 @@ prints the parsed object pretty-printed. It is a single request: `--stream`, `--
 cannot parse into the schema exits with code 1. The server keeps only `type`, `properties`, `required`,
 `additionalProperties` and `$defs`; schemas using other root keywords (`allOf`, `minProperties`, ...) are
 rejected up front.
+
+---
+
+## `lh generate decide [state]` / `lh gen decide [state]`
+
+Ask a decision model (e.g. Jev) typed questions about one state. Each answer comes back as a probability,
+not generated text: `boolean` → `probability`, `choice` → the picked option with `probabilities`, `score`
+→ a rubric level.
+
+**Source**: `apps/cli/src/commands/generate/decide.ts`
+
+```bash
+lh gen decide [state] -m <model> -q <json|path> [-p <provider>] [--state-file <path>] [--pipe]
+```
+
+```bash
+lh gen decide "Newest message: is the queue mode ready?" -m lobehub/jev-1.14.0 \
+  -q '{"addressed":{"type":"boolean","instructions":"Is the message directed at the assistant?"}}'
+```
+
+| Option                         | Description                                                             | Default |
+| ------------------------------ | ----------------------------------------------------------------------- | ------- |
+| `-m, --model <model>`          | Decision model ID, `provider/model` (required)                          | -       |
+| `-p, --provider <provider>`    | Provider name                                                           | -       |
+| `-q, --questions <json\|path>` | Question name → `{type, instructions, criteria}`, inline or from a file | -       |
+| `--state-file <path>`          | Read the state from a file instead of the argument                      | -       |
+| `--pipe`                       | Read the state (or more of it) from stdin                               | `false` |
+
+Question shapes mirror `DecisionQuestion` in `@lobechat/model-runtime`: `boolean` takes optional
+`criteria: {true, false}`, `choice` takes `criteria: {option: guidance | null}`, `score` takes
+`criteria: [level0, level1, ...]`. The command calls the `aiChat.decide` mutation, the same
+`runtime.decide` path bot wake and channel routing use, so a prompt can be replayed on the production
+model. A provider without a decision endpoint fails with `CapabilityNotSupported` and exit code 1.
 
 ---
 

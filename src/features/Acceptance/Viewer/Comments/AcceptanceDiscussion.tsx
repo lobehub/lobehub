@@ -1,7 +1,7 @@
 'use client';
 
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Text } from '@lobehub/ui';
 import { BadgeCheck, Undo2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -13,7 +13,8 @@ import { buildAuthReturnUrl, currentReturnPath } from '@/utils/authReturnUrl';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
-import { useCommentAnchor } from './anchor';
+import AccessRequestEntry from './AccessRequestEntry';
+import { commentAnchorId, useCommentAnchor } from './anchor';
 import { commentAuthorName } from './CommentCard';
 import CommentComposer from './CommentComposer';
 import DiscussionAside from './DiscussionAside';
@@ -112,6 +113,7 @@ const entryCommentIds = (entry: DiscussionEntry): string[] => {
   if (entry.kind === 'region')
     return [entry.thread.root.id, ...entry.thread.replies.map((reply) => reply.id)];
   if (entry.kind === 'round' && entry.proposal) return [entry.proposal.id];
+  if (entry.kind === 'accessRequest') return [entry.request.id];
   return [];
 };
 
@@ -132,8 +134,10 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
   const isSignedIn = useUserStore(authSelectors.isLogin);
   const { data } = useAcceptanceBundle(acceptanceId);
   const {
+    answerAccessRequest,
     canApprove,
     canComment,
+    canManageAccess,
     create,
     error,
     isLoading,
@@ -256,6 +260,21 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
         >
           {entry.comment && <div className={entryStyles.quote}>{entry.comment}</div>}
         </TimelineEvent>
+      );
+    if (entry.kind === 'accessRequest')
+      return (
+        <div
+          className={cx(entry.request.id === anchoredId && styles.entryAnchored)}
+          id={commentAnchorId(entry.request.id)}
+          key={entry.request.id}
+        >
+          <AccessRequestEntry
+            at={entry.at}
+            canManage={canManageAccess}
+            request={entry.request}
+            onAnswer={answerAccessRequest}
+          />
+        </div>
       );
     if (entry.kind === 'approval') {
       const who =

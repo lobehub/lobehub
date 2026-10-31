@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -24,6 +25,7 @@ import {
   assertCanUseTopicTargets,
   assertCanViewTopicTargets,
 } from './_helpers/conversationResourceGuard';
+import { getResourceConfigAccess } from './_helpers/resourceConfigGuard';
 import { assertCreatorTopicTargets } from './_helpers/shareVisitorTargetGuard';
 
 const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -51,6 +53,54 @@ const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   });
 });
 const write = procedure.use(withScopedPermission('agent:update'));
+
+/** Per-agent permission lookups each hit the database; a large project must not fan out unbounded. */
+const CONFIG_ACCESS_LOOKUP_CONCURRENCY = 5;
+
+/**
+ * An agent's bound device is edit-level config (see `redactAgentConfig`): a
+ * reader without full config access keeps the pin's policy but not its device,
+ * so the sidebar offers that agent no device starts instead of leaking the id.
+ */
+const redactAgentDevicePins = async <
+  T extends { agentBoundDeviceId: string | null; agentId: string | null },
+>(
+  ctx: {
+    serverDB: Parameters<typeof getResourceConfigAccess>[0]['db'];
+    userId: string;
+    workspaceId?: string | null;
+    workspacePermissionCodes?: string[];
+  },
+  rows: T[],
+): Promise<T[]> => {
+  if (!ctx.workspaceId) return rows;
+  const pinnedAgentIds = [
+    ...new Set(rows.flatMap((row) => (row.agentId && row.agentBoundDeviceId ? [row.agentId] : []))),
+  ];
+  const fullAccess = new Set<string>();
+  await pMap(
+    pinnedAgentIds,
+    async (agentId) => {
+      const access = await getResourceConfigAccess(
+        {
+          db: ctx.serverDB,
+          grantedPermissions: ctx.workspacePermissionCodes,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        },
+        'agent',
+        agentId,
+      );
+      if (access === 'full') fullAccess.add(agentId);
+    },
+    { concurrency: CONFIG_ACCESS_LOOKUP_CONCURRENCY },
+  );
+  return rows.map((row) =>
+    row.agentBoundDeviceId && !(row.agentId && fullAccess.has(row.agentId))
+      ? { ...row, agentBoundDeviceId: null }
+      : row,
+  );
+};
 const idInput = z.object({ id: z.string().uuid() });
 
 export const projectWorkingDirectoryRouter = router({
@@ -117,7 +167,7 @@ export const projectWorkingDirectoryRouter = router({
         { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
         data.map((topic) => topic.id),
       );
-      return { data, success: true };
+      return { data: await redactAgentDevicePins(ctx, data), success: true };
     }),
   attachEnvironment: write
     .input(z.object({ projectId: z.string(), environmentId: z.string().uuid() }))

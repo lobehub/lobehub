@@ -135,6 +135,34 @@ describe('UserMemoryContextModel', () => {
       expect(result.some(({ id }) => id === 'context-with-only-trashed-parent')).toBe(false);
       expect(result.some(({ id }) => id === 'context-with-live-parent')).toBe(true);
     });
+
+    it('judges a context by its single parent once it has one', async () => {
+      await serverDB.insert(userMemories).values([
+        {
+          deletedAt: new Date(),
+          id: 'trashed-single-parent',
+          isDeleted: true,
+          lastAccessedAt: new Date(),
+          userId,
+        },
+        { id: 'live-single-parent', lastAccessedAt: new Date(), userId },
+      ]);
+      await serverDB.insert(userMemoriesContexts).values([
+        {
+          id: 'context-with-trashed-single-parent',
+          userId,
+          // The legacy list still names a live parent; the single parent wins.
+          userMemoryId: 'trashed-single-parent',
+          userMemoryIds: ['live-single-parent'],
+        },
+        { id: 'context-with-live-single-parent', userId, userMemoryId: 'live-single-parent' },
+      ]);
+
+      const result = await contextModel.query();
+
+      expect(result.some(({ id }) => id === 'context-with-trashed-single-parent')).toBe(false);
+      expect(result.some(({ id }) => id === 'context-with-live-single-parent')).toBe(true);
+    });
   });
 
   describe('findById', () => {

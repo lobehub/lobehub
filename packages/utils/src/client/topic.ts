@@ -18,7 +18,8 @@ import isYesterday from 'dayjs/plugin/isYesterday';
 dayjs.extend(isToday);
 dayjs.extend(isYesterday);
 
-const getTopicGroupId = (timestamp: number): TimeGroupId => {
+/** Time bucket of a timestamp: today, yesterday, this week, this month, a month or a year. */
+export const getTimeGroupId = (timestamp: number): TimeGroupId => {
   const date = dayjs(timestamp);
   const now = dayjs();
 
@@ -51,8 +52,8 @@ const getTopicGroupId = (timestamp: number): TimeGroupId => {
   return `${date.year()}`;
 };
 
-// Ensure group sorting
-const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
+/** Orders time buckets newest first: the fixed buckets, then months and years. */
+export const sortTimeGroups = <T extends { id: string }>(groups: T[]): T[] => {
   const orderMap = new Map<string, number>([
     ['today', 0],
     ['yesterday', 1],
@@ -97,7 +98,7 @@ const groupTopicsByField = (
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
   for (const topic of sortedTopics) {
-    const groupId = getTopicGroupId(getTopicSortTime(topic, field));
+    const groupId = getTimeGroupId(getTopicSortTime(topic, field));
     const existing = groupsMap.get(groupId);
     if (existing) {
       existing.push(topic);
@@ -111,7 +112,7 @@ const groupTopicsByField = (
     id,
   }));
 
-  return sortGroups(result);
+  return sortTimeGroups(result);
 };
 
 export const groupTopicsByTime = (topics: ChatTopic[]) => groupTopicsByField(topics, 'createdAt');

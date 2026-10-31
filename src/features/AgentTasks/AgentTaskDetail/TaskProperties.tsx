@@ -1,6 +1,6 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
 import { Block, cssVar, Icon, Text } from '@lobehub/ui';
-import { ArchiveIcon } from 'lucide-react';
+import { ArchiveIcon, Stamp } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,6 +19,7 @@ import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
 import TaskAcceptanceStateRow from './TaskAcceptanceStateRow';
 import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskScheduleConfig from './TaskScheduleConfig';
+import { useTaskAcceptanceWait } from './useTaskAcceptanceWait';
 
 interface StatusMeta {
   labelKey: string;
@@ -62,6 +63,7 @@ const TaskProperties = memo(() => {
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
   const memberMeta = useUserDisplayMeta(assigneeUserId);
   const activeWorkspaceId = useActiveWorkspaceId();
+  const acceptanceWait = useTaskAcceptanceWait();
 
   if (!taskId) return null;
 
@@ -79,8 +81,18 @@ const TaskProperties = memo(() => {
           gap={8}
           variant={'borderless'}
         >
-          <TaskStatusTag disableDropdown size={16} status={status} taskIdentifier={taskId} />
-          <Text weight={500}>{t(`taskDetail.${statusMeta.labelKey}` as never)}</Text>
+          {/* `running` covers both an executing agent and a stopped one whose
+              acceptance round has yet to settle; only the first is "in progress". */}
+          {acceptanceWait ? (
+            <Icon color={cssVar.colorWarning} icon={Stamp} size={16} />
+          ) : (
+            <TaskStatusTag disableDropdown size={16} status={status} taskIdentifier={taskId} />
+          )}
+          <Text weight={500}>
+            {acceptanceWait
+              ? t('taskDetail.status.awaitingAcceptance')
+              : t(`taskDetail.${statusMeta.labelKey}` as never)}
+          </Text>
         </Block>
       </TaskStatusTag>
 

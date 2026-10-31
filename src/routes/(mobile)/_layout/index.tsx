@@ -8,6 +8,7 @@ import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { useMobileNavigation } from '@/hooks/useMobileNavigation';
+import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -26,6 +27,8 @@ const MobileMainLayout: FC = () => {
         <Outlet />
         {showNav && <NavBar />}
       </Suspense>
+      {/* Global search: the sidebars mobile opens as drawers trigger it. */}
+      <CmdkLazy />
     </WorkspaceContextSlot>
   );
 };

@@ -3,6 +3,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentShareVisitorContext,
   type ChatToolPayload,
+  type ChatTopicBotContext,
   type ClientSecretPayload,
   type DeviceUnavailableErrorData,
   type ExecSubAgentParams,
@@ -24,6 +25,13 @@ export interface ToolExecutionMemoryEmbeddingRuntime {
 export interface ServerSubAgentRunParams {
   /** Target agent id; defaults to the parent agent when omitted. */
   agentId?: string;
+  /**
+   * Run detached from the parent (`callSubAgent({ runInBackground })`): the
+   * placeholder is written with the start receipt as its final tool result, and
+   * the child's answer is delivered to the parent as a later message instead of
+   * resuming a parked parent. Only set by `callSubAgent`.
+   */
+  background?: boolean;
   /** Short label shown in the UI (sub-agent thread title). */
   description: string;
   /** Detailed instruction/prompt for the sub-agent run. */
@@ -208,6 +216,13 @@ export interface ToolExecutionContext {
    * `messageId`.
    */
   assistantMessageId?: string;
+  /**
+   * Who started this run from an IM conversation (`state.principal.actor.bot`): the platform
+   * sender of the message the run answers and whether they are the bot's owner. Built per inbound
+   * message by the bot / messenger routers, so it names the current speaker, not whoever opened
+   * the topic. Absent outside bot conversations.
+   */
+  botContext?: ChatTopicBotContext;
   /** Originating request IP propagated through the operation metadata. */
   clientIp?: string;
   /**
@@ -378,6 +393,11 @@ export interface ToolExecutionResult {
   errorData?: DeviceUnavailableErrorData;
   state?: Record<string, any>;
   success: boolean;
+  /**
+   * The tool message this call already created for itself; the agent runtime
+   * writes the result into that row instead of creating a second one.
+   */
+  toolMessageId?: string;
   /**
    * Transient Work-registration intent produced by the executor and consumed by
    * the agent runtime (`callTool` / `callToolsBatch`) once the tool call's

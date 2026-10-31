@@ -169,6 +169,14 @@ export interface OperationMetadata {
   // UI state (for sendMessage operation)
   inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
   inputSendErrorMsg?: string; // Error message to display in UI
+  /**
+   * User-facing LLM-call total for the running operation.
+   *
+   * Counts only actual model invocations — tool-only runtime iterations do not
+   * increment it. `stepCount` in operation metadata remains the internal
+   * scheduling/execution index.
+   */
+  llmCalls?: number;
   // Progress information
   progress?: {
     current: number;
@@ -483,7 +491,7 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
  */
 export interface OperationFilter {
   agentId?: string;
-  groupId?: string;
+  groupId?: string | null;
   isNew?: boolean;
   messageId?: string;
   scope?: MessageMapScope;
@@ -551,12 +559,13 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   // after the round-trips. See INTERIM_LOADING_OPERATION_TYPES for the bridge
   // semantics and why they stay out of AI_RUNTIME_OPERATION_TYPES.
   //
-  // Known limitation (accepted): this also makes Stop appear during the pre-
-  // generation window. The approve/submit/skip gateway branches don't forward
-  // `parentOperationId` to `executeGatewayAgent`, so hitting Stop in that
-  // narrow window doesn't actually abort the in-flight request (loading
-  // briefly flickers, generation proceeds). No stuck state; wiring the abort
-  // handoff through those branches is deferred. The `regenerate` branch DOES
+  // This also makes Stop appear during the pre-generation window. The approve
+  // gateway branches forward `parentOperationId` to `executeGatewayAgent`, so
+  // Stop there interrupts the resumed run: approval cards resolve instantly
+  // and no longer cover the composer, which keeps this window reachable.
+  // Known limitation (accepted): the submit/skip gateway branches don't
+  // forward it yet, so Stop in that narrow window doesn't abort (loading
+  // briefly flickers, generation proceeds). The `regenerate` branch DOES
   // forward it — an unsettled regenerate wrapper is what the retry guard
   // reads, so it must never outlive phase-1 (a WS drop before session end
   // would otherwise brick retry for that turn permanently).

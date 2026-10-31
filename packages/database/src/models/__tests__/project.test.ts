@@ -6,14 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
+  agentOperations,
   agents,
   environments,
   knowledgeBases,
+  projectAgents,
   projectCompletionReviews,
   projectEnvironments,
   projects,
   projectWorks,
   tasks,
+  topics,
   users,
   works,
   workspaces,
@@ -230,6 +233,51 @@ describe('ProjectModel', () => {
     expect(await model.isDedicatedCoordinator(user.id, { exceptProjectId: project.id })).toBe(
       false,
     );
+  });
+
+  it('creates a project led by a picked agent without provisioning a coordinator', async () => {
+    const picked = await new AgentModel(serverDB, userId).create({ title: 'Planner' });
+    const agentCount = (await serverDB.select().from(agents).where(eq(agents.userId, userId)))
+      .length;
+
+    const project = await createProject(model, { coordinatorAgentId: picked.id, name: 'Picked' });
+
+    expect(project.coordinatorAgentId).toBe(picked.id);
+    expect(await serverDB.select().from(agents).where(eq(agents.userId, userId))).toHaveLength(
+      agentCount,
+    );
+    expect(
+      await serverDB
+        .select({ role: projectAgents.role })
+        .from(projectAgents)
+        .where(eq(projectAgents.projectId, project.id)),
+    ).toEqual([{ role: 'coordinator' }]);
+
+    await model.delete(project.id);
+    expect(await serverDB.select().from(agents).where(eq(agents.id, picked.id))).toHaveLength(1);
+  });
+
+  it('lets the identifier be omitted, keeping the default task prefix', async () => {
+    const named = await model.create({ identifier: 'ace', name: 'Named' });
+    const unnamed = await model.create({ name: 'Unnamed' });
+    const taskModel = new TaskModel(serverDB, userId);
+
+    const namedTask = await taskModel.create({ instruction: 'a', projectId: named.id });
+    const unnamedTask = await taskModel.create({ instruction: 'b', projectId: unnamed.id });
+
+    expect(named.identifier).toBe('ACE');
+    expect(unnamed.identifier).toBeNull();
+    expect(namedTask.identifier).toBe('ACE-1');
+    expect(unnamedTask.identifier).toBe('T-2');
+  });
+
+  it('refuses to create a project led by an agent outside the scope', async () => {
+    const foreign = await new AgentModel(serverDB, otherUserId).create({ title: 'Foreign' });
+
+    await expect(
+      createProject(model, { coordinatorAgentId: foreign.id, name: 'Foreign-led' }),
+    ).rejects.toThrow('Agent not found');
+    expect(await serverDB.select().from(projects).where(eq(projects.userId, userId))).toEqual([]);
   });
 
   it('creates, lists, updates, and deletes a project in the owner scope', async () => {
@@ -537,6 +585,32 @@ describe('ProjectModel', () => {
     expect(await model.removeKnowledgeBase(project.id, knowledgeBase.id)).toBe(true);
     expect(await model.removeAgent(project.id, agent.id)).toBe(false);
     expect(await model.removeKnowledgeBase(project.id, knowledgeBase.id)).toBe(false);
+  });
+
+  it('refuses to lead a shared workspace project with a private agent', async () => {
+    const workspaceId = 'project-shared-lead-workspace';
+    await serverDB.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Shared Lead Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    const creator = new ProjectModel(serverDB, userId, workspaceId);
+    const [privateAgent] = await serverDB
+      .insert(agents)
+      .values({ title: 'Private lead', userId, visibility: 'private', workspaceId })
+      .returning();
+
+    await expect(
+      createProject(creator, {
+        coordinatorAgentId: privateAgent.id,
+        name: 'Shared-led',
+        visibility: 'public',
+      }),
+    ).rejects.toThrow('A shared project only takes shared agents');
+    expect(
+      await serverDB.select().from(projects).where(eq(projects.workspaceId, workspaceId)),
+    ).toEqual([]);
   });
 
   // A private binding on a shared project would be filtered out for every reader but its creator.
@@ -959,6 +1033,62 @@ describe('ProjectModel', () => {
     await expect(otherModel.listTopics(project.id)).rejects.toThrow('access denied');
   });
 
+  it("carries each agent's execution-target pin on its project topics", async () => {
+    const project = await createProject(model, { name: 'Pinned host' });
+    const [pinned] = await serverDB
+      .insert(agents)
+      .values({
+        agencyConfig: { boundDeviceId: 'device-mac', executionTargetSelectionPolicy: 'fixed' },
+        title: 'Pinned',
+        userId,
+      })
+      .returning();
+    const topicModel = new TopicModel(serverDB, userId);
+    await topicModel.create({ agentId: pinned.id, projectId: project.id, title: 'Pinned work' });
+    await topicModel.create({
+      agentId: project.coordinatorAgentId,
+      projectId: project.id,
+      title: 'Free work',
+    });
+
+    const list = await model.listTopics(project.id);
+    expect(list.find((t) => t.agentId === pinned.id)).toMatchObject({
+      agentBoundDeviceId: 'device-mac',
+      agentExecutionTargetSelectionPolicy: 'fixed',
+    });
+    expect(list.find((t) => t.agentId === project.coordinatorAgentId)).toMatchObject({
+      agentBoundDeviceId: null,
+      agentExecutionTargetSelectionPolicy: null,
+    });
+  });
+
+  it("carries each agent's heterogeneous provider type on its project topics", async () => {
+    const project = await createProject(model, { name: 'External runtime' });
+    const [external] = await serverDB
+      .insert(agents)
+      .values({
+        agencyConfig: { heterogeneousProvider: { command: 'claude', type: 'claude-code' } },
+        title: 'Claude Code',
+        userId,
+      })
+      .returning();
+    const topicModel = new TopicModel(serverDB, userId);
+    await topicModel.create({ agentId: external.id, projectId: project.id, title: 'External' });
+    await topicModel.create({
+      agentId: project.coordinatorAgentId,
+      projectId: project.id,
+      title: 'Built-in',
+    });
+
+    const list = await model.listTopics(project.id);
+    expect(list.find((t) => t.agentId === external.id)).toMatchObject({
+      agentHeterogeneousProviderType: 'claude-code',
+    });
+    expect(list.find((t) => t.agentId === project.coordinatorAgentId)).toMatchObject({
+      agentHeterogeneousProviderType: null,
+    });
+  });
+
   it('keeps agentless conversations visible in project listings', async () => {
     const project = await createProject(model, { name: 'Agentless host' });
     const topic = await new TopicModel(serverDB, userId).create({
@@ -968,5 +1098,44 @@ describe('ProjectModel', () => {
     expect(await model.listTopics(project.id)).toEqual([
       expect.objectContaining({ agentId: null, agentTitle: null, id: topic.id }),
     ]);
+  });
+
+  // The project sidebar renders a running row's elapsed clock from this. Rows
+  // the client holds no local operation for (every non-active running topic
+  // after a refresh) otherwise show a spinner with no timer.
+  it('resolves runStartedAt for running project topics', async () => {
+    const project = await createProject(model, { name: 'Running work' });
+    await serverDB.insert(topics).values([
+      { id: 't-op', projectId: project.id, status: 'running', title: 'server run', userId },
+      {
+        id: 't-stamp',
+        metadata: { runStartedAt: '2026-01-05T00:00:00Z' },
+        projectId: project.id,
+        status: 'running',
+        title: 'client run',
+        userId,
+      },
+      {
+        id: 't-done',
+        metadata: { runStartedAt: '2026-01-06T00:00:00Z' },
+        projectId: project.id,
+        status: 'completed',
+        title: 'finished run',
+        userId,
+      },
+    ]);
+    await serverDB.insert(agentOperations).values({
+      id: 'op-project-run',
+      startedAt: new Date('2026-01-02T00:00:00Z'),
+      status: 'running',
+      topicId: 't-op',
+      userId,
+    });
+
+    const byId = Object.fromEntries((await model.listTopics(project.id)).map((t) => [t.id, t]));
+
+    expect(byId['t-op'].runStartedAt).toEqual(new Date('2026-01-02T00:00:00Z'));
+    expect(byId['t-stamp'].runStartedAt).toEqual(new Date('2026-01-05T00:00:00Z'));
+    expect(byId['t-done'].runStartedAt).toBeNull();
   });
 });

@@ -38,7 +38,6 @@ const styles = stylex.create({
     borderRadius: cssVar.borderRadiusLG,
     borderStyle: 'solid',
     borderWidth: 1,
-    maxWidth: 480,
     overflow: 'hidden',
     width: '100%',
   },
@@ -119,7 +118,7 @@ const CanvasWorkCard = memo<CanvasWorkCardProps>(({ className, item, onOpen }) =
           </Text>
           {item.url && (
             <Tag color={'blue'} size={'small'}>
-              {t('workingPanel.works.canvasPublished')}
+              {t('workingPanel.works.canvasShared')}
             </Tag>
           )}
         </Flexbox>

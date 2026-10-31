@@ -63,7 +63,7 @@ const getFilteredDocumentsLimited = (s: PageState): LobeDocument[] =>
 /**
  * One page as the loaded list holds it, falling back to the by-id projection
  * for pages outside it (mobile mounts no sidebar; a deep link may land before
- * the list fetches), and finally to a Docs sidebar section.
+ * the list fetches), and finally to a Docs sidebar section or its full list.
  *
  * The sections load their own rows (`pageSectionMap`), so on a fresh Docs load
  * a page can be on screen while the flat list has not fetched it yet. Rename,
@@ -82,8 +82,14 @@ const getDocumentById = (docId: string | undefined) => (s: PageState) => {
   const detailRow = s.pageDetailMap[docId];
   if (detailRow) return detailRow;
 
-  return Object.values(s.pageSectionMap)
+  const sectionRow = Object.values(s.pageSectionMap)
     .flat()
+    .find((doc) => doc.id === docId);
+  if (sectionRow) return sectionRow;
+
+  // The full-list panel pages older rows that no section head holds.
+  return Object.values(s.pageSectionListMap)
+    .flatMap((list) => list.items)
     .find((doc) => doc.id === docId);
 };
 

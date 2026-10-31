@@ -1,4 +1,7 @@
-import { claudeCodeRoutesExternally } from '@lobechat/heterogeneous-agents/quota';
+import {
+  claudeCodeAgentEnvPicksLogin,
+  claudeCodeRoutesExternally,
+} from '@lobechat/heterogeneous-agents/quota';
 import { t } from 'i18next';
 
 import { agentQuotaService } from '@/services/agentQuota';
@@ -39,23 +42,6 @@ const resolveLocalLogin = async (selection: AccountSelection) => {
 };
 
 /**
- * Agent env keys that already choose which login (or credential) the CLI
- * uses. The executor spreads the agent's env last, so with any of these set
- * account routing could only be overridden — or, worse, block the run over a
- * pin the agent does not even use.
- */
-const AGENT_LOGIN_ENV_KEYS = [
-  'CLAUDE_CONFIG_DIR',
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_AUTH_TOKEN',
-  'ANTHROPIC_BASE_URL',
-] as const;
-
-/** The agent's own env decides the login, so subscription routing must stay out. */
-const agentEnvPicksLogin = (env?: Record<string, string>) =>
-  AGENT_LOGIN_ENV_KEYS.some((key) => env?.[key]?.trim()) || claudeCodeRoutesExternally(env);
-
-/**
  * Bedrock / Mantle / Vertex flags the desktop process exports reach the CLI
  * too, unless the agent env overrides them — a run on an external provider
  * involves no subscription login at all. An older desktop without the IPC
@@ -83,7 +69,7 @@ const inheritedEnvRoutesExternally = async (agentEnv?: Record<string, string>) =
  * No bindings, or the quota service unreachable, → `{}` and the spawn behaves
  * as before; a desktop that fails to look up its logins fails the run. An env
  * that picks its own login or an external provider — the agent's
- * (`agentEnvPicksLogin`) or one inherited from the desktop — wins over
+ * (`claudeCodeAgentEnvPicksLogin`) or one inherited from the desktop — wins over
  * routing; the result is also spread BEFORE `heterogeneousProvider.env` for
  * the same reason.
  */
@@ -94,7 +80,7 @@ export const resolveQuotaAccountSpawnPlan = async (
 ): Promise<QuotaAccountSpawnPlan> => {
   // Codex accounts exist in the DB but have no runnable credential mapping yet.
   if (adapterType !== 'claude-code' || !agentId) return NO_ROUTING;
-  if (agentEnvPicksLogin(agentEnv)) return NO_ROUTING;
+  if (claudeCodeAgentEnvPicksLogin(agentEnv)) return NO_ROUTING;
 
   const select = (runnableExternalAccountIds?: string[]) =>
     agentQuotaService

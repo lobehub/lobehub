@@ -129,7 +129,7 @@ export function installCanvasProject(
       Object.entries(urls).map(([path, url]) => [`lobe-canvas-project/${path}`, url]),
     );
     const injection =
-      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline' blob:; img-src data: blob:; font-src data: blob:; media-src data: blob:; connect-src blob:; form-action 'none'; base-uri 'none'">` +
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'unsafe-inline' blob:; img-src data: blob:; font-src data: blob:; media-src data: blob:; connect-src blob:; form-action 'none'; base-uri 'none'">` +
       `<script>(${bridgeSource})();(${globalsSource})(${serialize(urls)},${serialize(page)},${serialize(owned)});</script>` +
       `<script type="importmap">${serialize({ imports })}</script>` +
       `<script type="module">window.dispatchEvent(new CustomEvent('lobe-canvas-project-import',{detail:(url,options)=>import(url,options)}));</script>` +

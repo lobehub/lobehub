@@ -288,6 +288,7 @@ export function registerTaskCommand(program: Command) {
 
       // ── Header ──
       console.log(`\n${pc.bold(t.identifier)} ${t.name || ''}`);
+      console.log(`ID: ${t.id}`);
       console.log(`${pc.dim('URL:')} ${url}`);
       console.log(
         `${pc.dim('Status:')} ${statusBadge(t.status)}  ${pc.dim('Priority:')} ${priorityLabel(t.priority)}`,
@@ -575,6 +576,7 @@ export function registerTaskCommand(program: Command) {
         }
 
         log.info(`Task created: ${pc.bold(result.data.identifier)} ${result.data.name || ''}`);
+        console.log(`ID: ${result.data.id}`);
         console.log(`${pc.bold('task')}: ${url}`);
       },
     );
@@ -643,7 +645,19 @@ export function registerTaskCommand(program: Command) {
           }
           if (!hasFieldEdits) {
             const result = await client.task.updateStatus.mutate({ id, status: options.status });
-            log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
+            if (options.json !== undefined) {
+              outputJson(
+                withUrl(
+                  result.data,
+                  await resolveUrlBuilder(client),
+                  resourcePath.task(result.data),
+                ),
+                typeof options.json === 'string' ? options.json : undefined,
+              );
+            } else {
+              log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
+              console.log(`ID: ${result.data.id}`);
+            }
             return;
           }
 
@@ -662,6 +676,7 @@ export function registerTaskCommand(program: Command) {
 
         const statusSuffix = options.status ? ` → ${options.status}` : '';
         log.info(`Task updated: ${pc.bold(result.data.identifier)}${statusSuffix}`);
+        console.log(`ID: ${result.data.id}`);
       },
     );
 
@@ -678,8 +693,8 @@ export function registerTaskCommand(program: Command) {
       }
 
       const client = await getTrpcClient();
-      await client.task.delete.mutate({ id });
-      log.info(`Task ${pc.bold(id)} deleted.`);
+      const result = await client.task.delete.mutate({ id });
+      log.info(`Task ${pc.bold(result.data.identifier)} (id: ${result.data.id}) deleted.`);
     });
 
   // ── clear ──────────────────────────────────────────────

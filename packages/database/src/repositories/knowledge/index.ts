@@ -2,6 +2,7 @@ import {
   AGENT_ARTIFACT_SOURCE_TYPES,
   CUSTOM_DOCUMENT_FILE_TYPE,
   CUSTOM_FOLDER_FILE_TYPE,
+  HTML_DOCUMENT_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
   RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
 } from '@lobechat/const';
@@ -603,13 +604,13 @@ export class KnowledgeRepo {
   }
 
   /**
-   * The Docs home list: pages and uploaded files together, newest update first,
+   * The Docs home list: pages (rich text and HTML artifacts) and uploaded documents (pdf / office / text; no
+   * media, raw data or page-backing rows) together, newest update first,
    * wherever they live (a knowledge base or not; rows carry `knowledgeBaseIds`
    * for the location column). `creator` narrows to the caller's own rows
    * (`self`) or to what other workspace members shared (`others`); private rows
-   * of other members never pass the ownership scope in the first place.
-   * Folders, page-backing file rows and rows of restricted knowledge bases are
-   * excluded in SQL, so `limit` is never eaten by rows filtered out later.
+   * of other members never pass the ownership scope in the first place. All
+   * exclusions run in SQL, so `limit` is never eaten by rows filtered later.
    */
   async queryHomeItems({
     creator,
@@ -630,7 +631,7 @@ export class KnowledgeRepo {
     const fileArm = this.fileArm(
       [
         creatorFilter(f.userId),
-        ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+        this.fileCategoryFilter(FilesTabs.Documents),
         excludeKnowledgeBaseIds?.length
           ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
           : undefined,
@@ -643,7 +644,9 @@ export class KnowledgeRepo {
     const documentArm = this.documentArm(
       [
         creatorFilter(d.userId),
-        eq(d.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+        // HTML pages (artifacts) are pages too; leaving them out hid every
+        // agent-written report from the list.
+        inArray(d.fileType, [CUSTOM_DOCUMENT_FILE_TYPE, HTML_DOCUMENT_FILE_TYPE]),
         excludeKnowledgeBaseIds?.length
           ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
           : undefined,

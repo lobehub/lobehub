@@ -12,6 +12,7 @@ import {
 } from '@/features/Acceptance';
 import TopicPanel from '@/features/Acceptance/Viewer/Conversation/TopicPanel';
 import NavHeader from '@/features/NavHeader';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
 /** `project/:projectId/acceptance/:acceptanceId` — one acceptance, back to the project's list. */
 const ProjectAcceptanceDetail = () => {
@@ -22,6 +23,9 @@ const ProjectAcceptanceDetail = () => {
   return (
     <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
       <NavHeader
+        // The page's own back leads to its list; mobile drops the shell's
+        // history back so there is one.
+        showTogglePanelButton={!isMobileSurface()}
         left={
           <Flexbox horizontal align={'center'} gap={6}>
             <ActionIcon

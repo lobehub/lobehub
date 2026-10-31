@@ -8,7 +8,12 @@ import {
   TopicListRevealContext,
   TopicListScopeContext,
 } from './TopicListScope';
-import { pinCoordinatorGroup, useOnlyMineTopics, useScopedSidebarTopics } from './useScopedTopics';
+import {
+  pinCoordinatorGroup,
+  useOnlyMineTopics,
+  useScopedSidebarTopics,
+  withCoordinatorGroup,
+} from './useScopedTopics';
 
 const fixture = vi.hoisted(() => ({ topicId: undefined as string | undefined }));
 const userFixture = vi.hoisted(() => ({ topicOnlyMine: false, userId: 'me' }));
@@ -72,9 +77,9 @@ vi.mock('@/store/user', () => ({
 }));
 vi.mock('@/store/user/selectors', () => ({
   userProfileSelectors: { userId: (s: typeof userFixture) => s.userId },
-  workspaceUserSettingsSelectors: {
-    topicOnlyMine: () => (s: typeof userFixture) => s.topicOnlyMine,
-  },
+}));
+vi.mock('@/hooks/useTopicOnlyMine', () => ({
+  useTopicOnlyMine: () => userFixture.topicOnlyMine,
 }));
 vi.mock('i18next', () => ({ t: (key: string) => key }));
 
@@ -99,7 +104,7 @@ describe('Project topics use the canonical Agent sidebar rules', () => {
     userFixture.topicOnlyMine = false;
     updateSystemStatus.mockClear();
   });
-  it('lists only the caller topics with the workspace only-mine filter, keeping the open one', () => {
+  it('lists only the caller topics with the project only-mine filter, keeping the open one', () => {
     userFixture.topicOnlyMine = true;
     const { result, rerender } = renderHook(
       () => useScopedSidebarTopics(20, 'updatedAt', 'flat', false),
@@ -264,6 +269,25 @@ describe('pinCoordinatorGroup', () => {
     expect(pinCoordinatorGroup(groups, 'b')).toBe(groups);
     expect(pinCoordinatorGroup(groups, 'missing')).toBe(groups);
     expect(pinCoordinatorGroup(groups, undefined)).toBe(groups);
+  });
+});
+
+describe('withCoordinatorGroup', () => {
+  /** @example Review feedback: an empty project showed text, not the main agent's group with "new topic". */
+  it('shows the main agent as an empty group named from the project when there is no topic', () => {
+    expect(
+      withCoordinatorGroup([], {
+        coordinatorAgent: { name: null, title: '官网改版 Coordinator' },
+        coordinatorAgentId: 'agt_lead',
+      }),
+    ).toEqual([{ children: [], id: 'agent:agt_lead', title: '官网改版 Coordinator' }]);
+  });
+
+  it('leaves existing groups and scopes without a main agent alone', () => {
+    const groups = [{ children: [], id: 'agent:a', title: 'a' }];
+    expect(withCoordinatorGroup(groups, { coordinatorAgentId: 'agt_lead' })).toBe(groups);
+    expect(withCoordinatorGroup([], { coordinatorAgentId: undefined })).toEqual([]);
+    expect(withCoordinatorGroup([], null)).toEqual([]);
   });
 });
 

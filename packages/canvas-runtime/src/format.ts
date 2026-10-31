@@ -1,6 +1,7 @@
 const compact = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, notation: 'compact' });
 const number = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
 const percent = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, style: 'percent' });
+const TIGHT_UNIT = /^[%‰°′″]/;
 
 export const formatValue = (value: unknown, format?: unknown, unit?: unknown): string => {
   if (typeof value !== 'number') return value === undefined || value === null ? '' : String(value);
@@ -24,7 +25,8 @@ export const formatValue = (value: unknown, format?: unknown, unit?: unknown): s
     }
   }
 
-  return typeof unit === 'string' && unit ? `${text} ${unit}` : text;
+  if (typeof unit !== 'string' || !unit) return text;
+  return TIGHT_UNIT.test(unit) ? `${text}${unit}` : `${text} ${unit}`;
 };
 
 export const heatmapLevel = (count: number, max: number) =>

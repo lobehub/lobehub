@@ -46,6 +46,8 @@ export const imageToBase64 = ({
 export interface ImageUrlToBase64Options {
   /** Abort the download once the response exceeds this many bytes. */
   maxBytes?: number;
+  /** Cancels the download, e.g. `AbortSignal.timeout(...)`. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -60,9 +62,18 @@ export const imageUrlToBase64 = async (
     const isServer = typeof window === 'undefined';
 
     // Use SSRF-safe fetch on server-side to prevent SSRF attacks
+    const init = options.signal ? { signal: options.signal } : undefined;
+    // Also cap the stream inside ssrfSafeFetch. It truncates silently, so allow one extra
+    // byte for readBlobWithLimit to detect the overflow and reject.
     const res = isServer
-      ? await import('@lobechat/ssrf-safe-fetch').then((m) => m.ssrfSafeFetch(imageUrl))
-      : await fetch(imageUrl);
+      ? await import('@lobechat/ssrf-safe-fetch').then((m) =>
+          m.ssrfSafeFetch(
+            imageUrl,
+            init,
+            options.maxBytes ? { maxContentLength: options.maxBytes + 1 } : undefined,
+          ),
+        )
+      : await fetch(imageUrl, init);
 
     const blob = options.maxBytes
       ? await readBlobWithLimit(res, options.maxBytes)

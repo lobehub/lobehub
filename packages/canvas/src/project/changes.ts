@@ -34,11 +34,22 @@ const decodeBase64 = (value: string) => Uint8Array.from(atob(value), (char) => c
 export const isCanvasFileRefWrite = (write: CanvasFileWrite): write is CanvasFileRefWrite =>
   typeof write.fileRef === 'string' && write.fileRef.length > 0;
 
+// Tool-calling models can omit a required field. Read it defensively so the change set reports
+// the missing field by name instead of crashing inside normalizeCanvasPath on `undefined`.
+const readPath = (value: unknown): string | undefined => {
+  const path = (value as { path?: unknown } | null | undefined)?.path;
+  return typeof path === 'string' && path.length > 0 ? path : undefined;
+};
+
 export const collectCanvasFileRefs = (changes: CanvasChangeSet): CanvasFileRefWrite[] =>
-  (changes.writes ?? []).filter(isCanvasFileRefWrite).map((write) => ({
-    fileRef: write.fileRef,
-    path: normalizeCanvasPath(write.path) ?? write.path,
-  }));
+  (changes.writes ?? [])
+    .filter(isCanvasFileRefWrite)
+    .flatMap((write) => {
+      // A fileRef write with no usable path is refused by applyCanvasChanges; skipping it here
+      // keeps this pre-resolution pass from crashing on the missing path first.
+      const path = readPath(write);
+      return path ? [{ fileRef: write.fileRef, path: normalizeCanvasPath(path) ?? path }] : [];
+    });
 
 const countOccurrences = (text: string, search: string) => {
   let count = 0;
@@ -55,8 +66,16 @@ export const applyCanvasChanges = (
 ): CanvasChangeResult => {
   const files = new Map(base);
 
-  for (const write of changes.writes ?? []) {
-    const path = normalizeCanvasPath(write.path) ?? write.path;
+  for (const [index, write] of (changes.writes ?? []).entries()) {
+    const rawPath = readPath(write);
+    if (!rawPath) {
+      return {
+        error: `writes[${index}] is missing "path": every write must name the file it targets, e.g. "index.html".`,
+        ok: false,
+      };
+    }
+
+    const path = normalizeCanvasPath(rawPath) ?? rawPath;
     if (isCanvasFileRefWrite(write)) {
       const content = resolvedFileRefs.get(write.fileRef);
       if (content === undefined) {
@@ -77,19 +96,33 @@ export const applyCanvasChanges = (
       try {
         content = decodeBase64(write.content);
       } catch {
-        return { error: `"${write.path}" is not valid base64.`, ok: false };
+        return { error: `"${rawPath}" is not valid base64.`, ok: false };
       }
     }
     files.set(path, { content, path });
   }
 
-  for (const edit of changes.edits ?? []) {
-    const path = normalizeCanvasPath(edit.path) ?? edit.path;
+  for (const [index, edit] of (changes.edits ?? []).entries()) {
+    const rawPath = readPath(edit);
+    if (!rawPath) {
+      return {
+        error: `edits[${index}] is missing "path": every edit must name the file it targets, e.g. "index.html".`,
+        ok: false,
+      };
+    }
+    if (typeof edit.oldText !== 'string' || typeof edit.newText !== 'string') {
+      return {
+        error: `edits[${index}] needs both "oldText" and "newText" strings.`,
+        ok: false,
+      };
+    }
+
+    const path = normalizeCanvasPath(rawPath) ?? rawPath;
     const file = files.get(path);
-    if (!file) return { error: `Cannot edit "${edit.path}": the file does not exist.`, ok: false };
+    if (!file) return { error: `Cannot edit "${rawPath}": the file does not exist.`, ok: false };
     if (typeof file.content !== 'string') {
       return {
-        error: `Cannot edit "${edit.path}": it is a binary file. Write it instead.`,
+        error: `Cannot edit "${rawPath}": it is a binary file. Write it instead.`,
         ok: false,
       };
     }
@@ -97,14 +130,21 @@ export const applyCanvasChanges = (
     const occurrences = countOccurrences(file.content, edit.oldText);
     if (occurrences !== 1) {
       return {
-        error: `Cannot edit "${edit.path}": oldText appears ${occurrences} times; it must appear exactly once. Include more surrounding text.`,
+        error: `Cannot edit "${rawPath}": oldText appears ${occurrences} times; it must appear exactly once. Include more surrounding text.`,
         ok: false,
       };
     }
     files.set(path, { content: file.content.replace(edit.oldText, () => edit.newText), path });
   }
 
-  for (const target of changes.deletes ?? []) {
+  for (const [index, target] of (changes.deletes ?? []).entries()) {
+    if (typeof target !== 'string' || target.length === 0) {
+      return {
+        error: `deletes[${index}] must be a file path, e.g. "index.html".`,
+        ok: false,
+      };
+    }
+
     const path = normalizeCanvasPath(target) ?? target;
     if (!files.delete(path)) {
       return { error: `Cannot delete "${target}": the file does not exist.`, ok: false };

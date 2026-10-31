@@ -1,4 +1,4 @@
-import type { AcceptanceSubjectType } from '@lobechat/types';
+import type { CreatableAcceptanceSubjectType } from '@lobechat/types';
 
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import { AppIndexedDBStorage, defineReplica } from '@/libs/replica';
@@ -23,7 +23,7 @@ export const acceptanceBundleResource = defineReplica<string, AcceptanceBundle>(
 /** The subject (topic / task / document) an acceptance is attached to. */
 export interface AcceptanceBySubjectParams {
   subjectId: string;
-  subjectType: AcceptanceSubjectType;
+  subjectType: CreatableAcceptanceSubjectType;
 }
 
 /** One subject's entry key in `acceptanceBySubjectMap`. */

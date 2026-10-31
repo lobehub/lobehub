@@ -1,3 +1,4 @@
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
 import type { TaskCurrentActivity, TaskStatusResult } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
@@ -261,9 +262,28 @@ export const operationStatusRouter = router({
             updatedMetadata.totalMessages = stats.totalMessages;
           }
 
-          // Store totalSteps from stepCount
-          if (redisState.stepCount) {
-            updatedMetadata.totalSteps = redisState.stepCount;
+          // User-facing step metric: completed LLM calls. In QStash mode this
+          // poller is the only writer of thread metadata, so keep both fields in
+          // LLM-call units (`totalSteps` is what the UI reads).
+          //
+          // `operationLlmCalls` is cumulative for the operation, so it must be
+          // added to an immutable pre-operation baseline instead of the value a
+          // previous poll wrote: polls are frequent and each one used to add the
+          // operation's running total again.
+          const operationLlmCalls = getLlmCallCount(redisState);
+          if (operationLlmCalls) {
+            const baselineIsCurrent =
+              metadata?.llmCallsBaselineOperationId === resolvedOperationId &&
+              typeof metadata?.llmCallsBaseline === 'number';
+            const baselineLlmCalls = baselineIsCurrent
+              ? (metadata.llmCallsBaseline as number)
+              : (metadata?.totalLlmCalls ?? 0);
+
+            const totalLlmCalls = baselineLlmCalls + operationLlmCalls;
+            updatedMetadata.llmCallsBaseline = baselineLlmCalls;
+            updatedMetadata.llmCallsBaselineOperationId = resolvedOperationId;
+            updatedMetadata.totalLlmCalls = totalLlmCalls;
+            updatedMetadata.totalSteps = totalLlmCalls;
           }
 
           // Check if operation is completed

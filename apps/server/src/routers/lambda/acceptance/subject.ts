@@ -1,12 +1,15 @@
-import { acceptanceSubjectTypes } from '@lobechat/const/verify';
+import { creatableAcceptanceSubjectTypes } from '@lobechat/const/verify';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { TaskModel } from '@/database/models/task';
 import { router } from '@/libs/trpc/lambda';
+import { resolveTasksOrThrow } from '@/server/services/task/utils';
+import { acceptanceResponse } from '@/server/services/verify/acceptanceResponse';
 
 import { acceptanceProcedure, acceptanceWriteProcedure } from './procedures';
 
-const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
+const subjectTypeSchema = z.enum(creatableAcceptanceSubjectTypes);
 
 export const subjectRouter = router({
   /** Get (or lazily create) the aggregate for a subject — the ingest entry point. */
@@ -43,7 +46,7 @@ export const subjectRouter = router({
         title: input.title,
       };
       try {
-        return input.foldTaskRunTopic
+        const result = input.foldTaskRunTopic
           ? await ctx.acceptanceService.ensureForIngest(
               input.subjectType,
               input.subjectId,
@@ -54,6 +57,7 @@ export const subjectRouter = router({
               input.subjectId,
               defaults,
             );
+        return acceptanceResponse(result);
       } catch (error) {
         throw new TRPCError({
           code: 'NOT_FOUND',
@@ -83,7 +87,7 @@ export const subjectRouter = router({
       // to load the whole bundle for one field.
       const latest = await ctx.acceptanceService.latestRound(acceptance.id);
       return {
-        ...acceptance,
+        ...acceptanceResponse(acceptance),
         latestRunStatus: latest?.status ?? null,
         latestRunUserDecision: latest?.userDecision ?? null,
       };
@@ -168,10 +172,23 @@ export const subjectRouter = router({
         subjectType: subjectTypeSchema,
       }),
     )
-    .query(async ({ ctx, input }) =>
-      ctx.acceptanceService.acceptanceModel.listStatusesBySubjects(
-        input.subjectType,
-        input.subjectIds,
-      ),
-    ),
+    .query(async ({ ctx, input }) => {
+      const model = ctx.acceptanceService.acceptanceModel;
+      if (input.subjectType !== 'task')
+        return model.listStatusesBySubjects(input.subjectType, input.subjectIds);
+      const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+      const resolved = await resolveTasksOrThrow(taskModel, input.subjectIds, {
+        duplicates: 'collapse',
+      });
+      const rows = await model.listStatusesBySubjects(
+        'task',
+        resolved.tasks.flatMap((task) => [task.id, task.identifier]),
+      );
+      const bySubject = new Map(rows.map((row) => [row.subjectId, row.status]));
+      return input.subjectIds.flatMap((subjectId) => {
+        const task = resolved.byRef.get(subjectId)!;
+        const status = bySubject.get(task.id) ?? bySubject.get(task.identifier);
+        return status ? [{ status, subjectId }] : [];
+      });
+    }),
 });

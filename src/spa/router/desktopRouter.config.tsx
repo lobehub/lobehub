@@ -81,10 +81,5 @@ const webOnlyRoutes: RouteObject[] = [
 
 export const desktopRoutes: RouteObject[] = createSharedDesktopRoutes({
   mainAreaChildren: createMainAreaChildren(),
-  onboardingRoute: {
-    element: dynamicElement(() => import('@/routes/onboarding'), 'Desktop > Onboarding'),
-    errorElement: <ErrorBoundary />,
-    path: '/onboarding',
-  },
   platformRoutes: webOnlyRoutes,
 });

@@ -1,13 +1,13 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import type { DocumentItem } from '@lobechat/database/schemas';
 
+import { docsPagePath, RESOURCE_HOME_PATH } from '@/features/ResourceHome/paths';
 import { type ReplicaSyncResult } from '@/libs/replica';
 import { documentService } from '@/services/document';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import type { StoreSetter } from '@/store/types';
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
-import { standardizeIdentifier } from '@/utils/identifier';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { initialState, type PageState } from './initialState';
@@ -15,6 +15,8 @@ import { currentPageSize, PagePrivateAction } from './privateAction';
 import {
   documentItemToLobeDocument,
   PAGE_LIST_KEY,
+  type PageSectionListParams,
+  type PageSectionParams,
   type PageSectionScope,
   TEMP_PAGE_ID_PREFIX,
 } from './projection';
@@ -69,8 +71,16 @@ export class PageActionImpl {
   };
 
   /** The Docs sidebar's My docs / Shared sections; rows via `pageSelectors.pageSection`. */
-  useFetchPageSection = (scope: PageSectionScope, limit: number): ReplicaSyncResult =>
-    this.#private.section.useSync({ limit, scope });
+  useFetchPageSection = (params: PageSectionParams): ReplicaSyncResult =>
+    this.#private.section.useSync(params);
+
+  /** A section's full list, paged; rows via `pageSelectors.pageSectionList`. */
+  useFetchPageSectionList = (params: PageSectionListParams | null): ReplicaSyncResult =>
+    this.#private.sectionList.useSync(params);
+
+  loadMorePageSectionList = async (params: PageSectionListParams): Promise<void> => {
+    await this.#private.sectionList.loadMore(params.scope, params);
+  };
 
   useFetchPageDetail = (pageId?: string | null): ReplicaSyncResult =>
     this.#private.detail.useSync(pageId || null);
@@ -121,6 +131,18 @@ export class PageActionImpl {
     this.#set({ allPagesDrawerOpen: false }, false, n('closeAllPagesDrawer'));
   };
 
+  openSectionFullList = (scope: PageSectionScope): void => {
+    this.#set(
+      { sectionFullListOpen: true, sectionFullListScope: scope },
+      false,
+      n('openSectionFullList'),
+    );
+  };
+
+  closeSectionFullList = (): void => {
+    this.#set({ sectionFullListOpen: false }, false, n('closeSectionFullList'));
+  };
+
   openAllPagesDrawer = (): void => {
     this.#set({ allPagesDrawerOpen: true }, false, n('openAllPagesDrawer'));
   };
@@ -142,7 +164,7 @@ export class PageActionImpl {
   };
 
   navigateToPage = (pageId: string | null): void => {
-    this.#get().navigate?.(pageId ? `/page/${standardizeIdentifier(pageId)}` : '/page');
+    this.#get().navigate?.(pageId ? docsPagePath(pageId) : RESOURCE_HOME_PATH);
   };
 
   createNewPage = async (title: string, visibility?: 'private' | 'public'): Promise<string> => {

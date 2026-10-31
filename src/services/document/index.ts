@@ -169,6 +169,7 @@ export class DocumentService {
     current?: number;
     fileTypes?: string[];
     pageSize?: number;
+    sortBy?: 'createdAt' | 'title' | 'updatedAt';
     sourceTypes?: string[];
     standaloneOnly?: boolean;
   }): Promise<{ items: DocumentItem[]; total: number }> {
@@ -271,6 +272,15 @@ export class DocumentService {
     return {
       savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
     };
+  }
+
+  /** Store a page's live collaboration room as a version; false when it has no live room. */
+  async snapshotPageVersion(documentId: string, saveSource: 'manual'): Promise<boolean> {
+    const { recorded } = await lambdaClient.document.snapshotPageVersion.mutate({
+      documentId,
+      saveSource,
+    });
+    return recorded;
   }
 
   async transferDocument(
