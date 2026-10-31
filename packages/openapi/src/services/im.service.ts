@@ -11,6 +11,7 @@ import { agentOperations, messages, messagesFiles, pushTokens, topics } from '@/
 import type { LobeChatDatabase } from '@/database/type';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { ForeignLiveRunError } from '@/server/services/aiAgent/topicStartReservation';
 import { FileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
@@ -238,6 +239,12 @@ export class ImRestService extends BaseService {
       // receipt that won instead of failing a request the client will retry.
       const raced = await this.idempotentReceipt(input.clientMessageId);
       if (raced) return raced;
+      // Another member's run drives the topic; nothing was written.
+      if (error instanceof ForeignLiveRunError) {
+        throw this.createConflictError(
+          'Another member is running this conversation; wait until their turn finishes.',
+        );
+      }
       throw error;
     }
 

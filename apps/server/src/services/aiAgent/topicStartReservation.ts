@@ -21,6 +21,19 @@ export class TopicStartReservationError extends Error {
 }
 
 /**
+ * An interactive send found the topic driven by another member's live
+ * foreground run. A send only ever retires its own sender's runs, so the
+ * start is refused — before anything is written, like
+ * {@link TopicStartReservationError} — instead of interrupting a teammate.
+ */
+export class ForeignLiveRunError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ForeignLiveRunError';
+  }
+}
+
+/**
  * Claim the gap between choosing a conversation parent and publishing the
  * operation's `runningOperation` marker. Every existing-topic start uses the
  * same claim, so a foreground message and a task callback cannot both observe

@@ -17,6 +17,7 @@ import {
   users,
   workspaces,
 } from '@/database/schemas';
+import { ForeignLiveRunError } from '@/server/services/aiAgent/topicStartReservation';
 
 import { ImSendRequestSchema } from '../../types/im.type';
 import { ImRestService } from '../im.service';
@@ -730,6 +731,14 @@ describe('ImRestService.send', () => {
     expect(execGroupAgentMock).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: SUPERVISOR, groupId: GROUP, topicId: GROUP_TOPIC }),
     );
+  });
+
+  it("answers a conflict when another member's run drives the conversation", async () => {
+    execAgentMock.mockRejectedValue(new ForeignLiveRunError('topic busy'));
+
+    await expect(
+      service.send({ agentId: AGENT, content: 'keep going', topicId: TOPIC }),
+    ).rejects.toMatchObject({ name: 'ConflictError' });
   });
 
   it('refuses an agentId that is not a member of the group', async () => {
