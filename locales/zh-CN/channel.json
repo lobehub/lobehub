@@ -88,6 +88,7 @@
   "failure.messageLabel": "回复失败：{{names}}",
   "failure.title": "回复失败 · {{count}}",
   "followers": "参与回复：{{names}}",
+  "invite.directHint": "邀请后会新建一个频道，包含 {{name}} 和你选择的成员；你和 {{name}} 的这个对话保持不变。",
   "invite.noAgentMatches": "没有匹配的 Agent",
   "invite.noAgents": "可用的 Agent 都已加入",
   "invite.noSelected": "还没有选择成员",

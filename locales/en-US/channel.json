@@ -88,6 +88,7 @@
   "failure.messageLabel": "Reply failed: {{names}}",
   "failure.title": "Failed replies · {{count}}",
   "followers": "Replies from: {{names}}",
+  "invite.directHint": "Inviting here starts a new channel with {{name}} and the members you choose. This conversation with {{name}} stays as it is.",
   "invite.noAgentMatches": "No matching Agents",
   "invite.noAgents": "All available Agents have joined",
   "invite.noSelected": "No one selected yet",

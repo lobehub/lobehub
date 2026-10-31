@@ -102,6 +102,19 @@ export const channelRouter = router({
       data: await ctx.channelService.create(input),
       success: true,
     })),
+  createGroupFromDirect: channelProcedure
+    .input(
+      z.object({
+        agents: z.array(agentSelection).max(20).default([]),
+        channelId,
+        title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength),
+        userIds: z.array(z.string().min(1)).max(100).default([]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.createGroupFromDirect(input.channelId, input),
+      success: true,
+    })),
   detail: channelProcedure
     .input(
       z.object({

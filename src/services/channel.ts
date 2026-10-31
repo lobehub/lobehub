@@ -40,6 +40,12 @@ class ChannelService {
     lambdaClient.channel.addAgent.mutate({ agent, channelId });
   create = (input: { agents: ChannelAgentSelection[]; projectId?: string; title: string }) =>
     lambdaClient.channel.create.mutate(input);
+  createGroupFromDirect = (input: {
+    agents: ChannelAgentSelection[];
+    channelId: string;
+    title: string;
+    userIds: string[];
+  }) => lambdaClient.channel.createGroupFromDirect.mutate(input);
   detail = async (params: ChannelViewParams): Promise<ChannelDetail> =>
     (await lambdaClient.channel.detail.query(params)).data;
   list = async (): Promise<ChannelListItem[]> => (await lambdaClient.channel.list.query()).data;

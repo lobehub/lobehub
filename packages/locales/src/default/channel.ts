@@ -154,6 +154,8 @@ export default {
   'rename': 'Rename channel',
   'renameFailed': 'Could not rename the channel. Try again.',
   'renameForbidden': 'Only the channel owner or an administrator can rename this channel.',
+  'invite.directHint':
+    'Inviting here starts a new channel with {{name}} and the members you choose. This conversation with {{name}} stays as it is.',
   'invite.noAgentMatches': 'No matching Agents',
   'invite.noAgents': 'All available Agents have joined',
   'invite.noSelected': 'No one selected yet',
