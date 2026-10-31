@@ -1,16 +1,8 @@
 'use client';
 
-import {
-  Center,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Highlighter,
-  Icon,
-  Markdown,
-  Text,
-} from '@lobehub/ui';
+import { Center, Flexbox, Highlighter, Icon, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight, FileText } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,140 +41,103 @@ export const filenameFromUrl = (url: string): string => {
   }
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  foldBody: css`
-    padding-block: 4px 8px;
-    padding-inline: 22px 0;
-
-    @media (width <= 767px) {
-      padding-inline: 0;
-    }
-  `,
+const styles = stylex.create({
+  foldBody: {
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '8px',
+    paddingInlineStart: { 'default': '22px', '@media (width <= 767px)': 0 },
+    paddingInlineEnd: 0,
+  },
   /* Reviewer-directed: no fill, no border — the row is just a line of text
      with a chevron; the surrounding check card provides the container. */
-  foldCard: css`
-    overflow: hidden;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  foldChevron: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-    transition: transform 160ms ease;
-  `,
-  foldChevronOpen: css`
-    transform: rotate(90deg);
-  `,
-  foldHeader: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    width: 100%;
-    padding-block: 4px;
-    padding-inline: 0;
-    border: none;
-
-    text-align: start;
-
-    background: transparent;
-
+  foldCard: { overflow: 'hidden', borderRadius: cssVar.borderRadius },
+  foldChevron: {
+    flex: 'none',
+    color: cssVar.colorTextTertiary,
+    transition: 'transform 160ms ease',
+  },
+  foldChevronOpen: { transform: 'rotate(90deg)' },
+  foldHeader: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: {
+      'default': null,
+      '@media (width <= 767px), (pointer: coarse)': '44px',
+    },
+    paddingBlock: '4px',
+    paddingInline: 0,
+    borderStyle: 'none',
+    textAlign: 'start',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  foldTitle: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    lineHeight: 1.35,
     /* No fill and no border by design — the hover feedback lives on the text. */
-    &:hover [data-fold-title] {
-      color: ${cssVar.colorText};
-    }
-
-    @media (width <= 767px), (pointer: coarse) {
-      min-height: 44px;
-    }
-  `,
-  foldTitle: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    transition: color 120ms ease;
-
-    @media (width <= 767px) {
-      overflow-wrap: anywhere;
-      white-space: normal;
-    }
-  `,
+    color: {
+      default: cssVar.colorTextSecondary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorText,
+    },
+    textOverflow: 'ellipsis',
+    whiteSpace: { 'default': 'nowrap', '@media (width <= 767px)': 'normal' },
+    overflowWrap: { 'default': null, '@media (width <= 767px)': 'anywhere' },
+    transition: 'color 120ms ease',
+  },
   /* A plain block, deliberately not a Flexbox: `Markdown`'s root is
      `overflow: hidden`, so as a flex item its automatic minimum size collapses
      to 0 and a long document gets squeezed to the viewer's height and clipped
      instead of overflowing it — leaving this box scrollable in name only. */
-  docViewer: css`
-    overflow: auto;
-    flex: 1;
-
-    height: 100%;
-    min-height: 0;
-    padding-block: 12px;
-    padding-inline: 16px;
-
-    > * {
-      flex-shrink: 0;
-    }
-  `,
-  fileCard: css`
-    cursor: pointer;
-
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
-    gap: 8px;
-    align-items: center;
-
-    width: min(100%, 520px);
-    padding-block: 7px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    text-align: start;
-
-    background: ${cssVar.colorFillQuaternary};
-
-    &:hover {
-      border-color: ${cssVar.colorLink};
-      color: ${cssVar.colorLink};
-    }
-  `,
-  fileCardBody: css`
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  `,
-  fileCardDesc: css`
-    overflow: hidden;
-
-    margin-block-start: 2px;
-
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  fileCardIcon: css`
-    display: flex;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  fileCardName: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    line-height: 1.35;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+  docViewer: {
+    overflow: 'auto',
+    flex: '1',
+    height: '100%',
+    minHeight: '0',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+  },
+  fileCard: {
+    cursor: 'pointer',
+    display: 'grid',
+    gridTemplateColumns: '18px minmax(0, 1fr)',
+    gap: '8px',
+    alignItems: 'center',
+    width: 'min(100%, 520px)',
+    paddingBlock: '7px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorLink },
+    borderRadius: cssVar.borderRadius,
+    color: { 'default': null, ':hover': cssVar.colorLink },
+    textAlign: 'start',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  fileCardBody: { display: 'flex', flexDirection: 'column', minWidth: '0' },
+  fileCardDesc: {
+    overflow: 'hidden',
+    marginBlockStart: '2px',
+    fontSize: '12px',
+    lineHeight: 1.35,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  fileCardIcon: { display: 'flex', color: cssVar.colorTextTertiary },
+  fileCardName: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    lineHeight: 1.35,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 /** Content small enough that folding it would cost more than it saves. */
 const INLINE_RENDER_MAX_CHARS = 160;
@@ -299,27 +254,25 @@ export const CollapsibleMarkdownEvidence = memo<{
   }
 
   return (
-    <Flexbox className={styles.foldCard}>
+    <Flexbox className={stylex.props(styles.foldCard).className}>
       <button
         aria-expanded={expanded}
-        className={styles.foldHeader}
+        {...stylex.props(styles.foldHeader, stylex.defaultMarker())}
         title={t(expanded ? 'report.evidence.collapse' : 'report.evidence.expand')}
         type={'button'}
         onClick={() => setExpanded(!expanded)}
       >
         <Icon
-          className={cx(styles.foldChevron, expanded && styles.foldChevronOpen)}
+          className={stylex.props(styles.foldChevron, expanded && styles.foldChevronOpen).className}
           icon={ChevronRight}
           size={14}
         />
-        <span className={styles.fileCardIcon}>
+        <span {...stylex.props(styles.fileCardIcon)}>
           <Icon icon={FileText} size={13} />
         </span>
-        <span data-fold-title className={styles.foldTitle}>
-          {foldTitle}
-        </span>
+        <span {...stylex.props(styles.foldTitle)}>{foldTitle}</span>
       </button>
-      {expanded && <div className={styles.foldBody}>{body}</div>}
+      {expanded && <div {...stylex.props(styles.foldBody)}>{body}</div>}
     </Flexbox>
   );
 });
@@ -350,7 +303,7 @@ export const DocumentViewer = memo<{ fileName?: string | null; markdown?: boolea
       );
 
     return (
-      <div className={styles.docViewer}>
+      <div {...stylex.props(styles.docViewer)}>
         {markdown ? (
           <Markdown fontSize={13} variant={'chat'}>
             {fileData}
@@ -391,17 +344,17 @@ export const EvidenceFileCard = memo<{
   return (
     <>
       <button
-        className={styles.fileCard}
+        {...stylex.props(styles.fileCard)}
         title={t('report.evidence.openDetail', { name })}
         type={'button'}
         onClick={() => setOpen(true)}
       >
-        <span className={styles.fileCardIcon}>
+        <span {...stylex.props(styles.fileCardIcon)}>
           <Icon icon={FileText} size={13} />
         </span>
-        <span className={styles.fileCardBody}>
-          <span className={styles.fileCardName}>{name}</span>
-          {desc && <span className={styles.fileCardDesc}>{desc}</span>}
+        <span {...stylex.props(styles.fileCardBody)}>
+          <span {...stylex.props(styles.fileCardName)}>{name}</span>
+          {desc && <span {...stylex.props(styles.fileCardDesc)}>{desc}</span>}
         </span>
       </button>
       {open && (

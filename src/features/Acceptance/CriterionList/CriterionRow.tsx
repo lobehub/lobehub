@@ -1,36 +1,32 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, cx, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { HTMLAttributes, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  list: css`
-    overflow: hidden;
-    width: 100%;
-    padding: 0;
-  `,
-  row: css`
-    padding-block: 10px;
-    padding-inline: 12px;
+import { sx } from '@/styles/sx';
 
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  rowClickable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  seq: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  list: { overflow: 'hidden', width: '100%', padding: 0 },
+  row: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  rowClickable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  seq: { flex: 'none', fontSize: '12px', color: cssVar.colorTextTertiary },
+});
 
 interface CriterionRequiredChipProps {
   /** When set, the chip becomes the required/optional toggle. */
@@ -107,8 +103,8 @@ export const CriterionRow = ({
   <Flexbox
     horizontal
     align={'center'}
-    className={cx(styles.row, onOpen && styles.rowClickable, className)}
     gap={10}
+    {...sx([styles.row, stylex.defaultMarker(), onOpen && styles.rowClickable], className)}
     role={onOpen ? 'button' : undefined}
     tabIndex={onOpen ? 0 : undefined}
     onClick={onOpen}
@@ -116,7 +112,7 @@ export const CriterionRow = ({
     {...rest}
   >
     {icon}
-    {seq !== undefined && <span className={styles.seq}>C{seq}</span>}
+    {seq !== undefined && <span {...stylex.props(styles.seq)}>C{seq}</span>}
     <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
       {title}
     </Text>
@@ -132,7 +128,7 @@ interface CriterionListProps {
 
 /** Outlined container that gives `CriterionRow` children their between-row borders. */
 export const CriterionList = ({ children, className }: CriterionListProps) => (
-  <Block className={cx(styles.list, className)} variant={'outlined'}>
+  <Block {...sx([styles.list], className)} variant={'outlined'}>
     {children}
   </Block>
 );

@@ -1,0 +1,7 @@
+.content img,
+.content video {
+  display: block;
+  width: 100%;
+  border: none !important;
+  border-radius: 0 !important;
+}

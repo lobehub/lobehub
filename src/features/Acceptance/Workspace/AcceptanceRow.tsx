@@ -2,17 +2,9 @@
 
 import type { AcceptanceStatus } from '@lobechat/types';
 import type { DropdownItem } from '@lobehub/ui';
-import {
-  ActionIcon,
-  Center,
-  Checkbox,
-  createStaticStyles,
-  cssVar,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  toast,
-} from '@lobehub/ui';
+import { ActionIcon, Center, Checkbox, DropdownMenu, Flexbox, Icon, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   BadgeCheck,
@@ -51,31 +43,31 @@ import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
 import { useAcceptanceProjectMenuItem } from './useAcceptanceProjectMenuItem';
 import { useAcceptanceRowCreator } from './useAcceptanceRowCreator';
 
-const styles = createStaticStyles(({ css }) => ({
-  itemProject: css`
-    overflow: hidden;
+const spin = stylex.keyframes({
+  to: { transform: 'rotate(360deg)' },
+});
 
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  itemTime: css`
-    flex: none;
-    padding-inline-start: 8px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  spin: css`
-    animation: acceptance-spin 1.1s linear infinite;
-
-    @keyframes acceptance-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  itemProject: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  itemTime: {
+    flex: 'none',
+    paddingInlineStart: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  spin: {
+    animationName: spin,
+    animationDuration: '1.1s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+});
 
 type Glyph = 'accepted' | 'awaiting' | 'bad' | 'closed' | 'repairing' | 'running' | 'unsure';
 
@@ -337,7 +329,7 @@ const AcceptanceRow = memo<{
 
     const statusGlyph = (
       <Icon
-        className={SPINNING_GLYPHS.has(glyph) ? styles.spin : undefined}
+        className={SPINNING_GLYPHS.has(glyph) ? stylex.props(styles.spin).className : undefined}
         icon={meta.icon}
         size={16}
         style={{ color: meta.color }}
@@ -391,13 +383,13 @@ const AcceptanceRow = memo<{
         }
         description={
           showProject && item.project ? (
-            <span className={styles.itemProject}>{item.project.name}</span>
+            <span {...stylex.props(styles.itemProject)}>{item.project.name}</span>
           ) : undefined
         }
         extra={
           <Flexbox horizontal align={'center'} gap={6}>
             {selectable && statusGlyph}
-            <span className={styles.itemTime}>
+            <span {...stylex.props(styles.itemTime)}>
               {relativeTime(item.updatedAt ?? item.createdAt)}
             </span>
           </Flexbox>

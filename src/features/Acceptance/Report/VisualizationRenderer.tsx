@@ -10,11 +10,15 @@ import type {
   VerifyVisualizationDataset,
   VerifyVisualizationManifest,
 } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowDownRight, ArrowUpRight, ChartNoAxesCombined } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import {
   datasetForView,
@@ -26,200 +30,166 @@ import {
   tableHighlightRows,
 } from './visualization';
 
-const styles = createStaticStyles(({ css }) => ({
-  axisLabel: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  badge: css`
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-
-    padding-block: 1px;
-    padding-inline: 5px;
-    border-radius: 999px;
-
-    font-size: 11px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorSuccess};
-
-    background: ${cssVar.colorSuccessBg};
-  `,
-  badgeWorse: css`
-    color: ${cssVar.colorError};
-    background: ${cssVar.colorErrorBg};
-  `,
-  bar: css`
-    overflow: hidden;
-    height: 6px;
-    border-radius: 999px;
-    background: ${cssVar.colorFillSecondary};
-  `,
-  barChartLabel: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  barAfter: css`
-    height: 100%;
-    border-radius: inherit;
-    background: ${cssVar.colorInfo};
-  `,
-  barBefore: css`
-    height: 100%;
-    border-radius: inherit;
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  body: css`
-    min-width: 0;
-    padding: 14px;
-  `,
-  card: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  chart: css`
-    display: block;
-    width: 100%;
-    min-height: 180px;
-  `,
-  context: css`
-    padding-block: 8px 10px;
-    padding-inline: 14px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  delta: css`
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorSuccess};
-  `,
-  deltaWorse: css`
-    color: ${cssVar.colorError};
-  `,
-  header: css`
-    padding-block: 10px;
-    padding-inline: 14px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  heatmap: css`
-    display: grid;
-    gap: 3px;
-    align-items: center;
-  `,
-  heatmapCell: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 34px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-size: 11px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-  `,
-  metric: css`
-    display: grid;
-    grid-template-columns: minmax(120px, 1fr) minmax(240px, 2.4fr) auto;
-    gap: 16px;
-    align-items: center;
-
-    padding-block: 12px;
-    padding-inline: 14px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    @media (width <= 640px) {
-      grid-template-columns: 1fr auto;
-    }
-  `,
-  metricName: css`
-    min-width: 0;
-    font-weight: 500;
-  `,
-  sample: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  table: css`
-    border-collapse: collapse;
-    width: 100%;
-
-    th,
-    td {
-      padding-block: 8px;
-      padding-inline: 10px;
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-      text-align: start;
-      white-space: nowrap;
-    }
-
-    th {
-      font-size: 11px;
-      font-weight: 500;
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    td {
-      font-size: 12px;
-      font-variant-numeric: tabular-nums;
-    }
-  `,
-  tableBest: css`
-    font-weight: 700;
-    color: ${cssVar.colorInfo};
-    background: ${cssVar.colorInfoBg};
-  `,
-  tableBestBadge: css`
-    margin-inline-start: 5px;
-    padding-block: 1px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 9px;
-    font-weight: 700;
-    color: ${cssVar.colorInfo};
-
-    background: ${cssVar.colorInfoBgHover};
-  `,
-  tableScroll: css`
-    overflow-x: auto;
-  `,
-  target: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  values: css`
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-
-    @media (width <= 640px) {
-      grid-column: 1 / -1;
-      grid-row: 2;
-    }
-  `,
-  valueText: css`
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-  `,
-}));
+const styles = stylex.create({
+  axisLabel: { fontSize: '11px', color: cssVar.colorTextTertiary },
+  badge: {
+    display: 'inline-flex',
+    gap: '3px',
+    alignItems: 'center',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    borderRadius: '999px',
+    fontSize: '11px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
+  badgeWorse: {
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  bar: {
+    overflow: 'hidden',
+    height: '6px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  barChartLabel: { fontSize: '11px', color: cssVar.colorTextSecondary },
+  barAfter: {
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: cssVar.colorInfo,
+    backgroundImage: 'none',
+  },
+  barBefore: {
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+  body: { minWidth: '0', padding: '14px' },
+  card: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  chart: { display: 'block', width: '100%', minHeight: '180px' },
+  context: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '10px',
+    paddingInline: '14px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  delta: {
+    display: 'inline-flex',
+    gap: '3px',
+    alignItems: 'center',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorSuccess,
+  },
+  deltaWorse: { color: cssVar.colorError },
+  header: {
+    paddingBlock: '10px',
+    paddingInline: '14px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  heatmap: { display: 'grid', gap: '3px', alignItems: 'center' },
+  heatmapCell: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '34px',
+    borderRadius: cssVar.borderRadiusSM,
+    fontSize: '11px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  metric: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'minmax(120px, 1fr) minmax(240px, 2.4fr) auto',
+      '@media (width <= 640px)': '1fr auto',
+    },
+    gap: '16px',
+    alignItems: 'center',
+    paddingBlock: '12px',
+    paddingInline: '14px',
+    borderBlockStartWidth: { default: null, [stylex.when.siblingBefore(':is(*)')]: '1px' },
+    borderBlockStartStyle: { default: null, [stylex.when.siblingBefore(':is(*)')]: 'solid' },
+    borderBlockStartColor: {
+      default: null,
+      [stylex.when.siblingBefore(':is(*)')]: cssVar.colorBorderSecondary,
+    },
+  },
+  metricName: { minWidth: '0', fontWeight: 500 },
+  sample: { fontSize: '11px', color: cssVar.colorTextTertiary },
+  table: { borderCollapse: 'collapse', width: '100%' },
+  /* The table cells are styled per element: StyleX has no descendant selectors. */
+  cell: {
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    textAlign: 'start',
+    whiteSpace: 'nowrap',
+  },
+  th: {
+    fontSize: '11px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  td: { fontSize: '12px', fontVariantNumeric: 'tabular-nums' },
+  tableBest: {
+    fontWeight: 700,
+    color: cssVar.colorInfo,
+    backgroundColor: cssVar.colorInfoBg,
+    backgroundImage: 'none',
+  },
+  tableBestBadge: {
+    marginInlineStart: '5px',
+    paddingBlock: '1px',
+    paddingInline: '4px',
+    borderRadius: '4px',
+    fontSize: '9px',
+    fontWeight: 700,
+    color: cssVar.colorInfo,
+    backgroundColor: cssVar.colorInfoBgHover,
+    backgroundImage: 'none',
+  },
+  tableScroll: { overflowX: 'auto' },
+  target: { fontSize: '11px', color: cssVar.colorTextSecondary },
+  values: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '9px',
+    gridColumn: { 'default': null, '@media (width <= 640px)': '1 / -1' },
+    gridRow: { 'default': null, '@media (width <= 640px)': 2 },
+  },
+  valueText: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+  },
+});
 
 const SERIES_COLORS = [
   cssVar.colorInfo,
@@ -257,13 +227,18 @@ const ViewCard = memo<{
 }>(({ children, context, title }) => {
   const { t } = useTranslation('verify');
   return (
-    <div className={styles.card}>
-      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
+    <div {...stylex.props(styles.card)}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.header).className}
+        gap={8}
+      >
         <Icon icon={ChartNoAxesCombined} size={15} />
         <Text strong>{title ?? t('report.visualization.title')}</Text>
       </Flexbox>
       {children}
-      {context && <div className={styles.context}>{context}</div>}
+      {context && <div {...stylex.props(styles.context)}>{context}</div>}
     </div>
   );
 });
@@ -297,17 +272,22 @@ const MetricComparisonRenderer = memo<{
         const DeltaIcon = after <= before ? ArrowDownRight : ArrowUpRight;
 
         return (
-          <div className={styles.metric} key={`${stringCell(row, view.encoding.label)}-${index}`}>
+          <div
+            {...stylex.props(styles.metric, stylex.defaultMarker())}
+            key={`${stringCell(row, view.encoding.label)}-${index}`}
+          >
             <Flexbox gap={2}>
-              <span className={styles.metricName}>
+              <span {...stylex.props(styles.metricName)}>
                 {stringCell(row, view.encoding.label) ?? t('report.visualization.unnamed')}
               </span>
               <Flexbox horizontal gap={8}>
                 {view.encoding.statistic && (
-                  <span className={styles.sample}>{stringCell(row, view.encoding.statistic)}</span>
+                  <span {...stylex.props(styles.sample)}>
+                    {stringCell(row, view.encoding.statistic)}
+                  </span>
                 )}
                 {(view.encoding.beforeSamples || view.encoding.afterSamples) && (
-                  <span className={styles.sample}>
+                  <span {...stylex.props(styles.sample)}>
                     n=
                     {view.encoding.beforeSamples
                       ? (numberCell(row, view.encoding.beforeSamples) ?? '–')
@@ -320,22 +300,23 @@ const MetricComparisonRenderer = memo<{
                 )}
               </Flexbox>
             </Flexbox>
-            <div className={styles.values}>
+            <div {...stylex.props(styles.values)}>
               {(
                 [
                   ['before', before, styles.barBefore],
                   ['after', after, styles.barAfter],
                 ] as const
-              ).map(([role, value, barClass]) => (
+              ).map(([role, value, barStyle]) => (
                 <Flexbox gap={5} key={role}>
-                  <span className={styles.valueText}>
+                  <span {...stylex.props(styles.valueText)}>
                     <span>{t(`report.visualization.${role}`)}</span>
                     <strong>{formatValue(value, unit)}</strong>
                   </span>
-                  <div className={styles.bar}>
+                  <div {...stylex.props(styles.bar)}>
                     <div
-                      className={barClass}
-                      style={{ width: `${Math.max(3, (Math.abs(value) / maximum) * 100)}%` }}
+                      {...sx([barStyle], undefined, {
+                        width: `${Math.max(3, (Math.abs(value) / maximum) * 100)}%`,
+                      })}
                     />
                   </div>
                 </Flexbox>
@@ -343,13 +324,13 @@ const MetricComparisonRenderer = memo<{
             </div>
             <Flexbox align={'flex-end'} gap={2}>
               {improvement !== null && (
-                <span className={cx(styles.delta, !improved && styles.deltaWorse)}>
+                <span {...stylex.props(styles.delta, !improved && styles.deltaWorse)}>
                   <Icon icon={DeltaIcon} size={13} />
                   {Math.abs(improvement).toFixed(1)}%
                 </span>
               )}
               {target !== null && (
-                <span className={styles.target}>
+                <span {...stylex.props(styles.target)}>
                   {t(
                     targetMet
                       ? 'report.visualization.targetMet'
@@ -388,10 +369,10 @@ const LineChartRenderer = memo<{
 
   return (
     <ViewCard context={view.context} title={view.title}>
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         <svg
           aria-label={view.title ?? 'Line chart'}
-          className={styles.chart}
+          {...stylex.props(styles.chart)}
           role={'img'}
           viewBox={'0 0 640 230'}
         >
@@ -467,10 +448,10 @@ const ScatterPlotRenderer = memo<{
 
   return (
     <ViewCard context={view.context} title={view.title}>
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         <svg
           aria-label={view.title ?? 'Scatter plot'}
-          className={styles.chart}
+          {...stylex.props(styles.chart)}
           role={'img'}
           viewBox={'0 0 640 230'}
         >
@@ -531,32 +512,32 @@ const HeatmapRenderer = memo<{
 
   return (
     <ViewCard context={view.context} title={view.title}>
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         <div
-          className={styles.heatmap}
-          style={{ gridTemplateColumns: `minmax(64px, auto) repeat(${xValues.length}, 1fr)` }}
+          {...sx([styles.heatmap], undefined, {
+            gridTemplateColumns: `minmax(64px, auto) repeat(${xValues.length}, 1fr)`,
+          })}
         >
           <span />
           {xValues.map((value) => (
-            <span className={styles.axisLabel} key={value} style={{ textAlign: 'center' }}>
+            <span {...sx([styles.axisLabel], undefined, { textAlign: 'center' })} key={value}>
               {value}
             </span>
           ))}
           {yValues.map((y) => (
             <Fragment key={y}>
-              <span className={styles.axisLabel}>{y}</span>
+              <span {...stylex.props(styles.axisLabel)}>{y}</span>
               {xValues.map((x) => {
                 const value = byCoordinate.get(`${x}\0${y}`);
                 const intensity =
                   typeof value === 'number' ? 0.14 + ((value - minimum) / span) * 0.76 : 0;
                 return (
                   <span
-                    className={styles.heatmapCell}
                     key={`${x}-${y}`}
-                    style={{
+                    {...sx([styles.heatmapCell], undefined, {
                       background: `color-mix(in srgb, ${cssVar.colorInfo} ${intensity * 100}%, ${cssVar.colorBgContainer})`,
                       color: intensity > 0.58 ? cssVar.colorTextLightSolid : cssVar.colorText,
-                    }}
+                    })}
                   >
                     {typeof value === 'number' ? formatValue(value) : '–'}
                   </span>
@@ -592,10 +573,10 @@ const BarChartRenderer = memo<{
 
   return (
     <ViewCard context={view.context} title={view.title}>
-      <div className={styles.body}>
+      <div {...stylex.props(styles.body)}>
         <svg
           aria-label={view.title ?? 'Bar chart'}
-          className={styles.chart}
+          {...stylex.props(styles.chart)}
           role={'img'}
           viewBox={'0 0 640 250'}
         >
@@ -623,7 +604,7 @@ const BarChartRenderer = memo<{
                   );
                 })}
                 <text
-                  className={styles.barChartLabel}
+                  {...stylex.props(styles.barChartLabel)}
                   fill={cssVar.colorTextSecondary}
                   textAnchor={'middle'}
                   x={groupStart + groupWidth / 2}
@@ -674,12 +655,14 @@ const TableRenderer = memo<{
   );
   return (
     <ViewCard context={view.context} title={view.title}>
-      <div className={styles.tableScroll}>
-        <table className={styles.table}>
+      <div {...stylex.props(styles.tableScroll)}>
+        <table {...stylex.props(styles.table)}>
           <thead>
             <tr>
               {fields.map((field) => (
-                <th key={field.key}>{field.label ?? field.key}</th>
+                <th {...stylex.props(styles.cell, styles.th)} key={field.key}>
+                  {field.label ?? field.key}
+                </th>
               ))}
             </tr>
           </thead>
@@ -689,9 +672,12 @@ const TableRenderer = memo<{
                 {fields.map((field) => {
                   const isBest = highlightedRows.get(field.key)?.has(index) ?? false;
                   return (
-                    <td className={isBest ? styles.tableBest : undefined} key={field.key}>
+                    <td
+                      {...stylex.props(styles.cell, styles.td, isBest && styles.tableBest)}
+                      key={field.key}
+                    >
                       {String(row[field.key] ?? '–')}
-                      {isBest && <span className={styles.tableBestBadge}>SOTA</span>}
+                      {isBest && <span {...stylex.props(styles.tableBestBadge)}>SOTA</span>}
                     </td>
                   );
                 })}
@@ -718,7 +704,7 @@ export const VisualizationDeltaBadge = memo<{
   const improved = delta.improvement >= 0;
   const DeltaIcon = delta.after <= delta.before ? ArrowDownRight : ArrowUpRight;
   return (
-    <span className={cx(styles.badge, !improved && styles.badgeWorse)}>
+    <span {...stylex.props(styles.badge, !improved && styles.badgeWorse)}>
       <Icon icon={DeltaIcon} size={11} />
       {Math.abs(delta.improvement).toFixed(1)}%
     </span>

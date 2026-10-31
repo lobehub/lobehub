@@ -1,15 +1,7 @@
 import type { VerifyCheckItem } from '@lobechat/types';
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Input,
-  useThemeMode,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Icon, Input, useThemeMode } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Check,
   CheckCircle2,
@@ -36,90 +28,82 @@ import { useChatStore } from '@/store/chat';
 import { useVerifyResults, useVerifyState } from '../hooks';
 import { countResults, phaseFromStatus } from '../utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actions: css`
-    margin-block-start: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  body: css`
-    padding-block: 0 12px;
-    padding-inline: 12px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  /* In the merged verify card the RunResult header already draws the divider —
-     drop our own top border so they don't stack into a 2px line. */
-  bodyEmbedded: css`
-    border-block-start: none;
-  `,
-  checkRow: css`
-    display: grid;
-    grid-template-columns: 20px minmax(0, 1fr) auto;
-    gap: 8px;
-    align-items: start;
-
-    padding-block: 12px;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-  chevron: css`
-    flex: none;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  clickable: css`
-    cursor: pointer;
-    transition: background 150ms ${cssVar.motionEaseOut};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  desc: css`
-    margin-block-start: 3px;
-    font-size: 12px;
-    line-height: 1.45;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  dock: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 16px;
-    background: ${cssVar.colorBgElevated};
-  `,
-  head: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 11px;
-    padding-inline: 12px;
-  `,
-  inputPanel: css`
-    margin-block-start: 10px;
-    padding: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  sub: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  title: css`
-    font-size: 13px;
-    font-weight: 700;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  actions: {
+    marginBlockStart: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  body: {
+    paddingBlockStart: '0',
+    paddingBlockEnd: '12px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  bodyEmbedded: { borderBlockStartStyle: 'none' },
+  checkRow: {
+    display: 'grid',
+    gridTemplateColumns: '20px minmax(0, 1fr) auto',
+    gap: '8px',
+    alignItems: 'start',
+    paddingBlock: '12px',
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  chevron: { flex: 'none', color: cssVar.colorTextQuaternary },
+  clickable: {
+    cursor: 'pointer',
+    transition: `background 150ms ${cssVar.motionEaseOut}`,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  desc: {
+    marginBlockStart: '3px',
+    fontSize: '12px',
+    lineHeight: 1.45,
+    color: cssVar.colorTextTertiary,
+  },
+  dock: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  head: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '11px',
+    paddingInline: '12px',
+  },
+  inputPanel: {
+    marginBlockStart: '10px',
+    padding: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  sub: {
+    overflow: 'hidden',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  title: { fontSize: '13px', fontWeight: 700, color: cssVar.colorText },
+});
 
 const statusIcon = (
   status: VerifyCheckResultItem['status'] | undefined,
@@ -216,7 +200,7 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
     const sIcon = statusIcon(result?.status);
     return (
       <div
-        className={cx(styles.checkRow, styles.clickable)}
+        {...stylex.props(styles.checkRow, styles.clickable)}
         key={item.id}
         onClick={() => openVerifyResult(operationId, item.id)}
       >
@@ -235,11 +219,14 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
         )}
         {/* Title only: the judge's reasoning is long and buries the verdicts;
             it lives in the result detail opened by clicking the row. */}
-        <span className={styles.title} style={{ fontWeight: 600, minWidth: 0 }}>
+        <span
+          className={stylex.props(styles.title).className}
+          style={{ fontWeight: 600, minWidth: 0 }}
+        >
           {item.title}
         </span>
         <Icon
-          className={styles.chevron}
+          className={stylex.props(styles.chevron).className}
           icon={ChevronRight}
           size={16}
           style={{ marginBlockStart: 2 }}
@@ -320,15 +307,15 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
       );
     if (phase === 'repairing')
       return (
-        <div className={styles.inputPanel} style={{ marginTop: 10 }}>
-          <div className={styles.desc}>{t('dock.repairHint')}</div>
+        <div className={stylex.props(styles.inputPanel).className} style={{ marginTop: 10 }}>
+          <div {...stylex.props(styles.desc)}>{t('dock.repairHint')}</div>
         </div>
       );
     return null;
   };
 
   const body = (
-    <div className={cx(styles.body, embedded && styles.bodyEmbedded)}>
+    <div {...stylex.props(styles.body, embedded && styles.bodyEmbedded)}>
       {editing ? (
         renderEditor()
       ) : (
@@ -336,7 +323,7 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
           <Flexbox gap={0}>{plan.map((item) => renderCheckRow(item))}</Flexbox>
           {(() => {
             const actions = renderActions();
-            return actions ? <div className={styles.actions}>{actions}</div> : null;
+            return actions ? <div {...stylex.props(styles.actions)}>{actions}</div> : null;
           })()}
         </>
       )}
@@ -354,15 +341,15 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
         : ShieldCheck;
 
   return (
-    <div className={styles.dock}>
-      <div className={styles.head} onClick={() => setExpanded((v) => !v)}>
+    <div {...stylex.props(styles.dock)}>
+      <div {...stylex.props(styles.head)} onClick={() => setExpanded((v) => !v)}>
         <Flexbox horizontal align="center" gap={10} style={{ minWidth: 0 }}>
           <Icon icon={headIcon} size={18} />
           <Flexbox style={{ minWidth: 0 }}>
             <Flexbox horizontal align="center" gap={8}>
-              <span className={styles.title}>{t('dock.title')}</span>
+              <span {...stylex.props(styles.title)}>{t('dock.title')}</span>
             </Flexbox>
-            <span className={styles.sub}>{subText}</span>
+            <span {...stylex.props(styles.sub)}>{subText}</span>
           </Flexbox>
         </Flexbox>
         <Icon

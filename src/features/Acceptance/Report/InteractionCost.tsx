@@ -1,9 +1,12 @@
 'use client';
 
 import type { VerifyInteractionCost } from '@lobechat/types';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import {
   formatSeconds,
@@ -25,216 +28,171 @@ export { formatSeconds, readInteractionCost } from './interactionCostModel';
  * reviewer deciding whether a flow is worth accepting.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  interactionCost: css`
-    --klm-blue-1: color-mix(in srgb, ${cssVar.colorInfo} 70%, ${cssVar.colorBgContainer});
-    --klm-blue-2: ${cssVar.colorInfo};
-    --klm-blue-3: color-mix(in srgb, ${cssVar.colorInfo} 84%, ${cssVar.colorText});
-    --klm-blue-4: color-mix(in srgb, ${cssVar.colorInfo} 68%, ${cssVar.colorText});
-    --klm-blue-5: color-mix(in srgb, ${cssVar.colorInfo} 54%, ${cssVar.colorText});
-    --klm-blue-6: color-mix(in srgb, ${cssVar.colorInfo} 42%, ${cssVar.colorText});
-
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
-  `,
-  interactionCostHeader: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-    align-items: center;
-    justify-content: flex-end;
-  `,
-  interactionCostModel: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  interactionMetric: css`
-    min-width: 0;
-    padding-block: 9px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-  interactionMetricLabel: css`
-    display: block;
-    margin-block-end: 4px;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  interactionMetricValue: css`
-    font-size: 18px;
-    font-weight: 650;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.2;
-    color: ${cssVar.colorText};
-  `,
-  interactionMetrics: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-
-    @media (width <= 520px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-  operatorChip: css`
-    --operator-color: ${cssVar.colorTextSecondary};
-
-    display: inline-flex;
-    gap: 5px;
-    align-items: baseline;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: color-mix(in srgb, var(--operator-color) 72%, ${cssVar.colorTextSecondary});
-
-    &::before {
-      content: '';
-
-      flex: 0 0 auto;
-
-      width: 6px;
-      height: 6px;
-      margin-block-start: 0.5em;
-      border-radius: 50%;
-
-      background: var(--operator-color);
-    }
-
-    b {
-      font-weight: 650;
-      color: var(--operator-color);
-    }
-
-    &[data-operator='K'] {
-      --operator-color: var(--klm-blue-1);
-    }
-
-    &[data-operator='P'] {
-      --operator-color: var(--klm-blue-2);
-    }
-
-    &[data-operator='M'] {
-      --operator-color: var(--klm-blue-3);
-    }
-
-    &[data-operator='H'] {
-      --operator-color: var(--klm-blue-4);
-    }
-
-    &[data-operator='T_chars'] {
-      --operator-color: var(--klm-blue-5);
-    }
-
-    &[data-operator='R_ms'] {
-      --operator-color: var(--klm-blue-6);
-    }
-  `,
-  operatorList: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 14px;
-  `,
+const styles = stylex.create({
+  interactionCost: {
+    '--klm-blue-1': `color-mix(in srgb, ${cssVar.colorInfo} 70%, ${cssVar.colorBgContainer})`,
+    '--klm-blue-2': cssVar.colorInfo,
+    '--klm-blue-3': `color-mix(in srgb, ${cssVar.colorInfo} 84%, ${cssVar.colorText})`,
+    '--klm-blue-4': `color-mix(in srgb, ${cssVar.colorInfo} 68%, ${cssVar.colorText})`,
+    '--klm-blue-5': `color-mix(in srgb, ${cssVar.colorInfo} 54%, ${cssVar.colorText})`,
+    '--klm-blue-6': `color-mix(in srgb, ${cssVar.colorInfo} 42%, ${cssVar.colorText})`,
+    'display': 'flex',
+    'flexDirection': 'column',
+    'gap': '12px',
+    'width': '100%',
+  },
+  interactionCostHeader: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    columnGap: '12px',
+    rowGap: '8px',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  interactionCostModel: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  interactionMetric: {
+    minWidth: '0',
+    paddingBlock: '9px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusSM,
+  },
+  interactionMetricLabel: {
+    display: 'block',
+    marginBlockEnd: '4px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  interactionMetricValue: {
+    fontSize: '18px',
+    fontWeight: 650,
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.2,
+    color: cssVar.colorText,
+  },
+  interactionMetrics: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'repeat(3, minmax(0, 1fr))',
+      '@media (width <= 520px)': '1fr',
+    },
+    gap: '8px',
+  },
+  operatorChip: {
+    '--operator-color': cssVar.colorTextSecondary,
+    'display': 'inline-flex',
+    'gap': '5px',
+    'alignItems': 'baseline',
+    'fontFamily': cssVar.fontFamilyCode,
+    'fontSize': '12px',
+    'color': `color-mix(in srgb, var(--operator-color) 72%, ${cssVar.colorTextSecondary})`,
+    '::before': {
+      content: '""',
+      flexGrow: '0',
+      flexShrink: '0',
+      flexBasis: 'auto',
+      width: '6px',
+      height: '6px',
+      marginBlockStart: '0.5em',
+      borderRadius: '50%',
+      backgroundColor: 'var(--operator-color)',
+      backgroundImage: 'none',
+    },
+  },
+  operatorValue: { fontWeight: 650, color: 'var(--operator-color)' },
+  operatorK: { '--operator-color': 'var(--klm-blue-1)' },
+  operatorP: { '--operator-color': 'var(--klm-blue-2)' },
+  operatorM: { '--operator-color': 'var(--klm-blue-3)' },
+  operatorH: { '--operator-color': 'var(--klm-blue-4)' },
+  operatorTChars: { '--operator-color': 'var(--klm-blue-5)' },
+  operatorRMs: { '--operator-color': 'var(--klm-blue-6)' },
+  operatorList: { display: 'flex', flexWrap: 'wrap', columnGap: '14px', rowGap: '8px' },
   /* Secondary to the phase name: it may be a long check title, so it is the part
      that gives way and truncates rather than squeezing the name out of the row. */
-  phaseCheck: css`
-    overflow: hidden;
-    flex: 1 1 auto;
-
-    min-width: 0;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  phaseList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  `,
-  phaseName: css`
-    overflow: hidden;
-    display: flex;
-    gap: 6px;
-    align-items: baseline;
-
-    min-width: 0;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
+  phaseCheck: {
+    overflow: 'hidden',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: '0',
+    fontSize: '11px',
+    color: cssVar.colorTextQuaternary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  phaseList: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  phaseName: {
+    overflow: 'hidden',
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'baseline',
+    minWidth: '0',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+  },
   /* The phase is what tells two rows apart, so it never shrinks — a long check
      title must not collapse it to nothing and leave the rows looking identical. */
-  phaseSlug: css`
-    overflow: hidden;
-    flex: 0 0 auto;
-    max-width: 60%;
-    text-overflow: ellipsis;
-  `,
-  phaseRow: css`
-    display: grid;
-    grid-template-columns: minmax(120px, 1fr) minmax(140px, 1.6fr) auto;
-    gap: 10px;
-    align-items: center;
+  phaseSlug: {
+    overflow: 'hidden',
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    maxWidth: '60%',
+    textOverflow: 'ellipsis',
+  },
+  phaseRow: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'minmax(120px, 1fr) minmax(140px, 1.6fr) auto',
+      '@media (width <= 640px)': '1fr',
+    },
+    gap: { 'default': '10px', '@media (width <= 640px)': '5px' },
+    alignItems: 'center',
+  },
+  phaseSegment: {
+    '--operator-color': cssVar.colorTextSecondary,
+    'flexGrow': '0',
+    'flexShrink': '0',
+    'flexBasis': 'auto',
+    'minWidth': '2px',
+    'height': '100%',
+    'backgroundColor': 'var(--operator-color)',
+    'backgroundImage': 'none',
+  },
+  phaseTrack: {
+    overflow: 'hidden',
+    display: 'flex',
+    height: '8px',
+    borderRadius: '999px',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    boxShadow: `inset 0 0 0 1px ${cssVar.colorBorderSecondary}`,
+  },
+  phaseValue: {
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
-    @media (width <= 640px) {
-      grid-template-columns: 1fr;
-      gap: 5px;
-    }
-  `,
-  phaseSegment: css`
-    --operator-color: ${cssVar.colorTextSecondary};
+const operatorStyles = {
+  H: styles.operatorH,
+  K: styles.operatorK,
+  M: styles.operatorM,
+  P: styles.operatorP,
+  R_ms: styles.operatorRMs,
+  T_chars: styles.operatorTChars,
+} as const;
 
-    flex: 0 0 auto;
-    min-width: 2px;
-    height: 100%;
-    background: var(--operator-color);
-
-    &[data-operator='K'] {
-      --operator-color: var(--klm-blue-1);
-    }
-
-    &[data-operator='P'] {
-      --operator-color: var(--klm-blue-2);
-    }
-
-    &[data-operator='M'] {
-      --operator-color: var(--klm-blue-3);
-    }
-
-    &[data-operator='H'] {
-      --operator-color: var(--klm-blue-4);
-    }
-
-    &[data-operator='T_chars'] {
-      --operator-color: var(--klm-blue-5);
-    }
-
-    &[data-operator='R_ms'] {
-      --operator-color: var(--klm-blue-6);
-    }
-  `,
-  phaseTrack: css`
-    overflow: hidden;
-    display: flex;
-
-    height: 8px;
-    border-radius: 999px;
-
-    background: transparent;
-    box-shadow: inset 0 0 0 1px ${cssVar.colorBorderSecondary};
-  `,
-  phaseValue: css`
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const operatorStyle = (key?: string) =>
+  key && key in operatorStyles ? operatorStyles[key as keyof typeof operatorStyles] : undefined;
 
 export interface InteractionCostPanelProps {
   /**
@@ -269,37 +227,41 @@ const InteractionCostPanel = memo<InteractionCostPanelProps>(
     ];
 
     return (
-      <section className={styles.interactionCost}>
-        <div className={styles.interactionCostHeader}>
-          {roundLabel && <span className={styles.interactionCostModel}>{roundLabel}</span>}
-          <span className={styles.interactionCostModel}>{cost.model}</span>
+      <section {...stylex.props(styles.interactionCost)}>
+        <div {...stylex.props(styles.interactionCostHeader)}>
+          {roundLabel && <span {...stylex.props(styles.interactionCostModel)}>{roundLabel}</span>}
+          <span {...stylex.props(styles.interactionCostModel)}>{cost.model}</span>
         </div>
 
-        <div className={styles.interactionMetrics}>
+        <div {...stylex.props(styles.interactionMetrics)}>
           {metrics.map((metric) => (
-            <div className={styles.interactionMetric} key={metric.label}>
-              <span className={styles.interactionMetricLabel}>{metric.label}</span>
-              <span className={styles.interactionMetricValue}>{metric.value}</span>
+            <div {...stylex.props(styles.interactionMetric)} key={metric.label}>
+              <span {...stylex.props(styles.interactionMetricLabel)}>{metric.label}</span>
+              <span {...stylex.props(styles.interactionMetricValue)}>{metric.value}</span>
             </div>
           ))}
         </div>
 
-        <div className={styles.operatorList}>
+        <div {...stylex.props(styles.operatorList)}>
           {OPERATOR_KEYS.map((key) => {
             const value = cost.operators[key];
             if (value === undefined) return null;
 
             return (
-              <span className={styles.operatorChip} data-operator={key} key={key}>
+              <span
+                {...stylex.props(styles.operatorChip, operatorStyle(key))}
+                data-operator={key}
+                key={key}
+              >
                 <span>{t(`report.interaction.operator.${key}`)}</span>
-                <b>{operatorValue(key, value)}</b>
+                <b {...stylex.props(styles.operatorValue)}>{operatorValue(key, value)}</b>
               </span>
             );
           })}
         </div>
 
         {phases.length > 0 && (
-          <div className={styles.phaseList}>
+          <div {...stylex.props(styles.phaseList)}>
             {phases.map((phase) => {
               const seconds = phaseSeconds(phase);
               const activeSeconds = phase.activeSeconds ?? 0;
@@ -313,26 +275,25 @@ const InteractionCostPanel = memo<InteractionCostPanelProps>(
                 : undefined;
 
               return (
-                <div className={styles.phaseRow} key={phase.id}>
+                <div {...stylex.props(styles.phaseRow)} key={phase.id}>
                   <span
-                    className={styles.phaseName}
+                    {...stylex.props(styles.phaseName)}
                     title={checkLabel ? `${name} · ${checkLabel}` : name}
                   >
-                    <span className={styles.phaseSlug}>{name}</span>
-                    {checkLabel && <span className={styles.phaseCheck}>{checkLabel}</span>}
+                    <span {...stylex.props(styles.phaseSlug)}>{name}</span>
+                    {checkLabel && <span {...stylex.props(styles.phaseCheck)}>{checkLabel}</span>}
                   </span>
-                  <span className={styles.phaseTrack}>
+                  <span {...stylex.props(styles.phaseTrack)}>
                     {segments.length > 0 ? (
                       segments.map((segment) => (
                         <span
-                          className={styles.phaseSegment}
-                          data-operator={segment.key}
-                          key={segment.key}
-                          style={{
+                          {...sx([styles.phaseSegment, operatorStyle(segment.key)], undefined, {
                             width: `${
                               maxPhaseSeconds > 0 ? (segment.seconds / maxPhaseSeconds) * 100 : 0
                             }%`,
-                          }}
+                          })}
+                          data-operator={segment.key}
+                          key={segment.key}
                           title={`${t(`report.interaction.operator.${segment.key}`)} ${formatSeconds(
                             segment.seconds,
                           )}`}
@@ -341,18 +302,18 @@ const InteractionCostPanel = memo<InteractionCostPanelProps>(
                     ) : (
                       <>
                         <span
-                          className={styles.phaseSegment}
-                          style={{ width: `${activeWidth}%` }}
+                          {...sx([styles.phaseSegment], undefined, { width: `${activeWidth}%` })}
                         />
                         <span
-                          className={styles.phaseSegment}
+                          {...sx([styles.phaseSegment, styles.operatorRMs], undefined, {
+                            width: `${waitWidth}%`,
+                          })}
                           data-operator={'R_ms'}
-                          style={{ width: `${waitWidth}%` }}
                         />
                       </>
                     )}
                   </span>
-                  <span className={styles.phaseValue}>{formatSeconds(seconds)}</span>
+                  <span {...stylex.props(styles.phaseValue)}>{formatSeconds(seconds)}</span>
                 </div>
               );
             })}

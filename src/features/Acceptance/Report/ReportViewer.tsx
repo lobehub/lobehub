@@ -8,20 +8,9 @@ import type {
   VerifySurface,
   VerifyVerdict,
 } from '@lobechat/types';
-import {
-  Block,
-  Button,
-  Center,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Empty,
-  Flexbox,
-  Icon,
-  Image,
-  Markdown,
-  Text,
-} from '@lobehub/ui';
+import { Block, Button, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { TFunction } from 'i18next';
 import {
   AlertTriangle,
@@ -55,6 +44,7 @@ import { useParams } from 'react-router';
 import Loading from '@/components/Loading/BrandTextLoading';
 import AudioPlayer from '@/features/AudioPlayer';
 import type { VerifyEvidenceWithUrl } from '@/services/verify';
+import { sx } from '@/styles/sx';
 
 import { AcceptanceDrawer } from '../AcceptanceDrawer';
 import { useVerifyReportBundle } from '../hooks';
@@ -92,595 +82,454 @@ import { TerminalEvidenceCard } from './TerminalEvidence';
 import { readVisualizationManifest } from './visualization';
 import { VisualizationRenderer } from './VisualizationRenderer';
 
-const styles = createStaticStyles(({ css }) => ({
-  scroll: css`
-    overflow: auto;
-    width: 100%;
-    height: 100%;
-  `,
-  page: css`
-    width: 100%;
-    max-width: 880px;
-    margin-inline: auto;
-    padding-block: 32px 64px;
-
+const styles = stylex.create({
+  scroll: { overflow: 'auto', width: '100%', height: '100%' },
+  page: {
+    width: '100%',
+    maxWidth: '880px',
+    marginInline: 'auto',
+    paddingBlockStart: { 'default': '32px', '@media (width <= 767px)': '16px' },
+    paddingBlockEnd: {
+      'default': '64px',
+      '@media (width <= 767px)': 'calc(24px + env(safe-area-inset-bottom))',
+    },
     /* Start-aligned with the 46px gutter a check row's body sits at, so the hero
        prose and the expanded check prose share one text edge. */
-    padding-inline: 46px 32px;
-
-    @media (width <= 767px) {
-      padding-block: 16px calc(24px + env(safe-area-inset-bottom));
-      padding-inline: 16px;
-      overflow-wrap: anywhere;
-    }
-  `,
+    paddingInlineStart: { 'default': '46px', '@media (width <= 767px)': '16px' },
+    paddingInlineEnd: { 'default': '32px', '@media (width <= 767px)': '16px' },
+    overflowWrap: { 'default': null, '@media (width <= 767px)': 'anywhere' },
+  },
 
   /* hero */
-  heroLine: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
-  `,
-  pill: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 5px;
-    padding-inline: 13px;
-    border-radius: 999px;
-
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1;
-  `,
-  summary: css`
-    max-width: 100%;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-  `,
-  meta: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 16px;
-    margin-block-start: 4px;
-  `,
-  metaItem: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: baseline;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    code {
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-      word-break: break-word;
-    }
-  `,
-  liveBanner: css`
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-
-    width: fit-content;
-    margin-block-start: 4px;
-    padding-block: 6px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorInfoBorder};
-    border-radius: 999px;
-
-    font-size: 12px;
-    color: ${cssVar.colorInfoText};
-
-    background: ${cssVar.colorInfoBg};
-  `,
+  heroLine: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '12px',
+    alignItems: 'center',
+  },
+  pill: {
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '5px',
+    paddingInline: '13px',
+    borderRadius: '999px',
+    fontSize: '13px',
+    fontWeight: 600,
+    lineHeight: 1,
+  },
+  summary: { maxWidth: '100%', lineHeight: 1.6, color: cssVar.colorText },
+  liveBanner: {
+    display: 'inline-flex',
+    gap: '8px',
+    alignItems: 'center',
+    width: 'fit-content',
+    marginBlockStart: '4px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorInfoBorder,
+    borderRadius: '999px',
+    fontSize: '12px',
+    color: cssVar.colorInfoText,
+    backgroundColor: cssVar.colorInfoBg,
+    backgroundImage: 'none',
+  },
   /* Provenance: where the code came from. Reference material the reader scans,
      so it stays visually subordinate to the verdict + summary above it. */
-  codingScope: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-
-    min-width: 0;
-    max-width: 100%;
-    margin-block-start: 4px;
-  `,
+  codingScope: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    minWidth: '0',
+    maxWidth: '100%',
+    marginBlockStart: '4px',
+  },
   /* The PR gets its own line. It is the one outbound link a reader actually
      follows, and its title is long enough that sharing a row with branch/commit
      would either push them onto a second line anyway or truncate the title to
      nothing. */
-  scopePullRequestLine: css`
-    display: flex;
-    min-width: 0;
-    max-width: 100%;
-  `,
-  scopeMetaLine: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 14px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 100%;
-  `,
-  branchChip: css`
-    display: inline-flex;
-    flex: 0 1 auto;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: min(360px, 100%);
-
-    color: ${cssVar.colorTextTertiary};
-
-    code {
-      overflow: hidden;
-
-      min-width: 0;
-
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    svg {
-      flex: 0 0 auto;
-      color: ${cssVar.colorTextQuaternary};
-    }
-  `,
-  commitChip: css`
-    display: inline-flex;
-    flex: 0 0 auto;
-    gap: 6px;
-    align-items: center;
-
-    color: ${cssVar.colorTextTertiary};
-
-    code {
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 12px;
-      color: ${cssVar.colorTextTertiary};
-    }
-
-    svg {
-      flex: 0 0 auto;
-      color: ${cssVar.colorTextQuaternary};
-    }
-  `,
-  prChip: css`
-    /* Resting: number secondary, title tertiary, icon quaternary — a quiet chip.
-       Hover lifts the WHOLE thing to the primary text color at once (a clearly
-       perceptible emphasis, not a one-gray-step nudge), and never the global
-       link-blue. Vars so number/title/icon rise together. */
-    --pr-number-color: ${cssVar.colorTextSecondary};
-    --pr-title-color: ${cssVar.colorTextTertiary};
-    --pr-icon-color: ${cssVar.colorTextQuaternary};
-
-    cursor: default;
-
-    display: inline-flex;
-    flex: 0 1 auto;
-    gap: 6px;
-    align-items: center;
-
+  scopePullRequestLine: { display: 'flex', minWidth: '0', maxWidth: '100%' },
+  scopeMetaLine: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    rowGap: '6px',
+    columnGap: '14px',
+    alignItems: 'center',
+    minWidth: '0',
+    maxWidth: '100%',
+  },
+  /* Icons and <code> inside the provenance chips: StyleX has no descendant
+     selectors, so each element carries its own rule. */
+  chipIcon: {
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    color: cssVar.colorTextQuaternary,
+  },
+  chipCode: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  commitCode: {
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  branchChip: {
+    display: 'inline-flex',
+    flexGrow: '0',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    maxWidth: 'min(360px, 100%)',
+    color: cssVar.colorTextTertiary,
+  },
+  commitChip: {
+    display: 'inline-flex',
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    gap: '6px',
+    alignItems: 'center',
+    color: cssVar.colorTextTertiary,
+  },
+  /* Resting: number secondary, title tertiary, icon quaternary — a quiet chip.
+     Hover lifts the WHOLE thing to the primary text color at once (a clearly
+     perceptible emphasis, not a one-gray-step nudge), and never the global
+     link-blue. Vars so number/title/icon rise together. */
+  prChip: {
+    '--pr-number-color': cssVar.colorTextSecondary,
+    '--pr-title-color': cssVar.colorTextTertiary,
+    '--pr-icon-color': cssVar.colorTextQuaternary,
+    'cursor': 'default',
+    'display': 'inline-flex',
+    'flexGrow': '0',
+    'flexShrink': '1',
+    'flexBasis': 'auto',
+    'gap': '6px',
+    'alignItems': 'center',
     /* Owns its own line, so the title gets the full column before ellipsizing. */
-    min-width: 0;
-    max-width: 100%;
-
-    font-size: 12px;
-    color: var(--pr-number-color);
-    text-decoration: none;
-
-    transition: color 0.15s;
-
-    &[data-link='true'] {
-      cursor: pointer;
-    }
-
-    &[data-link='true']:hover {
-      --pr-number-color: ${cssVar.colorText};
-      --pr-title-color: ${cssVar.colorText};
-      --pr-icon-color: ${cssVar.colorTextSecondary};
-
-      /* Re-assert over the global \`a:hover\` link-blue — the chip's hover is a
-         text-emphasis step, never a recolor. */
-      color: var(--pr-number-color);
-    }
-
-    > svg:first-child {
-      flex: 0 0 auto;
-      color: var(--pr-icon-color);
-      transition: color 0.15s;
-    }
-  `,
-  prNumber: css`
-    flex: 0 0 auto;
-    color: var(--pr-number-color);
-    transition: color 0.15s;
-  `,
-  prTitle: css`
-    overflow: hidden;
-    flex: 1 1 auto;
-
-    min-width: 0;
-
-    color: var(--pr-title-color);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    transition: color 0.15s;
-  `,
-  scopeMetaItem: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 100%;
-
-    font-size: 12px;
-    line-height: 1.45;
-    color: ${cssVar.colorTextTertiary};
-
-    code {
-      overflow: hidden;
-
-      min-width: 0;
-
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    svg {
-      flex: 0 0 auto;
-      color: ${cssVar.colorTextQuaternary};
-    }
-  `,
+    'minWidth': '0',
+    'maxWidth': '100%',
+    'fontSize': '12px',
+    'color': 'var(--pr-number-color)',
+    'textDecoration': 'none',
+    'transition': 'color 0.15s',
+  },
+  /* `data-link` chips: the hover step re-asserts the color over the global
+     `a:hover` link-blue — the chip's hover is a text-emphasis step, never a recolor. */
+  prChipLink: {
+    '--pr-number-color': {
+      'default': cssVar.colorTextSecondary,
+      ':hover': cssVar.colorText,
+    },
+    '--pr-title-color': {
+      'default': cssVar.colorTextTertiary,
+      ':hover': cssVar.colorText,
+    },
+    '--pr-icon-color': {
+      'default': cssVar.colorTextQuaternary,
+      ':hover': cssVar.colorTextSecondary,
+    },
+    'cursor': 'pointer',
+    'color': { 'default': 'var(--pr-number-color)', ':hover': 'var(--pr-number-color)' },
+  },
+  prIcon: {
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    color: 'var(--pr-icon-color)',
+    transition: 'color 0.15s',
+  },
+  prNumber: {
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    color: 'var(--pr-number-color)',
+    transition: 'color 0.15s',
+  },
+  prTitle: {
+    overflow: 'hidden',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minWidth: '0',
+    color: 'var(--pr-title-color)',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    transition: 'color 0.15s',
+  },
+  scopeMetaItem: {
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    minWidth: '0',
+    maxWidth: '100%',
+    fontSize: '12px',
+    lineHeight: 1.45,
+    color: cssVar.colorTextTertiary,
+  },
   /* The command / URL under test. Can be long; it must never push the rest of
      the provenance line onto a second row. */
-  scopeEntry: css`
-    max-width: 260px;
-  `,
-  originLink: css`
-    cursor: pointer;
-    color: ${cssVar.colorTextTertiary};
-    text-decoration: none;
-
-    &:hover {
-      color: ${cssVar.colorLink};
-    }
-
-    &:hover svg {
-      color: ${cssVar.colorLink};
-    }
-  `,
-  surfaceList: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  `,
-  surfaceChip: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-
-    svg {
-      color: ${cssVar.colorTextTertiary};
-    }
-  `,
+  scopeEntry: { maxWidth: '260px' },
+  originLink: {
+    cursor: 'pointer',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorLink },
+    textDecoration: 'none',
+  },
+  originLinkIcon: {
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    color: {
+      default: cssVar.colorTextQuaternary,
+      [stylex.when.ancestor(':hover')]: cssVar.colorLink,
+    },
+  },
+  surfaceList: { display: 'flex', flexWrap: 'wrap', gap: '4px' },
+  surfaceChip: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadiusSM,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  surfaceIcon: { color: cssVar.colorTextTertiary },
 
   /* checks */
-  checks: css`
-    /* The filter bar used to carry this gap in its own margin; without it the
-       hero and the first row collided. */
-    overflow: hidden;
-
-    margin-block-start: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  row: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  rowHead: css`
-    cursor: pointer;
-
-    display: grid;
-    grid-template-columns: 20px minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: center;
-
-    width: 100%;
-    padding-block: 11px;
-    padding-inline: 16px;
-    border: none;
-
-    text-align: start;
-
-    background: none;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    @media (width <= 767px) {
-      grid-template-columns: 20px minmax(0, 1fr);
-      gap: 6px 8px;
-      padding: 12px;
-    }
-  `,
-  rowTitle: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    &[data-failed='true'] {
-      font-weight: 600;
-    }
-
-    @media (width <= 767px) {
-      overflow-wrap: anywhere;
-      white-space: normal;
-    }
-  `,
-  rowSide: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    @media (width <= 767px) {
-      grid-column: 2;
-      flex-wrap: wrap;
-    }
-  `,
-  softTag: css`
-    padding-block: 1px;
-    padding-inline: 7px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  chev: css`
-    color: ${cssVar.colorTextQuaternary};
-    transition: transform 0.15s ease;
-
-    &[data-open='true'] {
-      transform: rotate(90deg);
-    }
-  `,
-  rowBody: css`
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-
-    padding-block: 2px 16px;
-    padding-inline: 46px 16px;
-
-    @media (width <= 767px) {
-      padding-inline: 12px;
-    }
-  `,
-  reasoning: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  suggestion: css`
-    padding-inline-start: 10px;
-    border-inline-start: 2px solid ${cssVar.colorBorder};
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
+  /* The filter bar used to carry this gap in its own margin; without it the
+     hero and the first row collided. */
+  checks: {
+    overflow: 'hidden',
+    marginBlockStart: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  row: {
+    borderBlockEndWidth: { 'default': null, ':not(:last-child)': '1px' },
+    borderBlockEndStyle: { 'default': null, ':not(:last-child)': 'solid' },
+    borderBlockEndColor: { 'default': null, ':not(:last-child)': cssVar.colorBorderSecondary },
+  },
+  rowHead: {
+    cursor: 'pointer',
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': '20px minmax(0, 1fr) auto',
+      '@media (width <= 767px)': '20px minmax(0, 1fr)',
+    },
+    rowGap: { 'default': '10px', '@media (width <= 767px)': '6px' },
+    columnGap: { 'default': '10px', '@media (width <= 767px)': '8px' },
+    alignItems: 'center',
+    width: '100%',
+    paddingBlock: { 'default': '11px', '@media (width <= 767px)': '12px' },
+    paddingInline: { 'default': '16px', '@media (width <= 767px)': '12px' },
+    borderStyle: 'none',
+    textAlign: 'start',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: 'none',
+  },
+  rowTitle: {
+    overflow: 'hidden',
+    fontSize: '14px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: { 'default': 'nowrap', '@media (width <= 767px)': 'normal' },
+    overflowWrap: { 'default': null, '@media (width <= 767px)': 'anywhere' },
+  },
+  rowTitleFailed: { fontWeight: 600 },
+  rowSide: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    gridColumn: { 'default': null, '@media (width <= 767px)': 2 },
+    flexWrap: { 'default': null, '@media (width <= 767px)': 'wrap' },
+  },
+  softTag: {
+    paddingBlock: '1px',
+    paddingInline: '7px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  chev: { color: cssVar.colorTextQuaternary, transition: 'transform 0.15s ease' },
+  chevOpen: { transform: 'rotate(90deg)' },
+  rowBody: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    paddingBlockStart: '2px',
+    paddingBlockEnd: '16px',
+    paddingInlineStart: { 'default': '46px', '@media (width <= 767px)': '12px' },
+    paddingInlineEnd: { 'default': '16px', '@media (width <= 767px)': '12px' },
+  },
+  reasoning: { fontSize: '13px', lineHeight: 1.6, color: cssVar.colorTextSecondary },
+  suggestion: {
+    paddingInlineStart: '10px',
+    borderInlineStartWidth: '2px',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartColor: cssVar.colorBorder,
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+  },
   /* What the run said it would do, before it did it — read above the outcome so
      intent and result sit together and a gap between them is visible. */
-  planDetail: css`
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 4px 8px;
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextTertiary};
-
-    @media (width <= 767px) {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 4px;
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  planDetailLabel: css`
-    color: ${cssVar.colorTextQuaternary};
-    white-space: nowrap;
-  `,
-  notExecutedHint: css`
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextTertiary};
-  `,
+  planDetail: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'auto minmax(0, 1fr)',
+      '@media (width <= 767px)': 'minmax(0, 1fr)',
+    },
+    rowGap: '4px',
+    columnGap: { 'default': '8px', '@media (width <= 767px)': '4px' },
+    fontSize: '13px',
+    lineHeight: 1.6,
+    color: {
+      'default': cssVar.colorTextTertiary,
+      '@media (width <= 767px)': cssVar.colorTextSecondary,
+    },
+  },
+  planDetailLabel: { color: cssVar.colorTextQuaternary, whiteSpace: 'nowrap' },
+  notExecutedHint: { fontSize: '13px', lineHeight: 1.6, color: cssVar.colorTextTertiary },
 
   /* narrative */
-  narrative: css`
-    margin-block-start: 24px;
-
-    &:not([open]) > :not(summary) {
-      display: none;
-    }
-  `,
-  narrativeSummary: css`
-    cursor: pointer;
-    user-select: none;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    list-style: none;
-
-    &::-webkit-details-marker {
-      display: none;
-    }
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  narrativeBody: css`
-    margin-block-start: 12px;
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  interactionCostBody: css`
-    margin-block-start: 12px;
-  `,
+  narrative: { marginBlockStart: '24px' },
+  /* A closed <details> shows only its summary; the marker on <details> lets the
+     body hide itself exactly as the old `:not([open]) > :not(summary)` did. */
+  narrativeContent: {
+    display: { default: null, [stylex.when.ancestor(':not([open])')]: 'none' },
+  },
+  narrativeSummary: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    display: { 'default': 'inline-flex', '::-webkit-details-marker': 'none' },
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    listStyle: 'none',
+  },
+  narrativeBody: {
+    marginBlockStart: '12px',
+    padding: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  interactionCostBody: { marginBlockStart: '12px' },
 
   /* evidence */
-  evidenceList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    align-items: flex-start;
-
-    width: 100%;
-  `,
-  evidenceFile: css`
-    cursor: pointer;
-
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
-    gap: 8px;
-    align-items: center;
-
-    width: min(100%, 520px);
-    padding-block: 7px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    text-align: start;
-
-    background: ${cssVar.colorFillQuaternary};
-
-    &:hover {
-      border-color: ${cssVar.colorLink};
-      color: ${cssVar.colorLink};
-    }
-  `,
-  evidenceFileIcon: css`
-    display: flex;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  evidenceFileBody: css`
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  `,
-  evidenceFileName: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    line-height: 1.35;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  evidenceFileDesc: css`
-    overflow: hidden;
-
-    margin-block-start: 2px;
-
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  evidenceText: css`
-    overflow: auto;
-
-    max-height: 200px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  evidenceVideo: css`
-    align-self: flex-start;
-
-    width: auto;
-    max-width: 100%;
-    max-height: 360px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    object-fit: contain;
-  `,
-  evChip: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    padding-block: 1px;
-    padding-inline: 6px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  evidenceDoc: css`
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-
-    width: 100%;
-    min-height: 0;
-  `,
-}));
+  evidenceList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  evidenceFile: {
+    cursor: 'pointer',
+    display: 'grid',
+    gridTemplateColumns: '18px minmax(0, 1fr)',
+    gap: '8px',
+    alignItems: 'center',
+    width: 'min(100%, 520px)',
+    paddingBlock: '7px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorLink },
+    borderRadius: cssVar.borderRadius,
+    color: { 'default': null, ':hover': cssVar.colorLink },
+    textAlign: 'start',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  evidenceFileIcon: { display: 'flex', color: cssVar.colorTextTertiary },
+  evidenceFileBody: { display: 'flex', flexDirection: 'column', minWidth: '0' },
+  evidenceFileName: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    lineHeight: 1.35,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  evidenceFileDesc: {
+    overflow: 'hidden',
+    marginBlockStart: '2px',
+    fontSize: '12px',
+    lineHeight: 1.35,
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  evidenceText: {
+    overflow: 'auto',
+    maxHeight: '200px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    whiteSpace: 'pre-wrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  evidenceVideo: {
+    alignSelf: 'flex-start',
+    width: 'auto',
+    maxWidth: '100%',
+    maxHeight: '360px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    objectFit: 'contain',
+  },
+  evChip: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  evidenceDoc: {
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    width: '100%',
+    minHeight: '0',
+  },
+});
 
 const VERDICT_META: Record<
   CheckState,
@@ -795,7 +644,7 @@ const EvidenceItem = memo<{
           />
         </Flexbox>
       ) : e.fileUrl && e.type === 'video' ? (
-        <video controls className={styles.evidenceVideo} src={e.fileUrl} />
+        <video controls {...stylex.props(styles.evidenceVideo)} src={e.fileUrl} />
       ) : e.fileUrl && e.type === 'audio' ? (
         // The same waveform player the conversation renders — one audio dialect
         // across the product, plus the download the reviewer needs to keep the
@@ -807,7 +656,7 @@ const EvidenceItem = memo<{
           url={e.fileUrl}
         />
       ) : e.fileUrl ? (
-        <div className={styles.evidenceDoc}>
+        <div {...stylex.props(styles.evidenceDoc)}>
           <DocumentViewer fileName={e.fileName} markdown={rendersAsMarkdown(e)} url={e.fileUrl} />
         </div>
       ) : e.content && markdownTextEvidenceTypes.has(e.type) ? (
@@ -823,9 +672,9 @@ const EvidenceItem = memo<{
           {e.content}
         </CollapsibleMarkdownEvidence>
       ) : e.content ? (
-        <div className={styles.evidenceText}>{e.content}</div>
+        <div {...stylex.props(styles.evidenceText)}>{e.content}</div>
       ) : (
-        <span className={styles.softTag}>{e.type}</span>
+        <span {...stylex.props(styles.softTag)}>{e.type}</span>
       )}
     </Flexbox>
   );
@@ -843,17 +692,17 @@ const EvidenceFileButton = memo<{
 
   return (
     <button
-      className={styles.evidenceFile}
+      {...stylex.props(styles.evidenceFile)}
       title={t('report.evidence.openDetail', { name })}
       type={'button'}
       onClick={onClick}
     >
-      <span className={styles.evidenceFileIcon}>
+      <span {...stylex.props(styles.evidenceFileIcon)}>
         <Icon icon={CATEGORY_ICON[evidenceCategory(evidence.type)]} size={13} />
       </span>
-      <span className={styles.evidenceFileBody}>
-        <span className={styles.evidenceFileName}>{name}</span>
-        {description && <span className={styles.evidenceFileDesc}>{description}</span>}
+      <span {...stylex.props(styles.evidenceFileBody)}>
+        <span {...stylex.props(styles.evidenceFileName)}>{name}</span>
+        {description && <span {...stylex.props(styles.evidenceFileDesc)}>{description}</span>}
       </span>
     </button>
   );
@@ -981,24 +830,27 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
   );
 
   return (
-    <div className={styles.row}>
+    <div {...stylex.props(styles.row)}>
       <button
         aria-expanded={hasBody ? open : undefined}
-        className={styles.rowHead}
+        {...stylex.props(styles.rowHead)}
         type={'button'}
         onClick={() => hasBody && setOpen((o) => !o)}
       >
         <span style={{ color: meta.dot, display: 'flex' }}>
           <Icon icon={meta.icon} size={16} />
         </span>
-        <span className={styles.rowTitle} data-failed={state === 'failed'}>
+        <span
+          {...stylex.props(styles.rowTitle, state === 'failed' && styles.rowTitleFailed)}
+          data-failed={state === 'failed'}
+        >
           {result?.checkItemTitle || planItem?.title || row.id}
         </span>
-        <span className={styles.rowSide}>
+        <span {...stylex.props(styles.rowSide)}>
           {CATEGORY_ORDER.map((cat) =>
             categoryCounts[cat] > 0 ? (
               <span
-                className={styles.evChip}
+                {...stylex.props(styles.evChip)}
                 key={cat}
                 title={`${t(`report.evidence.category.${cat}`)} × ${categoryCounts[cat]}`}
               >
@@ -1008,27 +860,32 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
             ) : null,
           )}
           {state === 'not_executed' && (
-            <span className={styles.softTag}>{t('report.verdict.notExecuted')}</span>
+            <span {...stylex.props(styles.softTag)}>{t('report.verdict.notExecuted')}</span>
           )}
-          {!required && <span className={styles.softTag}>{t('report.check.optional')}</span>}
+          {!required && <span {...stylex.props(styles.softTag)}>{t('report.check.optional')}</span>}
           {hasBody && (
-            <Icon className={styles.chev} data-open={open} icon={ChevronRight} size={14} />
+            <Icon
+              className={stylex.props(styles.chev, open && styles.chevOpen).className}
+              data-open={open}
+              icon={ChevronRight}
+              size={14}
+            />
           )}
         </span>
       </button>
       {open && hasBody && (
-        <div className={styles.rowBody}>
+        <div {...stylex.props(styles.rowBody)}>
           {(planConfig.method || planConfig.expected || requiredEvidence.length > 0) && (
-            <div className={styles.planDetail}>
+            <div {...stylex.props(styles.planDetail)}>
               {planConfig.method && (
                 <>
-                  <span className={styles.planDetailLabel}>{t('report.plan.method')}</span>
+                  <span {...stylex.props(styles.planDetailLabel)}>{t('report.plan.method')}</span>
                   <span>{planConfig.method}</span>
                 </>
               )}
               {planConfig.expected && (
                 <>
-                  <span className={styles.planDetailLabel}>{t('report.plan.expected')}</span>
+                  <span {...stylex.props(styles.planDetailLabel)}>{t('report.plan.expected')}</span>
                   <span>{planConfig.expected}</span>
                 </>
               )}
@@ -1037,13 +894,17 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
                   so a reader can see what the check was contractually owed. */}
               {requiredEvidence.length > 0 && (
                 <>
-                  <span className={styles.planDetailLabel}>
+                  <span {...stylex.props(styles.planDetailLabel)}>
                     {t('report.plan.requiredEvidence')}
                   </span>
-                  <span className={styles.surfaceList}>
+                  <span {...stylex.props(styles.surfaceList)}>
                     {requiredEvidence.map((spec) => (
-                      <span className={styles.surfaceChip} key={spec.type} title={spec.hint}>
-                        <Icon icon={CATEGORY_ICON[evidenceCategory(spec.type)]} size={12} />
+                      <span {...stylex.props(styles.surfaceChip)} key={spec.type} title={spec.hint}>
+                        <Icon
+                          className={stylex.props(styles.surfaceIcon).className}
+                          icon={CATEGORY_ICON[evidenceCategory(spec.type)]}
+                          size={12}
+                        />
                         {t(`report.evidence.medium.${spec.type}`)}
                         {/* Says why an authored example or a bare log leaves it uncovered. */}
                         {spec.provenance === 'execution' &&
@@ -1056,16 +917,16 @@ const CheckRow = memo<{ defaultOpen: boolean; row: CheckRowData }>(({ defaultOpe
             </div>
           )}
           {state === 'not_executed' && (
-            <p className={styles.notExecutedHint}>{t('report.plan.notExecutedHint')}</p>
+            <p {...stylex.props(styles.notExecutedHint)}>{t('report.plan.notExecutedHint')}</p>
           )}
           {result?.toulmin?.evidence && (
-            <p className={styles.reasoning}>{result.toulmin.evidence}</p>
+            <p {...stylex.props(styles.reasoning)}>{result.toulmin.evidence}</p>
           )}
-          {result?.suggestion && <p className={styles.suggestion}>{result.suggestion}</p>}
+          {result?.suggestion && <p {...stylex.props(styles.suggestion)}>{result.suggestion}</p>}
           {visualization && <VisualizationRenderer manifest={visualization} />}
           {evidenceCount > 0 && (
             <>
-              <div className={styles.evidenceList}>
+              <div {...stylex.props(styles.evidenceList)}>
                 {[...comparisonGroups.entries()].map(([id, group]) =>
                   group.before && group.after ? (
                     <EvidenceComparisonView after={group.after} before={group.before} key={id} />
@@ -1178,21 +1039,21 @@ const CodingScopeCard = memo<{
   const pullRequestContent =
     hasPullRequest && pullRequest ? (
       <>
-        <Icon icon={GitPullRequest} size={15} />
-        <span className={styles.prNumber}>{pullRequestLabel(pullRequest, t)}</span>
-        {pullRequest.title && <span className={styles.prTitle}>{pullRequest.title}</span>}
+        <Icon className={stylex.props(styles.prIcon).className} icon={GitPullRequest} size={15} />
+        <span {...stylex.props(styles.prNumber)}>{pullRequestLabel(pullRequest, t)}</span>
+        {pullRequest.title && <span {...stylex.props(styles.prTitle)}>{pullRequest.title}</span>}
         {pullRequestUrl && <Icon icon={ExternalLink} size={13} />}
       </>
     ) : null;
   const shortCommit = commit && commit.length > 12 ? commit.slice(0, 10) : commit;
 
   return (
-    <div className={styles.codingScope}>
+    <div {...stylex.props(styles.codingScope)}>
       {pullRequestContent && (
-        <div className={styles.scopePullRequestLine}>
+        <div {...stylex.props(styles.scopePullRequestLine)}>
           {pullRequestUrl ? (
             <a
-              className={styles.prChip}
+              {...stylex.props(styles.prChip, styles.prChipLink)}
               data-link={true}
               href={pullRequestUrl}
               rel="noreferrer"
@@ -1202,60 +1063,76 @@ const CodingScopeCard = memo<{
               {pullRequestContent}
             </a>
           ) : (
-            <span className={styles.prChip} title={pullRequest?.title}>
+            <span {...stylex.props(styles.prChip)} title={pullRequest?.title}>
               {pullRequestContent}
             </span>
           )}
         </div>
       )}
 
-      <div className={styles.scopeMetaLine}>
+      <div {...stylex.props(styles.scopeMetaLine)}>
         {branch && (
-          <span className={styles.branchChip} title={branch}>
-            <Icon icon={GitBranch} size={15} />
-            <code>{branch}</code>
+          <span {...stylex.props(styles.branchChip)} title={branch}>
+            <Icon className={stylex.props(styles.chipIcon).className} icon={GitBranch} size={15} />
+            <code {...stylex.props(styles.chipCode)}>{branch}</code>
           </span>
         )}
         {commit && (
-          <span className={styles.commitChip} title={commit}>
-            <Icon icon={GitCommit} size={14} />
-            <code>{shortCommit}</code>
+          <span {...stylex.props(styles.commitChip)} title={commit}>
+            <Icon className={stylex.props(styles.chipIcon).className} icon={GitCommit} size={14} />
+            <code {...stylex.props(styles.commitCode)}>{shortCommit}</code>
           </span>
         )}
         {date && (
-          <span className={styles.scopeMetaItem}>
-            <Icon icon={CalendarClock} size={13} />
+          <span {...stylex.props(styles.scopeMetaItem)}>
+            <Icon
+              className={stylex.props(styles.chipIcon).className}
+              icon={CalendarClock}
+              size={13}
+            />
             <span>{date}</span>
           </span>
         )}
         {surfaces.length > 0 && (
-          <span className={styles.surfaceList}>
+          <span {...stylex.props(styles.surfaceList)}>
             {surfaces.map((surface) => (
-              <span className={styles.surfaceChip} key={surface}>
-                <Icon icon={SURFACE_ICON[surface]} size={12} />
+              <span {...stylex.props(styles.surfaceChip)} key={surface}>
+                <Icon
+                  className={stylex.props(styles.surfaceIcon).className}
+                  icon={SURFACE_ICON[surface]}
+                  size={12}
+                />
                 {t(`report.surface.${surface}`)}
               </span>
             ))}
           </span>
         )}
         {entry && (
-          <span className={cx(styles.scopeMetaItem, styles.scopeEntry)} title={entry}>
-            <Icon icon={Terminal} size={13} />
-            <code>{entry}</code>
+          <span {...stylex.props(styles.scopeMetaItem, styles.scopeEntry)} title={entry}>
+            <Icon className={stylex.props(styles.chipIcon).className} icon={Terminal} size={13} />
+            <code {...stylex.props(styles.chipCode)}>{entry}</code>
           </span>
         )}
         {/* Only ever rendered for the report's author — the server redacts `origin`
             from a bundle fetched by anyone else holding the shared link. */}
         {originHref && (
           <a
-            className={cx(styles.scopeMetaItem, styles.originLink)}
+            {...stylex.props(styles.scopeMetaItem, styles.originLink, stylex.defaultMarker())}
             href={originHref}
             rel="noreferrer"
             target="_blank"
             title={t('report.scope.origin')}
           >
-            <Icon icon={MessagesSquare} size={13} />
-            <Icon icon={ExternalLink} size={11} />
+            <Icon
+              className={stylex.props(styles.originLinkIcon).className}
+              icon={MessagesSquare}
+              size={13}
+            />
+            <Icon
+              className={stylex.props(styles.originLinkIcon).className}
+              icon={ExternalLink}
+              size={11}
+            />
           </a>
         )}
       </div>
@@ -1347,8 +1224,8 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
   const origin = data.isOwner ? run.metadata?.origin : undefined;
 
   return (
-    <div className={styles.scroll}>
-      <div className={styles.page}>
+    <div {...stylex.props(styles.scroll)}>
+      <div {...stylex.props(styles.page)}>
         <main>
           <Flexbox gap={12}>
             {/* Verdict above the title, not trailing it — the same order the
@@ -1356,13 +1233,12 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
                 to its own line anyway, and then reads as an afterthought
                 rather than as the report's headline state. */}
             {verdict && (
-              <div className={styles.heroLine} style={{ marginBlockEnd: 2 }}>
+              <div {...sx([styles.heroLine], undefined, { marginBlockEnd: 2 })}>
                 <span
-                  className={styles.pill}
-                  style={{
+                  {...sx([styles.pill], undefined, {
                     background: VERDICT_META[verdict].bg,
                     color: VERDICT_META[verdict].color,
-                  }}
+                  })}
                 >
                   <Icon icon={VERDICT_META[verdict].icon} size={15} />
                   {t(`report.verdict.${verdict}`)}
@@ -1373,8 +1249,12 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
               {run.title || t('report.titleFallback')}
             </Text>
 
-            {!isCodingReport && run.goal && <Text className={styles.summary}>{run.goal}</Text>}
-            {report?.summary && <Text className={styles.summary}>{report.summary}</Text>}
+            {!isCodingReport && run.goal && (
+              <Text className={stylex.props(styles.summary).className}>{run.goal}</Text>
+            )}
+            {report?.summary && (
+              <Text className={stylex.props(styles.summary).className}>{report.summary}</Text>
+            )}
 
             {isCodingReport && (
               <CodingScopeCard
@@ -1384,7 +1264,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
             )}
 
             {liveStatus && (
-              <div className={styles.liveBanner}>
+              <div {...stylex.props(styles.liveBanner)}>
                 <Icon icon={Clock3} size={14} />
                 {t(liveStatusLabelKey[liveStatus])}
               </div>
@@ -1392,7 +1272,7 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
           </Flexbox>
 
           {visible.length > 0 ? (
-            <div className={styles.checks}>
+            <div {...stylex.props(styles.checks)}>
               {visible.map((row) => (
                 /* Every row opens. A report is read to see what was actually
                    observed, and a page of collapsed titles makes the reader
@@ -1407,24 +1287,24 @@ const ReportViewer = memo<ReportViewerProps>(({ runId: explicitRunId }) => {
           )}
 
           {report?.content && (
-            <details className={styles.narrative}>
-              <summary className={styles.narrativeSummary}>
+            <details {...stylex.props(styles.narrative, stylex.defaultMarker())}>
+              <summary {...stylex.props(styles.narrativeSummary)}>
                 <Icon icon={ChevronRight} size={13} />
                 {t('report.sections.details')}
               </summary>
-              <div className={styles.narrativeBody}>
+              <div {...stylex.props(styles.narrativeBody, styles.narrativeContent)}>
                 <Markdown>{report.content}</Markdown>
               </div>
             </details>
           )}
 
           {interactionCost && (
-            <details className={styles.narrative}>
-              <summary className={styles.narrativeSummary}>
+            <details {...stylex.props(styles.narrative, stylex.defaultMarker())}>
+              <summary {...stylex.props(styles.narrativeSummary)}>
                 <Icon icon={ChevronRight} size={13} />
                 {t('report.interaction.title')}
               </summary>
-              <div className={styles.interactionCostBody}>
+              <div {...stylex.props(styles.interactionCostBody, styles.narrativeContent)}>
                 <InteractionCostPanel cost={interactionCost} />
               </div>
             </details>

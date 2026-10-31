@@ -1,15 +1,17 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import {
   Button,
   Checkbox,
   createModal,
+  Flexbox,
   type ModalInstance,
   Text,
   toast,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,33 +25,24 @@ import { frostedModalStyles } from '../Viewer/Review/modals';
 
 const PREVIEW_BATCH_LIMIT = 20;
 
-const styles = createStaticStyles(({ css }) => ({
-  facts: css`
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 4px 14px;
-
-    margin: 0;
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-
-    background: ${cssVar.colorFillQuaternary};
-
-    dt {
-      margin: 0;
-      color: ${cssVar.colorTextTertiary};
-    }
-
-    dd {
-      margin: 0;
-      color: ${cssVar.colorText};
-    }
-  `,
-}));
+const styles = stylex.create({
+  facts: {
+    display: 'grid',
+    gridTemplateColumns: 'auto 1fr',
+    rowGap: '4px',
+    columnGap: '14px',
+    margin: 0,
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    fontSize: '13px',
+    fontVariantNumeric: 'tabular-nums',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  term: { margin: 0, color: cssVar.colorTextTertiary },
+  detail: { margin: 0, color: cssVar.colorText },
+});
 
 interface DeleteConfirmProps {
   description?: string;
@@ -117,20 +110,26 @@ const DeleteConfirmContent = memo<DeleteConfirmProps>(({ description, ids, onDel
           : translate('acceptance.workspace.deleteConfirm.purgeOptionPlain')}
       </Checkbox>
       {purge && preview && (
-        <dl className={styles.facts}>
-          <dt>{translate('acceptance.workspace.deleteConfirm.rounds')}</dt>
-          <dd>
+        <dl {...stylex.props(styles.facts)}>
+          <dt {...stylex.props(styles.term)}>
+            {translate('acceptance.workspace.deleteConfirm.rounds')}
+          </dt>
+          <dd {...stylex.props(styles.detail)}>
             {translate('acceptance.workspace.deleteConfirm.roundsValue', { count: preview.rounds })}
           </dd>
-          <dt>{translate('acceptance.workspace.deleteConfirm.files')}</dt>
-          <dd>
+          <dt {...stylex.props(styles.term)}>
+            {translate('acceptance.workspace.deleteConfirm.files')}
+          </dt>
+          <dd {...stylex.props(styles.detail)}>
             {translate('acceptance.workspace.deleteConfirm.filesValue', {
               count: preview.fileCount,
               ...preview.files,
             })}
           </dd>
-          <dt>{translate('acceptance.workspace.deleteConfirm.space')}</dt>
-          <dd>{formatSize(preview.bytes)}</dd>
+          <dt {...stylex.props(styles.term)}>
+            {translate('acceptance.workspace.deleteConfirm.space')}
+          </dt>
+          <dd {...stylex.props(styles.detail)}>{formatSize(preview.bytes)}</dd>
         </dl>
       )}
       <Flexbox horizontal gap={8} justify={'flex-end'}>
