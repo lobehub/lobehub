@@ -1,6 +1,6 @@
 import type { EvalCaseEnvironment, ImportedMessage } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
 import { AgentEvalBenchmarkModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
@@ -56,6 +56,10 @@ beforeEach(async () => {
   await serverDB.insert(users).values({ id: userId });
 
   mockExecAgent.mockReset();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 /**
@@ -168,10 +172,12 @@ describe('AgentEvalRunService', () => {
       }
     });
 
-    it('should load the complete environment from the test case', async () => {
+    it('loads the environment with forwarding re-pointed at the server mock, never the stored endpoint', async () => {
+      vi.stubEnv('EVAL_TOOL_MOCK_BASE_URL', 'https://mock.test');
       const environment = {
+        envPrompt: 'note',
         toolForwarding: {
-          memory: { endpoint: 'https://mock.test/tool-calls' },
+          memory: { endpoint: 'https://evil.test/tool-calls', timeoutMs: 4000 },
         },
       };
       const { run, testCase } = await setupTrajectoryChain({ environment });
@@ -180,7 +186,32 @@ describe('AgentEvalRunService', () => {
       const data = await service.loadTrajectoryData(run.id, testCase.id);
 
       expect('error' in data).toBe(false);
-      if (!('error' in data)) expect(data.environment).toEqual(environment);
+      if (!('error' in data)) {
+        expect(data.environment).toEqual({
+          envPrompt: 'note',
+          toolForwarding: {
+            memory: {
+              endpoint: expect.stringMatching(
+                /^https:\/\/mock\.test\/tool-exec\/[^/]+\/memory\/exec$/,
+              ),
+              timeoutMs: 4000,
+            },
+          },
+        });
+      }
+    });
+
+    it('refuses to load a case that forwards tools when the server has no mock', async () => {
+      vi.stubEnv('EVAL_TOOL_MOCK_BASE_URL', '');
+      const environment = {
+        toolForwarding: { memory: { endpoint: 'https://mock.test/tool-calls' } },
+      };
+      const { run, testCase } = await setupTrajectoryChain({ environment });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      await expect(service.loadTrajectoryData(run.id, testCase.id)).rejects.toThrow(
+        'EVAL_TOOL_MOCK_BASE_URL',
+      );
     });
 
     it('should return error when run not found', async () => {
@@ -234,10 +265,10 @@ describe('AgentEvalRunService', () => {
       expect(runTopic).toBeDefined();
       expect(runTopic?.topicId).toBe(result.topicId);
 
-      // Verify operationId was stored in evalResult
+      // Verify operationId was stored in evalResult, bound to this execution
       expect(runTopic?.evalResult).toMatchObject({
+        executionId: expect.any(String),
         operationId: 'op-123',
-        rubricScores: [],
       });
 
       // Verify execAgent was called with correct params
@@ -250,7 +281,13 @@ describe('AgentEvalRunService', () => {
               id: 'eval-trajectory-complete',
               type: 'onComplete',
               webhook: {
-                body: { runId: run.id, testCaseId: testCase.id, userId },
+                body: {
+                  executionId: runTopic?.evalResult?.executionId,
+                  runId: run.id,
+                  testCaseId: testCase.id,
+                  topicId: result.topicId,
+                  userId,
+                },
                 delivery: 'qstash',
                 url: '/api/workflows/agent-eval-run/on-trajectory-complete',
               },
@@ -304,7 +341,16 @@ describe('AgentEvalRunService', () => {
 
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({
-          evalRuntime: { toolForwarding: environment.toolForwarding },
+          evalRuntime: {
+            attemptId: expect.any(String),
+            // Every attempt runs on its own isolated Memory scope.
+            memory: {
+              fixtureHash: expect.any(String),
+              runId: expect.any(String),
+              topicId: expect.any(String),
+            },
+            toolForwarding: environment.toolForwarding,
+          },
         }),
       );
     });
@@ -327,7 +373,18 @@ describe('AgentEvalRunService', () => {
       });
 
       expect(mockExecAgent).toHaveBeenCalledWith(
-        expect.objectContaining({ evalRuntime: { caseId: 'case-42' } }),
+        expect.objectContaining({
+          appContext: expect.objectContaining({ suppressSignal: true }),
+          evalRuntime: {
+            attemptId: expect.any(String),
+            caseId: 'case-42',
+            memory: {
+              fixtureHash: expect.any(String),
+              runId: expect.any(String),
+              topicId: expect.any(String),
+            },
+          },
+        }),
       );
     });
 

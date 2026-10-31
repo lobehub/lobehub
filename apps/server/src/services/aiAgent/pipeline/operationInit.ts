@@ -218,6 +218,8 @@ export const runOperationInit = async (
         disabledPluginIds: ctx.disabledPluginIds,
         discovery,
         ephemeralUserMessage: request.ephemeralUserMessage,
+        evalAllowedTools: request.evalAllowedTools,
+        evalMemory: request.evalMemory,
         globalMemoryEnabled: request.globalMemoryEnabled,
         hasMentionedAgents: request.hasMentionedAgents,
         loadHistoryMessages: deps.loadHistoryMessages,

@@ -30,6 +30,7 @@ import { memo, useCallback, useMemo } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
+import { isLobeBenchKind } from '@/store/eval/kinds';
 
 const SYSTEM_ICONS = [
   LoaderPinwheel,
@@ -82,7 +83,12 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!benchmarkList || benchmarkList.length === 0) return [];
 
-    return benchmarkList.map((b: any) => ({
+    // The switcher stays on one side: a Lobe Bench benchmark offers the other
+    // Lobe Bench benchmarks, an Evaluation Lab benchmark the Evaluation Lab's.
+    const onLobeBench = isLobeBenchKind(benchmarkList.find((b: any) => b.id === id) ?? benchmark);
+    const sameSide = benchmarkList.filter((b: any) => isLobeBenchKind(b) === onLobeBench);
+
+    return sameSide.map((b: any) => ({
       icon: (
         <Center className={styles.menuIcon} style={{ minWidth: 16 }} width={16}>
           {(() => {
@@ -96,7 +102,7 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
       onClick: () => handleBenchmarkSwitch(b.id),
       style: b.id === id ? { backgroundColor: cssVar.controlItemBgActive } : {},
     }));
-  }, [benchmarkList, handleBenchmarkSwitch, id, styles.menuIcon]);
+  }, [benchmark, benchmarkList, handleBenchmarkSwitch, id, styles.menuIcon]);
 
   return (
     <Block

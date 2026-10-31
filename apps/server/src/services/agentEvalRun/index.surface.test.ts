@@ -40,6 +40,7 @@ describe('agent eval run service public surface', () => {
       'loadTrajectoryData',
       'recordThreadCompletion',
       'recordTrajectoryCompletion',
+      'rerunUnverifiedCases',
       'resumeTrajectory',
       'retryErrorCases',
       'retrySingleCase',

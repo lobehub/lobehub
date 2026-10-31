@@ -9,6 +9,7 @@ import {
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { activeEvalTestCases } from './testCase';
 
 export class AgentEvalBenchmarkModel {
   private userId: string;
@@ -100,9 +101,12 @@ export class AgentEvalBenchmarkModel {
       .from(agentEvalTestCases)
       .innerJoin(agentEvalDatasets, eq(agentEvalTestCases.datasetId, agentEvalDatasets.id))
       .where(
-        buildWorkspaceWhere(
-          { userId: this.userId, workspaceId: this.workspaceId },
-          agentEvalDatasets,
+        and(
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            agentEvalDatasets,
+          ),
+          activeEvalTestCases(),
         ),
       )
       .groupBy(agentEvalDatasets.benchmarkId)

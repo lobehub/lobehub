@@ -11,6 +11,7 @@ import { type ToolType } from '@lobechat/observability-otel/modules/agent-runtim
 import {
   type ChatToolPayload,
   type LobeAgentConfig,
+  RequestTrigger,
   type WorkAccessScope,
   type WorkRegistrationIntent,
 } from '@lobechat/types';
@@ -266,6 +267,16 @@ export const buildServerVirtualSubAgentRunner = (
   // `callAgent` target only takes it as its `local` device, keeping its own
   // execution target.
   const parentDeviceId = resolveRunActiveDeviceId(state);
+  // A child forked inside an eval attempt stays inside that attempt's sandbox:
+  // same session clock, same tool forwarding and Memory scope, same step cap.
+  const parentEval =
+    state.origin?.trigger === RequestTrigger.Eval
+      ? {
+          ...(state.world?.eval && { context: state.world.eval }),
+          ...(state.maxSteps && { maxSteps: state.maxSteps }),
+          ...(state.plan?.eval && { runtime: state.plan.eval }),
+        }
+      : undefined;
 
   return {
     run: async ({
@@ -338,6 +349,7 @@ export const buildServerVirtualSubAgentRunner = (
         background,
         chatConfig: subAgentChatConfig,
         deviceId: targetAgentId ? undefined : parentDeviceId,
+        ...(parentEval && { eval: parentEval }),
         groupId: state.origin?.groupId ?? undefined,
         instruction,
         localDeviceId: parentDeviceId,

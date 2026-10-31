@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { AgentEvalRunModel, AgentEvalTestCaseModel } from '@/database/models/agentEval';
 import { getServerDB } from '@/database/server';
+import { selectCases } from '@/server/services/agentEvalRun/caseSelection';
 import { AgentEvalRunWorkflow, type RunBenchmarkPayload } from '@/server/workflows/agentEvalRun';
 import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 import { runStep } from '@/server/workflows/step';
@@ -43,10 +44,13 @@ export const runBenchmarkHandler = async (context: WorkflowContext<RunBenchmarkP
     return { error: 'Run is already running', success: false };
   }
 
-  // Get all test cases
+  // The run's cases: the dataset narrowed by `config.caseSelection`, the same
+  // rule createRun pre-created the run's topics with. Counting the whole
+  // dataset here would set a `totalCases` a partial run can never reach, so
+  // it would stay `running` after its last case finished.
   const testCaseModel = new AgentEvalTestCaseModel(db, userId, wsId);
-  const allTestCases = await runStep(context, 'agent-eval-run:get-test-cases', () =>
-    testCaseModel.findByDatasetId(run.datasetId),
+  const allTestCases = await runStep(context, 'agent-eval-run:get-test-cases', async () =>
+    selectCases(await testCaseModel.findByDatasetId(run.datasetId), run.config?.caseSelection),
   );
 
   const allTestCaseIds = allTestCases.map((tc: { id: string }) => tc.id);

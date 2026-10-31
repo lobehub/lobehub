@@ -3,6 +3,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import {
   AgentEvalBenchmarkModel,
   AgentEvalDatasetModel,
+  AgentEvalEnvironmentModel,
   AgentEvalExperimentModel,
   AgentEvalRunModel,
   AgentEvalRunTopicModel,
@@ -29,6 +30,7 @@ export const createEvalRunDeps = (
   const runModel = new AgentEvalRunModel(db, userId, workspaceId);
   const benchmarkModel = new AgentEvalBenchmarkModel(db, userId, workspaceId);
   const datasetModel = new AgentEvalDatasetModel(db, userId, workspaceId);
+  const environmentModel = new AgentEvalEnvironmentModel(db, userId, workspaceId);
   const experimentModel = new AgentEvalExperimentModel(db, userId, workspaceId);
   const runTopicModel = new AgentEvalRunTopicModel(db, userId, workspaceId);
   const testCaseModel = new AgentEvalTestCaseModel(db, userId, workspaceId);
@@ -42,6 +44,7 @@ export const createEvalRunDeps = (
     benchmarkModel,
     datasetModel,
     db,
+    environmentModel,
     experimentModel,
     messageModel,
     runModel,

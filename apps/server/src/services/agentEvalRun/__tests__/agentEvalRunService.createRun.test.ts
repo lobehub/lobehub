@@ -92,7 +92,42 @@ describe('AgentEvalRunService', () => {
       }
     });
 
-    it('should store caseSelection without changing internal topic pre-creation', async () => {
+    it('records the version of the cases the run is made on, and a retry still matches', async () => {
+      const benchmark = await new AgentEvalBenchmarkModel(serverDB, userId).create({
+        identifier: 'versioned-benchmark',
+        isSystem: false,
+        name: 'Versioned Benchmark',
+        rubrics: [],
+      });
+      const [dataset] = await serverDB
+        .insert(agentEvalDatasets)
+        .values({
+          benchmarkId: benchmark.id,
+          identifier: 'versioned-dataset',
+          metadata: { presentation: 'realism-v3', release: '2026-10-30-realism-v4' },
+          name: 'Versioned Dataset',
+          userId,
+        })
+        .returning();
+      await serverDB.insert(agentEvalTestCases).values({
+        content: { expected: '42', input: 'Question' },
+        datasetId: dataset.id,
+        sortOrder: 1,
+        userId,
+      });
+
+      const service = new AgentEvalRunService(serverDB, userId);
+      const params = { config: { k: 1 }, datasetId: dataset.id, id: 'run_versioned01' };
+      const run = await service.createRun(params);
+      expect((run.config as { caseVersion?: string }).caseVersion).toBe(
+        '2026-10-30-realism-v4+realism-v3',
+      );
+      // The version is captured server-side, so the same create sent again is the same run.
+      const again = await service.createRun(params);
+      expect(again.id).toBe(run.id);
+    });
+
+    it('pre-creates topics only for the cases the caseSelection keeps', async () => {
       const benchmarkModel = new AgentEvalBenchmarkModel(serverDB, userId);
       const benchmark = await benchmarkModel.create({
         identifier: 'test-benchmark',
@@ -128,9 +163,28 @@ describe('AgentEvalRunService', () => {
       // Stored verbatim
       expect((run.config as any).caseSelection).toEqual(caseSelection);
 
-      // Storage-only scope: internal pre-creation is unaffected (all cases)
+      // Only the selected case gets a topic; the other case is not part of this run.
       const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
-      expect(await runTopicModel.findByRunId(run.id)).toHaveLength(2);
+      const runTopics = await runTopicModel.findByRunId(run.id);
+      expect(runTopics).toHaveLength(1);
+      const [selected] = await serverDB
+        .select()
+        .from(agentEvalTestCases)
+        .where(eq(agentEvalTestCases.id, runTopics[0].testCaseId));
+      expect(selected.metadata).toEqual({ caseId: 'case_1' });
+
+      // Excluding works the same way, and an unknown id is refused instead of skipped.
+      const excluded = await service.createRun({
+        config: { caseSelection: { caseIds: ['case_1'], mode: 'exclude' } },
+        datasetId: dataset.id,
+      });
+      expect(await runTopicModel.findByRunId(excluded.id)).toHaveLength(1);
+      await expect(
+        service.createRun({
+          config: { caseSelection: { caseIds: ['case_9'], mode: 'include' } },
+          datasetId: dataset.id,
+        }),
+      ).rejects.toThrow('not in the dataset');
     });
 
     it('should restore case messages and use their tail as the eval-thread source', async () => {

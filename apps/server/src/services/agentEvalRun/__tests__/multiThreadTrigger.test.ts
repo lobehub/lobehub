@@ -16,9 +16,12 @@ const createDeps = () => {
   return {
     runTopicModel: {
       findByRunAndTestCase: vi.fn().mockResolvedValue({ evalResult: null, topicId: 'topic-1' }),
-      updateByRunAndTopic: vi.fn().mockResolvedValue(undefined),
+      updateByRunAndTopic: vi.fn().mockResolvedValue({}),
     },
-    threadModel: { create: vi.fn().mockImplementation(async () => ({ id: `thread-${next++}` })) },
+    threadModel: {
+      create: vi.fn().mockImplementation(async () => ({ id: `thread-${next++}` })),
+      findById: vi.fn().mockResolvedValue({ metadata: { executionId: 'queued-generation' } }),
+    },
     topicModel: { findById: vi.fn().mockResolvedValue({ metadata: {} }) },
     userId: 'user-1',
   };

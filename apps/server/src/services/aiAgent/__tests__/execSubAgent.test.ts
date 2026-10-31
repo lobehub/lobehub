@@ -336,6 +336,36 @@ describe('AiAgentService.execSubAgent', () => {
       );
     });
 
+    it('keeps a callSubAgent child inside its eval attempt', async () => {
+      const execAgentSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({ operationId: 'op-child', success: true } as any);
+      const context = { sessionDate: '2026-07-24', timezone: 'America/New_York' };
+      const runtime = {
+        caseId: 'case-7',
+        memory: { fixtureHash: 'hash', scopeId: 'scope-1' },
+        toolForwarding: { twitter: { endpoint: 'http://mock/twitter' } },
+      };
+
+      await service.execVirtualSubAgent({
+        agentId: 'agent-1',
+        eval: { context, maxSteps: 20, runtime },
+        instruction: 'collect the posts',
+        parentMessageId: 'tool-msg-1',
+        parentOperationId: 'parent-op-1',
+        topicId: 'topic-1',
+      } as any);
+
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({ suppressSignal: true }),
+          evalContext: context,
+          evalRuntime: runtime,
+          maxSteps: 20,
+        }),
+      );
+    });
+
     it('should store operationId and startedAt in Thread metadata', async () => {
       vi.spyOn(service, 'execAgent').mockResolvedValue({
         agentId: 'agent-1',

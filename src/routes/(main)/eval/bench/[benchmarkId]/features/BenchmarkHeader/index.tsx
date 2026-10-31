@@ -2,29 +2,14 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
-import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, createStaticStyles, cssVar, Text } from '@lobehub/ui';
-import {
-  CircleDollarSign,
-  Clock,
-  Edit,
-  EllipsisVertical,
-  Layers,
-  Server,
-  Trash2,
-  Trophy,
-  User,
-} from 'lucide-react';
-import { type LucideIcon } from 'lucide-react';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { CircleDollarSign, Clock, Layers, type LucideIcon, Trophy } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useEvalStore } from '@/store/eval';
-
-import { createBenchmarkEditModal } from '../../../../features/BenchmarkEditModal';
 import Sparkline from '../../../../features/Sparkline';
 import { formatDuration, formatDurationMinutes } from '../../../../utils';
+import BenchmarkTitleBar from './TitleBar';
 
 const RANK_COLORS = [cssVar.colorPrimary, cssVar.colorSuccess, cssVar.colorTextQuaternary];
 
@@ -40,22 +25,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 600;
     line-height: 1;
     color: ${cssVar.colorText};
-  `,
-  description: css`
-    margin: 0;
-    margin-block-start: 2px;
-    font-size: ${cssVar.fontSize};
-    color: ${cssVar.colorTextTertiary};
-  `,
-  iconBox: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadiusLG};
   `,
   statCard: css`
     flex: 1;
@@ -79,12 +48,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 600;
     color: ${cssVar.colorTextSecondary};
   `,
-  title: css`
-    margin: 0;
-    font-size: ${cssVar.fontSizeHeading3};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
 }));
 
 interface BenchmarkHeaderProps {
@@ -94,53 +57,14 @@ interface BenchmarkHeaderProps {
   onBenchmarkUpdate?: (benchmark: any) => void;
   runCount: number;
   systemIcon?: LucideIcon;
+  /** Label of the top-performers card; defaults to "Top Agents". */
+  topLabel?: string;
   totalCases: number;
 }
 
 const BenchmarkHeader = memo<BenchmarkHeaderProps>(
-  ({
-    benchmark,
-    completedRuns,
-    datasets,
-    onBenchmarkUpdate,
-    runCount,
-    systemIcon = Server,
-    totalCases,
-  }) => {
+  ({ benchmark, completedRuns, datasets, onBenchmarkUpdate, systemIcon, topLabel, totalCases }) => {
     const { t } = useTranslation('eval');
-    const navigate = useWorkspaceAwareNavigate();
-    const deleteBenchmark = useEvalStore((s) => s.deleteBenchmark);
-    const refreshBenchmarkDetail = useEvalStore((s) => s.refreshBenchmarkDetail);
-
-    const handleEditSuccess = async () => {
-      await refreshBenchmarkDetail(benchmark.id);
-      onBenchmarkUpdate?.(benchmark);
-    };
-
-    const handleEdit = () => createBenchmarkEditModal({ benchmark, onSuccess: handleEditSuccess });
-
-    const handleDelete = () => {
-      confirmModal({
-        content: t('benchmark.actions.delete.confirm'),
-        okButtonProps: { danger: true },
-        okText: t('benchmark.actions.delete'),
-        onOk: async () => {
-          await deleteBenchmark(benchmark.id);
-          navigate('/eval');
-        },
-        title: t('benchmark.actions.delete'),
-      });
-    };
-
-    const menuItems: DropdownItem[] = [
-      {
-        danger: true,
-        icon: <Trash2 size={16} />,
-        key: 'delete',
-        label: t('common.delete'),
-        onClick: handleDelete,
-      },
-    ];
 
     // === Stats Computations ===
 
@@ -216,42 +140,11 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
     return (
       <>
         {/* Header */}
-        <Flexbox gap={16}>
-          <Flexbox horizontal align="start" justify="space-between">
-            <Flexbox horizontal align="start" gap={12}>
-              <div
-                className={styles.iconBox}
-                style={{
-                  background:
-                    benchmark.source === 'user' ? cssVar.colorSuccessBg : cssVar.colorPrimaryBg,
-                }}
-              >
-                <Icon
-                  icon={benchmark.source === 'user' ? User : systemIcon}
-                  size={20}
-                  style={{
-                    color: benchmark.source === 'user' ? cssVar.colorSuccess : cssVar.colorPrimary,
-                  }}
-                />
-              </div>
-              <Flexbox gap={4}>
-                <h1 className={styles.title}>{benchmark.name}</h1>
-                {benchmark.description && (
-                  <p className={styles.description}>{benchmark.description}</p>
-                )}
-              </Flexbox>
-            </Flexbox>
-
-            <Flexbox horizontal gap={8}>
-              <Button icon={Edit} size="small" onClick={handleEdit}>
-                {t('common.edit')}
-              </Button>
-              <DropdownMenu items={menuItems} placement="bottomRight">
-                <Button icon={EllipsisVertical} size="small" />
-              </DropdownMenu>
-            </Flexbox>
-          </Flexbox>
-        </Flexbox>
+        <BenchmarkTitleBar
+          benchmark={benchmark}
+          systemIcon={systemIcon}
+          onBenchmarkUpdate={onBenchmarkUpdate}
+        />
 
         {/* Results hero — headline best pass rate + trend across completed runs.
             Always rendered (shows a muted dash before the first completed run) so
@@ -288,7 +181,9 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorWarningBg }}>
                   <Trophy size={16} style={{ color: cssVar.colorWarning }} />
                 </div>
-                <span className={styles.statLabel}>{t('benchmark.detail.stats.topAgents')}</span>
+                <span className={styles.statLabel}>
+                  {topLabel ?? t('benchmark.detail.stats.topAgents')}
+                </span>
               </Flexbox>
 
               {!hasDatasets && !hasCompletedRuns && (

@@ -4,7 +4,7 @@ import type { EvalThreadResult } from '@lobechat/types';
 import { cssVar, Flexbox, Tabs } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
@@ -25,6 +25,10 @@ const CaseDetail = memo(() => {
   }>();
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
+  // Opened from a Lobe Bench experiment: "back" returns there and prev/next keep the context.
+  const [searchParams] = useSearchParams();
+  const experimentId = searchParams.get('experiment');
+  const suffix = experimentId ? `?experiment=${experimentId}` : '';
   const useFetchRunDetail = useEvalStore((s) => s.useFetchRunDetail);
   const useFetchRunResults = useEvalStore((s) => s.useFetchRunResults);
   const isActive = useEvalStore(runSelectors.isRunActive(runId!));
@@ -108,10 +112,20 @@ const CaseDetail = memo(() => {
           <CaseHeader
             caseNumber={(caseResult.testCase?.sortOrder ?? 0) + 1}
             evalResult={displayEvalResult}
-            runName={runDetail?.name || runId!.slice(0, 8)}
-            onBack={() => navigate(`/eval/bench/${benchmarkId}/runs/${runId}`)}
-            onNext={nextCaseId ? () => navigate(`${basePath}/${nextCaseId}`) : undefined}
-            onPrev={prevCaseId ? () => navigate(`${basePath}/${prevCaseId}`) : undefined}
+            runName={
+              experimentId
+                ? t('lobeBench.attempt.backToExperiment')
+                : runDetail?.name || runId!.slice(0, 8)
+            }
+            onNext={nextCaseId ? () => navigate(`${basePath}/${nextCaseId}${suffix}`) : undefined}
+            onPrev={prevCaseId ? () => navigate(`${basePath}/${prevCaseId}${suffix}`) : undefined}
+            onBack={() =>
+              navigate(
+                experimentId
+                  ? `/eval/lobe-bench/experiments/${experimentId}`
+                  : `/eval/bench/${benchmarkId}/runs/${runId}`,
+              )
+            }
           />
           {hasMultipleThreads && (
             <Flexbox
@@ -132,6 +146,7 @@ const CaseDetail = memo(() => {
             {topicId && agentId ? (
               <ChatArea
                 agentId={agentId}
+                reloadKey={caseResult.status}
                 threadId={activeThreadId ?? undefined}
                 topicId={topicId}
               />
@@ -140,8 +155,10 @@ const CaseDetail = memo(() => {
             )}
             <InfoSidebar
               evalResult={displayEvalResult}
+              experimentId={experimentId ?? undefined}
               passed={displayPassed}
               score={displayScore}
+              status={currentThread ? currentThread.status : caseResult.status}
               testCase={caseResult.testCase}
             />
           </Flexbox>

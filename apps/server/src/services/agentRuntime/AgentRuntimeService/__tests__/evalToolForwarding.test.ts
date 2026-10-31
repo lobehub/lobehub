@@ -128,6 +128,65 @@ describe('AgentRuntimeService', () => {
     beforeEach(() => {
       event.mock.mockReset();
       mockSsrfSafeFetch.mockReset();
+      // The tests' endpoints live on the server's trusted mock.
+      vi.stubEnv('EVAL_TOOL_MOCK_BASE_URL', 'https://mock.test');
+    });
+
+    it('refuses an endpoint off the trusted mock: no request, no token, a failed tool result', async () => {
+      vi.stubEnv('EVAL_TOOL_FORWARDING_TOKEN', 'secret-token');
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://evil.test/tool-calls' },
+      });
+
+      await hook.handler!(event as any);
+
+      expect(mockSsrfSafeFetch).not.toHaveBeenCalled();
+      expect(event.mock).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, content: expect.stringContaining('refused') }),
+      );
+    });
+
+    it('refuses every endpoint when the server has no trusted mock configured', async () => {
+      vi.stubEnv('EVAL_TOOL_MOCK_BASE_URL', '');
+      vi.stubEnv('EVAL_TOOL_FORWARDING_TOKEN', 'secret-token');
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler!(event as any);
+
+      expect(mockSsrfSafeFetch).not.toHaveBeenCalled();
+      expect(event.mock).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    });
+
+    it('refuses a same-host endpoint outside the trusted path prefix', async () => {
+      vi.stubEnv('EVAL_TOOL_MOCK_BASE_URL', 'https://mock.test/bench');
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler!(event as any);
+
+      expect(mockSsrfSafeFetch).not.toHaveBeenCalled();
+      expect(event.mock).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    });
+
+    it('never follows a redirect, so the token cannot leave the trusted mock', async () => {
+      vi.stubEnv('EVAL_TOOL_FORWARDING_TOKEN', 'secret-token');
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(null, { headers: { location: 'https://evil.test/' }, status: 302 }),
+      );
+      const hook = createEvalToolForwardingHook({
+        twitter: { endpoint: 'https://mock.test/tool-calls' },
+      });
+
+      await hook.handler!(event as any);
+
+      expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(1);
+      expect(mockSsrfSafeFetch.mock.calls[0][1]).toMatchObject({ redirect: 'manual' });
+      expect(event.mock).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, content: expect.stringContaining('redirect') }),
+      );
     });
 
     it('forwards the beforeToolCall payload and preserves the returned tool result', async () => {
@@ -171,6 +230,46 @@ describe('AgentRuntimeService', () => {
       expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toMatchObject({
         metadata: { caseId: 'case-42' },
       });
+    });
+
+    it('includes the attempt id so a mock can keep one session per attempt', async () => {
+      const result = { content: 'fixture result', success: true };
+      mockSsrfSafeFetch.mockResolvedValue(
+        new Response(JSON.stringify({ data: result, success: true })),
+      );
+      const hook = createEvalToolForwardingHook(
+        { twitter: { endpoint: 'https://mock.test/tool-calls' } },
+        'case-42',
+        'run_1_tpc_1',
+      );
+
+      await hook.handler!(event as any);
+
+      expect(JSON.parse(mockSsrfSafeFetch.mock.calls[0][1].body)).toMatchObject({
+        metadata: { attemptId: 'run_1_tpc_1', caseId: 'case-42', operationId: 'op-forwarding' },
+      });
+    });
+
+    it('authenticates to the mock with the server-side forwarding token when one is set', async () => {
+      const previous = process.env.EVAL_TOOL_FORWARDING_TOKEN;
+      process.env.EVAL_TOOL_FORWARDING_TOKEN = 'secret-token';
+      try {
+        mockSsrfSafeFetch.mockResolvedValue(
+          new Response(JSON.stringify({ data: { content: 'ok', success: true }, success: true })),
+        );
+        const hook = createEvalToolForwardingHook({
+          twitter: { endpoint: 'https://mock.test/tool-calls' },
+        });
+
+        await hook.handler!(event as any);
+
+        expect(mockSsrfSafeFetch.mock.calls[0][1].headers).toMatchObject({
+          Authorization: 'Bearer secret-token',
+        });
+      } finally {
+        if (previous === undefined) delete process.env.EVAL_TOOL_FORWARDING_TOKEN;
+        else process.env.EVAL_TOOL_FORWARDING_TOKEN = previous;
+      }
     });
 
     it('mocks a failed result without executing the real tool', async () => {

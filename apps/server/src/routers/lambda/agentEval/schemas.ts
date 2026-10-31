@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { evalMemoryFixtureSchema } from '@/server/services/agentEvalRun/evalMemory.schema';
+
 export const rubricTypeSchema = z.enum([
   'equals',
   'contains',
@@ -13,6 +15,7 @@ export const rubricTypeSchema = z.enum([
   'javascript',
   'python',
   'llm-rubric',
+  'rule-checklist',
   'factuality',
   'answer-relevance',
   'similar',
@@ -23,18 +26,44 @@ export const rubricTypeSchema = z.enum([
 
 export const evalConfigSchema = z.object({ judgePrompt: z.string().optional() }).passthrough();
 
+export const evalCaseAgentConfigSchema = z
+  .object({
+    memory: z
+      .object({
+        effort: z.enum(['low', 'medium', 'high']).optional(),
+        enabled: z.boolean().optional(),
+        toolPermission: z.enum(['read-only', 'read-write']).optional(),
+      })
+      .strict()
+      .optional(),
+    name: z.string().trim().min(1).max(200).optional(),
+    plugins: z.array(z.string().trim().min(1)).optional(),
+    systemRole: z.string().optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+
 export const evalCaseEnvironmentSchema = z
   .object({
+    agent: evalCaseAgentConfigSchema.optional(),
     envPrompt: z.string().optional(),
+    memory: evalMemoryFixtureSchema.optional(),
+    mock: z
+      .object({ services: z.array(z.string().trim().min(1)).min(1) })
+      .strict()
+      .optional(),
+    sessionDate: z
+      .string()
+      .refine((value) => !Number.isNaN(Date.parse(value)), 'sessionDate must be an ISO date')
+      .optional(),
+    timezone: z.string().trim().min(1).optional(),
+    // Which connectors are forwarded and with what timeout. Where they are
+    // forwarded to is the server's trusted mock (EVAL_TOOL_MOCK_BASE_URL); an
+    // `endpoint` supplied here is rejected rather than trusted.
     toolForwarding: z
       .record(
         z.string().trim().min(1),
-        z
-          .object({
-            endpoint: z.string().url(),
-            timeoutMs: z.number().int().positive().optional(),
-          })
-          .strict(),
+        z.object({ timeoutMs: z.number().int().positive().optional() }).strict(),
       )
       .optional(),
   })

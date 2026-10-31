@@ -1,5 +1,6 @@
 import type { EvalBenchmarkRubric, RubricConfigLLM } from '@lobechat/types';
 
+import { judgeErrorResult } from './judgeError';
 import type { MatchContext, MatchResult } from './types';
 
 const DEFAULT_SYSTEM_ROLE = [
@@ -51,14 +52,14 @@ export const matchLLMEq = async (
   context?: MatchContext,
 ): Promise<MatchResult> => {
   if (!context?.generateObject) {
-    return { passed: false, reason: 'LLM judge not available', score: 0 };
+    return judgeErrorResult('LLM judge not available');
   }
 
-  const cfg = rubric.config as RubricConfigLLM;
+  const cfg = (rubric.config ?? {}) as RubricConfigLLM;
   const model = cfg.model || context.judgeModel;
 
-  if (!model) {
-    return { passed: false, reason: 'No judge model configured', score: 0 };
+  if (typeof model !== 'string' || !model.trim()) {
+    return judgeErrorResult('No judge model configured');
   }
 
   try {
@@ -72,7 +73,10 @@ export const matchLLMEq = async (
       schema: JUDGE_SCORE_SCHEMA,
     });
 
-    const score = result?.score === 1 ? 1 : 0;
+    if ((result?.score !== 0 && result?.score !== 1) || typeof result?.reason !== 'string') {
+      return judgeErrorResult('LLM judge did not return a valid binary score and reason');
+    }
+    const score = result.score;
 
     return {
       passed: score === 1,
@@ -80,10 +84,8 @@ export const matchLLMEq = async (
       score,
     };
   } catch (error) {
-    return {
-      passed: false,
-      reason: `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
-      score: 0,
-    };
+    return judgeErrorResult(
+      `LLM judge failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 };

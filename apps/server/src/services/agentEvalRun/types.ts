@@ -3,6 +3,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   AgentEvalBenchmarkModel,
   AgentEvalDatasetModel,
+  AgentEvalEnvironmentModel,
   AgentEvalExperimentModel,
   AgentEvalRunModel,
   AgentEvalRunTopicModel,
@@ -23,6 +24,7 @@ export interface EvalRunDeps {
   benchmarkModel: AgentEvalBenchmarkModel;
   datasetModel: AgentEvalDatasetModel;
   db: LobeChatDatabase;
+  environmentModel: AgentEvalEnvironmentModel;
   experimentModel: AgentEvalExperimentModel;
   messageModel: MessageModel;
   runModel: AgentEvalRunModel;

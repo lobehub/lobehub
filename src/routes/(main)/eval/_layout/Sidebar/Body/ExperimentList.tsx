@@ -17,7 +17,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useEvalStore } from '@/store/eval';
+import { experimentSelectors, useEvalStore } from '@/store/eval';
 import { isModifierClick } from '@/utils/navigation';
 
 interface ExperimentListProps {
@@ -29,7 +29,7 @@ const ExperimentList = memo<ExperimentListProps>(({ activeKey, itemKey }) => {
   const { t } = useTranslation('eval');
   const { t: tCommon } = useTranslation('common');
   const navigate = useWorkspaceAwareNavigate();
-  const experimentList = useEvalStore((s) => s.experimentList);
+  const experimentList = useEvalStore(experimentSelectors.agentExperimentList);
   const isInit = useEvalStore((s) => s.experimentListInit);
   const useFetchExperiments = useEvalStore((s) => s.useFetchExperiments);
   const { error, mutate } = useFetchExperiments();

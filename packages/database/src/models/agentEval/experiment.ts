@@ -18,6 +18,7 @@ import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { AgentEvalDatasetModel } from './dataset';
 import { AgentEvalRunModel } from './run';
+import { hasUnverifiedEvalAttempts } from './runEvidence';
 
 const RECENT_RUNS_PER_EXPERIMENT = 5;
 
@@ -317,6 +318,7 @@ export class AgentEvalExperimentModel {
       const rankedRuns = this.db
         .select({
           ...getTableColumns(agentEvalRuns),
+          hasUnverifiedAttempts: hasUnverifiedEvalAttempts().as('has_unverified_attempts'),
           rn: sql<number>`row_number() over (partition by ${agentEvalRuns.experimentId} order by ${agentEvalRuns.createdAt} desc)`.as(
             'rn',
           ),

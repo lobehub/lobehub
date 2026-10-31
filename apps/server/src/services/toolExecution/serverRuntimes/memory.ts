@@ -46,6 +46,7 @@ import {
   initModelRuntimeFromDB,
   initModelRuntimeWithUserPayload,
 } from '@/server/modules/ModelRuntime';
+import { AgentEvalMemoryService } from '@/server/services/agentEvalMemory';
 import {
   emitToolOutcomeSafely,
   resolveToolOutcomeScope,
@@ -110,7 +111,7 @@ const createEmbedder = (
   };
 };
 
-class MemoryServerRuntimeService implements MemoryRuntimeService {
+export class MemoryServerRuntimeService implements MemoryRuntimeService {
   private agentId?: string;
   private emitOutcome?: typeof emitToolOutcomeSafely;
   private messageId?: string;
@@ -172,6 +173,8 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     summary: string;
     toolAction: string;
   }) => {
+    // Eval trials and fixture seeding run without an outcome emitter.
+    if (!this.emitOutcome) return;
     const { scope, scopeKey } = resolveToolOutcomeScope({
       agentId: this.agentId,
       taskId: this.taskId,
@@ -848,7 +851,27 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       throw new Error('userId is required for Memory execution');
     }
 
-    // Resolve memoryEffort from user settings
+    // An eval attempt reads and writes only its own Memory entries. An attempt
+    // without a reference must fail rather than fall back to the caller's
+    // memories, and the reference is checked against this exact topic / thread.
+    if (context.isEval && !context.evalMemory) {
+      throw new Error('Eval Memory requires an initialized attempt reference');
+    }
+    if (context.evalMemory) {
+      const service = new AgentEvalMemoryService(
+        context.serverDB,
+        context.userId,
+        context.workspaceId,
+      ).runtime({
+        context,
+        // An eval attempt uses its Agent's effort setting.
+        memoryEffort: normalizeMemoryEffort(context.memoryEffort),
+        memoryEmbeddingRuntime: context.memoryEmbeddingRuntime,
+        reference: context.evalMemory,
+      });
+      return new MemoryExecutionRuntime({ service, toolPermission: context.memoryToolPermission });
+    }
+
     let memoryEffort: MemoryEffort = 'medium';
     try {
       const userSettingsRow = await context.serverDB.query.userSettings.findFirst({

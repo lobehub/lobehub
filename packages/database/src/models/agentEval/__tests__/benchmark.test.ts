@@ -257,7 +257,7 @@ describe('AgentEvalBenchmarkModel', () => {
       expect(result.datasetCount).toBe(2);
     });
 
-    it('should return testCaseCount for benchmarks with test cases', async () => {
+    it('should count active test cases without retired historical rows', async () => {
       const benchmarks = await serverDB.query.agentEvalBenchmarks.findMany();
       const userBenchmark = benchmarks.find((b) => b.identifier === 'user-1')!;
 
@@ -272,11 +272,18 @@ describe('AgentEvalBenchmarkModel', () => {
         })
         .returning();
 
-      // Add 3 test cases to the dataset
+      // Three runnable cases and one retired row kept for historical results.
       await serverDB.insert(agentEvalTestCases).values([
         { datasetId: dataset.id, content: { input: 'test' }, sortOrder: 1, userId },
         { datasetId: dataset.id, content: { input: 'test' }, sortOrder: 2, userId },
         { datasetId: dataset.id, content: { input: 'test' }, sortOrder: 3, userId },
+        {
+          datasetId: dataset.id,
+          content: { input: 'retired' },
+          metadata: { retired: true },
+          sortOrder: 4,
+          userId,
+        },
       ]);
 
       const results = await benchmarkModel.query(true);

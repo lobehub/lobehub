@@ -35,9 +35,11 @@ export const onTrajectoryComplete = async (c: Context) => {
       duration,
       errorDetail,
       errorMessage,
+      executionId,
       llmCalls,
       steps,
       toolCalls,
+      topicId,
       totalTokens,
     } = body;
 
@@ -72,6 +74,7 @@ export const onTrajectoryComplete = async (c: Context) => {
     const service = new AgentEvalRunService(db, userId, wsId);
 
     const { allDone, completedCount } = await service.recordTrajectoryCompletion({
+      executionId,
       runId,
       status,
       telemetry: {
@@ -86,6 +89,7 @@ export const onTrajectoryComplete = async (c: Context) => {
         totalTokens,
       },
       testCaseId,
+      topicId,
     });
 
     log('Completion check: %d completed, allDone=%s', completedCount, allDone);

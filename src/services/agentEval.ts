@@ -1,4 +1,10 @@
-import type { EvalRunInputConfig, RubricType } from '@lobechat/types';
+import type {
+  EvalCaseEnvironment,
+  EvalConfig,
+  EvalRunInputConfig,
+  EvalTestCaseContent,
+  RubricType,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -15,6 +21,8 @@ class AgentEvalService {
   async createExperiment(params: {
     benchmarkIds: string[];
     description?: string;
+    /** Caller-supplied id: creating again with the same id returns the existing experiment. */
+    id?: string;
     metadata?: Record<string, unknown>;
     name: string;
   }) {
@@ -31,8 +39,9 @@ class AgentEvalService {
     return lambdaClient.agentEval.updateExperiment.mutate(params);
   }
 
-  async deleteExperiment(id: string) {
-    return lambdaClient.agentEval.deleteExperiment.mutate({ id });
+  /** `withRuns` deletes the experiment's runs (results, topics, case Agents) with it. */
+  async deleteExperiment(id: string, options?: { withRuns?: boolean }) {
+    return lambdaClient.agentEval.deleteExperiment.mutate({ id, ...options });
   }
 
   // ============ Benchmark ============
@@ -70,7 +79,48 @@ class AgentEvalService {
     return lambdaClient.agentEval.deleteBenchmark.mutate({ id });
   }
 
+  /** Whether the benchmark's mock tool service answers (and this server holds its token). */
+  async checkBenchmarkMock(id: string) {
+    return lambdaClient.agentEval.checkBenchmarkMock.query({ id });
+  }
+
   // ============ Dataset ============
+  // ============================================
+  // Environments
+  // ============================================
+  async listEnvironments() {
+    return lambdaClient.agentEval.listEnvironments.query();
+  }
+
+  async getEnvironment(id: string) {
+    return lambdaClient.agentEval.getEnvironment.query({ id });
+  }
+
+  async createEnvironment(params: {
+    config: EvalCaseEnvironment;
+    description?: string;
+    identifier?: string;
+    metadata?: Record<string, unknown>;
+    name: string;
+  }) {
+    return lambdaClient.agentEval.createEnvironment.mutate(params);
+  }
+
+  async updateEnvironment(params: {
+    config?: EvalCaseEnvironment;
+    description?: string | null;
+    id: string;
+    identifier?: string | null;
+    metadata?: Record<string, unknown> | null;
+    name?: string;
+  }) {
+    return lambdaClient.agentEval.updateEnvironment.mutate(params);
+  }
+
+  async deleteEnvironment(id: string) {
+    return lambdaClient.agentEval.deleteEnvironment.mutate({ id });
+  }
+
   async listDatasets(benchmarkId: string) {
     return lambdaClient.agentEval.listDatasets.query({ benchmarkId });
   }
@@ -85,6 +135,14 @@ class AgentEvalService {
   }
 
   async createDataset(params: {
+    cases?: Array<{
+      content: EvalTestCaseContent;
+      environmentId?: string | null;
+      evalConfig?: EvalConfig;
+      evalMode?: RubricType;
+      metadata?: Record<string, unknown>;
+      sortOrder?: number;
+    }>;
     benchmarkId: string;
     description?: string;
     evalConfig?: { judgePrompt?: string };
@@ -98,6 +156,8 @@ class AgentEvalService {
   }
 
   async updateDataset(params: {
+    /** Moves the dataset into this benchmark (one the account can see). */
+    benchmarkId?: string;
     description?: string;
     evalConfig?: { judgePrompt?: string } | null;
     evalMode?: RubricType | null;
@@ -139,14 +199,24 @@ class AgentEvalService {
     return lambdaClient.agentEval.getTestCase.query({ id });
   }
 
+  async draftTestCaseFromTopic(params: {
+    benchmarkId?: string;
+    draftRules?: boolean;
+    topicId: string;
+  }) {
+    return lambdaClient.agentEval.draftTestCaseFromTopic.mutate(params);
+  }
+
   async listTestCases(params: { datasetId: string; limit?: number; offset?: number }) {
     return lambdaClient.agentEval.listTestCases.query(params);
   }
 
   async createTestCase(params: {
+    environmentId?: string | null;
     content: {
       category?: string;
       choices?: string[];
+      environment?: EvalCaseEnvironment;
       expected?: string;
       input: string;
       /**
@@ -168,12 +238,36 @@ class AgentEvalService {
     return lambdaClient.agentEval.createTestCase.mutate(params);
   }
 
+  /** Creates several cases at once, each with its own rules and judge (a dataset's copies). */
+  async batchCreateTestCases(params: {
+    cases: Array<{
+      content: { input: string } & Record<string, unknown>;
+      environmentId?: string | null;
+      evalConfig?: Record<string, unknown>;
+      evalMode?: RubricType;
+      metadata?: Record<string, unknown>;
+      sortOrder?: number;
+    }>;
+    datasetId: string;
+  }) {
+    return lambdaClient.agentEval.batchCreateTestCases.mutate(params as never);
+  }
+
   async updateTestCase(params: {
+    environmentId?: string | null;
     id: string;
     content?: {
       category?: string;
+      choices?: string[];
+      environment?: EvalCaseEnvironment;
       expected?: string;
       input?: string;
+      messages?: Array<{
+        content: string;
+        id?: string;
+        parentId?: string;
+        role: 'assistant' | 'system' | 'user';
+      }>;
     };
     evalConfig?: { criteria?: string; judgePrompt?: string } | null;
     evalMode?: RubricType | null;
@@ -204,11 +298,18 @@ class AgentEvalService {
     config?: EvalRunInputConfig;
     datasetId: string;
     experimentId?: string;
+    /** Caller-supplied id: creating again with the same id and parameters returns the existing run. */
+    id?: string;
     name?: string;
     parentRunId?: string;
     targetAgentId?: string;
   }) {
     return lambdaClient.agentEval.createRun.mutate(params);
+  }
+
+  /** Which of these providers this server can call for the current user (key present). */
+  async checkProviders(providers: string[]) {
+    return lambdaClient.agentEval.checkProviders.query({ providers });
   }
 
   async startRun(id: string, force?: boolean) {
@@ -221,6 +322,15 @@ class AgentEvalService {
 
   async retryRunErrors(id: string) {
     return lambdaClient.agentEval.retryRunErrors.mutate({ id });
+  }
+
+  /** Grade a finished run again from its recorded trajectories; nothing is re-run. */
+  async rejudgeRun(id: string) {
+    return lambdaClient.agentEval.rejudgeRun.mutate({ id });
+  }
+
+  async rerunRunUnverified(id: string) {
+    return lambdaClient.agentEval.rerunRunUnverified.mutate({ id });
   }
 
   async retryRunCase(runId: string, testCaseId: string) {

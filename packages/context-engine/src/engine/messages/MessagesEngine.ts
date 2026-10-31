@@ -239,6 +239,8 @@ export class MessagesEngine {
     const hasDateAwareTools =
       toolIds.includes('lobe-web-browsing') || toolIds.includes('lobe-user-memory');
     const isSystemDateEnabled = enableSystemDate !== false && !hasDateAwareTools;
+    // An eval attempt renders "today" from its case clock, never the wall clock.
+    const evalClock = evalContext?.sessionDate ? new Date(evalContext.sessionDate) : undefined;
     const currentUserMessage = [...messages]
       .reverse()
       .find((m) => m.role === 'user' && typeof m.content === 'string')?.content as
@@ -327,7 +329,7 @@ export class MessagesEngine {
         enabled: !!botPlatformContext,
       }),
       // System date
-      new SystemDateProvider({ enabled: isSystemDateEnabled, timezone }),
+      new SystemDateProvider({ enabled: isSystemDateEnabled, now: evalClock, timezone }),
       // Model info (name / id / knowledge cutoff)
       new ModelInfoProvider({
         displayName: modelDisplayName,

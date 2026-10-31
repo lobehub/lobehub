@@ -1,3 +1,4 @@
+import type { EvalMemoryReference } from '../eval/evalMemory';
 import type { ChatAudioItem, ChatFileItem, ChatVideoItem, MessagePluginItem } from '../message';
 import type { RuntimeMentionedAgent } from '../stepContext';
 
@@ -56,6 +57,10 @@ export interface AgentRunInitRequest {
   disableTools?: boolean;
   /** A user turn that is prompted but never persisted (self-iteration runs). */
   ephemeralUserMessage?: string;
+  /** The exact tool surface exposed to an isolated evaluation attempt. */
+  evalAllowedTools?: string[];
+  /** Server-created Memory scope for one evaluation attempt. */
+  evalMemory?: EvalMemoryReference;
   /** When set, the run may use ONLY these tools. */
   exclusivePluginIds?: string[];
   /** The exact messages the caller supplied as history, instead of the topic's. */

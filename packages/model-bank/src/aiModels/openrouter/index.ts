@@ -1,5 +1,11 @@
 import type { AIChatModelCard } from '../../types/aiModel';
 import { openrouterDecisionModels } from './decision';
+import { deepseekV4ChatModels } from './deepseek';
+import { minimaxM3ChatModels } from './minimax';
+import { moonshotK3ChatModels } from './moonshot';
+import { openaiGpt6ChatModels } from './openai';
+import { qwen38ChatModels } from './qwen';
+import { zaiGlm5ChatModels } from './zai';
 
 // https://openrouter.ai/docs/api-reference/list-available-models
 const openrouterChatModels: AIChatModelCard[] = [
@@ -106,128 +112,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     settings: { extendParams: ['disableContextCaching'], searchImpl: 'params' },
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_050_000,
-    description: 'GPT-6 Sol is built for complex coding and agentic workflows.',
-    displayName: 'GPT-6 Sol',
-    enabled: true,
-    family: 'gpt',
-    generation: 'gpt-6',
-    id: 'openai/gpt-6-sol',
-    knowledgeCutoff: '2026-04',
-    maxOutput: 128_000,
-    pricing: {
-      units: [
-        {
-          name: 'textInput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 2, upTo: 272_000 },
-            { rate: 4, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput_cacheRead',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.2, upTo: 272_000 },
-            { rate: 0.4, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput_cacheWrite',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 2.5, upTo: 272_000 },
-            { rate: 5, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textOutput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 10, upTo: 272_000 },
-            { rate: 15, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2026-09-22',
-    settings: { extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'], searchImpl: 'params' },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_050_000,
-    description: 'GPT-6 Luna is OpenAI’s most efficient model for focused, high-volume tasks.',
-    displayName: 'GPT-6 Luna',
-    enabled: true,
-    family: 'gpt',
-    generation: 'gpt-6',
-    id: 'openai/gpt-6-luna',
-    knowledgeCutoff: '2026-05',
-    maxOutput: 128_000,
-    pricing: {
-      units: [
-        {
-          name: 'textInput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.1, upTo: 272_000 },
-            { rate: 0.2, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput_cacheRead',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.01, upTo: 272_000 },
-            { rate: 0.02, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput_cacheWrite',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.125, upTo: 272_000 },
-            { rate: 0.25, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textOutput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.5, upTo: 272_000 },
-            { rate: 0.75, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2026-09-22',
-    settings: { extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'], searchImpl: 'params' },
-    type: 'chat',
-  },
+  ...openaiGpt6ChatModels,
   {
     abilities: {
       functionCall: true,
@@ -367,6 +252,11 @@ const openrouterChatModels: AIChatModelCard[] = [
     settings: { extendParams: ['enableReasoning'] },
     type: 'chat',
   },
+  ...deepseekV4ChatModels,
+  ...zaiGlm5ChatModels,
+  ...moonshotK3ChatModels,
+  ...qwen38ChatModels,
+  ...minimaxM3ChatModels,
   {
     abilities: {
       functionCall: true,

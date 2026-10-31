@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   hasRepeatedToolCall,
+  hasToolCallBurst,
+  TOOL_CALL_BURST_LIMIT,
   TOOL_CALL_REPEAT_LIMIT,
   updateToolCallRepeatGuard,
 } from './toolCallRepeatGuard';
@@ -56,5 +58,41 @@ describe('toolCallRepeatGuard', () => {
 
     expect(resetGuard).toEqual({ counts: {} });
     expect(hasRepeatedToolCall(resetGuard)).toBe(false);
+  });
+
+  it('counts copies of one call inside a single turn toward the limit', () => {
+    const copies = (count: number) =>
+      Array.from({ length: count }, () => createToolCall('{"id":"acme_ai"}'));
+
+    expect(
+      hasRepeatedToolCall(updateToolCallRepeatGuard(undefined, copies(TOOL_CALL_REPEAT_LIMIT - 1))),
+    ).toBe(false);
+    expect(
+      hasRepeatedToolCall(updateToolCallRepeatGuard(undefined, copies(TOOL_CALL_REPEAT_LIMIT))),
+    ).toBe(true);
+  });
+
+  it('adds copies in the current turn to the count carried from earlier turns', () => {
+    const copies = (count: number) =>
+      Array.from({ length: count }, () => createToolCall('{"id":"acme_ai"}'));
+    const half = Math.ceil(TOOL_CALL_REPEAT_LIMIT / 2);
+
+    const firstTurn = updateToolCallRepeatGuard(undefined, copies(half - 1));
+    expect(hasRepeatedToolCall(updateToolCallRepeatGuard(firstTurn, copies(half - 1)))).toBe(false);
+    expect(hasRepeatedToolCall(updateToolCallRepeatGuard(firstTurn, copies(half + 1)))).toBe(true);
+  });
+
+  it('flags a turn that requests more tool calls than the burst limit even with distinct arguments', () => {
+    const distinct = (count: number) =>
+      Array.from({ length: count }, (_, index) => createToolCall(`{"query":"topic ${index}"}`));
+
+    expect(hasToolCallBurst(distinct(TOOL_CALL_BURST_LIMIT))).toBe(false);
+    expect(hasToolCallBurst(distinct(TOOL_CALL_BURST_LIMIT + 1))).toBe(true);
+    // Distinct arguments never trip the repeat count; only the burst cap catches this turn.
+    expect(
+      hasRepeatedToolCall(
+        updateToolCallRepeatGuard(undefined, distinct(TOOL_CALL_BURST_LIMIT + 1)),
+      ),
+    ).toBe(false);
   });
 });

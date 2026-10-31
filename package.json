@@ -94,6 +94,7 @@
     "e2e": "cd e2e && npm run test",
     "e2e:install": "playwright install",
     "e2e:ui": "playwright test --ui",
+    "eval:seed-lobe-bench": "cross-env MIGRATION_DB=1 tsx ./scripts/seedLobeBench/index.ts",
     "fts-search:cleanup-ineligible-messages": "cross-env MIGRATION_DB=1 bun run scripts/elasticsearchCleanupIneligibleMessages/cli.ts",
     "fts-search:reindex": "node scripts/elasticsearchReindex/runner.mjs",
     "fts-search:sync": "cross-env MIGRATION_DB=1 bun run scripts/elasticsearchSync/cli.ts",

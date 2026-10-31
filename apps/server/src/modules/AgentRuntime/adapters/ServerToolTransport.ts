@@ -17,6 +17,7 @@ import {
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
 import type { ChatToolPayload } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -306,6 +307,9 @@ export class ServerToolTransport implements ToolTransport {
                 : undefined,
               localSandboxNetwork:
                 context.state.world?.agent?.agencyConfig?.localSandboxNetwork === true,
+              evalMemory: context.state.plan?.eval?.memory,
+              isEval: context.state.origin?.trigger === RequestTrigger.Eval,
+              memoryEffort: context.state.world?.agent?.chatConfig?.memory?.effort,
               memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
               messageId: context.state.origin?.sourceMessageId,
               operationId,

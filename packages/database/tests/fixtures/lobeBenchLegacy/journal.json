@@ -1,0 +1,37 @@
+[
+  {
+    "idx": 182,
+    "version": "7",
+    "when": 1792600439243,
+    "tag": "0182_eval_memory_scopes",
+    "breakpoints": true
+  },
+  {
+    "idx": 183,
+    "version": "7",
+    "when": 1793058978085,
+    "tag": "0183_eval_environments",
+    "breakpoints": true
+  },
+  {
+    "idx": 184,
+    "version": "7",
+    "when": 1793064460496,
+    "tag": "0184_drop_eval_memory_scopes",
+    "breakpoints": true
+  },
+  {
+    "idx": 185,
+    "version": "7",
+    "when": 1793064463665,
+    "tag": "0185_eval_memories",
+    "breakpoints": true
+  },
+  {
+    "idx": 186,
+    "version": "7",
+    "when": 1793239418975,
+    "tag": "0186_agent_eval_system_cases_environments",
+    "breakpoints": true
+  }
+]
