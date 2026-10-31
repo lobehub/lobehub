@@ -3571,6 +3571,7 @@ export default {
   'workingPanel.browser.tool.readPage': 'Read page text',
   'workingPanel.browser.tool.screenshot': 'Captured screenshot',
   'workingPanel.browser.tool.scroll': 'Scrolled page',
+  'workingPanel.browser.tool.setViewport': 'Set viewport',
   'workingPanel.browser.tool.snapshot': 'Read page elements',
   'workingPanel.claudeMemory.empty.description':
     'Claude Code saves what is worth remembering here as it works in this project.',

@@ -3160,6 +3160,7 @@
   "workingPanel.browser.tool.readPage": "读取了页面文本",
   "workingPanel.browser.tool.screenshot": "截取了页面截图",
   "workingPanel.browser.tool.scroll": "滚动了页面",
+  "workingPanel.browser.tool.setViewport": "调整了视口尺寸",
   "workingPanel.browser.tool.snapshot": "读取了页面元素",
   "workingPanel.claudeMemory.empty.description": "Claude Code 在这个项目里工作时，会把值得记住的内容保存在这里。",
   "workingPanel.claudeMemory.empty.title": "Claude 还没有为这个项目记下内容",
