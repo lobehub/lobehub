@@ -2,11 +2,11 @@ import { deriveWorktreePath } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { router } from '@/libs/trpc/lambda';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { assertWorkspaceRootApproved } from '../deviceWorkspaceGuard';
+import { assertDeviceOperable } from './guards';
 import { deviceProcedure } from './procedures';
 
 /**
@@ -21,6 +21,35 @@ const requireDeviceAnswer = <T>(result: T | undefined, what: string): T => {
   return result;
 };
 
+const gitPathInput = z.object({ deviceId: z.string(), path: z.string() });
+
+/**
+ * `deviceProcedure` that confines `input.path` to an approved workspace root —
+ * the git mirror of `workspaceFileProcedure` in ./projectFiles. Every route
+ * below asks the device to run `git` inside a caller-supplied directory, so
+ * the root check is built into the procedure and can never be forgotten:
+ * without it the directory came straight from an untrusted session and any
+ * path on the device was fair game.
+ */
+const gitProcedure = deviceProcedure.input(gitPathInput).use(async (opts) => {
+  const { deviceId, path } = gitPathInput.parse(await opts.getRawInput());
+  await assertWorkspaceRootApproved(opts.ctx.deviceModel, deviceId, path, opts.ctx.workspaceId);
+  return opts.next();
+});
+
+/**
+ * `gitProcedure` for routes that change the repository (checkout, rename,
+ * worktree add/remove, pull, push, revert, `gh pr` writes). Mutating the
+ * working tree or refs is operating the machine, so the caller must also
+ * satisfy {@link assertDeviceOperable} — a read-only viewer may read git
+ * state inside an approved root but never modify it.
+ */
+const gitWriteProcedure = gitProcedure.use(async (opts) => {
+  const { deviceId } = z.object({ deviceId: z.string() }).parse(await opts.getRawInput());
+  await assertDeviceOperable(opts.ctx, deviceId, 'modify repositories on');
+  return opts.next();
+});
+
 export const gitRouter = router({
   /**
    * Granular git reads for a directory on a remote device, each via its own
@@ -28,7 +57,7 @@ export const gitRouter = router({
    * separate, differently-cadenced SWR hooks. Return `null` when offline / the
    * directory isn't a git repo.
    */
-  gitBranch: deviceProcedure
+  gitBranch: gitProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitBranch({
@@ -39,7 +68,7 @@ export const gitRouter = router({
       });
       return result ?? null;
     }),
-  gitLinkedPullRequest: deviceProcedure
+  gitLinkedPullRequest: gitProcedure
     .input(
       z.object({
         branch: z.string(),
@@ -59,7 +88,7 @@ export const gitRouter = router({
       });
       return result ?? null;
     }),
-  gitPullRequestDetail: deviceProcedure
+  gitPullRequestDetail: gitProcedure
     .input(
       z.object({
         coreOnly: z.boolean().optional(),
@@ -79,7 +108,7 @@ export const gitRouter = router({
       });
       return result ?? null;
     }),
-  gitPullRequestActivity: deviceProcedure
+  gitPullRequestActivity: gitProcedure
     .input(
       z.object({ deviceId: z.string(), number: z.number().int().positive(), path: z.string() }),
     )
@@ -93,7 +122,7 @@ export const gitRouter = router({
       });
       return result ?? null;
     }),
-  gitPullRequestMergeContext: deviceProcedure
+  gitPullRequestMergeContext: gitProcedure
     .input(
       z.object({
         baseRefName: z.string(),
@@ -112,7 +141,7 @@ export const gitRouter = router({
       });
       return result ?? null;
     }),
-  gitWorkingTreeStatus: deviceProcedure
+  gitWorkingTreeStatus: gitProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitWorkingTreeStatus({
@@ -123,7 +152,7 @@ export const gitRouter = router({
       });
       return result ?? null;
     }),
-  gitAheadBehind: deviceProcedure
+  gitAheadBehind: gitProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.gitAheadBehind({
@@ -139,7 +168,7 @@ export const gitRouter = router({
    * remote device, via the device's `listGitWorktrees` RPC. Lets the web/remote
    * worktree picker mirror the local desktop's, populated over IPC.
    */
-  listGitWorktrees: deviceProcedure
+  listGitWorktrees: gitProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.listGitWorktrees({
@@ -155,7 +184,7 @@ export const gitRouter = router({
    * `listGitBranches` RPC. Lets the web/remote branch switcher populate the same
    * dropdown the local desktop renders over IPC.
    */
-  listGitBranches: deviceProcedure
+  listGitBranches: gitProcedure
     .input(
       z.object({
         deviceId: z.string(),
@@ -177,7 +206,7 @@ export const gitRouter = router({
    * Checkout (or create) a branch in a directory on a remote device, via the
    * device's `checkoutGitBranch` RPC.
    */
-  checkoutGitBranch: deviceProcedure
+  checkoutGitBranch: gitWriteProcedure
     .input(
       z.object({
         branch: z.string(),
@@ -200,7 +229,7 @@ export const gitRouter = router({
    * Rename a branch in a directory on a remote device, via the device's
    * `renameGitBranch` RPC.
    */
-  renameGitBranch: deviceProcedure
+  renameGitBranch: gitWriteProcedure
     .input(
       z.object({
         deviceId: z.string(),
@@ -223,7 +252,7 @@ export const gitRouter = router({
    * Delete a branch in a directory on a remote device, via the device's
    * `deleteGitBranch` RPC.
    */
-  deleteGitBranch: deviceProcedure
+  deleteGitBranch: gitWriteProcedure
     .input(
       z.object({
         branch: z.string(),
@@ -244,7 +273,7 @@ export const gitRouter = router({
    * Remove a worktree in a directory's repository on a remote device,
    * via the device's `removeGitWorktree` RPC.
    */
-  removeGitWorktree: deviceProcedure
+  removeGitWorktree: gitWriteProcedure
     .input(
       z.object({
         deviceId: z.string(),
@@ -270,7 +299,7 @@ export const gitRouter = router({
    * crafted web call can't ask the device to check out at an arbitrary absolute
    * path — the branch is folded to `-` in the folder name, so it can't traverse.
    */
-  addGitWorktree: deviceProcedure
+  addGitWorktree: gitWriteProcedure
     .input(
       z.object({
         branch: z.string(),
@@ -292,7 +321,7 @@ export const gitRouter = router({
    * Pull (`--ff-only`) the current branch of a directory on a remote device, via
    * the device's `pullGitBranch` RPC.
    */
-  pullGitBranch: deviceProcedure
+  pullGitBranch: gitWriteProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .mutation(async ({ ctx, input }) =>
       deviceGateway.pullGitBranch({
@@ -306,7 +335,7 @@ export const gitRouter = router({
    * Push the current branch of a directory on a remote device, via the device's
    * `pushGitBranch` RPC.
    */
-  pushGitBranch: deviceProcedure
+  pushGitBranch: gitWriteProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .mutation(async ({ ctx, input }) =>
       deviceGateway.pushGitBranch({
@@ -320,8 +349,7 @@ export const gitRouter = router({
    * Run a `gh pr` mutation (merge, auto-merge, ready, comment, close, ...) on a
    * directory on a remote device, via the device's `runPullRequestAction` RPC.
    */
-  runGitPullRequestAction: deviceProcedure
-    .use(requireWorkspaceRoleWhenScoped('member'))
+  runGitPullRequestAction: gitWriteProcedure
     .input(
       z.object({
         action: z.discriminatedUnion('type', [
@@ -351,28 +379,22 @@ export const gitRouter = router({
         path: z.string(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
-      await assertWorkspaceRootApproved(
-        ctx.deviceModel,
-        input.deviceId,
-        input.path,
-        ctx.workspaceId,
-      );
-      return deviceGateway.runGitPullRequestAction({
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.runGitPullRequestAction({
         action: input.action,
         deviceId: input.deviceId,
         number: input.number,
         path: input.path,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
-      });
-    }),
+      }),
+    ),
   /**
    * Working-tree (unstaged) per-file patches for a directory on a remote device,
    * via the device's `getGitWorkingTreePatches` RPC. Powers the web/remote Review
    * panel's unstaged diff. Returns `null` when offline / not a git repo.
    */
-  getGitWorkingTreePatches: deviceProcedure
+  getGitWorkingTreePatches: gitProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.getGitWorkingTreePatches({
@@ -387,7 +409,7 @@ export const gitRouter = router({
    * Branch diff (current branch vs base ref) per-file patches for a directory on
    * a remote device, via the device's `getGitBranchDiff` RPC.
    */
-  getGitBranchDiff: deviceProcedure
+  getGitBranchDiff: gitProcedure
     .input(z.object({ baseRef: z.string().optional(), deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.getGitBranchDiff({
@@ -403,7 +425,7 @@ export const gitRouter = router({
    * List the remote branches of a directory on a remote device, via the device's
    * `listGitRemoteBranches` RPC. Populates the Review base-ref picker.
    */
-  listGitRemoteBranches: deviceProcedure
+  listGitRemoteBranches: gitProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.listGitRemoteBranches({
@@ -420,7 +442,7 @@ export const gitRouter = router({
    * device, via the device's `getGitWorkingTreeFiles` RPC. Powers the Files tab's
    * git-status overlay. Returns `null` when offline / not a git repo.
    */
-  getGitWorkingTreeFiles: deviceProcedure
+  getGitWorkingTreeFiles: gitProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.getGitWorkingTreeFiles({
@@ -435,7 +457,7 @@ export const gitRouter = router({
    * Revert a single file in a directory on a remote device, via the device's
    * `revertGitFile` RPC.
    */
-  revertGitFile: deviceProcedure
+  revertGitFile: gitWriteProcedure
     .input(z.object({ deviceId: z.string(), filePath: z.string(), path: z.string() }))
     .mutation(async ({ ctx, input }) =>
       deviceGateway.revertGitFile({

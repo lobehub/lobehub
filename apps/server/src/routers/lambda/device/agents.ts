@@ -7,7 +7,13 @@ import { z } from 'zod';
 import { router } from '@/libs/trpc/lambda';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { assertDeviceOperable } from './guards';
 import { deviceProcedure } from './procedures';
+
+// Every route in this file makes the device do work — probe binaries, read
+// local credentials, or spawn a CLI to list its models — so visibility alone
+// is not enough. A read-only viewer may see a public workspace device but must
+// never drive processes on it: all five handlers pass `assertDeviceOperable`.
 
 // Derive the zod enum from the canonical config so new platforms are
 // automatically covered without touching this file.
@@ -41,6 +47,7 @@ export const agentsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'probe agent CLIs on');
       const result = await deviceGateway.executeToolCall(
         {
           deviceId: input.deviceId,
@@ -81,6 +88,7 @@ export const agentsRouter = router({
     .input(z.object({ deviceId: z.string() }))
     .query(
       async ({ ctx, input }): Promise<{ agents: HeterogeneousAgentScanMap; error?: string }> => {
+        await assertDeviceOperable(ctx, input.deviceId, 'probe agent CLIs on');
         const result = await deviceGateway.executeToolCall(
           { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
           {
@@ -117,6 +125,7 @@ export const agentsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'read agent credentials on');
       const result = await deviceGateway.claudeCodeQuota({
         deviceId: input.deviceId,
         env: input.env,
@@ -150,8 +159,9 @@ export const agentsRouter = router({
         ]),
       }),
     )
-    .query(async ({ ctx, input }) =>
-      deviceGateway.listHeterogeneousAgentModels({
+    .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'run agent CLIs on');
+      return deviceGateway.listHeterogeneousAgentModels({
         args: input.args,
         command: input.command,
         cwd: input.cwd,
@@ -160,8 +170,8 @@ export const agentsRouter = router({
         type: input.type,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
-      }),
-    ),
+      });
+    }),
   /**
    * Fetch the agent profile (title, description, avatar) from the platform
    * installed on the given device. Used to pre-fill the creation modal.
@@ -175,6 +185,7 @@ export const agentsRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'probe agent CLIs on');
       const result = await deviceGateway.executeToolCall(
         { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
         {

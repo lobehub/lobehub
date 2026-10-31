@@ -23,6 +23,7 @@ const mockVisibleDevice = vi.fn();
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: { codexQuota: mockCodexQuota, kimiCodeQuota: mockKimiCodeQuota },
 }));
+vi.mock('../device/guards', () => ({ assertDeviceOperable: mockVisibleDevice }));
 vi.mock('../deviceWorkspaceGuard', () => ({ assertWorkspaceDeviceVisible: mockVisibleDevice }));
 const mockFindByDeviceId = vi.fn();
 const mockFindWorkspaceDeviceById = vi.fn();
@@ -194,7 +195,7 @@ describe('agentQuota.refreshCodexQuota', () => {
     expect(mockIngestSnapshot).not.toHaveBeenCalled();
   });
 
-  it('checks workspace device visibility before sampling', async () => {
+  it('checks workspace device operability before sampling', async () => {
     mockVisibleDevice.mockRejectedValue(new Error('hidden device'));
     await expect(
       createCaller('workspace').refreshCodexQuota({ deviceId: 'remote' }),
@@ -247,7 +248,7 @@ describe('agentQuota.refreshKimiCodeQuota', () => {
     expect(mockIngestSnapshot).not.toHaveBeenCalled();
   });
 
-  it('checks workspace device visibility before sampling', async () => {
+  it('checks workspace device operability before sampling', async () => {
     mockVisibleDevice.mockRejectedValue(new Error('hidden device'));
     await expect(
       createCaller('workspace').refreshKimiCodeQuota({ deviceId: 'remote' }),
