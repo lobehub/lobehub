@@ -1,5 +1,5 @@
 import type { ChannelDetail, ChannelPublicMessage } from '@lobechat/types';
-import { Button, Divider, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Divider, Flexbox, Icon, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { GitBranch, Reply } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -16,6 +16,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
+import { channelTimeFormatters } from './messagePresentation';
 import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
 import { showsReplyQuote } from './replyQuote';
 import { styles } from './styles';
@@ -42,6 +43,7 @@ const MessageText = ({ content, names }: { content: string; names: string[] }) =
 
 export const ChannelMessage = ({
   detail,
+  continuation = false,
   message,
   isRoot,
   highlighted,
@@ -51,6 +53,7 @@ export const ChannelMessage = ({
   onReply,
   onJumpToMessage,
 }: {
+  continuation?: boolean;
   detail: ChannelDetail;
   isRoot?: boolean;
   highlighted?: boolean;
@@ -61,7 +64,24 @@ export const ChannelMessage = ({
   onJumpToMessage?: (message: ChannelReplyTarget) => void;
   threadId?: string | null;
 }) => {
-  const { t } = useTranslation('channel');
+  const { t, i18n } = useTranslation('channel');
+  const timeFormats = useMemo(() => channelTimeFormatters(i18n.language), [i18n.language]);
+  const date = new Date(message.createdAt);
+  // Failed/unassigned requests keep their identity row and recovery affordance.
+  const compact =
+    continuation &&
+    !isRoot &&
+    message.routingStatus !== 'unassigned' &&
+    !detail.jobs.some((job) => job.messageId === message.id && job.status === 'failed');
+  const timestamp = (
+    <time
+      dateTime={date.toISOString()}
+      title={timeFormats.full.format(date)}
+      {...stylex.props(styles.messageTime)}
+    >
+      {timeFormats.time.format(date)}
+    </time>
+  );
   const isOwnMessage = useUserStore((s) =>
     isCurrentUserAuthor(message.author, userProfileSelectors.userId(s)),
   );
@@ -69,6 +89,11 @@ export const ChannelMessage = ({
   const thread =
     !threadId && !isRoot && detail.threads.find((entry) => entry.rootMessageId === message.id);
   const canBranch = !threadId && !isRoot && !thread && !!onStartThread;
+  const startThread = () =>
+    onStartThread?.({
+      root: message,
+      attachments: detail.attachments.filter((file) => message.fileIds.includes(file.id)),
+    });
   const isRequest = message.author.type === 'user' && !isRoot;
   const mentionNames = detail.members
     .filter((member) => message.mentions.includes(member.id))
@@ -76,13 +101,18 @@ export const ChannelMessage = ({
     .filter(Boolean);
   return (
     <div
+      aria-label={message.author.name || t('deletedMember')}
+      data-continuation={compact || undefined}
       data-message-id={message.id}
+      role="article"
       {...stylex.props(
         styles.messageRow,
+        compact && (onReply || canBranch) && styles.continuationWithAction,
         highlighted && styles.highlightedMessage,
         stylex.defaultMarker(),
       )}
     >
+      {compact && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
       <ChatItem
         showAvatar
         showTitle
@@ -91,10 +121,10 @@ export const ChannelMessage = ({
         belowMessage={isRequest ? <MessageRoutingStatus message={message} /> : undefined}
         gap={4}
         id={message.id}
-        paddingBlock={12}
+        paddingBlock={compact ? 2 : 8}
         placement="left"
+        showHeader={!compact}
         style={{ paddingInlineStart: 48 }}
-        time={new Date(message.createdAt).getTime()}
         actionAddon={
           thread ? (
             <Button
@@ -117,8 +147,7 @@ export const ChannelMessage = ({
           </Flexbox>
         )}
         message={
-          <CollapsibleContent key={message.id}>
-            <Flexbox gap={8}>
+          <Flexbox gap={8}>
               {!isRoot &&
                 showsReplyQuote(message) &&
                 (message.replyTo ? (
@@ -141,41 +170,53 @@ export const ChannelMessage = ({
                     {t('reply.unavailable')}
                   </Text>
                 ))}
-              {message.fileIds.length > 0 && (
-                <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
-              )}
-              {message.content && <MessageText content={message.content} names={mentionNames} />}
-            </Flexbox>
-          </CollapsibleContent>
+            {message.fileIds.length > 0 && (
+              <MessageAttachments attachments={detail.attachments} fileIds={message.fileIds} />
+            )}
+            {message.content && (
+              <CollapsibleContent key={message.id} maxHeight={160}>
+                <MessageText content={message.content} names={mentionNames} />
+              </CollapsibleContent>
+            )}
+          </Flexbox>
         }
         titleAddon={
-          isRequest ? <MessageFailureMark detail={detail} message={message} /> : undefined
+          <>
+            {timestamp}
+            {isRequest && <MessageFailureMark detail={detail} message={message} />}
+          </>
         }
       />
       {(onReply || canBranch) && (
         <div {...stylex.props(styles.messageToolbar)}>
-          {onReply && (
-            <Button icon={Reply} size="small" type="text" onClick={() => onReply(message)}>
-              {t('reply.action')}
-            </Button>
-          )}
-          {canBranch && (
-            <Button
-              icon={GitBranch}
-              size="small"
-              type="text"
-              onClick={() =>
-                onStartThread?.({
-                  root: message,
-                  attachments: detail.attachments.filter((file) =>
-                    message.fileIds.includes(file.id),
-                  ),
-                })
-              }
-            >
-              {t('startThread')}
-            </Button>
-          )}
+          {onReply &&
+            (compact ? (
+              <ActionIcon
+                aria-label={t('reply.action')}
+                icon={Reply}
+                size="small"
+                title={t('reply.action')}
+                onClick={() => onReply(message)}
+              />
+            ) : (
+              <Button icon={Reply} size="small" type="text" onClick={() => onReply(message)}>
+                {t('reply.action')}
+              </Button>
+            ))}
+          {canBranch &&
+            (compact ? (
+              <ActionIcon
+                aria-label={t('startThread')}
+                icon={GitBranch}
+                size="small"
+                title={t('startThread')}
+                onClick={startThread}
+              />
+            ) : (
+              <Button icon={GitBranch} size="small" type="text" onClick={startThread}>
+                {t('startThread')}
+              </Button>
+            ))}
         </div>
       )}
     </div>

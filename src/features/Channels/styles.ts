@@ -66,8 +66,48 @@ export const styles = stylex.create({
   highlightedMessage: { backgroundColor: cssVar.colorInfoBg },
   messageAvatar: {
     position: 'absolute',
-    insetBlockStart: 12,
+    insetBlockStart: 8,
     insetInlineStart: 0,
+  },
+  // A continuation has no header for its toolbar; reserve a small action lane.
+  continuationWithAction: {
+    paddingInlineEnd: 52,
+  },
+  messageTime: {
+    flexShrink: 0,
+    fontSize: cssVar.fontSizeSM,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    opacity: 1,
+  },
+  continuationTime: {
+    position: 'absolute',
+    insetBlockStart: 4,
+    insetInlineStart: 0,
+    width: 54,
+    textAlign: 'center',
+    opacity: {
+      default: 1,
+      [HOVER]: {
+        default: 0,
+        [stylex.when.ancestor(':hover')]: 1,
+        [stylex.when.ancestor(':focus-within')]: 1,
+      },
+    },
+  },
+  dateDivider: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    paddingBlock: 12,
+    fontSize: cssVar.fontSizeSM,
+    color: cssVar.colorTextSecondary,
+  },
+  dateLine: {
+    flex: '1',
+    height: 1,
+    backgroundColor: cssVar.colorBorderSecondary,
   },
   /** Floats over the row's top-right corner while the row is hovered or focused. */
   messageToolbar: {
