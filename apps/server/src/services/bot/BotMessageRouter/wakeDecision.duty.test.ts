@@ -125,6 +125,21 @@ describe('bot-wake recorder: a message within the bot duties', () => {
     expect(input.signal.author?.isOwner).toBe(false);
   });
 
+  it('steps in to settle an open question that is not one of its duties, and says so', async () => {
+    const judge: WakeDutyJudge = vi.fn(async () => ({
+      duty: '评估需求',
+      helpful: 0.8,
+      inDuty: 0.3,
+      reason: 'p=0.30 helpful=0.80',
+    }));
+    const recorder = make(DUTIES(), fakeState(), { dutyJudge: judge });
+
+    // No duty is named: the agent is woken to answer, not to carry out a duty.
+    await expect(
+      recorder.initiate(request({ text: '话说我们能看到单个话题花了多少token么' })),
+    ).resolves.toEqual({ addressed: false, helpful: true, reason: 'in-duty' });
+  });
+
   it('stays out when the score is under the threshold', async () => {
     const recorder = make(DUTIES(), fakeState(), { dutyJudge: dutyJudge(0.4) });
 

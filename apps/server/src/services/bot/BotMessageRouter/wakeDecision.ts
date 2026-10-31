@@ -37,6 +37,7 @@ import {
   CLASSIFIER_POLICY_ID,
   createDutyPolicy,
   createWakePolicySet,
+  DUTY_HELPFUL_TAG,
   DUTY_POLICY_ID,
   OWNER_RULES_POLICY_ID,
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
@@ -244,19 +245,25 @@ export interface BotWakeInitiation {
   duty?: string;
   /** `followup-window` only. See {@link BotWakeFollowupContext}. */
   followup?: BotWakeFollowupContext;
+  /**
+   * `in-duty` only: woken because stepping in would help (an open question nobody answered that the
+   * bot can settle), not because the message falls within the duties.
+   */
+  helpful?: boolean;
   reason: BotWakeInitiationReason;
 }
 
 /** What a wake carries for the agent besides its reason. */
-type InitiationDetails = Pick<BotWakeInitiation, 'duty' | 'followup'>;
+type InitiationDetails = Pick<BotWakeInitiation, 'duty' | 'followup' | 'helpful'>;
 
 const initiationFor = (
   reason: BotWakeInitiationReason,
-  { duty, followup }: InitiationDetails = {},
+  { duty, followup, helpful }: InitiationDetails = {},
 ): BotWakeInitiation => ({
   ...INITIATION_TRAITS[reason],
   ...(duty && { duty }),
   ...(followup && { followup }),
+  ...(helpful && { helpful }),
   reason,
 });
 
@@ -478,6 +485,7 @@ const parseRemembered = (raw: string | undefined): RememberedInitiation | undefi
 
     return {
       duty: typeof value.duty === 'string' ? value.duty : undefined,
+      helpful: value.helpful === true ? true : undefined,
       followup:
         followup && Array.isArray(followup.participants)
           ? {
@@ -716,7 +724,10 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     // A shadow judge only scores; a degraded one abstains, so it never lands here.
     if (dutyPolicy.mode === 'enforce' && judged.verdict === 'allow') {
       const record = judged.records.find((entry) => entry.policyId === DUTY_POLICY_ID);
-      return initiated(observation, 'in-duty', evaluation, { duty: record?.matched });
+      return initiated(observation, 'in-duty', evaluation, {
+        duty: record?.matched,
+        helpful: record?.tags.includes(DUTY_HELPFUL_TAG),
+      });
     }
 
     keepEvaluation(observation, evaluation);

@@ -225,6 +225,23 @@ describe('formatBotPlatformContext', () => {
     );
   });
 
+  it('tells an agent woken to settle an open question to answer it concretely or stay silent', () => {
+    const helpful = formatBotPlatformContext({
+      duty: { helpful: true },
+      platformName: 'Discord',
+      supportsMarkdown: true,
+      wakeKind: 'followup',
+    });
+
+    expect(helpful).toContain(
+      'the message is not one of your duties, but it leaves something open',
+    );
+    expect(helpful).toContain('Speak only if you can give that concrete answer');
+    expect(helpful).toContain('NO_REPLY:already_handled');
+    expect(helpful).toContain('NO_REPLY:not_addressed');
+    expect(helpful).not.toContain('falls within the duties your owner gave you');
+  });
+
   it('tells an agent woken by its duties which duty, and to act on it or stay silent', () => {
     const base = { platformName: 'Discord', supportsMarkdown: true };
     const duty = formatBotPlatformContext({
