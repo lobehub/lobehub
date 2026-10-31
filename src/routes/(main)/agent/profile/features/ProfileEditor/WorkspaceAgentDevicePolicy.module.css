@@ -1,6 +1,0 @@
-/* The select's value wrapper is a lobe-ui element; StyleX cannot style its child span. */
-.selectValue > span {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-}
