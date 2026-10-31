@@ -2,12 +2,16 @@
 
 import type { WorkSummaryItem } from '@lobechat/types';
 import { formatUsageValue } from '@lobechat/utils';
-import { Center, createStaticStyles, cx, Flexbox, Icon as LobeIcon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon as LobeIcon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { type StyleXStyles } from '@stylexjs/stylex';
 import { CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { sx } from '@/styles/sx';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -15,114 +19,86 @@ import CanvasWorkCard from './CanvasWorkCard';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from './descriptors';
 import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    overflow: hidden;
-
-    width: 100%;
-    padding-block: 12px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  clickable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  cost: css`
-    flex-shrink: 0;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  description: css`
-    min-width: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  identifier: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  icon: css`
-    flex-shrink: 0;
-
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  inline: css`
-    overflow: hidden;
-
-    width: 100%;
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: 6px;
-
-    transition: background-color 0.12s ease;
-  `,
-  inlineClickable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  inlineCost: css`
-    flex-shrink: 0;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  inlineDescription: css`
-    flex: 1 1 0;
-    min-width: 0;
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  inlineDot: css`
-    flex-shrink: 0;
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  inlineIdentifier: css`
-    /* The short resource key keeps its width; the long description truncates first. */
-    flex: 0 0 auto;
-
-    max-width: 70%;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  inlineMeta: css`
-    min-width: 0;
-  `,
-  inlineIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  inlineTitle: css`
-    min-width: 0;
-    font-size: 13px;
-    font-weight: 500;
-  `,
-  title: css`
-    min-width: 0;
-    font-size: 15px;
-    font-weight: 500;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    width: '100%',
+    paddingBlock: '12px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  clickable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  cost: {
+    flexShrink: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  description: { minWidth: '0', color: cssVar.colorTextTertiary },
+  identifier: { flexShrink: 0, color: cssVar.colorTextTertiary },
+  icon: {
+    flexShrink: 0,
+    width: '36px',
+    height: '36px',
+    borderRadius: '8px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  inline: {
+    overflow: 'hidden',
+    width: '100%',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    transition: 'background-color 0.12s ease',
+  },
+  inlineClickable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  inlineCost: {
+    flexShrink: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+  inlineDescription: {
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0',
+    minWidth: '0',
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+  inlineDot: { flexShrink: 0, fontSize: '11px', color: cssVar.colorTextQuaternary },
+  inlineMeta: { minWidth: 0 },
+  inlineIdentifier: {
+    flexGrow: '0',
+    flexShrink: '0',
+    flexBasis: 'auto',
+    maxWidth: '70%',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+  inlineIcon: { flexShrink: 0, color: cssVar.colorTextSecondary },
+  inlineTitle: { minWidth: '0', fontSize: '13px', fontWeight: 500 },
+  title: { minWidth: '0', fontSize: '15px', fontWeight: 500 },
+});
 
 interface WorkSummaryCardProps {
+  /** Appended after the card's own classes; use `xstyle` to override its StyleX rules. */
   className?: string;
   item: WorkSummaryItem;
   /**
@@ -141,10 +117,12 @@ interface WorkSummaryCardProps {
    * dictate the flat sidebar's visual vocabulary.
    */
   variant?: 'card' | 'inline';
+  /** Restyle the card; applied after its own StyleX rules so it wins. */
+  xstyle?: StyleXStyles;
 }
 
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
-  ({ className, item, onOpen, variant = 'card' }) => {
+  ({ className, item, onOpen, variant = 'card', xstyle }) => {
     const { t } = useTranslation('chat');
     const openCanvas = useChatStore((s) => s.openCanvas);
     const openDocument = useChatStore((s) => s.openDocument);
@@ -236,36 +214,61 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={cx(styles.inline, clickable && styles.inlineClickable, className)}
+          {...sx([styles.inline, clickable && styles.inlineClickable, xstyle], className)}
           gap={10}
           onClick={clickable ? handleOpen : undefined}
         >
-          <Icon className={styles.inlineIcon} size={17} />
+          <Icon className={stylex.props(styles.inlineIcon).className} size={17} />
           {/* The sidebar is narrow: the title owns the first line (sharing it only
               with the short usage badge), and the identifier drops to the meta line
               with the description so a long `owner/repo#n` can't squeeze the title. */}
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text ellipsis className={styles.inlineTitle} style={{ flex: 1 }} title={title}>
+              <Text
+                ellipsis
+                className={stylex.props(styles.inlineTitle).className}
+                style={{ flex: 1 }}
+                title={title}
+              >
                 {title}
               </Text>
               {usage && (
-                <Center horizontal className={styles.inlineCost} gap={2} title={usageTitle}>
+                <Center
+                  horizontal
+                  className={stylex.props(styles.inlineCost).className}
+                  gap={2}
+                  title={usageTitle}
+                >
                   <LobeIcon icon={usage.icon} />
                   {usage.value}
                 </Center>
               )}
             </Flexbox>
             {(showIdentifier || description) && (
-              <Flexbox horizontal align={'center'} className={styles.inlineMeta} gap={4}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.inlineMeta).className}
+                gap={4}
+              >
                 {showIdentifier && (
-                  <Text ellipsis className={styles.inlineIdentifier} title={identifier}>
+                  <Text
+                    ellipsis
+                    className={stylex.props(styles.inlineIdentifier).className}
+                    title={identifier}
+                  >
                     {identifier}
                   </Text>
                 )}
-                {showIdentifier && description && <span className={styles.inlineDot}>·</span>}
+                {showIdentifier && description && (
+                  <span className={stylex.props(styles.inlineDot).className}>·</span>
+                )}
                 {description && (
-                  <Text ellipsis className={styles.inlineDescription} title={description}>
+                  <Text
+                    ellipsis
+                    className={stylex.props(styles.inlineDescription).className}
+                    title={description}
+                  >
                     {description}
                   </Text>
                 )}
@@ -280,34 +283,43 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={cx(styles.card, clickable && styles.clickable, className)}
+        {...sx([styles.card, clickable && styles.clickable, xstyle], className)}
         gap={12}
         onClick={clickable ? handleOpen : undefined}
       >
-        <Flexbox align={'center'} className={styles.icon} justify={'center'}>
+        <Flexbox
+          align={'center'}
+          className={stylex.props(styles.icon).className}
+          justify={'center'}
+        >
           <Icon size={18} />
         </Flexbox>
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text ellipsis className={styles.title}>
+              <Text ellipsis className={stylex.props(styles.title).className}>
                 {title}
               </Text>
               {showIdentifier && (
-                <Text code className={styles.identifier} fontSize={12}>
+                <Text code className={stylex.props(styles.identifier).className} fontSize={12}>
                   {identifier}
                 </Text>
               )}
             </Flexbox>
             {usage && (
-              <Center horizontal className={styles.cost} gap={2} title={usageTitle}>
+              <Center
+                horizontal
+                className={stylex.props(styles.cost).className}
+                gap={2}
+                title={usageTitle}
+              >
                 <LobeIcon icon={usage.icon} />
                 {usage.value}
               </Center>
             )}
           </Flexbox>
           {description && (
-            <Text ellipsis className={styles.description} fontSize={12}>
+            <Text ellipsis className={stylex.props(styles.description).className} fontSize={12}>
               {description}
             </Text>
           )}

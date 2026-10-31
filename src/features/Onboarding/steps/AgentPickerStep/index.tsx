@@ -6,6 +6,7 @@ import type {
 } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { getTemplatesByCategoryPriority } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
 import { Button, cssVar, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -159,7 +160,7 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
       {showLoading ? (
         <AgentPickerSkeleton />
       ) : showEmpty ? (
-        <div className={styles.empty}>
+        <div {...stylex.props(styles.empty)}>
           {error
             ? tTool('agentMarketplace.picker.failedToLoad')
             : tTool('agentMarketplace.picker.empty')}
@@ -172,8 +173,8 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
             categories={availableCategories}
             onChange={setActive}
           />
-          <div className={styles.scrollArea}>
-            <div className={styles.grid}>
+          <div {...stylex.props(styles.scrollArea)}>
+            <div {...stylex.props(styles.grid)}>
               {visibleTemplates.map((tpl) => (
                 <AgentCard
                   key={tpl.id}
@@ -187,7 +188,7 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
         </>
       )}
 
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         {showBack ? (
           <Button
             disabled={!!pending}
@@ -201,7 +202,7 @@ const AgentPickerStep = memo<AgentPickerStepProps>(({ onBack }) => {
         ) : (
           <span />
         )}
-        <div className={styles.footerActions}>
+        <div {...stylex.props(styles.footerActions)}>
           <Button disabled={!!pending} type={'text'} onClick={() => void handleSkip()}>
             {t('agentPicker.skip')}
           </Button>

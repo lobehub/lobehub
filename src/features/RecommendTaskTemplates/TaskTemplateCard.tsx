@@ -5,7 +5,6 @@ import {
   Button,
   Center,
   cssVar,
-  cx,
   Divider,
   Flexbox,
   Tag,
@@ -83,9 +82,14 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     if (compact)
       return (
-        <Flexbox horizontal align={'center'} className={styles.compactRow} gap={4}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.compactRow, stylex.defaultMarker()).className}
+          gap={4}
+        >
           <Button
-            className={styles.compactMain}
+            className={stylex.props(styles.compactMain).className}
             disabled={loading || pendingCreate}
             type={'text'}
             onClick={handleOpenDetail}
@@ -95,7 +99,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
                 <TemplateBriefIcon spec={iconSpec} tileSize={RECOMMENDATION_ICON_SIZE.compact} />
               </Flexbox>
               <Text
-                className={cx(stylex.props(homeType.itemTitleProse).className, styles.compactTitle)}
+                className={stylex.props(homeType.itemTitleProse, styles.compactTitle).className}
                 style={{ flex: 1 }}
               >
                 {title}
@@ -103,7 +107,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             </Flexbox>
           </Button>
           <ActionIcon
-            className={`${styles.dismissBtn} task-template-dismiss`}
+            className={stylex.props(styles.dismissBtn, styles.dismissBtnCompact).className}
             icon={X}
             size={'small'}
             title={t('taskTemplate.action.dismiss.tooltip')}
@@ -126,14 +130,11 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     return (
       <Block
+        className={stylex.props(briefStyles.card, styles.card, stylex.defaultMarker()).className}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG, cursor: 'pointer' }}
         variant={'outlined'}
-        className={cx(
-          stylex.props(briefStyles.card, stylex.defaultMarker()).className,
-          styles.card,
-        )}
         onClick={handleOpenDetail}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
@@ -169,7 +170,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
           <Flexbox horizontal align={'center'} gap={8}>
             <ActionIcon
-              className={`${styles.dismissBtn} task-template-dismiss`}
+              className={stylex.props(styles.dismissBtn).className}
               icon={X}
               size={'small'}
               title={t('taskTemplate.action.dismiss.tooltip')}

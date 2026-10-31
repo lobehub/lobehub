@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  createStaticStyles,
-  DrawerPopup,
-  DrawerPortal,
-  DrawerRoot,
-  Flexbox,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, DrawerPopup, DrawerPortal, DrawerRoot, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { XIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, Suspense, useEffect, useState } from 'react';
@@ -26,23 +20,25 @@ const DRAWER_WIDTH = 280;
 // from inside the panel still paint above it.
 const DRAWER_Z_INDEX = 1000;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    overflow: hidden auto;
-    flex: 1;
-    min-height: 0;
-    background: ${cssVar.colorBgLayout};
-  `,
-  panel: css`
-    border-inline: 1px solid ${cssVar.colorBorderSecondary};
-    background: ${cssVar.colorBgLayout};
-    box-shadow: 4px 0 8px -2px rgb(0 0 0 / 4%);
-  `,
-  popup: css`
-    position: absolute;
-    overflow: hidden;
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    flex: '1',
+    minHeight: '0',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+  },
+  panel: {
+    borderInlineWidth: '1px',
+    borderInlineStyle: 'solid',
+    borderInlineColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+    boxShadow: '4px 0 8px -2px rgb(0 0 0 / 4%)',
+  },
+  popup: { position: 'absolute', overflow: 'hidden' },
+});
 
 interface SideBarDrawerProps {
   action?: ReactNode;
@@ -78,8 +74,8 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
           <DrawerPortal container={portalContainer}>
             <DrawerPopup
               flush
-              className={styles.popup}
-              panelClassName={styles.panel}
+              className={stylex.props(styles.popup).className}
+              panelClassName={stylex.props(styles.panel).className}
               placement={'left'}
               ref={setOverlayContainer}
               width={width}
@@ -114,7 +110,7 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
                 }
               />
               {subHeader}
-              <div className={styles.body}>
+              <div {...stylex.props(styles.body)}>
                 <Suspense
                   fallback={
                     <Flexbox gap={1} paddingBlock={1} paddingInline={4}>

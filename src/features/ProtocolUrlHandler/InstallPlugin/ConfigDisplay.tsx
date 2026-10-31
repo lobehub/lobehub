@@ -1,94 +1,78 @@
 'use client';
 
 import { type McpInstallSchema } from '@lobechat/electron-client-ipc';
-import { Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { Block, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { LinkIcon, Settings2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import KeyValueEditor from '@/components/KeyValueEditor';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  configEditor: css`
-    margin-block-start: ${cssVar.marginSM};
-  `,
-  configSection: css`
-    margin-block-end: ${cssVar.marginLG};
-    padding: ${cssVar.paddingSM};
-    border-radius: ${cssVar.borderRadius};
-  `,
-  configTitle: css`
-    display: flex;
-    gap: ${cssVar.marginXS};
-    align-items: center;
-
-    height: 24px;
-
-    font-weight: 600;
-    color: ${cssVar.colorTextHeading};
-  `,
-
-  previewContainer: css`
-    padding-inline: ${cssVar.paddingXS};
-  `,
-
-  previewItem: css`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: ${cssVar.paddingXS};
-    padding-inline: 0;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-  `,
-
-  previewLabel: css`
-    display: flex;
-    gap: ${cssVar.marginXS};
-    align-items: center;
-
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-
-  previewValue: css`
-    padding-block: ${cssVar.paddingXXS};
-    padding-inline: ${cssVar.paddingXS};
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 600;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-
-  typeValue: css`
-    display: flex;
-    gap: ${cssVar.marginXS};
-    align-items: center;
-  `,
-
-  urlValue: css`
-    max-width: 300px;
-    padding-block: ${cssVar.paddingXS};
-    padding-inline: ${cssVar.paddingSM};
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: ${cssVar.fontSizeSM};
-    font-weight: 500;
-    word-break: auto-phrase;
-
-    background: ${cssVar.colorBgElevated};
-  `,
-}));
+const styles = stylex.create({
+  configEditor: { marginBlockStart: cssVar.marginSM },
+  configSection: {
+    marginBlockEnd: cssVar.marginLG,
+    padding: cssVar.paddingSM,
+    borderRadius: cssVar.borderRadius,
+  },
+  configTitle: {
+    display: 'flex',
+    gap: cssVar.marginXS,
+    alignItems: 'center',
+    height: '24px',
+    fontWeight: 600,
+    color: cssVar.colorTextHeading,
+  },
+  previewContainer: { paddingInline: cssVar.paddingXS },
+  previewItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: cssVar.paddingXS,
+    paddingInline: '0',
+    borderBlockEndWidth: { 'default': '1px', ':last-child': '0' },
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  previewLabel: {
+    display: 'flex',
+    gap: cssVar.marginXS,
+    alignItems: 'center',
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+  previewValue: {
+    paddingBlock: cssVar.paddingXXS,
+    paddingInline: cssVar.paddingXS,
+    borderRadius: cssVar.borderRadiusSM,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 600,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  typeValue: { display: 'flex', gap: cssVar.marginXS, alignItems: 'center' },
+  urlValue: {
+    // eslint-disable-next-line @stylexjs/valid-styles -- Supported by the compiler/browser, missing from the 0.19 keyword list.
+    wordBreak: 'auto-phrase',
+    maxWidth: '300px',
+    paddingBlock: cssVar.paddingXS,
+    paddingInline: cssVar.paddingSM,
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: cssVar.fontSizeSM,
+    fontWeight: 500,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+});
 
 interface ConfigDisplayProps {
   onConfigUpdate?: (updatedConfig: {
@@ -122,18 +106,20 @@ const ConfigDisplay = memo<ConfigDisplayProps>(({ schema, onConfigUpdate }) => {
   return (
     <Flexbox gap={16}>
       {/* Installation info */}
-      <Block className={styles.configSection} variant={'outlined'}>
-        <div className={styles.configTitle}>
+      <Block className={stylex.props(styles.configSection).className} variant={'outlined'}>
+        <div {...stylex.props(styles.configTitle)}>
           <LinkIcon size={14} />
           {t('protocolInstall.install.title')}
         </div>
 
-        <div className={styles.previewContainer}>
+        <div {...stylex.props(styles.previewContainer)}>
           {/* Connection type */}
-          <div className={styles.previewItem}>
-            <span className={styles.previewLabel}>{t('protocolInstall.config.type.label')}</span>
-            <div className={styles.typeValue}>
-              <Text className={styles.previewValue}>
+          <div {...stylex.props(styles.previewItem)}>
+            <span {...stylex.props(styles.previewLabel)}>
+              {t('protocolInstall.config.type.label')}
+            </span>
+            <div {...stylex.props(styles.typeValue)}>
+              <Text className={stylex.props(styles.previewValue).className}>
                 {schema.config.type === 'stdio' ? 'STDIO' : 'HTTP'}
               </Text>
             </div>
@@ -141,9 +127,9 @@ const ConfigDisplay = memo<ConfigDisplayProps>(({ schema, onConfigUpdate }) => {
 
           {/* HTTP type shows URL */}
           {schema.config.type === 'http' && schema.config.url && (
-            <div className={styles.previewItem}>
-              <span className={styles.previewLabel}>{t('protocolInstall.config.url')}</span>
-              <div className={styles.urlValue}>{schema.config.url}</div>
+            <div {...stylex.props(styles.previewItem)}>
+              <span {...stylex.props(styles.previewLabel)}>{t('protocolInstall.config.url')}</span>
+              <div {...stylex.props(styles.urlValue)}>{schema.config.url}</div>
             </div>
           )}
 
@@ -151,16 +137,20 @@ const ConfigDisplay = memo<ConfigDisplayProps>(({ schema, onConfigUpdate }) => {
           {schema.config.type === 'stdio' && (
             <>
               {schema.config.command && (
-                <div className={styles.previewItem}>
-                  <span className={styles.previewLabel}>{t('protocolInstall.config.command')}</span>
-                  <span className={styles.previewValue}>{schema.config.command}</span>
+                <div {...stylex.props(styles.previewItem)}>
+                  <span {...stylex.props(styles.previewLabel)}>
+                    {t('protocolInstall.config.command')}
+                  </span>
+                  <span {...stylex.props(styles.previewValue)}>{schema.config.command}</span>
                 </div>
               )}
 
               {schema.config.args && schema.config.args.length > 0 && (
-                <div className={styles.previewItem}>
-                  <span className={styles.previewLabel}>{t('protocolInstall.config.args')}</span>
-                  <span className={styles.previewValue}>{schema.config.args.join(' ')}</span>
+                <div {...stylex.props(styles.previewItem)}>
+                  <span {...stylex.props(styles.previewLabel)}>
+                    {t('protocolInstall.config.args')}
+                  </span>
+                  <span {...stylex.props(styles.previewValue)}>{schema.config.args.join(' ')}</span>
                 </div>
               )}
             </>
@@ -169,15 +159,15 @@ const ConfigDisplay = memo<ConfigDisplayProps>(({ schema, onConfigUpdate }) => {
       </Block>
 
       {/* Config info - directly use KeyValueEditor */}
-      <Block className={styles.configSection} variant={'outlined'}>
-        <div className={styles.configTitle}>
+      <Block className={stylex.props(styles.configSection).className} variant={'outlined'}>
+        <div {...stylex.props(styles.configTitle)}>
           <Settings2Icon size={14} />
           {schema.config.type === 'stdio'
             ? t('protocolInstall.config.env')
             : t('protocolInstall.config.headers')}
         </div>
 
-        <div className={styles.configEditor}>
+        <div {...stylex.props(styles.configEditor)}>
           {/* HTTP type shows Headers */}
           {schema.config.type === 'http' && (
             <KeyValueEditor

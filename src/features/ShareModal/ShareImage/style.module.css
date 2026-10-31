@@ -1,0 +1,5 @@
+/* Shrinks every descendant of the system role text; `!important` is needed
+   because the Markdown renderer sets its own font sizes on nested elements. */
+.role * {
+  font-size: 12px !important;
+}

@@ -2,8 +2,10 @@
 
 import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
 import { resolveConnectorCatalogItem } from '@lobechat/const';
-import { Avatar, createStaticStyles, cssVar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import { Avatar, cssVar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
+import { cssVar as stylexCssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { AlertCircle, Loader2, Square, SquareCheckBig, SquareMinus, X } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
@@ -53,35 +55,25 @@ const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
 const EMPTY_CONNECTORS: ReturnType<typeof connectorSelectors.connectorList> = [];
 const emptyConnectorList = () => EMPTY_CONNECTORS;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  loadingIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextSecondary};
-    animation: spin 1s linear infinite;
+const spin = stylex.keyframes({
+  from: { transform: 'rotate(0deg)' },
+  to: { transform: 'rotate(360deg)' },
+});
 
-    @keyframes spin {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `,
-  notInstalledTag: css`
-    border-color: ${cssVar.colorWarningBorder};
-    background: ${cssVar.colorWarningBg};
-  `,
-  tag: css`
-    height: 28px !important;
-    border-radius: ${cssVar.borderRadiusSM} !important;
-  `,
-  warningIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorWarning};
-  `,
-}));
+// `tag` drops the former `!important`: lobe-ui's Tag CSS sits in `@layer lobe-ui`,
+// which unlayered StyleX rules already beat.
+const styles = stylex.create({
+  loadingIcon: {
+    flexShrink: 0,
+    color: stylexCssVar.colorTextSecondary,
+    animationName: spin,
+    animationDuration: '1s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+  tag: { height: '28px', borderRadius: stylexCssVar.borderRadiusSM },
+  warningIcon: { flexShrink: 0, color: stylexCssVar.colorWarning },
+});
 
 export interface PluginTagProps {
   /**
@@ -338,12 +330,12 @@ const PluginTag = memo<PluginTagProps>(
     const renderIcon = () => {
       // Show loading spinner when loading
       if (isLoading) {
-        return <Loader2 className={styles.loadingIcon} size={14} />;
+        return <Loader2 className={stylex.props(styles.loadingIcon).className} size={14} />;
       }
 
       // Show warning icon when not installed
       if (!meta.isInstalled) {
-        return <AlertCircle className={styles.warningIcon} size={14} />;
+        return <AlertCircle className={stylex.props(styles.warningIcon).className} size={14} />;
       }
 
       // Composio type has icon property
@@ -392,7 +384,7 @@ const PluginTag = memo<PluginTagProps>(
 
     return (
       <Tag
-        className={styles.tag}
+        className={stylex.props(styles.tag).className}
         closable={removable && !disabled && !selectable}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}

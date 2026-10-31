@@ -1,0 +1,6 @@
+/* Direct-child rule on the footer actions' children, which StyleX cannot select. */
+@media (max-width: 575.98px) {
+  .footerActions > * {
+    flex: 1;
+  }
+}

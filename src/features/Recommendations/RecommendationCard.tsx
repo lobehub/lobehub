@@ -1,4 +1,4 @@
-import { Block, Button, cssVar, cx, Divider, Flexbox, Tag, Text, toast } from '@lobehub/ui';
+import { Block, Button, cssVar, Divider, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,13 +49,18 @@ export const RecommendationCard = memo<RecommendationCardProps>(
 
     if (compact)
       return (
-        <Button className={styles.compactRow} loading={loading} type={'text'} onClick={handleClick}>
+        <Button
+          className={stylex.props(styles.compactRow).className}
+          loading={loading}
+          type={'text'}
+          onClick={handleClick}
+        >
           <Flexbox horizontal align={'flex-start'} gap={10} style={{ width: '100%' }}>
             <Flexbox flex={'none'} paddingBlock={2}>
               {renderIcon(RECOMMENDATION_ICON_SIZE.compact)}
             </Flexbox>
             <Text
-              className={cx(stylex.props(homeType.itemTitleProse).className, styles.compactTitle)}
+              className={stylex.props(homeType.itemTitleProse, styles.compactTitle).className}
               style={{ flex: 1 }}
             >
               {title}
@@ -66,14 +71,11 @@ export const RecommendationCard = memo<RecommendationCardProps>(
 
     return (
       <Block
+        className={stylex.props(briefStyles.card, styles.card, stylex.defaultMarker()).className}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG }}
         variant={'outlined'}
-        className={cx(
-          stylex.props(briefStyles.card, stylex.defaultMarker()).className,
-          styles.card,
-        )}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
           <Flexbox

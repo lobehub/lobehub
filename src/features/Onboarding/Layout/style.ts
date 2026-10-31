@@ -1,38 +1,43 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
+export const styles = stylex.create({
   // Inner container - dark mode
-  innerContainerDark: css`
-    position: relative;
-
-    overflow: hidden auto;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-  `,
+  innerContainerDark: {
+    position: 'relative',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
 
   // Inner container - light mode
-  innerContainerLight: css`
-    position: relative;
+  innerContainerLight: {
+    position: 'relative',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
 
-    overflow: hidden auto;
-
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-
-  innerContainerMobile: css`
-    position: relative;
-    overflow: hidden auto;
-    background: ${cssVar.colorBgContainer};
-  `,
+  innerContainerMobile: {
+    position: 'relative',
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
 
   // Outer container
-  outerContainer: css`
-    position: relative;
-  `,
-}));
+  outerContainer: {
+    position: 'relative',
+  },
+});

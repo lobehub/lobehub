@@ -2,7 +2,9 @@
 
 import type { WorkSummaryItem } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2Icon, GitPullRequestIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,147 +12,134 @@ import { useTranslation } from 'react-i18next';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
 import LinearIcon from '@/features/Work/icons/LinearIcon';
 
-const styles = createStaticStyles(({ css }) => ({
-  cover: css`
-    position: relative;
+const DARK = ':is([data-theme="dark"] *)';
 
-    overflow: hidden;
-
-    height: clamp(160px, 15vw, 220px);
-    margin: 7px;
-    border-radius: 11px;
-
-    /* A white top spotlight keeps the flat fill from reading dull. Light and
-       dark need different intensities: on the light grey fill the highlight
-       must be near-opaque white to register at all, while in dark mode a few
-       percent of white already lifts the surface. */
-    background:
-      radial-gradient(
-        140% 110% at 50% 0%,
-        color-mix(in srgb, #fff 85%, transparent) 0%,
-        color-mix(in srgb, #fff 30%, transparent) 45%,
-        transparent 75%
-      ),
-      ${cssVar.colorFillTertiary};
-    box-shadow: inset 0 1px 0 #fff;
-
-    [data-theme='dark'] & {
-      background:
-        radial-gradient(
-          140% 110% at 50% 0%,
-          color-mix(in srgb, #fff 10%, transparent) 0%,
-          transparent 65%
-        ),
-        ${cssVar.colorFillQuaternary};
-      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
-    }
-  `,
-  coverBadge: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 9px;
-    inset-inline-start: 9px;
-
-    display: grid;
-    place-items: center;
-
-    width: 34px;
-    height: 34px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 10px;
-
-    color: ${cssVar.colorText};
-
-    background: color-mix(in srgb, ${cssVar.colorBgElevated} 88%, transparent);
-    backdrop-filter: blur(12px);
-  `,
-  grid: css`
-    position: absolute;
-    inset: 0;
-
-    opacity: 0.22;
-    background-image:
-      linear-gradient(${cssVar.colorBorderSecondary} 1px, transparent 1px),
-      linear-gradient(90deg, ${cssVar.colorBorderSecondary} 1px, transparent 1px);
-    background-size: 20px 20px;
-  `,
-  linearBody: css`
-    padding: 20px;
-  `,
-  linearId: css`
-    font-size: 10px;
-    font-weight: 650;
-    color: ${cssVar.colorTextTertiary};
-    letter-spacing: 0.04em;
-  `,
-  linearTitle: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    margin-block-start: 7px;
-
-    font-size: 13px;
-    font-weight: 700;
-    line-height: 1.4;
-  `,
-  mockWindow: css`
-    position: absolute;
-    inset: 26px;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 9px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  previewDescription: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    margin-block-start: 8px;
-
-    font-size: 9px;
-    line-height: 1.55;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  previewBody: css`
-    box-sizing: border-box;
-    height: 100%;
-    padding-block: 20px 28px;
-    padding-inline: 20px;
-  `,
-  previewIdentifier: css`
-    font-size: 9px;
-    font-weight: 650;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  previewTitle: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    margin-block-start: 7px;
-
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1.45;
-  `,
-  status: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 12px;
-    inset-inline-end: 12px;
-  `,
-  taskBody: css`
-    padding: 20px;
-  `,
-}));
+const styles = stylex.create({
+  cover: {
+    // Keep color-mix precision and percentage positions through CSS optimization.
+    '--work-preview-highlight': '#fff',
+    '--work-preview-background-position': '0% 0%',
+    'position': 'relative',
+    'overflow': 'hidden',
+    'height': 'clamp(160px, 15vw, 220px)',
+    'margin': '7px',
+    'borderRadius': '11px',
+    'backgroundColor': { default: cssVar.colorFillTertiary, [DARK]: cssVar.colorFillQuaternary },
+    'backgroundImage': {
+      default:
+        'radial-gradient(140% 110% at center top, color-mix(in srgb, var(--work-preview-highlight) 85%, transparent) 0%, color-mix(in srgb, var(--work-preview-highlight) 30%, transparent) 45%, transparent 75%), none',
+      [DARK]:
+        'radial-gradient(140% 110% at center top, color-mix(in srgb, var(--work-preview-highlight) 10%, transparent) 0%, transparent 65%), none',
+    },
+    'backgroundPosition':
+      'var(--work-preview-background-position), var(--work-preview-background-position)',
+    'backgroundSize': 'auto, auto',
+    'backgroundRepeat': 'repeat, repeat',
+    // eslint-disable-next-line @stylexjs/valid-styles -- Preserve both background layers; the 0.19 keyword validator omits comma lists.
+    'backgroundOrigin': 'padding-box, padding-box',
+    // eslint-disable-next-line @stylexjs/valid-styles -- Valid list-valued CSS, accepted by the compiler.
+    'backgroundClip': 'border-box, border-box',
+    // eslint-disable-next-line @stylexjs/valid-styles -- Valid list-valued CSS, accepted by the compiler.
+    'backgroundAttachment': 'scroll, scroll',
+    'boxShadow': {
+      default: 'inset 0 1px 0 #fff',
+      [DARK]: 'inset 0 1px 0 color-mix(in srgb, var(--work-preview-highlight) 12%, transparent)',
+    },
+  },
+  coverBadge: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: '9px',
+    insetInlineStart: '9px',
+    display: 'grid',
+    placeItems: 'center',
+    width: '34px',
+    height: '34px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '10px',
+    color: cssVar.colorText,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgElevated} 88%, transparent)`,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(12px)',
+  },
+  grid: {
+    position: 'absolute',
+    inset: 0,
+    opacity: 0.22,
+    backgroundImage: `linear-gradient(${cssVar.colorBorderSecondary} 1px, transparent 1px),
+      linear-gradient(90deg, ${cssVar.colorBorderSecondary} 1px, transparent 1px)`,
+    backgroundSize: '20px 20px',
+  },
+  linearBody: { padding: '20px' },
+  linearId: {
+    fontSize: '10px',
+    fontWeight: 650,
+    color: cssVar.colorTextTertiary,
+    letterSpacing: '0.04em',
+  },
+  linearTitle: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    marginBlockStart: '7px',
+    fontSize: '13px',
+    fontWeight: 700,
+    lineHeight: 1.4,
+  },
+  mockWindow: {
+    position: 'absolute',
+    inset: '26px',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '9px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  previewDescription: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    marginBlockStart: '8px',
+    fontSize: '9px',
+    lineHeight: 1.55,
+    color: cssVar.colorTextSecondary,
+  },
+  previewBody: {
+    boxSizing: 'border-box',
+    height: '100%',
+    paddingBlockStart: '20px',
+    paddingBlockEnd: '28px',
+    paddingInline: '20px',
+  },
+  previewIdentifier: {
+    fontSize: '9px',
+    fontWeight: 650,
+    color: cssVar.colorTextTertiary,
+  },
+  previewTitle: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    marginBlockStart: '7px',
+    fontSize: '12px',
+    fontWeight: 700,
+    lineHeight: 1.45,
+  },
+  status: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: '12px',
+    insetInlineEnd: '12px',
+  },
+  taskBody: { padding: '20px' },
+});
 
 const getStatusColor = (status?: string | null) => {
   const normalized = status?.toLowerCase();
@@ -185,41 +174,41 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
   const status = item.status || taskStatus;
 
   return (
-    <div className={styles.cover}>
-      <div className={styles.grid} />
-      <div className={styles.mockWindow}>
+    <div {...stylex.props(styles.cover)}>
+      <div {...stylex.props(styles.grid)} />
+      <div {...stylex.props(styles.mockWindow)}>
         {isLinear ? (
-          <div className={styles.linearBody}>
+          <div {...stylex.props(styles.linearBody)}>
             <Flexbox horizontal align={'center'} justify={'space-between'}>
-              <span className={styles.linearId}>{identifier}</span>
+              <span {...stylex.props(styles.linearId)}>{identifier}</span>
             </Flexbox>
-            <div className={styles.linearTitle}>{title}</div>
-            <div className={styles.previewDescription}>{description}</div>
+            <div {...stylex.props(styles.linearTitle)}>{title}</div>
+            <div {...stylex.props(styles.previewDescription)}>{description}</div>
           </div>
         ) : item.resourceType === 'task' ? (
-          <Flexbox className={styles.taskBody} gap={10}>
+          <Flexbox className={stylex.props(styles.taskBody).className} gap={10}>
             <Flexbox horizontal align={'center'} gap={8}>
               <CheckCircle2Icon color={cssVar.colorSuccess} size={22} />
               <Text strong>{title}</Text>
             </Flexbox>
-            <div className={styles.previewDescription}>{description}</div>
+            <div {...stylex.props(styles.previewDescription)}>{description}</div>
           </Flexbox>
         ) : (
-          <div className={styles.previewBody}>
+          <div {...stylex.props(styles.previewBody)}>
             <Flexbox horizontal align={'center'} gap={6}>
               {item.resourceType === 'github_pull_request' && (
                 <GitPullRequestIcon color={cssVar.colorTextTertiary} size={11} />
               )}
-              <span className={styles.previewIdentifier}>
+              <span {...stylex.props(styles.previewIdentifier)}>
                 {previewIdentifier || item.resourceType}
               </span>
             </Flexbox>
-            <div className={styles.previewTitle}>{title}</div>
-            <div className={styles.previewDescription}>{description}</div>
+            <div {...stylex.props(styles.previewTitle)}>{title}</div>
+            <div {...stylex.props(styles.previewDescription)}>{description}</div>
           </div>
         )}
       </div>
-      <div className={styles.coverBadge}>
+      <div {...stylex.props(styles.coverBadge)}>
         {isGithub ? (
           <Github size={18} />
         ) : isLinear ? (
@@ -229,7 +218,11 @@ const WorkPreview = memo<WorkPreviewProps>(({ item, title }) => {
         )}
       </div>
       {!isLinear && !isGithub && status && (
-        <Tag className={styles.status} color={getStatusColor(status)} size={'small'}>
+        <Tag
+          className={stylex.props(styles.status).className}
+          color={getStatusColor(status)}
+          size={'small'}
+        >
           {status}
         </Tag>
       )}

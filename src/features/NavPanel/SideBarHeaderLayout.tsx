@@ -1,7 +1,8 @@
 'use client';
 
-import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Breadcrumb, type BreadcrumbItem, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -12,25 +13,12 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { isModifierClick } from '@/utils/navigation';
 
 import BackButton from './components/BackButton';
+import styles from './SideBarHeaderLayout.module.css';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  breadcrumb: css`
-    li,
-    li[aria-current='page'] {
-      font-size: 12px;
-      font-weight: normal;
-      color: ${cssVar.colorTextDescription};
-    }
-
-    a:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  container: css`
-    overflow: hidden;
-  `,
-}));
+const containerStyles = stylex.create({
+  container: { overflow: 'hidden' },
+});
 
 interface SideBarHeaderLayoutProps {
   backTo?: string;
@@ -105,7 +93,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.container}
+        className={stylex.props(containerStyles.container).className}
         flex={'none'}
         justify={'space-between'}
         padding={'8px 6px'}

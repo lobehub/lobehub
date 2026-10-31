@@ -1,0 +1,11 @@
+/* Restyles the Breadcrumb's own `li` / `a` DOM, which StyleX cannot select. */
+.breadcrumb li,
+.breadcrumb li[aria-current='page'] {
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--lobe-color-text-description);
+}
+
+.breadcrumb a:hover {
+  color: var(--lobe-color-text);
+}

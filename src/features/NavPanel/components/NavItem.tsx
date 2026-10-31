@@ -1,79 +1,57 @@
 'use client';
 
 import { type BlockProps, type DropdownItem, type IconProps } from '@lobehub/ui';
-import {
-  Block,
-  Center,
-  ContextMenuTrigger,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Spin,
-  Text,
-} from '@lobehub/ui';
+import { Block, Center, ContextMenuTrigger, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
+import type { StyleXStyles } from '@stylexjs/stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type FocusEvent, type PointerEvent, type ReactNode } from 'react';
 import { memo } from 'react';
 
+import { sx } from '@/styles/sx';
 import { isModifierClick } from '@/utils/navigation';
 
 import { type LazyActions, useLazyActions } from './useLazyActions';
 
-const ACTION_CLASS_NAME = 'nav-item-actions';
-const CONTENT_CLASS_NAME = 'nav-item-content';
+const HOVER = ':is([data-nav-item]:hover *)';
+const ACTION_FOCUS = ':is([data-nav-item]:has([data-nav-item-actions] :focus-visible) *)';
+const POPUP_OPEN = ':is([data-nav-item]:has([data-popup-open]) *)';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    /* Width the title fades out under: one small action icon (24px) plus spacing.
-       Each extra icon adds its 24px plus the 2px gap. The focus guards and the
-       aria-owns portal marker an open menu inserts beside its trigger are not
-       icons, so they are not counted. */
-    --nav-item-actions-inset: 28px;
-
-    user-select: none;
-    overflow: hidden;
-    min-width: 32px;
-
-    &:has(.${ACTION_CLASS_NAME} > :nth-child(2 of :not([data-base-ui-focus-guard], [aria-owns]))) {
-      --nav-item-actions-inset: 54px;
-    }
-
-    /* focus-visible, not focus-within: closing a dropdown hands focus back to its
-       trigger, which would pin the actions open after the pointer has left. */
-    &:hover,
-    &:has(.${ACTION_CLASS_NAME} :focus-visible),
-    &:has([data-popup-open]) {
-      .${ACTION_CLASS_NAME} {
-        pointer-events: auto;
-        opacity: 1;
-      }
-
-      /* Fade the covered text itself instead of painting a row-colored plate over it,
-         so the overlay matches any row background (hover / active / none). */
-      .${CONTENT_CLASS_NAME} {
-        mask-image: linear-gradient(
-          to right,
-          #000 calc(100% - var(--nav-item-actions-inset) - 28px),
-          transparent calc(100% - var(--nav-item-actions-inset))
-        );
-      }
-    }
-
-    /* Overlay instead of in-flow so revealing the actions never re-truncates the title. */
-    .${ACTION_CLASS_NAME} {
-      pointer-events: none;
-
-      position: absolute;
-      inset-block: 0;
-      inset-inline-end: 0;
-
-      padding-inline-end: 6px;
-
-      opacity: 0;
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    '--nav-item-actions-inset': {
+      'default': '28px',
+      ':has([data-nav-item-actions] > :nth-child(2 of :not([data-base-ui-focus-guard], [aria-owns])))':
+        '54px',
+    },
+    'userSelect': 'none',
+    'overflow': 'hidden',
+    'minWidth': '32px',
+  },
+  actions: {
+    pointerEvents: {
+      default: 'none',
+      [HOVER]: 'auto',
+      [ACTION_FOCUS]: 'auto',
+      [POPUP_OPEN]: 'auto',
+    },
+    opacity: { default: 0, [HOVER]: 1, [ACTION_FOCUS]: 1, [POPUP_OPEN]: 1 },
+    position: 'absolute',
+    insetBlock: 0,
+    insetInlineEnd: 0,
+    paddingInlineEnd: '6px',
+  },
+  content: {
+    maskImage: {
+      default: null,
+      [HOVER]:
+        'linear-gradient(to right, #000 calc(100% - var(--nav-item-actions-inset) - 28px), transparent calc(100% - var(--nav-item-actions-inset)))',
+      [ACTION_FOCUS]:
+        'linear-gradient(to right, #000 calc(100% - var(--nav-item-actions-inset) - 28px), transparent calc(100% - var(--nav-item-actions-inset)))',
+      [POPUP_OPEN]:
+        'linear-gradient(to right, #000 calc(100% - var(--nav-item-actions-inset) - 28px), transparent calc(100% - var(--nav-item-actions-inset)))',
+    },
+  },
+});
 
 export interface NavItemSlots {
   iconPostfix?: ReactNode;
@@ -115,6 +93,7 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
    * fully emphasized regardless of active state (e.g. topic titles).
    */
   titleColor?: string;
+  xstyle?: StyleXStyles;
 }
 
 const NavItem = memo<NavItemProps>(
@@ -128,6 +107,7 @@ const NavItem = memo<NavItemProps>(
     iconSize = 18,
     title,
     titleColor,
+    xstyle,
     description,
     onClick,
     disabled,
@@ -180,15 +160,15 @@ const NavItem = memo<NavItemProps>(
 
     const Content = (
       <Block
+        data-nav-item
         horizontal
         align={'center'}
-        className={cx(styles.container, className)}
+        {...sx([styles.container, xstyle], className, mergedStyle)}
         clickable={!disabled}
         gap={8}
         height={description ? undefined : 36}
         paddingBlock={description ? 8 : undefined}
         paddingInline={4}
-        style={mergedStyle}
         variant={variant}
         onClick={(e) => {
           // Always prevent default <a> navigation for normal clicks to avoid full page reload.
@@ -226,10 +206,9 @@ const NavItem = memo<NavItemProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={CONTENT_CLASS_NAME}
+          {...sx([styles.content], undefined, { overflow: 'hidden' })}
           flex={1}
           gap={8}
-          style={{ overflow: 'hidden' }}
         >
           {titlePrefix}
           {description ? (
@@ -267,9 +246,10 @@ const NavItem = memo<NavItemProps>(
         </Flexbox>
         {actions && (
           <Flexbox
+            data-nav-item-actions
             horizontal
             align={'center'}
-            className={ACTION_CLASS_NAME}
+            {...stylex.props(styles.actions)}
             gap={2}
             justify={'flex-end'}
             onClick={(e) => {

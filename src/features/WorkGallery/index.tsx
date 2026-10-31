@@ -1,16 +1,9 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import {
-  Avatar,
-  Button,
-  Center,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Empty,
-  Flexbox,
-} from '@lobehub/ui';
+import { Avatar, Button, Center, Empty, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,119 +24,88 @@ import { useOpenWork } from './useOpenWork';
 import WorkPreviewCard from './WorkPreviewCard';
 import WorksTypeTabs from './WorksTypeTabs';
 
-const styles = createStaticStyles(({ css }) => ({
-  agentFilter: css`
-    flex: none;
-
-    padding-inline: 5px 10px;
-    border: 1px solid transparent;
-    border-radius: 999px;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-  agentFilterActive: css`
-    border-color: ${cssVar.colorBorder};
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  cardList: css`
-    display: grid;
-    grid-template-columns: repeat(3, minmax(280px, 1fr));
-    gap: 16px;
-    width: 100%;
-
-    @media (width >= 1600px) {
-      grid-template-columns: repeat(4, minmax(280px, 1fr));
-    }
-
-    @media (width <= 920px) {
-      grid-template-columns: repeat(2, minmax(280px, 1fr));
-    }
-
-    @media (width <= 620px) {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  `,
-  container: css`
-    height: 100%;
-  `,
-  emptyState: css`
-    height: 100%;
-    min-height: 320px;
-  `,
-  filterBar: css`
-    scrollbar-width: none;
-
-    overflow: auto hidden;
-    flex: none;
-
-    padding-block: 12px 10px;
-    padding-inline: 24px;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  `,
-  groupCount: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  groupHeader: css`
-    display: flex;
-    gap: 10px;
-    align-items: baseline;
-    margin-block-end: 12px;
-  `,
-  groupTitle: css`
-    font-size: 14px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  loadMoreError: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 16px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  retry: css`
-    cursor: pointer;
-
-    padding-block: 4px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 6px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      border-color: ${cssVar.colorTextTertiary};
-      color: ${cssVar.colorText};
-    }
-  `,
-  typeBar: css`
-    flex: none;
-    padding-block: 12px 0;
-    padding-inline: 24px;
-  `,
-  scroll: css`
-    overflow: hidden auto;
-    flex: 1;
-
-    min-height: 0;
-    padding-block: 8px 24px;
-    padding-inline: 24px;
-  `,
-}));
+const styles = stylex.create({
+  agentFilter: {
+    flex: 'none',
+    paddingInlineStart: '5px',
+    paddingInlineEnd: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: '999px',
+    color: cssVar.colorTextSecondary,
+  },
+  agentFilterActive: {
+    borderColor: cssVar.colorBorder,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  cardList: {
+    display: 'grid',
+    gridTemplateColumns: {
+      'default': 'repeat(3, minmax(280px, 1fr))',
+      '@media (width >= 1600px)': 'repeat(4, minmax(280px, 1fr))',
+      '@media (width <= 920px)': 'repeat(2, minmax(280px, 1fr))',
+      '@media (width <= 620px)': 'minmax(0, 1fr)',
+    },
+    gap: '16px',
+    width: '100%',
+  },
+  container: { height: '100%' },
+  emptyState: { height: '100%', minHeight: '320px' },
+  filterBar: {
+    'scrollbarWidth': 'none',
+    'overflowX': 'auto',
+    'overflowY': 'hidden',
+    'flex': 'none',
+    'paddingBlockStart': '12px',
+    'paddingBlockEnd': '10px',
+    'paddingInline': '24px',
+    '::-webkit-scrollbar': { display: 'none' },
+  },
+  groupCount: { flex: 'none', fontSize: '12px', color: cssVar.colorTextTertiary },
+  groupHeader: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'baseline',
+    marginBlockEnd: '12px',
+  },
+  groupTitle: { fontSize: '14px', fontWeight: 600, color: cssVar.colorText },
+  loadMoreError: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '16px',
+    fontSize: '13px',
+    color: cssVar.colorTextTertiary,
+  },
+  retry: {
+    cursor: 'pointer',
+    paddingBlock: '4px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorTextTertiary },
+    borderRadius: '6px',
+    fontSize: '13px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  typeBar: { flex: 'none', paddingBlockStart: '12px', paddingBlockEnd: 0, paddingInline: '24px' },
+  scroll: {
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    flex: '1',
+    minHeight: '0',
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '24px',
+    paddingInline: '24px',
+  },
+});
 
 interface AgentFilterProps {
   active: boolean;
@@ -157,7 +119,7 @@ const AgentFilter = memo<AgentFilterProps>(({ active, agentId, onSelect }) => {
 
   return (
     <Button
-      className={cx(styles.agentFilter, active && styles.agentFilterActive)}
+      className={stylex.props(styles.agentFilter, active && styles.agentFilterActive).className}
       size={'small'}
       type={'text'}
       icon={
@@ -260,13 +222,13 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
   const renderBody = () => {
     if (error && items.length === 0)
       return (
-        <Center className={styles.emptyState} gap={12}>
+        <Center className={stylex.props(styles.emptyState).className} gap={12}>
           <Empty
             description={t('work.loadError')}
             icon={TriangleAlertIcon}
             title={t('work.loadErrorTitle')}
           />
-          <button className={styles.retry} type={'button'} onClick={() => reload()}>
+          <button {...stylex.props(styles.retry)} type={'button'} onClick={() => reload()}>
             {t('work.retry')}
           </button>
         </Center>
@@ -274,7 +236,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
 
     if (items.length === 0)
       return (
-        <Center className={styles.emptyState}>
+        <Center className={stylex.props(styles.emptyState).className}>
           <Empty
             description={t('work.empty.desc')}
             icon={PackageOpenIcon}
@@ -285,7 +247,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
 
     if (filteredItems.length === 0)
       return (
-        <Center className={styles.emptyState}>
+        <Center className={stylex.props(styles.emptyState).className}>
           <Empty description={t('work.agentEmpty.desc')} title={t('work.agentEmpty.title')} />
         </Center>
       );
@@ -295,18 +257,18 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
         <Flexbox gap={32}>
           {groups.map((group) => (
             <section key={group.key}>
-              <div className={styles.groupHeader}>
-                <span className={styles.groupTitle}>{group.title}</span>
-                <span className={styles.groupCount}>
+              <div {...stylex.props(styles.groupHeader)}>
+                <span {...stylex.props(styles.groupTitle)}>{group.title}</span>
+                <span {...stylex.props(styles.groupCount)}>
                   {t('work.count', { count: group.items.length })}
                 </span>
                 {group.totalCost && (
-                  <span className={styles.groupCount}>
+                  <span {...stylex.props(styles.groupCount)}>
                     {t('work.totalCost', { cost: group.totalCost })}
                   </span>
                 )}
               </div>
-              <div className={styles.cardList}>
+              <div {...stylex.props(styles.cardList)}>
                 {group.items.map((item) => (
                   <WorkPreviewCard
                     item={item}
@@ -327,9 +289,9 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
             <WorkGalleryCardsSkeleton count={4} />
           </Flexbox>
         ) : error ? (
-          <div className={styles.loadMoreError}>
+          <div {...stylex.props(styles.loadMoreError)}>
             <span>{t('work.loadMoreError')}</span>
-            <button className={styles.retry} type={'button'} onClick={() => reload()}>
+            <button {...stylex.props(styles.retry)} type={'button'} onClick={() => reload()}>
               {t('work.retry')}
             </button>
           </div>
@@ -339,26 +301,33 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
   };
 
   const typeTabs = (
-    <Flexbox className={styles.typeBar} gap={12}>
+    <Flexbox className={stylex.props(styles.typeBar).className} gap={12}>
       <WorksTypeTabs activeKey={galleryKey} />
       {galleryKey === 'canvas' && <CanvasStorageSummary summary={canvasSummary} />}
     </Flexbox>
   );
 
   return isLoadingInitial && items.length === 0 ? (
-    <Flexbox className={styles.container}>
+    <Flexbox className={stylex.props(styles.container).className}>
       {typeTabs}
       <WorkGallerySkeleton />
     </Flexbox>
   ) : (
-    <Flexbox className={styles.container}>
+    <Flexbox className={stylex.props(styles.container).className}>
       {typeTabs}
       {agentIds.length > 0 && (
-        <Flexbox horizontal align={'center'} className={styles.filterBar} gap={4}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.filterBar).className}
+          gap={4}
+        >
           <Button
-            className={cx(styles.agentFilter, !activeAgentId && styles.agentFilterActive)}
             size={'small'}
             type={'text'}
+            className={
+              stylex.props(styles.agentFilter, !activeAgentId && styles.agentFilterActive).className
+            }
             onClick={() => setActiveAgentId(null)}
           >
             {t('work.agentFilter.all')}
@@ -373,7 +342,7 @@ const WorkGallery = memo<WorkGalleryProps>(({ galleryKey }) => {
           ))}
         </Flexbox>
       )}
-      <Flexbox className={styles.scroll}>{renderBody()}</Flexbox>
+      <Flexbox className={stylex.props(styles.scroll).className}>{renderBody()}</Flexbox>
     </Flexbox>
   );
 });

@@ -1,0 +1,7 @@
+/* Reaches into base-ui Steps' own `li > span[aria-hidden]` connector, which
+   StyleX cannot select. The doubled class outranks base-ui's vertical connector
+   rule so the rail centres under the 32px icons. */
+.steps.steps > li > span[aria-hidden] {
+  inset-block-start: 36px;
+  inset-inline-start: 16px;
+}

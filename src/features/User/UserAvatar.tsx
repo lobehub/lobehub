@@ -1,7 +1,8 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useMemo } from 'react';
 
 import BaseUserAvatar, {
@@ -14,37 +15,28 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
-const styles = createStaticStyles(({ css }) => ({
-  clickable: css`
-    position: relative;
-    transition: all 200ms ease-out 0s;
-
-    &::before {
-      content: '';
-
-      position: absolute;
-      transform: skewX(-45deg) translateX(-400%);
-
-      overflow: hidden;
-
-      box-sizing: border-box;
-      width: 25%;
-      height: 100%;
-
-      background: rgb(255 255 255 / 50%);
-
-      transition: all 200ms ease-out 0s;
-    }
-
-    &:hover {
-      box-shadow: 0 0 0 2px ${cssVar.colorPrimary};
-
-      &::before {
-        transform: skewX(-45deg) translateX(400%);
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  clickable: {
+    'position': 'relative',
+    'transition': 'all 200ms ease-out 0s',
+    'boxShadow': { 'default': null, ':hover': `0 0 0 2px ${cssVar.colorPrimary}` },
+    '::before': {
+      content: "''",
+      position: 'absolute',
+      transform: {
+        'default': 'skewX(-45deg) translateX(-400%)',
+        ':hover': 'skewX(-45deg) translateX(400%)',
+      },
+      overflow: 'hidden',
+      boxSizing: 'border-box',
+      width: '25%',
+      height: '100%',
+      backgroundColor: 'rgb(255 255 255 / 50%)',
+      backgroundImage: 'none',
+      transition: 'all 200ms ease-out 0s',
+    },
+  },
+});
 
 export interface UserAvatarProps extends BaseUserAvatarProps {
   /**
@@ -104,7 +96,7 @@ const UserAvatar = ({
       alt={altText}
       avatar={avatarValue}
       background={background}
-      className={clickable ? styles.clickable : className}
+      className={clickable ? stylex.props(styles.clickable).className : className}
       // A workspace identity is not a person, so it draws the workspace mark.
       fallbackVariant={nameOverride ? 'bauhaus' : 'pixel'}
       name={name}

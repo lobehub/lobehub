@@ -1,53 +1,54 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-import { SPIN_TURN_MS } from './spinHold';
+const refreshSpin = stylex.keyframes({
+  to: { transform: 'rotate(360deg)' },
+});
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    &:hover {
-      border-color: ${cssVar.colorBorder} !important;
-    }
-  `,
-  compactRow: css`
-    justify-content: flex-start;
+const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
 
-    width: calc(100% + 16px);
-    height: auto;
-    margin-inline: -8px;
-    padding-block: 6px;
-    padding-inline: 8px;
-    border: 0;
-    border-radius: ${cssVar.borderRadius};
-
-    text-align: start;
-
-    transition: background ${cssVar.motionDurationFast};
-
-    /* the selector mirrors base-ui's variantText hover rule so the row tint
-       can outrank its brighter fill */
-    &:hover:not(:disabled, [aria-disabled='true']) {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  compactTitle: css`
-    min-width: 0;
-  `,
-  refreshSpin: css`
-    animation: recommendations-refresh-spin ${SPIN_TURN_MS}ms linear infinite;
-
-    @keyframes recommendations-refresh-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    /* Keep the "working" signal, drop the rotation. */
-    @media (prefers-reduced-motion: reduce) {
-      opacity: 0.45;
-      animation: none;
-    }
-  `,
-  subtitle: css`
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+// The row/card hover rules mirror base-ui's variantText hover selector so the
+// tint can outrank its brighter fill.
+export const styles = stylex.create({
+  // `!important` dropped: lobe-ui's Block CSS sits in `@layer lobe-ui`.
+  card: {
+    borderColor: { 'default': null, ':hover': cssVar.colorBorder },
+  },
+  compactRow: {
+    justifyContent: 'flex-start',
+    width: 'calc(100% + 16px)',
+    height: 'auto',
+    marginInline: '-8px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadius,
+    textAlign: 'start',
+    transition: `background ${cssVar.motionDurationFast}`,
+    backgroundColor: {
+      'default': null,
+      ':hover:not(:disabled, [aria-disabled="true"])': cssVar.colorFillQuaternary,
+    },
+    backgroundImage: {
+      'default': null,
+      ':hover:not(:disabled, [aria-disabled="true"])': 'none',
+    },
+  },
+  compactTitle: {
+    minWidth: '0',
+  },
+  // The duration is `SPIN_TURN_MS` (./spinHold): StyleX cannot read an imported
+  // constant, so keep the two in step. Reduced motion keeps the "working" signal
+  // and drops the rotation.
+  refreshSpin: {
+    animationName: { default: refreshSpin, [REDUCED_MOTION]: 'none' },
+    animationDuration: '600ms',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+    opacity: { default: null, [REDUCED_MOTION]: 0.45 },
+  },
+  subtitle: {
+    color: cssVar.colorTextDescription,
+  },
+});

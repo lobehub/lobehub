@@ -1,17 +1,9 @@
 'use client';
 
 import type { TopicIssue } from '@lobechat/conversation-flow';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Skeleton,
-  Text,
-  toast,
-  useModalContext,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Skeleton, Text, toast, useModalContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleAlert, CircleCheck, EyeOff, Stethoscope } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,13 +17,15 @@ export interface TopicDoctorContentProps {
   topicId: string;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  issue: css`
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-  `,
-}));
+const styles = stylex.create({
+  issue: {
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '8px',
+  },
+});
 
 const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) => {
   const { t } = useTranslation(['topic', 'common']);
@@ -122,7 +116,7 @@ const TopicDoctorContent = memo<TopicDoctorContentProps>(({ agentId, topicId }) 
           <Flexbox
             horizontal
             align={'flex-start'}
-            className={styles.issue}
+            className={stylex.props(styles.issue).className}
             gap={8}
             key={issue.messageId}
           >

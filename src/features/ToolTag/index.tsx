@@ -2,7 +2,9 @@
 
 import { type ComposioAppType } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
-import { Avatar, createStaticStyles, cssVar, Icon, Tag } from '@lobehub/ui';
+import { Avatar, cssVar, Icon, Tag } from '@lobehub/ui';
+import { cssVar as stylexCssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
@@ -29,18 +31,19 @@ const ComposioIcon = memo<Pick<ComposioAppType, 'icon' | 'label'>>(({ icon, labe
   return <Icon fill={cssVar.colorText} icon={icon} size={16} />;
 });
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  compact: css`
-    height: auto !important;
-    padding: 0 !important;
-    border: none !important;
-    background: transparent !important;
-  `,
-  tag: css`
-    height: 24px !important;
-    border-radius: ${cssVar.borderRadiusSM} !important;
-  `,
-}));
+// The former `!important`s are dropped: lobe-ui's Tag CSS sits in `@layer lobe-ui`,
+// which unlayered StyleX rules already beat.
+const styles = stylex.create({
+  compact: {
+    height: 'auto',
+    padding: 0,
+    borderWidth: 0,
+    borderStyle: 'none',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  tag: { height: '24px', borderRadius: stylexCssVar.borderRadiusSM },
+});
 
 export interface ToolTagProps {
   /**
@@ -156,7 +159,7 @@ const ToolTag = memo<ToolTagProps>(({ identifier, variant = 'default' }) => {
 
   return (
     <Tag
-      className={isCompact ? styles.compact : styles.tag}
+      className={stylex.props(isCompact ? styles.compact : styles.tag).className}
       icon={renderIcon()}
       variant={isCompact ? 'borderless' : 'filled'}
     >

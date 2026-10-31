@@ -1,5 +1,7 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Button, Center, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
+import { Button, Center, Flexbox, Text, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { DownloadIcon, RotateCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,50 +19,44 @@ const DEFAULT_FIELD_VALUE: FieldType = {
   withSystemRole: false,
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  updating: css`
-    pointer-events: none;
+const spin = stylex.keyframes({
+  to: { transform: 'rotate(360deg)' },
+});
 
-    position: absolute;
-    z-index: 10;
-    inset-block-start: 60px;
-    inset-inline-start: 50%;
-    transform: translateX(-50%);
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    height: 32px;
-    padding-inline: 12px;
-    border-radius: 16px;
-
-    font-size: 12px;
-    color: ${cssVar.colorBgContainer};
-
-    background: ${cssVar.colorText};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  updatingSpinner: css`
-    width: 10px;
-    height: 10px;
-    border: 2px solid color-mix(in srgb, ${cssVar.colorBgContainer} 35%, transparent);
-    border-block-start-color: ${cssVar.colorBgContainer};
-    border-radius: 50%;
-
-    animation: share-pdf-spin 800ms linear infinite;
-
-    @keyframes share-pdf-spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      animation: none;
-    }
-  `,
-}));
+const styles = stylex.create({
+  updating: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '60px',
+    insetInlineStart: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    height: '32px',
+    paddingInline: '12px',
+    borderRadius: '16px',
+    fontSize: '12px',
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorText,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  updatingSpinner: {
+    width: '10px',
+    height: '10px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 35%, transparent)`,
+    borderBlockStartColor: cssVar.colorBgContainer,
+    borderRadius: '50%',
+    animationName: { 'default': spin, '@media (prefers-reduced-motion: reduce)': 'none' },
+    animationDuration: '800ms',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
+  },
+});
 
 const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
@@ -97,8 +93,8 @@ const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
       overlay={
         loading &&
         pdfData && (
-          <div aria-live={'polite'} className={styles.updating} role={'status'}>
-            <span className={styles.updatingSpinner} />
+          <div aria-live={'polite'} {...stylex.props(styles.updating)} role={'status'}>
+            <span {...stylex.props(styles.updatingSpinner)} />
             {t('shareModal.pdfUpdating')}
           </div>
         )

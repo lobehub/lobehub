@@ -2,16 +2,9 @@
 
 import type { CanvasStorageItem, WorkSummaryItem } from '@lobechat/types';
 import { formatSize, formatTokenNumber } from '@lobechat/utils/format';
-import {
-  ActionIcon,
-  Avatar,
-  createStaticStyles,
-  cssVar,
-  cx,
-  DropdownMenu,
-  Flexbox,
-  Tag,
-} from '@lobehub/ui';
+import { ActionIcon, Avatar, cx, DropdownMenu, Flexbox, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,113 +18,71 @@ import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
 import WorkPreview from './WorkPreview';
 
-const styles = createStaticStyles(({ css }) => ({
-  agentAvatar: css`
-    align-self: flex-start;
-    margin-block-start: 2px;
-  `,
-  agentName: css`
-    overflow: hidden;
-    flex: none;
-
-    max-width: 64px;
-
-    font-size: 12px;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  card: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      transform ${cssVar.motionDurationFast},
+const styles = stylex.create({
+  agentAvatar: { alignSelf: 'flex-start', marginBlockStart: '2px' },
+  agentName: {
+    overflow: 'hidden',
+    flex: 'none',
+    maxWidth: '64px',
+    fontSize: '12px',
+    fontWeight: 600,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  card: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: `transform ${cssVar.motionDurationFast},
       border-color ${cssVar.motionDurationFast},
-      box-shadow ${cssVar.motionDurationFast};
-  `,
-  cardInfo: css`
-    padding-block: 8px 12px;
-    padding-inline: 12px;
-  `,
-  clickable: css`
-    cursor: pointer;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  footer: css`
-    overflow: hidden;
-    margin-block-start: 8px;
-  `,
-  identityMeta: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  identifier: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  metaRow: css`
-    min-width: 0;
-  `,
-  more: css`
-    flex: none;
-    margin-inline-start: auto;
-  `,
-  meta: css`
-    flex: none;
-    font-size: 10px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  originTopic: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  title: css`
-    overflow: hidden;
-
-    margin-block-start: 5px;
-
-    font-size: 15px;
-    font-weight: 650;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  type: css`
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  usage: css`
-    flex: none;
-
-    margin-inline-start: auto;
-
-    font-size: 10px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-  `,
-}));
+      box-shadow ${cssVar.motionDurationFast}`,
+  },
+  cardInfo: { paddingBlockStart: '8px', paddingBlockEnd: '12px', paddingInline: '12px' },
+  clickable: { cursor: 'pointer', borderColor: { 'default': null, ':hover': cssVar.colorBorder } },
+  footer: { overflow: 'hidden', marginBlockStart: '8px' },
+  identityMeta: { flex: '1', minWidth: '0' },
+  identifier: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  metaRow: { minWidth: '0' },
+  more: { flex: 'none', marginInlineStart: 'auto' },
+  meta: { flex: 'none', fontSize: '10px', color: cssVar.colorTextTertiary },
+  originTopic: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  title: {
+    overflow: 'hidden',
+    marginBlockStart: '5px',
+    fontSize: '15px',
+    fontWeight: 650,
+    lineHeight: 1.4,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  type: { fontSize: '11px', color: cssVar.colorTextTertiary },
+  usage: {
+    flex: 'none',
+    marginInlineStart: 'auto',
+    fontSize: '10px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface WorkPreviewCardProps {
   item: WorkSummaryItem;
@@ -209,18 +160,31 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) =
 
   return (
     <Flexbox
-      className={cx('work-preview-card', styles.card, clickable && styles.clickable)}
+      className={cx(
+        stylex.props(styles.card, clickable && styles.clickable).className,
+        'work-preview-card',
+      )}
       onClick={clickable ? () => onOpen(item) : undefined}
     >
       <WorkPreview item={item} title={title} />
-      <div className={styles.cardInfo}>
-        <Flexbox horizontal align={'center'} className={styles.metaRow} gap={6}>
-          <span className={styles.type}>{t(workTypeKey(item), { ns: 'file' })}</span>
+      <div {...stylex.props(styles.cardInfo)}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.metaRow).className}
+          gap={6}
+        >
+          <span {...stylex.props(styles.type)}>{t(workTypeKey(item), { ns: 'file' })}</span>
           {displayIdentifier &&
             item.resourceType !== 'document' &&
             item.resourceType !== 'github_pull_request' &&
             item.resourceType !== 'linear_issue' && (
-              <Flexbox horizontal align={'center'} className={styles.identifier} gap={3}>
+              <Flexbox
+                horizontal
+                align={'center'}
+                className={stylex.props(styles.identifier).className}
+                gap={3}
+              >
                 {displayIdentifier}
               </Flexbox>
             )}
@@ -230,7 +194,7 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) =
             </Tag>
           )}
           {menuItems.length > 0 && (
-            <div className={styles.more} onClick={stopPropagation}>
+            <div className={stylex.props(styles.more).className} onClick={stopPropagation}>
               <DropdownMenu items={menuItems} placement={'bottomRight'}>
                 <ActionIcon
                   icon={MoreHorizontalIcon}
@@ -242,25 +206,30 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) =
             </div>
           )}
         </Flexbox>
-        <div className={styles.title}>{title}</div>
-        <Flexbox horizontal align={'baseline'} className={styles.footer} gap={7}>
+        <div {...stylex.props(styles.title)}>{title}</div>
+        <Flexbox
+          horizontal
+          align={'baseline'}
+          className={stylex.props(styles.footer).className}
+          gap={7}
+        >
           {agent && (
             <>
               <Avatar
                 emojiScaleWithBackground
                 avatar={agent.avatar}
                 background={agent.backgroundColor}
-                className={styles.agentAvatar}
+                className={stylex.props(styles.agentAvatar).className}
                 shape={'square'}
                 size={24}
               />
-              <Flexbox className={styles.identityMeta} gap={1}>
+              <Flexbox className={stylex.props(styles.identityMeta).className} gap={1}>
                 <Flexbox horizontal align={'baseline'} gap={7}>
-                  <span className={styles.agentName}>{agent.title}</span>
-                  <span className={styles.meta}>{eventTime}</span>
+                  <span {...stylex.props(styles.agentName)}>{agent.title}</span>
+                  <span {...stylex.props(styles.meta)}>{eventTime}</span>
                 </Flexbox>
                 {item.originTopicTitle && (
-                  <div className={styles.originTopic}>
+                  <div {...stylex.props(styles.originTopic)}>
                     {t('work.fromTopic', { ns: 'file', topic: item.originTopicTitle })}
                   </div>
                 )}
@@ -268,17 +237,17 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) =
             </>
           )}
           {!agent && (
-            <Flexbox className={styles.identityMeta} gap={1}>
-              <span className={styles.meta}>{eventTime}</span>
+            <Flexbox className={stylex.props(styles.identityMeta).className} gap={1}>
+              <span {...stylex.props(styles.meta)}>{eventTime}</span>
               {item.originTopicTitle && (
-                <div className={styles.originTopic}>
+                <div {...stylex.props(styles.originTopic)}>
                   {t('work.fromTopic', { ns: 'file', topic: item.originTopicTitle })}
                 </div>
               )}
             </Flexbox>
           )}
           {(size || totalTokens || cost) && (
-            <span className={styles.usage}>
+            <span className={stylex.props(styles.usage).className}>
               {[size, totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
                 .filter(Boolean)
                 .join(' · ')}

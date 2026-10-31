@@ -1,82 +1,65 @@
-import { createStaticStyles, cx, type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon, ChevronDownIcon, PlusIcon } from 'lucide-react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    height: 30px;
-    padding-inline: 12px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: 15px;
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition:
-      background 150ms ${cssVar.motionEaseOut},
+const styles = stylex.create({
+  chip: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    height: '30px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: { 'default': cssVar.colorBorder, ':hover': cssVar.colorTextQuaternary },
+    borderRadius: '15px',
+    fontSize: '13px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: `background 150ms ${cssVar.motionEaseOut},
       color 150ms ${cssVar.motionEaseOut},
-      border-color 150ms ${cssVar.motionEaseOut};
-
-    &:hover {
-      border-color: ${cssVar.colorTextQuaternary};
-      color: ${cssVar.colorText};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  chipActive: css`
-    border: 1px solid ${cssVar.colorText};
-    color: ${cssVar.colorBgContainer};
-    background: ${cssVar.colorText};
-
-    &:hover {
-      border-color: ${cssVar.colorText};
-      color: ${cssVar.colorBgContainer};
-      opacity: 0.88;
-    }
-  `,
-  select: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    height: 30px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 1px;
-    }
-  `,
-  selectLabel: css`
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+      border-color 150ms ${cssVar.motionEaseOut}`,
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  chipActive: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
+    color: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorBgContainer },
+    backgroundColor: cssVar.colorText,
+    backgroundImage: 'none',
+    opacity: { 'default': null, ':hover': 0.88 },
+  },
+  select: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    height: '30px',
+    paddingInline: '10px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadius,
+    fontSize: '13px',
+    color: cssVar.colorText,
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  selectLabel: { color: cssVar.colorTextDescription },
+});
 
 interface ToggleChipProps {
   checked: boolean;
@@ -87,7 +70,7 @@ interface ToggleChipProps {
 export const ToggleChip = ({ checked, label, onChange }: ToggleChipProps) => (
   <button
     aria-pressed={checked}
-    className={cx(styles.chip, checked && styles.chipActive)}
+    {...stylex.props(styles.chip, checked && styles.chipActive)}
     type={'button'}
     onClick={() => onChange(!checked)}
   >
@@ -125,8 +108,8 @@ export const SelectChip = <T extends string>({
 
   return (
     <DropdownMenu items={items} placement={'bottomLeft'}>
-      <button className={styles.select} type={'button'}>
-        <span className={styles.selectLabel}>{label}</span>
+      <button {...stylex.props(styles.select)} type={'button'}>
+        <span {...stylex.props(styles.selectLabel)}>{label}</span>
         {current?.label}
         <Icon icon={ChevronDownIcon} size={14} style={{ opacity: 0.5 }} />
       </button>

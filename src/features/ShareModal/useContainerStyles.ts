@@ -1,35 +1,35 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  preview: css`
-    overflow: hidden;
+import moduleStyles from './useContainerStyles.module.css';
 
-    width: 100%;
-    max-width: var(--preview-max-width, none);
-    min-height: 100%;
-    margin: var(--preview-margin, 0 auto);
-    border-start-start-radius: ${cssVar.borderRadiusLG};
-    border-start-end-radius: ${cssVar.borderRadiusLG};
+export const styles = stylex.create({
+  preview: {
+    overflow: 'hidden',
+    width: '100%',
+    maxWidth: 'var(--preview-max-width, none)',
+    minHeight: '100%',
+    margin: 'var(--preview-margin,0 auto)',
+    borderStartStartRadius: cssVar.borderRadiusLG,
+    borderStartEndRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: `0 0 0 1px ${cssVar.colorFillTertiary},
+      0 8px 24px color-mix(in srgb, ${cssVar.colorText} 8%, transparent)`,
+  },
+  previewNarrow: { '--preview-max-width': '480px' },
+  previewText: { '--preview-max-width': '720px' },
+  previewWide: { '--preview-max-width': '880px' },
+});
 
-    background: ${cssVar.colorBgContainer};
-    box-shadow:
-      0 0 0 1px ${cssVar.colorFillTertiary},
-      0 8px 24px color-mix(in srgb, ${cssVar.colorText} 8%, transparent);
+type PreviewVariant = 'narrow' | 'text' | 'wide';
 
-    /* stylelint-disable selector-class-pattern */
-    .react-pdf__Document *,
-    .react-pdf__Page * {
-      pointer-events: none;
-    }
-    /* stylelint-enable selector-class-pattern */
-  `,
-  previewNarrow: css`
-    --preview-max-width: 480px;
-  `,
-  previewText: css`
-    --preview-max-width: 720px;
-  `,
-  previewWide: css`
-    --preview-max-width: 880px;
-  `,
-}));
+const variantStyles = {
+  narrow: styles.previewNarrow,
+  text: styles.previewText,
+  wide: styles.previewWide,
+} as const;
+
+/** Class names of the framed preview surface, for one of its width variants. */
+export const previewClassName = (variant: PreviewVariant) =>
+  `${stylex.props(styles.preview, variantStyles[variant]).className} ${moduleStyles.preview}`;

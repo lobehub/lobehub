@@ -1,36 +1,21 @@
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useState } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    margin-block-end: ${cssVar.marginLG};
-  `,
-
-  header: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: all ${cssVar.motionDurationMid} ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-
-  title: css`
-    margin-inline-start: 4px;
-    font-weight: ${cssVar.fontWeightStrong};
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  container: { marginBlockEnd: cssVar.marginLG },
+  header: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    borderRadius: cssVar.borderRadius,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: `all ${cssVar.motionDurationMid} ease`,
+  },
+  title: { marginInlineStart: '4px', fontWeight: cssVar.fontWeightStrong, color: cssVar.colorText },
+});
 
 interface CollapsibleSectionProps {
   /** Child component content */
@@ -49,10 +34,10 @@ const CollapsibleSection = ({
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   return (
-    <div className={styles.container}>
-      <div className={cx(styles.header)} onClick={() => setIsExpanded(!isExpanded)}>
+    <div {...stylex.props(styles.container)}>
+      <div {...stylex.props(styles.header)} onClick={() => setIsExpanded(!isExpanded)}>
         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        <span className={styles.title}>{title}</span>
+        <span {...stylex.props(styles.title)}>{title}</span>
       </div>
       {isExpanded && <div>{children}</div>}
     </div>

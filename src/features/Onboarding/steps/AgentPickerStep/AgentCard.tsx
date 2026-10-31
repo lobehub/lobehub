@@ -1,5 +1,6 @@
 import type { AgentTemplate } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
-import { Avatar, cx, Icon } from '@lobehub/ui';
+import { Avatar, Icon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback } from 'react';
@@ -28,21 +29,21 @@ const AgentCard = memo<AgentCardProps>(({ onToggle, selected, template }) => {
   return (
     <div
       aria-pressed={selected}
-      className={cx(styles.card, selected && styles.cardSelected)}
+      {...stylex.props(styles.card, selected && styles.cardSelected)}
       role="button"
       tabIndex={0}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
     >
       <Avatar avatar={template.avatar} shape="square" size={36} />
-      <div className={styles.cardBody}>
-        <div className={styles.cardTitle}>{template.title}</div>
+      <div {...stylex.props(styles.cardBody)}>
+        <div {...stylex.props(styles.cardTitle)}>{template.title}</div>
         {template.description && (
-          <div className={styles.cardDescription}>{template.description}</div>
+          <div {...stylex.props(styles.cardDescription)}>{template.description}</div>
         )}
       </div>
       <Icon
-        className={cx(styles.cardCheck, !selected && styles.cardCheckHidden)}
+        className={stylex.props(styles.cardCheck, !selected && styles.cardCheckHidden).className}
         icon={CheckIcon}
         size={16}
       />

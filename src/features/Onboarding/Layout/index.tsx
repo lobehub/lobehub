@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, cx, Divider, Flexbox, useTheme } from '@lobehub/ui';
+import { Center, Divider, Flexbox, useTheme } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC, type PropsWithChildren, useEffect } from 'react';
 import { useLocation } from 'react-router';
 
@@ -27,7 +28,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
 
   return (
     <Flexbox
-      className={styles.outerContainer}
+      className={stylex.props(styles.outerContainer).className}
       height={'100%'}
       padding={isMobile ? 0 : 8}
       width={'100%'}
@@ -35,13 +36,15 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
       <Flexbox
         height={'100%'}
         width={'100%'}
-        className={cx(
-          isMobile
-            ? styles.innerContainerMobile
-            : isDarkMode
-              ? styles.innerContainerDark
-              : styles.innerContainerLight,
-        )}
+        className={
+          stylex.props(
+            isMobile
+              ? styles.innerContainerMobile
+              : isDarkMode
+                ? styles.innerContainerDark
+                : styles.innerContainerLight,
+          ).className
+        }
       >
         <Flexbox
           horizontal

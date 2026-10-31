@@ -1,0 +1,6 @@
+/* Keeps the embedded react-pdf pages from taking pointer events. Targets the
+   library's own DOM, which StyleX cannot select. */
+.preview :global(.react-pdf__Document) *,
+.preview :global(.react-pdf__Page) * {
+  pointer-events: none;
+}

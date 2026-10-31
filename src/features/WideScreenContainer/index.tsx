@@ -1,7 +1,9 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { type CSSProperties } from 'react';
 import { memo, useEffect } from 'react';
@@ -9,14 +11,15 @@ import { memo, useEffect } from 'react';
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { sx } from '@/styles/sx';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    flex-grow: 1;
-    align-self: center;
-    transition: width 0.25s ${cssVar.motionEaseInOut};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    flexGrow: 1,
+    alignSelf: 'center',
+    transition: `width 0.25s ${cssVar.motionEaseInOut}`,
+  },
+});
 
 interface WideScreenContainerProps extends FlexboxProps {
   /**
@@ -41,7 +44,7 @@ const WideScreenContainer = memo<WideScreenContainerProps>(
     return (
       <Flexbox style={wrapperStyle} width={'100%'} onClick={onClick}>
         <Flexbox
-          className={cx(styles.container, className)}
+          {...sx([styles.container], className)}
           paddingInline={fullWidth ? 0 : 16}
           width={
             fullWidth || wideScreen ? '100%' : `min(${minWidth || CONVERSATION_MIN_WIDTH}px, 100%)`

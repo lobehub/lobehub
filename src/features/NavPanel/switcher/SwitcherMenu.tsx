@@ -1,12 +1,6 @@
-import {
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-  usePopoverContext,
-} from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Input, Text, usePopoverContext } from '@lobehub/ui';
+import { cssVar as stylexCssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,50 +12,71 @@ import { filterSwitcherItems, pickRecentItems, type SwitcherItem } from './switc
 import SwitcherRow from './SwitcherRow';
 import { useSwitcherRecents } from './useSwitcherRecents';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  list: css`
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    flex: 1 1 auto;
-
-    min-height: 0;
-    max-height: min(360px, 50vh);
-    margin-block-end: calc(var(--switcher-inset) * -1);
-    margin-inline: calc(var(--switcher-inset) * -1);
-    padding-block: 4px var(--switcher-inset);
-    padding-inline: var(--switcher-inset);
-  `,
-  root: css`
-    --switcher-inset: 6px;
-
-    overflow: hidden;
-    max-height: min(420px, 70vh);
-    padding: var(--switcher-inset);
-  `,
-  search: css`
-    flex: none;
-
-    margin-inline: calc(var(--switcher-inset) * -1);
-    padding-block: 2px 8px;
-    padding-inline: 14px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  searchInput: css`
-    padding-inline: 0 !important;
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-  `,
-  section: css`
-    padding-block: 6px 2px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  list: {
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: 'auto',
+    minHeight: '0',
+    maxHeight: 'min(360px, 50vh)',
+    marginBlockEnd: 'calc(var(--switcher-inset) * -1)',
+    marginInline: 'calc(var(--switcher-inset) * -1)',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: 'var(--switcher-inset)',
+    paddingInline: 'var(--switcher-inset)',
+  },
+  root: {
+    '--switcher-inset': '6px',
+    'overflow': 'hidden',
+    'maxHeight': 'min(420px, 70vh)',
+    'padding': 'var(--switcher-inset)',
+  },
+  search: {
+    flex: 'none',
+    marginInline: 'calc(var(--switcher-inset) * -1)',
+    paddingBlockStart: '2px',
+    paddingBlockEnd: '8px',
+    paddingInline: '14px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: stylexCssVar.colorBorderSecondary,
+  },
+  // The compiler accepts !important; the 0.19 keyword validator does not.
+  /* eslint-disable @stylexjs/valid-styles */
+  searchInput: {
+    paddingInlineStart: '0 !important',
+    paddingInlineEnd: '0 !important',
+    borderWidth: 'medium !important',
+    borderStyle: 'none !important',
+    borderColor: 'currentColor !important',
+    borderImageSource: 'none !important',
+    borderImageSlice: '100% !important',
+    borderImageWidth: '1 !important',
+    borderImageOutset: '0 !important',
+    borderImageRepeat: 'stretch !important',
+    backgroundColor: 'transparent !important',
+    backgroundImage: 'none !important',
+    backgroundPosition: '0% 0% !important',
+    backgroundSize: 'auto !important',
+    backgroundRepeat: 'repeat !important',
+    backgroundOrigin: 'padding-box !important',
+    backgroundClip: 'border-box !important',
+    backgroundAttachment: 'scroll !important',
+    boxShadow: 'none !important',
+  },
+  /* eslint-enable @stylexjs/valid-styles */
+  section: {
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '2px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    fontWeight: 500,
+    lineHeight: '16px',
+    color: stylexCssVar.colorTextTertiary,
+  },
+});
 
 interface SwitcherMenuProps {
   activeId?: string;
@@ -101,12 +116,12 @@ const SwitcherMenu = memo<SwitcherMenuProps>(
     const showRecent = recentItems.length > 0;
 
     return (
-      <Flexbox className={styles.root}>
-        <div className={styles.search}>
+      <Flexbox className={stylex.props(styles.root).className}>
+        <div {...stylex.props(styles.search)}>
           <Input
             allowClear
             autoFocus
-            className={styles.searchInput}
+            className={stylex.props(styles.searchInput).className}
             placeholder={searchPlaceholder}
             prefix={<Icon color={cssVar.colorTextTertiary} icon={SearchIcon} size={14} />}
             size={'small'}
@@ -135,11 +150,11 @@ const SwitcherMenu = memo<SwitcherMenuProps>(
           }
           onRetry={onRetry}
         >
-          <div className={styles.list}>
+          <div {...stylex.props(styles.list)}>
             <Flexbox>
               {showRecent && (
                 <>
-                  <Text as={'div'} className={styles.section}>
+                  <Text as={'div'} className={stylex.props(styles.section).className}>
                     {t('navPanel.switcherRecent', { defaultValue: 'Recent' })}
                   </Text>
                   {recentItems.map((item) => (
@@ -154,7 +169,7 @@ const SwitcherMenu = memo<SwitcherMenuProps>(
                 </>
               )}
               {showRecent && (
-                <Text as={'div'} className={styles.section}>
+                <Text as={'div'} className={stylex.props(styles.section).className}>
                   {t('navPanel.switcherAll', { defaultValue: 'All' })}
                 </Text>
               )}

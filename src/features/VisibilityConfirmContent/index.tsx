@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   AlertTriangleIcon,
   CheckIcon,
@@ -114,52 +116,35 @@ const CONFIG: Record<VisibilityConfirmVariant, VariantConfig> = {
   },
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  list: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+const styles = stylex.create({
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    margin: 0,
+    padding: '12px',
+    borderRadius: '8px',
+    listStyle: 'none',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  row: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'flex-start',
+    fontSize: '13px',
+    lineHeight: 1.55,
+    color: cssVar.colorText,
+  },
+  rowIcon: { flex: 'none', marginBlockStart: '3px', color: cssVar.colorTextTertiary },
+  rowIconDanger: { color: cssVar.colorError },
+  rowIconOk: { color: cssVar.colorSuccess },
+  rowIconInfo: { color: cssVar.colorInfo },
+  emphasis: { fontWeight: 500 },
+  suffix: { color: cssVar.colorTextTertiary },
+});
 
-    margin: 0;
-    padding: 12px;
-    border-radius: 8px;
-
-    list-style: none;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  row: css`
-    display: flex;
-    gap: 10px;
-    align-items: flex-start;
-
-    font-size: 13px;
-    line-height: 1.55;
-    color: ${cssVar.colorText};
-  `,
-  rowIcon: css`
-    flex: none;
-    margin-block-start: 3px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  rowIconDanger: css`
-    color: ${cssVar.colorError};
-  `,
-  rowIconOk: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  rowIconInfo: css`
-    color: ${cssVar.colorInfo};
-  `,
-  emphasis: css`
-    font-weight: 500;
-  `,
-  suffix: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
-
-const rowIconClass = (tone: Tone) => {
+const rowIconStyle = (tone: Tone) => {
   if (tone === 'danger') return styles.rowIconDanger;
   if (tone === 'ok') return styles.rowIconOk;
   return styles.rowIconInfo;
@@ -201,18 +186,18 @@ const VisibilityConfirmContent = memo<VisibilityConfirmContentProps>(
       : config.items;
 
     return (
-      <ul className={styles.list}>
+      <ul {...stylex.props(styles.list)}>
         {items.map((item) => {
           const ItemIcon = item.icon;
           return (
-            <li className={styles.row} key={item.key}>
-              <span className={`${styles.rowIcon} ${rowIconClass(item.tone)}`}>
+            <li {...stylex.props(styles.row)} key={item.key}>
+              <span {...stylex.props(styles.rowIcon, rowIconStyle(item.tone))}>
                 <Icon icon={ItemIcon} size={14} />
               </span>
-              <span className={item.emphasis ? styles.emphasis : undefined}>
+              <span {...stylex.props(item.emphasis && styles.emphasis)}>
                 {t(item.key as any)}
                 {item.showIrreversible && (
-                  <span className={styles.suffix}>{irreversibleSuffix}</span>
+                  <span {...stylex.props(styles.suffix)}>{irreversibleSuffix}</span>
                 )}
               </span>
             </li>

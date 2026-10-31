@@ -6,7 +6,6 @@ import {
   Checkbox,
   confirmModal,
   copyToClipboard,
-  cx,
   Flexbox,
   Icon,
   Input,
@@ -16,6 +15,7 @@ import {
   toast,
   usePopoverContext,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronRightIcon,
   CopyIcon,
@@ -189,7 +189,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
 
   if (!canShare) {
     return (
-      <Flexbox className={styles.container} gap={8}>
+      <Flexbox className={stylex.props(styles.container).className} gap={8}>
         <Text strong>{t('share', { ns: 'common' })}</Text>
         <Text type="secondary">{reason}</Text>
       </Flexbox>
@@ -198,7 +198,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
 
   if (loadError) {
     return (
-      <Flexbox className={styles.container} gap={8}>
+      <Flexbox className={stylex.props(styles.container).className} gap={8}>
         <Text strong>{t('share', { ns: 'common' })}</Text>
         <Text type="secondary">{t('shareModal.popover.loadError')}</Text>
         <Flexbox horizontal justify={'flex-end'}>
@@ -213,7 +213,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
   // Without a share record the body still renders: visibility defaults to private.
   if (isLoading) {
     return (
-      <Flexbox className={styles.container} gap={16}>
+      <Flexbox className={stylex.props(styles.container).className} gap={16}>
         <Text strong>{t('share', { ns: 'common' })}</Text>
         <ArticleSkeleton rows={2} />
       </Flexbox>
@@ -224,10 +224,13 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
   const linkRestricted = !canPublishLink && !isLinkShared;
 
   return (
-    <Flexbox className={styles.panel} ref={containerRef}>
-      <Flexbox className={styles.section} gap={10}>
+    <Flexbox className={stylex.props(styles.panel).className} ref={containerRef}>
+      <Flexbox className={stylex.props(styles.section).className} gap={10}>
         <Flexbox horizontal align={'center'} gap={10}>
-          <Center className={cx(styles.badge, isLinkShared && styles.badgeActive)} flex={'none'}>
+          <Center
+            className={stylex.props(styles.badge, isLinkShared && styles.badgeActive).className}
+            flex={'none'}
+          >
             <Icon icon={isLinkShared ? GlobeIcon : LockIcon} size={16} />
           </Center>
           <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
@@ -247,14 +250,14 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
           />
         </Flexbox>
 
-        {linkRestricted && <div className={styles.notice}>{publishRestrictedReason}</div>}
+        {linkRestricted && <div {...stylex.props(styles.notice)}>{publishRestrictedReason}</div>}
 
         {isLinkShared && shareUrl && (
           <Flexbox horizontal gap={6}>
             <Input
               readOnly
               aria-label={t('shareModal.link')}
-              className={styles.url}
+              className={stylex.props(styles.url).className}
               value={shareUrl}
               onFocus={(e) => e.currentTarget.select()}
             />
@@ -265,13 +268,17 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
         )}
       </Flexbox>
 
-      <div className={styles.divider} />
+      <div {...stylex.props(styles.divider)} />
 
-      <button className={styles.exportRow} type={'button'} onClick={handleOpenModal}>
-        <Icon className={styles.exportIcon} icon={DownloadIcon} size={16} />
-        <span className={styles.exportLabel}>{t('shareModal.popover.export')}</span>
-        <span className={styles.exportHint}>{t('shareModal.popover.exportFormats')}</span>
-        <Icon className={styles.exportIcon} icon={ChevronRightIcon} size={14} />
+      <button {...stylex.props(styles.exportRow)} type={'button'} onClick={handleOpenModal}>
+        <Icon className={stylex.props(styles.exportIcon).className} icon={DownloadIcon} size={16} />
+        <span {...stylex.props(styles.exportLabel)}>{t('shareModal.popover.export')}</span>
+        <span {...stylex.props(styles.exportHint)}>{t('shareModal.popover.exportFormats')}</span>
+        <Icon
+          className={stylex.props(styles.exportIcon).className}
+          icon={ChevronRightIcon}
+          size={14}
+        />
       </button>
     </Flexbox>
   );

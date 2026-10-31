@@ -1,34 +1,37 @@
-import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessageCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  button: css`
-    && {
-      gap: 4px;
-      padding-inline: 6px;
-      border-radius: ${cssVar.borderRadiusXS};
-      color: ${cssVar.colorTextTertiary};
-    }
-
-    &&:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &&:active {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  container: css`
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+// Longhand StyleX rules outrank lobe-ui's layered Button styles, replacing the
+// former `&&` specificity bump.
+const styles = stylex.create({
+  button: {
+    gap: '4px',
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadiusXS,
+    color: {
+      'default': cssVar.colorTextTertiary,
+      ':hover': cssVar.colorTextSecondary,
+      ':active': cssVar.colorText,
+    },
+    backgroundColor: {
+      'default': null,
+      ':hover': cssVar.colorFillTertiary,
+      ':active': cssVar.colorFillTertiary,
+    },
+    backgroundImage: { 'default': null, ':hover': 'none', ':active': 'none' },
+  },
+  container: {
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface MessageCommentBadgeProps {
   count: number;
@@ -42,10 +45,16 @@ const MessageCommentBadge = memo<MessageCommentBadgeProps>(({ count, messageId, 
   const label = t('topicComment.openMessageComments', { count });
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.container} flex={'none'} padding={2}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.container).className}
+      flex={'none'}
+      padding={2}
+    >
       <Button
         aria-label={label}
-        className={styles.button}
+        className={stylex.props(styles.button).className}
         icon={MessageCircle}
         size={'small'}
         title={label}

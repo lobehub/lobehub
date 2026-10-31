@@ -1,0 +1,39 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules :global() */
+
+/* The panel hides the sidebar header buttons until it is hovered. They are
+   other components' elements, reached by id (TOGGLE_BUTTON_ID in
+   ToggleLeftPanelButton, USER_DROPDOWN_ICON_ID in ../constants, BACK_BUTTON_ID in
+   ./BackButton), and StyleX cannot select descendants by id. */
+.panel * {
+  user-select: none;
+}
+
+.panel :global(#toggle_left_panel_button) {
+  width: 0 !important;
+  opacity: 0;
+  transition:
+    opacity,
+    width 0.2s var(--lobe-motion-ease-out);
+}
+
+.panel :global(#user-dropdown-icon) {
+  width: 0 !important;
+  opacity: 0;
+  transition:
+    opacity,
+    width 0.2s var(--lobe-motion-ease-out);
+}
+
+.panel :global(#lobe-back-button) {
+  width: 24px !important;
+}
+
+.panel:hover :global(#toggle_left_panel_button) {
+  width: 32px !important;
+  opacity: 1;
+}
+
+.panel:hover :global(#user-dropdown-icon) {
+  width: 14px !important;
+  opacity: 1;
+}
