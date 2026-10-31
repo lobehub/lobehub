@@ -2,7 +2,8 @@
 
 import { type ErrorShape, type ImportFileUploadState } from '@lobechat/types';
 import { ImportStage } from '@lobechat/types';
-import { Button, Center, createStaticStyles, cx, toast, Upload } from '@lobehub/ui';
+import { Button, Center, toast, Upload } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ImportIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
@@ -35,19 +36,12 @@ export interface ImportResults {
   type?: string;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  children: css`
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background-color: transparent;
-    }
-  `,
-  wrapper: css`
-    font-size: inherit;
-  `,
-}));
+const styles = stylex.create({
+  children: {
+    '::before': { content: "''", position: 'absolute', inset: '0', backgroundColor: 'transparent' },
+  },
+  wrapper: { fontSize: 'inherit' },
+});
 
 interface DataImporterProps {
   children?: ReactNode;
@@ -189,7 +183,7 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
           <Center gap={24} padding={40}>
             <Upload
               accept={'application/json'}
-              className={cx(styles.wrapper)}
+              className={stylex.props(styles.wrapper).className}
               maxCount={1}
               onFiles={([file]) => handleFile(file)}
             >
@@ -202,12 +196,12 @@ const DataImporter = memo<DataImporterProps>(({ children, onFinishImport }) => {
       </DataStyleModal>
       <Upload
         accept={'application/json'}
-        className={cx(styles.wrapper)}
+        className={stylex.props(styles.wrapper).className}
         maxCount={1}
         onFiles={([file]) => handleFile(file)}
       >
         {/* a very hackable solution: add a pseudo before to have a large hot zone */}
-        <div className={cx(styles.children)}>{children}</div>
+        <div {...stylex.props(styles.children)}>{children}</div>
       </Upload>
       {importPgData && (
         <ImportPreviewModal

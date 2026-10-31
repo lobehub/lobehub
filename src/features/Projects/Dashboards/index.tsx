@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { BlocksIcon, LayoutDashboardIcon, PlusIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,12 +22,13 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { usePermission } from '@/hooks/usePermission';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
+import { sx } from '@/styles/sx';
 
 import { getProjectDashboardPath } from '../Layout/navigation';
 
 const Section = ({ children, title }: { children: ReactNode; title: string }) => (
   <Flexbox gap={12}>
-    <h2 className={pageStyles.sectionTitle}>{title}</h2>
+    <h2 {...stylex.props(pageStyles.sectionTitle)}>{title}</h2>
     {children}
   </Flexbox>
 );
@@ -59,7 +61,7 @@ const ProjectBoards = memo<{ canCreate: boolean; onCreate: () => void; projectId
           }
           onRetry={() => void mutate()}
         >
-          <div data-project-dashboards className={dashboardListStyles.grid}>
+          <div data-project-dashboards {...stylex.props(dashboardListStyles.grid)}>
             {dashboards.map((dashboard) => (
               <DashboardListCard
                 dashboard={dashboard}
@@ -129,18 +131,20 @@ const ProjectDashboardsPage = memo<{ projectId: string }>(({ projectId }) => {
           </Text>
         }
       />
-      <div className={pageStyles.scroll}>
-        <div className={pageStyles.canvas} style={{ gap: 32 }}>
+      <div {...stylex.props(pageStyles.scroll)}>
+        <div {...sx([pageStyles.canvas], undefined, { gap: 32 })}>
           <Flexbox
             horizontal
             align={'flex-end'}
-            className={pageStyles.heading}
+            className={stylex.props(pageStyles.heading).className}
             gap={16}
             justify={'space-between'}
           >
             <Flexbox gap={6} style={{ minWidth: 0 }}>
-              <h1 className={pageStyles.title}>{t('list.title')}</h1>
-              <Text className={pageStyles.description}>{t('project.description')}</Text>
+              <h1 {...stylex.props(pageStyles.title)}>{t('list.title')}</h1>
+              <Text className={stylex.props(pageStyles.description).className}>
+                {t('project.description')}
+              </Text>
             </Flexbox>
             {canCreate && (
               <Button

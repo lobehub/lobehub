@@ -114,7 +114,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     const primaryButton = (
       <Button
-        className={briefStyles.actionBtnPrimary}
+        className={stylex.props(briefStyles.actionBtnPrimary).className}
         disabled={disabled}
         loading={loading || pendingCreate}
         shape={'round'}
@@ -126,11 +126,14 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     return (
       <Block
-        className={cx(briefStyles.card, styles.card)}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG, cursor: 'pointer' }}
         variant={'outlined'}
+        className={cx(
+          stylex.props(briefStyles.card, stylex.defaultMarker()).className,
+          styles.card,
+        )}
         onClick={handleOpenDetail}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>

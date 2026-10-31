@@ -1,0 +1,7 @@
+/* Global on purpose: the view-transition pseudo-elements hang off the document root,
+   so no element-level StyleX rule can reach them. */
+::view-transition-old(floating-chat-panel-input),
+::view-transition-new(floating-chat-panel-input) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}

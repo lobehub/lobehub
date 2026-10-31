@@ -1,0 +1,75 @@
+/* Rules for the DOM that cmdk renders inside the command root. The elements are
+   addressed by cmdk's own attributes, so they cannot take StyleX classes. */
+
+.root [cmdk-input] {
+  flex: 1;
+
+  min-width: 0;
+  padding: 0;
+  border: none;
+
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--lobe-color-text);
+
+  background: transparent;
+  outline: none;
+}
+
+.root [cmdk-input]::placeholder {
+  color: var(--lobe-color-text-placeholder);
+}
+
+.root [cmdk-list] {
+  overflow-y: auto;
+  max-height: 400px;
+  padding: 8px;
+}
+
+.root [cmdk-empty] {
+  padding-block: 32px;
+  padding-inline: 16px;
+
+  font-size: 14px;
+  color: var(--lobe-color-text-tertiary);
+  text-align: center;
+}
+
+.root [cmdk-item] {
+  cursor: pointer;
+  user-select: none;
+
+  display: flex;
+  gap: 12px;
+  align-items: center;
+
+  padding-block: 12px;
+  padding-inline: 16px;
+  border-radius: var(--lobe-border-radius);
+
+  color: var(--lobe-color-text);
+
+  transition: all 0.15s ease;
+}
+
+.root [cmdk-item][aria-selected='true'],
+.root [cmdk-item]:hover {
+  background: var(--lobe-color-bg-text-hover);
+}
+
+.root [cmdk-group-heading] {
+  user-select: none;
+
+  padding-block: 8px;
+  padding-inline: 16px;
+
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lobe-color-text-secondary);
+}
+
+.root [cmdk-separator] {
+  height: 1px;
+  margin-block: 4px;
+  background: var(--lobe-color-border-secondary);
+}

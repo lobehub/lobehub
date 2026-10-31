@@ -1,71 +1,58 @@
 'use client';
 
-import { createStaticStyles, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronUp } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  bar: css`
-    pointer-events: auto;
+import { sx } from '@/styles/sx';
 
-    position: absolute;
-    inset-block-end: 100%;
-    inset-inline: 0;
-    transform: translateY(4px);
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    height: 28px;
-    padding-block-end: 4px;
-
-    opacity: 0;
-    background: transparent;
-
-    transition:
-      opacity 160ms ease-out,
-      transform 160ms ease-out;
-  `,
-  visible: css`
-    transform: translateY(0);
-    opacity: 1;
-  `,
-  trigger: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    height: 24px;
-    padding-inline: 10px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    font-size: 12px;
-    line-height: 1;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    transition:
-      color 160ms,
-      border-color 160ms,
-      background 160ms;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorBgContainer};
-    }
-  `,
-  hidden: css`
-    pointer-events: none;
-  `,
-}));
+const styles = stylex.create({
+  bar: {
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    display: 'flex',
+    height: '28px',
+    insetBlockEnd: '100%',
+    insetInline: 0,
+    justifyContent: 'center',
+    opacity: 0,
+    paddingBlockEnd: '4px',
+    pointerEvents: 'auto',
+    position: 'absolute',
+    transform: 'translateY(4px)',
+    transition: 'opacity 160ms ease-out, transform 160ms ease-out',
+  },
+  hidden: {
+    pointerEvents: 'none',
+  },
+  trigger: {
+    alignItems: 'center',
+    backgroundColor: { 'default': cssVar.colorBgElevated, ':hover': cssVar.colorBgContainer },
+    backgroundImage: 'none',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: '12px',
+    borderStyle: 'solid',
+    borderWidth: '1px',
+    boxShadow: cssVar.boxShadowTertiary,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    cursor: 'pointer',
+    display: 'inline-flex',
+    fontSize: '12px',
+    gap: '6px',
+    height: '24px',
+    lineHeight: 1,
+    paddingInline: '10px',
+    transition: 'color 160ms, border-color 160ms, background 160ms',
+  },
+  visible: {
+    opacity: 1,
+    transform: 'translateY(0)',
+  },
+});
 
 export interface HoverExpandBarProps {
   bottomOffset?: number;
@@ -75,17 +62,19 @@ export interface HoverExpandBarProps {
 
 const HoverExpandBar = memo<HoverExpandBarProps>(({ bottomOffset = 0, visible, onExpand }) => {
   const { t } = useTranslation('chat');
-  const s = styles;
 
   return (
     <div
       aria-hidden={!visible}
-      className={`${s.bar} ${visible ? s.visible : s.hidden}`}
+      {...sx(
+        [styles.bar, visible ? styles.visible : styles.hidden],
+        undefined,
+        bottomOffset > 0 ? { insetBlockEnd: `calc(100% + ${bottomOffset}px)` } : undefined,
+      )}
       data-testid="floating-chat-panel-hover-bar"
-      style={bottomOffset > 0 ? { insetBlockEnd: `calc(100% + ${bottomOffset}px)` } : undefined}
     >
       <button
-        className={s.trigger}
+        {...stylex.props(styles.trigger)}
         data-testid="floating-chat-panel-expand-button"
         tabIndex={visible ? 0 : -1}
         type="button"

@@ -9,6 +9,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { sx } from '@/styles/sx';
 
 import { resolveLayouts, sortByPosition } from '../utils/layout';
 import { isUsableRunStatus } from '../utils/widgetHealth';
@@ -17,7 +18,7 @@ import BoardEmpty from './BoardEmpty';
 import BoardHeader from './BoardHeader';
 import BoardWidgetCard from './BoardWidgetCard';
 import LayoutEditor from './LayoutEditor';
-import { cellStyle, gridStyles } from './style';
+import { cellStyle, gridProps, gridStyles } from './style';
 
 export interface DashboardBoardProps {
   dashboardId: string;
@@ -113,13 +114,12 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
             onEditLayout={canEditLayout ? () => setEditing(true) : undefined}
             onRefreshAll={() => void handleRefreshAll()}
           />
-          <div className={gridStyles.grid} data-dashboard-grid={'view'}>
+          <div {...gridProps()} data-dashboard-grid={'view'}>
             {ordered.map(({ item, widget }) => (
               <div
-                className={gridStyles.cell}
+                {...sx([gridStyles.cell], undefined, cellStyle(layouts[item.id]))}
                 data-layout-cell={item.id}
                 key={item.id}
-                style={cellStyle(layouts[item.id])}
               >
                 <BoardWidgetCard widget={widget} onOpen={setOpenWidgetId} />
               </div>

@@ -2,12 +2,14 @@
 
 import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { Button, Tag, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRight, Check, Copy } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { PlatformAvatar, SUPPORTED_MESSENGER_PLATFORMS } from '@/features/Messenger/constants';
+import { sx } from '@/styles/sx';
 
 import { CLI_INSTALL_COMMAND } from './const';
 import { CliScene, DesktopScene, MobileScene } from './scenes';
@@ -36,16 +38,16 @@ const AppsPage = () => {
   };
 
   return (
-    <div className={styles.page}>
-      <main className={styles.content}>
-        <h1 className={styles.headline}>{t('apps.title')}</h1>
+    <div {...stylex.props(styles.page)}>
+      <main {...stylex.props(styles.content)}>
+        <h1 {...stylex.props(styles.headline)}>{t('apps.title')}</h1>
 
-        <div className={styles.grid}>
-          <article className={`${styles.card} ${styles.spanFull}`}>
-            <div className={styles.heroInner}>
-              <div className={styles.cardBody}>
+        <div {...stylex.props(styles.grid)}>
+          <article {...stylex.props(styles.card, styles.spanFull)}>
+            <div {...stylex.props(styles.heroInner)}>
+              <div {...stylex.props(styles.cardBody)}>
                 <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
-                  <h2 className={styles.cardTitle}>{t('apps.desktop.title')}</h2>
+                  <h2 {...stylex.props(styles.cardTitle)}>{t('apps.desktop.title')}</h2>
                   {isDesktop && (
                     <Tag icon={<Check size={12} />} size="small">
                       {t('apps.desktop.inUse')}
@@ -55,17 +57,19 @@ const AppsPage = () => {
                 <Text style={{ marginTop: 8 }} type="secondary">
                   {t(isDesktop ? 'apps.desktop.inUseDesc' : 'apps.desktop.desc')}
                 </Text>
-                <ul className={styles.bullets}>
+                <ul {...stylex.props(styles.bullets)}>
                   {DESKTOP_FEATURES.map((feature) => (
-                    <li key={feature}>
-                      <strong>{t(`apps.desktop.features.${feature}.label`)}</strong>
+                    <li key={feature} {...stylex.props(styles.bulletItem)}>
+                      <strong {...stylex.props(styles.bulletStrong)}>
+                        {t(`apps.desktop.features.${feature}.label`)}
+                      </strong>
                       {' — '}
                       {t(`apps.desktop.features.${feature}.desc`)}
                     </li>
                   ))}
                 </ul>
                 {!isDesktop && (
-                  <div className={styles.ctaRow}>
+                  <div {...stylex.props(styles.ctaRow)}>
                     <Button type="primary" onClick={() => openExternal(DOWNLOAD_URL.default)}>
                       {t('apps.desktop.cta')}
                     </Button>
@@ -76,13 +80,13 @@ const AppsPage = () => {
             </div>
           </article>
 
-          <article className={styles.card}>
-            <div className={styles.cardBody}>
-              <h2 className={styles.cardTitle}>{t('apps.mobile.title')}</h2>
+          <article {...stylex.props(styles.card)}>
+            <div {...stylex.props(styles.cardBody)}>
+              <h2 {...stylex.props(styles.cardTitle)}>{t('apps.mobile.title')}</h2>
               <Text style={{ marginTop: 8 }} type="secondary">
                 {t('apps.mobile.desc')}
               </Text>
-              <div className={styles.ctaRow}>
+              <div {...stylex.props(styles.ctaRow)}>
                 <Button onClick={() => openExternal(DOWNLOAD_URL.mobile)}>
                   {t('apps.mobile.cta')}
                 </Button>
@@ -91,15 +95,15 @@ const AppsPage = () => {
             <MobileScene />
           </article>
 
-          <article className={styles.card}>
-            <div className={styles.cardBody} style={{ paddingBottom: 20 }}>
-              <h2 className={styles.cardTitle}>{t('apps.messenger.title')}</h2>
+          <article {...stylex.props(styles.card)}>
+            <div {...sx([styles.cardBody], undefined, { paddingBottom: 20 })}>
+              <h2 {...stylex.props(styles.cardTitle)}>{t('apps.messenger.title')}</h2>
               <Text style={{ marginTop: 8 }} type="secondary">
                 {t('apps.messenger.desc')}
               </Text>
             </div>
             {SUPPORTED_MESSENGER_PLATFORMS.map((platform) => (
-              <div className={styles.channelRow} key={platform.id}>
+              <div {...stylex.props(styles.channelRow)} key={platform.id}>
                 <PlatformAvatar platform={platform.id} size={32} />
                 <Text style={{ flex: 1 }} weight={500}>
                   {platform.name}
@@ -116,14 +120,14 @@ const AppsPage = () => {
             ))}
           </article>
 
-          <article className={`${styles.card} ${styles.spanFull}`}>
-            <div className={styles.cliInner}>
-              <div className={styles.cardBody}>
-                <h2 className={styles.cardTitle}>{t('apps.cli.title')}</h2>
+          <article {...stylex.props(styles.card, styles.spanFull)}>
+            <div {...stylex.props(styles.cliInner)}>
+              <div {...stylex.props(styles.cardBody)}>
+                <h2 {...stylex.props(styles.cardTitle)}>{t('apps.cli.title')}</h2>
                 <Text style={{ marginTop: 8 }} type="secondary">
                   {t('apps.cli.desc')}
                 </Text>
-                <div className={styles.command}>
+                <div {...stylex.props(styles.command)}>
                   {CLI_INSTALL_COMMAND}
                   <Button icon={copied ? Check : Copy} size="small" onClick={copyInstallCommand}>
                     {copied ? t('apps.cli.copied') : t('apps.cli.copy')}

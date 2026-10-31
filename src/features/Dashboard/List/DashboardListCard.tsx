@@ -1,7 +1,9 @@
 'use client';
 
 import type { WidgetLevelFilter } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,68 +14,61 @@ import type { DashboardListItem } from '@/services/dashboard';
 import DashboardActionsMenu from '../DashboardActionsMenu';
 import DashboardAvatar from '../DashboardAvatar';
 
-export const dashboardListStyles = createStaticStyles(({ css }) => ({
-  card: css`
-    position: relative;
-
-    display: block;
-
-    height: 100%;
-    padding: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: inherit;
-
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      border-color ${cssVar.motionDurationMid},
-      box-shadow ${cssVar.motionDurationMid};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      box-shadow: ${cssVar.boxShadowTertiary};
-    }
-
-    &:hover [data-dashboard-menu] {
-      opacity: 1;
-    }
-  `,
-  description: css`
-    /* Two lines reserved, so cards with and without a description line up. */
-    min-height: calc(2 * 1.6em);
-    font-size: 13px;
-    line-height: 1.6;
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
-  `,
-  menu: css`
-    position: absolute;
-    inset-block-start: 12px;
-    inset-inline-end: 12px;
-
-    opacity: 0;
-
-    transition: opacity ${cssVar.motionDurationMid};
-
-    &:focus-within,
-    &:has([aria-expanded='true']) {
-      opacity: 1;
-    }
-
-    @media (hover: none) {
-      opacity: 1;
-    }
-  `,
-  meta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+export const dashboardListStyles = stylex.create({
+  // The card is a `stylex.defaultMarker()` element: `menu` shows while it is hovered.
+  card: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    borderStyle: 'solid',
+    borderWidth: '1px',
+    boxShadow: { 'default': null, ':hover': cssVar.boxShadowTertiary },
+    color: 'inherit',
+    display: 'block',
+    height: '100%',
+    padding: '16px',
+    position: 'relative',
+    transition: `border-color ${cssVar.motionDurationMid}, box-shadow ${cssVar.motionDurationMid}`,
+  },
+  description: {
+    // Two lines reserved, so cards with and without a description line up.
+    fontSize: '13px',
+    lineHeight: 1.6,
+    minHeight: 'calc(2 * 1.6em)',
+  },
+  grid: {
+    display: 'grid',
+    gap: '16px',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+  },
+  icon: {
+    backgroundColor: `color-mix(in srgb, ${cssVar.geekblue} 12%, transparent)`,
+    backgroundImage: 'none',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.geekblue,
+    flex: 'none',
+    height: '36px',
+    width: '36px',
+  },
+  menu: {
+    insetBlockStart: '12px',
+    insetInlineEnd: '12px',
+    opacity: {
+      'default': 0,
+      ':focus-within': 1,
+      ":has([aria-expanded='true'])": 1,
+      '@media (hover: none)': 1,
+      [stylex.when.ancestor(':hover')]: 1,
+    },
+    position: 'absolute',
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  meta: {
+    color: cssVar.colorTextTertiary,
+    fontSize: '12px',
+  },
+});
 
 interface DashboardListCardProps {
   dashboard: DashboardListItem;
@@ -88,7 +83,10 @@ const DashboardListCard = memo<DashboardListCardProps>(({ dashboard, href, level
   const { t } = useTranslation('dashboard');
 
   return (
-    <div className={dashboardListStyles.card} data-dashboard-id={dashboard.id}>
+    <div
+      {...stylex.props(dashboardListStyles.card, stylex.defaultMarker())}
+      data-dashboard-id={dashboard.id}
+    >
       <WorkspaceLink style={{ color: 'inherit', display: 'block' }} to={href}>
         <Flexbox gap={12}>
           <Flexbox horizontal align={'center'} gap={12} style={{ paddingInlineEnd: 24 }}>
@@ -98,7 +96,7 @@ const DashboardListCard = memo<DashboardListCardProps>(({ dashboard, href, level
             </Text>
           </Flexbox>
           <Text
-            className={dashboardListStyles.description}
+            className={stylex.props(dashboardListStyles.description).className}
             ellipsis={{ rows: 2 }}
             style={{
               color: dashboard.description ? cssVar.colorTextSecondary : cssVar.colorTextQuaternary,
@@ -106,12 +104,12 @@ const DashboardListCard = memo<DashboardListCardProps>(({ dashboard, href, level
           >
             {dashboard.description || t('list.noDescription')}
           </Text>
-          <span className={dashboardListStyles.meta}>
+          <span {...stylex.props(dashboardListStyles.meta)}>
             {t('list.updatedAt', { time: dayjs(dashboard.updatedAt).fromNow() })}
           </span>
         </Flexbox>
       </WorkspaceLink>
-      <span data-dashboard-menu className={dashboardListStyles.menu}>
+      <span data-dashboard-menu {...stylex.props(dashboardListStyles.menu)}>
         <DashboardActionsMenu dashboard={dashboard} level={level} />
       </span>
     </div>

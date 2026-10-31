@@ -1,6 +1,7 @@
 'use client';
 
-import { cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useRef, useState } from 'react';
 
 import { MinimapIndicator } from './MinimapIndicator';
@@ -43,9 +44,16 @@ const ChatMinimap = memo(() => {
   };
 
   return (
-    <Flexbox className={styles.container}>
-      <Flexbox className={styles.hoverArea} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
-        <Flexbox className={cx(styles.rail, hovered && styles.railFaded)} role={'group'}>
+    <Flexbox className={stylex.props(styles.container).className}>
+      <Flexbox
+        className={stylex.props(styles.hoverArea).className}
+        onMouseEnter={handleEnter}
+        onMouseLeave={handleLeave}
+      >
+        <Flexbox
+          className={stylex.props(styles.rail, hovered && styles.railFaded).className}
+          role={'group'}
+        >
           {indicators.map(({ id, width, virtuosoIndex }, position) => (
             <MinimapIndicator
               activePosition={activeIndicatorPosition}
@@ -60,7 +68,7 @@ const ChatMinimap = memo(() => {
         </Flexbox>
         <div
           aria-hidden={!hovered}
-          className={cx(styles.previewPanel, hovered && styles.previewPanelVisible)}
+          {...stylex.props(styles.previewPanel, hovered && styles.previewPanelVisible)}
         >
           <MinimapPreview
             activePosition={activeIndicatorPosition}

@@ -1,6 +1,8 @@
 'use client';
 
-import { Checkbox, confirmModal, createStaticStyles, Text } from '@lobehub/ui';
+import { Checkbox, confirmModal, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -32,24 +34,13 @@ const persistAgreement = (accepted: boolean) => {
   }
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  link: css`
-    cursor: pointer;
-    color: inherit;
-    text-decoration: underline;
-
-    &:active,
-    &:focus,
-    &:hover,
-    &:visited {
-      text-decoration: underline;
-    }
-
-    &:visited {
-      color: ${cssVar.colorLinkActive};
-    }
-  `,
-}));
+const styles = stylex.create({
+  link: {
+    color: { 'default': 'inherit', ':visited': cssVar.colorLinkActive },
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  },
+});
 
 type AuthAgreementProps =
   | {
@@ -77,12 +68,22 @@ const AgreementText = memo<AgreementTextProps>(({ i18nKey }) => {
       ns={'auth'}
       components={{
         privacy: (
-          <a className={styles.link} href={PRIVACY_URL} rel="noopener noreferrer" target="_blank">
+          <a
+            {...stylex.props(styles.link)}
+            href={PRIVACY_URL}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
             {translate('footer.privacy')}
           </a>
         ),
         terms: (
-          <a className={styles.link} href={TERMS_URL} rel="noopener noreferrer" target="_blank">
+          <a
+            {...stylex.props(styles.link)}
+            href={TERMS_URL}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
             {translate('footer.terms')}
           </a>
         ),

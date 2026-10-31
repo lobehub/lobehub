@@ -2,48 +2,41 @@ import {
   formatSelfReviewItemHeadline,
   type SelfReviewProposalContentItem,
 } from '@lobechat/agent-signal/brief';
-import { Block, createStaticStyles, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { Block, Flexbox, Markdown, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSelfReviewTranslator } from '../useSelfReviewBriefView';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    overflow-y: auto;
-    max-height: min(70vh, 720px);
-    padding-block: 4px 16px;
-    padding-inline: 20px;
-  `,
-  divider: css`
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  headline: css`
-    font-size: 15px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-  `,
-  label: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  name: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  text: css`
-    font-size: 14px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    white-space: pre-wrap;
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    overflowY: 'auto',
+    maxHeight: 'min(70vh, 720px)',
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '16px',
+    paddingInline: '20px',
+  },
+  divider: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  headline: { fontSize: '15px', fontWeight: 600, color: cssVar.colorText },
+  label: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextTertiary },
+  name: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', color: cssVar.colorTextTertiary },
+  text: {
+    fontSize: '14px',
+    lineHeight: 1.6,
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'pre-wrap',
+  },
+});
 
 const Section = ({ children, label }: { children: ReactNode; label: string }) => (
   <Flexbox gap={4}>
-    <span className={styles.label}>{label}</span>
+    <span {...stylex.props(styles.label)}>{label}</span>
     {children}
   </Flexbox>
 );
@@ -70,22 +63,24 @@ const ProposalItem = ({ item }: { item: SelfReviewProposalContentItem }) => {
   return (
     <Flexbox gap={12}>
       <Flexbox gap={2}>
-        <Text className={styles.headline}>{headline}</Text>
-        {item.name && item.name !== item.title && <span className={styles.name}>{item.name}</span>}
+        <Text className={stylex.props(styles.headline).className}>{headline}</Text>
+        {item.name && item.name !== item.title && (
+          <span {...stylex.props(styles.name)}>{item.name}</span>
+        )}
       </Flexbox>
       {item.rationale && (
         <Section label={t('brief.agentSignal.selfReview.detail.rationale')}>
-          <span className={styles.text}>{item.rationale}</span>
+          <span {...stylex.props(styles.text)}>{item.rationale}</span>
         </Section>
       )}
       {item.description && (
         <Section label={t('brief.agentSignal.selfReview.detail.description')}>
-          <span className={styles.text}>{item.description}</span>
+          <span {...stylex.props(styles.text)}>{item.description}</span>
         </Section>
       )}
       {item.memoryContent && (
         <Section label={t('brief.agentSignal.selfReview.detail.memory')}>
-          <span className={styles.text}>{item.memoryContent}</span>
+          <span {...stylex.props(styles.text)}>{item.memoryContent}</span>
         </Section>
       )}
       {item.systemRole && (
@@ -108,10 +103,10 @@ interface ProposalContentProps {
 
 /** Body of the self-review details modal: every proposed action in full. */
 export const ProposalContent = ({ items }: ProposalContentProps) => (
-  <Flexbox className={styles.container} gap={20}>
+  <Flexbox className={stylex.props(styles.container).className} gap={20}>
     {items.map((item, index) => (
       <Flexbox gap={20} key={index}>
-        {index > 0 && <div className={styles.divider} />}
+        {index > 0 && <div {...stylex.props(styles.divider)} />}
         <ProposalItem item={item} />
       </Flexbox>
     ))}

@@ -1,70 +1,64 @@
 'use client';
 
-import { ActionIcon, createStaticStyles } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { XIcon } from 'lucide-react';
 import { Fragment, type PointerEvent as ReactPointerEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { DIVIDER_WIDTH, paneTrackWidth, resizePanes } from './paneLayout';
 import type { TerminalPane } from './store';
 import TerminalView from './TerminalView';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  close: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 2px;
-    inset-inline-end: 2px;
-
-    opacity: 0;
-
-    transition: opacity 0.15s;
-  `,
-  divider: css`
-    cursor: col-resize;
-    position: relative;
-    flex: none;
-    inline-size: ${DIVIDER_WIDTH}px;
-
-    &::after {
-      content: '';
-
-      position: absolute;
-      inset-block: 0;
-      inset-inline-start: ${(DIVIDER_WIDTH - 1) / 2}px;
-
-      inline-size: 1px;
-
-      background: ${cssVar.colorBorderSecondary};
-
-      transition: background 0.15s;
-    }
-
-    &:hover::after {
-      background: ${cssVar.colorPrimary};
-    }
-  `,
-  pane: css`
-    position: relative;
-    overflow: hidden;
-    min-inline-size: 0;
-    transition: opacity 0.15s;
-
-    /* Set only while split, so a lone pane is never dimmed. */
-    &[data-inactive-pane] {
-      opacity: 0.7;
-    }
-
-    &:hover [data-pane-close],
-    &:focus-within [data-pane-close] {
-      opacity: 1;
-    }
-  `,
-  root: css`
-    display: flex;
-    block-size: 100%;
-  `,
-}));
+const styles = stylex.create({
+  // Shown while the pane (a `stylex.defaultMarker()` element) is hovered or has focus inside.
+  close: {
+    insetBlockStart: '2px',
+    insetInlineEnd: '2px',
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':focus-within')]: 1,
+    },
+    position: 'absolute',
+    transition: 'opacity 0.15s',
+    zIndex: 1,
+  },
+  divider: {
+    'cursor': 'col-resize',
+    'flex': 'none',
+    'position': 'relative',
+    '::after': {
+      backgroundColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorPrimary },
+      backgroundImage: 'none',
+      content: "''",
+      insetBlock: 0,
+      inlineSize: '1px',
+      position: 'absolute',
+      transition: 'background 0.15s',
+    },
+  },
+  // paneLayout owns the width, which StyleX cannot read at build time.
+  dividerSize: (width: number) => ({
+    'inlineSize': `${width}px`,
+    '::after': { insetInlineStart: `${(width - 1) / 2}px` },
+  }),
+  pane: {
+    // Set only while split, so a lone pane is never dimmed.
+    minInlineSize: 0,
+    opacity: { 'default': null, '[data-inactive-pane]': 0.7 },
+    overflow: 'hidden',
+    position: 'relative',
+    transition: 'opacity 0.15s',
+  },
+  root: {
+    blockSize: '100%',
+    display: 'flex',
+  },
+});
 
 interface SplitViewProps {
   activePaneId: string;
@@ -118,20 +112,24 @@ const SplitView = ({
     };
 
   return (
-    <div className={styles.root} ref={rootRef}>
+    <div {...stylex.props(styles.root)} ref={rootRef}>
       {panes.map((pane, index) => (
         <Fragment key={pane.id}>
           {index > 0 && (
-            <div className={styles.divider} onPointerDown={handleDividerDown(index - 1)} />
+            <div
+              {...stylex.props(styles.divider, styles.dividerSize(DIVIDER_WIDTH))}
+              onPointerDown={handleDividerDown(index - 1)}
+            />
           )}
           <div
-            className={styles.pane}
+            {...sx([styles.pane, stylex.defaultMarker()], undefined, {
+              flex: `${flex[index]} 1 0`,
+            })}
             data-inactive-pane={split && pane.id !== activePaneId ? '' : undefined}
-            style={{ flex: `${flex[index]} 1 0` }}
             onPointerDownCapture={() => onActivatePane(pane.id)}
           >
             {split && (
-              <div data-pane-close className={styles.close}>
+              <div {...stylex.props(styles.close)}>
                 <ActionIcon
                   icon={XIcon}
                   size={{ blockSize: 20, size: 12 }}

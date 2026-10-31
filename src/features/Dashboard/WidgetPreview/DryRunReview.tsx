@@ -2,6 +2,7 @@
 
 import type { BuiltinRememberApproval } from '@lobechat/types';
 import { Flexbox, Highlighter, Skeleton, Text, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -159,7 +160,7 @@ const DryRunReview = memo<DryRunReviewProps>(
 
         <ExpectedPreview target={target} versions={versions} widget={widget} />
 
-        <Flexbox className={reviewStyles.section} gap={6}>
+        <Flexbox className={stylex.props(reviewStyles.section).className} gap={6}>
           <Fact label={t('chat.definition')}>
             <Text fontSize={12}>{widget.description || t('chat.noDefinition')}</Text>
           </Fact>

@@ -1,175 +1,174 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  body: css`
-    overflow: auto;
-    flex: 1;
-
-    min-height: 0;
-    padding-block: 0 8px;
-    padding-inline: 6px;
-  `,
-  cells: css`
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 80px 88px 64px 32px;
-    flex: 1;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  dot: css`
-    flex: none;
-
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorWarning};
-  `,
-  header: css`
-    position: sticky;
-    z-index: 2;
-    inset-block-start: 0;
-
-    height: 30px;
-    margin-block-end: 4px;
-    margin-inline: -6px;
-    padding-inline: 36px 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 11.5px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  headerPid: css`
-    text-align: end;
-  `,
-  hot: css`
-    font-weight: 500;
-    color: ${cssVar.colorWarning} !important;
-  `,
-  kind: css`
-    flex: none;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  label: css`
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  live: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    i {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: ${cssVar.colorSuccess};
-    }
-  `,
-  name: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    min-width: 0;
-  `,
-  node: css`
-    cursor: default;
-
-    &:hover [data-stop-cell],
-    &[aria-selected='true'] [data-stop-cell],
-    &:focus-within [data-stop-cell] {
-      visibility: visible;
-    }
-  `,
-  num: css`
-    font-size: 12.5px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    text-align: end;
-  `,
-  pid: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11.5px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: end;
-  `,
-  section: css`
-    font-size: 11px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sort: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 3px;
-    align-items: center;
-    justify-content: flex-end;
-
-    padding: 0;
-    border: 0;
-
-    font: inherit;
-    color: inherit;
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  sortActive: css`
-    font-weight: 500;
-    color: ${cssVar.colorText};
-  `,
-  stat: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: baseline;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-
-    b {
-      font-size: 13px;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
-      color: ${cssVar.colorText};
-    }
-  `,
-  status: css`
-    flex: none;
-
-    height: 28px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 11.5px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  stop: css`
-    justify-self: end;
-    visibility: hidden;
-  `,
-  sub: css`
-    flex: none;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    white-space: nowrap;
-  `,
-  title: css`
-    flex: 1;
-    padding-inline-end: 6px;
-  `,
-  toolbar: css`
-    flex: none;
-    height: 44px;
-    padding-inline: 16px 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+export const styles = stylex.create({
+  body: {
+    flex: '1',
+    minHeight: 0,
+    overflow: 'auto',
+    paddingBlockEnd: '8px',
+    paddingBlockStart: 0,
+    paddingInline: '6px',
+  },
+  cells: {
+    alignItems: 'center',
+    display: 'grid',
+    flex: '1',
+    gridTemplateColumns: 'minmax(0, 1fr) 80px 88px 64px 32px',
+    minWidth: 0,
+  },
+  dot: {
+    backgroundColor: cssVar.colorWarning,
+    backgroundImage: 'none',
+    borderRadius: '50%',
+    flex: 'none',
+    height: '6px',
+    width: '6px',
+  },
+  header: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: '1px',
+    color: cssVar.colorTextTertiary,
+    fontSize: '11.5px',
+    height: '30px',
+    insetBlockStart: 0,
+    marginBlockEnd: '4px',
+    marginInline: '-6px',
+    paddingInlineEnd: '12px',
+    paddingInlineStart: '36px',
+    position: 'sticky',
+    zIndex: 2,
+  },
+  headerPid: {
+    textAlign: 'end',
+  },
+  hot: {
+    color: cssVar.colorWarning,
+    fontWeight: 500,
+  },
+  kind: {
+    color: cssVar.colorTextTertiary,
+    flex: 'none',
+  },
+  label: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  live: {
+    alignItems: 'center',
+    display: 'inline-flex',
+    gap: '6px',
+  },
+  liveDot: {
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+    borderRadius: '50%',
+    height: '6px',
+    width: '6px',
+  },
+  name: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: '6px',
+    minWidth: 0,
+  },
+  // Also the marker for `stop`, which shows while its node is hovered, selected or focused.
+  node: {
+    cursor: 'default',
+  },
+  num: {
+    color: cssVar.colorTextSecondary,
+    fontSize: '12.5px',
+    fontVariantNumeric: 'tabular-nums',
+    textAlign: 'end',
+  },
+  pid: {
+    color: cssVar.colorTextTertiary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11.5px',
+    textAlign: 'end',
+  },
+  section: {
+    color: cssVar.colorTextTertiary,
+    fontSize: '11px',
+    fontWeight: 600,
+  },
+  sort: {
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    borderWidth: 0,
+    color: { 'default': 'inherit', ':hover': cssVar.colorTextSecondary },
+    cursor: 'pointer',
+    display: 'inline-flex',
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    fontStyle: 'inherit',
+    fontWeight: 'inherit',
+    gap: '3px',
+    justifyContent: 'flex-end',
+    lineHeight: 'inherit',
+    padding: 0,
+  },
+  // Hover still wins over the active colour, as it did with the original cascade.
+  sortActive: {
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorTextSecondary },
+    fontWeight: 500,
+  },
+  stat: {
+    alignItems: 'baseline',
+    color: cssVar.colorTextTertiary,
+    display: 'inline-flex',
+    fontSize: '12px',
+    gap: '6px',
+    whiteSpace: 'nowrap',
+  },
+  statValue: {
+    color: cssVar.colorText,
+    fontSize: '13px',
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 500,
+  },
+  status: {
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartStyle: 'solid',
+    borderBlockStartWidth: '1px',
+    color: cssVar.colorTextTertiary,
+    flex: 'none',
+    fontSize: '11.5px',
+    height: '28px',
+    paddingInline: '16px',
+  },
+  stop: {
+    justifySelf: 'end',
+    visibility: {
+      default: 'hidden',
+      [stylex.when.ancestor(':hover')]: 'visible',
+      [stylex.when.ancestor("[aria-selected='true']")]: 'visible',
+      [stylex.when.ancestor(':focus-within')]: 'visible',
+    },
+  },
+  sub: {
+    color: cssVar.colorTextTertiary,
+    flex: 'none',
+    fontSize: '12px',
+    whiteSpace: 'nowrap',
+  },
+  title: {
+    flex: '1',
+    paddingInlineEnd: '6px',
+  },
+  toolbar: {
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: '1px',
+    flex: 'none',
+    height: '44px',
+    paddingInlineEnd: '12px',
+    paddingInlineStart: '16px',
+  },
+});

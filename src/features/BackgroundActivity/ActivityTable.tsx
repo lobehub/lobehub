@@ -1,13 +1,6 @@
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Empty,
-  Flexbox,
-  Icon,
-  Skeleton,
-} from '@lobehub/ui';
+import { Button, Empty, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronRightIcon,
   CpuIcon,
@@ -19,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { sx } from '@/styles/sx';
 
 import {
   type Activity,
@@ -43,135 +37,130 @@ export const topicName = (id?: string) => {
 
 const GRID = '16px minmax(0, 1fr) 88px 72px 56px 28px';
 
-const tableStyles = createStaticStyles(({ css }) => ({
-  alert: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${cssVar.colorError};
-
-    background: ${cssVar.colorErrorBg};
-  `,
-  chevron: css`
-    color: ${cssVar.colorTextQuaternary};
-    transition: transform 0.15s ease;
-  `,
-  chevronOpen: css`
-    transform: rotate(90deg);
-  `,
-  critical: css`
-    color: ${cssVar.colorError};
-  `,
-  group: css`
-    position: sticky;
-    z-index: 1;
-    inset-block-start: 0;
-
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    height: 30px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 12px;
-    font-weight: 600;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorBgLayout};
-  `,
-  head: css`
-    display: grid;
-    gap: 8px;
-    align-items: center;
-
-    height: 28px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  headLabel: css`
-    font-size: 11px;
-    font-weight: 600;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  headNum: css`
-    text-align: end;
-  `,
-  label: css`
-    overflow: hidden;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    min-width: 0;
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  num: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    text-align: end;
-  `,
-  proc: css`
-    display: grid;
-    gap: 8px;
-    align-items: center;
-
-    height: 26px;
-    padding-inline: 12px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11.5px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  procName: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  row: css`
-    cursor: pointer;
-
-    display: grid;
-    gap: 8px;
-    align-items: center;
-
-    height: 36px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  selected: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  stale: css`
-    opacity: 0.55;
-  `,
-  warning: css`
-    color: ${cssVar.colorWarning};
-  `,
-}));
+const tableStyles = stylex.create({
+  alert: {
+    alignItems: 'center',
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: '1px',
+    color: cssVar.colorError,
+    display: 'flex',
+    fontSize: '12px',
+    gap: '8px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+  },
+  chevron: {
+    color: cssVar.colorTextQuaternary,
+    transition: 'transform 0.15s ease',
+  },
+  chevronOpen: {
+    transform: 'rotate(90deg)',
+  },
+  critical: {
+    color: cssVar.colorError,
+  },
+  group: {
+    alignItems: 'center',
+    backgroundColor: cssVar.colorBgLayout,
+    backgroundImage: 'none',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: '1px',
+    color: cssVar.colorTextSecondary,
+    display: 'flex',
+    fontSize: '12px',
+    fontWeight: 600,
+    gap: '6px',
+    height: '30px',
+    insetBlockStart: 0,
+    paddingInline: '12px',
+    position: 'sticky',
+    zIndex: 1,
+  },
+  head: {
+    alignItems: 'center',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: '1px',
+    color: cssVar.colorTextTertiary,
+    display: 'grid',
+    fontSize: '11px',
+    gap: '8px',
+    height: '28px',
+    paddingInline: '12px',
+  },
+  headLabel: {
+    color: cssVar.colorTextTertiary,
+    fontSize: '11px',
+    fontWeight: 600,
+  },
+  headNum: {
+    textAlign: 'end',
+  },
+  label: {
+    alignItems: 'center',
+    color: cssVar.colorText,
+    display: 'flex',
+    fontSize: '13px',
+    gap: '6px',
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  num: {
+    color: cssVar.colorTextSecondary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    textAlign: 'end',
+  },
+  proc: {
+    alignItems: 'center',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    color: cssVar.colorTextSecondary,
+    display: 'grid',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11.5px',
+    gap: '8px',
+    height: '26px',
+    paddingInline: '12px',
+  },
+  procName: {
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  row: {
+    alignItems: 'center',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: '1px',
+    cursor: 'pointer',
+    display: 'grid',
+    gap: '8px',
+    height: '36px',
+    paddingInline: '12px',
+  },
+  // Hover still wins over the selected fill, as it did with the original cascade.
+  selected: {
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  stale: {
+    opacity: 0.55,
+  },
+  warning: {
+    color: cssVar.colorWarning,
+  },
+});
 
 export function TopicTitle({ id }: { id: string }) {
   const { t } = useTranslation('chat');
@@ -196,10 +185,11 @@ function ActivityRows({ activity, selected }: { activity: Activity; selected: bo
     <>
       <div
         aria-expanded={open}
-        className={cx(tableStyles.row, selected && tableStyles.selected)}
+        {...sx([tableStyles.row, selected && tableStyles.selected], undefined, {
+          gridTemplateColumns: GRID,
+        })}
         ref={ref}
         role={'button'}
-        style={{ gridTemplateColumns: GRID }}
         tabIndex={0}
         onClick={() => setOpen(!open)}
         onKeyDown={(event) => {
@@ -211,34 +201,36 @@ function ActivityRows({ activity, selected }: { activity: Activity; selected: bo
         }}
       >
         <Icon
-          className={cx(tableStyles.chevron, open && tableStyles.chevronOpen)}
+          className={stylex.props(tableStyles.chevron, open && tableStyles.chevronOpen).className}
           icon={ChevronRightIcon}
           size={14}
         />
-        <span className={tableStyles.label} title={activity.label}>
-          {alert && <Icon className={tone} icon={TriangleAlertIcon} size={14} />}
+        <span {...stylex.props(tableStyles.label)} title={activity.label}>
+          {alert && (
+            <Icon className={stylex.props(tone).className} icon={TriangleAlertIcon} size={14} />
+          )}
           {activity.label}
         </span>
-        <span className={tableStyles.num}>
+        <span {...stylex.props(tableStyles.num)}>
           {t('backgroundActivity.processCount', { count: activity.processes.length })}
         </span>
-        <span className={cx(tableStyles.num, alert && tone)}>
+        <span {...stylex.props(tableStyles.num, alert && tone)}>
           {formatMemory(activity.memoryMB)}
         </span>
-        <span className={tableStyles.num}>{formatCpu(activity.cpuPercent)}</span>
+        <span {...stylex.props(tableStyles.num)}>{formatCpu(activity.cpuPercent)}</span>
         <StopButton rootId={activity.rootId} />
       </div>
       {open &&
         processTree(activity.processes).map(({ depth, row }) => (
-          <div className={tableStyles.proc} key={row.id} style={{ gridTemplateColumns: GRID }}>
+          <div {...sx([tableStyles.proc], undefined, { gridTemplateColumns: GRID })} key={row.id}>
             <span />
-            <span className={tableStyles.procName} style={{ paddingInlineStart: depth * 14 }}>
+            <span {...sx([tableStyles.procName], undefined, { paddingInlineStart: depth * 14 })}>
               {depth > 0 && '└ '}
               {row.name}
             </span>
-            <span className={tableStyles.num}>{row.pid}</span>
-            <span className={tableStyles.num}>{formatMemory(row.memoryMB)}</span>
-            <span className={tableStyles.num}>{formatCpu(row.cpuPercent)}</span>
+            <span {...stylex.props(tableStyles.num)}>{row.pid}</span>
+            <span {...stylex.props(tableStyles.num)}>{formatMemory(row.memoryMB)}</span>
+            <span {...stylex.props(tableStyles.num)}>{formatCpu(row.cpuPercent)}</span>
             <span />
           </div>
         ))}
@@ -261,7 +253,7 @@ export default function ActivityTable() {
   return (
     <Flexbox>
       {state.error && (
-        <div className={tableStyles.alert} role={'alert'}>
+        <div {...stylex.props(tableStyles.alert)} role={'alert'}>
           <Icon icon={TriangleAlertIcon} size={14} />
           <Flexbox flex={1}>{t('backgroundActivity.unavailable')}</Flexbox>
           <Button
@@ -283,20 +275,20 @@ export default function ActivityTable() {
           />
         )
       ) : (
-        <div className={cx(state.error && tableStyles.stale)}>
-          <div className={tableStyles.head} style={{ gridTemplateColumns: GRID }}>
+        <div {...stylex.props(state.error && tableStyles.stale)}>
+          <div {...sx([tableStyles.head], undefined, { gridTemplateColumns: GRID })}>
             <span />
-            <span className={tableStyles.headLabel}>
+            <span {...stylex.props(tableStyles.headLabel)}>
               {t('backgroundActivity.title')} · {state.activities.length}
             </span>
             <span />
-            <span className={tableStyles.headNum}>{t('backgroundActivity.memory')}</span>
-            <span className={tableStyles.headNum}>{t('backgroundActivity.cpu')}</span>
+            <span {...stylex.props(tableStyles.headNum)}>{t('backgroundActivity.memory')}</span>
+            <span {...stylex.props(tableStyles.headNum)}>{t('backgroundActivity.cpu')}</span>
             <span />
           </div>
           {groups.map((group) => (
             <div key={group ?? 'shared'}>
-              <div className={tableStyles.group}>
+              <div {...stylex.props(tableStyles.group)}>
                 <Icon icon={group ? MessageSquareIcon : CpuIcon} size={13} />
                 {group ? <TopicTitle id={group} /> : t('backgroundActivity.shared')}
               </div>

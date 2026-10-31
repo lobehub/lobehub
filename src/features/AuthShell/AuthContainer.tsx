@@ -1,6 +1,7 @@
 'use client';
 
-import { Center, cx, Divider, Flexbox } from '@lobehub/ui';
+import { Center, Divider, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC, type PropsWithChildren } from 'react';
 
 import { ProductLogo } from '@/components/Branding';
@@ -14,11 +15,19 @@ import { styles } from './style';
 const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
   return (
-    <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
+    <Flexbox
+      className={stylex.props(styles.outerContainer).className}
+      height={'100%'}
+      padding={8}
+      width={'100%'}
+    >
       <Flexbox
-        className={cx(isDarkMode ? styles.innerContainerDark : styles.innerContainerLight)}
         height={'100%'}
         width={'100%'}
+        className={
+          stylex.props(isDarkMode ? styles.innerContainerDark : styles.innerContainerLight)
+            .className
+        }
       >
         <Flexbox horizontal align={'center'} padding={16} width={'100%'}>
           <a aria-label={'LobeHub'} href={'/'} style={{ display: 'inline-flex' }}>

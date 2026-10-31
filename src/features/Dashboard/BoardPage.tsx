@@ -2,6 +2,7 @@
 
 import type { WidgetLevelFilter } from '@lobechat/types';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronLeftIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -84,8 +85,8 @@ BoardPageHeader.displayName = 'DashboardBoardPageHeader';
 const DashboardBoardPage = memo<DashboardBoardPageProps>(({ backPath, dashboardId, level }) => (
   <Flexbox flex={1} height={'100%'}>
     <BoardPageHeader backPath={backPath} dashboardId={dashboardId} level={level} />
-    <div className={styles.scroll}>
-      <div className={styles.canvas}>
+    <div {...stylex.props(styles.scroll)}>
+      <div {...stylex.props(styles.canvas)}>
         <DashboardBoard dashboardId={dashboardId} />
       </div>
     </div>

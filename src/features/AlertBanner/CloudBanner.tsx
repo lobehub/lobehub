@@ -1,15 +1,9 @@
 'use client';
 
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import {
-  Button,
-  Center,
-  createStaticStyles,
-  cx,
-  Flexbox,
-  Icon,
-  lobeStaticStylish,
-} from '@lobehub/ui';
+import { Button, Center, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import { ArrowRightIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
@@ -22,35 +16,44 @@ import { isOnServerSide } from '@/utils/env';
 
 export const BANNER_HEIGHT = 40;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  background: cx(
-    lobeStaticStylish.gradientAnimation,
-    css`
-      position: absolute;
+const gradient = stylex.keyframes({
+  '0%': { backgroundPosition: '0% 50%' },
+  '50%': { backgroundPosition: '100% 50%' },
+  '100%': { backgroundPosition: '0% 50%' },
+});
 
-      width: max(64%, 1280px);
-      height: 100%;
-
-      opacity: 0.8;
-      filter: blur(60px);
-    `,
-  ),
-  containerDark: css`
-    position: relative;
-    overflow: hidden;
-    background-color: ${cssVar.colorFill};
-  `,
-  containerLight: css`
-    position: relative;
-    overflow: hidden;
-    background-color: ${cssVar.colorFillSecondary};
-  `,
-  wrapper: css`
-    z-index: 1;
-    overflow: hidden;
-    max-width: 100%;
-  `,
-}));
+const styles = stylex.create({
+  background: {
+    animationDelay: '5s',
+    animationDuration: '5s',
+    animationIterationCount: 'infinite',
+    animationName: gradient,
+    animationTimingFunction: 'ease',
+    backgroundImage: `linear-gradient(-45deg, ${cssVar.gold}, ${cssVar.magenta}, ${cssVar.geekblue}, ${cssVar.cyan})`,
+    backgroundSize: '400% 400%',
+    borderRadius: 'inherit',
+    filter: 'blur(60px)',
+    height: '100%',
+    opacity: 0.8,
+    position: 'absolute',
+    width: 'max(64%, 1280px)',
+  },
+  containerDark: {
+    backgroundColor: cssVar.colorFill,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  containerLight: {
+    backgroundColor: cssVar.colorFillSecondary,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  wrapper: {
+    maxWidth: '100%',
+    overflow: 'hidden',
+    zIndex: 1,
+  },
+});
 
 const CloudBanner = memo<{ mobile?: boolean }>(({ mobile }) => {
   const ref = useRef(null);
@@ -79,15 +82,15 @@ const CloudBanner = memo<{ mobile?: boolean }>(({ mobile }) => {
   );
   return (
     <Center
-      className={isDarkMode ? styles.containerDark : styles.containerLight}
+      className={stylex.props(isDarkMode ? styles.containerDark : styles.containerLight).className}
       flex={'none'}
       height={BANNER_HEIGHT}
       paddingInline={16}
       ref={ref}
       width={'100%'}
     >
-      <div className={styles.background} />
-      <Center horizontal className={styles.wrapper} gap={16} width={'100%'}>
+      <div {...stylex.props(styles.background)} />
+      <Center horizontal className={stylex.props(styles.wrapper).className} gap={16} width={'100%'}>
         {isTruncated ? <Marquee pauseOnHover>{content}</Marquee> : content}
         <a
           href={`${OFFICIAL_URL}?utm_source=${UTM_SOURCE}&utm_medium=banner`}

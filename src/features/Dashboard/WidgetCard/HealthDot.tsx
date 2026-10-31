@@ -1,32 +1,32 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
+
+import { sx } from '@/styles/sx';
 
 import type { WidgetHealth } from '../utils/widgetHealth';
 
-const styles = createStaticStyles(({ css }) => ({
-  dot: css`
-    flex: none;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-  `,
-  running: css`
-    @keyframes dashboard-health-pulse {
-      0%,
-      100% {
-        opacity: 1;
-      }
+const pulse = stylex.keyframes({
+  '0%, 100%': { opacity: 1 },
+  '50%': { opacity: 0.3 },
+});
 
-      50% {
-        opacity: 0.3;
-      }
-    }
-
-    animation: dashboard-health-pulse 1.2s ease-in-out infinite;
-  `,
-}));
+const styles = stylex.create({
+  dot: {
+    borderRadius: '50%',
+    flex: 'none',
+    height: '6px',
+    width: '6px',
+  },
+  running: {
+    animationDuration: '1.2s',
+    animationIterationCount: 'infinite',
+    animationName: pulse,
+    animationTimingFunction: 'ease-in-out',
+  },
+});
 
 export type WidgetHealthTone = 'failed' | 'idle' | 'ok' | 'running' | 'stale';
 
@@ -54,9 +54,10 @@ const HealthDot = memo<{ health: WidgetHealth }>(({ health }) => {
   return (
     <span
       aria-hidden
-      className={cx(styles.dot, tone === 'running' && styles.running)}
+      {...sx([styles.dot, tone === 'running' && styles.running], undefined, {
+        background: HEALTH_TONE_COLOR[tone],
+      })}
       data-widget-health={tone}
-      style={{ background: HEALTH_TONE_COLOR[tone] }}
     />
   );
 });

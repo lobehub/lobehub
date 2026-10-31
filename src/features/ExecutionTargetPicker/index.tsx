@@ -1,116 +1,81 @@
 'use client';
 
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 
-const styles = createStaticStyles(({ css }) => ({
-  dotOffline: css`
-    flex: none;
+import moduleStyles from './index.module.css';
 
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  dotOnline: css`
-    flex: none;
-
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorSuccess};
-    box-shadow: 0 0 0 2px ${cssVar.colorSuccessBg};
-  `,
-  status: css`
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-  `,
-  option: css`
-    display: flex;
-    flex: 1;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  optionDescription: css`
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  optionIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  optionName: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 20px;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  selectItem: css`
-    min-height: 40px;
-  `,
-  selectPopup: css`
-    max-width: calc(100vw - 24px);
-  `,
-  selectValue: css`
-    > span {
-      display: flex;
-      flex: 1;
-      min-width: 0;
-    }
-  `,
-  triggerIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-  triggerLabel: css`
-    display: flex;
-    flex: 1;
-    gap: 8px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  triggerName: css`
-    overflow: hidden;
-    flex: 1;
-
-    text-align: start;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  dotOffline: {
+    flex: 'none',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+  dotOnline: {
+    flex: 'none',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+    boxShadow: `0 0 0 2px ${cssVar.colorSuccessBg}`,
+  },
+  status: { display: 'inline-flex', gap: '6px', alignItems: 'center' },
+  option: { display: 'flex', flex: '1', gap: '8px', alignItems: 'center', minWidth: 0 },
+  optionDescription: { fontSize: '12px', lineHeight: '16px', color: cssVar.colorTextDescription },
+  optionIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  optionName: {
+    overflow: 'hidden',
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: '20px',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  selectItem: { minHeight: '40px' },
+  selectPopup: { maxWidth: 'calc(100vw - 24px)' },
+  triggerIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    color: cssVar.colorTextSecondary,
+  },
+  triggerLabel: { display: 'flex', flex: '1', gap: '8px', alignItems: 'center', minWidth: 0 },
+  triggerName: {
+    overflow: 'hidden',
+    flex: '1',
+    textAlign: 'start',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 export const SHARED_EXECUTION_TARGETS = ['auto', 'device', 'none', 'sandbox'] as const;
 
@@ -274,10 +239,12 @@ interface ExecutionTargetDeviceStatusProps {
 
 export const ExecutionTargetDeviceStatus = memo<ExecutionTargetDeviceStatusProps>(
   ({ offlineLabel, online, onlineLabel, unknown, unknownLabel }) => (
-    <span className={styles.status}>
+    <span {...stylex.props(styles.status)}>
       <span
         aria-hidden
-        className={unknown ? styles.dotOffline : online ? styles.dotOnline : styles.dotOffline}
+        {...stylex.props(
+          unknown ? styles.dotOffline : online ? styles.dotOnline : styles.dotOffline,
+        )}
       />
       <span>{unknown ? unknownLabel : online ? onlineLabel : offlineLabel}</span>
     </span>
@@ -288,9 +255,9 @@ ExecutionTargetDeviceStatus.displayName = 'ExecutionTargetPicker.ExecutionTarget
 
 /** Select slots for execution-environment pickers that render {@link ExecutionTargetLabel}. */
 export const executionTargetSelectClassNames = {
-  item: styles.selectItem,
-  popup: styles.selectPopup,
-  value: styles.selectValue,
+  item: stylex.props(styles.selectItem).className,
+  popup: stylex.props(styles.selectPopup).className,
+  value: moduleStyles.selectValue,
 };
 
 interface ExecutionTargetLabelProps {
@@ -321,24 +288,26 @@ export const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
 
     if (compact) {
       return (
-        <span className={styles.triggerLabel}>
-          <span aria-hidden className={styles.triggerIcon}>
+        <span className={stylex.props(styles.triggerLabel).className}>
+          <span aria-hidden className={stylex.props(styles.triggerIcon).className}>
             {icon}
           </span>
-          <span className={styles.triggerName}>{label}</span>
-          {device ? <span className={styles.optionDescription}>{secondary}</span> : null}
+          <span className={stylex.props(styles.triggerName).className}>{label}</span>
+          {device ? (
+            <span className={stylex.props(styles.optionDescription).className}>{secondary}</span>
+          ) : null}
         </span>
       );
     }
 
     return (
-      <span className={styles.option}>
-        <span aria-hidden className={styles.optionIcon}>
+      <span className={stylex.props(styles.option).className}>
+        <span aria-hidden className={stylex.props(styles.optionIcon).className}>
           {icon}
         </span>
         <Flexbox flex={1} style={{ minWidth: 0 }}>
-          <span className={styles.optionName}>{label}</span>
-          <span className={styles.optionDescription}>{secondary}</span>
+          <span className={stylex.props(styles.optionName).className}>{label}</span>
+          <span className={stylex.props(styles.optionDescription).className}>{secondary}</span>
         </Flexbox>
       </span>
     );

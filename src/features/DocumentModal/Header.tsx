@@ -4,7 +4,6 @@ import {
   ActionIcon,
   Avatar,
   copyToClipboard,
-  createStaticStyles,
   cssVar,
   DropdownMenu,
   Flexbox,
@@ -29,17 +28,10 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
+import styles from './Header.module.css';
 import { buildDocumentModalUrl } from './url';
 
 const HEADER_HEIGHT = 44;
-
-const styles = createStaticStyles(({ css }) => ({
-  shareButton: css`
-    & button:not(:hover, :focus-visible) {
-      background: transparent;
-    }
-  `,
-}));
 
 const DocumentModalHeader = memo(() => {
   const { t } = useTranslation(['file', 'common']);

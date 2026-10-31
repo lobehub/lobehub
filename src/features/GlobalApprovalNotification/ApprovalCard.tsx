@@ -3,6 +3,7 @@
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Avatar } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRight, ChevronUp } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,9 +21,11 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { sx } from '@/styles/sx';
 
 import { styles } from './styles';
 import { type GlobalApprovalGroup } from './useGlobalPendingApprovals';
+import requestModule from './userRequest.module.css';
 
 interface ApprovalCardProps {
   group: GlobalApprovalGroup;
@@ -133,17 +136,19 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
 
   return (
     <ConversationProvider skipFetch context={context} operationState={operationState}>
-      <div data-pending-hotkey-scope className={styles.card}>
-        <div className={styles.header}>
+      <div data-pending-hotkey-scope {...stylex.props(styles.card)}>
+        <div {...stylex.props(styles.header)}>
           <Avatar
             avatar={meta.avatar}
             background={meta.backgroundColor}
             size={28}
             title={agentDisplayName(meta)}
           />
-          <div className={styles.headerMeta}>
-            <div className={styles.headerSubtitle}>
-              {agentDisplayName(meta) && <span>{agentDisplayName(meta)}</span>}
+          <div {...stylex.props(styles.headerMeta)}>
+            <div {...stylex.props(styles.headerSubtitle)}>
+              {agentDisplayName(meta) && (
+                <span {...stylex.props(styles.headerSubtitleName)}>{agentDisplayName(meta)}</span>
+              )}
               {t('globalApproval.subtitle')}
             </div>
           </div>
@@ -165,10 +170,10 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
           )}
         </div>
 
-        <div className={styles.requestContext}>
-          <div className={styles.headerTitle}>{topicTitle || t('globalApproval.title')}</div>
+        <div {...stylex.props(styles.requestContext)}>
+          <div {...stylex.props(styles.headerTitle)}>{topicTitle || t('globalApproval.title')}</div>
           {userRequest && (
-            <div className={styles.userRequestBody}>
+            <div {...sx([styles.userRequestBody], requestModule.body)}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
           )}
@@ -182,7 +187,7 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
           />
         )}
 
-        <div className={styles.content}>
+        <div {...stylex.props(styles.content)}>
           <InterventionContent
             actionsPortalTarget={actionsPortalTarget}
             intervention={activeIntervention}
@@ -190,7 +195,7 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
           />
         </div>
 
-        <div className={styles.actions} ref={setActionsPortalTarget} />
+        <div {...stylex.props(styles.actions)} ref={setActionsPortalTarget} />
       </div>
     </ConversationProvider>
   );

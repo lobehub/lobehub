@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { LayoutGridIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -13,22 +15,11 @@ import { dashboardPageStyles as pageStyles } from '../pageStyles';
 import { getWidgetHealth, getWidgetUpdatedAt } from '../utils/widgetHealth';
 import { getHealthTone, HEALTH_TONE_COLOR, type WidgetHealthTone } from '../WidgetCard/HealthDot';
 
-const styles = createStaticStyles(({ css }) => ({
-  dot: css`
-    flex: none;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-  `,
-  meta: css`
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  sep: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  dot: { flex: 'none', width: '6px', height: '6px', borderRadius: '50%' },
+  meta: { fontSize: '12px', fontVariantNumeric: 'tabular-nums', color: cssVar.colorTextTertiary },
+  sep: { color: cssVar.colorTextQuaternary },
+});
 
 /** Tones the summary calls out, in the order a reader should notice them. */
 const SUMMARY_TONES = ['failed', 'stale', 'running', 'ok'] as const;
@@ -75,24 +66,35 @@ const BoardHeader = memo<BoardHeaderProps>(
         data-dashboard-header
         horizontal
         align={'flex-end'}
-        className={pageStyles.heading}
+        className={stylex.props(pageStyles.heading).className}
         gap={16}
         justify={'space-between'}
       >
         <Flexbox gap={6} style={{ minWidth: 0 }}>
-          {title && <h1 className={pageStyles.title}>{title}</h1>}
-          {description && <Text className={pageStyles.description}>{description}</Text>}
-          <Flexbox horizontal align={'center'} className={styles.meta} gap={10} wrap={'wrap'}>
+          {title && <h1 {...stylex.props(pageStyles.title)}>{title}</h1>}
+          {description && (
+            <Text className={stylex.props(pageStyles.description).className}>{description}</Text>
+          )}
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={stylex.props(styles.meta).className}
+            gap={10}
+            wrap={'wrap'}
+          >
             <span>{t('board.widgetCount', { count: widgets.length })}</span>
             {SUMMARY_TONES.filter((tone) => counts[tone]).map((tone) => (
               <Flexbox horizontal align={'center'} data-dashboard-health={tone} gap={5} key={tone}>
-                <span className={styles.dot} style={{ background: HEALTH_TONE_COLOR[tone] }} />
+                <span
+                  className={stylex.props(styles.dot).className}
+                  style={{ background: HEALTH_TONE_COLOR[tone] }}
+                />
                 {t(`board.health.${tone}`, { count: counts[tone] })}
               </Flexbox>
             ))}
             {lastUpdatedAt !== undefined && (
               <>
-                <span className={styles.sep}>·</span>
+                <span {...stylex.props(styles.sep)}>·</span>
                 <Tooltip title={dayjs(lastUpdatedAt).format('YYYY-MM-DD HH:mm:ss')}>
                   <span>{t('board.lastUpdated', { time: dayjs(lastUpdatedAt).fromNow() })}</span>
                 </Tooltip>

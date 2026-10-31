@@ -1,7 +1,9 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Button, ModalFooter, Table, type TableColumn, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,56 +30,18 @@ const getTotalRecords = (tables: { count: number; name: string }[]): number => {
   return tables.reduce((sum, table) => sum + table.count, 0);
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    duplicateAlert: css`
-      margin-block-start: ${cssVar.marginMD};
-      padding: ${cssVar.paddingMD};
-      border: 1px solid ${cssVar.colorWarningBorder};
-      border-radius: ${cssVar.borderRadiusLG};
-
-      background-color: ${cssVar.colorWarningBg};
-    `,
-    duplicateDescription: css`
-      margin-block-start: ${cssVar.marginXS};
-      font-size: ${cssVar.fontSizeSM};
-      color: ${cssVar.colorTextSecondary};
-    `,
-    duplicateOptions: css`
-      margin-block-start: ${cssVar.marginSM};
-    `,
-    duplicateTag: css`
-      border-color: ${cssVar.colorWarningBorder};
-      color: ${cssVar.colorWarning};
-      background-color: ${cssVar.colorWarningBg};
-    `,
-    hash: css`
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 12px;
-      color: ${cssVar.colorTextTertiary};
-    `,
-    infoIcon: css`
-      color: ${cssVar.colorTextSecondary};
-    `,
-    modalContent: css`
-      padding-block: ${cssVar.paddingMD};
-      padding-inline: 0;
-    `,
-    successIcon: css`
-      color: ${cssVar.colorSuccess};
-    `,
-    tableContainer: css`
-      overflow: hidden;
-      border: 1px solid ${cssVar.colorBorderSecondary};
-      border-radius: ${cssVar.borderRadiusLG};
-    `,
-    tableName: css`
-      font-family: ${cssVar.fontFamilyCode};
-    `,
-    warningIcon: css`
-      color: ${cssVar.colorWarning};
-    `,
-  };
+const styles = stylex.create({
+  hash: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', color: cssVar.colorTextTertiary },
+  infoIcon: { color: cssVar.colorTextSecondary },
+  modalContent: { paddingBlock: cssVar.paddingMD, paddingInline: '0' },
+  tableContainer: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  tableName: { fontFamily: cssVar.fontFamilyCode },
 });
 
 interface ImportPreviewModalProps {
@@ -105,7 +69,7 @@ const ImportPreviewModal = ({
     {
       dataIndex: 'name',
       key: 'name',
-      render: (text: string) => <div className={styles.tableName}>{text}</div>,
+      render: (text: string) => <div {...stylex.props(styles.tableName)}>{text}</div>,
       title: t('importPreview.tables.name'),
     },
     {
@@ -142,12 +106,12 @@ const ImportPreviewModal = ({
       }
       onCancel={() => onOpenChange(false)}
     >
-      <div className={styles.modalContent}>
+      <div {...stylex.props(styles.modalContent)}>
         <Flexbox gap={16}>
           <Flexbox gap={4}>
             <Flexbox horizontal align="center" justify="space-between" width="100%">
               <Flexbox horizontal align="center" gap={8}>
-                <Info className={styles.infoIcon} size={16} />
+                <Info className={stylex.props(styles.infoIcon).className} size={16} />
                 <Text strong>{t('importPreview.totalRecords', { count: totalRecords })}</Text>
               </Flexbox>
               <Flexbox horizontal>
@@ -156,12 +120,12 @@ const ImportPreviewModal = ({
                 </Text>
               </Flexbox>
             </Flexbox>
-            <Flexbox horizontal className={styles.hash} gap={4}>
+            <Flexbox horizontal className={stylex.props(styles.hash).className} gap={4}>
               {t('importPreview.hashLabel')}: <span>{importData.schemaHash}</span>
             </Flexbox>
           </Flexbox>
 
-          <div className={styles.tableContainer}>
+          <div {...stylex.props(styles.tableContainer)}>
             <Table
               columns={columns}
               dataSource={tables}

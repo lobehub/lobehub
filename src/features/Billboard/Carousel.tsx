@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  Button,
-  Carousel,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Tooltip,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Carousel, Flexbox, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { X } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -31,103 +25,84 @@ interface BillboardCarouselProps {
   set: GlobalBillboard;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  action: css`
-    display: block;
-    width: 100%;
-    margin-block-start: 8px;
-  `,
-  card: css`
-    position: fixed;
-    z-index: 1000;
-    inset-block-end: 56px;
-    inset-inline-start: 8px;
-    transform-origin: bottom left;
-
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: 300px;
-    max-width: calc(100vw - 32px);
-    padding: 0;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: 0 4px 24px rgb(0 0 0 / 12%);
-  `,
-  closeButton: css`
-    position: absolute;
-    z-index: 10;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
-
-    /* Sits over the cover image (140px band) — give it its own opaque surface so
-       the icon reads on any image, and lift z-index above the carousel slides. */
-    color: #fff;
-
-    background: rgb(0 0 0 / 45%);
-    backdrop-filter: blur(4px);
-
-    &:hover {
-      color: #fff;
-      background: rgb(0 0 0 / 60%);
-    }
-  `,
-  description: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 4;
-
-    font-size: 14px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-  `,
-  dot: css`
-    cursor: pointer;
-
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorFillSecondary};
-
-    transition: all 0.2s;
-  `,
-  dotActive: css`
-    width: 18px;
-    border-radius: 3px;
-    background: ${cssVar.colorPrimary};
-  `,
-  dots: css`
-    padding-block-end: 10px;
-  `,
-  image: css`
-    display: block;
-
-    width: 100%;
-    height: 140px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    object-fit: cover;
-  `,
-  itemBody: css`
-    padding: 12px;
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 16px;
-    font-weight: 600;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-  `,
-}));
+const styles = stylex.create({
+  action: { display: 'block', width: '100%', marginBlockStart: '8px' },
+  card: {
+    position: 'fixed',
+    zIndex: 1000,
+    insetBlockEnd: '56px',
+    insetInlineStart: '8px',
+    transformOrigin: 'bottom left',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '300px',
+    maxWidth: 'calc(100vw - 32px)',
+    padding: '0',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: '0 4px 24px rgb(0 0 0 / 12%)',
+  },
+  closeButton: {
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '8px',
+    insetInlineEnd: '8px',
+    color: { 'default': '#fff', ':hover': '#fff' },
+    backgroundColor: { 'default': 'rgb(0 0 0 / 45%)', ':hover': 'rgb(0 0 0 / 60%)' },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    backdropFilter: 'blur(4px)',
+  },
+  description: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '4',
+    fontSize: '14px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+  },
+  dot: {
+    cursor: 'pointer',
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+    transition: 'all 0.2s',
+  },
+  dotActive: {
+    width: '18px',
+    borderRadius: '3px',
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+  },
+  dots: { paddingBlockEnd: '10px' },
+  image: {
+    display: 'block',
+    width: '100%',
+    height: '140px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    objectFit: 'cover',
+  },
+  itemBody: { padding: '12px' },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    fontSize: '16px',
+    fontWeight: 600,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+  },
+});
 
 const ItemContent = memo<{
   billboardSlug: string;
@@ -187,21 +162,21 @@ const ItemContent = memo<{
   }, [resolved.description]);
 
   const titleNode = (
-    <div className={styles.title} ref={titleRef}>
+    <div {...stylex.props(styles.title)} ref={titleRef}>
       {resolved.title}
     </div>
   );
 
   const descNode = resolved.description && (
-    <div className={styles.description} ref={descRef}>
+    <div {...stylex.props(styles.description)} ref={descRef}>
       {resolved.description}
     </div>
   );
 
   return (
     <Flexbox gap={0}>
-      {item.cover && <img alt="" className={styles.image} src={item.cover} />}
-      <Flexbox className={styles.itemBody} gap={4}>
+      {item.cover && <img alt="" {...stylex.props(styles.image)} src={item.cover} />}
+      <Flexbox className={stylex.props(styles.itemBody).className} gap={4}>
         {titleOverflow ? (
           <Tooltip placement="top" title={resolved.title}>
             {titleNode}
@@ -218,13 +193,18 @@ const ItemContent = memo<{
             descNode
           ))}
         {action ? (
-          <Button block className={styles.action} type="primary" onClick={handleActionClick}>
+          <Button
+            block
+            className={stylex.props(styles.action).className}
+            type="primary"
+            onClick={handleActionClick}
+          >
             {resolved.linkLabel ?? t('billboard.learnMore')}
           </Button>
         ) : (
           item.linkUrl && (
             <a
-              className={styles.action}
+              {...stylex.props(styles.action)}
               href={item.linkUrl}
               rel="noopener noreferrer"
               target="_blank"
@@ -279,7 +259,7 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
     return (
       <m.div
         {...cardDataProps}
-        className={styles.card}
+        {...stylex.props(styles.card)}
         initial={{ opacity: 0, scale: 0.92, y: 16 }}
         transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
         animate={
@@ -293,7 +273,12 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
           if (closing) onAnimationFinish?.();
         }}
       >
-        <ActionIcon className={styles.closeButton} icon={X} size={14} onClick={onClose} />
+        <ActionIcon
+          className={stylex.props(styles.closeButton).className}
+          icon={X}
+          size={14}
+          onClick={onClose}
+        />
         {single ? (
           <ItemContent
             billboardSlug={set.slug}
@@ -321,10 +306,15 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
                 </div>
               ))}
             </Carousel>
-            <Flexbox horizontal className={styles.dots} gap={6} justify="center">
+            <Flexbox
+              horizontal
+              className={stylex.props(styles.dots).className}
+              gap={6}
+              justify="center"
+            >
               {set.items.map((item, idx) => (
                 <div
-                  className={`${styles.dot} ${current === idx ? styles.dotActive : ''}`}
+                  {...stylex.props(styles.dot, current === idx && styles.dotActive)}
                   key={item.id}
                   onClick={() => setCurrent(idx)}
                 />

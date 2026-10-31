@@ -1,50 +1,48 @@
 'use client';
 
 import type { WidgetTableOutput } from '@lobechat/types';
-import { createStaticStyles, cssVar, Text } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatCell } from '../../utils/format';
 import { useIncrementalRows } from './useIncrementalRows';
 
-const styles = createStaticStyles(({ css }) => ({
-  table: css`
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 12px;
-
-    th,
-    td {
-      overflow: hidden;
-
-      max-width: 240px;
-      padding-block: 6px;
-      padding-inline: 8px;
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-      text-align: start;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    th {
-      font-weight: 500;
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    td[data-type='number'],
-    th[data-type='number'] {
-      font-variant-numeric: tabular-nums;
-      text-align: end;
-    }
-  `,
-  wrapper: css`
-    overflow: auto;
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({
+  cell: {
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: '1px',
+    maxWidth: '240px',
+    overflow: 'hidden',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    textAlign: 'start',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  head: {
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    color: cssVar.colorTextSecondary,
+    fontWeight: 500,
+  },
+  num: {
+    fontVariantNumeric: 'tabular-nums',
+    textAlign: 'end',
+  },
+  table: {
+    borderCollapse: 'collapse',
+    fontSize: '12px',
+    width: '100%',
+  },
+  wrapper: {
+    overflow: 'auto',
+    width: '100%',
+  },
+});
 
 interface TableViewProps {
   /** Column keys to show, in order (`view.columns`). */
@@ -78,12 +76,16 @@ const TableView = memo<TableViewProps>(({ output, columns, limit, incremental })
   }
 
   return (
-    <div className={styles.wrapper}>
-      <table className={styles.table}>
+    <div {...stylex.props(styles.wrapper)}>
+      <table {...stylex.props(styles.table)}>
         <thead>
           <tr>
             {visibleColumns.map((column) => (
-              <th data-type={column.type} key={column.key}>
+              <th
+                {...stylex.props(styles.cell, styles.head, column.type === 'number' && styles.num)}
+                data-type={column.type}
+                key={column.key}
+              >
                 {column.title ?? column.key}
               </th>
             ))}
@@ -95,7 +97,12 @@ const TableView = memo<TableViewProps>(({ output, columns, limit, incremental })
               {visibleColumns.map((column) => {
                 const text = formatCell(row[column.key]);
                 return (
-                  <td data-type={column.type} key={column.key} title={text}>
+                  <td
+                    {...stylex.props(styles.cell, column.type === 'number' && styles.num)}
+                    data-type={column.type}
+                    key={column.key}
+                    title={text}
+                  >
                     {column.type === 'link' && text ? (
                       <a href={text} rel={'noreferrer'} target={'_blank'}>
                         {text}

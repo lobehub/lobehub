@@ -1,6 +1,8 @@
 'use client';
 
-import { createGlobalStyle, createStaticStyles } from '@lobehub/ui';
+import './InputRowViewTransition.css';
+
+import * as stylex from '@stylexjs/stylex';
 import { type FocusEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -9,23 +11,15 @@ import { inputSelectors, useConversationStore } from '@/features/Conversation/st
 
 import HoverExpandBar from './HoverExpandBar';
 
-const styles = createStaticStyles(({ css }) => ({
-  row: css`
-    position: relative;
-    flex-shrink: 0;
-  `,
-  surface: css`
-    view-transition-name: floating-chat-panel-input;
-  `,
-}));
-
-const InputRowViewTransitionStyle = createGlobalStyle`
-  ::view-transition-old(floating-chat-panel-input),
-  ::view-transition-new(floating-chat-panel-input) {
-    animation-duration: 240ms;
-    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
-  }
-`;
+const styles = stylex.create({
+  row: {
+    flexShrink: 0,
+    position: 'relative',
+  },
+  surface: {
+    viewTransitionName: 'floating-chat-panel-input',
+  },
+});
 
 interface ViewTransitionLike {
   finished: Promise<void>;
@@ -76,7 +70,6 @@ export interface InputRowProps {
 }
 
 const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand, showExpandBar = true }) => {
-  const s = styles;
   const [renderedCollapsed, setRenderedCollapsed] = useState(isCollapsed);
   const [focused, setFocused] = useState(false);
   const focusedRef = useRef(false);
@@ -108,9 +101,8 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand, showExpandBar = t
 
   return (
     <>
-      <InputRowViewTransitionStyle />
       <div
-        className={s.row}
+        {...stylex.props(styles.row)}
         data-collapsed={isCollapsed}
         data-testid="floating-chat-panel-input-row"
         onBlur={handleBlur}
@@ -123,7 +115,7 @@ const InputRow = memo<InputRowProps>(({ isCollapsed, onExpand, showExpandBar = t
             onExpand={onExpand}
           />
         )}
-        <div className={s.surface}>
+        <div {...stylex.props(styles.surface)}>
           <ChatInput
             allowExpand={false}
             compact={effectiveCompact}

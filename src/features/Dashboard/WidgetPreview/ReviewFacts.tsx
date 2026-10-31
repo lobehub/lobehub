@@ -1,7 +1,9 @@
 'use client';
 
 import type { WidgetManifest, WidgetOutput, WidgetView } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
+import { Button, Flexbox, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,18 +14,19 @@ import type { DashboardWidgetDetail } from '@/services/dashboard';
 import WidgetCard from '../WidgetCard';
 import { toPreviewWidget, toSampleWidget } from './previewWidget';
 
-export const reviewStyles = createStaticStyles(({ css }) => ({
-  label: css`
-    flex: none;
-    width: 88px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  section: css`
-    padding: 10px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+export const reviewStyles = stylex.create({
+  label: {
+    color: cssVar.colorTextTertiary,
+    flex: 'none',
+    width: '88px',
+  },
+  section: {
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+    borderRadius: cssVar.borderRadius,
+    padding: '10px',
+  },
+});
 
 /**
  * A titled block of the review: the card a version produces leads, the facts
@@ -133,7 +136,7 @@ export const ReviewSampleCard = ({
 
 export const Fact = ({ label, children }: { children: ReactNode; label: string }) => (
   <Flexbox horizontal align={'baseline'} gap={8}>
-    <Text className={reviewStyles.label} fontSize={12}>
+    <Text className={stylex.props(reviewStyles.label).className} fontSize={12}>
       {label}
     </Text>
     <Flexbox horizontal flex={1} gap={4} style={{ minWidth: 0 }} wrap={'wrap'}>

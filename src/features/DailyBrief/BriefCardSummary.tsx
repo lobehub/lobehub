@@ -1,4 +1,5 @@
 import { Button, Flexbox, MaskShadow } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useEffect, useRef, useState } from 'react';
@@ -56,7 +57,7 @@ const BriefCardSummary = memo<BriefCardSummaryProps>(({ summary }) => {
       {isOverflow && (
         <Button
           block
-          className={styles.expandLink}
+          className={stylex.props(styles.expandLink).className}
           icon={expanded ? ChevronsDownUpIcon : ChevronsUpDownIcon}
           iconPosition={'end'}
           size={'small'}

@@ -1,3 +1,4 @@
+import * as stylex from '@stylexjs/stylex';
 import { Command } from 'cmdk';
 import { type ComponentProps, type ReactNode } from 'react';
 import { cloneElement, isValidElement, memo } from 'react';
@@ -47,13 +48,13 @@ const CommandItem = memo<CommandItemProps>((props) => {
     const { icon, title, description, trailingLabel, unpinned: _unpinned, ...itemProps } = props;
     return (
       <Command.Item {...itemProps}>
-        <div className={styles.itemContent}>
-          <div className={styles.itemIcon}>{icon}</div>
-          <div className={styles.itemDetails}>
-            <div className={styles.itemTitle}>{title}</div>
-            {description && <div className={styles.itemDescription}>{description}</div>}
+        <div {...stylex.props(styles.itemContent)}>
+          <div {...stylex.props(styles.itemIcon)}>{icon}</div>
+          <div {...stylex.props(styles.itemDetails)}>
+            <div {...stylex.props(styles.itemTitle)}>{title}</div>
+            {description && <div {...stylex.props(styles.itemDescription)}>{description}</div>}
           </div>
-          {trailingLabel && <div className={styles.itemType}>{trailingLabel}</div>}
+          {trailingLabel && <div {...stylex.props(styles.itemType)}>{trailingLabel}</div>}
         </div>
       </Command.Item>
     );
@@ -66,14 +67,14 @@ const CommandItem = memo<CommandItemProps>((props) => {
   // Clone the icon element and add the icon className if it's a valid React element
   const iconWithClass =
     isValidElement(icon) && typeof icon.type !== 'string'
-      ? cloneElement(icon, { className: styles.icon } as never)
+      ? cloneElement(icon, { className: stylex.props(styles.icon).className } as never)
       : icon;
 
   return (
     <Command.Item {...itemProps}>
       {iconWithClass}
-      <div className={styles.itemContent}>
-        <div className={styles.itemLabel}>{children}</div>
+      <div {...stylex.props(styles.itemContent)}>
+        <div {...stylex.props(styles.itemLabel)}>{children}</div>
       </div>
     </Command.Item>
   );

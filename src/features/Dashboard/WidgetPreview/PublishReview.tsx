@@ -1,6 +1,7 @@
 'use client';
 
 import { Alert, cssVar, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { CircleCheckIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -103,7 +104,7 @@ const PublishReview = memo<PublishReviewProps>(
           {t('publish.intro')}
         </Text>
 
-        <Flexbox className={reviewStyles.section} gap={6}>
+        <Flexbox className={stylex.props(reviewStyles.section).className} gap={6}>
           <Fact label={t('chat.definition')}>
             <Text fontSize={12}>{widget.description || t('chat.noDefinition')}</Text>
           </Fact>

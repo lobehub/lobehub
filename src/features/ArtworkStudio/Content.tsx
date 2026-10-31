@@ -14,8 +14,6 @@ import {
   Avatar,
   Button,
   Center,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   Icon,
   Input,
@@ -23,6 +21,8 @@ import {
   Text,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CircleUserRound,
   Frame,
@@ -70,273 +70,207 @@ const GENERATE_SECTION_KEY = 'generate';
  */
 const FULL_BODY_INSET = 12;
 
-const styles = createStaticStyles(({ css }) => ({
-  galleryGrid: css`
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: start;
-  `,
-  galleryItem: css`
-    cursor: pointer;
-
-    width: ${STYLE_THUMB_SIZE + 8}px;
-    padding: 4px;
-    border: 1px solid transparent;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    transition:
-      border-color ${cssVar.motionDurationFast},
-      background ${cssVar.motionDurationFast};
-
-    &:hover img {
-      filter: brightness(1.06);
-    }
-  `,
-  galleryItemActive: css`
-    border-color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorFillTertiary};
-  `,
-  galleryLabel: css`
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextSecondary};
-    text-align: center;
-  `,
-  galleryThumb: css`
-    aspect-ratio: 1;
-    width: ${STYLE_THUMB_SIZE}px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    object-fit: cover;
-
-    transition: filter ${cssVar.motionDurationFast};
-  `,
-  galleryThumbWrap: css`
-    position: relative;
-  `,
-  /** Empty state of the custom-reference tile: same footprint as a thumbnail. */
-  referenceEmpty: css`
-    aspect-ratio: 1;
-    width: ${STYLE_THUMB_SIZE}px;
-    border: 1px dashed ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorTextTertiary};
-  `,
-  referenceRemove: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 2px;
-    inset-inline-end: 2px;
-
-    opacity: 0;
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
-    backdrop-filter: blur(8px);
-
-    transition: opacity ${cssVar.motionDurationFast};
-
-    *:hover > & {
-      opacity: 1;
-    }
-  `,
-  generationOverlay: css`
-    position: absolute;
-    z-index: 2;
-    inset: 0;
-
-    padding: 12px;
-    border-radius: calc(${cssVar.borderRadiusLG} - 1px);
-
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent);
-    backdrop-filter: blur(12px);
-  `,
-  generationOverlayTitle: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 18px;
-    text-align: center;
-  `,
-  hint: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  noModelBlock: css`
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  outputCard: css`
-    cursor: pointer;
-    padding-block: 0;
-    padding-inline: 8px;
-  `,
-  /**
-   * Upload / generate / remove live on the artwork and only appear on hover or
-   * keyboard focus, so a settled slot is just the character.
-   *
-   * Filled buttons are translucent by design, so the row carries its own scrim:
-   * a bottom-up fade that darkens whatever the character puts behind the labels
-   * without boxing the buttons in a panel.
-   */
-  outputActions: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-end: 0;
-    inset-inline: 0;
-
-    padding-block: 40px 10px;
-    padding-inline: 10px;
-
-    opacity: 0;
-    background: linear-gradient(
-      to top,
-      ${cssVar.colorBgContainer} 0%,
-      color-mix(in srgb, ${cssVar.colorBgContainer} 76%, transparent) 46%,
-      transparent 100%
-    );
-
-    transition: opacity ${cssVar.motionDurationMid};
-  `,
-  outputColumn: css`
-    width: 100%;
-    height: 100%;
-  `,
-  outputGrid: css`
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px;
-    align-items: stretch;
-  `,
-  outputPreview: css`
-    position: relative;
-
-    overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover [data-slot-actions],
-    &:focus-within [data-slot-actions] {
-      opacity: 1;
-    }
-  `,
-  /**
-   * Square, and as wide as the column allows up to its default size — this sets
-   * the row height, and shrinks with the modal rather than pinning a number.
-   */
-  outputPreviewAvatar: css`
-    aspect-ratio: 1;
-    width: 100%;
-    max-width: ${PREVIEW_MAX_SIZE}px;
-  `,
-  /** Matches the avatar's height; its own ratio then decides the width. */
-  /**
-   * Matches the avatar's height — same cap, so the pair stays level — and its
-   * own ratio then decides the width.
-   */
-  outputPreviewFullBody: css`
-    aspect-ratio: 3 / 4;
-    max-width: 100%;
-    height: 100%;
-    max-height: ${PREVIEW_MAX_SIZE}px;
-  `,
-  /**
-   * Breathing room so the head is not pinned to the slot's top edge. Far less
-   * than the avatar's inset — a full body wants the height — but enough that the
-   * slot reads as a frame around the character rather than a crop of it.
-   */
-  previewBodyImage: css`
-    box-sizing: border-box;
-    width: 100%;
-    height: 100%;
-    padding-block: ${FULL_BODY_INSET}px;
-
-    object-fit: contain;
-  `,
-  /**
-   * Dashed marker for the share of the character the home surface actually
-   * shows, so framing can be judged here instead of by walking to home.
-   */
-  framePreview: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 3;
-    inset-block-start: ${FULL_BODY_INSET}px;
-    inset-inline: ${FULL_BODY_INSET}px;
-
-    height: calc((100% - ${FULL_BODY_INSET * 2}px) * ${HOME_PORTRAIT_VISIBLE_RATIO});
-    border: 1px dashed ${cssVar.colorTextSecondary};
-    border-radius: ${cssVar.borderRadiusSM};
-  `,
-  framePreviewLabel: css`
-    position: absolute;
-    inset-block-end: 4px;
-    inset-inline-end: 6px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    line-height: 14px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  frameToggle: css`
-    position: absolute;
-    z-index: 4;
-    inset-block-start: 8px;
-    inset-inline-start: 8px;
-
-    opacity: 0;
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
-    backdrop-filter: blur(8px);
-
-    transition: opacity ${cssVar.motionDurationMid};
-  `,
-  controlLabel: css`
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  removeButton: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
-
-    opacity: 0;
-    background: color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent);
-    backdrop-filter: blur(8px);
-
-    transition: opacity ${cssVar.motionDurationMid};
-  `,
-  sectionTitle: css`
-    font-weight: 500;
-  `,
-  uploadSpec: css`
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: center;
-  `,
-  visuallyHiddenInput: css`
-    pointer-events: none;
-
-    position: fixed;
-
-    overflow: hidden;
-
-    width: 1px;
-    height: 1px;
-
-    opacity: 0;
-  `,
-}));
+const styles = stylex.create({
+  galleryGrid: { display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'start' },
+  // The marker for `galleryThumb`, which brightens while its item is hovered.
+  galleryItem: {
+    cursor: 'pointer',
+    width: `${STYLE_THUMB_SIZE + 8}px`,
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+    borderRadius: cssVar.borderRadiusLG,
+    transition: `border-color ${cssVar.motionDurationFast}, background ${cssVar.motionDurationFast}`,
+  },
+  galleryItemActive: {
+    borderColor: cssVar.colorPrimary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  galleryLabel: {
+    fontSize: '12px',
+    lineHeight: '16px',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'center',
+  },
+  galleryThumb: {
+    aspectRatio: '1',
+    width: `${STYLE_THUMB_SIZE}px`,
+    borderRadius: cssVar.borderRadiusLG,
+    filter: { default: null, [stylex.when.ancestor(':hover')]: 'brightness(1.06)' },
+    objectFit: 'cover',
+    transition: `filter ${cssVar.motionDurationFast}`,
+  },
+  // The marker for `referenceRemove`, which shows while the thumbnail is hovered.
+  galleryThumbWrap: { position: 'relative' },
+  referenceEmpty: {
+    aspectRatio: '1',
+    width: `${STYLE_THUMB_SIZE}px`,
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorTextTertiary,
+  },
+  referenceRemove: {
+    position: 'absolute',
+    zIndex: 1,
+    insetBlockStart: '2px',
+    insetInlineEnd: '2px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent)`,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(8px)',
+    transition: `opacity ${cssVar.motionDurationFast}`,
+  },
+  generationOverlay: {
+    position: 'absolute',
+    zIndex: 2,
+    inset: '0',
+    padding: '12px',
+    borderRadius: `calc(${cssVar.borderRadiusLG} - 1px)`,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 88%, transparent)`,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(12px)',
+  },
+  generationOverlayTitle: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    fontSize: '13px',
+    fontWeight: 500,
+    lineHeight: '18px',
+    textAlign: 'center',
+  },
+  hint: { fontSize: '13px', color: cssVar.colorTextSecondary },
+  noModelBlock: {
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  outputCard: { cursor: 'pointer', paddingBlock: '0', paddingInline: '8px' },
+  outputActions: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockEnd: '0',
+    insetInline: '0',
+    paddingBlockStart: '40px',
+    paddingBlockEnd: '10px',
+    paddingInline: '10px',
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':focus-within')]: 1,
+    },
+    backgroundColor: 'transparent',
+    backgroundImage: `linear-gradient(to top, ${cssVar.colorBgContainer} 0%, color-mix(in srgb, ${cssVar.colorBgContainer} 76%, transparent) 46%, transparent 100%)`,
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  outputColumn: { width: '100%', height: '100%' },
+  outputGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: '24px',
+    alignItems: 'stretch',
+  },
+  // The marker for the slot's actions, shown on hover or keyboard focus.
+  outputPreview: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  outputPreviewAvatar: { aspectRatio: '1', width: '100%', maxWidth: `${PREVIEW_MAX_SIZE}px` },
+  outputPreviewFullBody: {
+    aspectRatio: '3 / 4',
+    maxWidth: '100%',
+    height: '100%',
+    maxHeight: `${PREVIEW_MAX_SIZE}px`,
+  },
+  previewBodyImage: {
+    boxSizing: 'border-box',
+    width: '100%',
+    height: '100%',
+    paddingBlock: `${FULL_BODY_INSET}px`,
+    objectFit: 'contain',
+  },
+  framePreview: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 3,
+    insetBlockStart: `${FULL_BODY_INSET}px`,
+    insetInline: `${FULL_BODY_INSET}px`,
+    borderWidth: '1px',
+    borderStyle: 'dashed',
+    borderColor: cssVar.colorTextSecondary,
+    borderRadius: cssVar.borderRadiusSM,
+  },
+  // The visible share comes from Home's framing, which StyleX cannot read at build time.
+  framePreviewHeight: (ratio: number) => ({
+    height: `calc((100% - ${FULL_BODY_INSET * 2}px) * ${ratio})`,
+  }),
+  framePreviewLabel: {
+    position: 'absolute',
+    insetBlockEnd: '4px',
+    insetInlineEnd: '6px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    lineHeight: '14px',
+    color: cssVar.colorTextSecondary,
+  },
+  frameToggle: {
+    position: 'absolute',
+    zIndex: 4,
+    insetBlockStart: '8px',
+    insetInlineStart: '8px',
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':focus-within')]: 1,
+    },
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent)`,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(8px)',
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  controlLabel: { fontSize: '12px', lineHeight: '16px', color: cssVar.colorTextTertiary },
+  removeButton: {
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: '8px',
+    insetInlineEnd: '8px',
+    opacity: {
+      default: 0,
+      [stylex.when.ancestor(':hover')]: 1,
+      [stylex.when.ancestor(':focus-within')]: 1,
+    },
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 72%, transparent)`,
+    backgroundImage: 'none',
+    backdropFilter: 'blur(8px)',
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  sectionTitle: { fontWeight: 500 },
+  uploadSpec: {
+    fontSize: '12px',
+    lineHeight: '16px',
+    color: cssVar.colorTextQuaternary,
+    textAlign: 'center',
+  },
+  visuallyHiddenInput: {
+    pointerEvents: 'none',
+    position: 'fixed',
+    overflow: 'hidden',
+    width: '1px',
+    height: '1px',
+    opacity: 0,
+  },
+});
 
 export interface ArtworkStudioContentProps {
   /** Current avatar url; falsy renders the empty avatar placeholder. */
@@ -491,8 +425,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
     const renderRemove = (composition: AgentArtworkComposition, hasImage: boolean) =>
       hasImage && !isGenerating(composition) ? (
         <ActionIcon
-          data-slot-actions
-          className={styles.removeButton}
+          className={stylex.props(styles.removeButton).className}
           icon={Trash2}
           size={'small'}
           title={t('artworkStudio.remove')}
@@ -505,9 +438,11 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
 
     const renderGenerationOverlay = (composition: AgentArtworkComposition) =>
       isGenerating(composition) ? (
-        <Center className={styles.generationOverlay} gap={8}>
+        <Center className={stylex.props(styles.generationOverlay).className} gap={8}>
           <Spin size="middle" variant="network" />
-          <Text className={styles.generationOverlayTitle}>{generatingTitle}</Text>
+          <Text className={stylex.props(styles.generationOverlayTitle).className}>
+            {generatingTitle}
+          </Text>
           <Button size={'small'} type={'fill'} onClick={onCancel}>
             {t('artworkStudio.cancel')}
           </Button>
@@ -516,10 +451,10 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
 
     return (
       <Flexbox gap={24} padding={24}>
-        <div className={styles.outputGrid}>
+        <div {...stylex.props(styles.outputGrid)}>
           <Flexbox
             align={'center'}
-            className={styles.outputCard}
+            className={stylex.props(styles.outputCard).className}
             gap={10}
             role={'button'}
             tabIndex={0}
@@ -533,13 +468,31 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
           >
             <Flexbox horizontal align={'center'} gap={6}>
               <Icon icon={CircleUserRound} size={16} />
-              <Text className={styles.sectionTitle}>{t('artworkStudio.composition.avatar')}</Text>
+              <Text className={stylex.props(styles.sectionTitle).className}>
+                {t('artworkStudio.composition.avatar')}
+              </Text>
             </Flexbox>
-            <Flexbox align={'center'} className={styles.outputColumn} gap={10}>
-              <Center className={`${styles.outputPreview} ${styles.outputPreviewAvatar}`}>
+            <Flexbox
+              align={'center'}
+              className={stylex.props(styles.outputColumn).className}
+              gap={10}
+            >
+              <Center
+                className={
+                  stylex.props(
+                    styles.outputPreview,
+                    styles.outputPreviewAvatar,
+                    stylex.defaultMarker(),
+                  ).className
+                }
+              >
                 <AvatarSlotImage avatar={avatar} />
                 {renderRemove('avatar', !!hasStoredAvatar)}
-                <Flexbox data-slot-actions horizontal className={styles.outputActions} gap={8}>
+                <Flexbox
+                  horizontal
+                  className={stylex.props(styles.outputActions).className}
+                  gap={8}
+                >
                   <Button icon={UploadIcon} loading={uploading} style={{ flex: 1 }} type={'fill'}>
                     {t('artworkStudio.upload')}
                   </Button>
@@ -557,12 +510,14 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                 </Flexbox>
                 {renderGenerationOverlay('avatar')}
               </Center>
-              <Text className={styles.uploadSpec}>{t('artworkStudio.uploadSpec.avatar')}</Text>
+              <Text className={stylex.props(styles.uploadSpec).className}>
+                {t('artworkStudio.uploadSpec.avatar')}
+              </Text>
             </Flexbox>
           </Flexbox>
           <Flexbox
             align={'center'}
-            className={styles.outputCard}
+            className={stylex.props(styles.outputCard).className}
             gap={10}
             role={'button'}
             tabIndex={0}
@@ -576,31 +531,49 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
           >
             <Flexbox horizontal align={'center'} gap={6}>
               <Icon icon={PersonStanding} size={16} />
-              <Text className={styles.sectionTitle}>{t('artworkStudio.composition.fullBody')}</Text>
+              <Text className={stylex.props(styles.sectionTitle).className}>
+                {t('artworkStudio.composition.fullBody')}
+              </Text>
             </Flexbox>
-            <Flexbox align={'center'} className={styles.outputColumn} gap={10}>
-              <Center className={`${styles.outputPreview} ${styles.outputPreviewFullBody}`}>
+            <Flexbox
+              align={'center'}
+              className={stylex.props(styles.outputColumn).className}
+              gap={10}
+            >
+              <Center
+                className={
+                  stylex.props(
+                    styles.outputPreview,
+                    styles.outputPreviewFullBody,
+                    stylex.defaultMarker(),
+                  ).className
+                }
+              >
                 {fullBody ? (
                   <img
                     alt={t('artworkStudio.preview.fullBody')}
-                    className={styles.previewBodyImage}
+                    {...stylex.props(styles.previewBodyImage)}
                     src={fullBody}
                   />
                 ) : (
                   <Icon icon={PersonStanding} size={64} />
                 )}
                 {showFramePreview && fullBody ? (
-                  <div className={styles.framePreview}>
-                    <span className={styles.framePreviewLabel}>
+                  <div
+                    {...stylex.props(
+                      styles.framePreview,
+                      styles.framePreviewHeight(HOME_PORTRAIT_VISIBLE_RATIO),
+                    )}
+                  >
+                    <span {...stylex.props(styles.framePreviewLabel)}>
                       {Math.round(HOME_PORTRAIT_VISIBLE_RATIO * 100)}%
                     </span>
                   </div>
                 ) : null}
                 {fullBody && !isGenerating('fullBody') ? (
                   <ActionIcon
-                    data-slot-actions
                     active={showFramePreview}
-                    className={styles.frameToggle}
+                    className={stylex.props(styles.frameToggle).className}
                     icon={Frame}
                     size={'small'}
                     title={t('artworkStudio.framePreview')}
@@ -611,7 +584,11 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                   />
                 ) : null}
                 {renderRemove('fullBody', !!fullBody)}
-                <Flexbox data-slot-actions horizontal className={styles.outputActions} gap={8}>
+                <Flexbox
+                  horizontal
+                  className={stylex.props(styles.outputActions).className}
+                  gap={8}
+                >
                   <Button icon={UploadIcon} loading={uploading} style={{ flex: 1 }} type={'fill'}>
                     {t('artworkStudio.upload')}
                   </Button>
@@ -629,13 +606,15 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                 </Flexbox>
                 {renderGenerationOverlay('fullBody')}
               </Center>
-              <Text className={styles.uploadSpec}>{t('artworkStudio.uploadSpec.fullBody')}</Text>
+              <Text className={stylex.props(styles.uploadSpec).className}>
+                {t('artworkStudio.uploadSpec.fullBody')}
+              </Text>
             </Flexbox>
           </Flexbox>
         </div>
 
         {generating ? (
-          <Text className={styles.hint} style={{ textAlign: 'center' }}>
+          <Text className={stylex.props(styles.hint).className} style={{ textAlign: 'center' }}>
             {t('artworkStudio.generatingHint')}
           </Text>
         ) : null}
@@ -651,26 +630,34 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
               <AccordionItem value={GENERATE_SECTION_KEY}>
                 <AccordionHeader>
                   <AccordionTrigger style={{ paddingBlock: 2, paddingInline: 0 }}>
-                    <Text className={styles.controlLabel}>{t('artworkStudio.generateTitle')}</Text>
+                    <Text className={stylex.props(styles.controlLabel).className}>
+                      {t('artworkStudio.generateTitle')}
+                    </Text>
                   </AccordionTrigger>
                 </AccordionHeader>
                 <AccordionPanel>
                   <Flexbox gap={12} paddingBlock={'4px 0'}>
-                    <div className={styles.galleryGrid}>
+                    <div {...stylex.props(styles.galleryGrid)}>
                       {GALLERY_STYLES.map((item) => (
                         <Flexbox
-                          className={`${styles.galleryItem} ${style === item && !useReference ? styles.galleryItemActive : ''}`}
                           gap={6}
                           key={item}
                           role={'button'}
                           tabIndex={0}
+                          className={
+                            stylex.props(
+                              styles.galleryItem,
+                              style === item && !useReference && styles.galleryItemActive,
+                              stylex.defaultMarker(),
+                            ).className
+                          }
                           onClick={() => selectStyle(item)}
                           onKeyDown={keySelect(item)}
                         >
-                          <div className={styles.galleryThumbWrap}>
+                          <div {...stylex.props(styles.galleryThumbWrap, stylex.defaultMarker())}>
                             <img
                               alt={t(`artworkStudio.style.${item}`)}
-                              className={styles.galleryThumb}
+                              {...stylex.props(styles.galleryThumb)}
                               src={
                                 item === 'lobe'
                                   ? LOBE_STYLE_PREVIEW
@@ -678,7 +665,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                               }
                             />
                           </div>
-                          <Text ellipsis className={styles.galleryLabel}>
+                          <Text ellipsis className={stylex.props(styles.galleryLabel).className}>
                             {t(`artworkStudio.style.${item}`)}
                           </Text>
                         </Flexbox>
@@ -690,10 +677,16 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                       of them can be in effect.
                     */}
                       <Flexbox
-                        className={`${styles.galleryItem} ${useReference ? styles.galleryItemActive : ''}`}
                         gap={6}
                         role={'button'}
                         tabIndex={0}
+                        className={
+                          stylex.props(
+                            styles.galleryItem,
+                            useReference && styles.galleryItemActive,
+                            stylex.defaultMarker(),
+                          ).className
+                        }
                         onClick={() =>
                           referenceImage
                             ? setUseReference(true)
@@ -707,16 +700,16 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                             openFilePicker(referenceInputRef.current);
                         }}
                       >
-                        <div className={styles.galleryThumbWrap}>
+                        <div {...stylex.props(styles.galleryThumbWrap, stylex.defaultMarker())}>
                           {referenceImage ? (
                             <>
                               <img
                                 alt={t('artworkStudio.reference.title')}
-                                className={styles.galleryThumb}
+                                {...stylex.props(styles.galleryThumb)}
                                 src={referenceImage}
                               />
                               <ActionIcon
-                                className={styles.referenceRemove}
+                                className={stylex.props(styles.referenceRemove).className}
                                 icon={Trash2}
                                 size={'small'}
                                 title={t('artworkStudio.reference.remove')}
@@ -728,12 +721,12 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
                               />
                             </>
                           ) : (
-                            <Center className={styles.referenceEmpty}>
+                            <Center className={stylex.props(styles.referenceEmpty).className}>
                               <Icon icon={ImagePlus} size={18} />
                             </Center>
                           )}
                         </div>
-                        <Text ellipsis className={styles.galleryLabel}>
+                        <Text ellipsis className={stylex.props(styles.galleryLabel).className}>
                           {t('artworkStudio.reference.title')}
                         </Text>
                       </Flexbox>
@@ -763,8 +756,13 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
             </AccordionRoot>
           </>
         ) : (
-          <Center className={styles.noModelBlock} flex={1} gap={12} padding={24}>
-            <Text className={styles.hint} style={{ textAlign: 'center' }}>
+          <Center
+            className={stylex.props(styles.noModelBlock).className}
+            flex={1}
+            gap={12}
+            padding={24}
+          >
+            <Text className={stylex.props(styles.hint).className} style={{ textAlign: 'center' }}>
               {t('artworkStudio.noModel')}
             </Text>
             <Button
@@ -783,7 +781,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
         <input
           accept="image/*"
           aria-label={t('artworkStudio.upload')}
-          className={styles.visuallyHiddenInput}
+          {...stylex.props(styles.visuallyHiddenInput)}
           ref={avatarInputRef}
           tabIndex={-1}
           type="file"
@@ -796,7 +794,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
         <input
           accept="image/*"
           aria-label={t('artworkStudio.upload')}
-          className={styles.visuallyHiddenInput}
+          {...stylex.props(styles.visuallyHiddenInput)}
           ref={fullBodyInputRef}
           tabIndex={-1}
           type="file"
@@ -809,7 +807,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
         <input
           accept="image/*"
           aria-label={t('artworkStudio.reference.title')}
-          className={styles.visuallyHiddenInput}
+          {...stylex.props(styles.visuallyHiddenInput)}
           ref={referenceInputRef}
           tabIndex={-1}
           type="file"

@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Button, Icon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRight, ChevronUp, Target } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,9 +9,11 @@ import { useTranslation } from 'react-i18next';
 import GoalClarification from '@/features/AgentGoals/GoalClarification';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { sx } from '@/styles/sx';
 
 import { styles } from './styles';
 import type { GoalClarificationGroup } from './usePendingGoalClarifications';
+import requestModule from './userRequest.module.css';
 
 interface GoalClarificationCardProps {
   group: GoalClarificationGroup;
@@ -35,14 +38,14 @@ const GoalClarificationCard = memo<GoalClarificationCardProps>(
       );
 
     return (
-      <div data-pending-hotkey-scope className={styles.card}>
-        <div className={styles.header}>
+      <div data-pending-hotkey-scope {...stylex.props(styles.card)}>
+        <div {...stylex.props(styles.header)}>
           <Icon icon={Target} size={18} />
           {/* The goal's own title leads, the same way a run approval leads with its
             agent — several goals can be waiting, and this is how to tell them apart. */}
-          <div className={styles.headerMeta} title={group.title}>
-            <div className={styles.headerSubtitle}>
-              <span>{group.title}</span>
+          <div {...stylex.props(styles.headerMeta)} title={group.title}>
+            <div {...stylex.props(styles.headerSubtitle)}>
+              <span {...stylex.props(styles.headerSubtitleName)}>{group.title}</span>
               {t('goalProcess.clarify.islandSubtitle')}
             </div>
           </div>
@@ -63,14 +66,14 @@ const GoalClarificationCard = memo<GoalClarificationCardProps>(
         </div>
 
         {group.requirement && (
-          <div className={styles.requestContext}>
-            <div className={styles.userRequestBody}>
+          <div {...stylex.props(styles.requestContext)}>
+            <div {...sx([styles.userRequestBody], requestModule.body)}>
               <MarkdownMessage>{group.requirement}</MarkdownMessage>
             </div>
           </div>
         )}
 
-        <div className={styles.content}>
+        <div {...stylex.props(styles.content)}>
           <GoalClarification
             actionsPortalTarget={actionsPortalTarget}
             goalId={group.goalId}
@@ -79,7 +82,7 @@ const GoalClarificationCard = memo<GoalClarificationCardProps>(
           />
         </div>
 
-        <div className={styles.goalActions}>
+        <div {...stylex.props(styles.goalActions)}>
           {onDismiss && (
             <Button
               size="small"
@@ -90,7 +93,7 @@ const GoalClarificationCard = memo<GoalClarificationCardProps>(
               {t('globalApproval.dismiss')}
             </Button>
           )}
-          <div className={styles.goalActionsSlot} ref={setActionsPortalTarget} />
+          <div {...stylex.props(styles.goalActionsSlot)} ref={setActionsPortalTarget} />
         </div>
       </div>
     );

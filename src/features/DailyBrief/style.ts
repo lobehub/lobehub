@@ -1,41 +1,36 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionBtn: css`
-    &:hover {
-      border-color: ${cssVar.colorBorder} !important;
-      background: ${cssVar.colorFillQuaternary} !important;
-    }
-  `,
-  actionBtnPrimary: css`
-    width: auto !important;
-    padding-inline: 12px !important;
-  `,
-  expandLink: css`
-    border: 1px solid ${cssVar.colorFillTertiary} !important;
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  resolvedTag: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  card: css`
-    .brief-comment-btn,
-    .brief-view-run-btn {
-      opacity: 0;
-    }
-
-    &:hover {
-      border-color: ${cssVar.colorBorder} !important;
-
-      .brief-comment-btn,
-      .brief-view-run-btn {
-        opacity: 1;
-      }
-    }
-  `,
-  clickableHeader: css`
-    cursor: pointer;
-  `,
-}));
+export const styles = stylex.create({
+  actionBtn: {
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    borderColor: { 'default': null, ':hover': cssVar.colorBorder },
+  },
+  actionBtnPrimary: {
+    paddingInline: '12px',
+    width: 'auto',
+  },
+  // A card is a `stylex.defaultMarker()` element: `revealOnCardHover` descendants
+  // are hidden until it is hovered.
+  card: {
+    borderColor: { 'default': null, ':hover': cssVar.colorBorder },
+  },
+  clickableHeader: {
+    cursor: 'pointer',
+  },
+  expandLink: {
+    borderColor: cssVar.colorFillTertiary,
+    borderStyle: 'solid',
+    borderWidth: '1px',
+    color: cssVar.colorTextDescription,
+    fontSize: '12px',
+  },
+  resolvedTag: {
+    color: cssVar.colorTextQuaternary,
+    fontSize: '13px',
+  },
+  revealOnCardHover: {
+    opacity: { default: null, [stylex.when.ancestor(':not(:hover)')]: 0 },
+  },
+});

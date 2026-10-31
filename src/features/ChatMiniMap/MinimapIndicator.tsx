@@ -1,6 +1,8 @@
-import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { indicatorStyles } from './styles';
 import { type MinimapIndicatorProps } from './types';
@@ -16,12 +18,13 @@ export const MinimapIndicator = memo<MinimapIndicatorProps>(
       <div
         aria-current={isActive ? 'true' : undefined}
         aria-label={t('minimap.jumpToMessage', { index: position + 1 })}
-        className={styles.indicator}
         id={id}
-        style={{ width }}
+        {...sx([styles.indicator], undefined, { width })}
         onClick={() => onJump(virtuosoIndex)}
       >
-        <div className={cx(styles.indicatorContent, isActive && styles.indicatorContentActive)} />
+        <div
+          {...stylex.props(styles.indicatorContent, isActive && styles.indicatorContentActive)}
+        />
       </div>
     );
   },

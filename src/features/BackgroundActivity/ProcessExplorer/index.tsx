@@ -1,6 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Input, showContextMenu, Skeleton, toast, Tree, type TreeDataNode } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   AppWindowIcon,
   BoxIcon,
@@ -46,22 +47,22 @@ function Cells({ row }: { row: RowModel }) {
   const icon = rowIcon(row);
   const hot = row.cpuHot || row.memoryHot;
   return (
-    <span className={cx(styles.cells, row.kind === 'section' && styles.section)}>
-      <span className={styles.name}>
-        {icon && <Icon className={styles.kind} icon={icon} size={14} />}
-        {hot && <i className={styles.dot} />}
-        <span className={styles.label} title={row.label}>
+    <span {...stylex.props(styles.cells, row.kind === 'section' && styles.section)}>
+      <span {...stylex.props(styles.name)}>
+        {icon && <Icon className={stylex.props(styles.kind).className} icon={icon} size={14} />}
+        {hot && <i {...stylex.props(styles.dot)} />}
+        <span {...stylex.props(styles.label)} title={row.label}>
           {row.kind === 'conversation' && row.topicId ? <TopicTitle id={row.topicId} /> : row.label}
         </span>
-        {row.sub && <span className={styles.sub}>{row.sub}</span>}
+        {row.sub && <span {...stylex.props(styles.sub)}>{row.sub}</span>}
       </span>
-      <span className={cx(styles.num, row.cpuHot && styles.hot)}>{formatCpu(row.cpu)}</span>
-      <span className={cx(styles.num, row.memoryHot && styles.hot)}>
+      <span {...stylex.props(styles.num, row.cpuHot && styles.hot)}>{formatCpu(row.cpu)}</span>
+      <span {...stylex.props(styles.num, row.memoryHot && styles.hot)}>
         {formatMemory(row.memory)}
       </span>
-      <span className={styles.pid}>{row.pid}</span>
+      <span {...stylex.props(styles.pid)}>{row.pid}</span>
       {row.stopId ? (
-        <span data-stop-cell className={styles.stop}>
+        <span {...stylex.props(styles.stop)}>
           <StopButton rootId={row.stopId} />
         </span>
       ) : (
@@ -143,7 +144,7 @@ export default function ProcessExplorer() {
 
   const sortHeader = (key: SortKey, label: string) => (
     <button
-      className={cx(styles.sort, sort === key && styles.sortActive)}
+      {...stylex.props(styles.sort, sort === key && styles.sortActive)}
       type={'button'}
       onClick={() => setSort(key)}
     >
@@ -154,19 +155,26 @@ export default function ProcessExplorer() {
 
   return (
     <Flexbox flex={1} style={{ minHeight: 0 }}>
-      <Flexbox horizontal align={'center'} className={styles.toolbar} gap={20}>
-        <span className={styles.stat}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.toolbar).className}
+        gap={20}
+      >
+        <span {...stylex.props(styles.stat)}>
           {t('backgroundActivity.cpu')}
-          <b>{formatCpu((background.cpu ?? 0) + (app.cpu ?? 0))}</b>
+          <b {...stylex.props(styles.statValue)}>
+            {formatCpu((background.cpu ?? 0) + (app.cpu ?? 0))}
+          </b>
         </span>
-        <span className={styles.stat}>
+        <span {...stylex.props(styles.stat)}>
           {t('backgroundActivity.memory')}
-          <b>{formatMemory(background.memory + app.memory)}</b>
+          <b {...stylex.props(styles.statValue)}>{formatMemory(background.memory + app.memory)}</b>
           {totalMemoryMB > 0 && `/ ${formatMemory(totalMemoryMB)}`}
         </span>
-        <span className={styles.stat}>
+        <span {...stylex.props(styles.stat)}>
           {t('processExplorer.processes')}
-          <b>{processCount}</b>
+          <b {...stylex.props(styles.statValue)}>{processCount}</b>
         </span>
         <Flexbox flex={1} />
         <Input
@@ -180,24 +188,27 @@ export default function ProcessExplorer() {
           onChange={(event) => setQuery(event.target.value)}
         />
       </Flexbox>
-      <div className={styles.body} onKeyDown={onKeyDown}>
-        <div className={cx(styles.cells, styles.header)}>
+      <div {...stylex.props(styles.body)} onKeyDown={onKeyDown}>
+        <div {...stylex.props(styles.cells, styles.header)}>
           <span>{t('processExplorer.name')}</span>
           {sortHeader('cpu', t('backgroundActivity.cpu'))}
           {sortHeader('memory', t('backgroundActivity.memory'))}
-          <span className={styles.headerPid}>{t('processExplorer.pid')}</span>
+          <span {...stylex.props(styles.headerPid)}>{t('processExplorer.pid')}</span>
           <span />
         </div>
         {metrics || activities.length > 0 ? (
           <Tree
             blockNode
             showLine
-            classNames={{ node: styles.node, title: styles.title }}
             expandedKeys={expandedKeys}
             selectedKeys={selected ? [selected] : []}
             styles={{ node: { height: 28 } }}
             titleRender={(node) => <Cells row={rows.get(node.key)!} />}
             treeData={treeData}
+            classNames={{
+              node: stylex.props(styles.node, stylex.defaultMarker()).className,
+              title: stylex.props(styles.title).className,
+            }}
             onSelect={(keys) => setSelected(keys[0])}
             onExpand={(_, { node }) =>
               setToggled((prev) => {
@@ -234,9 +245,14 @@ export default function ProcessExplorer() {
           </Flexbox>
         )}
       </div>
-      <Flexbox horizontal align={'center'} className={styles.status} justify={'space-between'}>
-        <span className={styles.live}>
-          <i />
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={stylex.props(styles.status).className}
+        justify={'space-between'}
+      >
+        <span {...stylex.props(styles.live)}>
+          <i {...stylex.props(styles.liveDot)} />
           {t('processExplorer.live')}
         </span>
         {sampledAt > 0 && (

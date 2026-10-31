@@ -1,29 +1,29 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleAlertIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css }) => ({
-  detail: css`
-    overflow: auto;
-
-    margin: 0;
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.5;
-    color: ${cssVar.colorTextSecondary};
-    word-break: break-all;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  detail: {
+    overflow: 'auto',
+    margin: '0',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    lineHeight: 1.5,
+    color: cssVar.colorTextSecondary,
+    wordBreak: 'break-all',
+    whiteSpace: 'pre-wrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * The lightweight error row: one quiet line — an icon, a short human summary,
@@ -48,7 +48,7 @@ export const ErrorLine = memo<{ detail?: ReactNode; summary: ReactNode }>(({ sum
         )}
       </Flexbox>
       {open && detail && (
-        <pre data-error-detail className={styles.detail}>
+        <pre data-error-detail {...stylex.props(styles.detail)}>
           {detail}
         </pre>
       )}

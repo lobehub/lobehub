@@ -1,6 +1,8 @@
 'use client';
 
-import { Alert, createStaticStyles, cssVar, Drawer, Flexbox, Tabs, Text } from '@lobehub/ui';
+import { Alert, Drawer, Flexbox, Tabs, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,43 +22,45 @@ import RunHistory from './RunHistory';
 import VersionDiff from './VersionDiff';
 import VersionList from './VersionList';
 
-const styles = createStaticStyles(({ css }) => ({
-  cell: css`
-    min-width: 0;
-    padding-block: 8px;
-    padding-inline: 12px;
-    background: ${cssVar.colorBgContainer};
-  `,
-  cellLabel: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  cellValue: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-    gap: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  status: css`
-    padding-block: 6px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  summary: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-}));
+const styles = stylex.create({
+  cell: {
+    minWidth: '0',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  cellLabel: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  cellValue: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))',
+    gap: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  status: {
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  summary: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+});
 
 /**
  * One fact of the summary row: a quiet label over a short value. The exact
@@ -72,9 +76,9 @@ const Cell = ({
   detail?: string;
   label: string;
 }) => (
-  <Flexbox className={styles.cell} gap={2}>
-    <span className={styles.cellLabel}>{label}</span>
-    <span className={styles.cellValue} title={detail}>
+  <Flexbox className={stylex.props(styles.cell).className} gap={2}>
+    <span className={stylex.props(styles.cellLabel).className}>{label}</span>
+    <span className={stylex.props(styles.cellValue).className} title={detail}>
       {children}
     </span>
   </Flexbox>
@@ -101,8 +105,13 @@ const WidgetSummary = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
 
   return (
     <Flexbox data-widget-summary gap={12}>
-      <div className={styles.summary}>
-        <Flexbox horizontal align={'center'} className={styles.status} gap={8}>
+      <div {...stylex.props(styles.summary)}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.status).className}
+          gap={8}
+        >
           <HealthDot health={health} />
           <Text fontSize={13} style={{ color: HEALTH_TONE_COLOR[tone] }} weight={500}>
             {health.running
@@ -115,7 +124,7 @@ const WidgetSummary = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
           <Flexbox flex={1} />
           <WidgetRefreshButton widget={widget} />
         </Flexbox>
-        <div className={styles.grid}>
+        <div className={stylex.props(styles.grid).className}>
           <Cell detail={formatTime(updatedAt)} label={t('detail.updatedAt')}>
             {fromNow(updatedAt) ?? '—'}
           </Cell>

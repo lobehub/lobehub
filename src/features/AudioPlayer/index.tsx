@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { DownloadIcon, PauseIcon, PlayIcon, RotateCcwIcon, XIcon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,202 +12,144 @@ import type { VoiceMessageUploadState } from '@/store/chat/slices/voiceMessage/i
 import { useAudioElementSource } from './useAudioElementSource';
 import { useWaveform } from './useWaveform';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionGroup: css`
-    display: flex;
-    flex: none;
-    gap: 2px;
-  `,
-  bar: css`
-    flex: 1;
-
-    min-width: 2px;
-    border-radius: 4px;
-
-    background: ${cssVar.colorTextQuaternary};
-
-    transition: background 120ms ease;
-  `,
-  barPlayed: css`
-    background: ${cssVar.colorText};
-  `,
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border: none;
-    border-radius: 8px;
-
-    color: ${cssVar.colorBgContainer};
-
-    background: ${cssVar.colorText};
-
-    transition: opacity 120ms ease;
-
-    &:hover {
-      opacity: 0.8;
-    }
-  `,
-  container: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    width: 360px;
-    max-width: 100%;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  download: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border: none;
-    border-radius: 6px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    background: transparent;
-
-    transition: all 120ms ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  miniButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    border: 0;
-    border-radius: 8px;
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    transition:
-      color 120ms ease,
-      background 120ms ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 1px;
-    }
-  `,
-  progress: css`
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline: 0;
-
-    overflow: hidden;
-
-    height: 2px;
-    border-radius: 2px;
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  progressValue: css`
-    height: 100%;
-    border-radius: inherit;
-    background: ${cssVar.colorPrimary};
-    transition: width 160ms ease;
-  `,
-  status: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset: 0;
-
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    padding-inline: 4px;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  time: css`
-    flex: none;
-
-    min-width: 36px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-    text-align: end;
-  `,
-  waveform: css`
-    cursor: pointer;
-
-    overflow: hidden;
-    display: flex;
-    flex: 1;
-    gap: 2px;
-    align-items: center;
-
-    /* The bars' intrinsic minimum (56 × min-width + gaps ≈ 222px) must never
-       set the row's minimum — without this, adding any sibling (the download
-       button) pushes the tail controls out of the rounded box. */
-    min-width: 0;
-    height: 32px;
-    padding: 0;
-    border: 0;
-
-    background: transparent;
-
-    &:focus-visible {
-      border-radius: 4px;
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: 2px;
-    }
-  `,
-  waveformPending: css`
-    opacity: 0.18;
-  `,
-  waveformWrap: css`
-    position: relative;
-
-    display: flex;
-    flex: 1;
-
-    min-width: 0;
-    height: 32px;
-  `,
-}));
+const styles = stylex.create({
+  actionGroup: { display: 'flex', flex: 'none', gap: '2px' },
+  bar: {
+    flex: '1',
+    minWidth: '2px',
+    borderRadius: '4px',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+    transition: 'background 120ms ease',
+  },
+  barPlayed: { backgroundColor: cssVar.colorText, backgroundImage: 'none' },
+  button: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderStyle: 'none',
+    borderRadius: '8px',
+    color: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorText,
+    backgroundImage: 'none',
+    transition: 'opacity 120ms ease',
+    opacity: { 'default': null, ':hover': 0.8 },
+  },
+  container: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    width: '360px',
+    maxWidth: '100%',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  download: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderStyle: 'none',
+    borderRadius: '6px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'all 120ms ease',
+  },
+  miniButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    padding: '0',
+    borderStyle: 'none',
+    borderRadius: '8px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'color 120ms ease, background 120ms ease',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+  progress: {
+    position: 'absolute',
+    insetBlockEnd: '0',
+    insetInline: '0',
+    overflow: 'hidden',
+    height: '2px',
+    borderRadius: '2px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  progressValue: {
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+    transition: 'width 160ms ease',
+  },
+  status: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    inset: '0',
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingInline: '4px',
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  time: {
+    flex: 'none',
+    minWidth: '36px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    textAlign: 'end',
+  },
+  waveform: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    display: 'flex',
+    flex: '1',
+    gap: '2px',
+    alignItems: 'center',
+    minWidth: '0',
+    height: '32px',
+    padding: '0',
+    borderStyle: 'none',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    borderRadius: { 'default': null, ':focus-visible': '4px' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  waveformPending: { opacity: 0.18 },
+  waveformWrap: { position: 'relative', display: 'flex', flex: '1', minWidth: '0', height: '32px' },
+});
 
 export const formatTime = (seconds: number): string => {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -318,7 +262,10 @@ const AudioPlayer = memo<AudioPlayerProps>(
     }, [url, downloadFileName]);
 
     return (
-      <div className={styles.container} style={fullWidth ? { width: '100%' } : undefined}>
+      <div
+        className={stylex.props(styles.container).className}
+        style={fullWidth ? { width: '100%' } : undefined}
+      >
         <audio
           preload={'metadata'}
           ref={audioRef}
@@ -332,17 +279,17 @@ const AudioPlayer = memo<AudioPlayerProps>(
         <button
           aria-label={isPlaying ? t('audioPlayer.pause') : t('audioPlayer.play')}
           aria-pressed={isPlaying}
-          className={styles.button}
+          {...stylex.props(styles.button)}
           title={alt}
           type={'button'}
           onClick={togglePlay}
         >
           <Icon icon={isPlaying ? PauseIcon : PlayIcon} size={16} />
         </button>
-        <div className={styles.waveformWrap}>
+        <div {...stylex.props(styles.waveformWrap)}>
           <button
             aria-label={t('audioPlayer.seek')}
-            className={`${styles.waveform} ${uploadState ? styles.waveformPending : ''}`}
+            {...stylex.props(styles.waveform, uploadState && styles.waveformPending)}
             type="button"
             onClick={handleSeek}
           >
@@ -350,29 +297,41 @@ const AudioPlayer = memo<AudioPlayerProps>(
               const played = peaks.length > 0 && i / peaks.length <= progress;
               return (
                 <div
-                  className={played ? `${styles.bar} ${styles.barPlayed}` : styles.bar}
                   key={i}
                   style={{ height: `${Math.round(peak * 100)}%` }}
+                  className={
+                    played
+                      ? stylex.props(styles.bar, styles.barPlayed).className
+                      : stylex.props(styles.bar).className
+                  }
                 />
               );
             })}
           </button>
           {statusText && (
-            <span aria-live="polite" className={styles.status} role="status" title={statusText}>
+            <span
+              aria-live="polite"
+              {...stylex.props(styles.status)}
+              role="status"
+              title={statusText}
+            >
               {statusText}
             </span>
           )}
           {uploadState?.status === 'uploading' && (
-            <div className={styles.progress}>
-              <div className={styles.progressValue} style={{ width: `${uploadProgress}%` }} />
+            <div {...stylex.props(styles.progress)}>
+              <div
+                className={stylex.props(styles.progressValue).className}
+                style={{ width: `${uploadProgress}%` }}
+              />
             </div>
           )}
         </div>
-        <span className={styles.time}>{formatTime(currentTime || duration)}</span>
+        <span {...stylex.props(styles.time)}>{formatTime(currentTime || duration)}</span>
         {downloadFileName && (
           <button
             aria-label={t('audioPlayer.download')}
-            className={styles.download}
+            {...stylex.props(styles.download)}
             title={t('audioPlayer.download')}
             type={'button'}
             onClick={() => void handleDownload()}
@@ -381,11 +340,11 @@ const AudioPlayer = memo<AudioPlayerProps>(
           </button>
         )}
         {uploadState && (
-          <div className={styles.actionGroup}>
+          <div {...stylex.props(styles.actionGroup)}>
             {isFailed && (
               <button
                 aria-label={t('voiceMessage.retry')}
-                className={styles.miniButton}
+                {...stylex.props(styles.miniButton)}
                 title={t('voiceMessage.retry')}
                 type="button"
                 onClick={() => onRetryUpload?.()}
@@ -396,7 +355,7 @@ const AudioPlayer = memo<AudioPlayerProps>(
             {(isPending || isFailed) && (
               <button
                 aria-label={t(isFailed ? 'voiceMessage.delete' : 'voiceMessage.cancelUpload')}
-                className={styles.miniButton}
+                {...stylex.props(styles.miniButton)}
                 title={t(isFailed ? 'voiceMessage.delete' : 'voiceMessage.cancelUpload')}
                 type="button"
                 onClick={() => onCancelUpload?.()}

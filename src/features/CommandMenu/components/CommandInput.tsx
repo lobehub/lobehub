@@ -1,5 +1,6 @@
 import { agentDisplayName } from '@lobechat/types';
 import { Tag } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Command } from 'cmdk';
 import { ArrowLeft, X } from 'lucide-react';
 import { memo } from 'react';
@@ -64,10 +65,10 @@ const CommandInput = memo<CommandInputProps>(({ onInputChange, onTypeFilterChang
   return (
     <>
       {(menuContext !== 'general' || typeFilter) && !hasPages && !hasSelectedAgent && (
-        <div className={styles.contextWrapper}>
+        <div {...stylex.props(styles.contextWrapper)}>
           {hasActiveAgent ? (
             <Tag
-              className={styles.contextTag}
+              {...stylex.props(styles.contextTag)}
               icon={
                 <AgentAvatar
                   agentId={activeAgentId}
@@ -82,11 +83,13 @@ const CommandInput = memo<CommandInputProps>(({ onInputChange, onTypeFilterChang
               {agentDisplayName(activeAgentMeta, t('defaultAgent'))}
             </Tag>
           ) : (
-            menuContext !== 'general' && <Tag className={styles.contextTag}>{contextName}</Tag>
+            menuContext !== 'general' && (
+              <Tag {...stylex.props(styles.contextTag)}>{contextName}</Tag>
+            )
           )}
           {typeFilter && (
             <Tag
-              className={styles.backTag}
+              {...stylex.props(styles.backTag)}
               icon={<X size={12} />}
               onClick={() => {
                 onTypeFilterChange();
@@ -98,9 +101,13 @@ const CommandInput = memo<CommandInputProps>(({ onInputChange, onTypeFilterChang
           )}
         </div>
       )}
-      <div className={styles.inputWrapper}>
+      <div {...stylex.props(styles.inputWrapper)}>
         {hasPages && !hasSelectedAgent && (
-          <Tag className={styles.backTag} icon={<ArrowLeft size={12} />} onClick={handleBack} />
+          <Tag
+            {...stylex.props(styles.backTag)}
+            icon={<ArrowLeft size={12} />}
+            onClick={handleBack}
+          />
         )}
         {hasSelectedAgent && (
           <Tag

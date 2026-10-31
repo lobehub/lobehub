@@ -1,0 +1,8 @@
+/* MarkdownMessage renders the paragraphs, so they are reached by tag. */
+.body p:first-child {
+  margin-block-start: 0;
+}
+
+.body p:last-child {
+  margin-block-end: 0;
+}

@@ -1,3 +1,4 @@
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpDown, CornerDownLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,13 +12,13 @@ const CommandFooter = memo(() => {
   const { t } = useTranslation('common');
 
   return (
-    <div className={styles.commandFooter}>
-      <div className={styles.kbd}>
-        <CornerDownLeft className={styles.kbdIcon} />
+    <div {...stylex.props(styles.commandFooter)}>
+      <div {...stylex.props(styles.kbd)}>
+        <CornerDownLeft {...stylex.props(styles.kbdIcon)} />
         <span>{t('cmdk.toOpen')}</span>
       </div>
-      <div className={styles.kbd}>
-        <ArrowUpDown className={styles.kbdIcon} />
+      <div {...stylex.props(styles.kbd)}>
+        <ArrowUpDown {...stylex.props(styles.kbdIcon)} />
         <span>{t('cmdk.toSelect')}</span>
       </div>
     </div>

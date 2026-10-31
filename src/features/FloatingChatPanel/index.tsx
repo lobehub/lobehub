@@ -1,11 +1,8 @@
 'use client';
 
-import {
-  ActionIcon,
-  createStaticStyles,
-  FloatingSheet,
-  type FloatingSheetProps,
-} from '@lobehub/ui';
+import { ActionIcon, FloatingSheet, type FloatingSheetProps } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -35,41 +32,40 @@ const SNAP_POINTS = [320, 800] as const;
 const MID_SNAP_POINT = SNAP_POINTS[0];
 const MAX_SNAP_POINT = SNAP_POINTS.at(-1)!;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  panel: css`
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-    align-self: stretch;
+const COLLAPSED = "[data-collapsed='true']";
 
-    width: 100%;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-
+const styles = stylex.create({
+  panel: {
+    alignSelf: 'stretch',
+    backgroundColor: { default: cssVar.colorBgContainer, [COLLAPSED]: 'transparent' },
+    backgroundImage: 'none',
+    borderBlockStartColor: {
+      default: cssVar.colorBorderSecondary,
+      [COLLAPSED]: 'transparent',
+    },
+    borderBlockStartStyle: 'solid',
+    borderBlockStartWidth: '1px',
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
     transition:
-      border-block-start-color 240ms cubic-bezier(0.32, 0.72, 0, 1),
-      background 240ms cubic-bezier(0.32, 0.72, 0, 1);
-
-    &[data-collapsed='true'] {
-      border-block-start-color: transparent;
-      background: transparent;
-    }
-  `,
-  panelEmbedded: css`
-    flex: 1;
-    min-height: 0;
-    border-block-start: none;
-  `,
-  sheetSeamless: css`
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-  `,
-  titleSpacer: css`
-    flex: 1;
-  `,
-}));
+      'border-block-start-color 240ms cubic-bezier(0.32, 0.72, 0, 1), background 240ms cubic-bezier(0.32, 0.72, 0, 1)',
+    width: '100%',
+  },
+  panelEmbedded: {
+    borderBlockStartStyle: 'none',
+    flex: '1',
+    minHeight: 0,
+  },
+  sheetSeamless: {
+    borderRadius: 0,
+    borderStyle: 'none',
+    boxShadow: 'none',
+  },
+  titleSpacer: {
+    flex: '1',
+  },
+});
 
 export interface FloatingChatPanelProps {
   /**
@@ -231,7 +227,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
 
     const sheetProps: FloatingSheetProps = {
       activeSnapPoint,
-      className: styles.sheetSeamless,
+      className: stylex.props(styles.sheetSeamless).className,
       closeThreshold: 0.5,
       defaultOpen: false,
       dismissible: true,
@@ -252,7 +248,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
       // Always render a title slot — `space-between` on the header pulls the
       // single child (headerActions) to the start otherwise, putting the
       // collapse button on the left.
-      title: title ?? <span className={styles.titleSpacer} />,
+      title: title ?? <span {...stylex.props(styles.titleSpacer)} />,
       variant: 'elevated',
       width,
     };
@@ -265,7 +261,7 @@ const FloatingChatPanel = memo<FloatingChatPanelProps>(
         operationState={operationState}
       >
         <div
-          className={`${styles.panel} ${isEmbedded ? styles.panelEmbedded : ''}`}
+          {...stylex.props(styles.panel, isEmbedded && styles.panelEmbedded)}
           data-collapsed={isEmbedded ? false : isCollapsed}
           data-mode={mode}
           data-testid="floating-chat-panel"

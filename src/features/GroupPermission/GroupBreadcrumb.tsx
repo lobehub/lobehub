@@ -1,6 +1,7 @@
 'use client';
 
-import { Breadcrumb, createStaticStyles, Icon, Text } from '@lobehub/ui';
+import { Breadcrumb, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,14 +13,12 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
-const styles = createStaticStyles(({ css }) => ({
-  breadcrumb: css`
-    a {
-      display: flex;
-      align-items: center;
-    }
-  `,
-}));
+const styles = stylex.create({
+  link: {
+    alignItems: 'center',
+    display: 'flex',
+  },
+});
 
 interface GroupBreadcrumbProps {
   groupId: string;
@@ -46,12 +45,11 @@ const GroupBreadcrumb = memo<GroupBreadcrumbProps>(({ groupId, title }) => {
 
   return (
     <Breadcrumb
-      className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} size={14} />}
       items={[
         {
           title: (
-            <Link to={groupHomePath}>
+            <Link {...stylex.props(styles.link)} to={groupHomePath}>
               <Text ellipsis as={'span'} color={'inherit'} style={{ maxWidth: 200 }} weight={500}>
                 {displayTitle}
               </Text>

@@ -1,17 +1,8 @@
 'use client';
 
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Skeleton,
-  Tag,
-  Text,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRightIcon, PanelRightOpenIcon, RocketIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,20 +23,23 @@ import AddToDashboardButton from './AddToDashboardButton';
 import { canPreviewPublish, getPreviewPublishState, toPreviewWidget } from './previewWidget';
 import { openPublishConfirmModal } from './PublishConfirmModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  definition: css`
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  root: css`
-    width: 100%;
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-}));
+const styles = stylex.create({
+  definition: {
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  root: {
+    width: '100%',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+});
 
 /** Card height by output shape — a single number needs far less room than rows. */
 const CARD_HEIGHT: Record<string, number> = { list: 260, series: 240, stat: 150, table: 260 };
@@ -114,7 +108,11 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
     });
 
   return (
-    <Flexbox className={styles.root} data-widget-preview={widget.id} gap={10}>
+    <Flexbox
+      className={stylex.props(styles.root).className}
+      data-widget-preview={widget.id}
+      gap={10}
+    >
       <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
         {version && (
           <Tag color={publishState === 'live' ? 'success' : 'info'} size={'small'}>
@@ -144,7 +142,7 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
         <WidgetCard view={version?.view} widget={preview} />
       </div>
 
-      <Flexbox className={styles.definition} gap={2}>
+      <Flexbox className={stylex.props(styles.definition).className} gap={2}>
         <Text fontSize={12} type={'secondary'} weight={500}>
           {t('chat.definition')}
         </Text>
@@ -222,7 +220,7 @@ const WidgetPreviewCard = memo<WidgetPreviewCardProps>(({ widgetId, runId }) => 
 
   if (widgetRequest.error || runRequest.error) {
     return (
-      <Flexbox horizontal align={'center'} className={styles.root} gap={6}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.root).className} gap={6}>
         <Icon color={cssVar.colorTextTertiary} icon={RocketIcon} size={14} />
         <Text fontSize={12} type={'secondary'}>
           {t('chat.unavailable')}
@@ -232,7 +230,7 @@ const WidgetPreviewCard = memo<WidgetPreviewCardProps>(({ widgetId, runId }) => 
   }
   if (!widget || !run) {
     return (
-      <Flexbox className={styles.root} gap={10}>
+      <Flexbox className={stylex.props(styles.root).className} gap={10}>
         <Skeleton height={150} width={'100%'} />
         <Skeleton.Text rows={2} />
       </Flexbox>

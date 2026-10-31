@@ -40,7 +40,7 @@ import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousA
 import {
   buildServerDefaultModelOptions,
   MODEL_PICKER_STYLE,
-  modelPickerStyles,
+  modelPickerClassName,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -797,7 +797,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
             <TooltipGroup>
               <Select
                 popupMatchSelectWidth
-                className={modelPickerStyles.picker}
+                className={modelPickerClassName}
                 disabled={!canEdit}
                 options={providerOptions}
                 placeholder={t('heterogeneousStatus.apiMode.providerPlaceholder')}
@@ -820,7 +820,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 <TooltipGroup>
                   <Select
                     popupMatchSelectWidth
-                    className={modelPickerStyles.picker}
+                    className={modelPickerClassName}
                     disabled={!canEdit}
                     options={serverDefaultModelOptions}
                     style={MODEL_PICKER_STYLE}

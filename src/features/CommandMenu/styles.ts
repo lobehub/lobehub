@@ -1,330 +1,174 @@
-import { createStaticStyles, keyframes } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-const slideDown = keyframes`
-  from {
-    transform: translateY(-20px) scale(0.96);
-    opacity: 0;
-  }
+const slideDown = stylex.keyframes({
+  from: { opacity: 0, transform: 'translateY(-20px) scale(0.96)' },
+  to: { opacity: 1, transform: 'translateY(0) scale(1)' },
+});
 
-  to {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-`;
+const fadeIn = stylex.keyframes({
+  from: { opacity: 0 },
+  to: { opacity: 1 },
+});
 
-const fadeIn = keyframes`
-  from {
-    opacity: 0;
-  }
+const slideUp = stylex.keyframes({
+  from: { opacity: 1, transform: 'translateY(0) scale(1)' },
+  to: { opacity: 0, transform: 'translateY(-20px) scale(0.96)' },
+});
 
-  to {
-    opacity: 1;
-  }
-`;
+const fadeOut = stylex.keyframes({
+  from: { opacity: 1 },
+  to: { opacity: 0 },
+});
 
-const slideUp = keyframes`
-  from {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
+const pulse = stylex.keyframes({
+  '0%': { backgroundPosition: '200% 0' },
+  '100%': { backgroundPosition: '-200% 0' },
+});
 
-  to {
-    transform: translateY(-20px) scale(0.96);
-    opacity: 0;
-  }
-`;
+const CLOSING = "[data-closing='true']";
 
-const fadeOut = keyframes`
-  from {
-    opacity: 1;
-  }
-
-  to {
-    opacity: 0;
-  }
-`;
-
-const pulse = keyframes`
-  0% {
-    background-position: 200% 0;
-  }
-
-  100% {
-    background-position: -200% 0;
-  }
-`;
-
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  backTag: css`
-    cursor: pointer;
-    font-size: 12px;
-  `,
-  chatContainer: css`
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 16px;
-  `,
-  chatMessage: css`
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-
-    padding: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  chatMessageContent: css`
-    font-size: 14px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-  `,
-  chatMessageRole: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  commandContainer: css`
-    display: flex;
-    flex-direction: column;
-  `,
-  commandFooter: css`
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    justify-content: center;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  commandRoot: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: min(640px, 90vw);
-    max-height: min(500px, 70vh);
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
-
-    animation: ${slideDown} 0.12s ease-out;
-
-    &[data-closing='true'] {
-      animation: ${slideUp} 0.15s ease-out forwards;
-    }
-
-    [cmdk-input] {
-      flex: 1;
-
-      min-width: 0;
-      padding: 0;
-      border: none;
-
-      font-family: inherit;
-      font-size: 16px;
-      color: ${cssVar.colorText};
-
-      background: transparent;
-      outline: none;
-
-      &::placeholder {
-        color: ${cssVar.colorTextPlaceholder};
-      }
-    }
-
-    [cmdk-list] {
-      overflow-y: auto;
-      max-height: 400px;
-      padding: 8px;
-    }
-
-    [cmdk-empty] {
-      padding-block: 32px;
-      padding-inline: 16px;
-
-      font-size: 14px;
-      color: ${cssVar.colorTextTertiary};
-      text-align: center;
-    }
-
-    [cmdk-item] {
-      cursor: pointer;
-      user-select: none;
-
-      display: flex;
-      gap: 12px;
-      align-items: center;
-
-      padding-block: 12px;
-      padding-inline: 16px;
-      border-radius: ${cssVar.borderRadius};
-
-      color: ${cssVar.colorText};
-
-      transition: all 0.15s ease;
-
-      &[aria-selected='true'] {
-        background: ${cssVar.colorBgTextHover};
-      }
-
-      &:hover {
-        background: ${cssVar.colorBgTextHover};
-      }
-    }
-
-    [cmdk-group-heading] {
-      user-select: none;
-
-      padding-block: 8px;
-      padding-inline: 16px;
-
-      font-size: 12px;
-      font-weight: 500;
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    [cmdk-separator] {
-      height: 1px;
-      margin-block: 4px;
-      background: ${cssVar.colorBorderSecondary};
-    }
-  `,
-  contextTag: css`
-    font-size: 12px;
-  `,
-  contextWrapper: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 16px;
-  `,
-  icon: css`
-    flex-shrink: 0;
-    width: 20px;
-    height: 20px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  inputWrapper: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  itemContent: css`
-    display: flex;
-    flex: 1;
-    gap: 12px;
-    align-items: center;
-
-    min-width: 0;
-  `,
-  itemDescription: css`
-    overflow: hidden;
-
-    margin-block-start: 2px;
-
-    font-size: 12px;
-    line-height: 1.4;
-    color: ${cssVar.colorTextTertiary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  itemDetails: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  itemIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-  itemLabel: css`
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.4;
-  `,
-  itemTitle: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    line-height: 1.4;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  itemType: css`
-    flex-shrink: 0;
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-    text-transform: capitalize;
-  `,
-  kbd: css`
-    display: flex;
-    gap: 4px;
-    align-items: center;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  kbdIcon: css`
-    width: 14px;
-    height: 14px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  overlay: css`
-    position: fixed;
-    z-index: 9999;
-    inset: 0;
-
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-
-    padding-block-start: 15vh;
-
-    background: ${cssVar.colorBgMask};
-
-    animation: ${fadeIn} 0.1s ease-in-out;
-
-    &[data-closing='true'] {
-      animation: ${fadeOut} 0.15s ease-out forwards;
-    }
-  `,
-  skeleton: css`
-    height: 16px;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    background: linear-gradient(
-      90deg,
-      ${cssVar.colorFillSecondary} 25%,
-      ${cssVar.colorFillTertiary} 50%,
-      ${cssVar.colorFillSecondary} 75%
-    );
-    background-size: 200% 100%;
-
-    animation: ${pulse} 1.5s ease-in-out infinite;
-  `,
-  skeletonItem: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
-}));
+export const styles = stylex.create({
+  backTag: { cursor: 'pointer', fontSize: '12px' },
+  chatContainer: { display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px' },
+  chatMessage: {
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    borderRadius: cssVar.borderRadius,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    padding: '12px',
+  },
+  chatMessageContent: { color: cssVar.colorText, fontSize: '14px', lineHeight: 1.6 },
+  chatMessageRole: { color: cssVar.colorTextSecondary, fontSize: '12px', fontWeight: 500 },
+  commandContainer: { display: 'flex', flexDirection: 'column' },
+  commandFooter: {
+    alignItems: 'center',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartStyle: 'solid',
+    borderBlockStartWidth: '1px',
+    display: 'flex',
+    gap: '16px',
+    justifyContent: 'center',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+  },
+  // cmdk's inner elements are styled by styles.module.css (.root)
+  commandRoot: {
+    animationDuration: { default: '0.12s', [CLOSING]: '0.15s' },
+    animationFillMode: { default: null, [CLOSING]: 'forwards' },
+    animationName: { default: slideDown, [CLOSING]: slideUp },
+    animationTimingFunction: 'ease-out',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    borderRadius: cssVar.borderRadiusLG,
+    boxShadow: cssVar.boxShadowSecondary,
+    display: 'flex',
+    flexDirection: 'column',
+    maxHeight: 'min(500px, 70vh)',
+    overflow: 'hidden',
+    width: 'min(640px, 90vw)',
+  },
+  contextTag: { fontSize: '12px' },
+  contextWrapper: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: '8px',
+    paddingBlock: '8px',
+    paddingInline: '16px',
+  },
+  icon: { color: cssVar.colorTextSecondary, flexShrink: 0, height: '20px', width: '20px' },
+  inputWrapper: {
+    alignItems: 'center',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartStyle: 'solid',
+    borderBlockStartWidth: '1px',
+    display: 'flex',
+    gap: '8px',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+  },
+  itemContent: {
+    alignItems: 'center',
+    display: 'flex',
+    flex: '1',
+    gap: '12px',
+    minWidth: 0,
+  },
+  itemDescription: {
+    color: cssVar.colorTextTertiary,
+    fontSize: '12px',
+    lineHeight: 1.4,
+    marginBlockStart: '2px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  itemDetails: { flex: '1', minWidth: 0 },
+  itemIcon: {
+    alignItems: 'center',
+    color: cssVar.colorTextSecondary,
+    display: 'flex',
+    flexShrink: 0,
+    height: '20px',
+    justifyContent: 'center',
+    width: '20px',
+  },
+  itemLabel: { fontSize: '14px', fontWeight: 500, lineHeight: 1.4 },
+  itemTitle: {
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: 1.4,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  itemType: {
+    color: cssVar.colorTextTertiary,
+    flexShrink: 0,
+    fontSize: '11px',
+    textTransform: 'capitalize',
+  },
+  kbd: {
+    alignItems: 'center',
+    color: cssVar.colorTextTertiary,
+    display: 'flex',
+    fontSize: '12px',
+    gap: '4px',
+  },
+  kbdIcon: { color: cssVar.colorTextTertiary, height: '14px', width: '14px' },
+  overlay: {
+    alignItems: 'flex-start',
+    animationDuration: { default: '0.1s', [CLOSING]: '0.15s' },
+    animationFillMode: { default: null, [CLOSING]: 'forwards' },
+    animationName: { default: fadeIn, [CLOSING]: fadeOut },
+    animationTimingFunction: { default: 'ease-in-out', [CLOSING]: 'ease-out' },
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+    display: 'flex',
+    inset: 0,
+    justifyContent: 'center',
+    paddingBlockStart: '15vh',
+    position: 'fixed',
+    zIndex: 9999,
+  },
+  skeleton: {
+    animationDuration: '1.5s',
+    animationIterationCount: 'infinite',
+    animationName: pulse,
+    animationTimingFunction: 'ease-in-out',
+    backgroundColor: 'transparent',
+    backgroundImage: `linear-gradient(90deg, ${cssVar.colorFillSecondary} 25%, ${cssVar.colorFillTertiary} 50%, ${cssVar.colorFillSecondary} 75%)`,
+    backgroundSize: '200% 100%',
+    borderRadius: cssVar.borderRadiusSM,
+    height: '16px',
+  },
+  skeletonItem: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: '12px',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+  },
+});

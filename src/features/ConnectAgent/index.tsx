@@ -9,7 +9,7 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   Alert,
   Button,
@@ -22,6 +22,8 @@ import {
   TextArea,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t as i18nT } from 'i18next';
 import {
   ArrowLeft,
@@ -54,213 +56,177 @@ import { buildConnectAgentConfig, CONNECTABLE_PROVIDERS } from './providers';
 import type { ScanTarget } from './useAgentScan';
 import { useAgentScan } from './useAgentScan';
 
-const styles = createStaticStyles(({ css }) => ({
-  agentListScrollbar: css`
-    width: 2px;
-    margin-block: 12px;
-    margin-inline-end: 4px;
-  `,
-  agentListThumb: css`
-    background: ${cssVar.colorFill};
-  `,
-  agentListViewport: css`
-    overscroll-behavior: contain;
-    max-height: min(50dvh, 400px);
-  `,
-  commandHint: css`
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    justify-content: space-between;
+const pulse = stylex.keyframes({
+  '50%': { opacity: 0.45 },
+});
 
-    min-width: 0;
-    padding-inline: 4px;
-
-    > span {
-      overflow: hidden;
-      min-width: 0;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  `,
-  dot: css`
-    flex: none;
-
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorSuccess};
-  `,
-  dotOff: css`
-    flex: none;
-
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorTextQuaternary};
-  `,
-  emptyCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  emptyHero: css`
-    padding-block: 24px;
-    padding-inline: 24px;
-    text-align: center;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  emptyOption: css`
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: flex-start;
-
-    min-width: 0;
-    min-height: 152px;
-    padding: 18px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  emptyOptionAction: css`
-    display: flex;
-    align-items: center;
-
-    width: 100%;
-    min-height: 28px;
-    margin-block-start: auto;
-
-    > a,
-    > div {
-      width: 100%;
-    }
-  `,
-  emptyOptions: css`
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  emptyOptionIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  heroIcon: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 52px;
-    height: 52px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  groupList: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  iconBox: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  mono: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  row: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-
-    transition: background 0.15s;
-
-    &:not(:last-child) {
-      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  rowDisabled: css`
-    cursor: not-allowed;
-    opacity: 0.5;
-
-    &:hover {
-      background: transparent;
-    }
-  `,
-  rowStatic: css`
-    cursor: default;
-
-    &:hover {
-      background: transparent;
-    }
-  `,
-  skeletonBar: css`
-    height: 10px;
-    border-radius: 5px;
-    background: ${cssVar.colorFillSecondary};
-    animation: lobe-connect-agent-pulse 1.4s ease-in-out infinite;
-
-    @keyframes lobe-connect-agent-pulse {
-      50% {
-        opacity: 0.45;
-      }
-    }
-  `,
-  skeletonCircle: css`
-    flex: none;
-
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-
-    background: ${cssVar.colorFillSecondary};
-
-    animation: lobe-connect-agent-pulse 1.4s ease-in-out infinite;
-  `,
-  skeletonSquare: css`
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-}));
+const styles = stylex.create({
+  agentListScrollbar: { width: '2px', marginBlock: '12px', marginInlineEnd: '4px' },
+  agentListThumb: { backgroundColor: cssVar.colorFill, backgroundImage: 'none' },
+  agentListViewport: { overscrollBehavior: 'contain', maxHeight: 'min(50dvh, 400px)' },
+  commandHint: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minWidth: '0',
+    paddingInline: '4px',
+  },
+  dot: {
+    flex: 'none',
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+  },
+  dotOff: {
+    flex: 'none',
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+  emptyCard: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  emptyHero: {
+    paddingBlock: '24px',
+    paddingInline: '24px',
+    textAlign: 'center',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  emptyOption: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    alignItems: 'flex-start',
+    minWidth: '0',
+    minHeight: '152px',
+    padding: '18px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  // The link and the command line inside it fill the row.
+  fullWidth: { width: '100%' },
+  emptyOptionAction: {
+    display: 'flex',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: '28px',
+    marginBlockStart: 'auto',
+  },
+  emptyOptions: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  emptyOptionIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40px',
+    height: '40px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  heroIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '52px',
+    height: '52px',
+    borderRadius: cssVar.borderRadiusLG,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  groupList: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  iconBox: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  mono: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', color: cssVar.colorTextTertiary },
+  row: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    transition: 'background 0.15s',
+    borderBlockEndWidth: { 'default': '1px', ':last-child': 0 },
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.5,
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  rowStatic: {
+    cursor: 'default',
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  skeletonBar: {
+    height: '10px',
+    borderRadius: '5px',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+    animationName: pulse,
+    animationDuration: '1.4s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
+  },
+  skeletonCircle: {
+    flex: 'none',
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+    animationName: pulse,
+    animationDuration: '1.4s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
+  },
+  skeletonSquare: { width: '36px', height: '36px', borderRadius: cssVar.borderRadius },
+});
 
 interface CreatedAgent {
   agentId: string;
@@ -277,17 +243,22 @@ const SectionLabel = memo<{ children: ReactNode }>(({ children }) => (
 ));
 
 const SkeletonRow = memo<{ squareIcon?: boolean; width: number }>(({ squareIcon, width }) => (
-  <div className={`${styles.row} ${styles.rowStatic}`}>
+  <div {...stylex.props(styles.row, styles.rowStatic)}>
     <div
       className={
-        squareIcon ? `${styles.skeletonCircle} ${styles.skeletonSquare}` : styles.skeletonCircle
+        squareIcon
+          ? stylex.props(styles.skeletonCircle, styles.skeletonSquare).className
+          : stylex.props(styles.skeletonCircle).className
       }
     />
     {/* Column height matches a real row's two-line text block so the
         scanning → done swap doesn't shift the modal */}
     <Flexbox flex={1} gap={10} justify={'center'} style={{ height: 42 }}>
-      <div className={styles.skeletonBar} style={{ width }} />
-      <div className={styles.skeletonBar} style={{ opacity: 0.6, width: width * 1.6 }} />
+      <div className={stylex.props(styles.skeletonBar).className} style={{ width }} />
+      <div
+        className={stylex.props(styles.skeletonBar).className}
+        style={{ opacity: 0.6, width: width * 1.6 }}
+      />
     </Flexbox>
   </div>
 ));
@@ -296,10 +267,10 @@ const ScrollableAgentList = memo<{ children: ReactNode }>(({ children }) => (
   <ScrollArea
     disableContentFit
     scrollFade
-    className={styles.groupList}
-    scrollbarProps={{ className: styles.agentListScrollbar }}
-    thumbProps={{ className: styles.agentListThumb }}
-    viewportProps={{ className: styles.agentListViewport }}
+    className={stylex.props(styles.groupList).className}
+    scrollbarProps={{ className: stylex.props(styles.agentListScrollbar).className }}
+    thumbProps={{ className: stylex.props(styles.agentListThumb).className }}
+    viewportProps={{ className: stylex.props(styles.agentListViewport).className }}
   >
     {children}
   </ScrollArea>
@@ -316,12 +287,16 @@ const DeviceRow = memo<{
   title: string;
 }>(({ icon, offline, onClick, statusText, subtitle, title }) => (
   <div
-    className={offline ? `${styles.row} ${styles.rowDisabled}` : styles.row}
     role={'button'}
     tabIndex={offline ? -1 : 0}
+    className={
+      offline
+        ? stylex.props(styles.row, styles.rowDisabled).className
+        : stylex.props(styles.row).className
+    }
     onClick={offline ? undefined : onClick}
   >
-    <div className={styles.iconBox}>{icon}</div>
+    <div {...stylex.props(styles.iconBox)}>{icon}</div>
     <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
       <Text ellipsis strong>
         {title}
@@ -331,7 +306,7 @@ const DeviceRow = memo<{
       </Text>
     </Flexbox>
     <Flexbox horizontal align={'center'} gap={6} style={{ flex: 'none' }}>
-      <div className={offline ? styles.dotOff : styles.dot} />
+      <div {...stylex.props(offline ? styles.dotOff : styles.dot)} />
       <Text fontSize={12} type={'secondary'}>
         {statusText}
       </Text>
@@ -350,9 +325,13 @@ const AgentScanRow = memo<{
   const available = status?.available === true;
   const row = (
     <div
-      className={available ? styles.row : `${styles.row} ${styles.rowDisabled}`}
       role={'button'}
       tabIndex={available ? 0 : -1}
+      className={
+        available
+          ? stylex.props(styles.row).className
+          : stylex.props(styles.row, styles.rowDisabled).className
+      }
       onClick={available ? onToggle : undefined}
     >
       <provider.brand.Avatar size={32} />
@@ -364,7 +343,7 @@ const AgentScanRow = memo<{
       </Flexbox>
       {available ? (
         <>
-          {status?.version && <span className={styles.mono}>{status.version}</span>}
+          {status?.version && <span {...stylex.props(styles.mono)}>{status.version}</span>}
           <Checkbox checked={selected} style={{ pointerEvents: 'none' }} />
         </>
       ) : (
@@ -612,9 +591,9 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
       return (
         <Flexbox gap={8} paddingBlock={'16px 8px'}>
           {showOpenChat && <SectionLabel>{t('connectAgent.create.doneHint')}</SectionLabel>}
-          <div className={styles.groupList}>
+          <div {...stylex.props(styles.groupList)}>
             {done.map((agent) => (
-              <div className={`${styles.row} ${styles.rowStatic}`} key={agent.agentId}>
+              <div {...stylex.props(styles.row, styles.rowStatic)} key={agent.agentId}>
                 <agent.provider.brand.Avatar size={32} />
                 <Flexbox flex={1} gap={1} style={{ minWidth: 0 }}>
                   <Text strong fontSize={13}>
@@ -625,7 +604,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                     {agent.version ? ` ${agent.version}` : ''} · {agent.locationLabel}
                   </Text>
                 </Flexbox>
-                <div className={styles.dot} />
+                <div {...stylex.props(styles.dot)} />
                 {showOpenChat && (
                   <Button size={'small'} onClick={() => openChat(agent.agentId)}>
                     {t('connectAgent.create.openChat')}
@@ -659,9 +638,13 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
         <Flexbox gap={16} paddingBlock={'16px 8px'}>
           <SectionLabel>{t('connectAgent.create.stepDevice')}</SectionLabel>
           {showEmpty ? (
-            <div className={styles.emptyCard}>
-              <Flexbox align={'center'} className={styles.emptyHero} gap={10}>
-                <span className={styles.heroIcon}>
+            <div {...stylex.props(styles.emptyCard)}>
+              <Flexbox
+                align={'center'}
+                className={stylex.props(styles.emptyHero).className}
+                gap={10}
+              >
+                <span {...stylex.props(styles.heroIcon)}>
                   <Icon icon={LaptopIcon} size={26} />
                 </span>
                 <Text fontSize={17} weight={600}>
@@ -671,9 +654,9 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                   {t('connectAgent.create.noDevicesDesc')}
                 </Text>
               </Flexbox>
-              <div className={styles.emptyOptions}>
-                <div className={styles.emptyOption}>
-                  <span className={styles.emptyOptionIcon}>
+              <div {...stylex.props(styles.emptyOptions)}>
+                <div {...stylex.props(styles.emptyOption)}>
+                  <span {...stylex.props(styles.emptyOptionIcon)}>
                     <Icon icon={Download} size={20} />
                   </span>
                   <Flexbox gap={3}>
@@ -682,8 +665,13 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                       {t('connectAgent.create.noDevicesDesktopHint')}
                     </Text>
                   </Flexbox>
-                  <div className={styles.emptyOptionAction}>
-                    <a href={DOWNLOAD_URL.default} rel={'noreferrer'} target={'_blank'}>
+                  <div {...stylex.props(styles.emptyOptionAction)}>
+                    <a
+                      {...stylex.props(styles.fullWidth)}
+                      href={DOWNLOAD_URL.default}
+                      rel={'noreferrer'}
+                      target={'_blank'}
+                    >
                       <Button
                         icon={<Icon icon={Download} size={14} />}
                         style={{ width: '100%' }}
@@ -694,8 +682,8 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                     </a>
                   </div>
                 </div>
-                <div className={styles.emptyOption}>
-                  <span className={styles.emptyOptionIcon}>
+                <div {...stylex.props(styles.emptyOption)}>
+                  <span {...stylex.props(styles.emptyOptionIcon)}>
                     <Icon icon={TerminalIcon} size={20} />
                   </span>
                   <Flexbox gap={3}>
@@ -704,8 +692,10 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                       {t('connectAgent.create.noDevicesCliHint')}
                     </Text>
                   </Flexbox>
-                  <div className={styles.emptyOptionAction}>
-                    <CommandLine command={t('connectAgent.create.noDevicesCmd')} />
+                  <div {...stylex.props(styles.emptyOptionAction)}>
+                    <div {...stylex.props(styles.fullWidth)}>
+                      <CommandLine command={t('connectAgent.create.noDevicesCmd')} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -726,7 +716,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               {isDesktop && (
                 <Flexbox gap={6}>
                   <SectionLabel>{t('connectAgent.create.thisDevice')}</SectionLabel>
-                  <div className={styles.groupList}>
+                  <div {...stylex.props(styles.groupList)}>
                     <DeviceRow
                       icon={<Icon icon={LaptopIcon} size={18} />}
                       statusText={t('connectAgent.create.online')}
@@ -751,7 +741,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                       {t('connectAgent.create.refresh')}
                     </Button>
                   </Flexbox>
-                  <div className={styles.groupList}>
+                  <div {...stylex.props(styles.groupList)}>
                     {deviceListState === 'error' ? (
                       <AsyncError
                         error={deviceListError}
@@ -785,7 +775,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
                 </Flexbox>
               )}
               {isDesktop && deviceListState === 'empty' && (
-                <div className={styles.commandHint}>
+                <div {...stylex.props(styles.commandHint)}>
                   <Text type={'secondary'}>{t('connectAgent.create.noDevicesCliHint')}</Text>
                   <CommandLine command={t('connectAgent.create.noDevicesCmd')} />
                 </div>
@@ -951,9 +941,9 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          <div className={styles.groupList}>
-            <div className={`${styles.row} ${styles.rowStatic}`}>
-              <div className={styles.iconBox}>
+          <div {...stylex.props(styles.groupList)}>
+            <div {...stylex.props(styles.row, styles.rowStatic)}>
+              <div {...stylex.props(styles.iconBox)}>
                 {target?.kind === 'device' ? (
                   getDeviceIcon(target.device.platform, 18)
                 ) : (

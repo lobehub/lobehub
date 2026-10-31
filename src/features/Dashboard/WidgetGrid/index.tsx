@@ -3,9 +3,10 @@
 import { memo, useMemo, useState } from 'react';
 
 import type { DashboardWidgetItem } from '@/services/dashboard';
+import { sx } from '@/styles/sx';
 
 import BoardWidgetCard from '../Board/BoardWidgetCard';
-import { cellStyle, gridStyles } from '../Board/style';
+import { cellStyle, gridProps, gridStyles } from '../Board/style';
 import { resolveLayouts } from '../utils/layout';
 import WidgetDetailDrawer from '../WidgetDetail';
 
@@ -32,13 +33,12 @@ const DashboardWidgetGrid = memo<DashboardWidgetGridProps>(({ widgets }) => {
 
   return (
     <>
-      <div className={gridStyles.grid} data-dashboard-grid={'widgets'}>
+      <div {...gridProps()} data-dashboard-grid={'widgets'}>
         {widgets.map((widget) => (
           <div
-            className={gridStyles.cell}
+            {...sx([gridStyles.cell], undefined, cellStyle(layouts[widget.id]))}
             data-widget-id={widget.id}
             key={widget.id}
-            style={cellStyle(layouts[widget.id])}
           >
             <BoardWidgetCard widget={widget} onOpen={setOpenWidgetId} />
           </div>

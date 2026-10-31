@@ -2,7 +2,9 @@
 
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { createStaticStyles, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   BadgeCheckIcon,
   BotIcon,
@@ -36,42 +38,34 @@ import {
   internalEntityPreviewKey,
 } from './InternalEntityPreview';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  icon: css`
-    margin-inline-end: 4px;
-    color: ${cssVar.colorTextSecondary};
-    vertical-align: -0.15em;
-  `,
-  link: css`
-    /* Keep the label on the surrounding text baseline instead of the icon's flex baseline. */
-    display: inline;
-
-    color: ${cssVar.colorText} !important;
-
-    /* Tertiary, not colorBorder: on a dark background colorBorder sits so
-       close to the bubble that the underline vanishes and the link reads as
-       plain text — findability is the underline's whole job here. */
-    text-decoration-color: ${cssVar.colorTextTertiary};
-    text-decoration-line: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-
-    transition:
-      color 0.15s,
-      text-decoration-color 0.15s;
-
-    &:hover {
-      color: ${cssVar.colorText} !important;
-      text-decoration-color: ${cssVar.colorTextSecondary};
-    }
-
-    &:focus-visible {
-      border-radius: 2px;
-      outline: 2px solid ${cssVar.colorPrimaryBorder};
-      outline-offset: 2px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  icon: {
+    color: cssVar.colorTextSecondary,
+    marginInlineEnd: '4px',
+    verticalAlign: '-0.15em',
+  },
+  link: {
+    borderRadius: { 'default': null, ':focus-visible': '2px' },
+    color: cssVar.colorText,
+    // Keep the label on the surrounding text baseline instead of the icon's flex baseline.
+    display: 'inline',
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimaryBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    // Tertiary, not colorBorder: on a dark background colorBorder sits so
+    // close to the bubble that the underline vanishes and the link reads as
+    // plain text — findability is the underline's whole job here.
+    textDecorationColor: {
+      'default': cssVar.colorTextTertiary,
+      ':hover': cssVar.colorTextSecondary,
+    },
+    textDecorationLine: 'underline',
+    textDecorationThickness: '1px',
+    textUnderlineOffset: '3px',
+    transition: 'color 0.15s, text-decoration-color 0.15s',
+  },
+});
 
 const ENTITY_ICONS = {
   acceptance: BadgeCheckIcon,
@@ -277,13 +271,13 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
   const link = (
     <a
       {...{ [RENDERER_HANDLED_LINK_ATTR]: 'true' }}
-      className={styles.link}
+      {...stylex.props(styles.link)}
       href={href}
       rel="noopener noreferrer"
       target="_blank"
       onClick={handleClick}
     >
-      {icon && <Icon className={styles.icon} icon={icon} size={14} />}
+      {icon && <Icon className={stylex.props(styles.icon).className} icon={icon} size={14} />}
       {displayLabel}
     </a>
   );

@@ -2,12 +2,14 @@
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { sx } from '@/styles/sx';
 
 import ApprovalCard from './ApprovalCard';
 import GoalClarificationCard from './GoalClarificationCard';
@@ -70,28 +72,32 @@ const GlobalApprovalNotification = memo(() => {
   const extraCount = total - 1;
 
   return (
-    <div className={styles.wrapper} style={{ '--global-approval-top': `${TOP_OFFSET}px` } as any}>
+    <div
+      {...sx([styles.wrapper], undefined, {
+        '--global-approval-top': `${TOP_OFFSET}px`,
+      } as any)}
+    >
       <AnimatePresence mode="popLayout">
         {hasApprovals &&
           (collapsed ? (
             <m.div
               layout
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              className={styles.pill}
+              {...stylex.props(styles.pill)}
               exit={{ opacity: 0, scale: 0.9, y: -16 }}
               initial={{ opacity: 0, scale: 0.9, y: -16 }}
               key="pill"
               transition={SPRING}
               onClick={() => setCollapsed(false)}
             >
-              <span className={styles.pillDot} />
+              <span {...stylex.props(styles.pillDot)} />
               {t('globalApproval.pendingCount', { count: total })}
             </m.div>
           ) : (
             <m.div
               layout
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              className={styles.stack}
+              {...stylex.props(styles.stack)}
               exit={{ opacity: 0, scale: 0.96, y: -16 }}
               initial={{ opacity: 0, scale: 0.96, y: -16 }}
               key="stack"
@@ -147,7 +153,7 @@ const GlobalApprovalNotification = memo(() => {
                 )}
               </AnimatePresence>
               {extraCount > 0 && (
-                <div className={styles.moreHint}>
+                <div {...stylex.props(styles.moreHint)}>
                   {t('globalApproval.moreCount', { count: extraCount })}
                 </div>
               )}

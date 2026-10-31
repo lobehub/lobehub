@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Center, Empty, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { LayoutDashboardIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,18 +38,20 @@ const DashboardListPage = memo(() => {
           </Text>
         }
       />
-      <div className={pageStyles.scroll}>
-        <div className={pageStyles.canvas}>
+      <div {...stylex.props(pageStyles.scroll)}>
+        <div {...stylex.props(pageStyles.canvas)}>
           <Flexbox
             horizontal
             align={'flex-end'}
-            className={pageStyles.heading}
+            className={stylex.props(pageStyles.heading).className}
             gap={16}
             justify={'space-between'}
           >
             <Flexbox gap={6} style={{ minWidth: 0 }}>
-              <h1 className={pageStyles.title}>{t('list.title')}</h1>
-              <Text className={pageStyles.description}>{t('list.description')}</Text>
+              <h1 {...stylex.props(pageStyles.title)}>{t('list.title')}</h1>
+              <Text className={stylex.props(pageStyles.description).className}>
+                {t('list.description')}
+              </Text>
             </Flexbox>
             <Button
               data-dashboard-create
@@ -76,7 +79,7 @@ const DashboardListPage = memo(() => {
             }
             onRetry={() => void mutate()}
           >
-            <div className={dashboardListStyles.grid}>
+            <div {...stylex.props(dashboardListStyles.grid)}>
               {dashboards.map((dashboard) => (
                 <DashboardListCard
                   dashboard={dashboard}

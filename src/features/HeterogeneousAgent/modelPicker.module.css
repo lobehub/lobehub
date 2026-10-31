@@ -1,0 +1,4 @@
+/* The model-info tag lives inside the Select's option renderer, outside StyleX's reach. */
+.picker :global(.lobe-model-info-tags) {
+  display: none;
+}

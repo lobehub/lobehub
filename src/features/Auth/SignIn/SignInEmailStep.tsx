@@ -1,16 +1,8 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import {
-  Alert,
-  Badge,
-  Button,
-  createStaticStyles,
-  Divider,
-  Flexbox,
-  Icon,
-  Input,
-  Text,
-} from '@lobehub/ui';
+import { Alert, Badge, Button, Divider, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Form, type FormInstance } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,13 +11,9 @@ import AuthIcons from '@/components/AuthIcons';
 import AuthCard from '@/features/AuthCard';
 import AuthAgreement from '@/features/AuthShell/AuthAgreement';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  inlineLink: css`
-    cursor: pointer;
-    color: ${cssVar.colorPrimary};
-    text-decoration: underline;
-  `,
-}));
+const styles = stylex.create({
+  inlineLink: { cursor: 'pointer', color: cssVar.colorPrimary, textDecoration: 'underline' },
+});
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 export const USERNAME_REGEX = /^\w+$/;
@@ -200,7 +188,7 @@ export const SignInEmailStep = ({
             <>
               {t('betterAuth.signin.socialOnlyHint')}{' '}
               <a
-                className={styles.inlineLink}
+                {...stylex.props(styles.inlineLink)}
                 role="button"
                 tabIndex={0}
                 onClick={onSetPassword}
@@ -220,7 +208,7 @@ export const SignInEmailStep = ({
       {isSocialOnly && (
         <Text align={'center'} fontSize={13} style={{ marginTop: 12 }} type={'secondary'}>
           <a
-            className={styles.inlineLink}
+            {...stylex.props(styles.inlineLink)}
             role="button"
             tabIndex={0}
             onClick={onResetEmail}
@@ -240,7 +228,7 @@ export const SignInEmailStep = ({
         <Text align={'center'} fontSize={13} style={{ marginTop: 16 }} type={'secondary'}>
           {t('betterAuth.signin.noAccount')}{' '}
           <a
-            className={styles.inlineLink}
+            {...stylex.props(styles.inlineLink)}
             role="button"
             tabIndex={0}
             onClick={onGoToSignup}

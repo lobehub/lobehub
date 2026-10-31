@@ -1,6 +1,9 @@
-import { cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { sx } from '@/styles/sx';
 
 import { previewStyles } from './styles';
 import { type MinimapIndicator } from './types';
@@ -17,7 +20,7 @@ export const MinimapPreview = memo<MinimapPreviewProps>(
     const styles = previewStyles;
 
     return (
-      <Flexbox className={styles.list} gap={2}>
+      <Flexbox className={stylex.props(styles.list).className} gap={2}>
         {indicators.map(({ id, preview, virtuosoIndex, width }, position) => {
           const isActive = activePosition === position;
           const label = preview || t('minimap.emptyPreview');
@@ -27,14 +30,14 @@ export const MinimapPreview = memo<MinimapPreviewProps>(
               horizontal
               align={'center'}
               aria-current={isActive ? 'true' : undefined}
-              className={cx(styles.item, isActive && styles.itemActive)}
+              className={stylex.props(styles.item, isActive && styles.itemActive).className}
               gap={10}
               justify={'flex-end'}
               key={id}
               onClick={() => onJump(virtuosoIndex)}
             >
-              <span className={cx(styles.label, isActive && styles.labelActive)}>{label}</span>
-              <div className={cx(styles.dash, isActive && styles.dashActive)} style={{ width }} />
+              <span {...stylex.props(styles.label, isActive && styles.labelActive)}>{label}</span>
+              <div {...sx([styles.dash, isActive && styles.dashActive], undefined, { width })} />
             </Flexbox>
           );
         })}

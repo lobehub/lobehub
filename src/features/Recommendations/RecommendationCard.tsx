@@ -66,11 +66,14 @@ export const RecommendationCard = memo<RecommendationCardProps>(
 
     return (
       <Block
-        className={cx(briefStyles.card, styles.card)}
         gap={12}
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG }}
         variant={'outlined'}
+        className={cx(
+          stylex.props(briefStyles.card, stylex.defaultMarker()).className,
+          styles.card,
+        )}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
           <Flexbox
@@ -97,7 +100,7 @@ export const RecommendationCard = memo<RecommendationCardProps>(
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             <Button
-              className={briefStyles.actionBtnPrimary}
+              className={stylex.props(briefStyles.actionBtnPrimary).className}
               loading={loading}
               shape={'round'}
               onClick={handleClick}
