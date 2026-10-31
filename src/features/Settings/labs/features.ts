@@ -15,6 +15,7 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
+  | 'agentIdentity'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
@@ -57,6 +58,12 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     flag: 'enableAgentGraphConfig',
     i18nKey: 'agentGraphConfig',
     searchKeywords: ['agent graph', 'graph runtime'],
+    stage: 'alpha',
+  },
+  {
+    flag: 'enableAgentIdentity',
+    i18nKey: 'agentIdentity',
+    searchKeywords: ['agent identity', 'agent mail', 'inbox', 'address'],
     stage: 'alpha',
   },
   {
