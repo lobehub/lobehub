@@ -3291,6 +3291,174 @@ paths:
           description: Internal server error
       tags:
         - api-keys
+  /api/v1/audio/speech:
+    post:
+      operationId: postApiV1AudioSpeech
+      description: "OpenAI-compatible text-to-speech. Point an OpenAI SDK at `/api/v1`
+        and call `audio.speech.create`. `model` takes `provider/model` (for
+        example `lobehub/speech-2.8-hd`) or a bare model id; the optional
+        `provider` and `params` (emotion, pitch, volume, sampleRate) are LobeHub
+        extensions. Returns the audio bytes; usage is reported in `X-LobeHub-*`
+        headers. Synthesis errors use OpenAI's `{ error: { message, type, code,
+        param } }` body; authentication and permission errors use the platform
+        `ApiError` envelope."
+      responses:
+        "200":
+          content:
+            audio/aac:
+              schema:
+                format: binary
+                type: string
+            audio/mpeg:
+              schema:
+                format: binary
+                type: string
+            audio/opus:
+              schema:
+                format: binary
+                type: string
+          description: Synthesized audio
+        "400":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type:
+                          - string
+                          - "null"
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                    required:
+                      - message
+                      - type
+                    type: object
+                required:
+                  - error
+                type: object
+          description: Invalid request, unsupported format or invalid params
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "402":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type:
+                          - string
+                          - "null"
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                    required:
+                      - message
+                      - type
+                    type: object
+                required:
+                  - error
+                type: object
+          description: Insufficient credits
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type:
+                          - string
+                          - "null"
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                    required:
+                      - message
+                      - type
+                    type: object
+                required:
+                  - error
+                type: object
+          description: Upstream provider rate limit
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+        "502":
+          content:
+            application/json:
+              schema:
+                properties:
+                  error:
+                    properties:
+                      code:
+                        type:
+                          - string
+                          - "null"
+                      message:
+                        type: string
+                      param:
+                        type:
+                          - string
+                          - "null"
+                      type:
+                        type: string
+                    required:
+                      - message
+                      - type
+                    type: object
+                required:
+                  - error
+                type: object
+          description: Upstream provider error
+      summary: Create speech
+      tags:
+        - audio
   /api/v1/chat:
     post:
       operationId: postApiV1Chat

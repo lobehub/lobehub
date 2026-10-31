@@ -125,3 +125,15 @@ Source: reviewer correction on widget approval cards, lobehub#21936 acceptance r
 Switching between items in one space (the approval bar's pending calls) uses `@lobehub/ui` `Tabs` (`size="small"`), not a hand-styled underline row. Do not decorate tab labels with emoji (no `🔧`). When two tabs would read the same (two dry runs of one tool), number them ("试运行组件 1", "试运行组件 2"). Read a reviewer's circled region against the exact screenshot coordinates before acting: in this case, two rounds of feedback on the tab strip were misread as feedback on the stage path below it.
 
 Source: reviewer correction on the approval tab bar, lobehub#21936 acceptance round 2 (2026-10-30).
+
+## LOBE-UX-018 — Judge a component's size against the whole page, not only inside itself
+
+When reviewing a single component (a composer, toolbar, card or bar), look at it in a full-page screenshot next to its neighbours (sidebar rows, page header, the main chat input) and compare height, padding and visual weight. Checking only internal spacing and alignment misses a component that is the wrong size for the app. Record the comparison as evidence: which neighbours, and their measured heights.
+
+Source: the Channel composer audit checked internal asymmetry and button weight but missed that the whole composer was oversized; the user caught it (“输入框看起来有点太大了”, 2026-10-31).
+
+## LOBE-UX-019 — Reply behavior follows the author's identity
+
+Reply is the primary Channel message action. Replying to a person only posts a quoted message in the current feed, with no Agent dispatch or new thread, even if the text mentions Agents. Replying to an Agent on the main feed atomically creates/reuses a thread rooted at that Agent's answer and sends the continuation there. The target Agent and explicitly mentioned Agents participate; unrelated Agents do not join. Inside a thread, keep replies in that thread and retain existing participants. Opening or cancelling reply mode never persists an empty thread.
+
+Source: user correction of the proposed in-channel reply semantics (2026-10-31).

@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import ResourceAccessPage from '@/features/ResourcePermission/ResourceAccessPage';
 import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 
@@ -25,8 +26,8 @@ const PagePermission = memo(() => {
 
   return (
     <ResourceAccessPage
-      redirectPath={`/page/${id}`}
-      resourceHomePath={`/page/${id}`}
+      redirectPath={docsPagePath(id)}
+      resourceHomePath={docsPagePath(id)}
       resourceId={id}
       resourceName={title}
       resourceType={'document'}

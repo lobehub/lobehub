@@ -34,6 +34,13 @@ messages directly to the bound Agent. Group channels leave `agentId` NULL, inclu
 only one Agent. A group whose only active members are one person and one Agent also skips routing:
 every message that mentions no Agent, in the main timeline or any Thread, goes to that Agent,
 which then follows the Thread. Deleting a bound Agent cascades its direct conversations and their public history.
+While Channels are on, creating an Agent opens its creator's conversation, titled with the Agent's
+name, with the Agent on the device and directory a new Channel would give it
+(`createAgentDirectChannel`).
+Inviting from a direct conversation leaves it as it is and starts a group instead
+(`createGroupFromDirect`): its person and Agent, the Agent in the same channel-local environment,
+plus the invited Agents and, in a workspace, people. `userCandidates` lists those people from a
+workspace direct conversation; `addUser` still refuses it.
 
 Group history survives deletion of an author or Agent. Message sender references use `SET NULL`;
 new writes require exactly one actual sender. Human requests have `userId`, Agent replies have
@@ -64,6 +71,25 @@ The job's `executionConfig` freezes those settings, the Agent runtime and the Ch
 Updating Agent settings affects the next claim, including already queued requests; it never
 rewrites an earlier job snapshot. A private, trashed, deleted or moved Agent fails the requester
 access check before any topic or operation is created.
+
+## Delivery-key retirement rollout
+
+Migration `0197_channel_jobs_message_member_unique` enforces one job per message and Agent
+member, but deliberately retains the physical `delivery_key` column and its `initial` default.
+Older binaries still include that column in ORM reads and writes; new binaries omit it.
+The generated snapshot and DBML describe the new application schema, not this temporary
+compatibility column. Do not add the column back to the runtime schema or drop it in this release.
+
+Deploy this version normally; no separate manual database step is required. Only after it has
+been deployed and all earlier instances, workers and in-flight tasks have drained should a later
+release drop the column with a **custom** migration (the generated snapshot already omits it).
+Do not ship that cleanup in the same deployment, and retire rollback targets that still reference
+the column before applying it.
+
+The migration fails rather than deleting jobs if historical `(message_id, member_id)` pairs are
+duplicated. The migrator transaction restores the previous index and leaves the data and migration
+history unchanged on failure. Rebuilding the index still takes a table lock; column compatibility
+does not promise a lock-free migration.
 
 ## Topic continuation
 

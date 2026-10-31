@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, MaterialFileTypeIcon, Text } from '@lobehub/ui';
+import { Flexbox, MaterialFileTypeIcon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,22 +11,24 @@ import { formatSize } from '@/utils/format';
 import { useDetailContext } from '../../DetailProvider';
 import Platform from './Platform';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  filesCard: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-    background: ${cssVar.colorBgContainer};
-  `,
-  sectionLabel: css`
-    margin: 0;
-
-    font-size: 20px;
-    font-weight: 700;
-    line-height: 1.25;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  filesCard: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  sectionLabel: {
+    margin: '0',
+    fontSize: '20px',
+    fontWeight: 700,
+    lineHeight: 1.25,
+    color: cssVar.colorText,
+  },
+});
 
 const Install = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { identifier, downloadUrl, resources, content } = useDetailContext();
@@ -47,10 +51,10 @@ const Install = memo<{ mobile?: boolean }>(({ mobile }) => {
       />
       {entries.length > 0 && (
         <Flexbox gap={12}>
-          <Text as={'h2'} className={styles.sectionLabel}>
+          <Text as={'h2'} className={stylex.props(styles.sectionLabel).className}>
             {t('skills.details.installation.filesIncluded')}
           </Text>
-          <div className={styles.filesCard}>
+          <div {...stylex.props(styles.filesCard)}>
             {entries.map(([name, meta], index) => (
               <Flexbox
                 horizontal

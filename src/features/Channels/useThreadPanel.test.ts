@@ -41,6 +41,28 @@ describe('Local thread preview', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it('keeps the returned thread open after a send even if it was already selected', () => {
+    const { result } = setup();
+    act(() => result.current.openThread('saved'));
+    act(() => result.current.openThread('saved', false));
+    expect(result.current.threadId).toBe('saved');
+    act(() => result.current.openThread('saved'));
+    expect(result.current.threadId).toBeNull();
+  });
+
+  it.each([false, true])(
+    'does not replace a newer thread preview or its dismissal after a slow main-feed reply (closed: %s)',
+    (closed) => {
+      const { result } = setup();
+      const openAfterSend = result.current.openThread;
+      act(() => result.current.openDraft(draft('new-selection')));
+      if (closed) act(() => result.current.close());
+      act(() => openAfterSend('sent-reply-thread', false));
+      expect(result.current.draft?.root.id).toBe(closed ? undefined : 'new-selection');
+      expect(result.current.threadId).toBeNull();
+    },
+  );
+
   it('sends once with the root and opens the saved thread only after success', async () => {
     const { result } = setup();
     act(() => result.current.openDraft(draft()));

@@ -1,8 +1,8 @@
+import type { UserMemoryPreferenceInsert } from '@lobechat/types';
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryPreference } from '../../../schemas';
 import { userMemories, userMemoriesPreferences, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryPreferenceModel } from '../preference';
@@ -27,7 +27,7 @@ beforeEach(async () => {
 describe('UserMemoryPreferenceModel', () => {
   describe('create', () => {
     it('should create a new preference', async () => {
-      const preferenceData: Omit<NewUserMemoryPreference, 'userId'> = {
+      const preferenceData: Omit<UserMemoryPreferenceInsert, 'userId'> = {
         type: 'communication',
         conclusionDirectives: 'Prefer concise responses',
         suggestions: 'Use bullet points when possible',

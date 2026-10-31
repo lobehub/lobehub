@@ -29,6 +29,19 @@ const otherUser = member('other-user', 'user', 'Lin');
 const otherAgent = member('other-agent', 'agent', 'Code helper');
 
 describe('Channel mention groups', () => {
+  it('returns personal-space matches without actor section headings', () => {
+    expect(getMentionGroups([agent, otherAgent], '', 'Former member', false)).toEqual([
+      { actorType: undefined, members: [agent, otherAgent] },
+    ]);
+    expect(getMentionGroups([agent], 'zzzzzzz', 'Former member', false)).toEqual([]);
+  });
+
+  it('retains the Agent section in team spaces even without matching people', () => {
+    expect(getMentionGroups([agent], '', 'Former member', true)).toEqual([
+      { actorType: 'agent', members: [agent] },
+    ]);
+  });
+
   it('puts members before Agents and preserves the original order within each group', () => {
     expect(getMentionGroups([agent, user, otherAgent, otherUser], '', 'Former member')).toEqual([
       { actorType: 'user', members: [user, otherUser] },

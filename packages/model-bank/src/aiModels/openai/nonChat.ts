@@ -1,4 +1,10 @@
 import { gptImage1Schema, gptImage2Schema } from '../../const/imageParameters';
+import {
+  openaiGpt4oMiniTTSSchema,
+  openaiGpt4oTTSVoices,
+  openaiTTS1Schema,
+  openaiTTS1Voices,
+} from '../../const/ttsParameters';
 import type {
   AIASRModelCard,
   AIEmbeddingModelCard,
@@ -43,28 +49,38 @@ export const openaiEmbeddingModels: AIEmbeddingModelCard[] = [
 // Text-to-speech models
 export const openaiTTSModels: AITTSModelCard[] = [
   {
-    description: 'The latest text-to-speech model optimized for real-time speed.',
+    description:
+      'Legacy text-to-speech model optimized for real-time speed. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'TTS-1',
     id: 'tts-1',
+    legacy: true,
+    parameters: openaiTTS1Schema,
     pricing: {
       units: [{ name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionCharacters' }],
     },
     type: 'tts',
+    voices: openaiTTS1Voices,
   },
   {
-    description: 'The latest text-to-speech model optimized for quality.',
+    description:
+      'Legacy text-to-speech model optimized for quality. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'TTS-1 HD',
     id: 'tts-1-hd',
+    legacy: true,
+    parameters: openaiTTS1Schema,
     pricing: {
       units: [{ name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionCharacters' }],
     },
     type: 'tts',
+    voices: openaiTTS1Voices,
   },
   {
     description:
-      'GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, converting text into natural-sounding speech with a max input of 2000 tokens.',
+      'GPT-4o mini TTS is a text-to-speech model built on GPT-4o mini, converting text into natural-sounding speech with a max input of 2000 tokens. OpenAI has deprecated it and shuts it down on 2027-01-06.',
     displayName: 'GPT-4o Mini TTS',
     id: 'gpt-4o-mini-tts',
+    legacy: true,
+    parameters: openaiGpt4oMiniTTSSchema,
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
@@ -72,6 +88,7 @@ export const openaiTTSModels: AITTSModelCard[] = [
       ],
     },
     type: 'tts',
+    voices: openaiGpt4oTTSVoices,
   },
 ];
 
@@ -132,6 +149,50 @@ export const openaiASRModels: AIASRModelCard[] = [
 
 // Image generation models
 export const openaiImageModels: AIImageModelCard[] = [
+  {
+    description:
+      "OpenAI's most capable image generation and editing model, built for workflows where editing precision matters most, with quality up to max and up to 4K output.",
+    displayName: 'GPT Image 2.5 Sunburst',
+    enabled: true,
+    id: 'gpt-image-2.5-sunburst',
+    parameters: gptImage2Schema,
+    pricing: {
+      // Token rates match GPT Image 2; OpenAI publishes no per-image estimate for GPT Image 2.5,
+      // so there is no `approximatePricePerImage`.
+      // https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst
+      units: [
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-08',
+    type: 'image',
+  },
+  {
+    description:
+      "OpenAI's fastest model for high-quality everyday image generation and editing, with quality up to max and up to 4K output.",
+    displayName: 'GPT Image 2.5 Flare',
+    enabled: true,
+    id: 'gpt-image-2.5-flare',
+    parameters: gptImage2Schema,
+    pricing: {
+      // Token rates match GPT Image 2; OpenAI publishes no per-image estimate for GPT Image 2.5,
+      // so there is no `approximatePricePerImage`.
+      // https://developers.openai.com/api/docs/models/gpt-image-2.5-flare
+      units: [
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput_cacheRead', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-08',
+    type: 'image',
+  },
   {
     description:
       "OpenAI's next-generation multimodal image model with native reasoning, up to 4K resolution, near-perfect text rendering, and high-fidelity multilingual support.",

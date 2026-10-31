@@ -67,6 +67,7 @@ function expected(): Array<
     ['setModel', 'mutation', 13],
     ['setTaskAgent', 'mutation', 13],
     ['setTaskModel', 'mutation', 13],
+    ['setVisibility', 'mutation', 13],
     ['start', 'mutation', 13],
     ['startOperation', 'mutation', 8],
     ['submitOperationPlan', 'mutation', 8],
@@ -77,6 +78,7 @@ function expected(): Array<
     ['tick', 'mutation', 13],
     ['updateRequirement', 'mutation', 13],
     ['updateSubscription', 'mutation', 13],
+    ['updateTitle', 'mutation', 13],
     ['wake', 'mutation', 13],
   ];
 }

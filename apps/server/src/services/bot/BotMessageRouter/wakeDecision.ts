@@ -40,7 +40,6 @@ import {
   DUTY_POLICY_ID,
   OWNER_RULES_POLICY_ID,
 } from '@/server/services/agentSignal/scenarios/botWake/policies';
-import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type {
   BotWakeConfig,
   WakeChannelState,
@@ -130,6 +129,18 @@ const KIND_BY_REASON: Record<BotWakeReason, BotWakeKind> = {
 };
 
 export const botWakeKindFor = (reason: BotWakeReason): BotWakeKind => KIND_BY_REASON[reason];
+
+/**
+ * Every `finalReason` of a wake nobody asked for: the `followup` reasons above, plus the retired
+ * ones older rows still carry (`classifier-confident`, `proactive-help` were follow-ups too).
+ */
+export const BOT_WAKE_FOLLOWUP_REASONS: readonly string[] = [
+  ...(Object.keys(KIND_BY_REASON) as BotWakeReason[]).filter(
+    (reason) => KIND_BY_REASON[reason] === 'followup',
+  ),
+  'classifier-confident',
+  'proactive-help',
+];
 
 const TAG_BY_REASON: Record<BotWakeReason, string> = {
   'access-gate-rejected': 'blocked',
@@ -286,11 +297,6 @@ export interface BotWakeRecorderOptions {
   /** The bot owner's user id on this platform (`settings.userId`). */
   operatorUserId?: string;
   platform: string;
-  /**
-   * Whether the `bot_wake` rollout flag is on for this bot's owner. Defaults to the runtime
-   * feature flag; injectable for tests. Off means the recorder does nothing at all.
-   */
-  rollout?: () => Promise<boolean>;
   /** Raw provider settings (`botWake` is parsed from them). Overrides `botWakeConfig` rules. */
   settings?: Record<string, unknown> | null;
   /** Replaces the policy set built from `settings`. */
@@ -311,6 +317,11 @@ export interface BotWakeRecorder {
    */
   conversation: (observation: BotWakeObservation) => Promise<WakeConversation | undefined>;
   /**
+   * The bot's own wake switch (on unless `botWakeDisabled`). Callers that change behaviour on their own
+   * (follow-up wakes that may end in silence, the follow-up gate) must check this first.
+   */
+  enabled: boolean;
+  /**
    * Decides whether to wake the bot for a message nobody addressed to it. The internal and owner
    * rules start a wake only when the owner switched them to `enforce`; the duty judge only when
    * the bot has duties and its own mode is `enforce` (it scores in `shadow`, and is not built when
@@ -330,11 +341,6 @@ export interface BotWakeRecorder {
    */
   initiate: (observation: BotWakeObservation) => Promise<BotWakeInitiation | undefined>;
   /**
-   * The `bot_wake` rollout flag for this bot's owner. Callers that change behaviour on their own
-   * (follow-up wakes that may end in silence, the follow-up gate) must ask this first.
-   */
-  isRolledOut: () => Promise<boolean>;
-  /**
    * Evaluates the policies that the owner switched to `enforce`, with their real modes.
    *
    * Returns:
@@ -348,11 +354,11 @@ export interface BotWakeRecorder {
   /**
    * Adds a person's message to the channel's shared log, so a later judgement can read what was
    * said around it. Never throws. Does nothing for the bot's own messages, direct messages, or
-   * while the rollout or bot-wake is off.
+   * while bot-wake is off.
    */
   remember: (observation: BotWakeObservation) => Promise<void>;
   /**
-   * Remembers that the bot is answering these messages (platform ids), whatever the rollout: an
+   * Remembers that the bot is answering these messages (platform ids), whatever the wake switch: an
    * edit that later @-mentions the bot on one of them must not wake it a second time. Never throws.
    */
   rememberEngaged: (messageIds: readonly string[]) => Promise<void>;
@@ -544,8 +550,6 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
       ? createDutyPolicy(parsed.rules, budgeted(options.dutyJudge))
       : undefined;
 
-  const rolledOut = options.rollout ?? createBotWakeRolloutProbe(userId);
-
   const policies =
     options.shadowPolicies ?? createWakePolicySet({ classify, settings: options.settings });
 
@@ -719,8 +723,8 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
   };
 
   const persist = async (observation: BotWakeObservation, observedAt: number) => {
-    // Rollout off: no row, no Redis write, no model call. The bot behaves as it did before.
-    if (!(await rolledOut())) return;
+    // Switch off: no row, no Redis write, no model call. The bot behaves as it did before.
+    if (!enabled) return;
 
     const startedAt = Date.now();
     const text = observation.message.text ?? '';
@@ -832,11 +836,11 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         log('conversation read failed: entry=%s %O', observation.entryPoint, error);
       }
     },
-    isRolledOut: rolledOut,
+    enabled,
     judge: async (observation) => {
       const observedAt = Date.now();
       try {
-        if (!(await rolledOut())) return;
+        if (!enabled) return;
 
         // The classifier answers "is this talking to the bot?", which is the wrong question for a
         // keyword wake: the keyword is there to wake the bot without anyone addressing it. Only
@@ -864,7 +868,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
     initiate: async (observation) => {
       const observedAt = Date.now();
       try {
-        if (!(await rolledOut()) || !enabled) return;
+        if (!enabled) return;
 
         const rulePolicies = policies.filter((policy) => policy.id !== CLASSIFIER_POLICY_ID);
         const rulesEnforce = rulePolicies.some((policy) => policy.mode === 'enforce');
@@ -969,7 +973,7 @@ export const createBotWakeRecorder = (options: BotWakeRecorderOptions): BotWakeR
         const logKey = logKeyFor(observation);
         const { message } = observation;
         if (!logKey || message.author?.isMe || !state.rememberMessages) return;
-        if (!enabled || !(await rolledOut())) return;
+        if (!enabled) return;
 
         const line = toConversationLine({
           // The send time comes from the message (a Discord id carries it), so two bots in one

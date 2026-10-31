@@ -55,7 +55,7 @@ const context: ToolExecutionContext = {
 
 const STORED = {
   allowFrom: [{ id: 'u-1' }],
-  botWakeEnabled: true,
+  botWakeDisabled: false,
   dmPolicy: 'open',
   userId: 'owner-1',
   watchKeywords: [{ keyword: 'bug' }],

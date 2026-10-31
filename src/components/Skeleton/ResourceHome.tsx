@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { cssVar as cssVarValue, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import SkeletonBar from './Bar';
 
@@ -32,27 +34,27 @@ export const ResourceSectionSkeleton = ({
     }}
   >
     {Array.from({ length: count }).map((_, index) => (
-      <SkeletonBar height={itemHeight} key={index} radius={cssVar.borderRadiusLG} />
+      <SkeletonBar height={itemHeight} key={index} radius={cssVarValue.borderRadiusLG} />
     ))}
   </div>
 );
 
-const styles = createStaticStyles(({ css }) => ({
-  content: css`
-    width: 100%;
-    max-width: 1200px;
-    margin-inline: auto;
-    padding-block: 24px 64px;
-    padding-inline: 32px;
-  `,
-  header: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  scroll: css`
-    overflow: hidden;
-    flex: 1;
-  `,
-}));
+const styles = stylex.create({
+  content: {
+    width: '100%',
+    maxWidth: '1200px',
+    marginInline: 'auto',
+    paddingBlockStart: '24px',
+    paddingBlockEnd: '64px',
+    paddingInline: '32px',
+  },
+  header: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  scroll: { overflow: 'hidden', flex: '1' },
+});
 
 /** Mirrors the Docs home: quick actions, then the tabbed list. */
 const ListSkeleton = () => (
@@ -75,7 +77,7 @@ const ResourceHomeSkeleton = () => (
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.header}
+      className={stylex.props(styles.header).className}
       flex={'none'}
       height={44}
       justify={'space-between'}
@@ -84,8 +86,8 @@ const ResourceHomeSkeleton = () => (
       <SkeletonBar height={20} width={96} />
       <SkeletonBar height={28} width={88} />
     </Flexbox>
-    <div className={styles.scroll}>
-      <Flexbox className={styles.content} gap={28}>
+    <div className={stylex.props(styles.scroll).className}>
+      <Flexbox className={stylex.props(styles.content).className} gap={28}>
         <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.quickActions} />
         <ListSkeleton />
       </Flexbox>

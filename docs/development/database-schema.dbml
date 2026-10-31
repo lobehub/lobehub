@@ -1260,7 +1260,6 @@ table channel_jobs {
   message_id uuid [not null]
   thread_id text
   requester_member_id uuid [not null]
-  delivery_key text [not null, default: 'initial']
   status text [not null, default: 'queued']
   blocked_reason text
   blocked_code text
@@ -1284,7 +1283,7 @@ table channel_jobs {
 
   indexes {
     (channel_id, id) [name: 'channel_jobs_scope_unique', unique]
-    (message_id, member_id, delivery_key) [name: 'channel_jobs_delivery_unique', unique]
+    (message_id, member_id) [name: 'channel_jobs_delivery_unique', unique]
     (channel_id, status) [name: 'channel_jobs_channel_status_idx']
     (member_id, requester_member_id, thread_id, claimed_at) [name: 'channel_jobs_continuation_idx']
     (topic_id, published_message_id) [name: 'channel_jobs_topic_idx']
@@ -2371,6 +2370,7 @@ table goals {
   subject_id text
   started_at "timestamp with time zone"
   completed_at "timestamp with time zone"
+  visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -2379,6 +2379,7 @@ table goals {
   indexes {
     user_id [name: 'goals_user_id_idx']
     workspace_id [name: 'goals_workspace_id_idx']
+    (workspace_id, visibility, user_id) [name: 'goals_workspace_visibility_idx']
     agent_id [name: 'goals_agent_id_idx']
     project_id [name: 'goals_project_id_idx']
     status [name: 'goals_status_idx']

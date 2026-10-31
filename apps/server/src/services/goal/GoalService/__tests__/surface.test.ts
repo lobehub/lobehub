@@ -83,6 +83,7 @@ const METHODS = [
   'pendingForIsland',
   'planDecomposition',
   'planMachineRecoveryFor',
+  'privatizeProjectGoals',
   'readRunDevicePresence',
   'reassignUnfinishedTasks',
   'recordObservation',
@@ -110,6 +111,7 @@ const METHODS = [
   'setPauseReason',
   'setTaskAgent',
   'setTaskModel',
+  'setVisibility',
   'settleTerminalAcceptance',
   'status',
   'stopFencedTasks',
@@ -117,6 +119,7 @@ const METHODS = [
   'tickOnce',
   'transitionStatus',
   'updateRequirement',
+  'updateTitle',
   'waitForDevice',
   'waitForQuotaReset',
 ];

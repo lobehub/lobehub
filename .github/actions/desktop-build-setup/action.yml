@@ -7,8 +7,7 @@ inputs:
     required: true
   cloud-repository:
     description: >-
-      Overlay repository (owner/name) for commercial desktop builds — pass the
-      OVERLAY_REPOSITORY repository variable; deliberately no hardcoded default.
+      Overlay repository (owner/name) for commercial desktop builds — pass the OVERLAY_REPOSITORY repository variable; deliberately no hardcoded default.
     required: false
     default: ''
   cloud-ref:
@@ -19,10 +18,25 @@ inputs:
     description: GitHub token with permission to read the Cloud repository
     required: false
     default: ''
+  require-pinned-cloud:
+    description: Require a full Cloud SHA and token for a commercial Stable build
+    default: 'false'
 
 runs:
   using: composite
   steps:
+    - name: Validate pinned Stable sources
+      shell: bash
+      env:
+        REQUIRE_PINNED_CLOUD: ${{ inputs.require-pinned-cloud }}
+        CLOUD_REF: ${{ inputs.cloud-ref }}
+        CLOUD_TOKEN: ${{ inputs.cloud-token }}
+      run: |
+        set -euo pipefail
+        if [ "$REQUIRE_PINNED_CLOUD" = true ]; then
+          [ -n "$CLOUD_TOKEN" ] || { echo '::error::Stable requires a Cloud read token'; exit 1; }
+          [[ "$CLOUD_REF" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Stable requires a full pinned Cloud SHA'; exit 1; }
+        fi
     - name: Setup environment
       uses: ./.github/actions/setup-env
       with:
@@ -37,6 +51,7 @@ runs:
         CLOUD_REPOSITORY: ${{ inputs.cloud-repository }}
         CLOUD_ROOT: ${{ github.workspace }}/..
         CLOUD_TOKEN: ${{ inputs.cloud-token }}
+        REQUIRE_PINNED_CLOUD: ${{ inputs.require-pinned-cloud }}
       run: |
         set -euo pipefail
         # Fail loudly rather than silently shipping an OSS-only commercial build.
@@ -56,6 +71,10 @@ runs:
         fi
 
         resolved_cloud_ref="$(git -C "$cloud_checkout" rev-parse HEAD)"
+        if [ "$REQUIRE_PINNED_CLOUD" = true ] && [ "$resolved_cloud_ref" != "$CLOUD_REF" ]; then
+          echo '::error::Resolved Cloud SHA differs from the pinned release sources'
+          exit 1
+        fi
         echo "CLOUD_REF=$resolved_cloud_ref" >> "$GITHUB_ENV"
 
         node <<'NODE'

@@ -1,5 +1,7 @@
 import type { WorkingDirGitState } from '@lobechat/types';
-import { createStaticStyles, cssVar, Icon, toast, Tooltip } from '@lobehub/ui';
+import { Icon, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowDownIcon, ArrowUpIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,84 +27,56 @@ import { gitChipStyles } from './gitChipStyles';
 import StaleGitSnapshot from './StaleGitSnapshot';
 import WorktreeSwitcher from './WorktreeSwitcher';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    aheadBehindStat: css`
-      display: inline-flex;
-      gap: 0;
-      align-items: center;
-
-      margin-inline-start: -2px;
-
-      font-variant-numeric: tabular-nums;
-      line-height: 1;
-    `,
-    aheadStat: css`
-      color: ${cssVar.colorInfo};
-    `,
-    behindStat: css`
-      color: ${cssVar.colorError};
-    `,
-    branchGroup: css`
-      display: flex;
-      flex: none;
-      gap: 2px;
-      align-items: center;
-    `,
-    branchLabel: css`
-      overflow: hidden;
-      max-width: 160px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    `,
-    diffStat: css`
-      display: inline-flex;
-      flex-shrink: 0;
-      gap: 4px;
-      align-items: center;
-
-      font-variant-numeric: tabular-nums;
-    `,
-    diffStatAdded: css`
-      color: ${cssVar.colorSuccess};
-    `,
-    diffStatDeleted: css`
-      color: ${cssVar.colorError};
-    `,
-    diffStatModified: css`
-      color: ${cssVar.colorWarning};
-    `,
-    syncTrigger: css`
-      cursor: pointer;
-
-      display: inline-flex;
-      flex: none;
-      gap: 2px;
-      align-items: center;
-
-      padding-block: 2px;
-      padding-inline: 4px;
-      border-radius: 4px;
-
-      font-size: 12px;
-      font-variant-numeric: tabular-nums;
-      line-height: 1;
-
-      transition: background 0.2s;
-
-      &:hover {
-        background: ${cssVar.colorFillTertiary};
-      }
-    `,
-    syncTriggerDisabled: css`
-      cursor: progress;
-      opacity: 0.6;
-
-      &:hover {
-        background: transparent;
-      }
-    `,
-  };
+const styles = stylex.create({
+  aheadBehindStat: {
+    display: 'inline-flex',
+    gap: '0',
+    alignItems: 'center',
+    marginInlineStart: '-2px',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+  },
+  aheadStat: { color: cssVar.colorInfo },
+  behindStat: { color: cssVar.colorError },
+  branchGroup: { display: 'flex', flex: 'none', gap: '2px', alignItems: 'center' },
+  branchLabel: {
+    overflow: 'hidden',
+    maxWidth: '160px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  diffStat: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    gap: '4px',
+    alignItems: 'center',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  diffStatAdded: { color: cssVar.colorSuccess },
+  diffStatDeleted: { color: cssVar.colorError },
+  diffStatModified: { color: cssVar.colorWarning },
+  syncTrigger: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '2px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '4px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    transition: 'background 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  syncTriggerDisabled: {
+    cursor: 'progress',
+    opacity: 0.6,
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
 });
 
 interface GitStatusProps {
@@ -373,17 +347,21 @@ const GitStatus = memo<GitStatusProps>(
       if (!probeSettled && fallbackGit?.branch) {
         return (
           <>
-            <div className={gitChipStyles.separator} />
-            <div aria-busy className={styles.branchGroup}>
-              <div className={gitChipStyles.trigger}>
-                <span className={styles.branchLabel}>{fallbackGit.branch}</span>
+            <div {...stylex.props(gitChipStyles.separator)} />
+            <div aria-busy {...stylex.props(styles.branchGroup)}>
+              <div {...stylex.props(gitChipStyles.trigger)}>
+                <span {...stylex.props(styles.branchLabel)}>{fallbackGit.branch}</span>
               </div>
             </div>
             {pullRequest && (
               <>
-                <div className={gitChipStyles.separator} />
+                <div {...stylex.props(gitChipStyles.separator)} />
                 <Tooltip title={pullRequest.title}>
-                  <div className={gitChipStyles.prTrigger} role="button" onClick={handleOpenPr}>
+                  <div
+                    {...stylex.props(gitChipStyles.prTrigger)}
+                    role="button"
+                    onClick={handleOpenPr}
+                  >
                     <Icon icon={GitPullRequest} size={12} />
                     <span>#{pullRequest.number}</span>
                   </div>
@@ -424,8 +402,8 @@ const GitStatus = memo<GitStatusProps>(
     const pushTargetExists = !!aheadBehind?.pushTargetExists;
 
     const branchTrigger = (
-      <div className={gitChipStyles.trigger}>
-        <span className={styles.branchLabel}>{branch}</span>
+      <div {...stylex.props(gitChipStyles.trigger)}>
+        <span {...stylex.props(styles.branchLabel)}>{branch}</span>
       </div>
     );
 
@@ -501,11 +479,15 @@ const GitStatus = memo<GitStatusProps>(
         <div
           aria-busy={pulling}
           aria-disabled={actionsBlocked}
-          className={`${styles.syncTrigger} ${styles.behindStat} ${actionsBlocked ? styles.syncTriggerDisabled : ''}`}
+          {...stylex.props(
+            styles.syncTrigger,
+            styles.behindStat,
+            actionsBlocked && styles.syncTriggerDisabled,
+          )}
           role="button"
           onClick={actionsBlocked ? undefined : handlePull}
         >
-          <span className={styles.aheadBehindStat}>
+          <span {...stylex.props(styles.aheadBehindStat)}>
             {pulling ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowDownIcon} size={10} />}
             {aheadBehind!.behind}
           </span>
@@ -518,11 +500,15 @@ const GitStatus = memo<GitStatusProps>(
         <div
           aria-busy={pushing}
           aria-disabled={actionsBlocked}
-          className={`${styles.syncTrigger} ${styles.aheadStat} ${actionsBlocked ? styles.syncTriggerDisabled : ''}`}
+          {...stylex.props(
+            styles.syncTrigger,
+            styles.aheadStat,
+            actionsBlocked && styles.syncTriggerDisabled,
+          )}
           role="button"
           onClick={actionsBlocked ? undefined : handlePush}
         >
-          <span className={styles.aheadBehindStat}>
+          <span {...stylex.props(styles.aheadBehindStat)}>
             {pushing ? <RingLoadingIcon size={10} /> : <Icon icon={ArrowUpIcon} size={10} />}
             {aheadBehind!.ahead}
           </span>
@@ -533,16 +519,16 @@ const GitStatus = memo<GitStatusProps>(
     const diffNode = (() => {
       if (!hasChanges) return null;
       const diffButton = (
-        <div className={gitChipStyles.trigger} role="button" onClick={handleToggleReview}>
-          <span className={styles.diffStat}>
+        <div {...stylex.props(gitChipStyles.trigger)} role="button" onClick={handleToggleReview}>
+          <span {...stylex.props(styles.diffStat)}>
             {diffStats.additions > 0 && (
-              <span className={styles.diffStatAdded}>+{diffStats.additions}</span>
+              <span {...stylex.props(styles.diffStatAdded)}>+{diffStats.additions}</span>
             )}
             {diffStats.deletions > 0 && (
-              <span className={styles.diffStatDeleted}>-{diffStats.deletions}</span>
+              <span {...stylex.props(styles.diffStatDeleted)}>-{diffStats.deletions}</span>
             )}
             {diffStats.additions === 0 && diffStats.deletions === 0 && diffStats.files > 0 && (
-              <span className={styles.diffStatModified}>±{diffStats.files}</span>
+              <span {...stylex.props(styles.diffStatModified)}>±{diffStats.files}</span>
             )}
           </span>
         </div>
@@ -552,10 +538,10 @@ const GitStatus = memo<GitStatusProps>(
 
     return (
       <>
-        <div className={gitChipStyles.separator} />
+        <div {...stylex.props(gitChipStyles.separator)} />
         {/* The worktree icon and the branch name name one thing — which checkout
          * you're on — so they sit closer to each other than to their neighbours. */}
-        <div className={styles.branchGroup}>
+        <div {...stylex.props(styles.branchGroup)}>
           {worktreeNode}
           {branchNode}
         </div>
@@ -564,9 +550,9 @@ const GitStatus = memo<GitStatusProps>(
         {diffNode}
         {pullRequest && (
           <>
-            <div className={gitChipStyles.separator} />
+            <div {...stylex.props(gitChipStyles.separator)} />
             <Tooltip title={prTooltip}>
-              <div className={gitChipStyles.prTrigger} role="button" onClick={handleOpenPr}>
+              <div {...stylex.props(gitChipStyles.prTrigger)} role="button" onClick={handleOpenPr}>
                 <Icon icon={GitPullRequest} size={12} />
                 <span>#{pullRequest.number}</span>
               </div>

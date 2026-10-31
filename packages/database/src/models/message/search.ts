@@ -7,6 +7,7 @@ import { sanitizeBm25Query } from '../../utils/bm25';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
 import { searchableMessage } from '../../utils/searchableMessage';
 import { notChannelTopic } from '../../utils/topicVisibility';
+import { nonNull } from '../utils/rows';
 import type { MessageLookupQueries } from './lookup';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
@@ -24,7 +25,6 @@ export const AUTOMATED_PROMPT_TOPIC_TRIGGERS = [
   'task',
   'task_manager',
 ];
-
 export const MESSAGE_KEYWORD_SEARCH_MAX_LIMIT = 100;
 
 /**
@@ -216,7 +216,18 @@ export class MessageKeywordSearchQueries extends MessageScope {
         ? undefined
         : or(
             ne(messages.role, 'user'),
-            isNull(topics.trigger),
+            // Acceptance verifier prompts ("Check to verify …") run without a
+            // trigger (it also feeds the run's origin, so it stays unset) but
+            // always under their task: a trigger-less topic with
+            // `metadata.taskId` is a verifier topic. In production every such
+            // topic is one (16,216 of 16,216 over 60 days); human chats about
+            // a task carry `trigger: 'chat'`.
+            and(
+              isNull(topics.trigger),
+              // `->> ... IS NULL` on an extracted jsonb value crashes the planner
+              // under pg_search, so ask the same question with a COALESCE sentinel.
+              sql`COALESCE(${topics.metadata} ->> 'taskId', '') = ''`,
+            ),
             notInArray(topics.trigger, AUTOMATED_PROMPT_TOPIC_TRIGGERS),
           ),
     ];
@@ -245,8 +256,8 @@ export class MessageKeywordSearchQueries extends MessageScope {
       truncated,
       hasMore: rows.length > pageSize,
       items: rows.slice(0, pageSize).map(({ content, summary, ...row }) => {
-        /* v8 ignore next -- unreachable: `searchableMessage()` requires searchable text in `content` or `summary` */
-        const body = content || summary || '';
+        // `searchableMessage()` requires searchable text in `content` or `summary`.
+        const body = nonNull(content || summary, 'messages.content or messages.summary');
         return {
           ...row,
           contentLength: body.length,

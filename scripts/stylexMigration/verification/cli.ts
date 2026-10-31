@@ -2,11 +2,13 @@ import { mkdir, mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 
-import { fixtureIds, getStyleFixture } from './fixtureRegistry';
-import { exitCode } from './gate';
-import { runPreflight } from './preflight';
-import { resolvePullRequest } from './pullRequest';
-import { fingerprintSources, writeJson } from './report';
+import { fixtureIds, getStyleFixture } from './fixtures/fixtureRegistry';
+import { exitCode } from './gate/gate';
+import { runPreflight } from './pipeline/preflight';
+import { armRunWatchdog } from './pipeline/runWatchdog';
+import { fingerprintSources, writeJson } from './reporting/report';
+import { recordSourceCleanup } from './source/cleanupSnapshots';
+import { resolvePullRequest } from './source/pullRequest';
 
 const help = `StyleX migration verification — local M1 foundation (advisory only)
 
@@ -19,6 +21,8 @@ const help = `StyleX migration verification — local M1 foundation (advisory on
   bun run stylex:verify self-test [--browser <executable>]
 
 Options: --output <parent-directory>, --repository <local-path>, --help
+--screenshots captures up to three diagnostic A/A/B viewport image sets per component.
+Temporary source/dependency exports are removed after success or failure; --keep-sources retains them for debugging.
 Available fixtures: ${fixtureIds.join(', ')}
 Revision objects must exist locally. No Git fetch, GitHub writes or PR merges.
 Dependency restore is opt-in, offline by default; --dependency-network explicitly enables public npm preparation.
@@ -41,11 +45,13 @@ const main = async () => {
       'fixtures': { type: 'string' },
       'fixture-dependencies': { type: 'boolean' },
       'help': { short: 'h', type: 'boolean' },
+      'keep-sources': { type: 'boolean' },
       'output': { type: 'string' },
       'plan-only': { type: 'boolean' },
       'pr': { type: 'string' },
       'pnpm': { type: 'string' },
       'restore-dependencies': { type: 'boolean' },
+      'screenshots': { type: 'boolean' },
       'repo': { type: 'string' },
       'repository': { type: 'string' },
     },
@@ -66,6 +72,8 @@ const main = async () => {
   if (values['restore-dependencies'] && (selfTest || values['plan-only']))
     throw new Error('DEPENDENCY_RESTORE_REQUIRES_FULL_SOURCE');
   if (values.fixture && values.fixtures) throw new Error('CONFLICTING_FIXTURE_OPTIONS');
+  if (values.screenshots && !values.fixture && !values.fixtures)
+    throw new Error('SCREENSHOTS_REQUIRE_FIXTURE');
   const selectedFixtures = values.fixtures?.split(',').map((id) => id.trim());
   if (
     selectedFixtures &&
@@ -99,10 +107,7 @@ const main = async () => {
   const sourceDirectory = process.env.STYLEX_VERIFIER_SOURCE_DIRECTORY;
   if (!sourceDirectory)
     throw new Error('Run through bun run stylex:verify to bind verifier sources');
-  const verifierHash = await fingerprintSources([
-    sourceDirectory,
-    path.resolve(sourceDirectory, '../experiment'),
-  ]);
+  const verifierHash = await fingerprintSources([sourceDirectory]);
   if (verifierHash !== process.env.STYLEX_VERIFIER_SOURCE_HASH)
     throw new Error('VERIFIER_SOURCE_HASH_MISMATCH');
   const parent = path.resolve(
@@ -112,14 +117,14 @@ const main = async () => {
   const output = await mkdtemp(path.join(parent, `${selfTest ? 'self-test' : 'run'}-`));
   console.log(`Evidence: ${output}`);
   // Bounded process watchdog also covers page.evaluate calls without protocol timeouts.
-  const watchdog = setTimeout(
-    () => {
-      console.error('ERROR: VERIFICATION_TIME_BUDGET_EXCEEDED');
-      process.exit(3);
-    },
-    values['restore-dependencies'] ? 900_000 : 120_000,
-  );
-  watchdog.unref();
+  let cleanupPromise: Promise<void> | undefined;
+  const cleanup = () =>
+    (cleanupPromise ??=
+      selfTest || values['keep-sources'] ? Promise.resolve() : recordSourceCleanup(output));
+  const stopWatchdog = armRunWatchdog({
+    cleanup,
+    durationMs: values['restore-dependencies'] ? 900_000 : 120_000,
+  });
   try {
     if (selfTest) {
       const { runSelfTest } = await import('./selfTest');
@@ -169,6 +174,7 @@ const main = async () => {
       pullRequest,
       repository,
       verifierHash,
+      screenshots: values.screenshots,
     });
     console.log(
       JSON.stringify({
@@ -195,7 +201,8 @@ const main = async () => {
     });
     process.exitCode = 3;
   } finally {
-    clearTimeout(watchdog);
+    stopWatchdog();
+    await cleanup();
   }
 };
 

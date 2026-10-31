@@ -6,8 +6,8 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { git } from '../git';
-import { resolveCommit } from '../revisionResolver';
+import { git } from '../source/git';
+import { resolveCommit } from '../source/revisionResolver';
 
 const runner = path.resolve(import.meta.dirname, '../run.ts');
 const owned: string[] = [];
@@ -71,6 +71,18 @@ describe('real Node CLI process exit contract', () => {
     expect(result.snapshots.base.fileCount).toBe(1);
     expect(result.snapshots.candidate.dependencyRestore).toBe('NOT_RESTORED');
     expect(result.reasonCodes).toContain('BROWSER_VERIFICATION_NOT_RUN');
+    expect(await artifact(root, 'source-cleanup.json')).toMatchObject({
+      removed: ['base-source', 'candidate-source'],
+    });
+  });
+
+  it('retains source exports only on an explicit debugging request', async () => {
+    const { root, base } = await setup();
+    expect((await run(root, ['--base', base, '--head', 'HEAD', '--keep-sources'])).code).toBe(2);
+    const result = await artifact(root);
+    expect(
+      await readFile(path.join(result.snapshots.base.directory, 'component.ts'), 'utf8'),
+    ).toContain('1');
   });
 
   it('uses exit 4 only for a proven identical candidate tree, not a fake PASS', async () => {

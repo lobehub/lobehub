@@ -1,9 +1,9 @@
 'use client';
 
 import { Button, confirmModal, Flexbox, Text } from '@lobehub/ui';
-import { Form, type FormInstance } from '@lobehub/ui/form';
+import { Form, type FormInstance, useWatch } from '@lobehub/ui/form';
 import { RotateCcw } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useCallback, useMemo } from 'react';
+import { Fragment, memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type {
@@ -20,6 +20,7 @@ import {
 } from '../platform/registry';
 import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
+import { WakeRecords } from '../WakeRecords';
 import { AccessSection } from './AccessSection';
 import styles from './Body.module.css';
 import type { ChannelTab } from './channelTabs';
@@ -80,6 +81,8 @@ interface BodyProps {
   currentConfig?: {
     applicationId: string;
     credentials: Record<string, string>;
+    /** The saved bot's id; the wake records tab reads its history by it. */
+    id?: string;
     settings?: Record<string, unknown> | null;
   };
   disabled?: boolean;
@@ -122,6 +125,11 @@ const Body = memo<BodyProps>(
   }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
+
+    // The records tab is a history read, not settings: it mounts the first time it is opened and
+    // then stays, so switching tabs keeps its filters and loaded pages.
+    const [recordsOpened, setRecordsOpened] = useState(false);
+    if (activeTab === 'records' && !recordsOpened) setRecordsOpened(true);
 
     const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
     const CredentialExtras = platformCredentialExtrasMap[platformDef.id];
@@ -221,30 +229,35 @@ const Body = memo<BodyProps>(
         />
       ) : undefined;
 
-    // The fields of one settings block. The master switch is always on for the people who see the
-    // wake options, so it is not shown.
+    // With the wake switch off, the blocks that only tune how the bot speaks up on its own are
+    // hidden; the switch and the keywords stay.
+    const wakeOn = useWatch(form, (values) => values.settings?.[WAKE_MASTER_KEY] !== true);
+    const wakeSectionShown = (section: { fields: FieldSchema[]; key: string }) =>
+      wakeOn ||
+      section.key === 'switch' ||
+      !section.fields.every((field) => field.key.startsWith(WAKE_KEY_PREFIX));
+
+    // The fields of one settings block.
     const renderSettingsFields = (fields: FieldSchema[]) =>
-      fields
-        .filter((field) => field.key !== WAKE_MASTER_KEY)
-        .map((field, index) => {
-          // Feature-gated fields (e.g. watch keywords) lock when the resolved access meta
-          // reports the feature as not allowed.
-          const featureLocked =
-            !!field.paidFeature &&
-            platformDef.access?.features?.[field.paidFeature]?.allowed === false;
-          return (
-            <Fragment key={field.key}>
-              <SchemaField
-                disabled={disabled}
-                divider={index !== 0}
-                featureLocked={featureLocked}
-                field={field}
-                parentKey="settings"
-              />
-              {renderExtras(field, featureLocked)}
-            </Fragment>
-          );
-        });
+      fields.map((field, index) => {
+        // Feature-gated fields (e.g. watch keywords) lock when the resolved access meta
+        // reports the feature as not allowed.
+        const featureLocked =
+          !!field.paidFeature &&
+          platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+        return (
+          <Fragment key={field.key}>
+            <SchemaField
+              disabled={disabled}
+              divider={index !== 0}
+              featureLocked={featureLocked}
+              field={field}
+              parentKey="settings"
+            />
+            {renderExtras(field, featureLocked)}
+          </Fragment>
+        );
+      });
 
     return (
       <Form
@@ -426,26 +439,31 @@ const Body = memo<BodyProps>(
                   </Form.Group>
                 ))
               ) : group.key === 'wake' ? (
-                // Keywords, channels, pace and judgement each get a block of their own, so a long
-                // list of options reads as four decisions.
-                groupWakeFields(group.fields).map((section) => (
-                  <Form.Group
-                    className={styles.moduleGroup}
-                    collapsible={false}
-                    extra={moduleExtra(`wake-${section.key}`)}
-                    key={section.key}
-                    keyValue={`settings-wake-${section.key}-${platformDef.id}`}
-                    title={t(`channel.wake.section.${section.key}`)}
-                    variant={'filled'}
-                    desc={
-                      WAKE_SECTIONS_WITH_DESC.has(section.key)
-                        ? t(`channel.wake.section.${section.key}Desc`)
-                        : undefined
-                    }
-                  >
-                    {renderSettingsFields(section.fields)}
-                  </Form.Group>
-                ))
+                // The switch, then keywords, channels, pace and judgement each get a block of their
+                // own, so a long list of options reads as separate decisions. The switch saves
+                // itself as it changes, so it has no Save.
+                groupWakeFields(group.fields)
+                  .filter(wakeSectionShown)
+                  .map((section) => (
+                    <Form.Group
+                      className={styles.moduleGroup}
+                      collapsible={false}
+                      key={section.key}
+                      keyValue={`settings-wake-${section.key}-${platformDef.id}`}
+                      title={t(`channel.wake.section.${section.key}`)}
+                      variant={'filled'}
+                      desc={
+                        WAKE_SECTIONS_WITH_DESC.has(section.key)
+                          ? t(`channel.wake.section.${section.key}Desc`)
+                          : undefined
+                      }
+                      extra={
+                        section.key === 'switch' ? undefined : moduleExtra(`wake-${section.key}`)
+                      }
+                    >
+                      {renderSettingsFields(section.fields)}
+                    </Form.Group>
+                  ))
               ) : (
                 <Form.Group
                   className={styles.moduleGroup}
@@ -485,6 +503,15 @@ const Body = memo<BodyProps>(
               )}
             </Panel>
           ))}
+        {recordsOpened && currentConfig?.id && (
+          <Panel active={activeTab === 'records'} tab="records">
+            <WakeRecords
+              active={activeTab === 'records'}
+              botId={currentConfig.id}
+              disabled={disabled}
+            />
+          </Panel>
+        )}
       </Form>
     );
   },

@@ -15,17 +15,15 @@ import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComment
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { usePermission } from '@/hooks/usePermission';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
-import { useTaskStore } from '@/store/task';
 
 import { styles } from '../shared/style';
+import { useCommentSubmit } from './useCommentSubmit';
 
 const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
   const editor = useEditor();
-  const addComment = useTaskStore((s) => s.addComment);
   const userAvatar = useUserAvatar();
-  const [submitting, setSubmitting] = useState(false);
   const [hasContent, setHasContent] = useState(false);
   const [hasAttachments, setHasAttachments] = useState(false);
   const shouldSendOnEnter = useEnterToSend();
@@ -52,23 +50,20 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
     [editor],
   );
 
-  const handleSubmit = useCallback(async () => {
-    if (!canEditTask || submitting) return;
-    const json = editor?.getDocument?.('json') as unknown;
-    const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
-    const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
-    if (!markdown && !hasFiles) return;
+  const handleContentReset = useCallback(
+    (state: { hasAttachments: boolean; hasContent: boolean }) => {
+      setHasContent(state.hasContent);
+      setHasAttachments(state.hasAttachments);
+    },
+    [],
+  );
 
-    setSubmitting(true);
-    try {
-      await addComment(taskId, markdown, { editorData: json });
-      editor?.cleanDocument?.();
-      setHasContent(false);
-      setHasAttachments(false);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [canEditTask, taskId, editor, addComment, submitting]);
+  const { submit: handleSubmit, submitting } = useCommentSubmit({
+    canComment: canEditTask,
+    editor,
+    onContentReset: handleContentReset,
+    taskId,
+  });
 
   return (
     <Flexbox className={styles.commentInputCard} gap={6}>

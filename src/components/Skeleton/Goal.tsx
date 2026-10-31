@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -8,13 +10,15 @@ import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
 
-const styles = createStaticStyles(({ css }) => ({
-  listRows: css`
-    display: flex;
-    flex-direction: column;
-    border-block: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  listRows: {
+    display: 'flex',
+    flexDirection: 'column',
+    borderBlockWidth: '1px',
+    borderBlockStyle: 'solid',
+    borderBlockColor: cssVar.colorBorderSecondary,
+  },
+});
 
 /**
  * The three row shapes a goal list settles into. Exported so a list that is
@@ -22,7 +26,7 @@ const styles = createStaticStyles(({ css }) => ({
  * blank while the server answers.
  */
 export const GoalListRowsSkeleton = () => (
-  <Flexbox aria-busy className={styles.listRows}>
+  <Flexbox aria-busy className={stylex.props(styles.listRows).className}>
     {Array.from({ length: 3 }).map((_, index) => (
       <Flexbox horizontal align={'center'} gap={12} key={index} paddingBlock={14}>
         <SkeletonBar height={20} radius={'50%'} width={20} />
