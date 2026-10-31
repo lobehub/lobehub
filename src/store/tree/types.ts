@@ -17,6 +17,11 @@ export interface TreeItem {
    */
   fileId?: string | null;
   fileType: string;
+  /**
+   * Something sits under this row. Folders are expandable regardless; this is
+   * what lets a document that holds other documents expand too.
+   */
+  hasChildren?: boolean;
   id: string;
   isFolder: boolean;
   metadata?: Record<string, any>;
@@ -76,6 +81,8 @@ export interface TreeState extends TreeDataState {
   renameItem: (itemId: string, parentId: string, newName: string) => Promise<void>;
   reset: () => void;
   revalidate: (folderId: string) => Promise<void>;
+  /** Refetch every loaded folder — for a bulk mutation whose scope only the server knows. */
+  revalidateLoaded: (fallbackKey?: string) => Promise<void>;
   snapshotMap: Record<string, LibraryTreeSnapshot>;
   snapshotReplica: ReplicaState<LibraryTreeSnapshot>;
   toggle: (folderId: string) => void;

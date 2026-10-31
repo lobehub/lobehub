@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { healthViewState, latestUsageView } from './viewState';
+import { currentUsage, healthViewState, latestUsageView } from './viewState';
 
 const series = (points: number) =>
   ({
@@ -34,12 +34,15 @@ describe('latestUsageView', () => {
   const reported = {
     bucketMs: BUCKET,
     cpuCount: 8,
+    diskTotalBytes: 1000,
     from: to - 12 * BUCKET,
     memoryTotalBytes: 200,
     points: [
       {
         connected: true,
         cpuPercent: 14,
+        diskPercent: 62,
+        diskUsedBytes: 620,
         load1: 1,
         memoryPercent: 35,
         memoryUsedBytes: 70,
@@ -59,14 +62,93 @@ describe('latestUsageView', () => {
     const view = latestUsageView({ data: reported });
 
     expect(view.loading).toBe(false);
-    expect(!view.loading && view.latest).toMatchObject({ cpuPercent: 14, memoryPercent: 35 });
+    expect(!view.loading && view.latest).toMatchObject({
+      cpuPercent: 14,
+      diskPercent: 62,
+      memoryPercent: 35,
+    });
+  });
+
+  it('shows the disk row only for a device that reports its disk', () => {
+    const view = latestUsageView({ data: reported });
+
+    expect(!view.loading && view.reportsDisk).toBe(true);
+  });
+
+  // An lh / desktop version that predates disk reporting would otherwise show a permanent em dash.
+  it('hides the disk row for a device that never reported its disk', () => {
+    const view = latestUsageView({ data: { ...reported, diskTotalBytes: null } });
+
+    expect(!view.loading && view.reportsDisk).toBe(false);
+  });
+
+  // A series persisted before devices reported the disk has no disk fields at all.
+  it('reads no disk usage from a series cached before the disk was reported', () => {
+    const { diskTotalBytes: _, ...cachedSeries } = reported;
+    const { diskPercent: __, diskUsedBytes: ___, ...cachedPoint } = reported.points[0];
+    const view = latestUsageView({ data: { ...cachedSeries, points: [cachedPoint] } as any });
+
+    expect(view).toMatchObject({ latest: { diskPercent: null }, reportsDisk: false });
   });
 
   it('resolves to no reading, not loading, for a silent device or a failed read', () => {
-    expect(latestUsageView({ data: series(0) })).toEqual({ latest: null, loading: false });
+    expect(latestUsageView({ data: series(0) })).toEqual({
+      latest: null,
+      loading: false,
+      reportsDisk: false,
+    });
     expect(latestUsageView({ error: new Error('gateway down') })).toEqual({
       latest: null,
       loading: false,
+      reportsDisk: false,
     });
+  });
+});
+
+describe('currentUsage', () => {
+  const BUCKET = 5 * 60_000;
+  const to = 1000 * BUCKET;
+  const at = (observedAt: number) => ({
+    bucketMs: BUCKET,
+    cpuCount: 4,
+    diskTotalBytes: null,
+    from: to - 144 * BUCKET,
+    memoryTotalBytes: 100,
+    points: [
+      {
+        connected: true,
+        cpuPercent: 12,
+        diskPercent: null,
+        diskUsedBytes: null,
+        load1: 2,
+        memoryPercent: 40,
+        memoryUsedBytes: 40,
+        observedAt,
+      },
+    ],
+    to,
+  });
+
+  it('reads the newest point while it is recent, with load relative to the cores', () => {
+    expect(currentUsage(at(to - BUCKET), to)).toEqual({
+      cpuPercent: 12,
+      loadPercent: 50,
+      memoryPercent: 40,
+    });
+  });
+
+  // A device that just reconnected still has last night's samples; the chip must not show them as now.
+  it('drops a reading older than one bucket plus the upload grace', () => {
+    expect(currentUsage(at(to - BUCKET - 11 * 60_000), to)).toBeNull();
+  });
+
+  // A persisted series painted on reload is fresh relative to its own `to`, but hours old now.
+  it('judges age by the wall clock, not by the series end', () => {
+    expect(currentUsage(at(to), to + 3 * 60 * 60_000)).toBeNull();
+  });
+
+  it('has nothing to read without data or samples', () => {
+    expect(currentUsage(undefined, to)).toBeNull();
+    expect(currentUsage(series(0), to)).toBeNull();
   });
 });

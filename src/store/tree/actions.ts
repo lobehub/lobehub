@@ -6,7 +6,7 @@ import { resourceService } from '@/services/resource';
 import type { StoreSetter } from '@/store/types';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
 
-import { revalidateHierarchySearch, sortTreeItems, toTreeItem } from './items';
+import { isExpandable, revalidateHierarchySearch, sortTreeItems, toTreeItem } from './items';
 import {
   buildLibraryTreeSnapshot,
   libraryTreeResource,
@@ -16,6 +16,7 @@ import {
 import type { TreeDataState, TreeItem, TreeState, TreeStoreHandle } from './types';
 
 export {
+  isExpandable,
   revalidateHierarchySearch,
   sortTreeItems,
   toTreeItem,
@@ -103,14 +104,24 @@ export class TreeActionImpl {
   #queuedRevalidate = new Set<string>();
 
   /**
-   * Folders whose rendered rows came from an explorer list with optimistic
-   * overlays still pending (see `reconcile`). The snapshot keeps their last
-   * confirmed rows; the explorer's settle or a server answer for the folder clears it.
+   * Folders whose rendered rows are not confirmed by the server: an explorer
+   * list with optimistic overlays still pending (see `reconcile`), or a folder
+   * whose refresh failed during `revalidateLoaded`. The snapshot keeps their
+   * last confirmed rows; the explorer's settle or a server answer for the
+   * folder clears it.
    */
   #unconfirmedFolders = new Set<string>();
 
   /** Sidebar transactions (move, rename, delete) whose optimistic patch is not confirmed. */
   #pendingTx = new Set<symbol>();
+
+  /**
+   * Batched refreshes in flight (`revalidateLoaded`). The snapshot is written
+   * once they all settle: persisting after each folder would store the rows of
+   * the folders that have not been refetched yet, and for a delete only the
+   * server can enumerate those rows are exactly the deleted ones.
+   */
+  #pendingBatch = 0;
 
   /**
    * Commit with the snapshot paused, then persist what survived (applied or
@@ -163,7 +174,7 @@ export class TreeActionImpl {
    * change, so a revalidation that confirms the tree costs no storage write.
    */
   #persistSnapshot = () => {
-    if (this.#pendingTx.size > 0) return;
+    if (this.#pendingTx.size > 0 || this.#pendingBatch > 0) return;
     const { children, expanded, knowledgeBaseId, snapshotMap } = this.#get();
     if (!knowledgeBaseId) return;
     // A folder showing the explorer's optimistic overlay keeps its last stored
@@ -292,7 +303,7 @@ export class TreeActionImpl {
       const items = children[folderId];
       if (!items || result.includes(folderId)) continue;
       result.push(folderId);
-      for (const item of items) if (item.isFolder && expanded[item.id]) queue.push(item.id);
+      for (const item of items) if (isExpandable(item) && expanded[item.id]) queue.push(item.id);
     }
     return result;
   };
@@ -404,14 +415,46 @@ export class TreeActionImpl {
   };
 
   /**
+   * Refetch every loaded folder, for a mutation whose scope only the server
+   * knows: a library-wide search reaches rows in folders the sidebar has
+   * expanded, so refreshing the folder behind the explorer leaves the other
+   * cached folders painting the deleted rows — and the snapshot written after
+   * that single refresh would persist them too. `fallbackKey` keeps the
+   * explorer's own folder in the batch when the sidebar never loaded it (a
+   * deep link before its ancestors arrive).
+   */
+  revalidateLoaded = async (fallbackKey = ''): Promise<void> => {
+    void revalidateHierarchySearch();
+    const targets = new Set(this.#loadedVisibleFolders());
+    targets.add(this.#resolveFolderKey(fallbackKey));
+
+    this.#pendingBatch += 1;
+    try {
+      const refreshed = await Promise.all(
+        [...targets].map((folderId) => this.#revalidateFolder(folderId)),
+      );
+      // A folder that failed (or was deferred behind an in-flight load) still
+      // shows its pre-deletion rows: keep it out of the snapshot until a later
+      // refresh confirms it, or a reload would repaint the deleted rows.
+      [...targets].forEach((folderId, index) => {
+        if (!refreshed[index]) this.#unconfirmedFolders.add(folderId);
+      });
+    } finally {
+      this.#pendingBatch -= 1;
+      this.#persistSnapshot();
+    }
+  };
+
+  /**
    * Refetch one folder while its current rows stay on screen. A failure keeps
    * them (status back to idle) rather than flagging the folder as errored.
+   * Resolves `true` only when the folder's rows now come from this refetch.
    */
-  #revalidateFolder = async (folderId: string) => {
+  #revalidateFolder = async (folderId: string): Promise<boolean> => {
     const { epoch, knowledgeBaseId, status } = this.#get();
     if (status[folderId] === 'loading' || status[folderId] === 'revalidating') {
       this.#queuedRevalidate.add(folderId);
-      return;
+      return false;
     }
 
     this.#set(
@@ -428,7 +471,7 @@ export class TreeActionImpl {
         showFilesInKnowledgeBase: false,
       });
 
-      if (this.#get().epoch !== epoch) return;
+      if (this.#get().epoch !== epoch) return false;
 
       this.#set(
         {
@@ -444,14 +487,16 @@ export class TreeActionImpl {
       this.#unconfirmedFolders.delete(folderId);
       this.#persistSnapshot();
       this.#runQueuedRevalidate(folderId);
+      return true;
     } catch {
-      if (this.#get().epoch !== epoch) return;
+      if (this.#get().epoch !== epoch) return false;
       this.#set(
         { status: { ...this.#get().status, [folderId]: 'idle' } },
         false,
         'tree/revalidate/error',
       );
       this.#runQueuedRevalidate(folderId);
+      return false;
     }
   };
 
@@ -553,7 +598,7 @@ export class TreeActionImpl {
     while (pending.length > 0) {
       const id = pending.pop()!;
       const descendants = children[id];
-      if (descendants) pending.push(...descendants.filter((i) => i.isFolder).map((i) => i.id));
+      if (descendants) pending.push(...descendants.filter(isExpandable).map((i) => i.id));
       delete children[id];
       delete expanded[id];
       delete status[id];

@@ -7,8 +7,12 @@ import { TopicShareModel } from '@/database/models/topicShare';
 import type { LobeChatDatabase } from '@/database/type';
 import { FileService } from '@/server/services/file';
 
-import { assertCanUseTopicTargets } from './conversationResourceGuard';
+import {
+  assertCanUseConversationTargets,
+  assertCanUseTopicTargets,
+} from './conversationResourceGuard';
 import { projectSharedTopicMessages } from './projectSharedTopicMessages';
+import { resolveContext } from './resolveContext';
 
 /**
  * Upper bound on rounds per `getMessagesByCursor` page. The scan itself is bounded
@@ -121,8 +125,18 @@ export const readMessagesByCursor = async (
   const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
   const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
 
+  const resolved = await resolveContext(
+    { ...queryParams, agentId: queryParams.agentId ?? undefined },
+    ctx.serverDB,
+    ctx.userId,
+    wsId,
+  );
+  await assertCanUseConversationTargets(
+    { db: ctx.serverDB, userId: ctx.userId, workspaceId: wsId },
+    [resolved],
+  );
   const page = await messageModel.queryTopicMessagesByCursor(
-    { ...queryParams, direction, topicId },
+    { ...queryParams, ...resolved, direction, topicId },
     {
       postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
     },

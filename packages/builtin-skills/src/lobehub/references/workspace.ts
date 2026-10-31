@@ -24,19 +24,22 @@ matching, say what you checked and ask. Do not report "not found" after looking 
 - \`lh workspace current [--json]\` - Show the scope commands run under, and where it came from
 - \`lh workspace use <id|slug>\` / \`lh workspace use --personal\` - Switch the saved scope (restore it afterwards, see below)
 - \`lh workspace list [--json]\` - List workspaces you belong to (id, name, slug, role, plan)
-- \`lh workspace view [workspaceId] [--json]\` - View workspace detail (defaults to the active scope)
-- \`lh workspace members [-w <id>] [--json]\` - List workspace members
-- \`lh workspace stats [-w <id>] [--mine] [--json]\` - Content statistics (admin or higher; \`--mine\` works for every member)
-- \`lh workspace usage [-w <id>] [--since <date>] [--until <date>] [--json]\` - Credit usage for the current billing window
-- \`lh workspace settings [-w <id>] [--json]\` - Show the workspace settings blob
+- \`lh workspace view [workspaceIdOrSlug] [--json]\` - View workspace detail (defaults to the active scope)
+- \`lh workspace members [-w <id|slug>] [--json]\` - List workspace members
+- \`lh workspace stats [-w <id|slug>] [--mine] [--json]\` - Content statistics (admin or higher; \`--mine\` works for every member)
+- \`lh workspace usage [-w <id|slug>] [--since <date>] [--until <date>] [--json]\` - Credit usage for the current billing window
+- \`lh workspace settings [-w <id|slug>] [--json]\` - Show the workspace settings blob
 - \`lh workspace create <name> -s <slug> [-d <desc>] [--avatar <url|emoji>] [--use]\` - Create a workspace
-- \`lh workspace update [-w <id>] [-n <name>] [-s <slug>] [-d <desc>] [--avatar <url|emoji>]\` - Update the profile (admin or higher)
-- \`lh workspace invite <email> [-w <id>] [-r admin|member|viewer]\` - Invite a member (admin or higher)
-- \`lh workspace invitations [-w <id>]\` - List pending invitations (admin or higher)
-- \`lh workspace audit-log [-w <id>] [--action <a>] [--resource-type <t>] [-q <text>] [--start <date>] [--end <date>] [-L <n>]\` - Audit log (admin or higher, Business plan)
+- \`lh workspace update [-w <id|slug>] [-n <name>] [-s <slug>] [-d <desc>] [--avatar <url|emoji>]\` - Update the profile (admin or higher)
+- \`lh workspace invite <email> [-w <id|slug>] [-r admin|member|viewer]\` - Invite a member (admin or higher)
+- \`lh workspace invitations [-w <id|slug>]\` - List pending invitations (admin or higher)
+- \`lh workspace audit-log [-w <id|slug>] [--action <a>] [--resource-type <t>] [-q <text>] [--start <date>] [--end <date>] [-L <n>]\` - Audit log (admin or higher, Business plan)
 
 \`-w\` only changes which workspace these \`lh workspace\` subcommands read. It does not
 change the scope of other modules.
+A workspace slug works in place of an id for \`-w\`, \`--workspace\` and the \`view\` argument,
+so there is no need to look up the id first. Resolving a slug needs \`workspace:read\`; a
+credential without it (such as a workspace-bound API key) must pass the workspace id.
 
 ## Scope rules for agent runs
 
@@ -53,7 +56,7 @@ change the scope of other modules.
   The saved scope is shared by every later \`lh\` command on this machine, including the
   user's own. Restore it even when the work fails partway. If \`lh workspace current\`
   does not change after \`use\`, this run's scope is fixed: tell the user instead of retrying.
-- \`lh topic view <id> --workspace <workspaceId>\` and \`lh topic export <id> --workspace <workspaceId>\`
+- \`lh topic view <id> --workspace <id|slug>\` and \`lh topic export <id> --workspace <id|slug>\`
   read one conversation from another workspace without switching.
 - Role-gated commands (admin or higher) fail with a permission error for members. Report
   that error as it is. Do not retry with other flags.

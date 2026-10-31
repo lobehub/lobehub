@@ -6,7 +6,7 @@ import { MessageCircle, MessagesSquare } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useTaskStore } from '@/store/task';
 
 import RunReplyEditor from './RunReplyEditor';
@@ -58,7 +58,17 @@ const TaskRunReport = memo<TaskRunReportProps>(({ activity }) => {
       {/* Who is reporting, at the top where a report names its author — not a
           footnote under the text it wrote. */}
       <Flexbox horizontal align={'center'} gap={8}>
-        <Avatar avatar={activity.author?.avatar || DEFAULT_AVATAR} size={24} />
+        {activity.author?.type === 'user' ? (
+          <Avatar avatar={activity.author.avatar || undefined} size={24} />
+        ) : (
+          <AgentAvatar
+            agentId={resolveRunAgentId(activity)}
+            avatar={activity.author?.avatar}
+            name={activity.author?.name}
+            shape={'circle'}
+            size={24}
+          />
+        )}
         <Text weight={500}>{activity.author?.name ?? t('taskDetail.reportedByAgent')}</Text>
       </Flexbox>
       <Markdown style={{ overflow: 'unset' }} variant={'chat'}>

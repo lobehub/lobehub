@@ -1,3 +1,4 @@
+import { verifyEvidenceFileIds } from '@lobechat/const/verify';
 import type { VerifyEvidence } from '@lobechat/types';
 import { FileSource } from '@lobechat/types';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
@@ -45,7 +46,8 @@ export class VerifyEvidenceModel {
    * (attached as evidence) from losing its original attribution.
    */
   private markFilesAsEvidence = async (rows: CreateVerifyEvidence[]) => {
-    const fileIds = [...new Set(rows.map((r) => r.fileId).filter((id): id is string => !!id))];
+    // A terminal evidence's stdout / stderr / recording files are evidence too.
+    const fileIds = [...new Set(rows.flatMap(verifyEvidenceFileIds))];
     if (fileIds.length === 0) return;
 
     await this.db

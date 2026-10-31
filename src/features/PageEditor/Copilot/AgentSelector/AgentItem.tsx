@@ -6,7 +6,7 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AgentAvatar from '@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
 
 interface AgentItemProps {
@@ -35,8 +35,15 @@ const AgentItem = memo<AgentItemProps>(
     return (
       <NavItem
         active={active}
-        icon={<AgentAvatar avatar={typeof avatar === 'string' ? avatar : undefined} />}
         style={{ flexShrink: 0 }}
+        icon={
+          <AgentAvatar
+            agentId={agentId}
+            avatar={typeof avatar === 'string' ? avatar : undefined}
+            name={title}
+            size={22}
+          />
+        }
         title={
           roleTag ? (
             <>

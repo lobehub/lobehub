@@ -28,7 +28,7 @@ const {
   mockPluginQuery: vi.fn().mockResolvedValue([]),
 }));
 
-// Feature-gated builtin tools (e.g. lobe-dashboard) join the disabled set
+// Feature-gated builtin tools (e.g. builtin-dashboard) join the disabled set
 // when their flag is off; this suite covers the agent's own tri-state config,
 // so run it with every gate open. Gating has its own coverage in
 // pipeline/__tests__/toolDiscovery.featureGate.test.ts.

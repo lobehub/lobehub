@@ -225,6 +225,11 @@ export interface CheckLike {
 export type CriterionOutcomeState = 'failed' | 'passed' | 'unjudged';
 
 export interface CriterionOutcome {
+  /**
+   * The acceptance bundle's row for the latest round's check — the id the
+   * Portal's check view looks the criterion up by. Absent when no round judged it.
+   */
+  checkId?: string;
   criterion: CriterionLike;
   evidence: EvidenceLike[];
   /** Why it is unmet (or undecided); absent for a met criterion. */
@@ -302,6 +307,7 @@ export const buildCriterionOutcomes = ({
 
     return [
       {
+        checkId: check.id,
         criterion,
         evidence: check.evidence,
         ...(reason ? { reason } : {}),

@@ -1,19 +1,9 @@
 'use client';
 
 import type { HeteroQuotaWindow } from '@lobechat/electron-client-ipc';
-import {
-  ActionIcon,
-  Alert,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Popover,
-  Skeleton,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
+import { ActionIcon, Alert, Flexbox, Icon, Popover, Skeleton, Text, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon, GaugeIcon, RefreshCwIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -28,127 +18,83 @@ import {
 const QUOTA_STALE_MS = 60_000;
 const QUOTA_RETRY_COOLDOWN_MS = 60_000;
 
-const styles = createStaticStyles(({ css }) => ({
-  compactItem: css`
-    color: inherit;
-
-    &[data-quota-level='low'] {
-      color: ${cssVar.colorWarningText};
-    }
-  `,
-  compactItems: css`
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-  `,
-  compactSeparator: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  emptyState: css`
-    padding-block: 10px;
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  error: css`
-    padding: 8px;
-    border: 1px solid ${cssVar.colorErrorBorder};
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    color: ${cssVar.colorError};
-
-    background: ${cssVar.colorErrorBg};
-  `,
-  header: css`
-    padding-block-end: 6px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  popover: css`
-    width: 292px;
-  `,
-  progressFill: css`
-    height: 100%;
-    border-radius: inherit;
-    background: ${cssVar.colorSuccess};
-  `,
-  progressFillWarning: css`
-    background: ${cssVar.colorWarning};
-  `,
-  progressTrack: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 24px;
-    height: 6px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  resetShort: css`
-    flex: none;
-    white-space: nowrap;
-  `,
-  trigger: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border: 0;
-    border-radius: 4px;
-
-    font: inherit;
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    appearance: none;
-    background: transparent;
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    &[data-quota-level='low'] {
-      color: ${cssVar.colorWarningText};
-
-      &:hover {
-        color: ${cssVar.colorWarningText};
-      }
-    }
-  `,
-  triggerOpen: css`
-    color: ${cssVar.colorTextSecondary};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  value: css`
-    flex: none;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorText};
-  `,
-  valueWarning: css`
-    color: ${cssVar.colorWarningText};
-  `,
-  window: css`
-    min-width: 0;
-  `,
-  windowExhausted: css`
-    /* nothing to act on until reset → grey the whole row out */
-    opacity: 0.45;
-  `,
-  windowLabel: css`
-    flex: none;
-    width: 84px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  compactItem: { color: 'inherit' },
+  // [data-quota-level='low']
+  compactItemLow: { color: cssVar.colorWarningText },
+  compactItems: { display: 'inline-flex', gap: '4px', alignItems: 'center' },
+  compactSeparator: { color: cssVar.colorTextQuaternary },
+  emptyState: { paddingBlock: '10px', fontSize: '12px', color: cssVar.colorTextDescription },
+  error: {
+    padding: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorErrorBorder,
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  header: {
+    paddingBlockEnd: '6px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  popover: { width: '292px' },
+  progressTrack: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '24px',
+    height: '6px',
+    borderRadius: '999px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  resetShort: { flex: 'none', whiteSpace: 'nowrap' },
+  trigger: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '4px',
+    borderWidth: '0',
+    borderRadius: '4px',
+    fontFamily: 'inherit',
+    fontStyle: 'inherit',
+    fontWeight: 'inherit',
+    lineHeight: 'inherit',
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    appearance: 'none',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+    transition: 'all 0.2s',
+  },
+  // [data-quota-level='low'] — after triggerOpen, as the attribute rule outranked it.
+  triggerLow: {
+    color: { 'default': cssVar.colorWarningText, ':hover': cssVar.colorWarningText },
+  },
+  triggerOpen: {
+    color: cssVar.colorTextSecondary,
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
+  },
+  value: {
+    flex: 'none',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorText,
+  },
+  valueWarning: { color: cssVar.colorWarningText },
+  window: { minWidth: '0' },
+  // nothing to act on until reset → grey the whole row out
+  windowExhausted: { opacity: 0.45 },
+  windowLabel: { flex: 'none', width: '84px', color: cssVar.colorTextSecondary },
+});
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
 const LOW_QUOTA_THRESHOLD = 15;
@@ -216,6 +162,12 @@ export interface FetchQuotaOptions<S = unknown> {
 
 interface QuotaMenuProps<S extends QuotaSnapshotBase> {
   /**
+   * Keep `renderHeader` on screen when there are no windows to show (an
+   * unavailable / failed / empty sample), for headers that carry controls the
+   * user needs in exactly those states — e.g. adding or switching an account.
+   */
+  alwaysRenderHeader?: boolean;
+  /**
    * Revalidate on this cadence while the tab is visible, so the badge stays
    * near-live without user interaction. Upstream sampler caches must keep
    * their fresh window below this for each poll to observe new data.
@@ -277,6 +229,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   hasExtraData,
   renderFooter,
   renderHeader,
+  alwaysRenderHeader,
   sourceKey = 'default',
   title,
   tooltip,
@@ -607,28 +560,35 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       <Flexbox
         horizontal
         align={'center'}
-        className={cx(styles.window, exhausted && styles.windowExhausted)}
+        className={stylex.props(styles.window, exhausted && styles.windowExhausted).className}
         gap={8}
         key={key}
       >
-        <Text ellipsis className={styles.windowLabel} style={{ fontSize: 12 }}>
+        <Text
+          ellipsis
+          className={stylex.props(styles.windowLabel).className}
+          style={{ fontSize: 12 }}
+        >
           {label}
         </Text>
-        <div className={styles.progressTrack}>
+        <div {...stylex.props(styles.progressTrack)}>
           <div
-            className={cx(styles.progressFill, lowQuota && styles.progressFillWarning)}
             data-quota-level={lowQuota ? 'low' : 'normal'}
             style={{ width: `${leftPercent}%` }}
           />
         </div>
         <Text
-          className={cx(styles.value, lowQuota && styles.valueWarning)}
+          className={stylex.props(styles.value, lowQuota && styles.valueWarning).className}
           style={{ fontSize: 12 }}
         >
           {exhausted ? t('heteroAgent.quota.exhausted') : `${leftPercent}%`}
         </Text>
         {resetShort && (
-          <Text className={styles.resetShort} style={{ fontSize: 12 }} type="secondary">
+          <Text
+            className={stylex.props(styles.resetShort).className}
+            style={{ fontSize: 12 }}
+            type="secondary"
+          >
             {resetShort}
           </Text>
         )}
@@ -637,11 +597,15 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   };
 
   const content = (
-    <Flexbox className={styles.popover} gap={10} style={{ width: contentWidth }}>
+    <Flexbox
+      className={stylex.props(styles.popover).className}
+      gap={10}
+      style={{ width: contentWidth }}
+    >
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.header}
+        className={stylex.props(styles.header).className}
         gap={8}
         justify={'space-between'}
       >
@@ -673,13 +637,19 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           <Skeleton height={18} />
         </Flexbox>
       ) : quota?.status === 'unavailable' ? (
-        <div className={styles.emptyState}>
-          {getUnavailableText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
-        </div>
+        <>
+          {alwaysRenderHeader && renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div {...stylex.props(styles.emptyState)}>
+            {getUnavailableText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
+          </div>
+        </>
       ) : quota?.status === 'error' && !hasQuotaData ? (
-        <div className={styles.error}>
-          {getErrorText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
-        </div>
+        <>
+          {alwaysRenderHeader && renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div {...stylex.props(styles.error)}>
+            {getErrorText?.(quota) || quota.error || t('heteroAgent.quota.unavailable')}
+          </div>
+        </>
       ) : hasQuotaData ? (
         <>
           {quota && renderHeader?.(quota, { applyQuota, formatDuration, now })}
@@ -697,53 +667,68 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           )}
         </>
       ) : (
-        <div className={styles.emptyState}>{t('heteroAgent.quota.noData')}</div>
+        <>
+          {alwaysRenderHeader &&
+            quota &&
+            renderHeader?.(quota, { applyQuota, formatDuration, now })}
+          <div {...stylex.props(styles.emptyState)}>{t('heteroAgent.quota.noData')}</div>
+        </>
       )}
     </Flexbox>
   );
+
+  const triggerQuotaLevel =
+    compactItems.length === 1
+      ? isLowQuota(compactItems[0].leftPercent)
+        ? 'low'
+        : 'normal'
+      : undefined;
 
   const trigger = (
     <button
       aria-expanded={open}
       aria-haspopup="dialog"
       aria-label={tooltip}
-      className={cx(styles.trigger, open && styles.triggerOpen)}
+      data-quota-level={triggerQuotaLevel}
       type="button"
-      data-quota-level={
-        compactItems.length === 1
-          ? isLowQuota(compactItems[0].leftPercent)
-            ? 'low'
-            : 'normal'
-          : undefined
-      }
+      {...stylex.props(
+        styles.trigger,
+        open && styles.triggerOpen,
+        triggerQuotaLevel === 'low' && styles.triggerLow,
+      )}
     >
       <Icon icon={GaugeIcon} size={14} />
       {compactItems.length > 0 && (
-        <span className={styles.compactItems}>
-          {compactItems.map((item, index) => (
-            <span key={item.key}>
-              {index > 0 && (
-                <span aria-hidden className={styles.compactSeparator}>
-                  {' · '}
+        <span {...stylex.props(styles.compactItems)}>
+          {compactItems.map((item, index) => {
+            const itemQuotaLevel =
+              compactItems.length > 1
+                ? isLowQuota(item.leftPercent)
+                  ? 'low'
+                  : 'normal'
+                : undefined;
+            return (
+              <span key={item.key}>
+                {index > 0 && (
+                  <span aria-hidden {...stylex.props(styles.compactSeparator)}>
+                    {' · '}
+                  </span>
+                )}
+                <span
+                  data-quota-level={itemQuotaLevel}
+                  {...stylex.props(
+                    styles.compactItem,
+                    itemQuotaLevel === 'low' && styles.compactItemLow,
+                  )}
+                >
+                  {item.label && `${item.label} `}
+                  {item.leftPercent === 0 && !item.label
+                    ? t('heteroAgent.quota.exhausted')
+                    : t('heteroAgent.quota.compactLeft', { percent: item.leftPercent })}
                 </span>
-              )}
-              <span
-                className={styles.compactItem}
-                data-quota-level={
-                  compactItems.length > 1
-                    ? isLowQuota(item.leftPercent)
-                      ? 'low'
-                      : 'normal'
-                    : undefined
-                }
-              >
-                {item.label && `${item.label} `}
-                {item.leftPercent === 0 && !item.label
-                  ? t('heteroAgent.quota.exhausted')
-                  : t('heteroAgent.quota.compactLeft', { percent: item.leftPercent })}
               </span>
-            </span>
-          ))}
+            );
+          })}
         </span>
       )}
       <Icon icon={ChevronDownIcon} size={12} />

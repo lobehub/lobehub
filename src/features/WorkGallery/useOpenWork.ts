@@ -2,6 +2,7 @@ import type { WorkSummaryItem } from '@lobechat/types';
 import { useCallback } from 'react';
 
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { openCanvasModal } from '@/features/CanvasModal/loader';
 import { openDocumentModal } from '@/features/DocumentModal/loader';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -20,6 +21,10 @@ export const useOpenWork = () => {
       if (!openTarget) return;
 
       switch (openTarget.kind) {
+        case 'canvas': {
+          void openCanvasModal(openTarget.canvasId, openTarget.version);
+          return;
+        }
         case 'document': {
           void openDocumentModal(openTarget.documentId);
           return;
@@ -35,7 +40,9 @@ export const useOpenWork = () => {
           return;
         }
         case 'task': {
-          navigate(taskDetailPath(openTarget.identifier, undefined, openTarget.name));
+          navigate(
+            taskDetailPath(openTarget.identifier ?? openTarget.taskId, undefined, openTarget.name),
+          );
         }
       }
     },

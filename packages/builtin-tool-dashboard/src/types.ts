@@ -9,16 +9,29 @@ import type {
   WidgetView,
 } from '@lobechat/types';
 
-export const DashboardIdentifier = 'lobe-dashboard';
+export const DashboardIdentifier = 'builtin-dashboard';
+
+/**
+ * The identifier the dashboard tool shipped under before it was renamed.
+ * Persisted tool calls, pending approvals and agents that pinned the tool
+ * still carry it, so renders, runtimes and plugin resolution accept both.
+ */
+export const LegacyDashboardIdentifier = 'lobe-dashboard';
+
+/** Whether a tool identifier names the dashboard tool, under its current or legacy id. */
+export const isDashboardIdentifier = (identifier: unknown): boolean =>
+  identifier === DashboardIdentifier || identifier === LegacyDashboardIdentifier;
 
 export const DashboardApiName = {
   listDashboards: 'listDashboards',
+  createDashboard: 'createDashboard',
 
   createWidgetDraft: 'createWidgetDraft',
   updateWidgetDraft: 'updateWidgetDraft',
   dryRunWidget: 'dryRunWidget',
   requestPublish: 'requestPublish',
   addWidgetToDashboard: 'addWidgetToDashboard',
+  updateDashboard: 'updateDashboard',
   getWidgetRuns: 'getWidgetRuns',
 } as const;
 
@@ -68,6 +81,8 @@ export interface WidgetRunRecord {
 }
 
 export interface DashboardSummary {
+  /** What the board is for, shown under its title. */
+  description?: string | null;
   id: string;
   /** Set for a board of the conversation's project; home boards have none. */
   projectId?: string | null;
@@ -167,9 +182,14 @@ export interface RequestPublishState {
  */
 export const DASHBOARD_TITLE_MAX_LENGTH = 200;
 
+/** The dashboard description length the API enforces, shared the same way. */
+export const DASHBOARD_DESCRIPTION_MAX_LENGTH = 2000;
+
 export interface AddWidgetToDashboardParams {
   /** An existing dashboard from listDashboards. */
   dashboardId?: string;
+  /** Description of the new dashboard; ignored when placing on an existing one. */
+  newDashboardDescription?: string;
   /** Create a new dashboard with this name instead. */
   newDashboardTitle?: string;
   widgetId: string;
@@ -182,6 +202,38 @@ export interface AddWidgetToDashboardState {
   /** The board's project, so the card links to the project's dashboard page. */
   projectId?: string | null;
   widgetId: string;
+}
+
+// ==================== createDashboard ====================
+
+export interface CreateDashboardParams {
+  /** What the board monitors and why, shown under its title. */
+  description?: string;
+  title: string;
+}
+
+export interface CreateDashboardState {
+  dashboardId: string;
+  description?: string | null;
+  /** The board's project, so the card links to the project's dashboard page. */
+  projectId?: string | null;
+  title: string;
+}
+
+// ==================== updateDashboard ====================
+
+export interface UpdateDashboardParams {
+  dashboardId: string;
+  /** An empty string clears the description. */
+  description?: string;
+  title?: string;
+}
+
+export interface UpdateDashboardState {
+  dashboardId: string;
+  description?: string | null;
+  projectId?: string | null;
+  title: string;
 }
 
 // ==================== getWidgetRuns ====================

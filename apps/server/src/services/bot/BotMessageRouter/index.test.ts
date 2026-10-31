@@ -354,7 +354,8 @@ describe('BotMessageRouter', () => {
       mockFindEnabledByPlatform.mockResolvedValue([
         makeProvider({
           applicationId: 'app-123',
-          settings: { dmPolicy: 'disabled' },
+          // Bot-wake off too: with it on, the catch-all also listens to channel chatter.
+          settings: { botWakeDisabled: true, dmPolicy: 'disabled' },
         }),
       ]);
 

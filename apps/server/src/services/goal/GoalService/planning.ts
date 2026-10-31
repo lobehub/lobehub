@@ -186,8 +186,8 @@ export const planDecomposition = async (
       if (!fresh || fresh.nodes.some((node) => node.kind === 'task')) return undefined;
       const currentProblem = fresh.nodes.find((node) => node.kind === 'problem');
       if (
+        // Not the title: it is a label, so renaming a goal mid-plan keeps the plan.
         fresh.goal.requirement !== graph.goal.requirement ||
-        fresh.goal.title !== graph.goal.title ||
         currentProblem?.description !== problem?.description
       )
         return undefined;

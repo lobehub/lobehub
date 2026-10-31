@@ -11,6 +11,7 @@ import {
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { nonNull } from './utils/rows';
 
 /**
  * A user-level skill library on the `documents` table.
@@ -329,10 +330,11 @@ export class UserSkillModel {
     // One pass over the children, not one per bundle.
     const byBundle = new Map<string, (typeof children)[number][]>();
     for (const child of children) {
-      if (!child.parentId) continue;
-      const list = byBundle.get(child.parentId) ?? [];
+      // Children are selected by inArray(documents.parentId, …), which never matches a NULL parentId.
+      const parentId = nonNull(child.parentId, 'documents.parent_id');
+      const list = byBundle.get(parentId) ?? [];
       list.push(child);
-      byBundle.set(child.parentId, list);
+      byBundle.set(parentId, list);
     }
     return bundles.map((bundle) => {
       const own = byBundle.get(bundle.id) ?? [];

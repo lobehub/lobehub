@@ -2,15 +2,20 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 import { acceptanceSubjectTypes } from '@lobechat/const/verify';
-import type { AcceptanceAttachment, AcceptanceCheckGroup } from '@lobechat/types';
+import type {
+  AcceptanceAttachment,
+  AcceptanceCheckGroup,
+  AcceptanceCommentList,
+} from '@lobechat/types';
 import type { Command } from 'commander';
 import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
-import { getTrpcClient } from '../../api/client';
+import { getTrpcClient, type TrpcClient } from '../../api/client';
 import { resolveServerUrl } from '../../settings';
 import { outputJson, printTable, timeAgo, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from '../resourceUrl';
 import { collectCommentFeedback } from './commentFeedback';
 import { attachCriterionCommands } from './criterion';
 import { attachAcceptanceFlowCommands } from './flow';
@@ -21,11 +26,19 @@ import {
   responseLanguageSettingsUrl,
   unsetLanguageWarning,
 } from './language';
+import { decideLocalAcceptance } from './local/decision';
+import { localAcceptanceTarget, readLocalBundle } from './local/localBundle';
+import { isSignedOut, LOCAL_MODE_INSTRUCTION } from './local/mode';
+import { publishAction, withPublishOptions } from './local/publish';
 import { attachPlanCommands } from './plan';
+import { projectEnsureInput, resolveAcceptanceProject, warnIfFiledElsewhere } from './project';
 import { attachRubricCommands } from './rubric';
 import { attachAcceptanceRunCommands } from './run';
 import type { ReviewAnnotationRegion } from './utils';
 import { formatAnnotationRegion, formatDisputedChapter, parseSubjectRef } from './utils';
+
+/** What `acceptance.getBundle` answers; a local acceptance is assembled into the same shape. */
+type RemoteBundle = Awaited<ReturnType<TrpcClient['acceptance']['getBundle']['query']>>;
 
 /**
  * Resolve an acceptance from either its uuid or a `type:id` subject reference —
@@ -87,14 +100,37 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
   attachAcceptanceFlowCommands(acceptance);
 
+  withPublishOptions(
+    acceptance
+      .command('publish <acceptanceDir>')
+      .description(
+        'Publish a local acceptance to LobeHub for team review: its unpublished rounds in order, then the local review decisions',
+      ),
+  ).action(publishAction);
+
   acceptance
     .command('preflight')
     .description(
-      'Check that the CLI is authenticated and print the language every acceptance text must be written in. ' +
+      'Say whether acceptance publishes to LobeHub (signed in) or renders locally (never signed in), and print the language every acceptance text must be written in. ' +
         'Run it before authoring anything, and pass the language to any subagent you delegate to.',
     )
     .option('--json [fields]', 'Output JSON')
     .action(async (options: { json?: boolean | string }) => {
+      // Never signed in: nothing to stop on — acceptance runs locally and the
+      // report is an offline page. A sign-in that exists but fails still stops.
+      if (isSignedOut()) {
+        const instruction = LOCAL_MODE_INSTRUCTION;
+        if (options.json !== undefined) {
+          outputJson(
+            { authenticated: false, instruction, language: { status: 'unset' }, mode: 'local' },
+            typeof options.json === 'string' ? options.json : undefined,
+          );
+          return;
+        }
+        console.log(`${pc.yellow('○')} Not signed in to LobeHub — reports are rendered locally`);
+        console.log(instruction);
+        return;
+      }
       const client = await getTrpcClient();
       // An auth failure throws here, which is the signal to stop before authoring.
       const language = await resolveReportLanguage(client);
@@ -108,6 +144,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
             authenticated: true,
             instruction,
             language: languageSummary(language),
+            mode: 'publish',
             settingsUrl: responseLanguageSettingsUrl(),
           },
           typeof options.json === 'string' ? options.json : undefined,
@@ -144,12 +181,17 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       'Reuse or create for task/topic/document/standalone; omit for a new standalone acceptance',
     )
     .option(
+      '--project <ref>',
+      "File under a project (id, slug or identifier such as LOBE), overriding the subject's own; otherwise the subject's project, then the one in .agents/acceptance/config.json",
+    )
+    .option(
       '--json [fields]',
-      'Output JSON, optionally select fields (acceptanceId, acceptanceUrl, requirement, status, subject)',
+      'Output JSON, optionally select fields (acceptanceId, acceptanceUrl, projectId, requirement, status, subject)',
     )
     .action(
       async (options: {
         json?: boolean | string;
+        project?: string;
         requirement: string;
         subject?: string;
         title?: string;
@@ -174,7 +216,17 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           { path: '--requirement', text: requirement },
           { path: '--title', text: title },
         ]);
-        const result = await client.acceptance.ensure.mutate({ ...subject, requirement, title });
+        const project = await resolveAcceptanceProject(client, {
+          flag: options.project,
+          startDirs: [process.cwd()],
+        });
+        const result = await client.acceptance.ensure.mutate({
+          ...subject,
+          ...projectEnsureInput(project),
+          requirement,
+          title,
+        });
+        warnIfFiledElsewhere(project, result);
         const acceptanceUrl = new URL(
           `/acceptance/${encodeURIComponent(result.id)}`,
           resolveServerUrl(),
@@ -185,6 +237,7 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
             {
               acceptanceId: result.id,
               acceptanceUrl,
+              projectId: result.projectId,
               requirement: result.requirement,
               status: result.status,
               subject: { subjectId: result.subjectId, subjectType: result.subjectType },
@@ -195,6 +248,9 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
         }
 
         console.log(`${pc.bold('acceptance')}: ${result.id} (${result.status})`);
+        if (project && result.projectId === project.id) {
+          console.log(`${pc.bold('project')}: ${project.name}`);
+        }
         console.log(`${pc.bold('open acceptance')}: ${acceptanceUrl}`);
         console.log(
           pc.dim(
@@ -226,7 +282,12 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       const items = await client.acceptance.list.query();
 
       if (options.json !== undefined) {
-        outputJson(items, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.acceptance(item.id),
+          ),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
       if (items.length === 0) {
@@ -247,12 +308,25 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
   acceptance
     .command('view <idOrSubject>')
-    .description('Show the acceptance decision bundle (union checks + round ledger)')
+    .description(
+      'Show the acceptance decision bundle (union checks + round ledger); a local acceptance directory reads it offline',
+    )
+    .option('--reviews <file>', 'Local only: the review log the report page saved')
     .option('--json [fields]', 'Output JSON')
-    .action(async (idOrSubject: string, options: { json?: boolean | string }) => {
-      const id = await resolveAcceptanceId(idOrSubject);
-      const client = await getTrpcClient();
-      const bundle = await client.acceptance.getBundle.query({ id });
+    .action(async (idOrSubject: string, options: { json?: boolean | string; reviews?: string }) => {
+      const local = localAcceptanceTarget(idOrSubject);
+      let bundle: RemoteBundle;
+      if (local) {
+        bundle = readLocalBundle(local, { reviewsFile: options.reviews })
+          .bundle as unknown as RemoteBundle;
+      } else {
+        const id = await resolveAcceptanceId(idOrSubject);
+        const client = await getTrpcClient();
+        bundle = await client.acceptance.getBundle.query({ id });
+        if (options.json !== undefined) {
+          bundle = withUrl(bundle, await resolveUrlBuilder(client), resourcePath.acceptance(id));
+        }
+      }
 
       if (options.json !== undefined) {
         outputJson(bundle, typeof options.json === 'string' ? options.json : undefined);
@@ -332,15 +406,35 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       "The user's review feedback — unresolved comments, region notes, attachments and rejection decisions",
     )
     .option('--actionable', 'Only standing feedback the next repair round must act on')
+    .option('--reviews <file>', 'Local only: the review log the report page saved')
     .option('--json [fields]', 'Output JSON')
     .action(
-      async (idOrSubject: string, options: { actionable?: boolean; json?: boolean | string }) => {
-        const id = await resolveAcceptanceId(idOrSubject);
-        const client = await getTrpcClient();
-        const [bundle, comments] = await Promise.all([
-          client.acceptance.getBundle.query({ id }),
-          client.acceptanceComment.list.query({ acceptanceId: id }),
-        ]);
+      async (
+        idOrSubject: string,
+        options: { actionable?: boolean; json?: boolean | string; reviews?: string },
+      ) => {
+        const local = localAcceptanceTarget(idOrSubject);
+        let id: string;
+        let bundle: RemoteBundle;
+        let comments: Pick<AcceptanceCommentList, 'items'>;
+        if (local) {
+          // The reviewer decided in the offline report; its saved log is read here.
+          const read = readLocalBundle(local, { reviewsFile: options.reviews });
+          if (read.read.source.reviews.length === 0)
+            log.warn(
+              'No saved review found. The reviewer saves decisions with "Save reviews" in report.html; the file lands in their Downloads folder (or pass --reviews <file>).',
+            );
+          id = read.read.info.id;
+          bundle = read.bundle as unknown as RemoteBundle;
+          comments = read.comments;
+        } else {
+          id = await resolveAcceptanceId(idOrSubject);
+          const client = await getTrpcClient();
+          [bundle, comments] = await Promise.all([
+            client.acceptance.getBundle.query({ id }),
+            client.acceptanceComment.list.query({ acceptanceId: id }),
+          ]);
+        }
 
         const currentRoundIndex = bundle.rounds.at(-1)?.run.roundIndex ?? 0;
 
@@ -554,7 +648,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
       const client = await getTrpcClient();
       const result = await client.acceptance.setPreviewUrl.mutate({ id, url });
       if (options.json !== undefined) {
-        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrl(result, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
       console.log(`${pc.green('✓')} r${result.roundIndex} preview: ${result.previewUrl}`);
@@ -596,7 +693,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           url,
         });
         if (options.json !== undefined) {
-          outputJson(linked, typeof options.json === 'string' ? options.json : undefined);
+          outputJson(
+            withUrl(linked, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+            typeof options.json === 'string' ? options.json : undefined,
+          );
           return;
         }
         console.log(
@@ -607,16 +707,23 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
   acceptance
     .command('accept <idOrSubject>')
-    .description('Accept the delivery — the terminal user decision that closes the acceptance')
+    .description(
+      'Accept the delivery — the terminal user decision that closes the acceptance; a local acceptance directory records it offline',
+    )
     .option('--comment <text>', 'Optional note recorded with the decision')
     .option('--json [fields]', 'Output JSON')
     .action(async (idOrSubject: string, options: { comment?: string; json?: boolean | string }) => {
+      const local = localAcceptanceTarget(idOrSubject);
+      if (local) return decideLocalAcceptance(local, 'accept', options);
       const id = await resolveAcceptanceId(idOrSubject);
       const client = await getTrpcClient();
       const result = await client.acceptance.accept.mutate({ comment: options.comment, id });
 
       if (options.json !== undefined) {
-        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrl(result, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
       console.log(`${pc.green('✓')} Delivery accepted (${result.id})`);
@@ -624,16 +731,23 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
   acceptance
     .command('reject <idOrSubject>')
-    .description('Reject the delivery — the comment seeds the next repair round')
+    .description(
+      'Reject the delivery — the comment seeds the next repair round; a local acceptance directory records it offline',
+    )
     .requiredOption('--comment <text>', 'Why the delivery is rejected (the re-tasking input)')
     .option('--json [fields]', 'Output JSON')
     .action(async (idOrSubject: string, options: { comment: string; json?: boolean | string }) => {
+      const local = localAcceptanceTarget(idOrSubject);
+      if (local) return decideLocalAcceptance(local, 'reject', options);
       const id = await resolveAcceptanceId(idOrSubject);
       const client = await getTrpcClient();
       const result = await client.acceptance.reject.mutate({ comment: options.comment, id });
 
       if (options.json !== undefined) {
-        outputJson(result, typeof options.json === 'string' ? options.json : undefined);
+        outputJson(
+          withUrl(result, await resolveUrlBuilder(client), resourcePath.acceptance(id)),
+          typeof options.json === 'string' ? options.json : undefined,
+        );
         return;
       }
       console.log(`${pc.red('✗')} Delivery rejected (${result.id}) — next round re-opens it`);

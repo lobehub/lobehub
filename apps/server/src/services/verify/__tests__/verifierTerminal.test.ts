@@ -84,6 +84,22 @@ describe('settleVerifierCheckFromTerminal', () => {
     expect(finalizeVerifyRunMock).toHaveBeenCalledWith(db, 'u', 'parent-op', {}, 'ws');
   });
 
+  it('keeps the runtime error code beside the message so a credit refusal stays recognisable', async () => {
+    await settleVerifierCheckFromTerminal(db, 'u', {
+      checkItemId: 'check-1',
+      errorMessage: 'Budget exceeded',
+      errorType: 'InsufficientBudgetForModel',
+      parentOperationId: 'parent-op',
+      reason: 'error',
+      verifierOperationId: 'verifier-op',
+    });
+
+    expect(updateByCheckItemMock.mock.calls[0][2].toulmin).toEqual({
+      limitation:
+        'Verifier failed before submitting a verdict: Budget exceeded (InsufficientBudgetForModel)',
+    });
+  });
+
   it('does not overwrite a result already written by submitVerifyResult', async () => {
     listResultsByRunMock.mockResolvedValue([{ checkItemId: 'check-1', status: 'passed' }]);
 

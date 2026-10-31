@@ -17,7 +17,7 @@ import {
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openBindDirectoryModal } from './BindDirectoryModal';
-import { openProjectTopicModal } from './StartDirectoryModal';
+import { useStartDirectoryConversation } from './useStartProjectTopic';
 
 /**
  * A device row restored from the persisted list (`onlineUnknown`) has not been
@@ -40,6 +40,10 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   const environmentId = params.get('environment') ?? '';
   useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const project = useCurrentProjectDetail(projectId);
+  const startConversation = useStartDirectoryConversation(
+    projectId,
+    project?.project.coordinatorAgentId,
+  );
   const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const environments = useProjectEnvironments(projectId);
@@ -148,13 +152,7 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
                           deviceId: directory.deviceId,
                           path: directory.path,
                         })
-                      : openProjectTopicModal({
-                          projectId,
-                          coordinatorAgentId: project!.project.coordinatorAgentId,
-                          directories,
-                          initialDirectoryId: directory.id,
-                          title: t('directories.start'),
-                        })
+                      : startConversation(directory)
                   }
                 >
                   {t(

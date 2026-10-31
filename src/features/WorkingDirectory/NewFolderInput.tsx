@@ -4,26 +4,29 @@ import { Button, cssVar, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { FolderPlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import type { DirectorySource } from './directorySource';
 import { useCreateFolder } from './useCreateFolder';
 
 interface NewFolderInputProps {
-  deviceId: string;
   onCancel: () => void;
   onCreated: (path: string) => void;
   parentPath: string;
+  /** Only how a folder is made — what a picker and a file manager have in common. */
+  source: Pick<DirectorySource, 'createFolder' | 'folderErrorKey'>;
 }
 
 /** Inline row that names and creates a folder inside the folder being browsed. */
 export const NewFolderInput = ({
-  deviceId,
   onCancel,
   onCreated,
   parentPath,
+  source,
 }: NewFolderInputProps) => {
   const { t } = useTranslation('device');
   const { t: tCommon } = useTranslation('common');
   const { error, name, pending, setName, submit } = useCreateFolder({
-    deviceId,
+    create: source.createFolder,
+    errorMessageKey: source.folderErrorKey,
     onCreated,
     parentPath,
   });

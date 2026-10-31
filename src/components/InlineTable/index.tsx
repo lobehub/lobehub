@@ -1,46 +1,16 @@
 import { Table, type TableProps } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  hoverToActive: css`
-    opacity: 0.6;
+import { sx } from '@/styles/sx';
 
-    &:hover {
-      opacity: 1;
-    }
-  `,
-  table: css`
-    table {
-      font-size: 13px;
-    }
+import styles from './InlineTable.module.css';
 
-    th {
-      background: transparent;
-      box-shadow: inset 0 999px 0 ${cssVar.colorFillQuaternary};
-    }
-
-    td {
-      border: none;
-      background: transparent;
-    }
-
-    tr:hover > td {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    tr {
-      td:first-child,
-      th:first-child {
-        padding-inline-start: 24px;
-      }
-
-      td:last-child,
-      th:last-child {
-        padding-inline-end: 24px;
-      }
-    }
-  `,
-}));
+const hoverStyles = stylex.create({
+  hoverToActive: {
+    opacity: { 'default': 0.6, ':hover': 1 },
+  },
+});
 
 export type InlineTableProps<T> = TableProps<T> & { hoverToActive?: boolean };
 
@@ -50,9 +20,11 @@ const InlineTable = <T extends object>({
   ...rest
 }: InlineTableProps<T>) => (
   <Table<T>
-    className={cx(styles.table, hoverToActive && styles.hoverToActive, className)}
     pagination={false}
     size={'small'}
+    className={
+      sx([hoverToActive && hoverStyles.hoverToActive], cx(styles.table, className)).className
+    }
     {...rest}
   />
 );

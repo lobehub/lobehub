@@ -1,34 +1,32 @@
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    display: inline-flex;
-    flex-direction: row;
-    gap: var(--dots-loading-gap);
-    align-items: center;
-  `,
-  dot: css`
-    width: var(--dots-loading-size);
-    height: var(--dots-loading-size);
-    border-radius: 50%;
+import { sx } from '@/styles/sx';
 
-    background-color: var(--dots-loading-color);
+const fade = stylex.keyframes({
+  '0%, 100%': { opacity: 0.3 },
+  '50%': { opacity: 1 },
+});
 
-    animation: dots-loading-fade 1.2s ease-in-out infinite;
-
-    @keyframes dots-loading-fade {
-      0%,
-      100% {
-        opacity: 0.3;
-      }
-
-      50% {
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    display: 'inline-flex',
+    flexDirection: 'row',
+    gap: 'var(--dots-loading-gap)',
+    alignItems: 'center',
+  },
+  dot: {
+    width: 'var(--dots-loading-size)',
+    height: 'var(--dots-loading-size)',
+    borderRadius: '50%',
+    backgroundColor: 'var(--dots-loading-color)',
+    animationName: fade,
+    animationDuration: '1.2s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
+  },
+});
 
 interface StyleArgs {
   color?: string;
@@ -49,10 +47,10 @@ const DotsLoading = memo<DotsLoadingProps>(({ size = 4, gap = 3, color, classNam
   } as CSSProperties;
 
   return (
-    <div className={cx(styles.container, className)} style={{ ...cssVars, ...style }}>
-      <div className={styles.dot} style={{ animationDelay: '0s' }} />
-      <div className={styles.dot} style={{ animationDelay: '0.15s' }} />
-      <div className={styles.dot} style={{ animationDelay: '0.3s' }} />
+    <div {...sx([styles.container], className, { ...cssVars, ...style })}>
+      <div {...sx([styles.dot], undefined, { animationDelay: '0s' })} />
+      <div {...sx([styles.dot], undefined, { animationDelay: '0.15s' })} />
+      <div {...sx([styles.dot], undefined, { animationDelay: '0.3s' })} />
     </div>
   );
 });

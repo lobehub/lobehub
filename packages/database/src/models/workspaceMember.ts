@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid/non-secure';
 
 import { devices } from '../schemas/device';
 import { messengerAccountLinks } from '../schemas/messengerAccountLink';
+import { projectMembers } from '../schemas/projectReview';
 import { tasks } from '../schemas/task';
 import { users } from '../schemas/user';
 import { workspaceInvitations, workspaceMembers, workspaceTeamMembers } from '../schemas/workspace';
@@ -198,7 +199,8 @@ export class WorkspaceMemberModel {
     // membership) only means anything while they belong to the workspace, and
     // the soft delete is reactivated by `addMember`, so a row left behind would
     // silently restore their old access or teams on re-invite. Workspace-wide
-    // rows carry no subject and stay.
+    // rows carry no subject and stay. The job title and responsibilities are
+    // cleared for the same reason: a re-invited member starts without them.
     //
     // Soft-delete first, then revoke, both in one transaction: the update takes
     // the membership row lock that a concurrent grant waits on, so a grant can
@@ -207,7 +209,7 @@ export class WorkspaceMemberModel {
     await this.db.transaction(async (tx) => {
       await tx
         .update(workspaceMembers)
-        .set({ deletedAt: new Date() })
+        .set({ deletedAt: new Date(), title: null, responsibilities: null })
         .where(
           and(
             eq(workspaceMembers.workspaceId, workspaceId),
@@ -217,6 +219,10 @@ export class WorkspaceMemberModel {
         );
 
       await new ResourcePermissionModel(tx, workspaceId).removeMemberGrants(userId);
+
+      await tx
+        .delete(projectMembers)
+        .where(and(eq(projectMembers.workspaceId, workspaceId), eq(projectMembers.userId, userId)));
 
       await tx
         .delete(workspaceTeamMembers)
@@ -263,6 +269,30 @@ export class WorkspaceMemberModel {
 
       return updatedMembers;
     });
+  };
+
+  /**
+   * Set an active member's workspace-scoped job title and responsibilities.
+   * `null` clears a field; an omitted field stays as it is. Returns the updated
+   * row, or `undefined` when the user is not an active member.
+   */
+  updateMemberProfile = async (
+    workspaceId: string,
+    userId: string,
+    profile: { title?: string | null; responsibilities?: string | null },
+  ) => {
+    const [result] = await this.db
+      .update(workspaceMembers)
+      .set({ title: profile.title, responsibilities: profile.responsibilities })
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .returning();
+    return result;
   };
 
   // ===== Invitations ===== //

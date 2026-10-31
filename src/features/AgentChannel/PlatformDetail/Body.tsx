@@ -1,571 +1,282 @@
 'use client';
 
-import { isMaskedBotCredential } from '@lobechat/const';
-import type { SelectOption } from '@lobehub/ui';
-import {
-  Block,
-  Button,
-  confirmModal,
-  createStaticStyles,
-  Flexbox,
-  Icon,
-  InputNumber,
-  Select,
-  Switch,
-  Tag,
-  Text,
-} from '@lobehub/ui';
-import { Form, type FormInstance, useFormInstance, useWatch } from '@lobehub/ui/form';
-import {
-  Fingerprint,
-  Hash,
-  KeyRound,
-  Link2,
-  ListChecks,
-  Plus,
-  RotateCcw,
-  SlidersHorizontal,
-  ToggleLeft,
-  Trash2,
-  UsersRound,
-} from 'lucide-react';
-import { Fragment, memo, useCallback, useMemo, useState } from 'react';
+import { Button, confirmModal, Flexbox, Text } from '@lobehub/ui';
+import { Form, type FormInstance, useWatch } from '@lobehub/ui/form';
+import { RotateCcw } from 'lucide-react';
+import { Fragment, memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FormInput, FormPassword } from '@/components/FormInput';
-import InfoTooltip from '@/components/InfoTooltip';
 import type {
   FieldSchema,
   SerializedPlatformDefinition,
 } from '@/server/services/bot/platforms/types';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import {
   platformCredentialBodyMap,
   platformCredentialExtrasMap,
   platformSettingsFieldExtrasMap,
+  platformWakeNoticeMap,
 } from '../platform/registry';
+import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
-import { extractSettingsDefaults } from './formState';
+import { WakeRecords } from '../WakeRecords';
+import { AccessSection } from './AccessSection';
+import styles from './Body.module.css';
+import type { ChannelTab } from './channelTabs';
+import { extractSettingsDefaults, WAKE_MASTER_KEY } from './formState';
 import type { ChannelFormValues } from './index';
+import { ModuleSaveBar } from './ModuleSaveBar';
+import type { SaveModuleId } from './saveModules';
+import { ApplicationIdField, SchemaField } from './SchemaField';
+import {
+  getSchemaFields,
+  groupAccessFields,
+  groupReplyFields,
+  groupSettingsFields,
+  groupWakeFields,
+  WAKE_KEY_PREFIX,
+} from './settingsGroups';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  advancedGroup: css`
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 0 !important;
-  `,
-  advancedTitle: css`
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 1.4;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  container: css`
-    overflow: hidden;
-    gap: 0;
-    width: 100%;
-    padding-inline: 16px;
-  `,
-  fieldIcon: css`
-    flex: none;
-    align-self: center;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
-
-// --------------- Validation rules builder ---------------
-
-const isEmptyValue = (value: unknown) =>
-  value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length);
-
-export function buildValidate(field: FieldSchema, t: (key: string) => string) {
-  const pattern = field.pattern ? new RegExp(field.pattern) : undefined;
-  const isNumber = field.type === 'number' || field.type === 'integer';
-  const { maximum, minimum } = field;
-
-  if (
-    !field.required &&
-    !pattern &&
-    !(isNumber && (typeof minimum === 'number' || typeof maximum === 'number'))
-  )
-    return undefined;
-
-  return (value: unknown) => {
-    if (isEmptyValue(value)) return field.required ? t(field.label) : undefined;
-
-    // Format constraint declared by the platform schema. Empty stays valid, so an
-    // untouched optional field does not trip it, and so does the placeholder the
-    // server returns in place of a stored secret — the save path swaps that back
-    // for the real value, and holding it to the platform's format here would make
-    // every unrelated edit demand the secret be retyped.
-    if (
-      pattern &&
-      typeof value === 'string' &&
-      !isMaskedBotCredential(value) &&
-      !pattern.test(value)
-    )
-      return field.patternMessage ? t(field.patternMessage) : t(field.label);
-
-    if (isNumber && typeof value === 'number') {
-      if (typeof minimum === 'number' && value < minimum) return `${t(field.label)} ≥ ${minimum}`;
-      if (typeof maximum === 'number' && value > maximum) return `${t(field.label)} ≤ ${maximum}`;
-    }
-
-    return undefined;
-  };
+/**
+ * What the page hands the body so each block can show its own Save: which blocks exist, which
+ * hold unsaved changes, and which one is being saved. Absent while a bot is still being created,
+ * when the setup steps save everything at once.
+ */
+export interface ModuleControls {
+  dirty: readonly SaveModuleId[];
+  ids: readonly SaveModuleId[];
+  onDiscard: (id: SaveModuleId) => void;
+  onSave: (id: SaveModuleId) => void;
+  saving?: SaveModuleId;
 }
 
-// --------------- Single field component (memo'd) ---------------
+/** The wake blocks that say, under their title, what they are for. */
+const WAKE_SECTIONS_WITH_DESC = new Set(['channels', 'judgement', 'pace']);
 
-interface SchemaFieldProps {
-  disabled?: boolean;
-  divider?: boolean;
-  /** The field belongs to a gated feature the current plan doesn't include. */
-  featureLocked?: boolean;
-  field: FieldSchema;
-  parentKey: string;
-}
-
-const renderFieldLabel = (field: FieldSchema, t: (key: string) => string) => {
-  const hint = field.tooltip;
-
-  if (!hint && !field.devOnly && !field.paidFeature) return t(field.label);
-
-  return (
-    <Flexbox horizontal align="center" gap={8}>
-      {t(field.label)}
-      {hint && <InfoTooltip size={'small'} title={t(hint)} />}
-      {field.paidFeature && (
-        <Tag color="gold" size={'small'}>
-          {t('channel.paidFeature.badge')}
-        </Tag>
-      )}
-      {field.devOnly && <Tag color="gold">Dev Only</Tag>}
-    </Flexbox>
-  );
-};
-
-const getFieldIcon = (field: FieldSchema) => {
-  const key = field.key.toLowerCase();
-
-  if (/key|password|secret|token/.test(key)) return KeyRound;
-  if (key.includes('url')) return Link2;
-  if (key.endsWith('id') || key.includes('identifier')) return Fingerprint;
-  if (field.type === 'array') return UsersRound;
-  if (field.type === 'boolean') return ToggleLeft;
-  if (field.enum) return ListChecks;
-  if (field.type === 'number' || field.type === 'integer') return Hash;
-
-  return SlidersHorizontal;
-};
-
-const renderFieldIcon = (field: FieldSchema) => (
-  <Icon className={styles.fieldIcon} icon={getFieldIcon(field)} size={20} />
+/**
+ * One tab's content. Every panel stays mounted and only the active one is
+ * visible, so a field on another tab keeps its value and is still validated
+ * and saved with the form.
+ */
+const Panel = ({
+  active,
+  children,
+  tab,
+}: {
+  active: boolean;
+  children: ReactNode;
+  tab: ChannelTab;
+}) => (
+  <div hidden={!active} id={`channel-panel-${tab}`} role="tabpanel">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>{children}</div>
+  </div>
 );
-
-const SchemaField = memo<SchemaFieldProps>(
-  ({ field, parentKey, divider, disabled: formDisabled, featureLocked }) => {
-    const { t: _t } = useTranslation('agent');
-    const t = _t as (key: string) => string;
-
-    // Scalar controls fully lock with the feature; list fields handle the
-    // locked state themselves so operators can still remove stale rows.
-    const disabled = formDisabled || featureLocked;
-
-    // Conditional visibility: watch the sibling field specified by visibleWhen
-    const form = useFormInstance();
-    const watchedValue = useWatch(form, (values) =>
-      field.visibleWhen ? values[parentKey]?.[field.visibleWhen.field] : undefined,
-    );
-    if (field.visibleWhen) {
-      // An array matches any of its entries, so one field can be shared by
-      // several sibling values (e.g. the window size for `burst` + `debounce`).
-      const expected = field.visibleWhen.value;
-      const matches = Array.isArray(expected)
-        ? expected.includes(watchedValue)
-        : watchedValue === expected;
-      if (!matches) return null;
-    }
-
-    // Only explicitly authored, actionable guidance earns a help affordance.
-    // Generic schema descriptions stay out of the compact row layout.
-    const label = renderFieldLabel(field, t);
-
-    // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
-    // be expressed as a single control inside a name-bound Form.Field.
-    if (field.type === 'array' && field.items?.type === 'object') {
-      return (
-        <ObjectListField
-          disabled={formDisabled}
-          divider={divider}
-          featureLocked={featureLocked}
-          field={field}
-          icon={renderFieldIcon(field)}
-          label={label}
-          parentKey={parentKey}
-        />
-      );
-    }
-
-    let children: React.ReactNode;
-    switch (field.type) {
-      case 'password': {
-        children = (
-          <FormPassword
-            autoComplete="new-password"
-            disabled={disabled}
-            placeholder={field.placeholder ? t(field.placeholder) : undefined}
-          />
-        );
-        break;
-      }
-      case 'boolean': {
-        children = <Switch disabled={disabled} />;
-        break;
-      }
-      case 'number':
-      case 'integer': {
-        children = (
-          <InputNumber
-            disabled={disabled}
-            max={field.maximum}
-            min={field.minimum}
-            placeholder={field.placeholder ? t(field.placeholder) : undefined}
-            style={{ width: '100%' }}
-          />
-        );
-        break;
-      }
-      case 'string': {
-        if (field.enum) {
-          const hasDescriptions = field.enumDescriptions?.some(Boolean);
-          const options = field.enum.map((value, i) => ({
-            description: field.enumDescriptions?.[i] ? t(field.enumDescriptions[i]) : undefined,
-            label: field.enumLabels?.[i] ? t(field.enumLabels[i]) : value,
-            value,
-          })) satisfies Array<SelectOption<string> & { description?: string }>;
-
-          children = (
-            <Select
-              disabled={disabled}
-              options={options}
-              placeholder={field.placeholder ? t(field.placeholder) : undefined}
-              optionRender={
-                hasDescriptions
-                  ? (item) => {
-                      const option = item as SelectOption<string> & { description?: string };
-
-                      return (
-                        <Flexbox horizontal align="center" gap={12} justify="space-between">
-                          <span>{option.label}</span>
-                          {option.description && (
-                            <Text fontSize={12} type="secondary">
-                              {option.description}
-                            </Text>
-                          )}
-                        </Flexbox>
-                      );
-                    }
-                  : undefined
-              }
-            />
-          );
-        } else {
-          children = (
-            <FormInput
-              disabled={disabled}
-              placeholder={field.placeholder ? t(field.placeholder) : t(field.label)}
-            />
-          );
-        }
-        break;
-      }
-      default: {
-        children = (
-          <FormInput
-            disabled={disabled}
-            placeholder={field.placeholder ? t(field.placeholder) : t(field.label)}
-          />
-        );
-      }
-    }
-
-    return (
-      <Form.Field
-        avatar={renderFieldIcon(field)}
-        divider={divider}
-        label={label}
-        minWidth={'max(50%, 400px)'}
-        name={`${parentKey}.${field.key}`}
-        validate={buildValidate(field, t)}
-        variant="outlined"
-      >
-        {children}
-      </Form.Field>
-    );
-  },
-);
-
-// --------------- Object-list field (e.g. allowFrom: [{id, name?}]) ---------------
-
-interface ObjectListFieldProps {
-  disabled?: boolean;
-  divider?: boolean;
-  /** The field belongs to a gated feature the current plan doesn't include. */
-  featureLocked?: boolean;
-  field: FieldSchema;
-  icon: React.ReactNode;
-  label: React.ReactNode;
-  parentKey: string;
-}
-
-const ObjectListField = memo<ObjectListFieldProps>(
-  ({ field, parentKey, divider, icon, label, disabled, featureLocked }) => {
-    const { t: _t } = useTranslation('agent');
-    const t = _t as (key: string) => string;
-
-    // A locked feature blocks new rows and edits, but existing rows must stay
-    // removable — the server-side write gate always allows clearing keywords,
-    // and stale rows would otherwise keep the feature semi-active with no way
-    // out short of resetting all advanced settings.
-    const editDisabled = disabled || featureLocked;
-
-    // The runtime ignores anything beyond `id`, but the editor renders every
-    // declared property so future additions (e.g. a per-row note tag) flow
-    // through without code changes here.
-    const itemProps = field.items?.type === 'object' ? (field.items.properties ?? []) : [];
-
-    // Convention: the schema field key drives the per-list copy keys
-    // (`allowFrom` → `channel.allowFromAdd` / `channel.allowFromEmpty`).
-    // Avoids overloading FieldSchema with cosmetic strings while keeping each
-    // list's "Add user" / "Add channel" wording distinct.
-    const addLabel = t(`${field.label}Add` as 'channel.allowFromAdd');
-    const emptyLabel = t(`${field.label}Empty` as 'channel.allowFromEmpty');
-    const removeLabel = t('channel.allowListRemove');
-
-    return (
-      <Form.Field
-        avatar={icon}
-        divider={divider}
-        label={label}
-        minWidth={'max(50%, 400px)'}
-        variant="outlined"
-      >
-        <Form.List name={`${parentKey}.${field.key}`}>
-          {({ fields: rows, add, remove }) => (
-            <Flexbox gap={8} style={{ width: '100%' }}>
-              {rows.length === 0 && (
-                <Flexbox style={{ fontSize: 12, opacity: 0.6, paddingBlock: 4 }}>
-                  {emptyLabel}
-                </Flexbox>
-              )}
-              {rows.map(({ index, key, name }) => (
-                <Flexbox horizontal align="center" gap={8} key={key}>
-                  {itemProps.map((sub) => (
-                    <div key={sub.key} style={{ flex: 1, minWidth: 0 }}>
-                      <Form.Field
-                        bare
-                        name={`${name}.${sub.key}`}
-                        validate={
-                          sub.required
-                            ? (value?: string) => (value?.trim() ? undefined : t(sub.label))
-                            : undefined
-                        }
-                      >
-                        <FormInput
-                          disabled={editDisabled}
-                          placeholder={
-                            sub.placeholder
-                              ? t(sub.placeholder as 'channel.allowFromIdPlaceholder')
-                              : t(sub.label)
-                          }
-                        />
-                      </Form.Field>
-                    </div>
-                  ))}
-                  <Button
-                    aria-label={removeLabel}
-                    disabled={disabled}
-                    icon={<Trash2 size={14} />}
-                    type="text"
-                    onClick={() => remove(index)}
-                  />
-                </Flexbox>
-              ))}
-              {featureLocked && (
-                <Flexbox style={{ fontSize: 12, opacity: 0.6, paddingBlock: 4 }}>
-                  {t('channel.paidFeature.fieldLocked')}
-                </Flexbox>
-              )}
-              <Button
-                block
-                disabled={editDisabled}
-                icon={<Plus size={14} />}
-                type="dashed"
-                onClick={() => add({ id: '', name: '' })}
-              >
-                {addLabel}
-              </Button>
-            </Flexbox>
-          )}
-        </Form.List>
-      </Form.Field>
-    );
-  },
-);
-
-// --------------- ApplicationId field (standalone, not nested) ---------------
-
-const ApplicationIdField = memo<{ disabled?: boolean; divider?: boolean; field: FieldSchema }>(
-  ({ field, divider, disabled }) => {
-    const { t: _t } = useTranslation('agent');
-    const t = _t as (key: string) => string;
-
-    return (
-      <Form.Field
-        avatar={renderFieldIcon(field)}
-        divider={divider}
-        label={renderFieldLabel(field, t)}
-        minWidth={'max(50%, 400px)'}
-        name="applicationId"
-        validate={buildValidate(field, t)}
-        variant="outlined"
-      >
-        <FormInput
-          disabled={disabled}
-          placeholder={field.placeholder ? t(field.placeholder) : t(field.label)}
-        />
-      </Form.Field>
-    );
-  },
-);
-
-// --------------- Helper: flatten fields from schema ---------------
-
-function getFields(schema: FieldSchema[], sectionKey: string): FieldSchema[] {
-  const section = schema.find((f) => f.key === sectionKey);
-  if (!section?.properties) return [];
-
-  return section.properties
-    .filter((f) => !f.devOnly || __DEV__)
-    .flatMap((f) => {
-      if (f.type === 'object' && f.properties) {
-        return f.properties.filter((child) => !child.devOnly || __DEV__);
-      }
-      return f;
-    });
-}
-
-// --------------- Settings group title (memo'd) ---------------
-
-const SettingsTitle = memo<{ schema: FieldSchema[] }>(({ schema }) => {
-  const { t: _t } = useTranslation('agent');
-  const t = _t as (key: string) => string;
-  const settingsSchema = schema.find((f) => f.key === 'settings');
-  return settingsSchema ? (
-    <Text as={'span'} className={styles.advancedTitle}>
-      {t(settingsSchema.label)}
-    </Text>
-  ) : null;
-});
 
 // --------------- Body component ---------------
 
 interface BodyProps {
+  /** The tab shown; the others stay mounted but hidden. */
+  activeTab: ChannelTab;
   currentConfig?: {
     applicationId: string;
     credentials: Record<string, string>;
+    /** The saved bot's id; the wake records tab reads its history by it. */
+    id?: string;
     settings?: Record<string, unknown> | null;
   };
   disabled?: boolean;
   form: FormInstance<ChannelFormValues>;
   hasConfig?: boolean;
+  /** Per-block save buttons; see {@link ModuleControls}. */
+  moduleControls?: ModuleControls;
   /** Saves and connects the credentials; resolves `false` when saving failed. */
   onAuthenticated?: (params: {
     applicationId: string;
     credentials: Record<string, string>;
   }) => Promise<boolean> | void;
+  /** Saves and connects the bot; offered as a step of its own while setting one up. */
+  onSave?: () => void;
   onValuesChange?: (values: ChannelFormValues) => void;
   platformDef: SerializedPlatformDefinition;
   /** Name a quick-created bot app starts with (the agent's name). */
   quickSetupAppName?: string;
   /** Who a quick-created bot app is for (the agent id); a new scope starts a new scan. */
   quickSetupScope?: string;
+  /** A save is running. */
+  saving?: boolean;
 }
 
 const Body = memo<BodyProps>(
   ({
+    activeTab,
     platformDef,
     form,
     hasConfig,
     currentConfig,
+    moduleControls,
     onAuthenticated,
+    onSave,
     onValuesChange,
     disabled,
     quickSetupAppName,
+    saving,
     quickSetupScope,
   }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
+    // The records tab is a history read, not settings: it mounts the first time it is opened and
+    // then stays, so switching tabs keeps its filters and loaded pages.
+    const [recordsOpened, setRecordsOpened] = useState(false);
+    if (activeTab === 'records' && !recordsOpened) setRecordsOpened(true);
+
     const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
     const CredentialExtras = platformCredentialExtrasMap[platformDef.id];
+    const WakeNotice = platformWakeNoticeMap[platformDef.id];
+
+    // Fields behind a rollout flag stay hidden until the user's flag is on (and
+    // while the flags have not loaded yet).
+    const featureFlags = useServerConfigStore((s) => s.featureFlags) as
+      Record<string, unknown> | undefined;
 
     const credentialFields = useMemo(
-      () => getFields(platformDef.schema, 'credentials'),
-      [platformDef.schema],
+      () => getSchemaFields(platformDef.schema, 'credentials', featureFlags),
+      [platformDef.schema, featureFlags],
     );
 
-    const settingsFields = useMemo(
-      () => getFields(platformDef.schema, 'settings'),
-      [platformDef.schema],
+    const settingsGroups = useMemo(
+      () => groupSettingsFields(getSchemaFields(platformDef.schema, 'settings', featureFlags)),
+      [platformDef.schema, featureFlags],
     );
 
-    // Auto-expand the settings group on mount when an already-saved bot is
-    // missing its operator User ID, so operators land directly on the field
-    // the Footer alert is asking them to fill in. Driven off the saved value
-    // (not the form watch) because `defaultActive` is mount-only — the form
-    // hasn't hydrated yet at this point — and skipped on platforms without
-    // a `userId` field in their schema (e.g. WeChat).
-    const userIdInitiallyMissing = useMemo(() => {
-      if (!hasConfig) return false;
-      const hasUserIdField = settingsFields.some((f) => f.key === 'userId');
-      if (!hasUserIdField) return false;
-      const savedUserId = currentConfig?.settings?.userId;
-      return !(typeof savedUserId === 'string' && savedUserId.trim());
-    }, [hasConfig, settingsFields, currentConfig?.settings]);
-    const [settingsActive, setSettingsActive] = useState(userIdInitiallyMissing);
+    // While a bot is being set up, its credentials are asked for in the setup
+    // step that produces them. A saved bot has no steps on screen, so they sit
+    // in the credentials group.
+    const inlineKeys = useMemo(
+      () => (hasConfig ? new Set<string>() : getInlineFieldKeys(platformDef.id)),
+      [hasConfig, platformDef.id],
+    );
 
-    const handleResetSettings = useCallback(() => {
-      form.setValues({
-        settings: extractSettingsDefaults(platformDef.schema) as Record<string, {} | undefined>,
-      });
-      onValuesChange?.(form.getValues());
-    }, [form, onValuesChange, platformDef.schema]);
+    const renderStepField = (key: string) => {
+      if (key === 'applicationId') {
+        const field = platformDef.schema.find((section) => section.key === 'applicationId');
+        return field && <ApplicationIdField disabled={disabled} field={field} />;
+      }
+      if (key === 'extras') return CredentialExtras && <CredentialExtras disabled={disabled} />;
+      const field = credentialFields.find((item) => item.key === key);
+      return (
+        field && <SchemaField fullWidth disabled={disabled} field={field} parentKey="credentials" />
+      );
+    };
+
+    const groupCredentialFields = credentialFields.filter((field) => !inlineKeys.has(field.key));
+    const showExtras = !!CredentialExtras && !inlineKeys.has('extras');
+    const showApplicationId =
+      !inlineKeys.has('applicationId') &&
+      platformDef.schema.some((section) => section.key === 'applicationId');
+
+    const connectGroup = settingsGroups.find((group) => group.key === 'connect');
+
+    // Reset only what the section shows: access rules and reply style are
+    // deliberate choices, so a reset button on "Advanced" must not touch them.
+    const handleResetGroup = useCallback(
+      (fields: FieldSchema[]) => {
+        const defaults = extractSettingsDefaults(platformDef.schema);
+        const next = { ...form.getValues().settings };
+        for (const field of fields) next[field.key] = defaults[field.key] as {} | undefined;
+
+        form.setValues({ settings: next });
+        onValuesChange?.(form.getValues());
+      },
+      [form, onValuesChange, platformDef.schema],
+    );
 
     // A settings-field helper writes straight into the form, which does not
-    // fire the Form's `onValuesChange` — same reason `handleResetSettings`
+    // fire the Form's `onValuesChange` — same reason `handleResetGroup`
     // reports its own write. Without this the page never sees the change and
     // the unsaved-changes affordances stay hidden.
     const handleFieldExtrasFilled = useCallback(() => {
       onValuesChange?.(form.getValues());
     }, [form, onValuesChange]);
 
+    // A platform's helper that sits under one setting (e.g. Feishu's "fetch my
+    // Open ID" under the owner ID).
+    const renderExtras = (field?: FieldSchema, featureLocked = false) => {
+      if (!field) return null;
+      const FieldExtras = platformSettingsFieldExtrasMap[`${platformDef.id}:${field.key}`];
+      if (!FieldExtras) return null;
+
+      return (
+        <FieldExtras
+          disabled={disabled || featureLocked}
+          platformId={platformDef.id}
+          savedValue={currentConfig?.settings?.[field.key]}
+          onFilled={handleFieldExtrasFilled}
+        />
+      );
+    };
+
+    // The Save in the corner of a block, when the page saves that block by itself.
+    const moduleExtra = (id: SaveModuleId) =>
+      moduleControls?.ids.includes(id) ? (
+        <ModuleSaveBar
+          dirty={moduleControls.dirty.includes(id)}
+          disabled={disabled}
+          saving={moduleControls.saving === id}
+          onDiscard={() => moduleControls.onDiscard(id)}
+          onSave={() => moduleControls.onSave(id)}
+        />
+      ) : undefined;
+
+    // With the wake switch off, the blocks that only tune how the bot speaks up on its own are
+    // hidden; the switch and the keywords stay.
+    const wakeOn = useWatch(form, (values) => values.settings?.[WAKE_MASTER_KEY] !== true);
+    const wakeSectionShown = (section: { fields: FieldSchema[]; key: string }) =>
+      wakeOn ||
+      section.key === 'switch' ||
+      !section.fields.every((field) => field.key.startsWith(WAKE_KEY_PREFIX));
+
+    // The fields of one settings block.
+    const renderSettingsFields = (fields: FieldSchema[]) =>
+      fields.map((field, index) => {
+        // Feature-gated fields (e.g. watch keywords) lock when the resolved access meta
+        // reports the feature as not allowed.
+        const featureLocked =
+          !!field.paidFeature &&
+          platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+        return (
+          <Fragment key={field.key}>
+            <SchemaField
+              disabled={disabled}
+              divider={index !== 0}
+              featureLocked={featureLocked}
+              field={field}
+              parentKey="settings"
+            />
+            {renderExtras(field, featureLocked)}
+          </Fragment>
+        );
+      });
+
     return (
       <Form
         form={form}
-        gap={0}
-        itemMinWidth={'max(50%, 400px)'}
-        style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
-        variant={'borderless'}
+        gap={24}
+        itemMinWidth={'max(34%, 240px)'}
+        style={{ maxWidth: 1024, padding: '8px 0 24px', width: '100%' }}
+        variant={'filled'}
       >
-        <Block className={styles.container} variant={'outlined'}>
+        <Panel active={activeTab === 'connect'} tab="connect">
           {CustomCredentialBody ? (
-            <CustomCredentialBody
-              currentConfig={currentConfig}
-              disabled={disabled}
-              hasConfig={hasConfig}
-              onAuthenticated={onAuthenticated}
-            />
+            <Form.Group title={t('channel.credentials')} variant={'filled'}>
+              <CustomCredentialBody
+                currentConfig={currentConfig}
+                disabled={disabled}
+                hasConfig={hasConfig}
+                onAuthenticated={onAuthenticated}
+              />
+            </Form.Group>
           ) : (
             <>
               <QuickSetupSection
@@ -574,113 +285,233 @@ const Body = memo<BodyProps>(
                 form={form}
                 hasConfig={hasConfig}
                 platformId={platformDef.id}
+                renderField={inlineKeys.size > 0 ? renderStepField : undefined}
+                saving={saving}
                 scope={quickSetupScope}
                 onAuthenticated={onAuthenticated}
+                onSave={onSave}
               />
-              {/* Render top-level sections in schema order so each platform controls
+              {/* Credentials of a saved bot are masked and rarely edited, so they
+            fold away; a new bot has nothing else to do but fill them in. */}
+              {(groupCredentialFields.length > 0 || showApplicationId || showExtras) && (
+                <Form.Group
+                  className={styles.moduleGroup}
+                  collapsible={!!hasConfig || inlineKeys.size > 0}
+                  defaultActive={!hasConfig && inlineKeys.size === 0}
+                  desc={t('channel.group.credentialsDesc')}
+                  extra={moduleExtra('credentials')}
+                  keyValue={`credentials-${platformDef.id}`}
+                  variant={'filled'}
+                  // The steps above ask for what is needed; what is left is optional.
+                  title={t(
+                    inlineKeys.size > 0
+                      ? 'channel.group.credentialsOptional'
+                      : 'channel.credentials',
+                  )}
+                >
+                  {/* Render top-level sections in schema order so each platform controls
               its own field ordering. LINE places `credentials` before `applicationId`
               because the operator must enter the channel access token before the
               "Fetch from LINE" button (rendered after applicationId) can auto-fill
               the destination user ID; Discord/Slack/QQ/Feishu place `applicationId`
               first as a primary identifier. */}
-              {platformDef.schema
-                .filter(
-                  (section) => section.key === 'applicationId' || section.key === 'credentials',
-                )
-                .map((section, sectionIndex) => {
-                  const needsDivider = sectionIndex > 0;
-                  if (section.key === 'applicationId') {
-                    return (
-                      <ApplicationIdField
-                        disabled={disabled}
-                        divider={needsDivider}
-                        field={section}
-                        key="applicationId"
-                      />
-                    );
-                  }
-                  return (
-                    <Fragment key="credentials">
-                      {credentialFields.map((field, i) => (
-                        <SchemaField
-                          disabled={disabled}
-                          divider={needsDivider || i !== 0}
-                          field={field}
-                          key={field.key}
-                          parentKey="credentials"
-                        />
-                      ))}
-                    </Fragment>
-                  );
-                })}
-              {/* Platform-specific helpers (e.g. LINE's "Fetch from LINE" button)
+                  {platformDef.schema
+                    .filter(
+                      (section) =>
+                        (section.key === 'applicationId' && showApplicationId) ||
+                        section.key === 'credentials',
+                    )
+                    .map((section, sectionIndex) => {
+                      const needsDivider = sectionIndex > 0;
+                      if (section.key === 'applicationId') {
+                        return (
+                          <ApplicationIdField
+                            disabled={disabled}
+                            divider={needsDivider}
+                            field={section}
+                            key="applicationId"
+                          />
+                        );
+                      }
+                      return (
+                        <Fragment key="credentials">
+                          {groupCredentialFields.map((field, i) => (
+                            <SchemaField
+                              fullWidth
+                              disabled={disabled}
+                              divider={needsDivider || i !== 0}
+                              field={field}
+                              key={field.key}
+                              parentKey="credentials"
+                            />
+                          ))}
+                        </Fragment>
+                      );
+                    })}
+                  {/* Platform-specific helpers (e.g. LINE's "Fetch from LINE" button)
               render after the credential + applicationId block so the button
               sits next to the field it acts on. */}
-              {CredentialExtras && <CredentialExtras disabled={disabled} />}
+                  {showExtras && <CredentialExtras disabled={disabled} />}
+                </Form.Group>
+              )}
             </>
           )}
-          {settingsFields.length > 0 && (
+          {connectGroup && (
             <Form.Group
-              collapsible
-              active={settingsActive}
-              className={styles.advancedGroup}
-              defaultActive={userIdInitiallyMissing}
-              keyValue={`settings-${platformDef.id}`}
-              title={<SettingsTitle schema={platformDef.schema} />}
-              variant="borderless"
-              extra={
-                settingsActive ? (
-                  <Button
-                    disabled={disabled}
-                    icon={<RotateCcw size={14} />}
-                    size="small"
-                    type="default"
-                    onClick={() =>
-                      confirmModal({
-                        content: t('channel.settingsResetConfirm'),
-                        okText: t('channel.settingsResetDefault'),
-                        title: t('channel.settingsResetDefault'),
-                        onOk: handleResetSettings,
-                      })
-                    }
-                  >
-                    {t('channel.settingsResetDefault')}
-                  </Button>
-                ) : undefined
-              }
-              onCollapse={setSettingsActive}
+              className={styles.moduleGroup}
+              collapsible={false}
+              extra={moduleExtra('connection')}
+              keyValue={`settings-connect-${platformDef.id}`}
+              title={t('channel.group.connection')}
+              variant={'filled'}
             >
-              {settingsFields.map((field) => {
-                // Feature-gated fields (e.g. watch keywords) lock when the
-                // resolved access meta reports the feature as not allowed.
-                const featureLocked =
-                  !!field.paidFeature &&
-                  platformDef.access?.features?.[field.paidFeature]?.allowed === false;
-                const FieldExtras =
-                  platformSettingsFieldExtrasMap[`${platformDef.id}:${field.key}`];
-                return (
-                  <Fragment key={field.key}>
-                    <SchemaField
-                      divider
-                      disabled={disabled}
-                      featureLocked={featureLocked}
-                      field={field}
-                      parentKey="settings"
-                    />
-                    {FieldExtras && (
-                      <FieldExtras
-                        disabled={disabled || featureLocked}
-                        platformId={platformDef.id}
-                        savedValue={currentConfig?.settings?.[field.key]}
-                        onFilled={handleFieldExtrasFilled}
-                      />
-                    )}
-                  </Fragment>
-                );
-              })}
+              {connectGroup.fields.map((field, index) => (
+                <SchemaField
+                  disabled={disabled}
+                  divider={index !== 0}
+                  field={field}
+                  key={field.key}
+                  parentKey="settings"
+                />
+              ))}
             </Form.Group>
           )}
-        </Block>
+        </Panel>
+        {settingsGroups
+          .filter((group) => group.key !== 'connect')
+          .map((group) => (
+            <Panel active={activeTab === group.key} key={group.key} tab={group.key}>
+              {/* The intro explains the rules, so it shows only where they are released. */}
+              {group.key === 'wake' &&
+                group.fields.some((field) => field.key.startsWith(WAKE_KEY_PREFIX)) && (
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('channel.wake.intro')}
+                  </Text>
+                )}
+              {group.key === 'wake' && WakeNotice && <WakeNotice />}
+              {group.key === 'access' ? (
+                // Who the owner is, who may talk to the bot and who may use the owner's devices are
+                // three separate decisions, so each gets a block (and a Save) of its own.
+                groupAccessFields(group.fields).map((section) => (
+                  <Form.Group
+                    className={styles.moduleGroup}
+                    collapsible={false}
+                    extra={moduleExtra(`access-${section.key}`)}
+                    key={section.key}
+                    keyValue={`settings-access-${section.key}-${platformDef.id}`}
+                    title={t(`channel.access.section.${section.key}`)}
+                    variant={'filled'}
+                    desc={
+                      section.key === 'identity'
+                        ? undefined
+                        : t(`channel.access.section.${section.key}Desc`)
+                    }
+                  >
+                    <AccessSection
+                      disabled={disabled}
+                      fields={section.fields}
+                      form={form}
+                      section={section.key}
+                      userIdExtras={renderExtras(section.fields.find((f) => f.key === 'userId'))}
+                      onValuesChange={onValuesChange}
+                    />
+                  </Form.Group>
+                ))
+              ) : group.key === 'reply' ? (
+                // How a reply looks saves itself as it changes; how the bot talks is long text, so
+                // it is a block of its own with a Save.
+                groupReplyFields(group.fields).map((section) => (
+                  <Form.Group
+                    className={styles.moduleGroup}
+                    collapsible={false}
+                    extra={section.key === 'style' ? moduleExtra('reply-style') : undefined}
+                    key={section.key}
+                    keyValue={`settings-reply-${section.key}-${platformDef.id}`}
+                    title={t(`channel.reply.section.${section.key}`)}
+                    variant={'filled'}
+                    desc={
+                      section.key === 'display' && hasConfig
+                        ? t('channel.reply.instant')
+                        : undefined
+                    }
+                  >
+                    {renderSettingsFields(section.fields)}
+                  </Form.Group>
+                ))
+              ) : group.key === 'wake' ? (
+                // The switch, then keywords, channels, pace and judgement each get a block of their
+                // own, so a long list of options reads as separate decisions. The switch saves
+                // itself as it changes, so it has no Save.
+                groupWakeFields(group.fields)
+                  .filter(wakeSectionShown)
+                  .map((section) => (
+                    <Form.Group
+                      className={styles.moduleGroup}
+                      collapsible={false}
+                      key={section.key}
+                      keyValue={`settings-wake-${section.key}-${platformDef.id}`}
+                      title={t(`channel.wake.section.${section.key}`)}
+                      variant={'filled'}
+                      desc={
+                        WAKE_SECTIONS_WITH_DESC.has(section.key)
+                          ? t(`channel.wake.section.${section.key}Desc`)
+                          : undefined
+                      }
+                      extra={
+                        section.key === 'switch' ? undefined : moduleExtra(`wake-${section.key}`)
+                      }
+                    >
+                      {renderSettingsFields(section.fields)}
+                    </Form.Group>
+                  ))
+              ) : (
+                <Form.Group
+                  className={styles.moduleGroup}
+                  collapsible={false}
+                  extra={moduleExtra(group.key as SaveModuleId)}
+                  keyValue={`settings-${group.key}-${platformDef.id}`}
+                  variant={'filled'}
+                  // A block with a Save in its corner needs a header to hold it.
+                  title={
+                    moduleControls?.ids.includes(group.key as SaveModuleId)
+                      ? t(`channel.tab.${group.key}`)
+                      : undefined
+                  }
+                >
+                  {renderSettingsFields(group.fields)}
+                  {group.key === 'advanced' && (
+                    <Flexbox horizontal justify={'flex-end'} style={{ paddingBlock: 8 }}>
+                      <Button
+                        disabled={disabled}
+                        icon={<RotateCcw size={14} />}
+                        size="small"
+                        type="text"
+                        onClick={() =>
+                          confirmModal({
+                            content: t('channel.settingsResetConfirm'),
+                            okText: t('channel.settingsResetDefault'),
+                            title: t('channel.settingsResetDefault'),
+                            onOk: () => handleResetGroup(group.fields),
+                          })
+                        }
+                      >
+                        {t('channel.settingsResetDefault')}
+                      </Button>
+                    </Flexbox>
+                  )}
+                </Form.Group>
+              )}
+            </Panel>
+          ))}
+        {recordsOpened && currentConfig?.id && (
+          <Panel active={activeTab === 'records'} tab="records">
+            <WakeRecords
+              active={activeTab === 'records'}
+              botId={currentConfig.id}
+              disabled={disabled}
+            />
+          </Panel>
+        )}
       </Form>
     );
   },

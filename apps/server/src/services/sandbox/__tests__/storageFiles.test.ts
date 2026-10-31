@@ -61,6 +61,27 @@ describe('createSandboxStorageClient', () => {
     expect(JSON.parse(init.body).instanceDir).toBe('app-dev');
   });
 
+  it('should rename through the storage rename endpoint without overwriting', async () => {
+    respond(200, { data: { path: 'archive/q3' } });
+
+    await expect(client.renameFile({ newPath: 'archive/q3', path: 'q3' })).resolves.toEqual({
+      path: 'archive/q3',
+    });
+
+    const [url, init] = (fetch as any).mock.calls[0];
+    expect(url).toBe('http://market.test/api/v1/sandbox/storages/current/rename');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ newPath: 'archive/q3', path: 'q3' });
+  });
+
+  it('should surface a taken destination as a 409', async () => {
+    respond(409, { error: 'conflict', error_description: 'Destination exists' });
+
+    const error = await client.renameFile({ newPath: 'b', path: 'a' }).catch((e) => e);
+
+    expect(error.status).toBe(409);
+  });
+
   it('should read one environment run history from the control plane', async () => {
     const page = { nextBefore: null, sessions: [] };
     respond(200, { data: page });

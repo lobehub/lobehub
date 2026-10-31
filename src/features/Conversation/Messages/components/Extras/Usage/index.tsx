@@ -4,7 +4,9 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import type { ModelPerformance, ModelUsage } from '@lobechat/types';
 import { unwrapServerDefaultHeterogeneousModel } from '@lobechat/types';
-import { Center, createStaticStyles, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -22,13 +24,9 @@ import { formatNumber } from '@/utils/format';
 import { contextSelectors, useConversationStore } from '../../../../store';
 import TokenDetail from './UsageDetail';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-    white-space: nowrap;
-  `,
-}));
+export const styles = stylex.create({
+  container: { fontSize: '12px', color: cssVar.colorTextQuaternary, whiteSpace: 'nowrap' },
+});
 
 // Cheap messages don't need a cost callout — only surface it once it's
 // expensive enough to matter.
@@ -87,7 +85,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       gap={12}
       justify={'space-between'}
     >
