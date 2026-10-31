@@ -149,6 +149,45 @@ describe('agent-mail provider — provisioning', () => {
     expect(calls).toContainEqual({ method: 'DELETE', path: '/v1/inboxes/inb_1' });
   });
 
+  it('keeps an inbox a concurrent provisioning request already bound', async () => {
+    // Webhook registration failed here, but the same deterministic `clientId`
+    // handed another in-flight request this very inbox, and that request
+    // committed its account first. Cleaning up would delete a live mailbox.
+    const calls: Array<{ method: string; path: string }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const { pathname } = new URL(typeof input === 'string' ? input : input.toString());
+      const method = init?.method ?? 'GET';
+      calls.push({ method, path: pathname });
+      if (method === 'POST' && pathname === '/v1/inboxes')
+        return json({ address: 'agent-7@lobe.id', clientId: 'cli_1', id: 'inb_1', metadata: {} });
+      if (method === 'POST' && pathname === '/v1/webhooks')
+        return json({ error: { message: 'upstream unavailable' } }, 503);
+      throw new Error(`unexpected ${method} ${pathname}`);
+    };
+    const provider = createAgentMailProvider({
+      ...isolated(),
+      apiKey: 'am_test',
+      fetchImpl,
+      webhookUrl: 'https://app.lobehub.com/hook',
+    });
+
+    // Not held when the request starts; the other request commits in between,
+    // which is exactly the window this guard covers.
+    let checks = 0;
+    await expect(
+      provider.provision({
+        agentId: 'agent_7',
+        isIdentifierHeld: async () => {
+          checks += 1;
+          return checks > 1;
+        },
+        userId: 'user_1',
+      }),
+    ).rejects.toThrow(/503/);
+
+    expect(calls).not.toContainEqual({ method: 'DELETE', path: '/v1/inboxes/inb_1' });
+  });
+
   it('opens an inbox and stores the returned handle as the identifier', async () => {
     const { calls, fetchImpl } = createMailFetch();
     const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', fetchImpl });

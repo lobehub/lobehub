@@ -169,7 +169,15 @@ export const createAgentMailProvider = (
           // The inbox already exists but nothing will ever point at it: the
           // service only learns about an account once provision returns. Hand
           // it back here, or every retry during a webhook outage leaks one.
-          await client.deleteInbox(inbox.id).catch(() => undefined);
+          //
+          // Unless a concurrent request already bound it. `clientId` is
+          // deterministic per agent, so two provisioning calls for the same
+          // agent get this same inbox; if the other one committed an account
+          // before this webhook call failed, deleting the inbox here would
+          // dismantle a live mailbox the service is happily routing.
+          if (!(await input.isIdentifierHeld?.(inbox.address))) {
+            await client.deleteInbox(inbox.id).catch(() => undefined);
+          }
           throw error;
         }
         if (webhook.secret) {
