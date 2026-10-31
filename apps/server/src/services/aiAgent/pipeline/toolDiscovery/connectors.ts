@@ -5,6 +5,11 @@ import pMap from 'p-map';
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { UserConnectorToolItem } from '@/database/schemas';
+import {
+  canCallNativeConnectorTool,
+  canUseNativeConnector,
+  hasNativeConnectorPolicy,
+} from '@/libs/mcp/connectorAccessPolicy';
 import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
 import type { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
@@ -113,7 +118,8 @@ interface PermissionPatchTargets<P> {
  * hard-block is already enforced universally in ToolExecutionService; this
  * surfaces the permission to the model too.
  *
- * Returns the inputs unchanged when nothing applies or the lookup fails.
+ * Returns the inputs unchanged when no connector applies. A lookup failure
+ * drops external manifests because access could not be established.
  */
 export const patchConnectorPermissions = async <P extends { identifier: string }>(
   deps: ToolDiscoveryDeps,
@@ -153,6 +159,29 @@ export const patchConnectorPermissions = async <P extends { identifier: string }
         { concurrency: CONNECTOR_TOOLS_QUERY_CONCURRENCY },
       );
 
+      const filterNativeManifest = <M extends LobeToolManifest>(manifest: M): M[] => {
+        const connector = connectorEntries.find((item) => item.identifier === manifest.identifier);
+        if (!connector || !hasNativeConnectorPolicy(connector)) return [manifest];
+        if (!canUseNativeConnector(connector, resolvedAgentId)) return [];
+        const permissions = connectorToolsMap.get(connector.identifier);
+        const api = manifest.api.filter(
+          (tool) =>
+            permissions?.has(tool.name) &&
+            permissions.get(tool.name) !== 'disabled' &&
+            canCallNativeConnectorTool(connector, resolvedAgentId, tool.name),
+        );
+        return api.length ? [{ ...manifest, api }] : [];
+      };
+      lobehubSkillManifests = lobehubSkillManifests.flatMap(filterNativeManifest);
+      composioManifests = composioManifests.flatMap(filterNativeManifest);
+      pluginsWithoutConnectors = pluginsWithoutConnectors.flatMap((plugin) => {
+        const connector = connectorEntries.find((item) => item.identifier === plugin.identifier);
+        if (!connector || !hasNativeConnectorPolicy(connector)) return [plugin];
+        const manifest = (plugin as P & { manifest?: LobeToolManifest }).manifest;
+        if (!manifest) return [];
+        return filterNativeManifest(manifest).map((allowed) => ({ ...plugin, manifest: allowed }));
+      });
+
       lobehubSkillManifests = lobehubSkillManifests.map((m) => {
         const perms = connectorToolsMap.get(m.identifier);
         return perms && perms.size > 0
@@ -182,6 +211,7 @@ export const patchConnectorPermissions = async <P extends { identifier: string }
     }
   } catch (err) {
     log('execAgent: failed to patch manifests with connector permissions: %O', err);
+    return { composioManifests: [], lobehubSkillManifests: [], pluginsWithoutConnectors: [] };
   }
 
   return { composioManifests, lobehubSkillManifests, pluginsWithoutConnectors };

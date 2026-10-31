@@ -20,6 +20,7 @@ import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceC
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
+import { preparePersonalRead } from '@/server/services/personalConnector/readEvidence';
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
@@ -167,6 +168,8 @@ export class ToolExecutionService {
 
     const startTime = Date.now();
     try {
+      const nativeRead = await preparePersonalRead(payload, context);
+      if (nativeRead?.blocked) return { ...buildBlockedToolResponse(apiName), executionTime: 0 };
       const typeStr = type as string;
       let data: ToolExecutionResult;
       switch (typeStr) {
@@ -182,6 +185,12 @@ export class ToolExecutionService {
         }
       }
 
+      // Journal failures must never turn a provider success into a retried call.
+      try {
+        if (nativeRead && !nativeRead.blocked) await nativeRead.finish(data);
+      } catch {
+        log('Personal read evidence unavailable');
+      }
       const executionTime = Date.now() - startTime;
 
       const denial = !data.success

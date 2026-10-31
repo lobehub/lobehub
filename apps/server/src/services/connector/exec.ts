@@ -1,6 +1,7 @@
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
+import { canCallNativeConnectorTool } from '@/libs/mcp/connectorAccessPolicy';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 
@@ -41,6 +42,12 @@ export const callConnectorToolById = async (
   }
   if (!connector.isEnabled) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
+  }
+  if (!canCallNativeConnectorTool(connector, undefined, params.toolName)) {
+    throw new ConnectorToolCallError(
+      'FORBIDDEN',
+      'This connection requires an authorized agent run',
+    );
   }
 
   // The tool MUST be present in the synced list — this is the single source of

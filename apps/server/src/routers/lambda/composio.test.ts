@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { canCallNativeConnectorTool } from '@/libs/mcp/connectorAccessPolicy';
+
 import { composioRouter } from './composio';
 
 const mocks = vi.hoisted(() => ({
@@ -27,7 +29,16 @@ const mocks = vi.hoisted(() => ({
   pluginUpdate: vi.fn(),
 }));
 
-vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({})) }));
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(async () => {
+    const db: any = {
+      execute: async () => {},
+      select: () => ({ from: () => ({ where: async () => [] }) }),
+      transaction: async (run: (tx: any) => Promise<unknown>) => run(db),
+    };
+    return db;
+  }),
+}));
 
 vi.mock('@/config/composio', () => ({
   getServerComposioAuthConfigId: mocks.getServerComposioAuthConfigId,
@@ -78,6 +89,66 @@ vi.mock('@/libs/composio', () => ({
 }));
 
 const caller = () => composioRouter.createCaller({ userId: 'user-1' } as any);
+
+describe('managed connection policy survives ordinary tool synchronization', () => {
+  it('requires confirmation again when the provider account identity changes', async () => {
+    const row = {
+      id: 'managed-gmail',
+      isEnabled: true,
+      status: 'connected',
+      metadata: {
+        composio: { connectedAccountId: 'ca-old' },
+        personalConnection: {
+          remoteId: 'ca-old',
+          accountKey: 'old-principal',
+          accountLabel: 'old@example.com',
+          authorization: { id: 'old-session' },
+        },
+        nativeReadEvidence: { toby: { lastSuccess: { outcome: 'data' } } },
+        nativeAccess: { agentIds: ['toby'], readToolNames: ['GMAIL_FETCH_EMAILS'], revision: 1 },
+      },
+    };
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue(row);
+    mocks.connectorUpdate.mockImplementation(async (_id, changes) => Object.assign(row, changes));
+    await caller().updateComposioPlugin({
+      appSlug: 'GMAIL',
+      identifier: 'gmail',
+      label: 'Gmail',
+      authConfigId: 'ac-1',
+      connectedAccountId: 'ca-different',
+      status: 'ACTIVE',
+      tools: [{ name: 'GMAIL_FETCH_EMAILS' }],
+    });
+    expect(canCallNativeConnectorTool(row, 'toby', 'GMAIL_FETCH_EMAILS')).toBe(false);
+    expect(row.metadata).not.toHaveProperty('personalConnection');
+    expect(row.metadata).not.toHaveProperty('nativeReadEvidence');
+    expect(row.isEnabled).toBe(false);
+  });
+
+  it('does not turn an unconfirmed connection into unrestricted access when tools refresh', async () => {
+    const row = {
+      id: 'managed-gmail',
+      isEnabled: true,
+      status: 'connected',
+      metadata: {
+        composio: { connectedAccountId: 'ca-1' },
+        nativeAccess: { agentIds: [], readToolNames: ['GMAIL_FETCH_EMAILS'] },
+      },
+    };
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue(row);
+    mocks.connectorUpdate.mockImplementation(async (_id, changes) => Object.assign(row, changes));
+    await caller().updateComposioPlugin({
+      appSlug: 'GMAIL',
+      identifier: 'gmail',
+      label: 'Gmail',
+      authConfigId: 'ac-1',
+      connectedAccountId: 'ca-1',
+      status: 'ACTIVE',
+      tools: [{ name: 'GMAIL_FETCH_EMAILS' }, { name: 'GMAIL_SEND_EMAIL' }],
+    });
+    expect(canCallNativeConnectorTool(row, 'toby', 'GMAIL_FETCH_EMAILS')).toBe(false);
+  });
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -212,6 +283,8 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
         }),
         status: 'connected',
       }),
+      undefined,
+      { nativeTransition: true },
     );
     expect(mocks.connectorToolUpsertMany).toHaveBeenCalledWith('conn-existing', expect.any(Array));
     expect(mocks.connectorToolDeleteToolsNotIn).toHaveBeenCalledWith('conn-existing', [

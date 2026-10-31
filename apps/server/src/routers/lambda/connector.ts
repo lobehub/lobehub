@@ -506,6 +506,11 @@ export const connectorRouter = router({
 
       const source = await ctx.connectorModel.findById(input.connectorId);
       if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      if (source.metadata && Object.hasOwn(source.metadata, 'nativeAccess'))
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Manage this connection through confirmed agent access instead of copying it',
+        });
       // Cloning duplicates the source's encrypted credentials into a row the
       // agent owner controls — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, source);
@@ -585,6 +590,11 @@ export const connectorRouter = router({
       // Clearing the mount lock mutates the source row — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, connector);
 
+      if (connector.metadata && Object.hasOwn(connector.metadata, 'nativeAccess'))
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Update confirmed agent access instead of unlinking this managed connection',
+        });
       const { mountedByAgentId: _drop, ...restMeta } = connector.metadata ?? {};
       await ctx.connectorModel.update(input.connectorId, { metadata: restMeta });
       return { id: input.connectorId };

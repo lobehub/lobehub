@@ -274,7 +274,7 @@ export const discoverTools = async (
     // borrowed tool runs on (see `buildOwnershipNote`).
     connectorOwnershipNote = await buildOwnershipNote(deps, connectors);
 
-    connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+    connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools, resolvedAgentId);
 
     scheduleConnectorRefresh(deps, {
       connectorGateKeeper,

@@ -14,6 +14,13 @@ import { defineConfig } from '@hey-api/openapi-ts';
  *   (GET …/{id}/chunks → listChunks, GET …/{id}/url → getUrl)
  */
 const METHOD_NAME_OVERRIDES: Record<string, string> = {
+  'GET /api/v1/connectors/catalog': 'catalog',
+  'POST /api/v1/connectors/authorizations': 'authorize',
+  'GET /api/v1/connectors/authorizations/{sessionId}': 'getAuthorization',
+  'POST /api/v1/connectors/authorizations/{sessionId}/cancel': 'cancelAuthorization',
+  'POST /api/v1/connectors/{id}/refresh': 'refresh',
+  'PUT /api/v1/connectors/{id}/agents': 'setAgents',
+  'POST /api/v1/connectors/{id}/disconnect': 'disconnect',
   'DELETE /api/v1/knowledge-bases/{id}/files/batch': 'removeFiles',
   // batch delete of selected ids (body requires non-empty messageIds), not "all"
   'DELETE /api/v1/messages': 'deleteMany',

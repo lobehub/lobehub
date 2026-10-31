@@ -154,6 +154,16 @@ export interface ConnectorMetadata {
    * Connect-new).
    */
   mountedByAgentId?: string;
+  /** Confirm-first access for connections managed by native personal-agent clients. */
+  nativeAccess?: {
+    /** Empty until the user confirms; never interpreted as unrestricted. */
+    agentIds: string[];
+    /** Explicit, server-reviewed read operations, never an inferred name prefix. */
+    readToolNames: string[];
+    /** Concrete Composio versions verified when tools were synchronized. */
+    readToolVersions?: Record<string, string>;
+    revision?: number;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
