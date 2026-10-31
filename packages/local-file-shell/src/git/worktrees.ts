@@ -235,14 +235,23 @@ const resolveWorktreeBase = async (
   dirPath: string,
   baseRef: string | undefined,
 ): Promise<GitWorktreeBase | undefined> => {
-  const sha = await resolveCommit(dirPath, baseRef ?? 'HEAD');
-  if (!sha) return undefined;
-
   if (baseRef) {
+    // The picker offers branch names, so read a name as a branch first: bare,
+    // git ranks a same-named tag above both `refs/heads/` and `refs/remotes/`.
+    for (const qualified of [`refs/heads/${baseRef}`, `refs/remotes/${baseRef}`]) {
+      const sha = await resolveCommit(dirPath, qualified);
+      if (sha) return { ref: baseRef, sha };
+    }
+
+    const sha = await resolveCommit(dirPath, baseRef);
+    if (!sha) return undefined;
     // A SHA (or a prefix of one) names nothing beyond the commit itself.
     const isSha = /^[\da-f]{4,40}$/i.test(baseRef) && sha.startsWith(baseRef.toLowerCase());
     return isSha ? { sha } : { ref: baseRef, sha };
   }
+
+  const sha = await resolveCommit(dirPath, 'HEAD');
+  if (!sha) return undefined;
 
   const branch = await runGit(dirPath, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
   return branch ? { ref: branch, sha } : { detached: true, sha };

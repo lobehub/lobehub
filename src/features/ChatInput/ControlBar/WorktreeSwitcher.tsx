@@ -49,6 +49,7 @@ import {
   getWorktreeBaseDefault,
   isDisabled,
   normalizeDisplayPath,
+  type WorktreeBaseDefault,
 } from './worktreeHelpers';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -589,11 +590,18 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
     // Create a worktree on a fresh branch (mirrors the branch switcher's "create
     // branch" flow), then switch the working directory into it. Returns an error
     // message for inline display in the modal, or undefined on success.
+    // `baseRef` is undefined when the base was left at `defaultBase`; the commit
+    // the dialog showed for it is then sent instead, so HEAD moving while the
+    // dialog was open cannot change what the worktree forks from.
     const handleCreateWorktree = useCallback(
-      async (branch: string, baseRef?: string): Promise<string | undefined> => {
+      async (
+        branch: string,
+        baseRef: string | undefined,
+        defaultBase: WorktreeBaseDefault,
+      ): Promise<string | undefined> => {
         const worktreePath = deriveWorktreePath(sourcePath, branch);
         const result = await gitService.addGitWorktree({
-          baseRef,
+          baseRef: baseRef ?? defaultBase.sha,
           branch,
           deviceId,
           path,
@@ -603,17 +611,19 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
 
         // Say what the branch forked from — above all a detached HEAD, which
         // would otherwise succeed without a word. A device too old to report a
-        // base also ignored the requested one and forked from its current HEAD.
+        // base also ignored the requested one and forked from its current HEAD,
+        // which only matters when the user picked a different base.
         if (!result.base) {
           if (baseRef) toast.warning(t('workingDirectory.createWorktreeBaseIgnored'));
         } else {
           const sha = getShortSha(result.base.sha);
+          // The default went over the wire as a bare SHA; name it as the dialog did.
+          const ref = baseRef ? result.base.ref : defaultBase.branch;
+          const detached = baseRef ? result.base.detached : defaultBase.detached;
           toast.success(
-            result.base.detached
+            detached
               ? t('workingDirectory.createWorktreeBasedOnDetached', { sha })
-              : t('workingDirectory.createWorktreeBasedOn', {
-                  base: result.base.ref ? `${result.base.ref} @${sha}` : sha,
-                }),
+              : t('workingDirectory.createWorktreeBasedOn', { base: ref ? `${ref} @${sha}` : sha }),
           );
         }
 
@@ -628,12 +638,13 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
 
     const openCreateWorktree = useCallback(() => {
       setOpen(false);
+      // The checkout `git worktree add` runs in — its HEAD is the default base.
+      const defaultBase = getWorktreeBaseDefault(
+        worktrees.find((worktree) => worktree.current),
+        detached ? '' : currentBranch,
+      );
       openCreateWorktreeModal({
-        // The checkout `git worktree add` runs in — its HEAD is the default base.
-        defaultBase: getWorktreeBaseDefault(
-          worktrees.find((worktree) => worktree.current),
-          detached ? '' : currentBranch,
-        ),
+        defaultBase,
         // The modal reads the repo's full local branch list itself and draws the
         // generated default from it, so a name is not handed out twice and does
         // not collide with a ref on the `wt` namespace path (see
@@ -641,7 +652,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
         // list can be awaited: snapshotting an in-flight (empty) list would hand
         // out a name git is guaranteed to refuse.
         deviceId,
-        onSubmit: handleCreateWorktree,
+        onSubmit: (branch, baseRef) => handleCreateWorktree(branch, baseRef, defaultBase),
         path,
         resolvePath: (branch) => deriveWorktreePath(sourcePath, branch),
       });

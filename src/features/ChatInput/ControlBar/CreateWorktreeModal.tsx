@@ -56,7 +56,7 @@ interface CreateWorktreeContentProps {
   deviceId?: string;
   /**
    * Create the worktree on a fresh branch. `baseRef` is undefined when the base
-   * was left at the current HEAD. Return an error message to show inline and
+   * was left at `defaultBase`. Return an error message to show inline and
    * keep the modal open; return undefined on success (modal closes).
    */
   onSubmit: (branch: string, baseRef?: string) => Promise<string | undefined>;
@@ -89,7 +89,7 @@ const CreateWorktreeContent = memo<CreateWorktreeContentProps>(
 
     const baseValue = baseEdited ?? defaultBase.value;
     const baseTrimmed = baseValue.trim();
-    // Typing the default back in is the same as never touching it: fork from HEAD.
+    // Typing the default back in is the same as never touching it.
     const isDefaultBase = !baseTrimmed || baseTrimmed === defaultBase.value;
     const baseOptions = useBaseOptions(deviceId, path, baseValue, baseEdited === undefined);
 

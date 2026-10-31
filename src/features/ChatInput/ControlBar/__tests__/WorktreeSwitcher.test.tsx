@@ -629,11 +629,35 @@ describe('WorktreeSwitcher', () => {
 
       expect(options.defaultBase).toEqual({ detached: true, sha, value: '9a1b3127' });
 
+      // The device gets the SHA the dialog showed and reports it back bare.
+      addGitWorktreeMock.mockResolvedValue({ base: { sha }, success: true });
       await options.onSubmit('wt/new', undefined);
 
+      expect(addGitWorktreeMock).toHaveBeenCalledWith(expect.objectContaining({ baseRef: sha }));
       expect(messageSuccessMock).toHaveBeenCalledWith(
         'workingDirectory.createWorktreeBasedOnDetached:{"sha":"9a1b3127"}',
       );
+    });
+
+    it('pins an untouched base to the commit the dialog showed', async () => {
+      addGitWorktreeMock.mockResolvedValue({ base: { sha }, success: true });
+      const options = openCreate([{ branch: 'canary', current: true, head: sha, path: '/repo' }]);
+
+      await options.onSubmit('wt/new', undefined);
+
+      expect(addGitWorktreeMock).toHaveBeenCalledWith(expect.objectContaining({ baseRef: sha }));
+      expect(messageSuccessMock).toHaveBeenCalledWith(
+        'workingDirectory.createWorktreeBasedOn:{"base":"canary @9a1b3127"}',
+      );
+    });
+
+    it('does not warn about an older device when the base was left as is', async () => {
+      addGitWorktreeMock.mockResolvedValue({ success: true, worktreePath: '/repo-wt' });
+      const options = openCreate([{ branch: 'canary', current: true, head: sha, path: '/repo' }]);
+
+      await options.onSubmit('wt/new', undefined);
+
+      expect(messageWarningMock).not.toHaveBeenCalled();
     });
 
     it('warns when an older device ignored the chosen base', async () => {

@@ -80,6 +80,24 @@ describe('addGitWorktree base', () => {
     expect(git(target('two'), 'branch', '--show-current')).toBe('wt/two');
   });
 
+  it('reads a baseRef as the branch when a tag shares its name', async () => {
+    const tagged = git(repo, 'rev-parse', 'HEAD');
+    git(repo, 'tag', 'release');
+    git(repo, 'checkout', '-q', '-b', 'release');
+    const branchTip = await commit(repo, 'b.txt');
+    git(repo, 'checkout', '-q', 'main');
+
+    const result = await addGitWorktree({
+      baseRef: 'release',
+      branch: 'wt/tag',
+      path: repo,
+      worktreePath: target('tag'),
+    });
+
+    expect(branchTip).not.toBe(tagged);
+    expect(result).toMatchObject({ base: { ref: 'release', sha: branchTip }, success: true });
+  });
+
   it('reports a SHA baseRef without a ref name', async () => {
     const first = git(repo, 'rev-parse', 'HEAD');
     await commit(repo, 'b.txt');
