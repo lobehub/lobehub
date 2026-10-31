@@ -8,6 +8,7 @@ import { getTrpcClient } from '../api/client';
 import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { registerAgentAccountCommand, registerAgentInboxCommand } from './agent/account';
 import { resolveAgentId } from './agent/resolveAgentId';
 import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
@@ -48,6 +49,8 @@ const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unkn
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
   registerAgentSpaceFsCommand(agent);
+  registerAgentAccountCommand(agent);
+  registerAgentInboxCommand(agent);
 
   // ── list ──────────────────────────────────────────────
 
