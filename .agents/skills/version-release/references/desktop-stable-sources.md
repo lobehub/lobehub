@@ -40,6 +40,8 @@ Replace both SHA placeholders with verified full commits. Read the base from the
 
 Manual `release_mode=recovery` only resumes a Release with that bound recovery intent; supplied Cloud SHA and reason must agree. The first-attempt/create-only rules still apply. Later rebuilds read the saved record. The new version becomes a delivered baseline only after its own complete publication succeeds.
 
+If the initial source-record write failed before any build/publication, a later attempt with no record must stop. Verify the Release's bound recovery intent, actual merged PR/tag and pinned Cloud SHA, then start a **new manual Release Desktop Stable run** from the current tooling ref with `release_mode=recovery`, the new `version`, and `source_ref=v<version>`. Leave optional Cloud/reason inputs empty to use the bound intent; keep both upload-skip inputs enabled for a verification build. Attempt 1 of this explicit run may create the missing record from those same pinned sources; it cannot overwrite an existing record. If a previously saved record was lost, recover its original content instead; do not replace its identity or invent historical import evidence.
+
 ## Rebuild and historical import
 
 To rebuild an older version, run the repaired **Release Desktop Stable** workflow from a ref containing the current release tooling. Select `release_mode=rebuild`, target `version`, and `source_ref=v<version>`; the latter must resolve to that version's tag SHA. Keep both upload-skip inputs enabled for a dry-run. `release_mode=import` is a separate metadata-only operation: supply `cloud_ref`, `evidence_run_id` and `evidence_run_attempt`; it records sources without building or publishing installers. An import does not create delivery proof.
