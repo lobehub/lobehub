@@ -11,6 +11,8 @@ export default {
   'create': 'Create channel',
   'submit': 'Create',
   'agents': 'Agents',
+  'otherAgents': 'Other Agents',
+  'projectAgents': 'Project members',
   'searchAgents': 'Search Agents',
   'unnamedAgent': 'Unnamed Agent',
   'person': 'Person',

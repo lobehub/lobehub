@@ -59,7 +59,7 @@ function CreateChannel({ existing, onCreated, projectId }: CreateChannelProps) {
   const [people, setPeople] = useState<ChannelPersonOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
-  const options = useChannelAgentOptions();
+  const options = useChannelAgentOptions(existing ? undefined : projectId);
   const dirty = !!title.trim() || agents.length > 0 || people.length > 0;
 
   // A mask click must not drop what the user typed or picked; ✕ and Esc still close.
