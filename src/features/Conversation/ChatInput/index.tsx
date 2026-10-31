@@ -3,10 +3,9 @@
 import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Alert, type DropdownItem, Flexbox, toast } from '@lobehub/ui';
+import { type DropdownItem, Flexbox, toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import {
   getBusinessChatInputSendAreaPrefix,
@@ -42,6 +41,7 @@ import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
+import SendErrorAlert from './SendErrorAlert';
 import { sendVoiceMessage } from './sendVoiceMessage';
 import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
@@ -50,7 +50,6 @@ import {
   getContextWindowMessages,
   getConversationSendButtonProps,
   toChatInputMessages,
-  toDisplayableSendErrorMessage,
 } from './utils';
 import {
   canSendVoiceMessage,
@@ -199,8 +198,6 @@ const ChatInput = memo<ChatInputProps>(
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
-    const { t } = useTranslation('chat');
-
     // ConversationStore state
     const storeApi = useConversationStoreApi();
     const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -271,22 +268,6 @@ const ChatInput = memo<ChatInputProps>(
     // Send message error from ConversationStore
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
-
-    // `inputSendErrorMsg` is the failed call's `error.message` verbatim, so it
-    // can still be a raw database dump on servers predating the databaseError
-    // middleware. That text is SQL plus every bound parameter — including the
-    // user's own input — so it is never echoed; generic copy stands in for it.
-    const sendMessageErrorTitle = useMemo(
-      () =>
-        sendMessageErrorMsg
-          ? t('input.errorMsg', {
-              errorMsg:
-                toDisplayableSendErrorMessage(sendMessageErrorMsg) ??
-                t('unknownError', { ns: 'common' }),
-            })
-          : undefined,
-      [sendMessageErrorMsg, t],
-    );
 
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
@@ -486,15 +467,8 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
-          {sendMessageErrorTitle && (
-            <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
-              <Alert
-                closable
-                title={sendMessageErrorTitle}
-                type={'secondary'}
-                onClose={clearSendMessageError}
-              />
-            </Flexbox>
+          {sendMessageErrorMsg && (
+            <SendErrorAlert errorMessage={sendMessageErrorMsg} onClose={clearSendMessageError} />
           )}
           {businessAlerts}
           <Flexbox
