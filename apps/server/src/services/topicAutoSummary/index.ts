@@ -10,6 +10,8 @@ import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, desc, eq } from 'drizzle-orm';
 
+import { analyzeTopic, isTopicAnalysisEnabled } from '@/business/server/topicAnalysis';
+import { TopicAnalysisModel } from '@/database/models/topicAnalysis';
 import { topicSummaryEligibleMessage, TopicSummaryModel } from '@/database/models/topicSummary';
 import { UserModel } from '@/database/models/user';
 import { messages, topics } from '@/database/schemas';
@@ -26,6 +28,8 @@ const MAX_PREVIOUS_SUMMARY_CHARS = 20_000;
 const MAX_TRANSCRIPT_CHARS = 60_000;
 
 export interface TopicAutoSummaryResult {
+  /** Whether a topic analysis was recorded after the summary. */
+  analyzed?: boolean;
   reason?: 'disabled' | 'empty' | 'stale' | 'invalid-output' | 'no-executor';
   summarized: boolean;
 }
@@ -156,6 +160,56 @@ export class TopicAutoSummaryService {
       topicId,
     });
 
-    return updated ? { summarized: true } : { reason: 'stale', summarized: false };
+    if (!updated) return { reason: 'stale', summarized: false };
+
+    const analyzed = await this.analyze({
+      lastMessageId: latest.id,
+      lastMessageUpdatedAt: latest.updatedAt,
+      model,
+      provider,
+      topicId,
+      transcript,
+    });
+    return { analyzed, summarized: true };
+  };
+
+  /**
+   * Classify the topic from the transcript the summary just used. The summary is
+   * already committed, so an analysis failure is logged and swallowed: throwing
+   * would make the workflow step retry and regenerate a summary that succeeded.
+   */
+  private analyze = async (input: {
+    lastMessageId: string;
+    lastMessageUpdatedAt: Date;
+    model: string;
+    provider: string;
+    topicId: string;
+    transcript: string;
+  }): Promise<boolean> => {
+    if (!isTopicAnalysisEnabled()) return false;
+
+    try {
+      const result = await analyzeTopic({
+        db: this.db,
+        model: input.model,
+        provider: input.provider,
+        topicId: input.topicId,
+        transcript: input.transcript,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if (!result) return false;
+
+      await new TopicAnalysisModel(this.db, this.userId, this.workspaceId).save({
+        lastMessageId: input.lastMessageId,
+        lastMessageUpdatedAt: input.lastMessageUpdatedAt,
+        result,
+        topicId: input.topicId,
+      });
+      return true;
+    } catch (error) {
+      console.error(`[topic-auto-summary] Topic analysis failed: topicId=${input.topicId}`, error);
+      return false;
+    }
   };
 }
