@@ -21,6 +21,11 @@ import { useTopicId } from '../hooks/useTopicId';
 export type SandboxStorageAccess = 'hidden' | 'ready' | 'upgrade';
 
 export interface SandboxStorageAccessResult {
+  /**
+   * Whether this run could have a drive at all — a business deployment, an
+   * agent that runs in the cloud sandbox — known before the entitlement is.
+   */
+  eligible: boolean;
   /** Soft storage quota of the workspace, once known. */
   quotaBytes: number | null;
   status: SandboxStorageAccess;
@@ -67,12 +72,13 @@ export const useSandboxStorageAccess = (agentId: string): SandboxStorageAccessRe
   sandboxActions.useFetchEntitlement(shouldAsk, { revalidateOnFocus: false });
   const data = useSandboxStore(sandboxSelectors.entitlement);
 
-  if (!shouldAsk) return { quotaBytes: null, status: 'hidden' };
+  if (!shouldAsk) return { eligible: false, quotaBytes: null, status: 'hidden' };
   // Until the answer arrives, show nothing rather than flashing an upgrade
   // prompt at a user who turns out to be entitled.
-  if (!data) return { quotaBytes: null, status: 'hidden' };
+  if (!data) return { eligible: true, quotaBytes: null, status: 'hidden' };
 
   return {
+    eligible: true,
     quotaBytes: data.quotaBytes,
     status: data.entitled ? 'ready' : 'upgrade',
   };

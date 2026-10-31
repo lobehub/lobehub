@@ -7,6 +7,7 @@ import SafeBoundary from '@/components/ErrorBoundary';
 import {
   getPendingSandboxSelection,
   setPendingSandboxSelection,
+  setSandboxDefaultSelection,
 } from '@/store/chat/pendingSandboxSelection';
 
 import { useTopicId } from '../hooks/useTopicId';
@@ -26,15 +27,31 @@ interface SandboxStorageSectionProps {
  * fills an empty slot — a pick, including the temporary sandbox, stays — and
  * only before the topic exists, so a conversation already running never moves.
  * Sending consumes the slot, and the next new conversation is seeded again.
+ *
+ * Two halves, because the entitlement loads after the composer does. The
+ * default is registered as soon as the run is known to use the sandbox, and
+ * the first send settles it against the entitlement — so a message sent before
+ * the answer arrives still starts on the drive. Once the answer is in, the
+ * slot is filled here too, which is what the chip names.
  */
-const useSeedDefaultSelection = (agentId: string, enabled: boolean) => {
+const useSeedDefaultSelection = (
+  agentId: string,
+  { eligible, entitled, hasTopic }: { eligible: boolean; entitled: boolean; hasTopic: boolean },
+) => {
   const workspaceId = useActiveWorkspaceId();
 
   useEffect(() => {
-    if (!enabled || getPendingSandboxSelection(agentId)) return;
+    setSandboxDefaultSelection(
+      agentId,
+      eligible ? resolveDefaultSandboxSelection(workspaceId) : undefined,
+    );
+  }, [agentId, eligible, workspaceId]);
+
+  useEffect(() => {
+    if (!entitled || hasTopic || getPendingSandboxSelection(agentId)) return;
 
     setPendingSandboxSelection(agentId, resolveDefaultSandboxSelection(workspaceId));
-  }, [agentId, enabled, workspaceId]);
+  }, [agentId, entitled, hasTopic, workspaceId]);
 };
 
 /**
@@ -54,9 +71,13 @@ const useSeedDefaultSelection = (agentId: string, enabled: boolean) => {
  * different control.
  */
 const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }) => {
-  const { status } = useSandboxStorageAccess(agentId);
+  const { eligible, status } = useSandboxStorageAccess(agentId);
   const { selection, setSelection, topicId } = useSandboxPlacement(agentId, useTopicId());
-  useSeedDefaultSelection(agentId, status === 'ready' && !topicId);
+  useSeedDefaultSelection(agentId, {
+    eligible,
+    entitled: status === 'ready',
+    hasTopic: !!topicId,
+  });
 
   if (status === 'hidden') return null;
 
