@@ -179,6 +179,8 @@ export class OnboardingService {
           content: template.content,
           filename: template.filename,
           loadPosition: template.loadPosition,
+          // Seeded templates are not user writes; the character limit does not apply.
+          source: 'system',
           loadRules: template.loadRules,
           policy: template.policyLoadFormat
             ? {

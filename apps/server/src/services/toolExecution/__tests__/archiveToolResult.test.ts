@@ -93,7 +93,7 @@ describe('archiveToolResultIfNeeded', () => {
       ARCHIVE_PATH,
       CONTENT,
       { agentId: 'agent-1', topicId: 'topic-1' },
-      { contentFormat: 'raw' },
+      { contentFormat: 'raw', source: 'system' },
     );
     expect(mockVfsService.read).toHaveBeenCalledWith(ARCHIVE_PATH, {
       agentId: 'agent-1',
@@ -165,7 +165,7 @@ describe('archiveToolResultIfNeeded', () => {
       collisionPath,
       CONTENT,
       { agentId: 'agent-1', topicId: 'topic-1' },
-      { contentFormat: 'raw' },
+      { contentFormat: 'raw', source: 'system' },
     );
     expect(mockTopicDocumentModel.associate).toHaveBeenCalledWith({
       documentId: 'document-1',

@@ -1,5 +1,6 @@
 'use client';
 
+import { DOCUMENT_CHAR_LIMIT_EXCEEDED, type DocumentCharLimitErrorData } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 import { toast } from '@lobehub/ui';
@@ -385,6 +386,7 @@ export class EditorActionImpl {
           lastUpdatedTime: updatedAt,
           // The editor reloads the adopted body and records it again.
           loadedBody: undefined,
+          charLimitError: undefined,
           saveBlockedByLock: false,
           saveStatus: 'saved',
         },
@@ -634,11 +636,14 @@ export class EditorActionImpl {
                 lastSavedEditorData: structuredClone(currentEditorData),
                 // The saved body is now the editor's own serialization.
                 loadedBody: undefined,
+                // Only a saved body clears a body refused for its length.
+                charLimitError: undefined,
               }
             : {}),
           ...(savedAt ? { lastUpdatedTime: savedAt } : {}),
           saveBlockedByLock: false,
-          saveStatus: 'saved',
+          // A title save does not save a body still refused for its length.
+          saveStatus: metadataOnly && current?.charLimitError ? 'failed' : 'saved',
         },
       });
 
@@ -677,6 +682,33 @@ export class EditorActionImpl {
         this.#get().triggerDebouncedSave(id);
       }
     } catch (error) {
+      // The plan's per-document character limit refused this body. Keep it dirty
+      // and surface a persistent banner instead of a toast on every autosave; no
+      // debounced retry, since the same body would be refused again until the
+      // user shortens it (the next edit schedules the next attempt).
+      const charLimitData = (
+        error as { data?: { errorData?: Partial<DocumentCharLimitErrorData> } }
+      )?.data?.errorData;
+      if (
+        charLimitData?.code === DOCUMENT_CHAR_LIMIT_EXCEEDED &&
+        typeof charLimitData.limit === 'number'
+      ) {
+        internal_dispatchDocument({
+          id,
+          type: 'updateDocument',
+          value: {
+            charLimitError: {
+              actual: charLimitData.actual ?? (doc.content ?? '').length,
+              limit: charLimitData.limit,
+              plan: charLimitData.plan,
+            },
+            saveStatus: 'failed',
+          },
+        });
+        if (hasMetadataChanges) throw error;
+        return;
+      }
+
       const errorCode = (error as { data?: { code?: string } })?.data?.code;
       const conflicted = errorCode === 'CONFLICT';
       // A view-level workspace member has no edit right on this document

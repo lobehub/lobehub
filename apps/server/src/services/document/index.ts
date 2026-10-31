@@ -10,7 +10,7 @@ import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
 import { sliceHead } from '@lobechat/prompts/textWindow';
-import type { DocumentAccessScope, FileAccessScope } from '@lobechat/types';
+import type { DocumentAccessScope, DocumentWriteSource, FileAccessScope } from '@lobechat/types';
 import {
   ordinaryDocumentAccessScope,
   ordinaryFileAccessScope,
@@ -47,6 +47,7 @@ import type {
   UpdateDocumentParams,
   UpdateDocumentResult,
 } from './types';
+import { assertDocumentWriteWithinLimit } from './writeLimit';
 
 const log = debug('lobe-chat:service:document');
 
@@ -207,6 +208,8 @@ export class DocumentService {
     slug?: string;
     title: string;
     visibility?: 'private' | 'public';
+    /** Who asked for the write; `system` skips the per-document character limit. Defaults to `user`. */
+    writeSource?: DocumentWriteSource;
   }): Promise<DocumentItem> {
     const {
       content,
@@ -217,6 +220,14 @@ export class DocumentService {
       slug,
       visibility,
     } = params;
+    // Refuse before any row (including the KB mirror file) is written.
+    await assertDocumentWriteWithinLimit({
+      charCount: content?.length ?? 0,
+      source: params.writeSource,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+
     // Agent tool calls often fill optional ids with "" — that means "unset".
     // Passed through, it reaches the `parent_id` / `knowledge_base_id` FKs and
     // fails the insert with an opaque `Failed query` error.
@@ -348,6 +359,7 @@ export class DocumentService {
       slug?: string;
       title: string;
       visibility?: 'private' | 'public';
+      writeSource?: DocumentWriteSource;
     }>,
   ): Promise<DocumentItem[]> {
     // Create all documents in parallel for better performance
@@ -811,6 +823,19 @@ export class DocumentService {
       const updates: Record<string, unknown> = {};
 
       if (params.content !== undefined) {
+        // Room projections persist what the room already accepted. Checked before
+        // anything is persisted. `restoreFromHistoryId` is not an exemption: the
+        // client sends it with a body the server does not match against the
+        // version, so only server-side restores opt out via `writeSource`.
+        if (params.origin !== 'room-projection') {
+          await assertDocumentWriteWithinLimit({
+            charCount: params.content.length,
+            previousCharCount: currentDocument.content?.length ?? 0,
+            source: params.writeSource,
+            userId: this.userId,
+            workspaceId: this.workspaceId,
+          });
+        }
         updates.content = params.content;
         updates.totalCharCount = params.content.length;
         updates.totalLineCount = params.content.split('\n').length;

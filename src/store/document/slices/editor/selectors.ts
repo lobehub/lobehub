@@ -24,6 +24,8 @@ const saveStatus = (id: string) => (s: DocumentStore) => s.documents[id]?.saveSt
 const saveBlockedByLock = (id: string) => (s: DocumentStore) =>
   s.documents[id]?.saveBlockedByLock ?? false;
 
+const charLimitError = (id: string) => (s: DocumentStore) => s.documents[id]?.charLimitError;
+
 const content = (id: string) => (s: DocumentStore) => s.documents[id]?.content ?? '';
 
 const editorData = (id: string) => (s: DocumentStore) => s.documents[id]?.editorData;
@@ -109,6 +111,7 @@ export const editorSelectors = {
   isDocumentLoading,
   isDirty,
   lastUpdatedTime,
+  charLimitError,
   saveBlockedByLock,
   saveStatus,
   sourceType,

@@ -1,4 +1,7 @@
+import { TRPCError } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
+
+import { formatDocumentCharLimitMessage } from '@/server/services/document/writeLimit';
 
 import { classifyToolError, getToolAccessDeniedError } from '../errorClassification';
 
@@ -17,6 +20,32 @@ describe('classifyToolError', () => {
 
   it('should classify invalid schema as replan', () => {
     const result = classifyToolError(new Error('invalid schema for tool arguments'));
+
+    expect(result.kind).toBe('replan');
+  });
+
+  it('classifies a refused document write as replan and keeps the numbers', () => {
+    const error = new TRPCError({
+      cause: { data: { actual: 123456, code: 'DocumentCharLimitExceeded', limit: 100000 } },
+      code: 'BAD_REQUEST',
+      message: formatDocumentCharLimitMessage({ actual: 123456, limit: 100000, plan: 'free' }),
+    });
+
+    const result = classifyToolError(error);
+
+    expect(result.kind).toBe('replan');
+    expect(result.message).toContain('123456');
+    expect(result.message).toContain('100000');
+    expect(result.message).toContain('split the content');
+  });
+
+  it('reads the code of an error a builtin runtime wrapped as its body', () => {
+    const body = new TRPCError({
+      code: 'BAD_REQUEST',
+      message: formatDocumentCharLimitMessage({ actual: 123456, limit: 100000 }),
+    });
+
+    const result = classifyToolError({ body, message: body.message, type: 'PluginServerError' });
 
     expect(result.kind).toBe('replan');
   });

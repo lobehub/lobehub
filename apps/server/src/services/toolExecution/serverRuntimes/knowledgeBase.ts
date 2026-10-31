@@ -166,6 +166,7 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
             knowledgeBaseId,
             parentId,
             title,
+            writeSource: 'agent',
             // Inherit caller-agent visibility: private-agent output stays in
             // the owner's private bucket; public-agent output is visible to
             // the workspace. When null (no agent / cannot resolve), fall

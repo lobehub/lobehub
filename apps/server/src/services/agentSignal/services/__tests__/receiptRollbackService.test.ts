@@ -149,6 +149,7 @@ describe('rollbackAgentSignalReceipt', () => {
       lockOwnerId: 'server:lock-owner',
       restoreFromHistoryId: 'history-1',
       saveSource: 'restore',
+      writeSource: 'system',
     });
     expect(mocks.receiptService.updateAgentSignalReceiptMetadata).toHaveBeenCalledWith(
       'receipt-1',

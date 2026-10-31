@@ -10,6 +10,19 @@ describe('error utilities', () => {
     expect(formatError(error)).toBe('fetch failed: Could not connect: ConnectionRefused');
   });
 
+  it('prints the page character-limit refusal with its numbers', () => {
+    const message =
+      'This document would have 120,500 characters, over the 100,000-character limit per document on your plan.';
+    const error = Object.assign(new Error(message), {
+      data: {
+        code: 'BAD_REQUEST',
+        errorData: { actual: 120_500, code: 'DocumentCharLimitExceeded', limit: 100_000 },
+      },
+    });
+
+    expect(formatError(error)).toBe(message);
+  });
+
   it('handles error-like objects and circular cause chains', () => {
     const error: { cause?: unknown; code: string; message: string; name: string } = {
       code: 'ECONNRESET',

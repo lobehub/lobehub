@@ -55,6 +55,7 @@ export const pageAgentRuntime: ServerRuntimeRegistration = {
       saveSource: 'llm_call',
       userId: context.userId,
       workspaceId: context.workspaceId,
+      writeSource: 'agent',
     };
     return new PageAgentExecutionRuntime(
       buildService(createPageSessions(context.serverDB, writer)),

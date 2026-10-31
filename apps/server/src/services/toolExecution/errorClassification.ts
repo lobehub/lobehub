@@ -107,6 +107,8 @@ const normalizeSignal = (error: unknown): ToolErrorSignal => {
 
   if (error && typeof error === 'object') {
     const raw = error as {
+      /** Builtin runtimes wrap the thrown error as `{ body, message, type }`. */
+      body?: { code?: unknown };
       code?: string;
       error?: { code?: string; message?: string; status?: number; statusCode?: number };
       message?: string;
@@ -119,7 +121,7 @@ const normalizeSignal = (error: unknown): ToolErrorSignal => {
     const message = (raw.message || nestedMessage || 'unknown error').toLowerCase();
 
     return {
-      code: normalizeCode(raw.code || nestedCode),
+      code: normalizeCode(raw.code || nestedCode || toRecord(raw.body)?.code),
       message,
       status:
         typeof raw.status === 'number'
