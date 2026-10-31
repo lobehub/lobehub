@@ -251,16 +251,21 @@ export class TaskRunnerService {
 
       // A heterogeneous runtime ignores a pair it cannot use, so the run would
       // report success on the Agent's own model. Refuse it before the Task moves.
-      if (model && provider) {
+      if (model) {
         const { heterogeneousProvider } =
           (await this.agentModel.getAgentAgencyConfig(task.assigneeAgentId!)) ?? {};
         if (
           heterogeneousProvider &&
-          !resolveHeterogeneousModelOverride(heterogeneousProvider, { model, provider })
+          !resolveHeterogeneousModelOverride(heterogeneousProvider, {
+            model,
+            provider: provider ?? getHeterogeneousTaskModelProvider(heterogeneousProvider),
+          })
         ) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: `This agent's runtime cannot run ${model} on provider ${provider}.`,
+            message: provider
+              ? `This agent's runtime cannot run ${model} on provider ${provider}.`
+              : `This agent's runtime cannot run ${model} without a provider it is bound to.`,
           });
         }
       }
@@ -486,6 +491,13 @@ export class TaskRunnerService {
       // fails below must not move its topic back to the previous machine.
       runAccepted = true;
 
+      // Written only with the recorded run, so a replacement that cannot start never
+      // costs the Task its previous pin, and a failed write cannot strand a live run.
+      // `null` clears the stale provider when none was resolved.
+      const replacedPin = model
+        ? { model, provider: typeof taskConfig.provider === 'string' ? taskConfig.provider : null }
+        : undefined;
+
       if (result.topicId) {
         const topicId = result.topicId;
         // Record the run under the task's row lock (see TaskService.deleteTask).
@@ -515,6 +527,7 @@ export class TaskRunnerService {
               trigger,
             });
           }
+          if (replacedPin) await taskModel.updateTaskConfig(task.id, replacedPin);
           return 'recorded' as const;
         });
         if (recorded !== 'recorded') {
@@ -542,13 +555,8 @@ export class TaskRunnerService {
         }
       }
 
-      // Written only now so a replacement that cannot start never costs the Task
-      // its previous pin. `null` clears the stale provider when none was resolved.
-      if (model) {
-        await this.taskModel.updateTaskConfig(task.id, {
-          model,
-          provider: typeof taskConfig.provider === 'string' ? taskConfig.provider : null,
-        });
+      if (!result.topicId && replacedPin) {
+        await this.taskModel.updateTaskConfig(task.id, replacedPin);
       }
 
       await this.taskModel.updateHeartbeat(task.id);

@@ -232,6 +232,50 @@ describe('TaskRunnerService.runTask model snapshot backfill', () => {
     expect(taskModel.updateStatus).not.toHaveBeenCalled();
   });
 
+  /** @example A server-default API binding cannot apply a model-only override. */
+  it('refuses a model-only override a server-default binding cannot use', async () => {
+    setupTask({ model: 'stale-model', provider: 'personal-provider' });
+    mocks.getAgentAgencyConfig.mockResolvedValue({
+      heterogeneousProvider: { authMode: 'api', type: 'codex' },
+    });
+
+    await expect(
+      new TaskRunnerService(db, 'user-1').runTask({ model: 'gpt-5.4', taskId: 'T-1' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mocks.execAgent).not.toHaveBeenCalled();
+    expect(taskModel.updateStatusIfCurrent).not.toHaveBeenCalled();
+  });
+
+  /** @example A native runtime still accepts a model-only override. */
+  it('accepts a model-only override on a native heterogeneous runtime', async () => {
+    setupTask({ model: 'stale-model', provider: 'codex' });
+
+    await new TaskRunnerService(db, 'user-1').runTask({ model: 'gpt-5.4', taskId: 'T-1' });
+
+    expect(taskModel.updateTaskConfig).toHaveBeenCalledWith('task-1', {
+      model: 'gpt-5.4',
+      provider: 'codex',
+    });
+  });
+
+  /** @example A run withdrawn during startup does not replace the pin. */
+  it('keeps the previous pin when the run is withdrawn before it is recorded', async () => {
+    setupTask({ model: 'stale-model', provider: 'blocked-provider' });
+    mocks.getAgentAgencyConfig.mockResolvedValue({});
+    taskModel.findById.mockResolvedValue({ id: 'task-1', status: 'canceled' });
+
+    await expect(
+      new TaskRunnerService(db, 'user-1').runTask({
+        model: 'fixed-model',
+        provider: 'working-provider',
+        taskId: 'T-1',
+      }),
+    ).rejects.toThrow();
+
+    expect(taskModel.updateTaskConfig).not.toHaveBeenCalled();
+  });
+
   /** @example Without an override the run keeps the pinned pair and writes nothing. */
   it('keeps the pinned pair when no override is passed', async () => {
     setupTask({ model: 'pinned-model', provider: 'pinned-provider' });
