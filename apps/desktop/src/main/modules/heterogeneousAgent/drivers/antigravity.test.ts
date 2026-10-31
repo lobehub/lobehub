@@ -18,6 +18,7 @@ describe('antigravityDriver', () => {
       'stream-json',
       '--output-format',
       'stream-json',
+      '--dangerously-skip-permissions',
       '--conversation',
       'conv-1',
       '--effort',

@@ -63,6 +63,7 @@ export interface ListHeterogeneousAgentModelsParams {
   cwd?: string;
   env?: Record<string, string>;
   type:
+    | 'antigravity'
     | 'codebuddy'
     | 'codex'
     | 'cursor'
@@ -588,23 +589,7 @@ export const buildHeteroSpawnArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
+  if (!getHeteroSelectorCapability(provider.type)) return provider.args;
 
   const baseArgs = provider.args ?? [];
   const extraArgs: string[] = [];
@@ -614,11 +599,23 @@ export const buildHeteroSpawnArgs = (
     if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
   }
 
-  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+  if (
+    provider.type === 'antigravity' ||
+    provider.type === 'claude-code' ||
+    provider.type === 'codebuddy'
+  ) {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
-    const effort = getExplicitClaudeCodeReasoningEffort(provider);
-    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
+    const effort =
+      provider.type === 'antigravity'
+        ? HETERO_SELECTOR_CAPABILITIES.antigravity.effort.resolve(provider)
+        : getExplicitClaudeCodeReasoningEffort(provider);
+    if (
+      effort &&
+      effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasCliFlag(baseArgs, '--effort')
+    )
+      extraArgs.push('--effort', effort);
   }
 
   if (provider.type === 'codex') {
@@ -736,23 +733,7 @@ export const buildHeteroExecArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
+  if (!getHeteroSelectorCapability(provider.type)) return provider.args;
 
   const baseArgs = provider.args ?? [];
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
@@ -768,11 +749,23 @@ export const buildHeteroExecArgs = (
     }
   }
 
-  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
+  if (
+    provider.type === 'antigravity' ||
+    provider.type === 'claude-code' ||
+    provider.type === 'codebuddy'
+  ) {
     const model = getExplicitClaudeCodeModel(provider);
     if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
-    const effort = getExplicitClaudeCodeReasoningEffort(provider);
-    if (effort && !hasCliFlag(baseArgs, '--effort')) selectorArgs.push('--effort', effort);
+    const effort =
+      provider.type === 'antigravity'
+        ? HETERO_SELECTOR_CAPABILITIES.antigravity.effort.resolve(provider)
+        : getExplicitClaudeCodeReasoningEffort(provider);
+    if (
+      effort &&
+      effort !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
+      !hasCliFlag(baseArgs, '--effort')
+    )
+      selectorArgs.push('--effort', effort);
   }
 
   if (provider.type === 'codex') {

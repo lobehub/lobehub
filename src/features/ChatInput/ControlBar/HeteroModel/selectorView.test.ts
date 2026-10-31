@@ -51,6 +51,7 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives a catalog provider with another dimension the full menu', () => {
+    expect(resolveSelectorShape({ type: 'antigravity' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'codebuddy' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'qoder' }, true).kind).toBe('menu');
@@ -63,6 +64,20 @@ describe('resolveSelectorShape', () => {
 });
 
 describe('dimensions per provider', () => {
+  it('offers Antigravity catalog models and native effort levels with inherited defaults', () => {
+    const view = viewOf({ type: 'antigravity' });
+    expect(view.isCatalogModel).toBe(true);
+    expect(view.model).toBe('default');
+    expect(view.dimensions.map(({ key }) => key)).toEqual(['reasoning']);
+    expect(view.dimensions[0].options.map(({ value }) => value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
+  });
   it('uses the Codex catalog while preserving reasoning levels through max', () => {
     expect(viewOf({ type: 'codex' }).isCatalogModel).toBe(true);
 

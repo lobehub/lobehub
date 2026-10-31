@@ -1,4 +1,23 @@
 export default {
+  'heteroAgent.antigravityQuota.title': 'Antigravity quota',
+  'heteroAgent.antigravityQuota.tooltip': 'View Antigravity model quotas',
+  'heteroAgent.antigravityQuota.fiveHour': '5 hours',
+  'heteroAgent.antigravityQuota.remainingAmount': '{{amount}} remaining',
+  'heteroAgent.antigravityQuota.unknown': 'Unknown',
+  'heteroAgent.antigravityQuota.disabled': 'Unavailable',
+  'heteroAgent.antigravityQuota.resetUnconfirmed':
+    'Reset time reached. Refresh to check the latest quota.',
+  'heteroAgent.antigravityQuota.stale': 'Showing the last query. Refresh to confirm current quota.',
+  'heteroAgent.antigravityQuota.authRequired': 'Run agy in a terminal to sign in, then refresh.',
+  'heteroAgent.antigravityQuota.cliNotFound':
+    'Antigravity CLI was not found on this device. Install agy, then refresh.',
+  'heteroAgent.antigravityQuota.unsupported':
+    'Update agy to a version that supports structured quota queries, then refresh.',
+  'heteroAgent.antigravityQuota.timeout':
+    'The quota query timed out. Check the device connection and try again.',
+  'heteroAgent.antigravityQuota.error':
+    'Could not query Antigravity quota. Check the device and try again.',
+
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
   'sharePage.app.helpDescription':
