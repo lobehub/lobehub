@@ -727,8 +727,7 @@ export class KnowledgeBaseModel {
       const result = await fileModel.deleteMany(exclusiveFileIds, removeGlobalFile, {
         restrictToCreator: options?.restrictToCreator,
       });
-      /* v8 ignore next -- unreachable: FileModel.deleteMany resolves to an array on every path, so the `|| []` fallback never runs */
-      deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
+      deletedFiles = result.map((f) => ({ id: f.id, url: f.url }));
     }
 
     await this.db.delete(knowledgeBases).where(and(eq(knowledgeBases.id, id), this.ownership()));
@@ -793,8 +792,7 @@ export class KnowledgeBaseModel {
       const result = await fileModel.deleteMany(fileIds, removeGlobalFile, {
         restrictToCreator: options?.restrictToCreator,
       });
-      /* v8 ignore next -- unreachable: FileModel.deleteMany resolves to an array on every path, so the `|| []` fallback never runs */
-      deletedFiles = (result || []).map((f) => ({ id: f.id, url: f.url }));
+      deletedFiles = result.map((f) => ({ id: f.id, url: f.url }));
     }
 
     await this.db.delete(knowledgeBases).where(kbWhere);

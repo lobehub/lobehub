@@ -840,9 +840,6 @@ export class FileModel {
 
   // Abstract common method for deleting chunks
   private deleteFileChunks = async (trx: PgTransaction<any>, fileIds: string[]) => {
-    /* v8 ignore next -- unreachable: both callers pass a non-empty list ([id] in deleteInTransaction; deleteMany returns early when no file matched) */
-    if (fileIds.length === 0) return;
-
     // Get all chunk IDs related to the files to be deleted (knowledge base protection logic removed)
     const relatedChunks = await trx
       .select({ chunkId: fileChunks.chunkId })
@@ -867,8 +864,6 @@ export class FileModel {
         if (startIdx >= chunkIds.length) break;
 
         const batchChunkIds = chunkIds.slice(startIdx, startIdx + BATCH_SIZE);
-        /* v8 ignore next -- unreachable: the break above guarantees startIdx < chunkIds.length, so the slice is never empty */
-        if (batchChunkIds.length === 0) continue;
 
         // Process each batch in the correct deletion order.
         const batchPromise = (async () => {
