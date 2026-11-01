@@ -6,6 +6,7 @@ import {
   extractFalInputSchema,
   falInputSchemaToImageParameters,
   falInputSchemaToVideoParameters,
+  withFalSchemaDefaults,
 } from './schema';
 import { buildFalOpenAPI } from './testUtils';
 
@@ -184,5 +185,49 @@ describe('coerceFalInput', () => {
 
   it('returns the input untouched without a schema', () => {
     expect(coerceFalInput({ duration: 5 }, undefined)).toEqual({ duration: 5 });
+  });
+
+  it('turns a WxH size into an object where the endpoint takes size objects', () => {
+    const imageSize = {
+      anyOf: [
+        { properties: { height: { type: 'integer' }, width: { type: 'integer' } }, type: 'object' },
+        { enum: ['square_hd', 'auto'], type: 'string' },
+      ],
+    };
+
+    expect(
+      coerceFalInput({ image_size: '1536x1024' }, { properties: { image_size: imageSize } }),
+    ).toEqual({ image_size: { height: 1024, width: 1536 } });
+    expect(
+      coerceFalInput({ image_size: 'auto' }, { properties: { image_size: imageSize } }),
+    ).toEqual({ image_size: 'auto' });
+  });
+
+  it('keeps a WxH size the endpoint lists as a string', () => {
+    const schema = {
+      properties: { image_size: { enum: ['1024x1024', '1536x1024'], type: 'string' } },
+    };
+
+    expect(coerceFalInput({ image_size: '1536x1024' }, schema)).toEqual({
+      image_size: '1536x1024',
+    });
+  });
+});
+
+describe('withFalSchemaDefaults', () => {
+  const schema = {
+    properties: {
+      image_size: { enum: ['1024x1024', '1536x1024'], type: 'string' },
+      quality: { enum: ['auto', 'low', 'high'], type: 'string' },
+    },
+  };
+
+  it('adds only defaults the endpoint accepts and never overrides the request', () => {
+    expect(withFalSchemaDefaults({}, { image_size: 'auto', quality: 'auto' }, schema)).toEqual({
+      quality: 'auto',
+    });
+    expect(
+      withFalSchemaDefaults({ quality: 'high' }, { image_size: 'auto', quality: 'auto' }, schema),
+    ).toEqual({ quality: 'high' });
   });
 });

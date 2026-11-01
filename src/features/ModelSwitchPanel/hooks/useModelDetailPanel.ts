@@ -116,6 +116,7 @@ const UNIT_GROUP_MAP: Record<PricingUnitName, PricingGroup> = {
   imageInput: 'image',
   imageInput_cacheRead: 'image',
   imageOutput: 'image',
+  providerBillableUnit: 'image',
   textInput: 'text',
   textInput_cacheRead: 'text',
   textInput_cacheWrite: 'text',
@@ -149,6 +150,7 @@ const UNIT_SORT_ORDER: Record<PricingUnitName, number> = {
   imageOutput: 1,
   imageInput_cacheRead: 2,
   imageGeneration: 3,
+  providerBillableUnit: 4,
   audioInput: 0,
   audioOutput: 1,
   audioInput_cacheRead: 2,
@@ -250,6 +252,9 @@ interface PricingGroupData {
 const groupPricingUnits = (units: PricingUnit[]): PricingGroupData[] => {
   const map = new Map<PricingGroup, PricingUnit[]>();
   for (const unit of units) {
+    // Provider-reported units (e.g. fal) are a billing mechanism with no user-facing rate;
+    // the card's approximate per-image price is shown instead.
+    if (unit.name === 'providerBillableUnit') continue;
     const group = UNIT_GROUP_MAP[unit.name] || 'text';
     const arr = map.get(group) || [];
     arr.push(unit);

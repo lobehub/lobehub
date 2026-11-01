@@ -6,10 +6,16 @@ import { clearFalInputSchemaCache, FAL_INPUT_SCHEMA_TTL_MS, getFalInputSchema } 
 import { LobeFalAI } from './index';
 import { buildFalCatalogResponse, buildFalOpenAPI } from './testUtils';
 
-vi.mock('@fal-ai/client', () => ({
-  createFalClient: vi.fn(() => ({})),
-  fal: { config: vi.fn(), subscribe: vi.fn() },
-}));
+// Pricing lookup only matters for billable-unit cards, covered in billableUnits.test.ts
+vi.mock('../../utils/getModelPricing', () => ({ getModelPricing: vi.fn(async () => undefined) }));
+
+vi.mock('@fal-ai/client', () => {
+  const subscribe = vi.fn();
+  return {
+    createFalClient: vi.fn(() => ({ subscribe: (...args: unknown[]) => subscribe(...args) })),
+    fal: { subscribe },
+  };
+});
 
 const mockFal = vi.mocked(fal);
 
@@ -87,6 +93,43 @@ describe('LobeFalAI createImage with any fal endpoint', () => {
 
     expect(mockFal.subscribe).toHaveBeenCalledWith('fal-ai/flux/krea', {
       input: expect.objectContaining({ acceleration: 'high' }),
+    });
+  });
+
+  it('maps a GPT Image request to its fal edit endpoint with OpenAI defaults', async () => {
+    stubInputSchema('openai/gpt-image-2/edit', {
+      image_size: {
+        anyOf: [
+          {
+            properties: { height: { type: 'integer' }, width: { type: 'integer' } },
+            type: 'object',
+          },
+          { enum: ['square_hd', 'landscape_4_3', 'auto'], type: 'string' },
+        ],
+      },
+      image_urls: { type: 'array' },
+      num_images: { type: 'integer' },
+      prompt: { type: 'string' },
+      quality: { enum: ['auto', 'low', 'medium', 'high'], type: 'string' },
+    });
+    const runtime = new LobeFalAI({
+      apiKey: 'test-api-key',
+      modelIdMapping: { 'gpt-image-2': 'openai/gpt-image-2' },
+    });
+
+    await runtime.createImage({
+      model: 'gpt-image-2',
+      params: { imageUrls: ['https://example.com/ref.png'], prompt: 'a fox', size: '1536x1024' },
+    });
+
+    expect(mockFal.subscribe).toHaveBeenCalledWith('openai/gpt-image-2/edit', {
+      input: {
+        image_size: { height: 1024, width: 1536 },
+        image_urls: ['https://example.com/ref.png'],
+        num_images: 1,
+        prompt: 'a fox',
+        quality: 'auto',
+      },
     });
   });
 

@@ -1,4 +1,4 @@
-import { createFalClient, fal, type FalClient } from '@fal-ai/client';
+import { createFalClient, type FalClient } from '@fal-ai/client';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import { pick } from 'es-toolkit/compat';
@@ -6,8 +6,13 @@ import type { RuntimeImageGenParamsValue } from 'model-bank';
 import type { ClientOptions } from 'openai';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { withUsageCost } from '../../core/usageConverters/utils/withUsageCost';
 import { AgentRuntimeErrorType } from '../../types/error';
-import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateImageMethodOptions,
+  CreateImagePayload,
+  CreateImageResponse,
+} from '../../types/image';
 import type {
   CreateVideoPayload,
   CreateVideoResult,
@@ -15,6 +20,7 @@ import type {
   VideoGenerationCapabilities,
 } from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
+import { getModelPricing } from '../../utils/getModelPricing';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { getFalInputSchema, listFalGenerationModels } from './catalog';
@@ -24,7 +30,7 @@ import {
   resolveFalEndpointId,
   resolveFalImageEndpoint,
 } from './endpoint';
-import { coerceFalInput } from './schema';
+import { coerceFalInput, withFalSchemaDefaults } from './schema';
 
 // Create debug logger
 const log = debug('lobe-image:fal');
@@ -33,6 +39,10 @@ interface FalImageOutput {
   image?: { height?: number; url: string; width?: number };
   images?: { height?: number; url: string; width?: number }[];
 }
+
+/** GPT Image endpoints, which fal defaults to a higher quality than OpenAI's `auto` */
+const GPT_IMAGE_ENDPOINT = /^(?:openai|fal-ai)\/gpt-image-/;
+const GPT_IMAGE_DEFAULTS = { image_size: 'auto', quality: 'auto' };
 
 /** fal endpoints that run faster with `acceleration: 'high'` at no quality cost */
 const ACCELERATED_BY_DEFAULT_ENDPOINTS = new Set(['fal-ai/flux/krea']);
@@ -92,6 +102,13 @@ const loadBuiltinFalEndpoints = async () => {
   );
 };
 
+/**
+ * fal reports what each request cost in this response header. For token-billed endpoints
+ * (GPT Image, Gemini image) one unit is one USD; it is the only per-request usage fal returns.
+ * @see https://docs.fal.ai/model-apis/pricing
+ */
+const FAL_BILLABLE_UNITS_HEADER = 'x-fal-billable-units';
+
 // https://docs.fal.ai/model-apis/errors/
 const toFalRuntimeError = (error: unknown) => {
   if (error instanceof Error && 'status' in error && error.status === 401) {
@@ -126,18 +143,22 @@ export class LobeFalAI implements LobeRuntimeAI {
    */
   private readonly client: FalClient;
   private readonly apiKey: string;
+  /** Provider id used for pricing lookup; RouterRuntime passes its own id (e.g. `lobehub`). */
+  private readonly id: string;
 
   // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only uses the string form.
   constructor({
     apiKey,
+    id,
     modelIdMapping,
-  }: Omit<ClientOptions, 'apiKey'> & { apiKey?: string } & ModelIdMappingOptions = {}) {
+  }: Omit<ClientOptions, 'apiKey'> & {
+    apiKey?: string;
+    id?: string;
+  } & ModelIdMappingOptions = {}) {
     if (!apiKey) throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
 
-    fal.config({
-      credentials: apiKey,
-    });
     this.apiKey = apiKey;
+    this.id = id ?? 'fal';
     this.client = createFalClient({ credentials: apiKey });
     this.modelIdMappingOptions = { modelIdMapping };
     log('FalAI initialized with apiKey: %s', apiKey ? '*****' : 'Not set');
@@ -165,7 +186,10 @@ export class LobeFalAI implements LobeRuntimeAI {
     return pollFalVideoStatus(this.client, inferenceId);
   }
 
-  async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {
+  async createImage(
+    payload: CreateImagePayload,
+    options?: CreateImageMethodOptions,
+  ): Promise<CreateImageResponse> {
     const { model, params } = payload;
     const requestModel = resolveMappedModelId(model, this.modelIdMappingOptions);
     log('Creating image with model: %s and params: %O', requestModel, params);
@@ -231,13 +255,34 @@ export class LobeFalAI implements LobeRuntimeAI {
     const input = { ...defaultInput, ...userInput };
     // Fetched endpoints only accept the fields their schema declares; built-in cards send the
     // curated input as is
-    const finalInput = builtinEndpoints.has(endpoint)
-      ? input
-      : coerceFalInput(input, await getFalInputSchema(this.apiKey, endpoint));
+    let finalInput = input;
+    if (!builtinEndpoints.has(endpoint)) {
+      const schema = await getFalInputSchema(this.apiKey, endpoint);
+      finalInput = coerceFalInput(
+        GPT_IMAGE_ENDPOINT.test(endpoint)
+          ? withFalSchemaDefaults(input, GPT_IMAGE_DEFAULTS, schema)
+          : input,
+        schema,
+      );
+    }
 
-    log('Calling fal.subscribe with endpoint: %s and input: %O', endpoint, finalInput);
+    // `subscribe` returns only the result body, so a client scoped to this call reads the
+    // billable units header from the result response without racing concurrent generations.
+    let billableUnits: number | undefined;
+    const client = createFalClient({
+      credentials: this.apiKey,
+      fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        const header = response.headers.get(FAL_BILLABLE_UNITS_HEADER);
+        const units = header === null ? Number.NaN : Number(header);
+        if (Number.isFinite(units)) billableUnits = units;
+        return response;
+      },
+    });
+
+    log('Calling fal subscribe with endpoint: %s and input: %O', endpoint, finalInput);
     try {
-      const { data } = await fal.subscribe(endpoint, {
+      const { data } = await client.subscribe(endpoint, {
         input: finalInput,
       });
       const output = data as FalImageOutput;
@@ -247,10 +292,37 @@ export class LobeFalAI implements LobeRuntimeAI {
       return {
         imageUrl: image.url,
         ...pick(image, ['width', 'height']),
+        ...(await this.resolveImageUsage(model, endpoint, billableUnits, options)),
       };
     } catch (error) {
       throw toFalRuntimeError(error);
     }
+  }
+
+  /**
+   * Attach usage only when the card bills fal's billable units. Other cards (per-image prices,
+   * self-hosted fal cards) cannot price the units and would otherwise report a zero cost.
+   */
+  private async resolveImageUsage(
+    model: string,
+    endpoint: string,
+    billableUnits: number | undefined,
+    options?: CreateImageMethodOptions,
+  ): Promise<Pick<CreateImageResponse, 'modelUsage'>> {
+    const pricing = await getModelPricing(model, this.id, options?.pricingContext);
+    if (!pricing?.units.some((unit) => unit.name === 'providerBillableUnit')) return {};
+
+    if (billableUnits === undefined) {
+      // The image was generated, so it must not become free: settle at the per-image estimate the
+      // budget hold already reserved. Throwing instead would make the router generate it again.
+      console.error(`[fal] ${endpoint} returned no ${FAL_BILLABLE_UNITS_HEADER} header`);
+      const { approximatePricePerImage } = pricing;
+      return typeof approximatePricePerImage === 'number'
+        ? { modelUsage: { cost: approximatePricePerImage } }
+        : {};
+    }
+
+    return { modelUsage: withUsageCost({ providerBillableUnits: billableUnits }, pricing) };
   }
 
   /**

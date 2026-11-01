@@ -29,8 +29,18 @@ const EDIT_OR_TEXT_TO_IMAGE_FAMILIES = [
   /^alibaba\/qwen-image-3$/,
 ];
 
-/** Image cards whose `/edit` endpoint serves requests with reference images */
-const EDIT_WITH_IMAGES_MODELS = new Set(['fal-ai/nano-banana']);
+/**
+ * Text-to-image endpoints whose sibling `/edit` endpoint serves requests with reference images:
+ * `<endpoint>/edit`, or `<app>/edit` when the endpoint ends in `/text-to-image`
+ * (e.g. `openai/gpt-image-2.5/flare/text-to-image` → `openai/gpt-image-2.5/flare/edit`).
+ */
+const EDIT_SIBLING_FAMILIES = [
+  /^fal-ai\/nano-banana(-[\w.]+)?$/,
+  /^google\/nano-banana[\w.-]*$/,
+  /^fal-ai\/gemini-[\w.-]+-image(-preview)?$/,
+  /^(fal-ai|openai)\/gpt-image-[\w.-]+$/,
+  /^openai\/gpt-image-[\w.-]+\/\w+\/text-to-image$/,
+];
 
 /**
  * Turn a model id into the fal endpoint id it runs on. fal endpoint ids are always
@@ -53,7 +63,11 @@ export const resolveFalImageEndpoint = (model: string, hasImageUrls: boolean) =>
   if (EDIT_OR_TEXT_TO_IMAGE_FAMILIES.some((family) => family.test(endpoint))) {
     return `${endpoint}/${hasImageUrls ? 'edit' : 'text-to-image'}`;
   }
-  if (EDIT_WITH_IMAGES_MODELS.has(endpoint) && hasImageUrls) return `${endpoint}/edit`;
+  if (hasImageUrls && EDIT_SIBLING_FAMILIES.some((family) => family.test(endpoint))) {
+    return endpoint.endsWith('/text-to-image')
+      ? endpoint.replace(/\/text-to-image$/, '/edit')
+      : `${endpoint}/edit`;
+  }
 
   return endpoint;
 };
