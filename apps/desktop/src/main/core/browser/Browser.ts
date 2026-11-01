@@ -496,16 +496,20 @@ export default class Browser {
         params;
 
       // Use the platform menu system with full context data
-      this.app.menuManager.showContextMenu('default', {
-        hasImageContents,
-        isEditable,
-        linkURL: linkURL || undefined,
-        mediaType: mediaType as any,
-        selectionText: selectionText || undefined,
-        srcURL: srcURL || undefined,
-        x,
-        y,
-      });
+      this.app.menuManager.showContextMenu(
+        'default',
+        {
+          hasImageContents,
+          isEditable,
+          linkURL: linkURL || undefined,
+          mediaType: mediaType as any,
+          selectionText: selectionText || undefined,
+          srcURL: srcURL || undefined,
+          x,
+          y,
+        },
+        browserWindow,
+      );
     });
   }
 
