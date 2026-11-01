@@ -95,6 +95,10 @@ export class AgentInboxService {
   findTextFromOtherSender = (params: Parameters<AgentMailModel['findTextFromOtherSender']>[0]) =>
     this.mail.findTextFromOtherSender(params);
 
+  findSecretRepeatedFromOtherSender = (
+    params: Parameters<AgentMailModel['findSecretRepeatedFromOtherSender']>[0],
+  ) => this.mail.findSecretRepeatedFromOtherSender(params);
+
   listCodesFromOtherSenders = (
     params: Parameters<AgentMailModel['listCodesFromOtherSenders']>[0],
   ) => this.mail.listCodesFromOtherSenders(params);

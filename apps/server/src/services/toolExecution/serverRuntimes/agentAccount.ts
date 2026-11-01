@@ -270,7 +270,7 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
       // another sender's mail is held for the user just the same.
       const copied = relayed
         ? undefined
-        : await inbox.findTextFromOtherSender({
+        : ((await inbox.findTextFromOtherSender({
             agentId: requireAgentId(),
             // Same treatment as the codes above: a token reformatted on the way
             // out (`AB12CD34` sent as `ab-12-cd-34`) is the same secret, so both
@@ -278,7 +278,17 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
             candidates,
             recipient,
             since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
-          });
+          })) ??
+          // The same question asked from the source side: does the reply,
+          // stripped to letters and digits, contain a secret another sender's
+          // mail carries? Spacing a token out, wrapping it in `token=` or a link
+          // of the attacker's own changes nothing once both sides are compacted.
+          (await inbox.findSecretRepeatedFromOtherSender({
+            agentId: requireAgentId(),
+            compactText,
+            recipient,
+            since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
+          })));
       if (copied) {
         return {
           refusal: `This reply repeats a link or token from a message ${copied.from} sent you. Content from one sender's mail is never relayed to another without the user's approval — send it without \`threadKey\` to ask the user.`,
