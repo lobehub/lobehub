@@ -1,5 +1,7 @@
 'use client';
 
+import './TelemetryStep.css';
+
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { type IconProps } from '@lobehub/ui';
@@ -13,8 +15,6 @@ import { Trans, useTranslation } from 'react-i18next';
 import { ProductLogo } from '@/components/Branding';
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 import { useUserStore } from '@/store/user';
-
-import styles from './TelemetryStep.module.css';
 
 interface TelemetryStepProps {
   onNext: () => void;
@@ -80,7 +80,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
         <Text as={'p'}>{t('telemetry.desc')}</Text>
       </Flexbox>
       <Steps
-        className={styles.steps}
+        className={'lobe-telemetry-step-08415200-steps'}
         orientation={'vertical'}
         styles={{ indicator: { border: 'none', height: 32, width: 32 } }}
         items={[

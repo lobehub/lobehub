@@ -1,6 +1,9 @@
 'use client';
 
+import './index.css';
+
 import { cx, Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
@@ -27,12 +30,22 @@ import { isHomeMinimalLayout } from './CustomizeModal/config';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
 import HomePortrait from './HomePortrait';
-import styles from './index.module.css';
 import InputArea from './InputArea';
 import { homeLayoutVars, MINIMAL_STACK_GAP, minimalVars } from './layoutVars';
 import PortraitBubble from './PortraitBubble';
 import { RAIL_INBOX_PROPS, resolveRailVisibility } from './railVisibility';
 import type { HomeMode } from './types';
+
+const stylesAtomic = stylex.create({
+  header: { minWidth: '0' },
+  bubbleSlot: { width: 'max-content', minWidth: '0', maxWidth: '100%', marginBlockEnd: '4px' },
+  portrait: {
+    pointerEvents: 'none',
+    flex: 'none',
+    alignSelf: 'stretch',
+    width: 'calc(var(--home-portrait-width) + var(--home-portrait-inset))',
+  },
+});
 
 export const DEFAULT_HOME_MODE: HomeMode = 'chat';
 export const ONBOARDING_HOME_MODE_PARAM = 'onboarding';
@@ -123,9 +136,9 @@ const Home = memo(() => {
 
   if (minimal)
     return (
-      <Flexbox className={styles.minimal} gap={MINIMAL_STACK_GAP} style={minimalVars}>
+      <Flexbox className={'lobe-home-5119153d-minimal'} gap={MINIMAL_STACK_GAP} style={minimalVars}>
         <HomeHeader centered />
-        <div className={styles.inputArea}>
+        <div className={'lobe-home-5119153d-input-area'}>
           <InputArea
             inputValue={inputValue}
             mode={mode}
@@ -137,21 +150,25 @@ const Home = memo(() => {
     );
 
   return (
-    <Flexbox className={styles.grid} style={homeLayoutVars}>
+    <Flexbox className={'lobe-home-5119153d-grid'} style={homeLayoutVars}>
       <div
-        className={cx(styles.hero, portraitVisible && styles.heroWithSpeech, styles.heroCollapsed)}
         data-rail-collapsed={contentCollapsed}
+        className={cx(
+          'lobe-home-5119153d-hero',
+          portraitVisible && 'lobe-home-5119153d-hero-with-speech',
+          'lobe-home-5119153d-hero-collapsed',
+        )}
       >
-        <div className={styles.header}>
+        <div {...stylex.props(stylesAtomic['header'])}>
           <HomeHeader />
         </div>
         {portraitVisible && (
-          <div className={styles.speech} data-collapsed={contentCollapsed}>
+          <div className={'lobe-home-5119153d-speech'} data-collapsed={contentCollapsed}>
             {/* Keep the agent's line and artwork together in both header layouts. */}
-            <div className={styles.bubbleSlot}>
+            <div {...stylex.props(stylesAtomic['bubbleSlot'])}>
               <PortraitBubble promo={promo} />
             </div>
-            <div className={styles.portrait}>
+            <div {...stylex.props(stylesAtomic['portrait'])}>
               <HomePortrait />
             </div>
           </div>
@@ -159,12 +176,16 @@ const Home = memo(() => {
       </div>
 
       <Flexbox
-        className={cx(styles.main, styles.content, styles.contentCollapsed)}
         data-rail-collapsed={contentCollapsed}
         data-testid={'home-main'}
         gap={24}
+        className={cx(
+          'lobe-home-5119153d-main',
+          'lobe-home-5119153d-content',
+          'lobe-home-5119153d-content-collapsed',
+        )}
       >
-        <Flexbox className={styles.inputArea} gap={12}>
+        <Flexbox className={'lobe-home-5119153d-input-area'} gap={12}>
           <InputArea
             showNewModelShortcuts
             inputValue={inputValue}
@@ -183,7 +204,7 @@ const Home = memo(() => {
       {isLogin && (
         <aside
           aria-hidden={railCollapsed}
-          className={`${styles.rail} ${styles.railSurface}`}
+          className={`${'lobe-home-5119153d-rail'} ${'lobe-home-5119153d-rail-surface'}`}
           data-collapsed={railCollapsed}
           data-testid={'home-rail'}
           id={'home-rail'}

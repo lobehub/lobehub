@@ -1,9 +1,9 @@
+import './RailToggle.css';
+
 import { ActionIcon } from '@lobehub/ui';
 import { PanelRightCloseIcon, PanelRightOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import styles from './RailToggle.module.css';
 
 interface RailToggleProps {
   onToggle: () => void;
@@ -19,7 +19,7 @@ const RailToggle = memo<RailToggleProps>(({ onToggle, railVisible }) => {
       aria-controls={'home-rail'}
       aria-expanded={railVisible}
       aria-label={label}
-      className={styles.root}
+      className={'lobe-rail-toggle-68a97e71-root'}
       data-testid={'home-rail-toggle'}
       icon={railVisible ? PanelRightCloseIcon : PanelRightOpenIcon}
       size={'small'}

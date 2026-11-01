@@ -1,4 +1,0 @@
-/* ShareButton is a business component, so its buttons are reached by tag. */
-.shareButton button:not(:hover, :focus-visible) {
-  background: transparent;
-}

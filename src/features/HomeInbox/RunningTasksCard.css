@@ -1,0 +1,4 @@
+/* Overlap the stack so N agents read as one cluster, not a toolbar. */
+.lobe-running-tasks-card-ac1bd65a-avatars > :not(:first-child) {
+  margin-inline-start: -6px;
+}

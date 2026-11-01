@@ -1,0 +1,52 @@
+.lobe-list-item-4202baab-container {
+  cursor: pointer;
+  min-width: 1040px;
+  transition: background var(--lobe-motion-duration-mid) var(--lobe-motion-ease-in-out);
+}
+
+.lobe-list-item-4202baab-container:hover {
+  background: var(--lobe-color-fill-tertiary);
+}
+
+/* Source order is the cascade order of the merged row classes: keep it. */
+.lobe-list-item-4202baab-even-row {
+  background: var(--lobe-color-fill-quaternary);
+}
+
+/* Hover effect overrides zebra striping on the hovered row only */
+.lobe-list-item-4202baab-even-row:hover {
+  background: var(--lobe-color-fill-tertiary);
+}
+
+/* Hide zebra striping when any row is hovered */
+.any-row-hovered .lobe-list-item-4202baab-even-row {
+  background: transparent;
+}
+
+/* But keep hover effect on the actual hovered row */
+.any-row-hovered .lobe-list-item-4202baab-even-row:hover {
+  background: var(--lobe-color-fill-tertiary);
+}
+
+.lobe-list-item-4202baab-selected {
+  background: var(--lobe-color-fill-tertiary);
+}
+
+.lobe-list-item-4202baab-selected:hover {
+  background: var(--lobe-color-fill-secondary);
+}
+
+.lobe-list-item-4202baab-dragging {
+  will-change: transform;
+  opacity: 0.5;
+}
+
+.lobe-list-item-4202baab-drag-over {
+  outline: 1px dashed var(--lobe-color-primary-border);
+  outline-offset: -2px;
+}
+
+.lobe-list-item-4202baab-drag-over,
+.lobe-list-item-4202baab-drag-over:hover {
+  background: var(--lobe-color-primary-bg);
+}

@@ -1,7 +1,7 @@
+import './useContainerStyles.css';
+
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
-import moduleStyles from './useContainerStyles.module.css';
 
 export const styles = stylex.create({
   preview: {
@@ -32,4 +32,4 @@ const variantStyles = {
 
 /** Class names of the framed preview surface, for one of its width variants. */
 export const previewClassName = (variant: PreviewVariant) =>
-  `${stylex.props(styles.preview, variantStyles[variant]).className} ${moduleStyles.preview}`;
+  `${stylex.props(styles.preview, variantStyles[variant]).className} ${'lobe-use-container-styles-53df3f34-preview'}`;

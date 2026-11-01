@@ -1,5 +1,7 @@
 'use client';
 
+import './styles.css';
+
 import { stopPropagation } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { Command, defaultFilter } from 'cmdk';
@@ -22,7 +24,6 @@ import CommandInput from './components/CommandInput';
 import MainMenu from './MainMenu';
 import SearchResults from './SearchResults';
 import { styles } from './styles';
-import cmdk from './styles.module.css';
 import ThemeMenu from './ThemeMenu';
 import { useCommandMenu } from './useCommandMenu';
 
@@ -130,7 +131,7 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
     <div {...stylex.props(styles.overlay)} data-closing={isClosing} onClick={onClose}>
       <div onClick={stopPropagation}>
         <Command
-          {...sx([styles.commandRoot], cmdk.root)}
+          {...sx([styles.commandRoot], 'lobe-command-menu-48defd20-root')}
           data-closing={isClosing}
           filter={commandFilter}
           shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}

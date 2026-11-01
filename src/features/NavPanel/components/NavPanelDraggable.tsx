@@ -1,5 +1,7 @@
 'use client';
 
+import './NavPanelDraggable.css';
+
 import { cssVar, DraggablePanel } from '@lobehub/ui';
 import { cssVar as stylexCssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -20,7 +22,6 @@ import { sx } from '@/styles/sx';
 import { isMacOS } from '@/utils/platform';
 
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
-import panelStyles from './NavPanelDraggable.module.css';
 
 const draggableStyles = stylex.create({
   content: {
@@ -108,7 +109,6 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
 
   return (
     <DraggablePanel
-      className={[stylex.props(draggableStyles.panel).className, panelStyles.panel].join(' ')}
       classNames={classNames}
       defaultSize={defaultSize}
       expand={expand}
@@ -118,6 +118,10 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent, 
       placement="left"
       showBorder={false}
       style={styles}
+      className={[
+        stylex.props(draggableStyles.panel).className,
+        'lobe-nav-panel-draggable-4efd33c1-panel',
+      ].join(' ')}
       onExpandChange={togglePanel}
       onSizeDragging={handleSizeChange}
     >

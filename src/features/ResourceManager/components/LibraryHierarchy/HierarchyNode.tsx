@@ -1,5 +1,7 @@
 'use client';
 
+import './hierarchy.css';
+
 import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { Block, cx, Flexbox, Icon, Input, stopPropagation, toast, Tooltip } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
@@ -25,7 +27,6 @@ import { isExpandable, useTreeStore } from '@/store/tree';
 import { useFileItemClick } from '../Explorer/hooks/useFileItemClick';
 import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdown';
 import FolderAddButton from './FolderAddButton';
-import moduleStyles from './hierarchy.module.css';
 import HierarchyNodeMenuButton from './HierarchyNodeMenuButton';
 import HierarchyNodeToggle from './HierarchyNodeToggle';
 import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
@@ -294,7 +295,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             paddingInline={4}
             variant={isActive ? 'filled' : 'borderless'}
             className={cx(
-              moduleStyles.treeItem,
+              'lobe-hierarchy-1d43e20b-tree-item',
               stylex.props(isOver && styles.fileItemDragOver, isDragging && styles.dragging)
                 .className,
             )}
@@ -388,7 +389,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           paddingInline={4}
           variant={isActive ? 'filled' : 'borderless'}
           className={cx(
-            moduleStyles.treeItem,
+            'lobe-hierarchy-1d43e20b-tree-item',
             stylex.props(isDragging && styles.dragging).className,
           )}
           style={{

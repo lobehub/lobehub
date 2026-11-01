@@ -1,5 +1,7 @@
 'use client';
 
+import './style.css';
+
 import {
   closestCenter,
   DndContext,
@@ -46,7 +48,6 @@ import {
 import WidgetCard from '../WidgetCard';
 import { openWidgetEditModal } from '../WidgetEditModal';
 import { cellStyle, gridProps, gridStyles } from './style';
-import editStyles from './style.module.css';
 
 type Size = { h: number; w: number };
 
@@ -112,7 +113,7 @@ const ResizeHandle = ({ layout, onResize }: ResizeHandleProps) => {
     <button
       data-resize-handle
       aria-label={t('layout.resize')}
-      className={editStyles.resizeHandle}
+      className={'lobe-board-e4f55859-resize-handle'}
       data-active={active}
       title={t('layout.resize')}
       type={'button'}
@@ -140,11 +141,15 @@ const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize, editabl
 
   return (
     <div
-      {...sx([gridStyles.cell, isDragging && gridStyles.cellDragging], editStyles.editCell, {
-        ...cellStyle(layout),
-        transform: CSS.Translate.toString(transform),
-        transition,
-      })}
+      {...sx(
+        [gridStyles.cell, isDragging && gridStyles.cellDragging],
+        'lobe-board-e4f55859-edit-cell',
+        {
+          ...cellStyle(layout),
+          transform: CSS.Translate.toString(transform),
+          transition,
+        },
+      )}
       data-layout-cell={entry.item.id}
       ref={setNodeRef}
     >

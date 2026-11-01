@@ -1,3 +1,5 @@
+import './RunningTasksCard.css';
+
 import { agentDisplayName } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -12,7 +14,6 @@ import { homeType } from '@/features/Home/components/homeType';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
 
 import AuthorChip from './AuthorChip';
-import moduleStyles from './RunningTasksCard.module.css';
 import TopicRow from './TopicRow';
 import { type InboxTopic } from './useHomeInboxTopics';
 
@@ -112,7 +113,12 @@ const RunningAgentAvatars = memo<{ running: InboxTopic[] }>(({ running }) => {
   if (shown.length === 0) return null;
 
   return (
-    <Flexbox horizontal align={'center'} className={moduleStyles.avatars} flex={'none'}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={'lobe-running-tasks-card-ac1bd65a-avatars'}
+      flex={'none'}
+    >
       {shown.map((agentId) => (
         <StackedAgentAvatar agentId={agentId} key={agentId} />
       ))}

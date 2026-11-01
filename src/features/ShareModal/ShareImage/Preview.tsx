@@ -1,3 +1,5 @@
+import './style.css';
+
 import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { agentDisplayName, type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import { Flexbox, Markdown, Text } from '@lobehub/ui';
@@ -18,7 +20,6 @@ import pkg from '../../../../package.json';
 import { previewClassName } from '../style';
 import ChatList from './ChatList';
 import { styles } from './style';
-import moduleStyles from './style.module.css';
 import { type FieldType } from './type';
 import { WidthMode } from './type';
 
@@ -132,7 +133,9 @@ const Preview = memo<PreviewProps>(
                 </Flexbox>
               </Flexbox>
               {withSystemRole && systemRole && (
-                <div className={`${stylex.props(styles.role).className} ${moduleStyles.role}`}>
+                <div
+                  className={`${stylex.props(styles.role).className} ${'lobe-share-image-ddbed31e-role'}`}
+                >
                   <Markdown variant={'chat'}>{systemRole}</Markdown>
                 </div>
               )}

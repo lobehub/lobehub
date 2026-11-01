@@ -1,9 +1,10 @@
+import '../style.css';
+
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 
 import { styles } from '../style';
-import moduleStyles from '../style.module.css';
 
 interface ExportLayoutProps {
   actions: ReactNode;
@@ -24,7 +25,7 @@ const ExportLayout = ({ actions, children, meta, overlay, toolbar }: ExportLayou
     {overlay}
     <Flexbox horizontal align={'center'} className={stylex.props(styles.footer).className}>
       <div {...stylex.props(styles.meta)}>{meta}</div>
-      <Flexbox horizontal className={moduleStyles.footerActions} gap={8}>
+      <Flexbox horizontal className={'lobe-share-modal-6c66305f-footer-actions'} gap={8}>
         {actions}
       </Flexbox>
     </Flexbox>

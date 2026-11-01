@@ -1,5 +1,7 @@
 'use client';
 
+import './SideBarHeaderLayout.css';
+
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Breadcrumb, type BreadcrumbItem, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
@@ -13,7 +15,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { isModifierClick } from '@/utils/navigation';
 
 import BackButton from './components/BackButton';
-import styles from './SideBarHeaderLayout.module.css';
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 
 const containerStyles = stylex.create({
@@ -64,7 +65,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     ) : (
       <Flexbox flex={1} paddingInline={6}>
         <Breadcrumb
-          className={styles.breadcrumb}
+          className={'lobe-side-bar-header-layout-1c0171ed-breadcrumb'}
           separator={<Icon icon={ChevronRightIcon} />}
           items={[
             homeItem ?? {
