@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  Download,
-  HomeIcon,
-  Image,
-  NotebookPenIcon,
-  Settings,
-  ShapesIcon,
-  Video,
-} from 'lucide-react';
+import { Download, HomeIcon, Image, Settings, ShapesIcon, Video } from 'lucide-react';
 import { createElement, type ReactElement } from 'react';
 import type { RouteObject } from 'react-router';
 
@@ -44,6 +36,7 @@ import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces'
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { agentPageChildren } from '@/spa/router/agentPageRoutes';
 import { memoryChildren } from '@/spa/router/memoryRoutes';
+import { noteChildren } from '@/spa/router/noteRoutes';
 import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
@@ -611,35 +604,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
 
   // Quick Note routes
   {
-    children: [
-      {
-        element: dynamicElement(() => import('@/routes/(main)/note'), 'Desktop > Note', {
-          preloadId: 'note',
-        }),
-        handle: {
-          meta: routeMeta({
-            Skeleton: createSurfaceSkeleton('list'),
-            icon: NotebookPenIcon,
-            titleKey: 'navigation.note',
-          }),
-        },
-        index: true,
-      },
-      {
-        element: dynamicElement(
-          () => import('@/routes/(main)/note/[id]'),
-          'Desktop > Note > Detail',
-        ),
-        handle: {
-          meta: routeMeta({
-            Skeleton: createSurfaceSkeleton('editor'),
-            icon: NotebookPenIcon,
-            titleKey: 'navigation.note',
-          }),
-        },
-        path: ':id',
-      },
-    ],
+    children: noteChildren,
     element: dynamicLayout(
       () => import('@/routes/(main)/note/_layout'),
       'Desktop > Note > Layout',
