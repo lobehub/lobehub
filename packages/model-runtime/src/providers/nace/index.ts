@@ -1,10 +1,21 @@
+import { CURRENT_VERSION } from '@lobechat/const';
+
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { DecisionContent, DecisionQuestion, DecisionQuestions } from '../../types';
 
+/**
+ * Identifies this app and its version to Nace for usage attribution (no user data).
+ * Format and charset: `name/version`, at most 64 characters of `A-Za-z0-9 ._@+-`.
+ */
+export const NACE_CLIENT = `lobehub/${CURRENT_VERSION}`
+  .replaceAll(/[^\w ./@+-]/g, '-')
+  .slice(0, 64);
+
 export const params = {
   baseURL: 'https://console.nace.ai/v1',
+  constructorOptions: { defaultHeaders: { 'X-Nace-Client': NACE_CLIENT } },
   /** @see https://console.nace.ai/docs/drex/api-reference/systemone */
   decide: { includeUser: false, path: '/systemone', protocol: 'systemone' },
   provider: 'nace',

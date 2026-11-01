@@ -1,7 +1,9 @@
 // @vitest-environment node
+import { CURRENT_VERSION } from '@lobechat/const';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { LobeTypeSafeAI } from '../typesafe';
 import { LobeNaceAI } from './index';
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
@@ -173,6 +175,45 @@ describe('LobeNaceAI', () => {
         },
       }),
     );
+  });
+
+  it('sends X-Nace-Client as lobehub/<app version> on the System One request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(drexReply), {
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const runtime = new LobeNaceAI({ apiKey: 'test-key', fetch: fetchMock });
+
+    await runtime.decide!({
+      model: 'drex-max',
+      questions: { done: { instructions: 'Is the task complete?', type: 'boolean' } },
+      state: 'done',
+    });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const header = new Headers(init.headers).get('x-nace-client')!;
+    expect(String(url)).toBe('https://console.nace.ai/v1/systemone');
+    expect(header).toBe(`lobehub/${CURRENT_VERSION}`);
+    expect(header).toMatch(/^lobehub\/[\w ./@+-]+$/);
+    expect(header.length).toBeLessThanOrEqual(64);
+  });
+
+  it('does not send X-Nace-Client from another provider runtime', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(drexReply), {
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const runtime = new LobeTypeSafeAI({ apiKey: 'test-key', fetch: fetchMock });
+
+    await runtime.decide!({
+      model: 'typesafe-model',
+      questions: { done: { instructions: 'Is the task complete?', type: 'boolean' } },
+      state: 'done',
+    });
+
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).has('x-nace-client')).toBe(false);
   });
 
   it('does not expose unsupported OpenAI-compatible capabilities', () => {
