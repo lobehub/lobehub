@@ -30,8 +30,6 @@
   "features.inAppBrowser.title": "Trình duyệt trong ứng dụng",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
-  "features.integrations.desc": "Hiển thị trang cài đặt Tích hợp: kết nối Ứng dụng GitHub để các yêu cầu hợp nhất chấp nhận giao hàng và các kiểm tra hoặc đánh giá thất bại được gửi đến agent đã mở chúng. Ẩn theo mặc định.",
-  "features.integrations.title": "Tích Hợp",
   "features.messageTextSelectionActions.desc": "Hiển thị hành động nhanh khi chọn văn bản trong tin nhắn trò chuyện để văn bản được chọn có thể được thêm vào ngữ cảnh cuộc trò chuyện tiếp theo.",
   "features.messageTextSelectionActions.title": "Hành Động Chọn Văn Bản Tin Nhắn",
   "features.oauthApps.desc": "Hiển thị quản lý ứng dụng OAuth trong cài đặt cá nhân và không gian làm việc. Tính năng này bị ẩn theo mặc định.",

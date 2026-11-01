@@ -30,8 +30,6 @@
   "features.inAppBrowser.title": "In-App Browser",
   "features.inputMarkdown.desc": "Toon Markdown in het invoerveld in realtime (vette tekst, codeblokken, tabellen, enz.).",
   "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
-  "features.integrations.desc": "Toon de instellingenpagina voor Integraties: verbind de GitHub-app zodat samengevoegde pull requests leveringen accepteren en mislukte controles of beoordelingen de agent bereiken die ze heeft geopend. Standaard verborgen.",
-  "features.integrations.title": "Integraties",
   "features.messageTextSelectionActions.desc": "Toon een snelle actie bij het selecteren van tekst in chatberichten zodat de geselecteerde tekst kan worden toegevoegd aan de context van het volgende gesprek.",
   "features.messageTextSelectionActions.title": "Acties voor Tekstselectie in Berichten",
   "features.oauthApps.desc": "Toon OAuth-appbeheer in persoonlijke en werkruimte-instellingen. Deze functie is standaard verborgen.",
