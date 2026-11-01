@@ -102,6 +102,7 @@
   "linear.sync.job.stop": "停止",
   "linear.sync.job.stopFailed": "停止同步失败，请重试。",
   "linear.sync.job.stopped": "同步已停止",
+  "linear.sync.job.stopping": "正在停止，当前这批写完后结束…",
   "linear.sync.job.titleIssues": "导入 {{count}} 个 Issue",
   "linear.sync.job.titleRule": "按规则同步：{{rule}}",
   "linear.sync.job.titleRuleDeleted": "按规则同步（规则已删除）",

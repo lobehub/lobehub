@@ -78,8 +78,8 @@ export const continueLinearRuleSyncJob = async (
   workspaceId: string | undefined,
   taskId: string,
   metadata: LinearSyncJobMetadata,
-): Promise<void> => {
-  // A run the user stopped during this round is left stopped.
+): Promise<boolean> => {
+  // A run the user stopped during this round is not queued again.
   const queued = await LinearSyncJobModel.transition(
     db,
     { userId, workspaceId: workspaceId ?? null },
@@ -88,6 +88,7 @@ export const continueLinearRuleSyncJob = async (
     { metadata, status: AsyncTaskStatus.Pending },
   );
   if (queued) await dispatchJob(db, userId, workspaceId, taskId);
+  return queued;
 };
 
 const recordJob = (

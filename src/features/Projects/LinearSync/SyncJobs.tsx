@@ -84,6 +84,9 @@ const SyncJobs = memo<SyncJobsProps>(({ canStop, jobs, onChanged, projectId, rul
   };
 
   const detailOf = (job: LinearSyncJobView) => {
+    if (isActiveLinearSyncJob(job) && job.error === 'canceled') {
+      return t('linear.sync.job.stopping');
+    }
     if (isActiveLinearSyncJob(job)) return linearSyncJobProgress(job, t);
     if (isStopped(job) && job.result) {
       return `${linearSyncJobErrorMessage(job.error, t)} · ${formatLinearSyncResult(job.result, t)}`;
@@ -125,7 +128,7 @@ const SyncJobs = memo<SyncJobsProps>(({ canStop, jobs, onChanged, projectId, rul
                 {detailOf(job)}
               </Text>
             </Flexbox>
-            {canStop && isActiveLinearSyncJob(job) ? (
+            {canStop && isActiveLinearSyncJob(job) && job.error !== 'canceled' ? (
               <Button
                 icon={<Icon icon={CircleStopIcon} />}
                 loading={stopping === job.id}

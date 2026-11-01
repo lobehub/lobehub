@@ -99,7 +99,15 @@ export const toLinearSyncJobView = (
   const error = (row.error as { code?: LinearSyncJobErrorCode } | null)?.code ?? null;
   return {
     createdAt: row.createdAt,
-    error: stale ? 'timeout' : row.status === AsyncTaskStatus.Error ? (error ?? 'failed') : null,
+    // A running job may carry `canceled`: its stop was requested and its
+    // current round is finishing.
+    error: stale
+      ? 'timeout'
+      : row.status === AsyncTaskStatus.Error
+        ? (error ?? 'failed')
+        : error === 'canceled'
+          ? 'canceled'
+          : null,
     id: row.id,
     issueCount: metadata.issueIds?.length,
     kind: metadata.kind,
@@ -119,7 +127,7 @@ export const toLinearSyncJobView = (
 export type ContinueLinearSyncJob = (
   taskId: string,
   metadata: LinearSyncJobMetadata,
-) => Promise<void>;
+) => Promise<boolean>;
 
 class LinearSyncJobError extends Error {
   constructor(readonly code: LinearSyncJobErrorCode) {
@@ -158,11 +166,26 @@ export class LinearSyncJobService {
     }, LINEAR_SYNC_HEARTBEAT_MS);
     // Every write below applies only while the job is still running, so a run
     // the user stopped meanwhile stays stopped.
-    const finish = (set: Parameters<typeof LinearSyncJobModel.transition>[4]) =>
-      LinearSyncJobModel.transition(this.db, this.scope, taskId, [AsyncTaskStatus.Processing], {
-        duration: Date.now() - startedAt,
-        ...set,
-      });
+    // A run stopped during this round ends as stopped, keeping its outcome.
+    const finish = async (
+      set: Parameters<typeof LinearSyncJobModel.transition>[4],
+      outcome?: LinearSyncJobMetadata,
+    ) => {
+      const duration = Date.now() - startedAt;
+      const done = await LinearSyncJobModel.transition(
+        this.db,
+        this.scope,
+        taskId,
+        [AsyncTaskStatus.Processing],
+        { duration, ...set },
+      );
+      if (!done) {
+        await LinearSyncJobModel.settleStopped(this.db, this.scope, taskId, {
+          duration,
+          ...(outcome ? { metadata: outcome } : {}),
+        });
+      }
+    };
     try {
       const round = await this.execute(metadata);
       const roundResult = withoutResumePoint(round);
@@ -184,15 +207,14 @@ export class LinearSyncJobService {
           : undefined;
       const next =
         proposed && (proposed.sweep || rounds < LINEAR_SYNC_MAX_ROUNDS) ? proposed : undefined;
+      const outcome = { ...metadata, cursor: undefined, result, rounds };
       if (next) {
         log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
-        await this.continueJob!(taskId, { ...metadata, cursor: next.cursor, result, rounds });
-        return;
+        if (await this.continueJob!(taskId, { ...metadata, cursor: next.cursor, result, rounds })) {
+          return;
+        }
       }
-      await finish({
-        metadata: { ...metadata, cursor: undefined, result, rounds },
-        status: AsyncTaskStatus.Success,
-      });
+      await finish({ metadata: outcome, status: AsyncTaskStatus.Success }, outcome);
     } catch (error) {
       const code = toErrorCode(error);
       log('sync %s failed (%s): %O', taskId, code, error);

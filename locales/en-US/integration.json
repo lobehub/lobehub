@@ -102,6 +102,7 @@
   "linear.sync.job.stop": "Stop",
   "linear.sync.job.stopFailed": "Could not stop the sync. Try again.",
   "linear.sync.job.stopped": "Sync stopped",
+  "linear.sync.job.stopping": "Stopping once the current batch is written…",
   "linear.sync.job.titleIssues": "Import {{count}} issues",
   "linear.sync.job.titleRule": "Rule: {{rule}}",
   "linear.sync.job.titleRuleDeleted": "Rule (deleted)",

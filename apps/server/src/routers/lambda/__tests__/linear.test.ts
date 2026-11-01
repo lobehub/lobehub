@@ -446,28 +446,28 @@ describe('linearRouter', () => {
         ]);
       });
 
-      it('stops after the round that is running when stopped, and starts no other', async () => {
-        const { id } = await startRule();
+      it('stays active while the stopped round finishes, then ends without another', async () => {
+        const { id, rule } = await startRule();
+        let during: unknown;
         mocks.syncByFilter.mockImplementation(async () => {
           await caller({ userId }).cancelSync({ jobId: id, projectId });
+          // The round is still writing: the run shows as stopping, and Sync
+          // joins it instead of starting an overlapping run.
+          during = (await caller({ userId }).listSyncJobs({ projectId }))[0];
+          expect(await caller({ userId }).startRuleSync({ ruleId: rule.id })).toEqual({ id });
           return round(100, true, '100');
         });
 
         await drainHandOffs();
 
+        expect(during).toMatchObject({ error: 'canceled', id, status: 'processing' });
         expect(mocks.syncByFilter).toHaveBeenCalledTimes(1);
         expect(mocks.runSync).toHaveBeenCalledTimes(1);
         expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
-          { error: 'canceled', id, status: 'error' },
+          { error: 'canceled', id, result: { created: 100 }, status: 'error' },
         ]);
-        // Stopped is not running: the rule can be started again.
-        expect(
-          (
-            await caller({ userId }).startRuleSync({
-              ruleId: (await caller({ userId }).listSyncRules({ projectId }))[0].id,
-            })
-          ).id,
-        ).not.toBe(id);
+        // Once it has ended, the rule starts a new run.
+        expect((await caller({ userId }).startRuleSync({ ruleId: rule.id })).id).not.toBe(id);
       });
 
       it("does not stop another user's run", async () => {

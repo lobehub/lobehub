@@ -1,6 +1,6 @@
 import type { LinearSyncJobMetadata } from '@lobechat/types';
 import { AsyncTaskStatus, AsyncTaskType } from '@lobechat/types';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { asyncTasks } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -85,9 +85,9 @@ export class LinearSyncJobModel {
   };
 
   /**
-   * Update a job only while it is still in one of `from`, so a write from a
-   * run that was stopped meanwhile cannot bring it back. Returns whether the
-   * job was updated.
+   * Update a job only while it is still in one of `from` and no stop was
+   * requested, so a write from a run stopped meanwhile cannot carry it on.
+   * Returns whether the job was updated.
    */
   static transition = async (
     db: LobeChatDatabase,
@@ -103,13 +103,9 @@ export class LinearSyncJobModel {
       .set({ ...set, updatedAt: new Date() })
       .where(
         and(
-          eq(asyncTasks.id, taskId),
-          eq(asyncTasks.type, AsyncTaskType.LinearIssueSync),
+          jobCondition(scope, taskId),
           inArray(asyncTasks.status, from),
-          buildWorkspaceWhere(
-            { userId: scope.userId, workspaceId: scope.workspaceId ?? undefined },
-            asyncTasks,
-          ),
+          isNull(asyncTasks.error),
         ),
       )
       .returning({ id: asyncTasks.id });
@@ -117,8 +113,32 @@ export class LinearSyncJobModel {
   };
 
   /**
-   * Stop a job of this project that has not finished. A round already running
-   * completes the tasks it is writing, but no further round starts. Returns
+   * End a running job whose stop was requested, once its round has written
+   * what it was writing. Keeps the outcome so far.
+   */
+  static settleStopped = async (
+    db: LobeChatDatabase,
+    scope: LinearConnectionScope,
+    taskId: string,
+    set: Partial<Pick<typeof asyncTasks.$inferInsert, 'duration' | 'metadata'>>,
+  ): Promise<void> => {
+    await db
+      .update(asyncTasks)
+      .set({ ...set, status: AsyncTaskStatus.Error, updatedAt: new Date() })
+      .where(
+        and(
+          jobCondition(scope, taskId),
+          eq(asyncTasks.status, AsyncTaskStatus.Processing),
+          sql`${asyncTasks.error} ->> 'code' = 'canceled'`,
+        ),
+      );
+  };
+
+  /**
+   * Stop a job of this project that has not finished. One still queued ends
+   * at once. One running is marked as stopping and stays active, so the rule
+   * cannot start again while its round still writes; that round finishes the
+   * tasks it is writing, then the job ends without starting another. Returns
    * whether a job was stopped.
    */
   static cancel = async (
@@ -127,18 +147,22 @@ export class LinearSyncJobModel {
     projectId: string,
     taskId: string,
   ): Promise<boolean> => {
-    const rows = await db
+    const stop = { error: { code: 'canceled' }, updatedAt: new Date() };
+    const target = and(eq(asyncTasks.id, taskId), projectCondition(scope, projectId));
+    const queued = await db
       .update(asyncTasks)
-      .set({ error: { code: 'canceled' }, status: AsyncTaskStatus.Error, updatedAt: new Date() })
+      .set({ ...stop, status: AsyncTaskStatus.Error })
+      .where(and(target, eq(asyncTasks.status, AsyncTaskStatus.Pending)))
+      .returning({ id: asyncTasks.id });
+    if (queued.length > 0) return true;
+    const running = await db
+      .update(asyncTasks)
+      .set(stop)
       .where(
-        and(
-          eq(asyncTasks.id, taskId),
-          projectCondition(scope, projectId),
-          inArray(asyncTasks.status, ACTIVE_STATUSES),
-        ),
+        and(target, eq(asyncTasks.status, AsyncTaskStatus.Processing), isNull(asyncTasks.error)),
       )
       .returning({ id: asyncTasks.id });
-    return rows.length > 0;
+    return running.length > 0;
   };
 
   /** A run of this rule that has not finished yet, if any. */
@@ -163,6 +187,16 @@ export class LinearSyncJobModel {
     return (row as LinearSyncJobRow | undefined) ?? null;
   };
 }
+
+const jobCondition = (scope: LinearConnectionScope, taskId: string) =>
+  and(
+    eq(asyncTasks.id, taskId),
+    eq(asyncTasks.type, AsyncTaskType.LinearIssueSync),
+    buildWorkspaceWhere(
+      { userId: scope.userId, workspaceId: scope.workspaceId ?? undefined },
+      asyncTasks,
+    ),
+  );
 
 const projectCondition = (scope: LinearConnectionScope, projectId: string) =>
   and(
