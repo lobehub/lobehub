@@ -1,3 +1,5 @@
+import './index.css';
+
 import { Center, Checkbox, ContextMenuTrigger, cx, Flexbox, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -19,7 +21,6 @@ import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
 import FileListItemName from './FileListItemName';
-import moduleStyles from './index.module.css';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
 import { useFileListItemRename } from './useFileListItemRename';
@@ -214,12 +215,12 @@ const FileListItem = ({
         height={48}
         paddingInline={8}
         className={cx(
-          moduleStyles.container,
+          'lobe-list-item-4202baab-container',
           'file-list-item-group',
-          index % 2 === 0 && moduleStyles.evenRow,
-          isSelected && moduleStyles.selected,
-          isDragging && moduleStyles.dragging,
-          isOver && moduleStyles.dragOver,
+          index % 2 === 0 && 'lobe-list-item-4202baab-even-row',
+          isSelected && 'lobe-list-item-4202baab-selected',
+          isDragging && 'lobe-list-item-4202baab-dragging',
+          isOver && 'lobe-list-item-4202baab-drag-over',
         )}
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,

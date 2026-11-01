@@ -1,0 +1,15 @@
+.lobe-hierarchy-1d43e20b-tree-item {
+  cursor: pointer;
+}
+
+.lobe-hierarchy-1d43e20b-tree-item .hierarchy-node-actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+/* Hover, keyboard focus on the action itself, or an open menu keep it visible. */
+.lobe-hierarchy-1d43e20b-tree-item:hover .hierarchy-node-actions,
+.lobe-hierarchy-1d43e20b-tree-item .hierarchy-node-actions:focus-within,
+.lobe-hierarchy-1d43e20b-tree-item .hierarchy-node-actions[data-open='true'] {
+  opacity: 1;
+}

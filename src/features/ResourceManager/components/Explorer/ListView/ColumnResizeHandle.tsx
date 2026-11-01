@@ -1,8 +1,8 @@
 'use client';
 
-import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import './ColumnResizeHandle.css';
 
-import styles from './ColumnResizeHandle.module.css';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 interface ColumnResizeHandleProps {
   column: 'name' | 'date' | 'size' | 'uploader';
@@ -66,7 +66,11 @@ const ColumnResizeHandle = memo<ColumnResizeHandleProps>(
 
     return (
       <div
-        className={isDragging ? `${styles.handle} ${styles.handleDragging}` : styles.handle}
+        className={
+          isDragging
+            ? `${'lobe-column-resize-handle-1cfc643a-handle'} ${'lobe-column-resize-handle-1cfc643a-handle-dragging'}`
+            : 'lobe-column-resize-handle-1cfc643a-handle'
+        }
         onMouseDown={handleMouseDown}
       />
     );

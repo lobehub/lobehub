@@ -1,5 +1,7 @@
 'use client';
 
+import './LibraryHead.css';
+
 import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
@@ -25,7 +27,6 @@ import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 
-import moduleStyles from './LibraryHead.module.css';
 import type { LibraryMenuEntry } from './libraryMenuItems';
 import { buildLibraryMenuItems } from './libraryMenuItems';
 
@@ -129,7 +130,7 @@ const Head = memo<{ id: string }>(({ id }) => {
       clickable
       horizontal
       align={'center'}
-      className={isDropZoneActive ? moduleStyles.dropZoneActive : undefined}
+      className={isDropZoneActive ? 'lobe-library-head-52231ddf-drop-zone-active' : undefined}
       data-drop-target-id="root"
       data-is-folder="true"
       data-root-drop="true"

@@ -1,5 +1,7 @@
 'use client';
 
+import './index.css';
+
 import { agentDisplayName } from '@lobechat/types';
 import {
   Button,
@@ -26,7 +28,6 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentList from './AgentList';
-import moduleStyles from './index.module.css';
 import { useResolvedHomeAgentId } from './useResolvedHomeAgentId';
 
 const styles = stylex.create({
@@ -92,7 +93,7 @@ const AgentSelect = memo(() => {
         <Button
           aria-expanded={open}
           aria-haspopup={'menu'}
-          className={moduleStyles.trigger}
+          className={'lobe-agent-select-4585cea3-trigger'}
           type={'text'}
         >
           <AgentAvatar
@@ -111,7 +112,7 @@ const AgentSelect = memo(() => {
           >
             {displayTitle}
           </Text>
-          <ChevronsUpDownIcon className={moduleStyles.chevron} size={12} />
+          <ChevronsUpDownIcon className={'lobe-agent-select-4585cea3-chevron'} size={12} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuPortal>

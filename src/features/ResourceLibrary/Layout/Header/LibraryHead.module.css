@@ -1,8 +1,0 @@
-.dropZoneActive {
-  color: var(--lobe-color-bg-elevated) !important;
-  background-color: var(--lobe-color-text) !important;
-}
-
-.dropZoneActive * {
-  color: var(--lobe-color-bg-elevated) !important;
-}

@@ -1,5 +1,7 @@
 'use client';
 
+import './CreateAgentButton.css';
+
 import {
   ActionIcon,
   Block,
@@ -20,7 +22,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { SessionDefaultGroup } from '@/types/session';
 
 import { useCreateMenuItems } from '../../hooks';
-import styles from './CreateAgentButton.module.css';
 
 interface CreateAgentButtonProps {
   className?: string;
@@ -90,7 +91,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
     <Block
       horizontal
       align={'center'}
-      className={cx(styles.container, className)}
+      className={cx('lobe-create-agent-button-149dbad1-container', className)}
       clickable={canCreate}
       gap={8}
       height={36}
@@ -109,7 +110,7 @@ const CreateAgentButton = memo<CreateAgentButtonProps>(({ groupId, className, vi
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.actions}
+          className={'lobe-create-agent-button-149dbad1-actions'}
           flex={'none'}
           justify={'flex-end'}
           onClick={(e) => {

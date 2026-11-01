@@ -1,3 +1,5 @@
+import './index.css';
+
 import {
   CUSTOM_DOCUMENT_FILE_TYPE,
   CUSTOM_FOLDER_FILE_TYPE,
@@ -28,7 +30,6 @@ import LibraryTags from '../../LibraryTags';
 import AudioFileItem from './AudioFileItem';
 import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
-import moduleStyles from './index.module.css';
 import MarkdownFileItem from './MarkdownFileItem';
 import NoteFileItem from './NoteFileItem';
 import VideoFileItem from './VideoFileItem';
@@ -353,7 +354,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
             isDragging && styles.dragging,
             isOver && styles.dragOver,
           ],
-          isOver ? moduleStyles.dragOver : undefined,
+          isOver ? 'lobe-masonry-item-7030772c-drag-over' : undefined,
         )}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
