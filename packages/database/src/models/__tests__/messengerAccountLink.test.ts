@@ -44,6 +44,32 @@ afterEach(async () => {
 });
 
 describe('MessengerAccountLinkModel', () => {
+  describe('findByUserIds', () => {
+    it('returns only the identities active under the requested scope', async () => {
+      await serverDB.insert(messengerAccountLinks).values([
+        { platform: 'discord', platformUserId: 'd-a', userId: userA, workspaceId: workspaceA },
+        { platform: 'telegram', platformUserId: 't-a', userId: userA, workspaceId: null },
+        { platform: 'slack', platformUserId: 's-b', userId: userB, workspaceId: workspaceA },
+      ]);
+
+      const inWorkspace = await MessengerAccountLinkModel.findByUserIds(serverDB, [userA, userB], {
+        workspaceId: workspaceA,
+      });
+      expect(inWorkspace.map((l) => l.platformUserId).sort()).toEqual(['d-a', 's-b']);
+      // A workspace directory never sees a member's personal-scope identity.
+      expect(inWorkspace.some((l) => 'credentials' in l)).toBe(false);
+
+      const personal = await MessengerAccountLinkModel.findByUserIds(serverDB, [userA, userB], {
+        workspaceId: null,
+      });
+      expect(personal.map((l) => l.platformUserId)).toEqual(['t-a']);
+
+      expect(
+        await MessengerAccountLinkModel.findByUserIds(serverDB, [], { workspaceId: workspaceA }),
+      ).toEqual([]);
+    });
+  });
+
   describe('upsertForPlatform', () => {
     it('inserts a Telegram row with empty tenant_id (global-bot semantics)', async () => {
       const model = new MessengerAccountLinkModel(serverDB, userA);
@@ -689,6 +715,62 @@ describe('MessengerAccountLinkModel', () => {
         workspaceA,
       );
       expect(updated).toBeUndefined();
+    });
+  });
+
+  describe('findById', () => {
+    it('resolves by id inside the owner scope, optionally constrained by platform', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const link = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'discord',
+        platformUserId: 'd-find',
+      });
+
+      expect((await model.findById(link.id))?.id).toBe(link.id);
+      expect((await model.findById(link.id, 'discord'))?.id).toBe(link.id);
+      expect(await model.findById(link.id, 'telegram')).toBeUndefined();
+      expect(await model.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+    });
+  });
+
+  describe('findAllByPlatformWithCredentials', () => {
+    it('decrypts every stored link and tolerates missing or unreadable blobs', async () => {
+      await serverDB.insert(messengerAccountLinks).values([
+        {
+          platform: 'slack',
+          platformUserId: 's-missing',
+          tenantId: 't-missing',
+          userId: userA,
+          workspaceId: null,
+        },
+        {
+          credentials: 'not-json',
+          platform: 'slack',
+          platformUserId: 's-bad',
+          tenantId: 't-bad',
+          userId: userA,
+          workspaceId: null,
+        },
+        {
+          credentials: JSON.stringify({ botToken: 'ok' }),
+          platform: 'slack',
+          platformUserId: 's-ok',
+          tenantId: 't-ok',
+          userId: userA,
+          workspaceId: null,
+        },
+      ]);
+
+      const rows = await MessengerAccountLinkModel.findAllByPlatformWithCredentials(
+        serverDB,
+        'slack',
+      );
+      const byPlatformUser = Object.fromEntries(rows.map((r) => [r.platformUserId, r.credentials]));
+
+      expect(byPlatformUser['s-missing']).toEqual({});
+      expect(byPlatformUser['s-bad']).toEqual({});
+      expect(byPlatformUser['s-ok']).toEqual({ botToken: 'ok' });
     });
   });
 });

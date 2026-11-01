@@ -22,10 +22,6 @@ const mocks = vi.hoisted(() => ({
   setOnboardingStep: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-}));
-
 vi.mock('@/components/Loading/BrandTextLoading', () => ({
   default: ({ debugId }: { debugId: string }) => <div>Loading:{debugId}</div>,
 }));

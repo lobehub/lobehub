@@ -1,4 +1,4 @@
-import { confirmModal, createModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, createModal, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t as translate } from 'i18next';
 import { EyeIcon, PencilIcon, Trash2Icon } from 'lucide-react';
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  filterSkillItems,
   openRenameSkillModal,
   type SkillListItem,
   type SkillRowAction,
@@ -19,6 +20,8 @@ import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
+
+const EMPTY_ITEMS: SkillListItem[] = [];
 
 const handleSkillDragStart = (item: SkillListItem, event: React.DragEvent) => {
   startSkillDrag(event, {
@@ -51,21 +54,23 @@ const openSkillDetailModal = (skillId: string) =>
  * data even when the Tools popover hasn't been opened in this session. The key
  * is deduplicated, so co-mounting with `useControls` doesn't double-fetch.
  */
-export const useUserSkills = (): SkillListItem[] => {
-  useToolStore((s) => s.useFetchAgentSkills)(true);
+export const useUserSkills = (enabled = true): SkillListItem[] => {
+  useToolStore((s) => s.useFetchAgentSkills)(enabled);
   const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
 
   return useMemo(
     () =>
-      agentSkills.map((skill) => ({
-        description: skill.description ?? undefined,
-        // `identifier` is what the runtime resolves through the skill registry,
-        // and is unique per skill — reuse it as both the React key and the
-        // drag payload's `type`.
-        id: skill.identifier,
-        name: skill.name,
-      })),
-    [agentSkills],
+      !enabled
+        ? EMPTY_ITEMS
+        : agentSkills.map((skill) => ({
+            description: skill.description ?? undefined,
+            // `identifier` is what the runtime resolves through the skill registry,
+            // and is unique per skill — reuse it as both the React key and the
+            // drag payload's `type`.
+            id: skill.identifier,
+            name: skill.name,
+          })),
+    [agentSkills, enabled],
   );
 };
 
@@ -76,13 +81,16 @@ interface UserLevelSkillsProps {
    * matching the agent-only layout this used to ship with.
    */
   hideHeader?: boolean;
+  /** Only render skills matching this query. */
+  searchQuery?: string;
 }
 
-const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
+const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader, searchQuery = '' }) => {
   const { t } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
 
-  const items = useUserSkills();
+  const userItems = useUserSkills();
+  const items = useMemo(() => filterSkillItems(userItems, searchQuery), [userItems, searchQuery]);
   // The row shape keys off `identifier`, but the store mutations key off the DB
   // id — resolve one from the other through the raw skill list.
   const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);

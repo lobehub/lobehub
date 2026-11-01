@@ -1,5 +1,6 @@
+import { MEMORY_SEARCH_EXPLICIT_CONTEXT_TOP_K, MEMORY_SEARCH_TOP_K_LIMITS } from '@lobechat/const';
 import type { SearchMemoryParams, SearchMemoryTimeIntent } from '@lobechat/types';
-import { searchMemorySchema } from '@lobechat/types';
+import { LayersEnum, searchMemorySchema } from '@lobechat/types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -189,5 +190,61 @@ export const normalizeSearchMemoryParams = (
     ...parsedParams,
     timeIntent: undefined,
     timeRange: resolveTimeIntent(parsedParams.timeIntent, now),
+  };
+};
+
+export type MemorySearchEffort = 'high' | 'low' | 'medium';
+
+export interface MemorySearchTopK {
+  activities: number;
+  contexts: number;
+  experiences: number;
+  identities: number;
+  preferences: number;
+}
+
+const IDENTITY_TOP_K_BY_EFFORT: Record<MemorySearchEffort, number> = {
+  high: 4,
+  low: 1,
+  medium: 2,
+};
+
+const requestsContextLayer = (params: Pick<SearchMemoryParams, 'layers' | 'topK'>) => {
+  if ((params.topK?.contexts ?? 0) > 0) return true;
+
+  const layers: unknown[] = Array.isArray(params.layers)
+    ? params.layers
+    : params.layers
+      ? [params.layers]
+      : [];
+
+  return layers.includes(LayersEnum.Context);
+};
+
+/**
+ * Resolves per-layer search limits for a memory effort level.
+ *
+ * Each layer defaults to — and is capped by — the effort's limit. The context
+ * layer is off (0) below `high` effort for unprompted searches, but when the
+ * caller explicitly asks for it (`layers` includes "context" or
+ * `topK.contexts > 0`) it gets a small effort-scaled cap instead of being
+ * clamped to 0, which would silently drop the layer.
+ */
+export const resolveMemorySearchTopK = (
+  effort: MemorySearchEffort,
+  params: Pick<SearchMemoryParams, 'layers' | 'topK'>,
+): MemorySearchTopK => {
+  const limit = MEMORY_SEARCH_TOP_K_LIMITS[effort];
+  const identityLimit = IDENTITY_TOP_K_BY_EFFORT[effort];
+  const contextLimit = requestsContextLayer(params)
+    ? Math.max(limit.contexts, MEMORY_SEARCH_EXPLICIT_CONTEXT_TOP_K[effort])
+    : limit.contexts;
+
+  return {
+    activities: Math.min(params.topK?.activities ?? limit.activities, limit.activities),
+    contexts: Math.min(params.topK?.contexts ?? contextLimit, contextLimit),
+    experiences: Math.min(params.topK?.experiences ?? limit.experiences, limit.experiences),
+    identities: Math.min(params.topK?.identities ?? identityLimit, identityLimit),
+    preferences: Math.min(params.topK?.preferences ?? limit.preferences, limit.preferences),
   };
 };

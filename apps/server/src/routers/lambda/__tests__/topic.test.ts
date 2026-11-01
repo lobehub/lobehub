@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
+import { TopicRepository } from '@/database/repositories/topic';
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(),
+}));
+
+vi.mock('@/database/repositories/topic', () => ({
+  TopicRepository: vi.fn(),
 }));
 
 vi.mock('@/database/models/topicShare', () => ({
@@ -18,12 +23,11 @@ vi.mock('@/database/server', () => ({
 describe('topicRouter', () => {
   it('should handle createTopic with sessionId', async () => {
     const mockCreate = vi.fn().mockResolvedValue({ id: 'topic1' });
-    vi.mocked(TopicModel).mockImplementation(
-      () =>
-        ({
-          create: mockCreate,
-        }) as any,
-    );
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+      } as any;
+    });
 
     const input = {
       sessionId: 'session1',
@@ -44,12 +48,11 @@ describe('topicRouter', () => {
     const mockQuery = vi
       .fn()
       .mockResolvedValue({ items: [{ id: 'topic1', title: 'Test' }], total: 1 });
-    vi.mocked(TopicModel).mockImplementation(
-      () =>
-        ({
-          query: mockQuery,
-        }) as any,
-    );
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return {
+        query: mockQuery,
+      } as any;
+    });
 
     const input = { groupId: 'group1' };
     const ctx = {
@@ -64,12 +67,11 @@ describe('topicRouter', () => {
 
   it('should handle deleteTopic', async () => {
     const mockDelete = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(TopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-        }) as any,
-    );
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+      } as any;
+    });
 
     const ctx = {
       topicModel: new TopicModel({} as any, 'user1'),
@@ -82,12 +84,11 @@ describe('topicRouter', () => {
 
   it('should handle updateTopic', async () => {
     const mockUpdate = vi.fn().mockResolvedValue({ success: true });
-    vi.mocked(TopicModel).mockImplementation(
-      () =>
-        ({
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return {
+        update: mockUpdate,
+      } as any;
+    });
 
     const ctx = {
       topicModel: new TopicModel({} as any, 'user1'),
@@ -101,12 +102,11 @@ describe('topicRouter', () => {
 
   it('should handle batchDelete', async () => {
     const mockBatchDelete = vi.fn().mockResolvedValue({ rowCount: 3 });
-    vi.mocked(TopicModel).mockImplementation(
-      () =>
-        ({
-          batchDelete: mockBatchDelete,
-        }) as any,
-    );
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return {
+        batchDelete: mockBatchDelete,
+      } as any;
+    });
 
     const ctx = {
       topicModel: new TopicModel({} as any, 'user1'),
@@ -120,12 +120,11 @@ describe('topicRouter', () => {
 
   it('should handle countTopics', async () => {
     const mockCount = vi.fn().mockResolvedValue(10);
-    vi.mocked(TopicModel).mockImplementation(
-      () =>
-        ({
-          count: mockCount,
-        }) as any,
-    );
+    vi.mocked(TopicModel).mockImplementation(function () {
+      return {
+        count: mockCount,
+      } as any;
+    });
 
     const ctx = {
       topicModel: new TopicModel({} as any, 'user1'),
@@ -140,12 +139,11 @@ describe('topicRouter', () => {
   describe('agentId support', () => {
     it('should handle createTopic with agentId', async () => {
       const mockCreate = vi.fn().mockResolvedValue({ id: 'topic1' });
-      vi.mocked(TopicModel).mockImplementation(
-        () =>
-          ({
-            create: mockCreate,
-          }) as any,
-      );
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return {
+          create: mockCreate,
+        } as any;
+      });
 
       const input = {
         agentId: 'agent1',
@@ -165,12 +163,11 @@ describe('topicRouter', () => {
 
     it('should handle getTopics with agentId', async () => {
       const mockQuery = vi.fn().mockResolvedValue([{ id: 'topic1', title: 'Test' }]);
-      vi.mocked(TopicModel).mockImplementation(
-        () =>
-          ({
-            query: mockQuery,
-          }) as any,
-      );
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return {
+          query: mockQuery,
+        } as any;
+      });
 
       const input = { agentId: 'agent1' };
       const ctx = {
@@ -185,12 +182,11 @@ describe('topicRouter', () => {
 
     it('should handle getTopics with both agentId and sessionId', async () => {
       const mockQuery = vi.fn().mockResolvedValue([{ id: 'topic1', title: 'Test' }]);
-      vi.mocked(TopicModel).mockImplementation(
-        () =>
-          ({
-            query: mockQuery,
-          }) as any,
-      );
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return {
+          query: mockQuery,
+        } as any;
+      });
 
       const input = { agentId: 'agent1', sessionId: 'session1' };
       const ctx = {
@@ -205,12 +201,11 @@ describe('topicRouter', () => {
 
     it('should handle batchDeleteByAgentId', async () => {
       const mockBatchDeleteByAgentId = vi.fn().mockResolvedValue({ rowCount: 5 });
-      vi.mocked(TopicModel).mockImplementation(
-        () =>
-          ({
-            batchDeleteByAgentId: mockBatchDeleteByAgentId,
-          }) as any,
-      );
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return {
+          batchDeleteByAgentId: mockBatchDeleteByAgentId,
+        } as any;
+      });
 
       const ctx = {
         topicModel: new TopicModel({} as any, 'user1'),
@@ -224,12 +219,11 @@ describe('topicRouter', () => {
 
     it('should handle batchCreateTopics with agentId', async () => {
       const mockBatchCreate = vi.fn().mockResolvedValue([{ id: 'topic1' }, { id: 'topic2' }]);
-      vi.mocked(TopicModel).mockImplementation(
-        () =>
-          ({
-            batchCreate: mockBatchCreate,
-          }) as any,
-      );
+      vi.mocked(TopicRepository).mockImplementation(function () {
+        return {
+          batchCreate: mockBatchCreate,
+        } as any;
+      });
 
       const input = [
         { agentId: 'agent1', sessionId: 'session1', title: 'Topic 1' },
@@ -237,10 +231,10 @@ describe('topicRouter', () => {
       ];
 
       const ctx = {
-        topicModel: new TopicModel({} as any, 'user1'),
+        topicRepo: new TopicRepository({} as any, 'user1'),
       };
 
-      const result = await ctx.topicModel.batchCreate(input as any);
+      const result = await ctx.topicRepo.batchCreate(input as any);
 
       expect(mockBatchCreate).toHaveBeenCalledWith(input);
       expect(result).toHaveLength(2);
@@ -248,12 +242,11 @@ describe('topicRouter', () => {
 
     it('should handle searchTopics with agentId', async () => {
       const mockQueryByKeyword = vi.fn().mockResolvedValue([{ id: 'topic1', title: 'Test' }]);
-      vi.mocked(TopicModel).mockImplementation(
-        () =>
-          ({
-            queryByKeyword: mockQueryByKeyword,
-          }) as any,
-      );
+      vi.mocked(TopicModel).mockImplementation(function () {
+        return {
+          queryByKeyword: mockQueryByKeyword,
+        } as any;
+      });
 
       const ctx = {
         topicModel: new TopicModel({} as any, 'user1'),
@@ -275,12 +268,11 @@ describe('topicRouter', () => {
         visibility: 'private',
       });
 
-      vi.mocked(TopicShareModel).mockImplementation(
-        () =>
-          ({
-            create: mockCreate,
-          }) as any,
-      );
+      vi.mocked(TopicShareModel).mockImplementation(function () {
+        return {
+          create: mockCreate,
+        } as any;
+      });
 
       const ctx = {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
@@ -301,12 +293,11 @@ describe('topicRouter', () => {
         visibility: 'link',
       });
 
-      vi.mocked(TopicShareModel).mockImplementation(
-        () =>
-          ({
-            create: mockCreate,
-          }) as any,
-      );
+      vi.mocked(TopicShareModel).mockImplementation(function () {
+        return {
+          create: mockCreate,
+        } as any;
+      });
 
       const ctx = {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
@@ -321,12 +312,11 @@ describe('topicRouter', () => {
     it('should handle disableSharing', async () => {
       const mockDeleteByTopicId = vi.fn().mockResolvedValue(undefined);
 
-      vi.mocked(TopicShareModel).mockImplementation(
-        () =>
-          ({
-            deleteByTopicId: mockDeleteByTopicId,
-          }) as any,
-      );
+      vi.mocked(TopicShareModel).mockImplementation(function () {
+        return {
+          deleteByTopicId: mockDeleteByTopicId,
+        } as any;
+      });
 
       const ctx = {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
@@ -344,12 +334,11 @@ describe('topicRouter', () => {
         visibility: 'link',
       });
 
-      vi.mocked(TopicShareModel).mockImplementation(
-        () =>
-          ({
-            updateVisibility: mockUpdateVisibility,
-          }) as any,
-      );
+      vi.mocked(TopicShareModel).mockImplementation(function () {
+        return {
+          updateVisibility: mockUpdateVisibility,
+        } as any;
+      });
 
       const ctx = {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
@@ -368,12 +357,11 @@ describe('topicRouter', () => {
         visibility: 'link',
       });
 
-      vi.mocked(TopicShareModel).mockImplementation(
-        () =>
-          ({
-            getByTopicId: mockGetByTopicId,
-          }) as any,
-      );
+      vi.mocked(TopicShareModel).mockImplementation(function () {
+        return {
+          getByTopicId: mockGetByTopicId,
+        } as any;
+      });
 
       const ctx = {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
@@ -392,12 +380,11 @@ describe('topicRouter', () => {
     it('should return null when getShareInfo for non-shared topic', async () => {
       const mockGetByTopicId = vi.fn().mockResolvedValue(null);
 
-      vi.mocked(TopicShareModel).mockImplementation(
-        () =>
-          ({
-            getByTopicId: mockGetByTopicId,
-          }) as any,
-      );
+      vi.mocked(TopicShareModel).mockImplementation(function () {
+        return {
+          getByTopicId: mockGetByTopicId,
+        } as any;
+      });
 
       const ctx = {
         topicShareModel: new TopicShareModel({} as any, 'user1'),
@@ -412,12 +399,11 @@ describe('topicRouter', () => {
     it('should handle all visibility types', async () => {
       const mockCreate = vi.fn();
 
-      vi.mocked(TopicShareModel).mockImplementation(
-        () =>
-          ({
-            create: mockCreate,
-          }) as any,
-      );
+      vi.mocked(TopicShareModel).mockImplementation(function () {
+        return {
+          create: mockCreate,
+        } as any;
+      });
 
       const ctx = {
         topicShareModel: new TopicShareModel({} as any, 'user1'),

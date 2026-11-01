@@ -36,6 +36,7 @@ export const MIN_BOT_HISTORY_LIMIT = 1;
  * - wechat: 2MB image — empirical: iLink silently drops larger images
  *   (every API call returns 200 yet the message never renders); 20MB file
  *   as a best-effort cap, the iLink protocol documents no explicit number.
+ * - linq: 10MB — Linq's documented ceiling for media it fetches by URL.
  *
  * `textMaxChars` is the single-message character cap used to batch the
  * download-link fallbacks: Discord rejects a message over 2000 chars,
@@ -57,10 +58,11 @@ export interface MessengerAttachmentBudget {
 const MB = 1024 * 1024;
 
 export const MESSENGER_ATTACHMENT_BUDGETS: Record<
-  'discord' | 'slack' | 'telegram' | 'wechat',
+  'discord' | 'slack' | 'telegram' | 'wechat' | 'linq',
   MessengerAttachmentBudget
 > = {
   discord: { fileMaxBytes: 10 * MB, imageMaxBytes: 10 * MB, textMaxChars: 2000 },
+  linq: { fileMaxBytes: 10 * MB, imageMaxBytes: 10 * MB, textMaxChars: 2000 },
   slack: { fileMaxBytes: 50 * MB, imageMaxBytes: 50 * MB, textMaxChars: 3000 },
   telegram: { fileMaxBytes: 20 * MB, imageMaxBytes: 5 * MB, textMaxChars: 4096 },
   wechat: { fileMaxBytes: 20 * MB, imageMaxBytes: 2 * MB, textMaxChars: 2000 },
@@ -90,3 +92,28 @@ export const DEFAULT_OVERSIZE_IMAGE_STRATEGY: MessengerOversizeImageStrategy = '
  * compress, or the consequence it spells out is simply untrue.
  */
 export const MESSENGER_MAX_COMPRESSION_SOURCE_BYTES = 100 * MB;
+
+/**
+ * Stand-in the server returns instead of a bot credential it will not disclose.
+ *
+ * Shared with the client because a form that reads a credential back cannot
+ * tell a secret from a placeholder by looking: helper actions that spend the
+ * value (LINE's bot-info fetch, Feishu's owner lookup) have to recognise it as
+ * "not available" rather than send it upstream and fail authentication.
+ *
+ * One fixed sentinel rather than a partial reveal: surviving characters are
+ * still entropy, and an exact value is the only thing the write path can
+ * reliably match on the way back in.
+ */
+export const BOT_CREDENTIAL_MASK = '••••••••';
+
+/**
+ * Whether a form field holds the placeholder rather than a usable credential.
+ *
+ * Anything that spends a credential — a helper that calls the platform API, a
+ * bridge that persists it locally — must ask this before using the value, or it
+ * sends the placeholder upstream and reads the resulting auth failure as a bad
+ * secret.
+ */
+export const isMaskedBotCredential = (value: string | null | undefined): boolean =>
+  value?.trim() === BOT_CREDENTIAL_MASK;

@@ -35,32 +35,37 @@ const mocks = vi.hoisted(() => ({
   updateTaskVisibility: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ title }: { title?: string }) => <button type="button">{title}</button>,
-  DropdownMenu: ({ children, items }: { children?: ReactNode; items: MenuItem[] }) => {
-    mocks.dropdownItems = items;
-    return <>{children}</>;
-  },
-  Icon: () => <span />,
-  copyToClipboard: vi.fn(),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      DropdownMenu: ({ children, items }: { children?: ReactNode; items: MenuItem[] }) => {
+        mocks.dropdownItems = items;
+        return <>{children}</>;
+      },
+      copyToClipboard: vi.fn(),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      confirmModal: (opts: unknown) => mocks.confirmModal(opts),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: (opts: unknown) => mocks.confirmModal(opts),
-}));
-
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: { success: mocks.messageSuccess },
     }),
   },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -75,6 +80,11 @@ vi.mock('@/business/client/hooks/useIsWorkspaceOwner', () => ({
   useIsWorkspaceOwner: () => mocks.isWorkspaceOwner,
 }));
 
+vi.mock('@/features/Favorites', () => ({
+  FavoriteButton: () => null,
+  useCurrentFavoritePath: () => '/favorite-path',
+  useFavoriteMenuItem: () => null,
+}));
 vi.mock('@/features/VisibilityConfirmContent', () => ({
   default: () => <div />,
 }));
@@ -101,10 +111,6 @@ vi.mock('@/hooks/useAppOrigin', () => ({
   useAppOrigin: () => 'https://example.com',
 }));
 
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
-}));
-
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -123,6 +129,19 @@ describe('TaskDetailHeaderActions', () => {
     mocks.activeWorkspaceId = 'ws-1';
     mocks.currentUserId = 'user-1';
     mocks.isWorkspaceOwner = false;
+  });
+
+  it('lists copy content right below copy link, ahead of the transfer group', () => {
+    render(<TaskDetailHeaderActions />);
+
+    expect(mocks.dropdownItems.slice(0, 6).map((item) => item?.key ?? item?.type)).toEqual([
+      'copyId',
+      'copyLink',
+      'copyContent',
+      'divider',
+      'transfer-task',
+      'copy-task',
+    ]);
   });
 
   it('includes task transfer and copy actions in the detail menu', () => {
@@ -161,23 +180,28 @@ describe('TaskDetailHeaderActions', () => {
     expect(mocks.dropdownItems.map((item) => item?.key)).toContain('makePrivate');
   });
 
-  it('hides "make private" from a workspace owner who is not the creator ', () => {
-    mocks.isWorkspaceOwner = true;
+  it('offers a non-creator member to take the public task over as private', () => {
     mocks.taskState.taskDetailMap = {
       'T-1': { createdByUserId: 'someone-else', visibility: 'public' },
     };
     render(<TaskDetailHeaderActions />);
+    const item = mocks.dropdownItems.find((i) => i?.key === 'makePrivate') as
+      { label?: string; onClick?: () => void } | undefined;
+    expect(item?.label).toBe('taskDetail.takeOver.menuLabel');
+    item?.onClick?.();
 
-    expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('makePrivate');
-  });
-
-  it('hides "make private" from non-creator members', () => {
-    mocks.taskState.taskDetailMap = {
-      'T-1': { createdByUserId: 'someone-else', visibility: 'public' },
+    const opts = mocks.confirmModal.mock.calls[0][0] as {
+      okButtonProps?: { danger?: boolean };
+      onOk: () => Promise<void>;
+      title: string;
     };
-    render(<TaskDetailHeaderActions />);
-
-    expect(mocks.dropdownItems.map((item) => item?.key)).not.toContain('makePrivate');
+    expect(opts.title).toBe('taskDetail.takeOver.confirmTitle');
+    expect(opts.okButtonProps?.danger).toBe(true);
+    return opts.onOk().then(() => {
+      expect(mocks.updateTaskVisibility).toHaveBeenCalledWith('T-1', 'private', {
+        takeOwnership: true,
+      });
+    });
   });
 
   it('hides "make private" on private tasks', () => {

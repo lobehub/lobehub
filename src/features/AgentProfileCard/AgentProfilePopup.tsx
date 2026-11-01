@@ -1,24 +1,36 @@
 'use client';
 
-import { agentDisplayName, type AgentItem } from '@lobechat/types';
-import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, Icon, Popover, Skeleton, Text } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import {
+  ActionIcon,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Popover,
+  Skeleton,
+  Text,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
-import { BookOpen, FileText, Settings } from 'lucide-react';
+import { BookOpen, FileText, Settings, SquareTerminal } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
+import { ModelIcon } from '@/components/LobeIcons';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ModelSelect from '@/features/ModelSelect';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { agentProfileKeys } from '@/libs/swr/keys';
-import { agentService } from '@/services/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentProfileCard from '.';
+import { resolveAgentRuntimeLabel } from './runtime';
+import {
+  type AgentProfilePreview as AgentPreview,
+  useAgentProfileDetail,
+} from './useAgentProfileDetail';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   footer: css`
@@ -32,11 +44,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   sectionTitle: css`
     margin-block-end: 8px;
-
     font-size: 11px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
   `,
   statItem: css`
     color: ${cssVar.colorTextSecondary};
@@ -49,18 +59,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
 }));
-
-type AgentPreview = Pick<
-  AgentItem,
-  'avatar' | 'backgroundColor' | 'description' | 'model' | 'name' | 'provider' | 'title'
->;
-
-interface FetchedAgent extends Partial<AgentPreview> {
-  files?: unknown[];
-  id?: string;
-  knowledgeBases?: unknown[];
-  plugins?: string[];
-}
 
 interface AgentProfilePopupProps extends PropsWithChildren {
   /** Prefilled data for instant render; fetched data overrides once loaded. */
@@ -89,12 +87,15 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
       (!groupId || (isGroupAccessResolved && canEditGroup));
 
     const updateMemberAgentConfig = useAgentGroupStore((s) => s.updateMemberAgentConfig);
+    const listEntry = useHomeStore(homeAgentListSelectors.getAgentById(agentId));
 
-    const { data: fetched, isLoading } = useSWR(
-      open && canConfigure ? agentProfileKeys.detail(agentId) : null,
-      () => agentService.getAgentConfigById(agentId) as Promise<FetchedAgent | null>,
-      { revalidateOnFocus: false },
-    );
+    const { detail: fetched, isLoading } = useAgentProfileDetail(agentId, open && !!canConfigure);
+
+    const runtimeLabel = resolveAgentRuntimeLabel({
+      fetchedType: fetched?.agencyConfig?.heterogeneousProvider?.type,
+      listEntry,
+    });
+    const isExternal = !!runtimeLabel;
 
     const merged: Partial<AgentPreview> = {
       avatar: fetched?.avatar ?? agent?.avatar,
@@ -141,8 +142,11 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     const footerLoading = canConfigure && !groupId && isLoading && !fetched;
 
+    // An external agent picks its own model inside its CLI, so the LobeHub model
+    // on its config is not what runs it: name the runtime instead, and never
+    // offer a model switch that would not take effect.
     const modelSection =
-      canConfigure && groupId ? (
+      canConfigure && groupId && !isExternal ? (
         merged.model && (
           <Flexbox className={styles.section} gap={4}>
             <div className={styles.sectionTitle}>{t('groupSidebar.agentProfile.model')}</div>
@@ -153,22 +157,31 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
             />
           </Flexbox>
         )
-      ) : footerLoading ? (
+      ) : footerLoading && !isExternal ? (
         <Flexbox horizontal align={'center'} className={styles.footer} gap={14}>
-          <Skeleton.Button active size={'small'} style={{ height: 16, width: 90 }} />
-          <Skeleton.Button active size={'small'} style={{ height: 16, width: 60 }} />
+          <Skeleton height={16} width={90} />
+          <Skeleton height={16} width={60} />
         </Flexbox>
-      ) : canConfigure && (merged.model || hasStats) ? (
+      ) : isExternal || (canConfigure && (merged.model || hasStats)) ? (
         <Flexbox horizontal align={'center'} className={styles.footer} gap={14} wrap={'wrap'}>
-          {merged.model && (
+          {isExternal ? (
             <Flexbox horizontal align={'center'} className={styles.statItem} gap={6}>
-              <ModelIcon model={merged.model} size={14} />
+              <Icon icon={SquareTerminal} size={14} />
               <Text fontSize={12} type={'secondary'}>
-                {merged.model}
+                {t('agentProfile.runtime', { name: runtimeLabel })}
               </Text>
             </Flexbox>
+          ) : (
+            merged.model && (
+              <Flexbox horizontal align={'center'} className={styles.statItem} gap={6}>
+                <ModelIcon model={merged.model} size={14} />
+                <Text fontSize={12} type={'secondary'}>
+                  {merged.model}
+                </Text>
+              </Flexbox>
+            )
           )}
-          {pluginCount > 0 && (
+          {canConfigure && pluginCount > 0 && (
             <Flexbox horizontal align={'center'} className={styles.statItem} gap={4}>
               <Icon icon={SkillsIcon} size={13} />
               <Text fontSize={12} type={'secondary'}>
@@ -176,7 +189,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
               </Text>
             </Flexbox>
           )}
-          {knowledgeCount > 0 && (
+          {canConfigure && knowledgeCount > 0 && (
             <Flexbox horizontal align={'center'} className={styles.statItem} gap={4}>
               <Icon icon={BookOpen} size={13} />
               <Text fontSize={12} type={'secondary'}>
@@ -184,7 +197,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
               </Text>
             </Flexbox>
           )}
-          {fileCount > 0 && (
+          {canConfigure && fileCount > 0 && (
             <Flexbox horizontal align={'center'} className={styles.statItem} gap={4}>
               <Icon icon={FileText} size={13} />
               <Text fontSize={12} type={'secondary'}>
@@ -197,10 +210,11 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     const content = showSkeleton ? (
       <div style={{ padding: 16, width: 280 }}>
-        <Skeleton active avatar paragraph={{ rows: 2 }} />
+        <ArticleSkeleton avatar rows={2} />
       </div>
     ) : (
       <AgentProfileCard
+        agentId={agentId}
         avatar={merged.avatar}
         backgroundColor={merged.backgroundColor}
         description={merged.description}

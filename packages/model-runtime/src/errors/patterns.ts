@@ -143,6 +143,18 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   { code: AgentRuntimeErrorType.ExceededContextWindow, match: sub('input tokens and requested') },
 
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.ExceededContextWindow,
+    match: sub('exceeds system limit'),
+    note: 'volcengine: input token count over the account-level system limit',
+  },
+  {
+    code: AgentRuntimeErrorType.ExceededContextWindow,
+    match: sub('channel input token limit exceeded'),
+    note: 'new-api style relay channel input cap',
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // InsufficientQuota — account balance / billing exhausted (long-term)
   // ─────────────────────────────────────────────────────────────────────────
@@ -401,6 +413,95 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('The free quota has been exhausted'),
   },
 
+  // Harvested from the UpstreamHttpError / bare-500 residue (2026-09 triage):
+  // BYOK proxies phrase balance exhaustion without the `, please recharge` tail
+  // that the narrower pattern above requires.
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('account balance is insufficient', { caseInsensitive: true }),
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('no credits remaining'),
+  },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('need pre-deduct'),
+    note: 'new-api pre-deduction against an empty balance',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('has an overdue balance'),
+    note: 'volcengine / openai-compat overdue account',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('credit limit is insufficient'),
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('hết credit'),
+    note: 'Vietnamese relay: pay-as-you-go wallet empty',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('reached your usage limit for this billing cycle'),
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('longer than the free tier allows'),
+    note: 'anthropic free tier single-request cap',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('preConsumedQuota'),
+    note: 'one-api / new-api pre-consumed quota check',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('run out of credits or need a'),
+    note: 'xAI / Grok subscription required',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('Not enough credit to cover this request'),
+    note: 'OpenRouter max-cost estimate',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('reached your specified workspace API usage limits'),
+    note: 'anthropic workspace spend cap',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('any credits or licenses yet'),
+    note: 'team seat / credit not purchased yet',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('insufficient_gpt_quota'),
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('订阅额度不足或未配置订阅'),
+    note: 'relay: subscription quota exhausted or unset',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('insufficient credits to make this request'),
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('余额不足'),
+    note: 'relay balance exhausted (Chinese)',
+  },
+  {
+    code: AgentRuntimeErrorType.InsufficientQuota,
+    match: sub('No active subscription found for this group'),
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // RateLimitExceeded — short-window rate limit (transient, retryable)
   // ─────────────────────────────────────────────────────────────────────────
@@ -471,6 +572,23 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.RateLimitExceeded,
     match: sub('per-user model TPM limit'),
+  },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.RateLimitExceeded,
+    match: sub('Worker local total request limit reached'),
+    note: 'nvidia NIM worker concurrency cap',
+  },
+  {
+    code: AgentRuntimeErrorType.RateLimitExceeded,
+    match: sub('Rate limit exceeded. Refer to'),
+    note: 'upstream points at x-ratelimit-* / retry-after headers',
+  },
+  {
+    code: AgentRuntimeErrorType.RateLimitExceeded,
+    match: sub('您已达到总请求数限制'),
+    note: 'relay: per-window total request cap (Chinese)',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -559,6 +677,29 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('服务器问题调试中') },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('undergoing an upgrade') },
+
+  {
+    code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    match: sub('provider temporarily unavailable. Error id:'),
+    note: 'Aggregator proxies wrap a transient upstream outage in a bare 500.',
+  },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    match: sub('is temporarily at capacity'),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RemoteMediaDownloadTimeout — provider-side remote media fetch
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+    match: sub('Unable to download content from the provided URL before the timeout', {
+      caseInsensitive: true,
+    }),
+    note: 'OpenAI-compatible remote media fetch timed out before inference.',
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // ProviderNetworkError — connection / timeout
@@ -673,6 +814,17 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('"code":"NOT_FOUND","msg":"route not found"'),
   },
 
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.NoAvailableChannel,
+    match: sub('暂无可用凭证'),
+    note: 'relay has no usable credential left',
+  },
+  {
+    code: AgentRuntimeErrorType.NoAvailableChannel,
+    match: sub('No available Gemini accounts'),
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ModelNotFound
   // ─────────────────────────────────────────────────────────────────────────
@@ -725,6 +877,42 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.ModelNotFound,
     match: sub('Unknown Model, please check the model code'),
+  },
+
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('is not supported by any configured account'),
+    note: 'Router/aggregator has no account able to serve the requested model.',
+  },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('is no longer available to new users'),
+    note: 'Gemini retires a model for accounts that never called it before.',
+  },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('was not found or your project does not have access'),
+    note: 'Vertex publisher model not enabled for the project',
+  },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('Invalid model. Please select a different model'),
+  },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub("Unknown model '"),
+    note: 'relay rejects an unknown model id',
+  },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('has been retired and is no longer available'),
+  },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: { kind: 'regex', value: /Requested model .+ not supported/ },
+    note: 'openai-compat relay: requested model not served. Keeps the `Requested model` discriminator so generic `... is not supported` parameter rejections in the same JSON envelope stay out.',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -782,6 +970,23 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('No active credentials for provider'),
   },
 
+  {
+    code: AgentRuntimeErrorType.InvalidProviderAPIKey,
+    match: sub('bound service account is deleted or disabled'),
+  },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.InvalidProviderAPIKey,
+    match: sub('Request had invalid authentication credentials'),
+    note: 'Google: expected OAuth2 token / valid key',
+  },
+  {
+    code: AgentRuntimeErrorType.InvalidProviderAPIKey,
+    match: sub('API key 已过期'),
+    note: 'relay: key expired (Chinese)',
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // InvalidGithubToken / InvalidGithubCopilotToken
   // ─────────────────────────────────────────────────────────────────────────
@@ -831,6 +1036,23 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('Access denied due to Virtual Network'),
   },
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('does not allow the current client') },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.PermissionDenied,
+    match: sub('Permission denied: Consumer '),
+    note: 'Google: api_key consumer suspended. Scoped to the consumer wording so `account has been suspended` still reaches AccountDeactivated below.',
+  },
+  {
+    code: AgentRuntimeErrorType.PermissionDenied,
+    match: sub('Access to model denied'),
+    note: 'qwen / bailian: account not eligible for the model',
+  },
+  {
+    code: AgentRuntimeErrorType.PermissionDenied,
+    match: sub('requires explicit opt in'),
+    note: 'region-hosted model needs an explicit account opt-in',
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // AccountDeactivated
@@ -897,6 +1119,32 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('The model rejected this request. It may not support the input you sent'),
   },
 
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('only available through the Batch API'),
+  },
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('不支持请求中的能力'),
+    note: 'Chinese aggregators reject unsupported image / PDF / tools / thinking capabilities.',
+  },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('does not support tools'),
+  },
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('does not support the coding plan feature'),
+    note: 'volcengine coding-plan model mismatch',
+  },
+  {
+    code: AgentRuntimeErrorType.CapabilityNotSupported,
+    match: sub('Reasoning is mandatory for this endpoint'),
+    note: 'OpenRouter reasoning-only endpoint',
+  },
+
   // ─────────────────────────────────────────────────────────────────────────
   // ContentModeration
   // ─────────────────────────────────────────────────────────────────────────
@@ -947,6 +1195,51 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     code: AgentRuntimeErrorType.ContentModeration,
     match: sub('Output data may contain inappropriate content'),
     note: 'sensenova output-side',
+  },
+
+  {
+    code: AgentRuntimeErrorType.ContentModeration,
+    match: sub('data_inspection_failed'),
+    note: 'Alibaba/Qwen content-safety rejection, delivered as a JSON error code.',
+  },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.ContentModeration,
+    match: sub('rejected by content moderation'),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RequestBodyTooLarge — serialized request exceeded an upstream body limit
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: { kind: 'regex', value: /failed to buffer (?:the )?request body/i },
+    note: 'Observed from DeepSeek Anthropic-compatible HTTP 413 responses.',
+  },
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: sub('Request body too large for', { caseInsensitive: true }),
+  },
+  {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    match: sub('413 Request Entity Too Large', { caseInsensitive: true }),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ExceededImageLimit — per-request image count limit of a channel.
+  // Match only the fixed wording, never the count: the cap differs by model
+  // and has changed over time, so the number in the message is not stable.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    code: AgentRuntimeErrorType.ExceededImageLimit,
+    match: sub('Exceeded maximum number of images', { caseInsensitive: true }),
+    note: 'Azure OpenAI Responses API: "Exceeded maximum number of images (<limit>) allowed in the request."',
+  },
+  {
+    code: AgentRuntimeErrorType.ExceededImageLimit,
+    match: sub('Too many images in request', { caseInsensitive: true }),
+    note: 'Azure OpenAI Chat Completions: "Too many images in request: <count>, maximum allowed: <limit>."',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1098,7 +1391,6 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('function_declarations'),
     note: 'custom gemini proxies mangle tool schema; lobehub-native schema bug fixed in #14740',
   },
-  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Request body too large for') },
   {
     code: AgentRuntimeErrorType.InvalidRequestFormat,
     match: sub('error getting file type: failed to download file'),
@@ -1158,6 +1450,26 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.UserConfigError,
     match: sub('OpenAIException - {"detail":"Not Found"}'),
+  },
+
+  // Harvested from the 2026-09 production residue.
+  {
+    code: AgentRuntimeErrorType.UserConfigError,
+    match: sub('anthropic-workspace-id is required'),
+  },
+  {
+    code: AgentRuntimeErrorType.UserConfigError,
+    match: sub('This host has been retired'),
+    note: 'upstream moved; user must repoint baseURL',
+  },
+  {
+    code: AgentRuntimeErrorType.UserConfigError,
+    match: sub('Replit AI Integrations is not configured'),
+  },
+  {
+    code: AgentRuntimeErrorType.UserConfigError,
+    match: sub('The product is not activated'),
+    note: 'qwen: product not activated on the account',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1223,7 +1535,6 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('400 status code') },
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('403 status code') },
   { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('404 status code') },
-  { code: AgentRuntimeErrorType.UpstreamHttpError, match: sub('413 Request Entity Too Large') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // ProviderBizError — generic upstream wrappers that don't fit elsewhere. The

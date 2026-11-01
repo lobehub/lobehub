@@ -1,7 +1,11 @@
+import type { SpendOrigin } from './agentRuntime';
+
 export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
+  /** One-way Linear issue → task sync run in the background (`linear_issue_sync`). */
+  LinearIssueSync = 'linear_issue_sync',
   UserMemoryExtractionHourly = 'user_memory_extraction:hourly',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
   VideoGeneration = 'video_generation',
@@ -16,6 +20,11 @@ export enum AsyncTaskStatus {
 
 export enum AsyncTaskErrorType {
   EmbeddingError = 'EmbeddingError',
+
+  /**
+   * File exceeds the in-memory parser limit and cannot be chunked.
+   */
+  FileTooLargeToParse = 'FileTooLargeToParse',
 
   /* ↓ cloud slot | free plan limit error type ↓ */
   /**
@@ -91,6 +100,8 @@ export interface AsyncTaskErrorBody {
   persistErrors?: AsyncTaskStructuredErrorItem[];
   progressErrors?: AsyncTaskStructuredErrorItem[];
   retrievalErrors?: AsyncTaskStructuredErrorItem[];
+  /** Earliest retry time for this failure, as an ISO timestamp. */
+  retryAt?: string;
 }
 
 export interface IAsyncTaskError {
@@ -192,7 +203,29 @@ export interface HourlyUserMemoryExtractionMetadata {
   startedAt: string;
 }
 
+export type VideoGenerationCompletionMode = 'polling' | 'webhook';
+
 export interface VideoGenerationTaskMetadata {
-  precharge?: Record<string, unknown>;
+  completionClaimedAt?: string;
+  completionEventId?: string;
+  completionMode?: VideoGenerationCompletionMode;
+  precharge?: unknown;
+  previousGenerationId?: string;
+  route?: VideoGenerationRoute;
+  /**
+   * Origin of the submitting request, carried across the async boundary so the
+   * completion charge (webhook / polling) can keep the spend attributed.
+   *
+   * Persisted on the async task row under this exact key. It was named
+   * `spendAttribution` before Agent Share v2; no double-read is needed because
+   * the feature had not shipped, so no stored row carries the old key.
+   */
+  spendOrigin?: SpendOrigin;
   webhookToken?: string;
+}
+
+export interface VideoGenerationRoute {
+  apiType: string;
+  channelId?: string;
+  routerId?: string;
 }

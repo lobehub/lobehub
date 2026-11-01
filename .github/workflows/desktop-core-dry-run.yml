@@ -1,0 +1,62 @@
+name: Desktop Core Dry Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Update channel'
+        required: false
+        type: choice
+        options:
+          - canary
+          - beta
+          - stable
+        default: canary
+
+permissions: read-all
+
+env:
+  NODE_VERSION: '24.11.1'
+
+jobs:
+  build-core:
+    name: Build core (darwin)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install deps
+        run: pnpm install
+
+      - name: Build core
+        run: npm_config_platform=darwin pnpm -C apps/desktop run build:main
+        env:
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+          UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          APP_URL: http://localhost:3015
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
+
+      - name: Build unsigned core manifest
+        working-directory: apps/desktop
+        env:
+          RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          UPDATE_CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          SHELL_ABI=$(node scripts/shellAbi.mjs)
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/buildCoreManifest.mjs --core=core-dist --platform=darwin --channel="$UPDATE_CHANNEL" --version="$VERSION" --seq=0 --shell-abi="$SHELL_ABI"
+
+      - name: Upload core
+        uses: actions/upload-artifact@v6
+        with:
+          name: core-darwin-dryrun
+          path: apps/desktop/core-dist
+          retention-days: 7

@@ -1,6 +1,4 @@
-import { Center, Flexbox } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Center, Checkbox, cssVar, Flexbox } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,6 +24,8 @@ interface ListViewHeaderProps {
   data: FileListItem[];
   hasMore: boolean;
   showUploader?: boolean;
+  /** Size of the listed pool; defaults to the folder list's total. */
+  total?: number;
 }
 
 const ListViewHeader = ({
@@ -33,6 +33,7 @@ const ListViewHeader = ({
   data,
   hasMore,
   showUploader = true,
+  total: poolTotal,
 }: ListViewHeaderProps) => {
   const { t } = useTranslation(['components', 'file']);
   const updateColumnWidth = useGlobalStore((s) => s.updateResourceManagerColumnWidth);
@@ -49,6 +50,7 @@ const ListViewHeader = ({
   } = useExplorerSelectionSummary({
     data,
     hasMore,
+    total: poolTotal,
   });
   const isAllResultsSelected = selectAllState === 'all' && total === selectedCount;
   const selectedLabelKey =

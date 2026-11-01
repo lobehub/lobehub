@@ -37,6 +37,13 @@ LobeHub supports multimodal AI sessions, including the ability to upload unstruc
 - Default: -
 - Example: `https://cos.ap-chengdu.myqcloud.com`
 
+### `S3_INTERNAL_ENDPOINT`
+
+- Type: Optional
+- Description: Endpoint the LobeHub server uses for its own S3 requests (uploads, metadata checks, reads, bucket creation) when `S3_ENDPOINT` is only reachable from browsers, for example the Docker Compose service name. Presigned URLs keep using `S3_ENDPOINT`.
+- Default: `-` (uses `S3_ENDPOINT`)
+- Example: `http://rustfs:9000`
+
 ### `S3_BUCKET`
 
 - Type: Required

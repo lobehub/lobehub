@@ -1,8 +1,10 @@
+import type { AgentInterventionSourceAction } from '@/services/aiAgent';
 import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
+import { useUserStore } from '@/store/user';
 
 import { type Store as ConversationStore } from '../../action';
-import { getInterventionBatch } from '../data/pendingInterventions';
+import { getInterventionBatch, type PendingIntervention } from '../data/pendingInterventions';
 import { dataSelectors } from '../data/selectors';
 
 /**
@@ -24,7 +26,11 @@ export class ToolActionImpl {
     this.#get = get;
   }
 
-  approveToolCall = async (toolMessageId: string, assistantGroupId: string): Promise<void> => {
+  approveToolCall = async (
+    toolMessageId: string,
+    assistantGroupId: string,
+    options?: { editedArguments?: Record<string, unknown>; rememberToolKey?: string },
+  ): Promise<void> => {
     const { hooks, context, waitForPendingArgsUpdate } = this.#get();
 
     // Wait for any pending args update to complete before approval
@@ -38,12 +44,78 @@ export class ToolActionImpl {
 
     // Delegate to global ChatStore with context for correct conversation scope
     const chatStore = useChatStore.getState();
-    await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context);
+    const toolCallId = dataSelectors.getDbMessageById(toolMessageId)(this.#get())?.tool_call_id;
+    const editedArguments = options?.editedArguments;
+    const chatOptions =
+      editedArguments && toolCallId
+        ? {
+            ...options,
+            onLegacyEditFallback: () =>
+              this.#get().updatePluginArguments(toolCallId, editedArguments, true),
+          }
+        : options;
+    if (chatOptions) {
+      await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context, chatOptions);
+    } else {
+      await chatStore.approveToolCalling(toolMessageId, assistantGroupId, context);
+    }
 
     // ===== Hook: onToolCallComplete =====
     if (hooks.onToolCallComplete) {
       hooks.onToolCallComplete(toolMessageId, undefined);
     }
+  };
+
+  /**
+   * "Approve, and don't ask again for similar actions" from one card, once its
+   * remember step has taken effect.
+   *
+   * The other calls of the same tool in this card's parallel batch were
+   * audited when the model emitted them, before the remember existed, so they
+   * would still ask. Those `isCovered` now clears are approved together with
+   * this card in one batch approval: the run continues once, and the user is
+   * not asked again for what they just said not to ask about. A card with
+   * staged argument edits approves alone, as the batch approval carries none.
+   */
+  approveToolCallAndCovered = async (
+    toolMessageId: string,
+    assistantGroupId: string,
+    {
+      editedArguments,
+      isCovered,
+      rememberToolKey,
+    }: {
+      editedArguments?: Record<string, unknown>;
+      isCovered: (sibling: PendingIntervention) => Promise<boolean>;
+      rememberToolKey?: string;
+    },
+  ): Promise<void> => {
+    const pending = dataSelectors.pendingInterventions(this.#get());
+    const active = pending.find((item) => item.toolMessageId === toolMessageId);
+    const siblings = editedArguments
+      ? []
+      : getInterventionBatch(pending, active).filter(
+          (item) =>
+            item.toolMessageId !== toolMessageId &&
+            item.identifier === active?.identifier &&
+            item.apiName === active?.apiName,
+        );
+    const covered: string[] = [];
+    for (const sibling of siblings) {
+      if (await isCovered(sibling)) covered.push(sibling.toolMessageId);
+    }
+
+    if (covered.length === 0) {
+      await this.approveToolCall(toolMessageId, assistantGroupId, {
+        editedArguments,
+        ...(rememberToolKey ? { rememberToolKey } : {}),
+      });
+      return;
+    }
+
+    // The batch approval approves once; the allow-list entry is written here.
+    if (rememberToolKey) await useUserStore.getState().addToolToAllowList(rememberToolKey);
+    await this.approveAllToolCalls([toolMessageId, ...covered]);
   };
 
   /**
@@ -112,10 +184,13 @@ export class ToolActionImpl {
     }
   };
 
-  cancelToolInteraction = async (toolMessageId: string): Promise<void> => {
+  cancelToolInteraction = async (
+    toolMessageId: string,
+    options?: { onLegacyFallback?: () => Promise<void> },
+  ): Promise<void> => {
     const { context } = this.#get();
     const chatStore = useChatStore.getState();
-    await chatStore.cancelToolInteraction(toolMessageId, context);
+    await chatStore.cancelToolInteraction(toolMessageId, context, options);
   };
 
   rejectAndContinueToolCall = async (toolMessageId: string, reason?: string): Promise<void> => {
@@ -168,17 +243,31 @@ export class ToolActionImpl {
     await chatStore.rejectToolCalling(toolMessageId, reason, context);
   };
 
-  skipToolInteraction = async (toolMessageId: string, reason?: string): Promise<void> => {
+  skipToolInteraction = async (
+    toolMessageId: string,
+    reason?: string,
+    options?: { onLegacyFallback?: () => Promise<void> },
+  ): Promise<void> => {
     const { context } = this.#get();
     const chatStore = useChatStore.getState();
-    await chatStore.skipToolInteraction(toolMessageId, reason, context);
+    await chatStore.skipToolInteraction(toolMessageId, reason, context, options);
   };
 
   submitToolInteraction = async (
     toolMessageId: string,
     response: Record<string, unknown>,
     options?: {
+      agentInterventionAction?: Extract<
+        AgentInterventionSourceAction,
+        { type: 'submit_answers' | 'submit_custom' }
+      >;
       createUserMessage?: boolean;
+      prepareLegacyFallback?: () => Promise<{
+        createUserMessage?: boolean;
+        pluginState?: Record<string, unknown>;
+        response: Record<string, unknown>;
+        toolResultContent?: string;
+      }>;
       pluginState?: Record<string, unknown>;
       toolResultContent?: string;
     },

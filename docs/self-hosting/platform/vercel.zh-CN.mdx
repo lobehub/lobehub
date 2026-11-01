@@ -252,6 +252,95 @@ tags:
   <Image alt={'登录成功状态'} src={'/blog/assets28616219/9cb5150d-6e1e-4c59-9a18-4e418dce1a5d.webp'} />
 </Steps>
 
+## 可选：使用 GitHub Actions 预构建
+
+如果 Vercel 构建因内存不足或超过构建时限而失败，可以改在 GitHub Actions 中运行 `vercel build`，再通过 `vercel deploy --prebuilt` 将 `.vercel/output` 构建产物部署到 Vercel。该流程遵循 Vercel 官方的 [GitHub Actions 部署方式](https://vercel.com/guides/how-can-i-use-github-actions-with-vercel)。
+
+<Callout type={'info'}>
+  此方式只将构建阶段移到 GitHub Actions。部署后的函数运行时、流量和套餐配额仍受 Vercel 限制。如果 Vercel 原生 Git 部署可以正常完成，则无需改用此方式。
+</Callout>
+
+<Steps>
+  ### 准备 Vercel 凭据
+
+  准备以下三个值：
+
+  - `VERCEL_TOKEN`：在 Vercel 的 [Tokens](https://vercel.com/account/settings/tokens) 页面创建；
+  - `VERCEL_ORG_ID` 和 `VERCEL_PROJECT_ID`：在仓库根目录执行 `vercel link` 后，可从生成的 `.vercel/project.json` 中获取。
+
+  在 Fork 仓库中进入 **Settings → Secrets and variables → Actions**，分别创建同名的 Repository secrets。请勿将这些值直接写入工作流文件。
+
+  ### 添加 GitHub Actions 工作流
+
+  在 Fork 仓库中新建 `.github/workflows/vercel-prebuilt-deploy.yml`，写入以下内容：
+
+  ```yaml
+  name: Vercel Prebuilt Deploy
+
+  on:
+    push:
+      branches:
+        - main
+    workflow_dispatch:
+
+  permissions:
+    contents: read
+
+  concurrency:
+    group: vercel-production
+    cancel-in-progress: true
+
+  env:
+    VERCEL: '1'
+    VERCEL_ENV: production
+    NEXT_PUBLIC_VERCEL_ENV: production
+    VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+    VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+  jobs:
+    deploy:
+      runs-on: ubuntu-latest
+      timeout-minutes: 90
+
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v6
+
+        - name: Setup environment
+          uses: ./.github/actions/setup-env
+
+        - name: Install Vercel CLI
+          run: npm install --global vercel@latest
+
+        - name: Pull Vercel project settings
+          env:
+            VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+        - name: Build Vercel output
+          env:
+            VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          run: vercel build --prod --token="$VERCEL_TOKEN"
+
+        - name: Deploy prebuilt output
+          env:
+            VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          run: vercel deploy --prebuilt --prod --archive=tgz --token="$VERCEL_TOKEN"
+  ```
+
+  每次向 `main` 分支推送代码后，该工作流都会自动构建并部署。你也可以在 **Actions → Vercel Prebuilt Deploy → Run workflow** 中手动触发。
+
+  仓库内置的 **Upstream Sync** 工作流使用 `GITHUB_TOKEN` 推送，而[这种推送不会启动另一个工作流](https://docs.github.com/zh-cn/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow)。Upstream Sync 更新 Fork 后，请手动运行 **Vercel Prebuilt Deploy** 部署新版本。
+
+  ### 关闭 Vercel 原生 Git 部署
+
+  确认上述工作流可以成功部署后，在 Vercel 项目的 **Settings → Git → Connected Git Repository** 中断开 Git 仓库连接，避免同一次推送同时触发 Vercel 原生构建和 GitHub Actions 构建。断开连接不会影响通过 Vercel CLI 部署预构建产物。
+
+  ### 验证部署
+
+  打开 GitHub Actions 的运行详情。`Deploy prebuilt output` 步骤会输出生产部署地址；访问该地址并按上一节检查登录功能。
+</Steps>
+
 ## 平台限制
 
 <Callout type={'warning'}>

@@ -18,6 +18,7 @@ export const MODEL_KNOWLEDGE_CUTOFFS: Record<string, string> = {
   'claude-3-opus': '2023-08',
   'claude-3-sonnet': '2023-08',
   'claude-fable-5': '2026-01',
+  'claude-fable-5-1': '2026-06',
   'claude-haiku-4-5': '2025-02',
   'claude-opus-4': '2025-01',
   'claude-opus-4-1': '2025-01',
@@ -89,6 +90,7 @@ export const MODEL_KNOWLEDGE_CUTOFFS: Record<string, string> = {
   'gemini-3.5-flash-lite': '2026-03',
   'gemini-3.6-flash': '2026-03',
   'gemini-3.7-flash': '2026-03',
+  'gemini-3.8-flash': '2026-03',
   'gemma-4-26b-a4b-it': '2025-01',
   'gemma-4-31b-it': '2025-01',
 

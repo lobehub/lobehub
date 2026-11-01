@@ -2,6 +2,14 @@ import type {
   ClaudeCodeAccountIdentity,
   ClaudeCodeQuotaReading,
 } from '@lobechat/electron-client-ipc';
+import type {
+  CodexQuotaSnapshot,
+  KimiCodeExtraUsage,
+  KimiCodeQuotaSnapshot,
+  QuotaAccountIdentity,
+  QuotaLimitReading,
+} from '@lobechat/heterogeneous-agents/quota';
+import type { QuotaDeviceAccount } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -11,6 +19,32 @@ import { lambdaClient } from '@/libs/trpc/client';
  * fetches the *live* quota from the local CLI login over Electron IPC.
  */
 class AgentQuotaService {
+  ingestCodexSnapshot = async (params: {
+    identity: QuotaAccountIdentity;
+    readings: QuotaLimitReading[];
+  }) => lambdaClient.agentQuota.ingestSnapshot.mutate({ ...params, provider: 'codex' });
+
+  refreshCodexQuota = async (params: {
+    command?: string;
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+  }): Promise<CodexQuotaSnapshot | null> =>
+    lambdaClient.agentQuota.refreshCodexQuota.mutate(params);
+
+  ingestKimiCodeSnapshot = async (params: {
+    extraUsage?: KimiCodeExtraUsage | null;
+    identity: QuotaAccountIdentity;
+    readings: QuotaLimitReading[];
+  }) => lambdaClient.agentQuota.ingestSnapshot.mutate({ ...params, provider: 'kimi-code' });
+
+  refreshKimiCodeQuota = async (params: {
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+  }): Promise<KimiCodeQuotaSnapshot | null> =>
+    lambdaClient.agentQuota.refreshKimiCodeQuota.mutate(params);
+
   /** Persist a live Claude snapshot (identity + readings) captured over IPC. */
   ingestClaudeSnapshot = async (params: {
     deviceId?: string;
@@ -46,6 +80,10 @@ class AgentQuotaService {
   listUsageTurns = async (accountId: string, sinceDays?: number) =>
     lambdaClient.agentQuota.listUsageTurns.query({ accountId, sinceDays });
 
+  /** Agent runs in flight on an account, newest turn first. */
+  listActiveRuns = async (accountId: string) =>
+    lambdaClient.agentQuota.listActiveRuns.query({ accountId });
+
   listBindings = async (agentId: string) => lambdaClient.agentQuota.listBindings.query({ agentId });
 
   /** UI "switch account": pin one account for an agent (Manual mode). */
@@ -66,9 +104,32 @@ class AgentQuotaService {
   updateAccount = async (id: string, value: { enabled?: boolean; label?: string }) =>
     lambdaClient.agentQuota.updateAccount.mutate({ id, value });
 
+  /** The account an agent uses on one device (gateway id); `null` = Auto there. */
+  getDeviceAccount = async (agentId: string, deviceId: string): Promise<QuotaDeviceAccount> =>
+    lambdaClient.agentQuota.getDeviceAccount.query({ agentId, deviceId });
+
+  /** Pin an account for an agent on one device, or return it to Auto (`null`). */
+  setDeviceAccount = async (agentId: string, deviceId: string, accountId: string | null) =>
+    lambdaClient.agentQuota.setDeviceAccount.mutate({ accountId, agentId, deviceId });
+
+  /** Report every login a device holds for a provider; the rest are forgotten there. */
+  syncDeviceLogins = async (
+    deviceId: string,
+    provider: 'claude-code' | 'codex' | 'kimi-code',
+    externalAccountIds: string[],
+  ) => lambdaClient.agentQuota.syncDeviceLogins.mutate({ deviceId, externalAccountIds, provider });
+
   /** Who the load balancer would pick right now (Auto mode preview + reason). */
-  selectAccountForAgent = async (agentId: string, modelScope?: string) =>
-    lambdaClient.agentQuota.selectAccountForAgent.query({ agentId, modelScope });
+  selectAccountForAgent = async (
+    agentId: string,
+    options?: {
+      /** Gateway id of the device the run spawns on. */
+      deviceId?: string;
+      modelScope?: string;
+      provider?: string;
+      runnableExternalAccountIds?: string[];
+    },
+  ) => lambdaClient.agentQuota.selectAccountForAgent.query({ agentId, ...options });
 
   /** One assistant turn's consumption → usage ledger (idempotent by message id). */
   recordUsage = async (params: {
@@ -78,7 +139,7 @@ class AgentQuotaService {
     model?: string;
     occurredAt?: number;
     operationId?: string;
-    provider: 'claude-code' | 'codex';
+    provider: 'claude-code' | 'codex' | 'kimi-code';
     topicId?: string;
     usage: {
       cacheRead?: number;

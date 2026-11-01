@@ -1,6 +1,6 @@
 'use client';
 
-import { Accordion, AccordionItem, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, Flexbox, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -15,6 +15,7 @@ import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
 
 const Body = memo(() => {
   const categoryGroups = useCategory();
+  const searchScope = useMemo(() => ({ categoryGroups }), [categoryGroups]);
   const navigate = useWorkspaceAwareNavigate();
   const location = useActiveLocation();
 
@@ -30,29 +31,27 @@ const Body = memo(() => {
 
   return (
     <Flexbox gap={4} paddingInline={4}>
-      <SearchSection>
+      <SearchSection scope={searchScope}>
         <Accordion
           gap={8}
-          defaultExpandedKeys={[
+          indicatorPlacement="inline"
+          styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
+          defaultValue={[
+            SettingsGroupKey.Account,
             SettingsGroupKey.General,
             SettingsGroupKey.Subscription,
             SettingsGroupKey.Agent,
             SettingsGroupKey.System,
             SettingsGroupKey.Developer,
           ]}
-        >
-          {categoryGroups.map((group) => (
-            <AccordionItem
-              itemKey={group.key}
-              key={group.key}
-              paddingBlock={4}
-              paddingInline={'8px 4px'}
-              title={
-                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-                  {group.title}
-                </Text>
-              }
-            >
+          items={categoryGroups.map((group) => ({
+            key: group.key,
+            title: (
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {group.title}
+              </Text>
+            ),
+            children: (
               <Flexbox gap={1} paddingBlock={1}>
                 {group.items.map((item) => {
                   const url = item.href ?? getTabUrl(item.key);
@@ -75,9 +74,9 @@ const Body = memo(() => {
                   );
                 })}
               </Flexbox>
-            </AccordionItem>
-          ))}
-        </Accordion>
+            ),
+          }))}
+        />
       </SearchSection>
     </Flexbox>
   );

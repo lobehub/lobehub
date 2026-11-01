@@ -1,6 +1,9 @@
 import type { VerifierType, VerifyOnFailStrategy, VerifyRubricConfig } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import type { AcceptanceBundle, AcceptanceBySubject } from '@/services/verify';
+
+import type { VerifyRunSnapshot } from './projection';
 
 /** The criterion fields the portal can edit. */
 export interface VerifyCriterionEdit {
@@ -12,8 +15,14 @@ export interface VerifyCriterionEdit {
 }
 
 export interface State {
+  /** Replica view of the acceptance bundles, one entry per acceptance id. */
   acceptanceBundleMap: Record<string, AcceptanceBundle>;
+  /** Replica bookkeeping of `acceptanceBundleMap`. */
+  acceptanceBundleReplica: ReplicaState<AcceptanceBundle>;
+  /** Replica view of the subject attachments, one entry per `<subjectType>:<subjectId>`. */
   acceptanceBySubjectMap: Record<string, AcceptanceBySubject>;
+  /** Replica bookkeeping of `acceptanceBySubjectMap`. */
+  acceptanceBySubjectReplica: ReplicaState<AcceptanceBySubject>;
   /**
    * Per-criterion edit overlay, keyed by `verify_criteria.id`. Holds the
    * user's in-flight edits so the UI reflects them immediately while they are
@@ -35,13 +44,21 @@ export interface State {
    * in-flight delivery-standard rename pending a debounced save.
    */
   rubricTitleEdits: Record<string, string>;
+  /** Replica view of the Agent Run verify cards, one entry per operation id. */
+  verifyRunMap: Record<string, VerifyRunSnapshot>;
+  /** Replica bookkeeping of `verifyRunMap`. */
+  verifyRunReplica: ReplicaState<VerifyRunSnapshot>;
 }
 
 export const initialState: State = {
   acceptanceBundleMap: {},
+  acceptanceBundleReplica: createReplicaState(),
   acceptanceBySubjectMap: {},
+  acceptanceBySubjectReplica: createReplicaState(),
   criterionEdits: {},
   instructionEdits: {},
   rubricConfigEdits: {},
   rubricTitleEdits: {},
+  verifyRunMap: {},
+  verifyRunReplica: createReplicaState(),
 };

@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import type { TargetIcon } from 'lucide-react';
 import {
   CalendarClockIcon,

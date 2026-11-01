@@ -9,7 +9,13 @@ import { windowSecondsForKind } from './types';
  */
 export type QuotaDisplayReading = Pick<
   QuotaLimitReading,
-  'capturedAt' | 'limitType' | 'resetsAt' | 'scopeKey' | 'utilization'
+  | 'capturedAt'
+  | 'limitType'
+  | 'resetsAt'
+  | 'scopeKey'
+  | 'utilization'
+  | 'windowMinutes'
+  | 'limitName'
 >;
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
@@ -26,7 +32,11 @@ const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(val
  */
 export const hasWindowRolledOver = (reading: QuotaDisplayReading, now: number): boolean =>
   reading.resetsAt == null
-    ? now - reading.capturedAt > windowSecondsForKind(reading.limitType) * 1000
+    ? now - reading.capturedAt >
+      (reading.windowMinutes == null
+        ? windowSecondsForKind(reading.limitType)
+        : reading.windowMinutes * 60) *
+        1000
     : reading.resetsAt <= now;
 
 /**
@@ -35,6 +45,23 @@ export const hasWindowRolledOver = (reading: QuotaDisplayReading, now: number): 
  */
 export const currentUtilization = (reading: QuotaDisplayReading, now: number): number =>
   hasWindowRolledOver(reading, now) ? 0 : clampPercent(reading.utilization);
+
+/**
+ * Drop the limits the provider has stopped reporting. A sample reports every
+ * limit the plan has — an idle window too, against a reset already in the past
+ * — so a limit missing from a sample taken after its window ended is one the
+ * plan no longer has: Claude Ultra has no 5-hour limit, and an account upgraded
+ * from Max keeps a last session reading that would otherwise render as a
+ * refilled window forever. A limit missing while its window is still live may
+ * just have landed in another batch, so it stays.
+ */
+export const dropRetiredLimits = <T extends QuotaDisplayReading>(readings: T[]): T[] => {
+  const newestSampleAt = readings.reduce((newest, r) => Math.max(newest, r.capturedAt), 0);
+
+  return readings.filter(
+    (r) => r.capturedAt >= newestSampleAt || !hasWindowRolledOver(r, newestSampleAt),
+  );
+};
 
 /**
  * A reading as a display window. A rolled-over window is reported as refilled
@@ -48,7 +75,7 @@ export const toQuotaWindow = (reading: QuotaDisplayReading, now: number): Hetero
   return {
     resetsAt: rolledOver ? null : (reading.resetsAt ?? null),
     usedPercent: rolledOver ? 0 : clampPercent(reading.utilization),
-    windowMinutes: windowSecondsForKind(reading.limitType) / 60,
+    windowMinutes: reading.windowMinutes ?? windowSecondsForKind(reading.limitType) / 60,
   };
 };
 
@@ -94,9 +121,10 @@ export const buildClaudeQuotaWindows = (
   readings: QuotaDisplayReading[],
   now: number,
 ): ClaudeQuotaWindows => {
-  const session = newestMatch(readings, isSessionLimit);
-  const weekly = newestMatch(readings, isWeeklyAllLimit);
-  const scoped = newestMatch(readings, isScopedWeeklyLimit);
+  const reported = dropRetiredLimits(readings);
+  const session = newestMatch(reported, isSessionLimit);
+  const weekly = newestMatch(reported, isWeeklyAllLimit);
+  const scoped = newestMatch(reported, isScopedWeeklyLimit);
 
   return {
     scopedWeekly: scoped

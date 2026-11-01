@@ -1,3 +1,4 @@
+import { Menu } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '../../App';
@@ -7,18 +8,9 @@ import { MenuManager } from '../MenuManager';
 vi.mock('electron', () => ({
   Menu: {
     buildFromTemplate: vi.fn(),
+    getApplicationMenu: vi.fn(),
     setApplicationMenu: vi.fn(),
   },
-}));
-
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
 }));
 
 // Mock menu platform implementation
@@ -114,6 +106,14 @@ describe('MenuManager', () => {
       expect(mockBuildContextMenu).toHaveBeenCalledWith(type, data);
       expect(mockMenu.popup).toHaveBeenCalled();
       expect(result).toEqual({ success: true });
+    });
+
+    it('binds the popup to the originating window when given', () => {
+      const window = { id: 2 } as any;
+
+      menuManager.showContextMenu('default', { mediaType: 'image' }, window);
+
+      expect(mockMenu.popup).toHaveBeenCalledWith({ window });
     });
 
     it('should build context menu without data', () => {
@@ -356,6 +356,58 @@ describe('MenuManager', () => {
       // buildTrayMenu should return Menu instance
       const trayMenu = menuManager.buildTrayMenu();
       expect(trayMenu).toBe(mockMenu);
+    });
+  });
+
+  describe('application menu snapshot', () => {
+    it('serializes the live application menu', () => {
+      vi.mocked(Menu.getApplicationMenu).mockReturnValue({
+        items: [
+          {
+            accelerator: null,
+            checked: false,
+            enabled: true,
+            id: 'quit',
+            label: 'Quit',
+            type: 'normal',
+            visible: true,
+          },
+        ],
+      } as never);
+
+      expect(menuManager.getAppMenu()).toEqual([
+        { enabled: true, id: 'quit', label: 'Quit', type: 'normal' },
+      ]);
+    });
+
+    it('returns an empty menu when the application menu is not ready', () => {
+      vi.mocked(Menu.getApplicationMenu).mockReturnValue(null);
+
+      expect(menuManager.getAppMenu()).toEqual([]);
+    });
+
+    it('invokes the item on the window that opened the menu', () => {
+      const click = vi.fn();
+      const window = { id: 1 };
+      const contents = { id: 2 };
+      vi.mocked(Menu.getApplicationMenu).mockReturnValue({
+        getMenuItemById: (id: string) => (id === 'quit' ? { click, type: 'normal' } : null),
+      } as never);
+
+      expect(menuManager.invokeAppMenuItem('quit', window as never, contents as never)).toEqual({
+        success: true,
+      });
+      expect(click).toHaveBeenCalledWith(undefined, window, contents);
+    });
+
+    it('does not activate submenu rows', () => {
+      const click = vi.fn();
+      vi.mocked(Menu.getApplicationMenu).mockReturnValue({
+        getMenuItemById: () => ({ click, type: 'submenu' }),
+      } as never);
+
+      expect(menuManager.invokeAppMenuItem('file', null)).toEqual({ success: false });
+      expect(click).not.toHaveBeenCalled();
     });
   });
 });

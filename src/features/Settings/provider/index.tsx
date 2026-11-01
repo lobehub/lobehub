@@ -55,18 +55,4 @@ export const ProviderDetailPage = memo(() => {
 
 ProviderDetailPage.displayName = 'ProviderDetailPage';
 
-// Default export for backward compatibility (used by SettingsContent)
-type ProviderPageType = {
-  mobile?: boolean;
-};
-
-const ProviderPage = (props: ProviderPageType) => {
-  const { mobile } = props;
-
-  // For mobile or when used via SettingsContent, use the old Page component
-  // This is a fallback for non-router usage
-  const OldPage = require('./(list)').default;
-  return <OldPage mobile={mobile} />;
-};
-
-export default ProviderPage;
+export { default } from './(list)';

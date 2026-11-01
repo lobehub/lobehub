@@ -3,7 +3,7 @@ import { isNotNull, isNull, relations } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
-import { timestamps } from './_helpers';
+import { softDeleteColumns, timestamps } from './_helpers';
 import { globalFiles } from './file';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -47,6 +47,8 @@ export const agentSkills = pgTable(
       .notNull(),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [

@@ -2,7 +2,7 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Markdown } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { UpdateAgentParams } from '../../../types';

@@ -53,6 +53,111 @@ export interface GitLinkedPullRequestResult {
   upstream?: GitUpstreamRef;
 }
 
+export interface GitPullRequestCheck {
+  completedAt?: string;
+  detailsUrl?: string;
+  name: string;
+  required: boolean;
+  startedAt?: string;
+  status: 'cancelled' | 'failure' | 'neutral' | 'pending' | 'skipped' | 'success';
+}
+
+export interface GitPullRequestComment {
+  author: string;
+  body: string;
+  createdAt: string;
+  id: string;
+}
+
+export interface GitPullRequestReview {
+  author: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+  submittedAt: string;
+}
+
+export interface GitPullRequestCommit {
+  author: string;
+  committedAt: string;
+  message: string;
+  sha: string;
+}
+
+export interface GitPullRequestDetail {
+  additions: number;
+  author: string;
+  autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseBehindBy: number;
+  baseRefName: string;
+  body: string;
+  changedFiles: number;
+  checks: GitPullRequestCheck[];
+  comments: GitPullRequestComment[];
+  commits: GitPullRequestCommit[];
+  deletions: number;
+  headRefName: string;
+  headRefOid: string;
+  isCrossRepository: boolean;
+  isDraft: boolean;
+  mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
+  mergedAt?: string;
+  mergeStateStatus:
+    'BEHIND' | 'BLOCKED' | 'CLEAN' | 'DIRTY' | 'DRAFT' | 'HAS_HOOKS' | 'UNKNOWN' | 'UNSTABLE';
+  number: number;
+  repo: { name: string; owner: string };
+  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+  reviews: GitPullRequestReview[];
+  state: 'closed' | 'merged' | 'open';
+  title: string;
+  url: string;
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+export type GitPullRequestActivity = Pick<GitPullRequestDetail, 'comments' | 'commits' | 'reviews'>;
+
+export interface GitPullRequestDetailResult {
+  detail: GitPullRequestDetail | null;
+  status: GitLinkedPullRequestLookupStatus;
+}
+
+export type GitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
+
+/**
+ * Slow, permission-dependent merge context resolved separately from the PR
+ * detail so the pane can paint before branch protection / compare calls land.
+ */
+export interface GitPullRequestMergeContext {
+  /** Commits the base branch has that the PR head does not. */
+  baseBehindBy: number;
+  /** Status-check contexts required by branch protection on the base branch. */
+  requiredChecks: string[];
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+export type GitPullRequestAction =
+  | {
+      admin?: boolean;
+      deleteBranch?: boolean;
+      headRefOid: string;
+      method: GitPullRequestMergeMethod;
+      type: 'merge';
+    }
+  | { headRefOid: string; method: GitPullRequestMergeMethod; type: 'autoMerge' }
+  | { type: 'disableAutoMerge' }
+  | { method: 'merge' | 'rebase'; type: 'updateBranch' }
+  | { type: 'ready' }
+  | { body: string; type: 'comment' }
+  | { type: 'close' }
+  | { type: 'reopen' }
+  | { head: string; type: 'deleteBranch' }
+  | { base: string; type: 'changeBase' };
+
+export interface GitPullRequestActionResult {
+  error?: string;
+  success: boolean;
+}
+
 export interface GitWorkingTreeStatus {
   added: number;
   clean: boolean;

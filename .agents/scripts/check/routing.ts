@@ -57,6 +57,25 @@ export const relatedTestCandidates = (relPath: string): string[] => {
 };
 
 /**
+ * Scenario suites split from a large test (`<base>.<scenario>.test.*`, see
+ * `source-layout` §2): the directories to list and a matcher for their
+ * entries. Pure — the caller lists the directories.
+ */
+export const scenarioTestLookup = (relPath: string) => {
+  if (isTestFile(relPath) || !/\.[cm]?[jt]sx?$/.test(relPath)) return null;
+
+  const dir = path.dirname(relPath);
+  const base = path.basename(relPath).replace(/\.[^.]+$/, '');
+  const pattern = new RegExp(
+    `^${base.replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&')}\\.[^.]+\\.test\\.(?:ts|tsx|mts)$`,
+  );
+  return {
+    dirs: [dir, path.join(dir, '__tests__')],
+    matches: (name: string) => pattern.test(name),
+  };
+};
+
+/**
  * Nearest directory (walking up to the host root) containing a vitest config —
  * the "run vitest from the owning package" rule, automated.
  */

@@ -5,6 +5,7 @@ import {
   isHeterogeneousAgentAuthRequired,
   isLocalHeterogeneousType,
 } from '../config';
+import { classifyCliQuotaMessage } from '../errors/cliQuota';
 import type { HeterogeneousTerminalErrorData } from '../types';
 
 /**
@@ -19,9 +20,9 @@ import type { HeterogeneousTerminalErrorData } from '../types';
  * error card instead of the heterogeneous status guide (install CLI / sign in).
  *
  * This helper mirrors the desktop in-process classifier
- * (`HeterogeneousAgentCtr.getSessionErrorPayload`) for the two guide codes a
+ * (`HeterogeneousAgentCtr.getSessionErrorPayload`) for the guide codes a
  * process-level failure can produce: `cli_not_found`,
- * `working_directory_not_found`, and `auth_required`.
+ * `working_directory_not_found`, `rate_limit` and `auth_required`.
  * The returned shape is persisted verbatim as the `ChatMessageError.body`, so
  * it must carry `agentType` + `code` — that pair is what
  * `isHeterogeneousAgentStatusGuideError` gates the dedicated UI on.
@@ -117,6 +118,25 @@ export const classifyHeteroProcessFailure = (
       command,
       stderr: detail,
     });
+  }
+
+  // Before auth: a CLI can report a spent subscription through its auth layer
+  // (Kimi Code exits with `provider.auth_error: 403 You've reached your weekly
+  // (7-day) usage limit…`). Signing in again never fixes that, so the quota
+  // wording has to win over anything the auth patterns recognize.
+  const quota = classifyCliQuotaMessage(detail);
+  if (detail && quota) {
+    return {
+      agentType,
+      code: 'rate_limit',
+      details: { kind: quota.kind },
+      error: detail,
+      message: detail,
+      ...(quota.rateLimitType
+        ? { rateLimitInfo: { rateLimitType: quota.rateLimitType, status: 'rejected' } }
+        : {}),
+      stderr: detail,
+    };
   }
 
   if (detail && isHeterogeneousAgentAuthRequired(agentType, detail)) {

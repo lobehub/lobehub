@@ -1,4 +1,4 @@
-import { MemorySourceType } from '@lobechat/types';
+import { LayersEnum, MemorySourceType } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createStepRunner } from '@/server/workflows/testing/stepContext';
@@ -13,16 +13,18 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobechat/observability-otel/modules/upstash-workflow', () => ({
-  buildUpstashWorkflowMetricAttributes: vi.fn(() => ({})),
+  buildUpstashWorkflowMetricAttributes: vi.fn(function () {
+    return {};
+  }),
   tracer: {
-    startActiveSpan: vi.fn((_name: string, callback: (span: unknown) => unknown) =>
-      callback({
+    startActiveSpan: vi.fn(function (_name: string, callback: (span: unknown) => unknown) {
+      return callback({
         end: vi.fn(),
         recordException: vi.fn(),
         setAttributes: vi.fn(),
         setStatus: vi.fn(),
-      }),
-    ),
+      });
+    }),
   },
 }));
 
@@ -52,11 +54,13 @@ vi.mock('@/server/services/memory/userMemory/extract', () => ({
 }));
 
 vi.mock('@/database/models/asyncTask', () => ({
-  AsyncTaskModel: vi.fn(() => ({
-    appendUserMemoryWorkflowRunIds: mocks.appendUserMemoryWorkflowRunIds,
-    isHourlyMemoryExtractionCancellationRequested:
-      mocks.isHourlyMemoryExtractionCancellationRequested,
-  })),
+  AsyncTaskModel: vi.fn(function () {
+    return {
+      appendUserMemoryWorkflowRunIds: mocks.appendUserMemoryWorkflowRunIds,
+      isHourlyMemoryExtractionCancellationRequested:
+        mocks.isHourlyMemoryExtractionCancellationRequested,
+    };
+  }),
 }));
 
 vi.mock('@/database/server', () => ({
@@ -126,6 +130,47 @@ describe('processTopicsHandler hourly task behavior', () => {
       '00000000-0000-4000-8000-000000000001',
       ['persona-update-run'],
     );
+  });
+
+  it('fans out without the retired experience layer', async () => {
+    /**
+     * @example
+     * The default layer set handed to process-topic no longer contains LayersEnum.Experience.
+     */
+    const context = createContext({
+      baseUrl: 'https://app.example.com',
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+
+    await processTopicsHandler(context as never);
+
+    const [, payload] = mocks.triggerProcessTopic.mock.calls[0];
+    expect(payload.layers).toEqual([
+      LayersEnum.Context,
+      LayersEnum.Preference,
+      LayersEnum.Activity,
+      LayersEnum.Identity,
+    ]);
+  });
+
+  it('does not fan out a request that names only the retired experience layer', async () => {
+    /**
+     * @example
+     * Nothing is left to extract, so no process-topic run is triggered for the topic.
+     */
+    const context = createContext({
+      baseUrl: 'https://app.example.com',
+      layers: [LayersEnum.Experience],
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+
+    await expect(processTopicsHandler(context as never)).resolves.toMatchObject({ skipped: true });
+
+    expect(mocks.triggerProcessTopic).not.toHaveBeenCalled();
   });
 
   it('skips topic fan-out and persona update when the hourly task is cancelled', async () => {

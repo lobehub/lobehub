@@ -227,7 +227,7 @@ const findCodexSessionFiles = async (root: string, threadId: string): Promise<st
   return out;
 };
 
-const readNewestMatchingSessionFile = async (
+export const readNewestMatchingSessionFile = async (
   codexHome: string,
   threadId: string,
 ): Promise<string | undefined> => {

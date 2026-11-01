@@ -17,7 +17,7 @@ lh kb list [--json [fields]]
 ### `lh kb view <id>`
 
 ```bash
-lh kb view [fields]] < id > [--json
+lh kb view <id> [--json [fields]]
 ```
 
 **Displays**: Name, description, full directory tree with all files and documents (recursively fetched). Shows indented tree structure with item type (File/Doc), file type, and size.
@@ -27,7 +27,7 @@ lh kb view [fields]] < id > [--json
 ### `lh kb create`
 
 ```bash
-lh kb create -n [--avatar < name > [-d < desc > ] < url > ]
+lh kb create -n <name> [-d <desc>] [--avatar <url>]
 ```
 
 | Option                     | Description         | Required |
@@ -41,7 +41,7 @@ lh kb create -n [--avatar < name > [-d < desc > ] < url > ]
 ### `lh kb edit <id>`
 
 ```bash
-lh kb edit [-d [--avatar < id > [-n < name > ] < desc > ] < url > ]
+lh kb edit <id> [-n <name>] [-d <desc>] [--avatar <url>]
 ```
 
 Requires at least one change flag. Errors if none specified.
@@ -49,7 +49,7 @@ Requires at least one change flag. Errors if none specified.
 ### `lh kb delete <id>`
 
 ```bash
-lh kb delete [--yes] < id > [--remove-files]
+lh kb delete <id> [--remove-files] [--yes]
 ```
 
 | Option           | Description                  |
@@ -60,7 +60,7 @@ lh kb delete [--yes] < id > [--remove-files]
 ### `lh kb add-files <knowledgeBaseId>`
 
 ```bash
-lh kb add-files <kbId> --ids <fileId1> <fileId2> ...
+lh kb add-files <kbId> --ids <fileId1> [fileId2...]
 ```
 
 Link existing files to a knowledge base.
@@ -68,7 +68,7 @@ Link existing files to a knowledge base.
 ### `lh kb remove-files <knowledgeBaseId>`
 
 ```bash
-lh kb remove-files <kbId> --ids <fileId1> <fileId2> ... [--yes]
+lh kb remove-files <kbId> --ids <fileId1> [fileId2...] [--yes]
 ```
 
 Unlink files from a knowledge base.
@@ -76,7 +76,7 @@ Unlink files from a knowledge base.
 ### `lh kb mkdir <knowledgeBaseId>`
 
 ```bash
-lh kb mkdir < kbId > -n < name > [--parent < folderId > ]
+lh kb mkdir <kbId> -n <name> [--parent <folderId>]
 ```
 
 Create a folder in a knowledge base. Uses `document.createDocument` with `fileType: 'custom/folder'`.
@@ -89,7 +89,7 @@ Create a folder in a knowledge base. Uses `document.createDocument` with `fileTy
 ### `lh kb create-doc <knowledgeBaseId>`
 
 ```bash
-lh kb create-doc [--parent < kbId > -t < title > [-c < content > ] < folderId > ]
+lh kb create-doc <kbId> -t <title> [-c <content>] [--parent <folderId>]
 ```
 
 Create a document in a knowledge base. Uses `document.createDocument` with `fileType: 'custom/document'`.
@@ -103,7 +103,7 @@ Create a document in a knowledge base. Uses `document.createDocument` with `file
 ### `lh kb move <id>`
 
 ```bash
-lh kb move < id > --type < file | doc > [--parent < folderId > ]
+lh kb move <id> [--type <file|doc>] [--parent <folderId>]
 ```
 
 Move a file or document to a different folder (or to root if `--parent` is omitted).
@@ -140,7 +140,7 @@ Manage uploaded files.
 ### `lh file list`
 
 ```bash
-lh file list [--kb-id [-L [--json [fields]] < id > ] < n > ]
+lh file list [--kb-id <id>] [-L <n>] [--json [fields]]
 ```
 
 | Option            | Description              | Default |
@@ -153,7 +153,7 @@ lh file list [--kb-id [-L [--json [fields]] < id > ] < n > ]
 ### `lh file view <id>`
 
 ```bash
-lh file view [fields]] < id > [--json
+lh file view <id> [--json [fields]]
 ```
 
 **Displays**: Name, type, size, chunking status, embedding status.
@@ -161,7 +161,7 @@ lh file view [fields]] < id > [--json
 ### `lh file delete <ids...>`
 
 ```bash
-lh file delete [--yes] < id1 > [id2...]
+lh file delete <id1> [id2...] [--yes]
 ```
 
 Supports deleting multiple files at once.
@@ -169,7 +169,7 @@ Supports deleting multiple files at once.
 ### `lh file recent`
 
 ```bash
-lh file recent [-L [--json [fields]] < n > ]
+lh file recent [-L <n>] [--json [fields]]
 ```
 
 | Option            | Description     | Default |
@@ -187,7 +187,7 @@ Manage text documents (notes, wiki pages).
 ### `lh doc list`
 
 ```bash
-lh doc list [-L [--file-type [--source-type [--json [fields]] < n > ] < type > ] < type > ]
+lh doc list [-L <n>] [--file-type <type>] [--source-type <type>] [--json [fields]]
 ```
 
 | Option                 | Description                                   | Default |
@@ -201,7 +201,7 @@ lh doc list [-L [--file-type [--source-type [--json [fields]] < n > ] < type > ]
 ### `lh doc view <id>`
 
 ```bash
-lh doc view [fields]] < id > [--json
+lh doc view <id> [--json [fields]]
 ```
 
 **Displays**: Title, type, KB association, updated time, full content.
@@ -209,7 +209,7 @@ lh doc view [fields]] < id > [--json
 ### `lh doc create`
 
 ```bash
-lh doc create -t [-F [--parent [--slug [--kb [--file-type < title > [-b < body > ] < path > ] < id > ] < slug > ] < id > ] < type > ]
+lh doc create -t <title> [-b <content>] [-F <path>] [--parent <id>] [--slug <slug>] [--kb <id>] [--file-type <type>]
 ```
 
 | Option                   | Description                                     | Required |
@@ -237,13 +237,13 @@ Each object in the array can have: `title`, `content`, `fileType`, `knowledgeBas
 ### `lh doc edit <id>`
 
 ```bash
-lh doc edit [-b [-F [--parent [--file-type < id > [-t < title > ] < body > ] < path > ] < id > ] < type > ]
+lh doc edit <id> [-t <title>] [-b <content>] [-F <path>] [--parent <id>] [--file-type <type>]
 ```
 
 ### `lh doc delete <ids...>`
 
 ```bash
-lh doc delete [--yes] < id1 > [id2...]
+lh doc delete <id1> [id2...] [--yes]
 ```
 
 ### `lh doc parse <fileId>`
@@ -251,7 +251,7 @@ lh doc delete [--yes] < id1 > [id2...]
 Parse an uploaded file into a document.
 
 ```bash
-lh doc parse [--json [fields]] < fileId > [--with-pages]
+lh doc parse <fileId> [--with-pages] [--json [fields]]
 ```
 
 | Option         | Description             |
@@ -273,7 +273,7 @@ lh doc link-topic <docId> <topicId>
 List documents associated with a topic.
 
 ```bash
-lh doc topic-docs [--json [fields]] < topicId > [--type < type > ]
+lh doc topic-docs <topicId> [--type <type>] [--json [fields]]
 ```
 
 | Option          | Description                                      |

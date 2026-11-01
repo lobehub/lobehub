@@ -21,8 +21,12 @@ describe('loadConnectedComposioIds', () => {
     vi.clearAllMocks();
     pluginModelMock = { query: vi.fn().mockResolvedValue([]) };
     connectorModelMock = { resolveAll: vi.fn().mockResolvedValue([]) };
-    vi.mocked(PluginModel).mockImplementation(() => pluginModelMock);
-    vi.mocked(ConnectorModel).mockImplementation(() => connectorModelMock);
+    vi.mocked(PluginModel).mockImplementation(function () {
+      return pluginModelMock;
+    });
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return connectorModelMock;
+    });
   });
 
   it('includes an agent-scoped connector that is absent from the plugin table', async () => {

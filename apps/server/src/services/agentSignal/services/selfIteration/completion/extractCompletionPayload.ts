@@ -2,9 +2,12 @@ import type { AgentState } from '@lobechat/agent-runtime';
 
 import {
   type AgentSignalOperationMarker,
-  readAgentSignalMarker,
+  parseAgentSignalMarker,
 } from '@/server/services/agentSignal/operationMarker';
-import { resolveMemoryActionResultFromState } from '@/server/services/agentSignal/policies/analyzeIntent/actions/memoryActionResult';
+import {
+  resolveMemoryActionResultFromState,
+  resolveMemoryActionTargetsFromState,
+} from '@/server/services/agentSignal/policies/analyzeIntent/actions/memoryActionResult';
 
 import {
   extractArtifacts,
@@ -44,6 +47,21 @@ const extractMemoryMutations = (finalState: AgentState): ToolResultWithKind[] =>
   const result = resolveMemoryActionResultFromState(finalState);
   if (result.status !== 'applied') return [];
 
+  const targets = resolveMemoryActionTargetsFromState(finalState);
+  if (targets.length > 1) {
+    return targets.map((target) => ({
+      apiName: 'writeMemory',
+      data: {
+        kind: 'mutation',
+        resourceId: target.id ?? target.memoryId,
+        status: 'applied',
+        summary: target.summary,
+        target,
+      },
+      kind: 'mutation',
+    }));
+  }
+
   return [
     {
       apiName: 'writeMemory',
@@ -72,13 +90,13 @@ export const extractSelfIterationCompletionPayload = (
   state: unknown,
 ): SelfIterationCompletionPayload | undefined => {
   if (!isRecord(state)) return undefined;
-  const metadata = isRecord(state.metadata) ? state.metadata : undefined;
-  if (!metadata) return undefined;
+  const origin = isRecord(state.origin) ? state.origin : undefined;
+  if (!origin) return undefined;
 
-  const marker = readAgentSignalMarker(metadata);
+  const marker = parseAgentSignalMarker(origin.signal);
   if (!marker) return undefined;
 
-  const userId = typeof metadata.userId === 'string' ? metadata.userId : undefined;
+  const userId = typeof origin.userId === 'string' ? origin.userId : undefined;
   if (!userId) return undefined;
 
   const finalState = state as unknown as AgentState;

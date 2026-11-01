@@ -1,7 +1,12 @@
 import type {
   HeterogeneousProviderBindingReference,
   HeterogeneousProviderBindingRuntime,
+  ServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
+import type {
+  ServerDefaultHeterogeneousModelDescriptor,
+  ServerDefaultHeterogeneousRelayInvocation,
+} from '@lobechat/types';
 
 import {
   callLambdaMutation,
@@ -31,6 +36,11 @@ export interface ServerDefaultOperationBinding {
   token: string;
 }
 
+export interface ServerDefaultOperationSettlement {
+  relayInvocation?: ServerDefaultHeterogeneousRelayInvocation | null;
+  success: true;
+}
+
 const getAuthenticatedServer = async (auth: RemoteServerAuth) => {
   const serverUrl = await auth.getServerUrl();
   const accessToken = await auth.getAccessToken();
@@ -43,7 +53,7 @@ const getAuthenticatedServer = async (auth: RemoteServerAuth) => {
 export const beginServerDefaultOperation = async (
   auth: RemoteServerAuth,
   input: {
-    agentType: 'claude-code' | 'codex';
+    agentType: ServerDefaultHeterogeneousAgentType;
     agentId?: string;
     model: string;
     operationId: string;
@@ -59,15 +69,25 @@ export const beginServerDefaultOperation = async (
   return { ...result, endpoint: server.serverUrl.replace(/\/$/, '') };
 };
 
+export const describeServerDefaultModel = async (
+  auth: RemoteServerAuth,
+  input: { agentType: ServerDefaultHeterogeneousAgentType; model: string },
+): Promise<ServerDefaultHeterogeneousModelDescriptor> =>
+  callLambdaMutation<ServerDefaultHeterogeneousModelDescriptor>(
+    await getAuthenticatedServer(auth),
+    'aiAgent.describeServerDefaultHeterogeneousModel',
+    input,
+  );
+
 export const getServerDefaultEndpoint = async (auth: RemoteServerAuth): Promise<string> =>
   (await getAuthenticatedServer(auth)).serverUrl.replace(/\/$/, '');
 
 export const settleServerDefaultOperation = async (
   auth: RemoteServerAuth,
   input: { cancelled?: boolean; operationId: string; result?: 'done' | 'error' },
-): Promise<void> => {
+): Promise<ServerDefaultOperationSettlement> => {
   const server = await getAuthenticatedServer(auth);
-  await callLambdaMutation(
+  return callLambdaMutation<ServerDefaultOperationSettlement>(
     server,
     input.cancelled
       ? 'aiAgent.cancelServerDefaultHeterogeneousOperation'

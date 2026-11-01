@@ -4,8 +4,11 @@ import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
-import { MarketService } from '@/server/services/market';
+import type { MarketService } from '@/server/services/market';
+import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
+import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
+import { createSandboxMarketService } from './sandboxMarket';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:creds-runtime');
@@ -14,13 +17,29 @@ const log = debug('lobe-server:creds-runtime');
  * Server-side Creds Service implementation
  * Wraps MarketService.market.creds to provide ICredsService interface
  */
-class ServerCredsService implements ICredsService {
+export class ServerCredsService implements ICredsService {
   private marketService: MarketService;
   private workspaceId?: string;
 
-  constructor(marketService: MarketService, workspaceId?: string) {
+  private isShareVisitor: boolean;
+
+  constructor(
+    marketService: MarketService,
+    workspaceId?: string,
+    /**
+     * Belt-and-braces guard: true for an Agent Share visitor's run
+     * (`context.agentShareVisitor` set). `lobe-creds` is already absent from
+     * `AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS`, so this runtime should never
+     * be constructed for a visitor in the first place — but `injectCreds`
+     * refuses again here too, so the guarantee that the creator's decrypted
+     * credentials never land in a sandbox a visitor controls doesn't rest on
+     * the allowlist alone.
+     */
+    isShareVisitor = false,
+  ) {
     this.marketService = marketService;
     this.workspaceId = workspaceId;
+    this.isShareVisitor = isShareVisitor;
   }
 
   /**
@@ -110,8 +129,26 @@ class ServerCredsService implements ICredsService {
   }> {
     log('injectCreds: keys=%O, topicId=%s', params.keys, params.topicId);
 
+    // Refuse before the Market call, not after: Market's inject endpoint
+    // writes the creator's REAL credentials into the sandbox's ~/.creds/env
+    // server-side as part of handling the request (see the comment below),
+    // so for a share visitor the only safe place to stop is here.
+    if (this.isShareVisitor) {
+      throw new Error(
+        'Credential injection into the sandbox is unavailable in shared conversations.',
+      );
+    }
+
     // Market's generic inject endpoint resolves organization credentials from
-    // the workspaceId signed into this service's trusted-client token.
+    // the workspaceId signed into this service's trusted-client token, and —
+    // when `sandbox` is true (the default) — already writes the *real*
+    // (unmasked) values into the sandbox's ~/.creds/env server-side before
+    // responding. The `credentials.env` map in that response is masked for
+    // safe display to the model, so it must never be written into the
+    // sandbox again here: an earlier version of this method did exactly
+    // that, appending a masked `export` line after market's real one. Since
+    // re-sourcing ~/.creds/env applies `export`s in file order, the masked
+    // line silently shadowed the real credential for every later command.
     const result = await this.marketService.market.creds.inject({
       keys: params.keys,
       sandbox: params.sandbox,
@@ -135,22 +172,6 @@ class ServerCredsService implements ICredsService {
 
     return result as any;
   }
-
-  async saveKVCred(params: {
-    description?: string;
-    key: string;
-    name: string;
-    type: 'kv-env' | 'kv-header';
-    values: Record<string, string>;
-  }): Promise<{ id: number }> {
-    log('saveKVCred: key=%s, name=%s, type=%s', params.key, params.name, params.type);
-
-    const result = await this.credsAccessor().createKV(params);
-
-    log('saveKVCred success: id=%d', result.id);
-
-    return result;
-  }
 }
 
 /**
@@ -163,13 +184,18 @@ export const credsRuntime: ServerRuntimeRegistration = {
       throw new Error('userId is required for Creds execution');
     }
 
-    if (context.workspaceId) {
+    // Recovered, not read off the context: the dispatch and resume paths drop
+    // it, and credentials must be injected into the SAME sandbox session the
+    // commands run in — the sandbox runtimes recover it the same way.
+    const workspaceId = await resolveContentWorkspaceId(context);
+
+    if (workspaceId) {
       if (!context.serverDB) {
         throw new Error('serverDB is required for workspace Creds execution');
       }
 
       const membership = await new WorkspaceMemberModel(context.serverDB, context.userId).getMember(
-        context.workspaceId,
+        workspaceId,
         context.userId,
       );
       if (!membership) {
@@ -181,7 +207,7 @@ export const credsRuntime: ServerRuntimeRegistration = {
       'Creating CredsExecutionRuntime for userId=%s, topicId=%s, workspaceId=%s',
       context.userId,
       context.topicId,
-      context.workspaceId,
+      workspaceId,
     );
 
     // Read market accessToken from DB so server-side creds runtime can authenticate.
@@ -196,11 +222,31 @@ export const credsRuntime: ServerRuntimeRegistration = {
       }
     }
 
-    const marketService = new MarketService({
-      accessToken,
-      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+    // Credentials are injected INTO a sandbox, so this call has to agree with
+    // the cloud-sandbox and skills runtimes about which one. A token without the
+    // entitlement routes to the ephemeral runtime, and the injection lands in a
+    // different sandbox than the commands that need it — or tears down the live
+    // one on the way.
+    const sandbox = await resolveSandboxSessionConfig({
+      isShareVisitorRun: Boolean(context.agentShareVisitor),
+      serverDB: context.serverDB,
+      topicId: context.topicId,
+      userId: context.userId,
+      workspaceId,
     });
-    const credsService = new ServerCredsService(marketService, context.workspaceId);
+
+    const marketService = createSandboxMarketService(
+      context,
+      accessToken,
+      workspaceId,
+      sandbox.claim,
+    );
+
+    const credsService = new ServerCredsService(
+      marketService,
+      workspaceId,
+      Boolean(context.agentShareVisitor),
+    );
 
     return new CredsExecutionRuntime(credsService, {
       topicId: context.topicId,

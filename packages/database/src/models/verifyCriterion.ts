@@ -1,16 +1,21 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 
+import type { VerifyCheckItem } from '@lobechat/types';
+import { verifyCheckDefinitionSchema } from '@lobechat/types';
+import { and, arrayContains, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
+
+import { documents, files } from '../schemas/file';
 import type { NewVerifyCriterion, VerifyCriterionItem } from '../schemas/verify';
 import { verifyCriteria, verifyRubricCriteria } from '../schemas/verify';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class VerifyCriterionModel {
-  private readonly db: LobeChatDatabase;
+  private readonly db: LobeChatDatabase | Transaction;
   private readonly userId: string;
   private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(db: LobeChatDatabase | Transaction, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
@@ -20,6 +25,7 @@ export class VerifyCriterionModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyCriteria);
 
   create = async (params: Omit<NewVerifyCriterion, 'userId' | 'workspaceId'>) => {
+    if (params.definition) verifyCheckDefinitionSchema.parse(params.definition);
     const [result] = await this.db
       .insert(verifyCriteria)
       .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
@@ -32,17 +38,32 @@ export class VerifyCriterionModel {
     return this.db.delete(verifyCriteria).where(and(eq(verifyCriteria.id, id), this.ownership()));
   };
 
-  query = async () => {
-    return this.db.query.verifyCriteria.findMany({
-      orderBy: [desc(verifyCriteria.updatedAt)],
-      where: this.ownership(),
-    });
+  query = async (filters: { search?: string; tags?: string[]; includeArchived?: boolean } = {}) => {
+    return this.db
+      .select()
+      .from(verifyCriteria)
+      .where(
+        and(
+          this.ownership(),
+          filters.includeArchived ? undefined : isNull(verifyCriteria.archivedAt),
+          filters.search
+            ? ilike(
+                verifyCriteria.title,
+                `%${filters.search.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`,
+              )
+            : undefined,
+          filters.tags?.length ? arrayContains(verifyCriteria.tags, filters.tags) : undefined,
+        ),
+      )
+      .orderBy(desc(verifyCriteria.updatedAt));
   };
 
   findById = async (id: string) => {
-    return this.db.query.verifyCriteria.findFirst({
-      where: and(eq(verifyCriteria.id, id), this.ownership()),
-    });
+    const [row] = await this.db
+      .select()
+      .from(verifyCriteria)
+      .where(and(eq(verifyCriteria.id, id), this.ownership()));
+    return row;
   };
 
   /**
@@ -117,7 +138,124 @@ export class VerifyCriterionModel {
     });
   };
 
+  /** Persist generated checks automatically; stable ids make ingest/retries idempotent. */
+  materialize = async (items: VerifyCheckItem[], contextId: string): Promise<VerifyCheckItem[]> => {
+    return this.db.transaction(async (tx) => {
+      const output: VerifyCheckItem[] = [];
+      for (const item of items) {
+        if (item.definition) verifyCheckDefinitionSchema.parse(item.definition);
+        let sourceCriterionId = item.sourceCriterionId;
+        if (!sourceCriterionId) {
+          const hex = createHash('sha256')
+            .update(JSON.stringify([this.workspaceId ?? this.userId, contextId, item.id]))
+            .digest('hex');
+          sourceCriterionId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+          await tx
+            .insert(verifyCriteria)
+            .values(
+              buildWorkspacePayload(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                {
+                  id: sourceCriterionId,
+                  title: item.title,
+                  description: item.description,
+                  definition: item.definition,
+                  documentId: item.documentId,
+                  verifierType: item.verifierType,
+                  verifierConfig: item.verifierConfig,
+                  required: item.required,
+                  onFail: item.onFail,
+                },
+              ),
+            )
+            .onConflictDoNothing();
+        }
+        const [asset] = await tx
+          .select()
+          .from(verifyCriteria)
+          .where(and(eq(verifyCriteria.id, sourceCriterionId), this.ownership()));
+        if (!asset) throw new Error('Check asset not found in current scope');
+        const definition = item.definition ??
+          asset.definition ?? {
+            expected:
+              typeof item.verifierConfig.expected === 'string'
+                ? item.verifierConfig.expected
+                : undefined,
+            steps:
+              typeof item.verifierConfig.method === 'string'
+                ? [{ id: 'legacy-method', instruction: item.verifierConfig.method }]
+                : undefined,
+          };
+        let resourceSnapshot = item.resourceSnapshot;
+        if (!resourceSnapshot) {
+          resourceSnapshot = { fixtures: [] };
+          const documentId = item.documentId ?? asset.documentId;
+          if (documentId) {
+            const [document] = await tx
+              .select()
+              .from(documents)
+              .where(
+                and(
+                  eq(documents.id, documentId),
+                  buildWorkspaceWhere(
+                    { userId: this.userId, workspaceId: this.workspaceId },
+                    documents,
+                  ),
+                ),
+              );
+            if (!document) throw new Error('Check document unavailable');
+            resourceSnapshot.documentContent = document.content ?? '';
+          }
+          for (const fixture of definition?.fixtures ?? []) {
+            if (!fixture.resource) continue;
+            if (fixture.resource.type === 'document') {
+              const [document] = await tx
+                .select()
+                .from(documents)
+                .where(
+                  and(
+                    eq(documents.id, fixture.resource.id),
+                    buildWorkspaceWhere(
+                      { userId: this.userId, workspaceId: this.workspaceId },
+                      documents,
+                    ),
+                  ),
+                );
+              if (!document) throw new Error('Fixture document unavailable');
+              resourceSnapshot.fixtures.push({
+                fixtureId: fixture.id,
+                content: document.content ?? '',
+              });
+            } else {
+              const [file] = await tx
+                .select()
+                .from(files)
+                .where(
+                  and(
+                    eq(files.id, fixture.resource.id),
+                    buildWorkspaceWhere(
+                      { userId: this.userId, workspaceId: this.workspaceId },
+                      files,
+                    ),
+                  ),
+                );
+              if (!file?.fileHash) throw new Error('Fixture requires an immutable file hash');
+              resourceSnapshot.fixtures.push({
+                fixtureId: fixture.id,
+                fileHash: file.fileHash,
+                url: file.url,
+              });
+            }
+          }
+        }
+        output.push({ ...item, sourceCriterionId, definition, resourceSnapshot });
+      }
+      return output;
+    });
+  };
+
   update = async (id: string, value: Partial<Omit<VerifyCriterionItem, 'id' | 'userId'>>) => {
+    if (value.definition) verifyCheckDefinitionSchema.parse(value.definition);
     return this.db
       .update(verifyCriteria)
       .set({ ...value, updatedAt: new Date() })

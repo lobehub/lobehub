@@ -8,6 +8,8 @@ interface MessengerSystemStrings {
   activeAgentChangedToast: (title: string) => string;
   activeMarker: string;
   agentNotFound: string;
+  /** Safe instruction when agent selection cannot be shown privately. */
+  agentsDirectMessageOnly: string;
   agentsEmpty: string;
   agentsHeading: string;
   agentsHint: string;
@@ -46,6 +48,8 @@ interface MessengerSystemStrings {
   stopNotActive: string;
   stopRequested: string;
   stopUnable: string;
+  /** Safe instruction when workspace selection cannot be shown privately. */
+  switchDirectMessageOnly: string;
   unknownAction: string;
   unknownCommand: (name: string) => string;
 }
@@ -60,6 +64,8 @@ const EN_US: MessengerSystemStrings = {
   activeAgentChangedToast: (title) => `Switched to ${title}.`,
   activeMarker: 'active',
   agentNotFound: 'Agent not found.',
+  agentsDirectMessageOnly:
+    'Open your direct message with the LobeHub bot and send `/agents` there.',
   agentsEmpty: 'You have no agents yet. Create one in LobeHub, then come back to /agents.',
   agentsHeading: 'Your agents:',
   agentsHint: 'Reply with /agents <n> to switch the active agent.',
@@ -112,6 +118,8 @@ const EN_US: MessengerSystemStrings = {
   stopNotActive: 'No active execution to stop.',
   stopRequested: 'Stop requested.',
   stopUnable: 'Unable to stop the current execution.',
+  switchDirectMessageOnly:
+    'Open your direct message with the LobeHub bot and send `/switch` there.',
   unknownAction: 'Unknown action.',
   unknownCommand: (name) => `Unknown command: /${name}`,
 };
@@ -125,6 +133,7 @@ const ZH_CN: MessengerSystemStrings = {
   activeAgentChangedToast: (title) => `已切换到 ${title}。`,
   activeMarker: '当前',
   agentNotFound: '未找到该 Agent。',
+  agentsDirectMessageOnly: '请在与 LobeHub 机器人的私聊中发送 `/agents`。',
   agentsEmpty: '你还没有 Agent。请先在 LobeHub 创建，然后再发送 /agents。',
   agentsHeading: '你的 Agent：',
   agentsHint: '回复 /agents <序号> 可切换当前 Agent。',
@@ -175,6 +184,7 @@ const ZH_CN: MessengerSystemStrings = {
   stopNotActive: '当前没有正在执行的任务可以停止。',
   stopRequested: '已发出停止请求。',
   stopUnable: '无法停止当前执行。',
+  switchDirectMessageOnly: '请在与 LobeHub 机器人的私聊中发送 `/switch`。',
   unknownAction: '未知操作。',
   unknownCommand: (name) => `未知命令：/${name}`,
 };

@@ -3,6 +3,7 @@ import { type FileListItem, FilesTabs, ResourceSourceFilter } from '@/types/file
 import { SortType } from '@/types/files';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State } from './initialState';
+import { DEFAULT_SEARCH_PAGE_SIZE, type ExplorerSearchParams } from './projection';
 
 /**
  * The Private / Workspace switch scopes the resource home only. Once the user
@@ -57,6 +58,26 @@ export const getResourceSourceFilter = (s: State): ResourceSourceFilter => {
   return (
     s.sourceFilter ?? DEFAULT_SOURCE_FILTER_BY_CATEGORY[s.category] ?? ResourceSourceFilter.All
   );
+};
+
+/**
+ * Query of the explorer's search overlay, or `null` while no keyword is typed.
+ * The overlay lists these rows and a select-all resolves against the same
+ * params, so a batch action acts on the search results, never on the folder
+ * list behind the overlay.
+ */
+export const getExplorerSearchParams = (s: State): ExplorerSearchParams | null => {
+  if (!s.searchQuery) return null;
+
+  return {
+    category: s.libraryId ? undefined : s.category,
+    includeContentPreview: s.viewMode === 'masonry',
+    libraryId: s.libraryId,
+    pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+    q: s.searchQuery,
+    sourceFilter: getResourceSourceFilter(s),
+    visibility: getResourceQueryVisibility(s.libraryId, s.listVisibility),
+  };
 };
 
 /**

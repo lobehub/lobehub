@@ -1,4 +1,4 @@
-import { isRecord } from '@lobechat/utils';
+import { isRecord } from '../../utils/object';
 import { ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';

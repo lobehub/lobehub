@@ -1,5 +1,4 @@
-import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { Flexbox, Icon, Tag, Tooltip, useTheme } from '@lobehub/ui';
 import { ArrowDownToDot, ArrowUpFromDot } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

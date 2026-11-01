@@ -1,8 +1,16 @@
 import type { TaskTemplate } from '@lobechat/const';
-import { ActionIcon, Block, Center, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  Center,
+  cssVar,
+  cx,
+  Divider,
+  Flexbox,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { Clock, X } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,11 +18,11 @@ import { useTranslation } from 'react-i18next';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 import { homeType } from '@/features/Home/components/homeType';
+import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 
 import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
 import { styles } from './style';
-import { createTaskTemplateDetailModal } from './TaskTemplateDetailModal';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
 import { useScheduleText } from './useScheduleText';
 import { useTaskTemplateCreate } from './useTaskTemplateCreate';
@@ -59,7 +67,9 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     );
 
     const handleOpenDetail = useCallback(() => {
-      createTaskTemplateDetailModal({ onCreated, template });
+      void import('./TaskTemplateDetailModal').then(({ createTaskTemplateDetailModal }) =>
+        createTaskTemplateDetailModal({ onCreated, template }),
+      );
     }, [onCreated, template]);
 
     const handlePrimaryClick = useCallback(
@@ -81,7 +91,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
           >
             <Flexbox horizontal align={'flex-start'} gap={10} style={{ width: '100%' }}>
               <Flexbox flex={'none'} paddingBlock={2}>
-                <TemplateBriefIcon spec={iconSpec} tileSize={20} />
+                <TemplateBriefIcon spec={iconSpec} tileSize={RECOMMENDATION_ICON_SIZE.compact} />
               </Flexbox>
               <Text
                 className={cx(homeType.itemTitleProse, styles.compactTitle)}
@@ -129,7 +139,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             gap={8}
             style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}
           >
-            <TemplateBriefIcon spec={iconSpec} />
+            <TemplateBriefIcon spec={iconSpec} tileSize={RECOMMENDATION_ICON_SIZE.regular} />
             <Flexbox
               horizontal
               align={'center'}
@@ -163,7 +173,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             />
           </Flexbox>
         </Flexbox>
-        <Divider dashed style={{ marginBlock: 0 }} />
+        <Divider dashed />
         {description.trim().length > 0 ? <BriefCardSummary summary={description} /> : null}
         {visibleAuthSpecs.length > 0 && (
           <Flexbox gap={6} onClick={(e) => e.stopPropagation()}>

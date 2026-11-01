@@ -26,10 +26,6 @@ vi.mock('../../../../store', () => ({
     }),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 const build = (
   data: Partial<UIChatMessage>,
   role: MessageActionContext['role'] = 'assistant',

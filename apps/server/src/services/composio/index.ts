@@ -85,6 +85,17 @@ export class ComposioService {
 
     log('executeComposioTool: %s/%s with args: %O', identifier, toolSlug, args);
 
+    if (!VALID_COMPOSIO_IDENTIFIERS.has(identifier)) {
+      return {
+        content: `Composio app "${identifier}" is not supported`,
+        error: {
+          code: 'COMPOSIO_APP_UNSUPPORTED',
+          message: `Composio app ${identifier} is not supported`,
+        },
+        success: false,
+      };
+    }
+
     if (!isComposioClientAvailable()) {
       return {
         content: 'Composio service is not configured on server',
@@ -244,9 +255,19 @@ export class ComposioService {
     return undefined;
   }
 
-  async getComposioManifests(agentId?: string): Promise<LobeToolManifest[]> {
+  /**
+   * @param options.identifiers Read only these identifiers instead of every
+   * connection, so a share run never resolves a connection the owner did not
+   * grant.
+   */
+  async getComposioManifests(
+    agentId?: string,
+    options?: { identifiers?: string[] },
+  ): Promise<LobeToolManifest[]> {
     const manifests: LobeToolManifest[] = [];
     const coveredIdentifiers = new Set<string>();
+    const identifiers = options?.identifiers?.filter((id) => VALID_COMPOSIO_IDENTIFIERS.has(id));
+    if (identifiers?.length === 0) return manifests;
 
     // 1. Connector-based (new path): rows whose metadata.composio marks them as
     //    Composio connectors and are ACTIVE. Tool defs come from
@@ -255,9 +276,14 @@ export class ComposioService {
     //    Composio connector shadows the base one for the same identifier.
     if (this.connectorModel && this.connectorToolModel) {
       try {
-        const connectors = await this.connectorModel.resolveAll(agentId);
+        const connectors = identifiers
+          ? await this.connectorModel.resolveByIdentifiers(identifiers, agentId)
+          : await this.connectorModel.resolveAll(agentId);
         const composioConnectors = connectors.filter(
-          (c) => c.isEnabled && c.metadata?.composio?.status === 'ACTIVE',
+          (c) =>
+            VALID_COMPOSIO_IDENTIFIERS.has(c.identifier) &&
+            c.isEnabled &&
+            c.metadata?.composio?.status === 'ACTIVE',
         );
 
         if (composioConnectors.length > 0) {
@@ -317,7 +343,8 @@ export class ComposioService {
           (plugin) =>
             VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier) &&
             plugin.customParams?.composio?.status === 'ACTIVE' &&
-            !coveredIdentifiers.has(plugin.identifier),
+            !coveredIdentifiers.has(plugin.identifier) &&
+            (!identifiers || identifiers.includes(plugin.identifier)),
         );
 
         for (const plugin of composioPlugins) {

@@ -1,8 +1,6 @@
 import { BRANDING_URL } from '@lobechat/business-const';
 import { ChatErrorType, Plans } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +21,10 @@ const CREDIT_UNIT = 1_000_000;
 const PLAN_TITLE_KEYS = {
   [Plans.Free]: 'plans.plan.free.title',
   [Plans.Hobby]: 'plans.plan.hobby.title',
+  [Plans.Max]: 'plans.plan.max.title',
+  [Plans.Plus]: 'plans.plan.plus.title',
   [Plans.Premium]: 'plans.plan.premium.title',
+  [Plans.Pro]: 'plans.plan.pro.title',
   [Plans.Starter]: 'plans.plan.starter.title',
   [Plans.Ultimate]: 'plans.plan.ultimate.title',
 } as const satisfies Record<Plans, string>;

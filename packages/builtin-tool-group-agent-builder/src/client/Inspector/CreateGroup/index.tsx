@@ -1,8 +1,9 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,8 +40,10 @@ export const CreateGroupInspector = memo<
 
   if (isArgumentsStreaming && !title) {
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-group-agent-builder.apiName.createGroup')}</span>
+      <div className={styles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-group-agent-builder.apiName.createGroup')}
+        </span>
       </div>
     );
   }
@@ -48,13 +51,13 @@ export const CreateGroupInspector = memo<
   const isSuccess = pluginState?.success;
 
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
-      gap={8}
-    >
-      <span className={styles.title}>
+    <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+      <span
+        className={cx(
+          styles.title,
+          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+        )}
+      >
         {t('builtins.lobe-group-agent-builder.apiName.createGroup')}:
       </span>
       {avatar && <Avatar avatar={avatar} shape={'square'} size={20} title={title || undefined} />}

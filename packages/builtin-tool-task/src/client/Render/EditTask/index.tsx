@@ -1,18 +1,19 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Markdown, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Markdown, Text } from '@lobehub/ui';
 import { Pencil } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 
+import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { EditTaskParams, EditTaskState } from '../../../types';
 import {
   AssigneeInline,
   InlineField,
+  MemberAssigneeInline,
   monoChipClassName,
   SectionField,
   TaskResultCard,
@@ -58,7 +59,7 @@ export const EditTaskRender = memo<BuiltinRenderProps<EditTaskParams, EditTaskSt
 
     const hasName = params.name !== undefined;
     const hasPriority = params.priority !== undefined;
-    const hasAssignee = params.assigneeAgentId !== undefined;
+    const hasAssignee = params.assigneeAgentId !== undefined || params.assigneeUserId !== undefined;
     const hasParent = params.parentIdentifier !== undefined;
     const hasInstruction = params.instruction !== undefined;
     const hasDescription = params.description !== undefined;
@@ -79,6 +80,7 @@ export const EditTaskRender = memo<BuiltinRenderProps<EditTaskParams, EditTaskSt
       <TaskResultCard
         icon={Pencil}
         identifier={identifier}
+        taskId={resolveTaskOpenTarget(pluginState, params)}
         title={t('builtins.lobe-task.apiName.editTask')}
       >
         {hasAnyChange ? (
@@ -93,10 +95,15 @@ export const EditTaskRender = memo<BuiltinRenderProps<EditTaskParams, EditTaskSt
             )}
             {hasAssignee && (
               <InlineField label={t('builtins.lobe-task.edit.assign')}>
-                {params.assigneeAgentId === null ? (
-                  <Text type={'secondary'}>{t('builtins.lobe-task.edit.unassign')}</Text>
+                {params.assigneeAgentId || params.assigneeUserId ? (
+                  <>
+                    {params.assigneeAgentId && <AssigneeInline agentId={params.assigneeAgentId} />}
+                    {params.assigneeUserId && (
+                      <MemberAssigneeInline userId={params.assigneeUserId} />
+                    )}
+                  </>
                 ) : (
-                  <AssigneeInline agentId={params.assigneeAgentId!} />
+                  <Text type={'secondary'}>{t('builtins.lobe-task.edit.unassign')}</Text>
                 )}
               </InlineField>
             )}

@@ -1,5 +1,11 @@
-import type { AppProcessMetrics, GpuStatus } from '@lobechat/electron-client-ipc';
-import { app } from 'electron';
+import type { AppProcessMetrics, GpuStatus, MemoryDump } from '@lobechat/electron-client-ipc';
+import { getManagedProcesses, stopManagedProcess } from '@lobechat/utils/managedProcess';
+import { app, BrowserWindow, webContents } from 'electron';
+
+import { getSharedAppMetrics } from '@/utils/appMetrics';
+import { collectRendererGarbage, startIdleRendererGc } from '@/utils/idleRendererGc';
+import { getIpcContext } from '@/utils/ipc';
+import { parseMemoryDump, type TraceEvent } from '@/utils/memoryDump';
 
 import { ControllerModule, IpcMethod } from './index';
 
@@ -12,8 +18,26 @@ interface CompleteGpuInfo {
 const readText = (value: unknown): string | null =>
   typeof value === 'string' && value.length > 0 ? value : null;
 
+const MEMORY_DUMP_TIMEOUT = 15_000;
+
 export default class DevtoolsCtr extends ControllerModule {
   static override readonly groupName = 'devtools';
+
+  @IpcMethod()
+  async getManagedProcesses() {
+    return getManagedProcesses();
+  }
+
+  @IpcMethod()
+  async stopManagedProcess({ id }: { id: string }) {
+    if (typeof id !== 'string' || !id) throw new Error('Invalid process identity');
+    await stopManagedProcess(id);
+  }
+
+  @IpcMethod()
+  async openProcessExplorer() {
+    this.app.browserManager.retrieveByIdentifier('processExplorer').show();
+  }
 
   @IpcMethod()
   async openDevtools() {
@@ -26,8 +50,17 @@ export default class DevtoolsCtr extends ControllerModule {
   // sees the sliver since the other one sampled.
   @IpcMethod()
   async getAppProcessMetrics(): Promise<AppProcessMetrics> {
-    const metrics = app.getAppMetrics();
+    const metrics = getSharedAppMetrics();
+    const windowTitles = new Map<number, string>();
+    for (const contents of webContents.getAllWebContents()) {
+      const title = BrowserWindow.fromWebContents(contents)?.getTitle();
+      const pid = contents.getOSProcessId();
+      if (title && !windowTitles.has(pid)) windowTitles.set(pid, title);
+    }
     const gpuProcesses = metrics.filter((metric) => metric.type === 'GPU');
+    const rendererPid = getIpcContext()?.sender.getOSProcessId();
+    const renderer =
+      rendererPid === undefined ? undefined : metrics.find((metric) => metric.pid === rendererPid);
 
     return {
       cpuPercent: metrics.reduce((sum, metric) => sum + metric.cpu.percentCPUUsage, 0),
@@ -39,7 +72,73 @@ export default class DevtoolsCtr extends ControllerModule {
               memoryMB:
                 gpuProcesses.reduce((sum, metric) => sum + metric.memory.workingSetSize, 0) / 1024,
             },
+      processes: metrics.map((metric) => ({
+        cpuPercent: metric.cpu.percentCPUUsage,
+        name: readText(metric.name) ?? readText(metric.serviceName),
+        pid: metric.pid,
+        type: metric.type,
+        windowTitle: windowTitles.get(metric.pid) ?? null,
+        workingSetMB: metric.memory.workingSetSize / 1024,
+      })),
+      rendererResidentMB: renderer ? renderer.memory.workingSetSize / 1024 : null,
     };
+  }
+
+  private rendererSender(what: string) {
+    const contents = getIpcContext()?.sender;
+    if (!contents) throw new Error(`${what} needs a renderer sender`);
+    return contents;
+  }
+
+  @IpcMethod()
+  async collectRendererGarbage(): Promise<void> {
+    await collectRendererGarbage(this.rendererSender('garbage collection'));
+  }
+
+  afterFirstFrame() {
+    startIdleRendererGc();
+  }
+
+  @IpcMethod()
+  async captureMemoryDump(): Promise<MemoryDump> {
+    const contents = this.rendererSender('memory dump');
+    const dbg = contents.debugger;
+    const attachedHere = !dbg.isAttached();
+    if (attachedHere) dbg.attach('1.3');
+
+    const events: TraceEvent[] = [];
+    let finish!: () => void;
+    const complete = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const onMessage = (_event: unknown, method: string, params: { value?: TraceEvent[] }) => {
+      if (method === 'Tracing.dataCollected') events.push(...(params.value ?? []));
+      if (method === 'Tracing.tracingComplete') finish();
+    };
+    dbg.on('message', onMessage);
+
+    try {
+      await dbg.sendCommand('Tracing.start', {
+        traceConfig: {
+          includedCategories: ['disabled-by-default-memory-infra'],
+          memoryDumpConfig: { triggers: [] },
+        },
+        transferMode: 'ReportEvents',
+      });
+      await dbg.sendCommand('Tracing.requestMemoryDump', { levelOfDetail: 'detailed' });
+      await dbg.sendCommand('Tracing.end');
+      await Promise.race([
+        complete,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('memory dump timed out')), MEMORY_DUMP_TIMEOUT);
+        }),
+      ]);
+    } finally {
+      dbg.off('message', onMessage);
+      if (attachedHere) dbg.detach();
+    }
+
+    return parseMemoryDump(events, contents.getOSProcessId());
   }
 
   @IpcMethod()

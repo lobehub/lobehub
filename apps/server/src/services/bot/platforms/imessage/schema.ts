@@ -1,6 +1,8 @@
 import { DEFAULT_BOT_DEBOUNCE_MS, MAX_BOT_DEBOUNCE_MS } from '@lobechat/const';
 
 import { displayToolCallsField, makeUserIdField, watchKeywordsField } from '../const';
+import { deviceAccessFields } from '../deviceAccess';
+import { replyStyleFields } from '../replyStyle';
 import type { FieldSchema } from '../types';
 
 export const schema: FieldSchema[] = [
@@ -20,6 +22,7 @@ export const schema: FieldSchema[] = [
     label: 'channel.settings',
     properties: [
       makeUserIdField('imessage'),
+      ...deviceAccessFields,
       {
         key: 'charLimit',
         default: 5000,
@@ -33,9 +36,17 @@ export const schema: FieldSchema[] = [
         key: 'concurrency',
         default: 'queue',
         description: 'channel.concurrencyHint',
-        enum: ['queue', 'debounce'],
-        enumDescriptions: ['channel.concurrencyQueueHint', 'channel.concurrencyDebounceHint'],
-        enumLabels: ['channel.concurrencyQueue', 'channel.concurrencyDebounce'],
+        enum: ['queue', 'burst', 'debounce'],
+        enumDescriptions: [
+          'channel.concurrencyQueueHint',
+          'channel.concurrencyBurstHint',
+          'channel.concurrencyDebounceHint',
+        ],
+        enumLabels: [
+          'channel.concurrencyQueue',
+          'channel.concurrencyBurst',
+          'channel.concurrencyDebounce',
+        ],
         label: 'channel.concurrency',
         type: 'string',
       },
@@ -47,7 +58,7 @@ export const schema: FieldSchema[] = [
         maximum: MAX_BOT_DEBOUNCE_MS,
         minimum: 100,
         type: 'number',
-        visibleWhen: { field: 'concurrency', value: 'debounce' },
+        visibleWhen: { field: 'concurrency', value: ['burst', 'debounce'] },
       },
       {
         key: 'showUsageStats',
@@ -58,6 +69,7 @@ export const schema: FieldSchema[] = [
       },
       displayToolCallsField,
       watchKeywordsField,
+      ...replyStyleFields,
     ],
     type: 'object',
   },

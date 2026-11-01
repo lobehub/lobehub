@@ -10,6 +10,25 @@ import {
 } from './testUtils';
 
 describe('DeepSeek OpenAI-compatible chatCompletion.handlePayload', () => {
+  it('should preserve the thinking history contract for the canonical Flash alias', () => {
+    const result = openAIParams.chatCompletion!.handlePayload!({
+      messages: [
+        { content: 'Use the tool', role: 'user' },
+        {
+          content: '',
+          role: 'assistant',
+          tool_calls: [
+            { function: { arguments: '{}', name: 'lookup' }, id: 'call_1', type: 'function' },
+          ],
+        },
+        { content: 'done', role: 'tool', tool_call_id: 'call_1' },
+      ],
+      model: 'deepseek-flash',
+    });
+
+    expect(result.messages[1]).toHaveProperty('reasoning_content', '');
+  });
+
   it('should transform reasoning object to reasoning_content string', () => {
     const payload = {
       messages: [

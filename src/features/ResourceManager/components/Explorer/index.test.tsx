@@ -2,6 +2,7 @@ import { render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ViewMode } from '@/features/ResourceManager/store/initialState';
 import { FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
 
 import ResourceExplorer from './index';
@@ -15,13 +16,13 @@ const mocks = vi.hoisted(() => ({
     sorter: 'createdAt' as const,
     sortType: 'desc' as SortType,
     sourceFilter: undefined as ResourceSourceFilter | undefined,
-    viewMode: 'list' as const,
+    viewMode: 'list' as ViewMode,
   },
   useFetchResources: vi.fn(),
 }));
 
 vi.mock('@/features/ResourceManager/hooks/useFolderPath', () => ({
-  useFolderPath: () => ({ currentFolderSlug: null }),
+  useFolderPath: () => ({ currentFolderId: null }),
 }));
 
 vi.mock('@/features/ResourceManager/hooks/useResourceManagerUrlSync', () => ({
@@ -92,16 +93,28 @@ describe('ResourceExplorer', () => {
     mocks.useFetchResources.mockReturnValue({ isLoading: false, isValidating: false });
   });
 
-  it('keeps library contents excluded from the All resource query', () => {
+  it('lists every uploaded file, library ones included, and no pages in the drive', () => {
     render(<ResourceExplorer />);
 
     expect(mocks.useFetchResources).toHaveBeenCalledWith(
       expect.objectContaining({
         category: FilesTabs.All,
+        filesOnly: true,
+        includeContentPreview: false,
         libraryId: undefined,
         parentId: null,
-        showFilesInKnowledgeBase: false,
+        showFilesInKnowledgeBase: true,
       }),
+    );
+  });
+
+  it('requests a server-generated content preview only for masonry cards', () => {
+    mocks.resourceManagerState.viewMode = 'masonry';
+
+    render(<ResourceExplorer />);
+
+    expect(mocks.useFetchResources).toHaveBeenCalledWith(
+      expect.objectContaining({ includeContentPreview: true }),
     );
   });
 
@@ -139,6 +152,20 @@ describe('ResourceExplorer', () => {
       expect.objectContaining({
         libraryId: 'kb-shared',
         visibility: undefined,
+      }),
+    );
+  });
+
+  it('lists the library own rows, pages and folders included, inside a library', () => {
+    mocks.resourceManagerState.libraryId = 'kb-shared';
+
+    render(<ResourceExplorer />);
+
+    expect(mocks.useFetchResources).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filesOnly: false,
+        libraryId: 'kb-shared',
+        showFilesInKnowledgeBase: false,
       }),
     );
   });

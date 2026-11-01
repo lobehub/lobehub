@@ -110,6 +110,12 @@ export interface AgentSignalSourcePayloadMap {
     anchorMessageId?: string;
     documentPayload?: Record<string, unknown>;
     intents?: Array<'document' | 'memory' | 'persona' | 'prompt' | 'skill'>;
+    /**
+     * `true` when the producer knows the user message opens its conversation: it has no
+     * parent message and no thread, so there is no earlier reply it could give feedback on.
+     * `undefined` means unknown; consumers must treat it as possibly having a prior reply.
+     */
+    isConversationRoot?: boolean;
     memoryPayload?: Record<string, unknown>;
     message: string;
     /** Legacy source message identifier kept for compatibility. */
@@ -350,8 +356,7 @@ export type SourceEventAgentSelfFeedbackIntentDeclared =
 
 /** Normalized tool outcome source event. */
 export type SourceEventToolOutcome =
-  | AgentSignalSourceEvent<'tool.outcome.completed'>
-  | AgentSignalSourceEvent<'tool.outcome.failed'>;
+  AgentSignalSourceEvent<'tool.outcome.completed'> | AgentSignalSourceEvent<'tool.outcome.failed'>;
 
 /** Source types accepted by browser producers through the authenticated edge. */
 export const AGENT_SIGNAL_CLIENT_SOURCE_TYPES = [

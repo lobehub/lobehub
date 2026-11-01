@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TopicList from './index';
@@ -23,6 +22,18 @@ const chatStoreStateMock = vi.hoisted(() => ({
   isUndefinedTopics: false,
   topicLength: 0,
   topics: [],
+}));
+const skeletonRenderCount = vi.hoisted(() => ({ value: 0 }));
+const userStoreStateMock = vi.hoisted(() => ({
+  topicIncludeCompleted: false,
+  topicSortBy: 'updatedAt',
+}));
+
+vi.mock('./TopicListSkeleton', () => ({
+  default: () => {
+    skeletonRenderCount.value += 1;
+    return <div data-testid="topic-list-skeleton" />;
+  },
 }));
 
 vi.mock('@/features/NavPanel/components/EmptyNavItem', () => ({
@@ -57,6 +68,10 @@ vi.mock('@/hooks/useFetchChatTopics', () => ({
   useFetchChatTopics: vi.fn(),
 }));
 
+vi.mock('@/hooks/useFetchActiveTopicDetail', () => ({
+  useFetchActiveTopicDetail: vi.fn(),
+}));
+
 vi.mock('@/hooks/usePermission', () => ({
   usePermission: (action: 'create_content') => ({
     allowed: permissionMock[action],
@@ -76,6 +91,7 @@ vi.mock('@/store/chat', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
+  operationSelectors: { visiblyRunningTopicIds: () => [] },
   topicSelectors: {
     currentTopicLength: (state: { topicLength: number }) => state.topicLength,
     displayTopicsForSidebar: () => (state: typeof chatStoreStateMock) => state.topics,
@@ -97,24 +113,22 @@ vi.mock('@/store/global/selectors', () => ({
 }));
 
 vi.mock('@/store/user', () => ({
-  useUserStore: (
-    selector: (state: { topicIncludeCompleted: boolean; topicSortBy: string }) => unknown,
-  ) => selector({ topicIncludeCompleted: false, topicSortBy: 'updatedAt' }),
+  getUserStoreState: () => userStoreStateMock,
+  useUserStore: (selector: (state: typeof userStoreStateMock) => unknown) =>
+    selector(userStoreStateMock),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  authSelectors: { isLoaded: () => true },
   preferenceSelectors: {
     topicIncludeCompleted: (state: { topicIncludeCompleted: boolean }) =>
       state.topicIncludeCompleted,
     topicSortBy: (state: { topicSortBy: string }) => state.topicSortBy,
   },
+  userProfileSelectors: { userId: () => 'test-user-id' },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
+vi.mock('@/hooks/useTopicOnlyMine', () => ({ useTopicOnlyMine: () => false }));
 
 vi.mock('../AllTopicsDrawer', () => ({
   default: ({ open }: { open: boolean }) => (
@@ -138,16 +152,6 @@ vi.mock('./Item', () => ({
   default: () => <div data-testid="topic-item" />,
 }));
 
-// Partial mock: keep every real export (e.g. `lobeStaticStylish`, which
-// `createStaticStyles` reads at import time in transitively-loaded modules like
-// ShareModal/useContainerStyles) and override only Flexbox. A full mock returning
-// just Flexbox drops those exports and crashes collection whenever the suite's
-// module graph evaluates one of them.
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-
 describe('Agent topic list', () => {
   beforeEach(() => {
     pushMock.mockReset();
@@ -155,8 +159,28 @@ describe('Agent topic list', () => {
     permissionMock.create_content = true;
     chatStoreStateMock.hasMore = true;
     chatStoreStateMock.isExpandingPageSize = false;
+    chatStoreStateMock.isUndefinedTopics = false;
     chatStoreStateMock.topicLength = 0;
     chatStoreStateMock.topics = [];
+    skeletonRenderCount.value = 0;
+  });
+
+  // The route loader seeds the persisted page before this mounts
+  // (`agentChatTopicListLoader`), so a mount frame that shows the loading
+  // placeholder is exactly the flash this must not reintroduce.
+  it('renders the list on the mount commit when the session bucket already exists', () => {
+    render(<TopicList />);
+
+    expect(skeletonRenderCount.value).toBe(0);
+    expect(screen.getByTestId('all-topics-drawer')).toBeInTheDocument();
+  });
+
+  it('keeps the skeleton for a session whose bucket has not landed yet', () => {
+    chatStoreStateMock.isUndefinedTopics = true;
+
+    render(<TopicList />);
+
+    expect(screen.getByTestId('topic-list-skeleton')).toBeInTheDocument();
   });
 
   it('opens the agent chat route from the empty start topic entry', () => {

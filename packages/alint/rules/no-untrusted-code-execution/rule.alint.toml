@@ -1,0 +1,10 @@
+name = "no-untrusted-code-execution"
+builtInAgent = "basic-structured"
+instruction = """
+Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
+
+Prevent untrusted data becoming executable code in the application's privileged process.
+Report request, user, model-generated, downloaded, or stored user content passed to eval, Function/new Function, node:vm runInNewContext/runInThisContext/Script, or interpreter -e/-c execution (node/python etc.) on the host without a real isolation/authorization boundary. node:vm and an empty context object are not security sandboxes. Also report writing downloaded code and then executing/importing it when that chain is visible. Anchor at execution, not the download/write. For shell-string construction use the shell injection rule; this rule covers code interpreted as a program.
+Recommend data parsing for data, or an existing isolated sandbox/runtime with restricted capabilities and explicit execution policy for intentional code execution.
+Do not report fixed build-time code, a fixed expression containing no untrusted interpolation, JSON.parse, parsing/compiling without executing, verified signed application updates, or code delegated to a visibly isolated remote/container worker with an execution-policy boundary. A generic parameter named code with no indication of untrusted origin is not sufficient. An authorized terminal/REPL feature is not itself a bug; report a visible isolation/approval bypass, not its existence.
+"""

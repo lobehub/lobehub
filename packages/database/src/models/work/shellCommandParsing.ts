@@ -7,10 +7,68 @@
 
 const CONTROL_OPERATORS = new Set(['&&', '||', ';', '|', '&']);
 
+interface PendingHeredoc {
+  delimiter: string;
+  stripTabs: boolean;
+}
+
+/**
+ * Read an unquoted here-document operator at `start` — `<<EOF`, `<<-EOF`,
+ * `<<'EOF'`, `<< "EOF"` — and return its delimiter plus the index just past
+ * it. A `<<<` here-string, or a `<<` with no delimiter word, is not one.
+ */
+const readHeredocOperator = (
+  input: string,
+  start: number,
+): { end: number; heredoc: PendingHeredoc } | null => {
+  if (!input.startsWith('<<', start) || input[start + 2] === '<' || input[start - 1] === '<')
+    return null;
+
+  let i = start + 2;
+  const stripTabs = input[i] === '-';
+  if (stripTabs) i++;
+  while (input[i] === ' ' || input[i] === '\t') i++;
+
+  const quote = input[i] === "'" || input[i] === '"' ? input[i] : '';
+  if (quote) i++;
+  const word = /^[\w.-]+/.exec(input.slice(i))?.[0];
+  if (!word) return null;
+  i += word.length;
+  if (quote) {
+    if (input[i] !== quote) return null;
+    i++;
+  }
+
+  return { end: i, heredoc: { delimiter: word, stripTabs } };
+};
+
+/**
+ * Skip the bodies of the heredocs opened on the line that just ended, in
+ * order, returning the index of the first line after the last delimiter. A
+ * body missing its delimiter runs to the end of input, as in the shell.
+ */
+const skipHeredocBodies = (input: string, start: number, pending: PendingHeredoc[]): number => {
+  let i = start;
+  for (const { delimiter, stripTabs } of pending) {
+    while (i < input.length) {
+      const lineEnd = input.indexOf('\n', i);
+      const line = input.slice(i, lineEnd === -1 ? input.length : lineEnd);
+      i = lineEnd === -1 ? input.length : lineEnd + 1;
+      if ((stripTabs ? line.replace(/^\t+/, '') : line) === delimiter) break;
+    }
+  }
+  return i;
+};
+
 /**
  * Minimal POSIX-ish tokenizer: whitespace splitting with single/double quote
- * and backslash handling. Returns null on unterminated quotes — better to
- * skip registration than to mis-attribute flag values.
+ * and backslash handling. An unquoted newline ends a command like `;` does, so
+ * a multi-line script yields one segment per line. An unquoted heredoc
+ * operator drops its body: the body is file content, not command text, and an
+ * apostrophe in prose (`panel's`) would otherwise read as an unterminated
+ * quote and void the `gh pr create` on the next line. A `<<` inside quotes
+ * (a heredoc example in a PR body) stays literal. Returns null on unterminated
+ * quotes — better to skip registration than to mis-attribute flag values.
  *
  * Deliberately hand-rolled instead of adding a `shell-quote`-style dependency:
  * a real shell parser would also expand what we must keep literal (`$VAR`,
@@ -25,6 +83,7 @@ const tokenizeShellCommand = (input: string): string[] | null => {
   const tokens: string[] = [];
   let current = '';
   let hasCurrent = false;
+  let pendingHeredocs: PendingHeredoc[] = [];
   let i = 0;
 
   const push = () => {
@@ -72,10 +131,22 @@ const tokenizeShellCommand = (input: string): string[] | null => {
         hasCurrent = true;
         i += 2;
       }
+    } else if (ch === '\n') {
+      push();
+      tokens.push(';');
+      i = skipHeredocBodies(input, i + 1, pendingHeredocs);
+      pendingHeredocs = [];
     } else if (/\s/.test(ch)) {
       push();
       i++;
     } else {
+      const operator = ch === '<' ? readHeredocOperator(input, i) : null;
+      if (operator) {
+        push();
+        pendingHeredocs.push(operator.heredoc);
+        i = operator.end;
+        continue;
+      }
       current += ch;
       hasCurrent = true;
       i++;
@@ -137,8 +208,9 @@ const expandShellWrapperSegment = (segment: string[]): string[][] => {
 };
 
 /**
- * Parse raw shell command text into simple-command token segments: tokenize,
- * split on control operators, and expand login-shell `-c` wrappers in place.
+ * Parse raw shell command text into simple-command token segments: tokenize
+ * (dropping heredoc bodies), split on control operators and unquoted newlines,
+ * and expand login-shell `-c` wrappers in place.
  * Returns null when the text cannot be tokenized (unterminated quoting).
  */
 export const parseShellCommandSegments = (command: string): string[][] | null => {

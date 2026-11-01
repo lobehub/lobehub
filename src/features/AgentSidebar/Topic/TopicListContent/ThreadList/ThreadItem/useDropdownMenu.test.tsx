@@ -6,17 +6,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useThreadItemDropdownMenu } from './useDropdownMenu';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => null,
-}));
-
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       modal: {
@@ -33,9 +24,16 @@ vi.mock('@/hooks/usePermission', () => ({
   }),
 }));
 
+const { openRenameModal, updateThreadTitle } = vi.hoisted(() => ({
+  openRenameModal: vi.fn(),
+  updateThreadTitle: vi.fn(),
+}));
+
+vi.mock('@/components/RenameModal', () => ({ openRenameModal }));
+
 vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ removeThread: vi.fn() }),
+    selector({ removeThread: vi.fn(), updateThreadTitle }),
 }));
 
 const getMenuItem = (
@@ -46,11 +44,36 @@ const getMenuItem = (
 describe('useThreadItemDropdownMenu', () => {
   it('disables thread management actions for workspace viewers', () => {
     const { result } = renderHook(() =>
-      useThreadItemDropdownMenu({ id: 'thread-1', toggleEditing: vi.fn() }),
+      useThreadItemDropdownMenu({ id: 'thread-1', title: 'Thread' }),
     );
     const items = result.current();
 
     expect(getMenuItem(items, 'rename')).toMatchObject({ disabled: true });
     expect(getMenuItem(items, 'delete')).toMatchObject({ disabled: true });
+  });
+
+  it('offers no delete for a subagent thread', () => {
+    const { result } = renderHook(() =>
+      useThreadItemDropdownMenu({ deletable: false, id: 'thread-1', title: 'Thread' }),
+    );
+    const items = result.current();
+
+    expect(getMenuItem(items, 'delete')).toBeUndefined();
+    expect(getMenuItem(items, 'rename')).toBeDefined();
+    expect(items.at(-1)).not.toMatchObject({ type: 'divider' });
+  });
+
+  it('renames through a modal, not an inline popover', async () => {
+    const { result } = renderHook(() =>
+      useThreadItemDropdownMenu({ id: 'thread-1', title: 'Old title' }),
+    );
+    const rename = getMenuItem(result.current(), 'rename') as unknown as { onClick: () => void };
+    rename.onClick();
+
+    expect(openRenameModal).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultValue: 'Old title' }),
+    );
+    await openRenameModal.mock.calls[0][0].onSave('New title');
+    expect(updateThreadTitle).toHaveBeenCalledWith('thread-1', 'New title');
   });
 });

@@ -7,6 +7,7 @@ export {
   type InitDocumentState,
   type ModifyNodesState,
   PageAgentIdentifier,
+  type PageAgentToolState,
   type ReplaceTextState,
 } from './types';
 export type {

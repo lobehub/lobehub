@@ -38,7 +38,11 @@ vi.mock('electron', () => {
     on: vi.fn(),
     show: vi.fn(),
   };
-  const MockNotification = vi.fn(() => mockNotificationInstance) as any;
+  // `Notification` is instantiated with `new` by the production code, so the mock
+  // implementation must be constructable (vitest 5 rejects arrow functions).
+  const MockNotification = vi.fn(function () {
+    return mockNotificationInstance;
+  }) as any;
   MockNotification.isSupported = vi.fn(() => true);
 
   return {

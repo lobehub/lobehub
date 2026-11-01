@@ -4,17 +4,26 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveCliDirName } from '../constants/identity';
 import { log } from '../utils/logger';
 import {
+  loadActiveWorkspace,
+  loadDeviceGatewayUrl,
   loadOrCreateConnectionId,
   loadSettings,
   normalizeUrl,
+  resolveDeviceMetricsBacklogPath,
   resolveServerUrl,
+  saveActiveWorkspace,
+  saveDeviceGatewayUrl,
   saveSettings,
+  settingsForLogin,
 } from './index';
 
 const tmpDir = path.join(os.tmpdir(), 'lobehub-cli-test-settings');
-const settingsDir = path.join(tmpDir, '.lobehub');
+// The shared test setup redirects the CLI home via `LOBEHUB_CLI_HOME`, so the
+// directory under the stubbed homedir is not the default `.lobehub`.
+const settingsDir = path.join(tmpDir, resolveCliDirName());
 const settingsFile = path.join(settingsDir, 'settings.json');
 const originalServer = process.env.LOBEHUB_SERVER;
 
@@ -28,12 +37,6 @@ vi.mock('node:os', async (importOriginal) => {
     },
   };
 });
-
-vi.mock('../utils/logger', () => ({
-  log: {
-    warn: vi.fn(),
-  },
-}));
 
 describe('settings', () => {
   beforeEach(() => {
@@ -56,6 +59,67 @@ describe('settings', () => {
     expect(loadSettings()).toEqual({
       gatewayUrl: 'https://gateway.example.com',
       serverUrl: 'https://self-hosted.example.com',
+    });
+  });
+
+  describe('device gateway addresses', () => {
+    it('binds a saved address to its server only', () => {
+      saveDeviceGatewayUrl('https://a.example.com/', 'https://gw-a.example.com/');
+
+      expect(loadDeviceGatewayUrl('https://a.example.com')).toBe('https://gw-a.example.com');
+      expect(loadDeviceGatewayUrl('https://b.example.com')).toBeUndefined();
+      expect(loadDeviceGatewayUrl('https://app.lobehub.com')).toBeUndefined();
+    });
+
+    it('reads a pre-discovery gatewayUrl only for the server it was saved with', () => {
+      saveSettings({ gatewayUrl: 'http://localhost:8788', serverUrl: 'https://self.example.com' });
+      // LOBEHUB_SERVER points this run at another server than the saved login.
+      process.env.LOBEHUB_SERVER = 'https://other.example.com';
+
+      expect(loadDeviceGatewayUrl('https://self.example.com/')).toBe('http://localhost:8788');
+      expect(loadDeviceGatewayUrl(resolveServerUrl())).toBeUndefined();
+    });
+
+    it('reads a gatewayUrl saved with official cloud as official cloud’s address only', () => {
+      saveSettings({ gatewayUrl: 'http://localhost:8788' });
+
+      expect(loadDeviceGatewayUrl('https://app.lobehub.com/')).toBe('http://localhost:8788');
+      expect(loadDeviceGatewayUrl('https://self.example.com')).toBeUndefined();
+    });
+
+    it('supersedes the legacy value when saving for its server', () => {
+      saveSettings({ gatewayUrl: 'http://localhost:8788', serverUrl: 'https://self.example.com' });
+
+      saveDeviceGatewayUrl('https://self.example.com', 'https://gw.self.example.com');
+
+      expect(loadSettings()).toEqual({
+        deviceGatewayUrls: { 'https://self.example.com': 'https://gw.self.example.com' },
+        serverUrl: 'https://self.example.com',
+      });
+    });
+
+    it('keeps each address with its own server across logins', () => {
+      saveSettings({ gatewayUrl: 'https://gw-a.example.com', serverUrl: 'https://a.example.com' });
+
+      saveSettings(settingsForLogin(loadSettings(), 'https://b.example.com'));
+
+      expect(loadSettings()).toEqual({
+        deviceGatewayUrls: { 'https://a.example.com': 'https://gw-a.example.com' },
+        serverUrl: 'https://b.example.com',
+      });
+      expect(loadDeviceGatewayUrl('https://b.example.com')).toBeUndefined();
+
+      saveSettings(settingsForLogin(loadSettings(), 'https://a.example.com'));
+      expect(loadDeviceGatewayUrl('https://a.example.com')).toBe('https://gw-a.example.com');
+    });
+
+    it('keeps an official cloud gatewayUrl with official cloud across a login elsewhere', () => {
+      saveSettings({ gatewayUrl: 'http://localhost:8788' });
+
+      saveSettings(settingsForLogin(loadSettings(), 'https://b.example.com'));
+
+      expect(loadDeviceGatewayUrl('https://b.example.com')).toBeUndefined();
+      expect(loadDeviceGatewayUrl('https://app.lobehub.com')).toBe('http://localhost:8788');
     });
   });
 
@@ -98,6 +162,44 @@ describe('settings', () => {
     expect(resolveServerUrl()).toBe('https://app.lobehub.com');
   });
 
+  it('should persist the active workspace and clear it back to personal', () => {
+    const record = {
+      identity: 'user:u1',
+      serverUrl: 'https://app.lobehub.com',
+      workspaceId: 'ws_abc123',
+    };
+    saveActiveWorkspace(record);
+
+    expect(loadActiveWorkspace()).toEqual(record);
+    // Kept out of settings.json, which is unlinked whenever all URLs default.
+    expect(fs.existsSync(path.join(settingsDir, 'active-workspace'))).toBe(true);
+
+    saveActiveWorkspace(null);
+
+    expect(loadActiveWorkspace()).toBeUndefined();
+    expect(fs.existsSync(path.join(settingsDir, 'active-workspace'))).toBe(false);
+  });
+
+  it('should ignore a corrupt active-workspace file instead of scoping to garbage', () => {
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(path.join(settingsDir, 'active-workspace'), 'not an id\n{"a":1}');
+
+    expect(loadActiveWorkspace()).toBeUndefined();
+  });
+
+  // A record without the account/server it was chosen under cannot be checked
+  // for staleness, so it must not be trusted.
+  it.each([
+    ['a missing identity', { serverUrl: 'https://app.lobehub.com', workspaceId: 'ws_1' }],
+    ['a missing serverUrl', { identity: 'user:u1', workspaceId: 'ws_1' }],
+    ['an id-shaped nothing', { identity: 'user:u1', serverUrl: 'https://x', workspaceId: 'a b' }],
+  ])('should reject an active-workspace record with %s', (_label, record) => {
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(path.join(settingsDir, 'active-workspace'), JSON.stringify(record));
+
+    expect(loadActiveWorkspace()).toBeUndefined();
+  });
+
   it('should create a connectionId once and reuse it across calls', () => {
     const first = loadOrCreateConnectionId();
     expect(first).toMatch(/[\da-f-]{36}/);
@@ -114,5 +216,13 @@ describe('settings', () => {
 
     expect(fs.existsSync(settingsFile)).toBe(false);
     expect(loadOrCreateConnectionId()).toBe(id);
+  });
+});
+
+describe('resolveDeviceMetricsBacklogPath', () => {
+  it('keeps custom device ids that differ only in punctuation in separate backlogs', () => {
+    expect(resolveDeviceMetricsBacklogPath('prod/api')).not.toBe(
+      resolveDeviceMetricsBacklogPath('prod:api'),
+    );
   });
 });

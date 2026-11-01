@@ -2,9 +2,9 @@
 
 import { isDesktop } from '@lobechat/const';
 import { type BinaryStatus, type ClaudeAuthStatus } from '@lobechat/electron-client-ipc';
-import { isHeterogeneousProviderBindingSupported } from '@lobechat/heterogeneous-agents';
 import {
   getHeterogeneousAgentClientConfig,
+  isLocalRuntimeHeterogeneousType,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents/client';
 import type {
@@ -14,23 +14,28 @@ import type {
 } from '@lobechat/types';
 import {
   ActionIcon,
+  Button,
   CopyButton,
+  createStaticStyles,
+  cssVar,
   Flexbox,
   Icon,
   Input,
+  Segmented,
+  Select,
+  Spin,
   Tag,
   Text,
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
-import { Button, Segmented, Select } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon, PencilLine, RefreshCw, XCircle } from 'lucide-react';
+import { CheckCircle2, KeyRound, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProviderItemRender } from '@/components/ModelSelect';
 import HeterogeneousAgentStatusGuide from '@/features/Electron/HeterogeneousAgent/StatusGuide';
+import { supportsHeterogeneousApiMode } from '@/features/HeterogeneousAgent/apiMode';
 import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import {
   buildServerDefaultModelOptions,
@@ -42,11 +47,11 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { usePermission } from '@/hooks/usePermission';
 import { binaryService } from '@/services/electron/binary';
 import { useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
 
 const COMMAND_LINE_HEIGHT = 28;
 const SERVER_DEFAULT_PROVIDER_VALUE = 'server-default';
 const USER_PROVIDER_VALUE_PREFIX = 'provider:';
-const NO_SERVER_DEFAULT_MODELS: ServerDefaultModel[] = [];
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -114,13 +119,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   detailLabel: css`
     flex-shrink: 0;
-
     width: 96px;
-
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   `,
   detailContent: css`
     display: flex;
@@ -140,51 +141,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   commandInput: css`
     width: 100%;
+    height: ${COMMAND_LINE_HEIGHT}px;
+    border-radius: 999px;
+
     font-family: ${cssVar.fontFamilyCode};
-
-    &,
-    &.ant-input,
-    &.ant-input-affix-wrapper,
-    &.ant-input-outlined,
-    & input,
-    & .ant-input,
-    & .ant-input-affix-wrapper,
-    & .ant-input-outlined {
-      box-sizing: border-box;
-      height: ${COMMAND_LINE_HEIGHT}px;
-      min-height: ${COMMAND_LINE_HEIGHT}px;
-      max-height: ${COMMAND_LINE_HEIGHT}px;
-      border-radius: 999px !important;
-
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 14px;
-      line-height: ${COMMAND_LINE_HEIGHT - 2}px;
-    }
-
-    &,
-    &.ant-input,
-    &.ant-input-outlined,
-    & input,
-    & .ant-input,
-    & .ant-input-outlined {
-      padding-block: 0;
-      padding-inline: 12px;
-    }
-
-    &.ant-input-affix-wrapper,
-    & .ant-input-affix-wrapper {
-      overflow: hidden;
-      padding-block: 0;
-      padding-inline: 12px;
-    }
-
-    &.ant-input-affix-wrapper input,
-    & .ant-input-affix-wrapper input {
-      height: ${COMMAND_LINE_HEIGHT - 2}px;
-      padding: 0;
-      border-radius: 999px !important;
-      line-height: ${COMMAND_LINE_HEIGHT - 2}px;
-    }
+    font-size: 14px;
   `,
   commandInputWrap: css`
     display: flex;
@@ -242,7 +203,6 @@ interface ServerDefaultModel {
 
 interface HeterogeneousAgentStatusCardProps {
   apiModeAvailable?: boolean;
-  apiModeLabEnabled?: boolean;
   /**
    * Provider binding is blocked because the agent is workspace-scoped: the
    * binding UI would offer workspace providers while Desktop main resolves
@@ -263,15 +223,66 @@ interface HeterogeneousAgentStatusCardProps {
   serverDefaultUnavailableReason?: string;
 }
 
-const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
+const LocalRuntimeStatusCard = memo<{ provider: HeterogeneousProviderConfig }>(({ provider }) => {
+  const { t } = useTranslation('setting');
+  const navigate = useWorkspaceAwareNavigate();
+  const keyVault = useAiInfraStore(aiProviderSelectors.providerKeyVaults('deepseek'));
+  const configured = Boolean(keyVault?.apiKey);
+  const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
+  const AgentIcon = providerConfig?.icon;
+
+  return (
+    <Flexbox className={styles.card} gap={12}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardTitleWrap}>
+          <div className={styles.cardTitle}>
+            {AgentIcon && <AgentIcon size={16} />}
+            <Text strong>{providerConfig?.title || provider.type}</Text>
+          </div>
+          <Flexbox horizontal align="center" className={styles.metaRow} gap={8}>
+            <Tag color="success" style={{ marginInlineEnd: 0 }}>
+              {t('heterogeneousStatus.runtime.bundled')}
+            </Tag>
+            <Text className={styles.metaText}>{t('heterogeneousStatus.runtime.description')}</Text>
+          </Flexbox>
+        </div>
+      </div>
+      <div className={styles.detailList}>
+        <div className={styles.detailRow}>
+          <Text className={styles.detailLabel}>{t('heterogeneousStatus.auth.label')}</Text>
+          <Flexbox horizontal align="center" flex={1} gap={8} justify="space-between">
+            <Flexbox horizontal align="center" gap={8}>
+              <Icon
+                color={configured ? 'var(--lobe-color-success)' : 'var(--lobe-color-warning)'}
+                icon={configured ? CheckCircle2 : KeyRound}
+                size={16}
+              />
+              <Text>
+                {t(
+                  configured
+                    ? 'heterogeneousStatus.runtime.keyReady'
+                    : 'heterogeneousStatus.runtime.keyMissing',
+                )}
+              </Text>
+            </Flexbox>
+            <Button size="small" onClick={() => navigate('/settings/provider/deepseek')}>
+              {t('heterogeneousStatus.runtime.configure')}
+            </Button>
+          </Flexbox>
+        </div>
+      </div>
+    </Flexbox>
+  );
+});
+
+const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
   ({
     apiModeAvailable = false,
-    apiModeLabEnabled = false,
     apiModeWorkspaceBlocked = false,
     provider,
-    serverDefaultAvailable: serverDefaultAvailableProp = false,
+    serverDefaultAvailable = false,
     serverDefaultLoading = false,
-    serverDefaultModels: serverDefaultModelsProp = [],
+    serverDefaultModels = [],
     serverDefaultUnavailableReason,
     onApiConfigChange,
     onAuthModeChange,
@@ -282,7 +293,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
     const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
-    const defaultCommand = providerConfig?.defaultCommand || '';
+    const defaultCommand =
+      providerConfig && 'defaultCommand' in providerConfig ? providerConfig.defaultCommand : '';
     const resolvedCommand = provider.command?.trim() || defaultCommand;
     const isUsingCustomCommand = resolvedCommand !== defaultCommand;
     const [status, setStatus] = useState<BinaryStatus | undefined>();
@@ -293,13 +305,6 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const [savingCommand, setSavingCommand] = useState(false);
     const commandInputRef = useRef<HTMLInputElement | null>(null);
     const authMode = provider.authMode ?? 'subscription';
-    // Labs gates every API-mode path, server-default included. Normalize here
-    // so a parent passing stale server-default props cannot resurface the
-    // experiment while the flag is off.
-    const serverDefaultAvailable = apiModeLabEnabled && serverDefaultAvailableProp;
-    const serverDefaultModels = apiModeLabEnabled
-      ? serverDefaultModelsProp
-      : NO_SERVER_DEFAULT_MODELS;
     const serverDefaultSelected = provider.apiConfig?.source === 'server-default';
     const providerApiConfig =
       provider.apiConfig?.source !== 'server-default' ? provider.apiConfig : undefined;
@@ -312,7 +317,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const selectedServerDefaultModel =
       serverDefaultModels.find(({ model }) => model === provider.apiConfig?.model) ??
       firstServerDefaultModel;
-    const providerBindingSupported = isHeterogeneousProviderBindingSupported(provider.type);
+    const apiModeSupported = supportsHeterogeneousApiMode(provider.type);
     const { modelsByProvider, providers: compatibleProviders } =
       useProviderBindingCompatibleProviders(provider.type);
     const providerOptions = useMemo(
@@ -328,12 +333,12 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
           value: SERVER_DEFAULT_PROVIDER_VALUE,
         },
         ...compatibleProviders.map(({ id, logo, name, source }) => ({
-          disabled: !apiModeLabEnabled || !apiModeAvailable,
+          disabled: !apiModeAvailable,
           label: <ProviderItemRender logo={logo} name={name || id} provider={id} source={source} />,
           value: `${USER_PROVIDER_VALUE_PREFIX}${id}`,
         })),
       ],
-      [apiModeAvailable, apiModeLabEnabled, compatibleProviders, serverDefaultAvailable, t],
+      [apiModeAvailable, compatibleProviders, serverDefaultAvailable, t],
     );
 
     useEffect(() => {
@@ -365,6 +370,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         provider.type === 'codebuddy' ||
         provider.type === 'codex' ||
         provider.type === 'cursor' ||
+        provider.type === 'droid' ||
+        provider.type === 'devin' ||
         provider.type === 'kimi-code' ||
         provider.type === 'opencode' ||
         provider.type === 'pi' ||
@@ -377,7 +384,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const handleAuthModeChange = useCallback(
       async (nextAuthMode: HeterogeneousAuthMode) => {
         if (!canEdit || nextAuthMode === authMode) return;
-        const localProviderApiAvailable = apiModeLabEnabled && apiModeAvailable;
+        const localProviderApiAvailable = apiModeAvailable;
         if (nextAuthMode === 'api' && !serverDefaultAvailable && !localProviderApiAvailable) return;
 
         const firstProvider = compatibleProviders[0];
@@ -394,7 +401,6 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       },
       [
         apiModeAvailable,
-        apiModeLabEnabled,
         authMode,
         canEdit,
         compatibleProviders,
@@ -586,7 +592,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       if (detecting) {
         return (
           <Flexbox horizontal align="center" gap={8}>
-            <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.6 }} />
+            <Spin size="small" style={{ opacity: 0.6 }} />
             <Text className={styles.metaText}>
               {t('heterogeneousStatus.detecting', { name: displayName })}
             </Text>
@@ -597,7 +603,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       if (!status || !status.available) {
         return (
           <Flexbox horizontal align="center" gap={8} style={{ flexWrap: 'wrap' }}>
-            <Icon color="var(--ant-color-error)" icon={XCircle} size={16} />
+            <Icon color="var(--lobe-color-error)" icon={XCircle} size={16} />
             <Text className={styles.unavailableText}>
               {t('heterogeneousStatus.unavailable', { name: displayName })}
             </Text>
@@ -637,7 +643,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                   className={styles.commandInput}
                   disabled={!canEdit || savingCommand}
                   placeholder={t('heterogeneousStatus.command.placeholder')}
-                  ref={commandInputRef as never}
+                  ref={commandInputRef}
                   value={commandInput}
                   onBlur={() => {
                     void commitCommand();
@@ -684,11 +690,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     };
 
     const renderAuthMode = () => {
-      if (!providerBindingSupported || detecting || !status?.available) return null;
-      // Keep leftover API-mode agents visible so they can switch back; hide the
-      // experiment entirely for subscription agents until Labs is enabled.
-      if (!apiModeLabEnabled && authMode !== 'api') return null;
-      const localProviderApiAvailable = apiModeLabEnabled && apiModeAvailable;
+      if (!apiModeSupported || detecting || !status?.available) return null;
+      const localProviderApiAvailable = apiModeAvailable;
       const runnableApiAvailable = serverDefaultAvailable || localProviderApiAvailable;
       const showLocalProviderUnavailable =
         (!serverDefaultAvailable && !serverDefaultLoading && !localProviderApiAvailable) ||
@@ -717,20 +720,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                 void handleAuthModeChange(value as HeterogeneousAuthMode);
               }}
             />
-            {!apiModeLabEnabled ? (
-              <>
-                <Text className={styles.unavailableText}>
-                  {t('heterogeneousStatus.apiMode.labDisabled')}
-                </Text>
-                <Text
-                  className={styles.metaText}
-                  style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                  onClick={() => navigate('/settings/labs')}
-                >
-                  {t('heterogeneousStatus.apiMode.enableInLabs')}
-                </Text>
-              </>
-            ) : !runnableApiAvailable && serverDefaultLoading ? (
+            {!runnableApiAvailable && serverDefaultLoading ? (
               <Text className={styles.unavailableText}>
                 {t('heterogeneousStatus.apiMode.serverDefault.checking')}
               </Text>
@@ -792,14 +782,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     };
 
     const renderApiConfig = () => {
-      if (
-        !providerBindingSupported ||
-        authMode !== 'api' ||
-        !apiModeLabEnabled ||
-        detecting ||
-        !status?.available
-      )
-        return null;
+      if (!apiModeSupported || authMode !== 'api' || detecting || !status?.available) return null;
 
       const selectedProviderValue = serverDefaultSelected
         ? SERVER_DEFAULT_PROVIDER_VALUE
@@ -978,6 +961,16 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       </Flexbox>
     );
   },
+);
+
+CliHeterogeneousAgentStatusCard.displayName = 'CliHeterogeneousAgentStatusCard';
+
+const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>((props) =>
+  isLocalRuntimeHeterogeneousType(props.provider.type) ? (
+    <LocalRuntimeStatusCard provider={props.provider} />
+  ) : (
+    <CliHeterogeneousAgentStatusCard {...props} />
+  ),
 );
 
 HeterogeneousAgentStatusCard.displayName = 'HeterogeneousAgentStatusCard';

@@ -1,9 +1,10 @@
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 
 import type { CrawlImpl, CrawlSuccessResult } from '../type';
-import { PageNotFoundError, toFetchError } from '../utils/errorType';
+import { PageNotFoundError, toFetchError, UnsupportedContentError } from '../utils/errorType';
 import { htmlToMarkdown, MAX_HTML_SIZE } from '../utils/htmlToMarkdown';
 import { createHTTPStatusError } from '../utils/response';
+import { isNonDocumentContentType } from '../utils/urlPreflight';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
 const mixinHeaders = {
@@ -39,24 +40,26 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
   let res: Response;
 
   try {
-    res = await withTimeout(
-      (signal) =>
-        ssrfSafeFetch(
-          url,
-          {
-            headers: mixinHeaders,
-            signal,
-          },
-          { maxContentLength: MAX_HTML_SIZE },
-        ),
-      DEFAULT_TIMEOUT,
-    );
+    res = await withTimeout(async (signal) => {
+      const streamed = await ssrfSafeFetch(
+        url,
+        {
+          headers: mixinHeaders,
+          signal,
+        },
+        { maxContentLength: MAX_HTML_SIZE },
+      );
+      // ssrfSafeFetch resolves at the headers; buffer the capped body under the same
+      // timeout so a server that keeps dripping bytes cannot stall the crawl.
+      const body = streamed.body ? await streamed.arrayBuffer() : null;
+      return new Response(body, streamed);
+    }, DEFAULT_TIMEOUT);
   } catch (e) {
     throw toFetchError(e);
   }
 
-  if (res.status === 404) {
-    throw new PageNotFoundError(res.statusText);
+  if (res.status === 404 || res.status === 410) {
+    throw new PageNotFoundError(res.statusText, res.status);
   }
 
   if (!res.ok) {
@@ -64,6 +67,12 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
   }
 
   const type = res.headers.get('content-type');
+
+  // images / fonts / media / archives have no readable body — surface that instead of
+  // handing binary bytes to the HTML parser (and falling through to the next provider)
+  if (isNonDocumentContentType(type)) {
+    throw new UnsupportedContentError(`URL points to non-document content (${type})`);
+  }
 
   if (type?.includes('application/json')) {
     let content: string;

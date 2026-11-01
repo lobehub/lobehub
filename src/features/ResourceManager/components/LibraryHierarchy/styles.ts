@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   dragging: css`
@@ -16,5 +16,17 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   treeItem: css`
     cursor: pointer;
+
+    .hierarchy-node-actions {
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    /* Hover, keyboard focus on the action itself, or an open menu keep it visible. */
+    &:hover .hierarchy-node-actions,
+    .hierarchy-node-actions:focus-within,
+    .hierarchy-node-actions[data-open='true'] {
+      opacity: 1;
+    }
   `,
 }));

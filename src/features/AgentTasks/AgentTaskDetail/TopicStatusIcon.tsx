@@ -1,26 +1,46 @@
-import { Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
-import { CircleAlert } from 'lucide-react';
+import { cssVar, Icon } from '@lobehub/ui';
+import { CircleAlert, Stamp } from 'lucide-react';
 import { memo } from 'react';
 
 import { EXECUTION_STATUS_VISUALS, type ExecutionStatusVisual } from '@/components/ExecutionStatus';
 
-type TopicRunStatus = 'canceled' | 'completed' | 'failed' | 'pending' | 'running' | 'timeout';
+type TopicRunStatus =
+  | 'awaiting_acceptance'
+  | 'canceled'
+  | 'completed'
+  | 'device_offline'
+  | 'failed'
+  | 'pending'
+  | 'quota_limited'
+  | 'running'
+  | 'timeout'
+  | 'transient_failed';
 
 const STATIC_META: Record<Exclude<TopicRunStatus, 'running'>, ExecutionStatusVisual> = {
+  // The agent stopped; the run's acceptance round still has to settle.
+  awaiting_acceptance: { color: cssVar.colorWarning, icon: Stamp },
   canceled: EXECUTION_STATUS_VISUALS.canceled,
   completed: EXECUTION_STATUS_VISUALS.completed,
+  // The run's device was unavailable; it is retried, not failed.
+  device_offline: { color: cssVar.colorWarning, icon: CircleAlert },
   failed: EXECUTION_STATUS_VISUALS.failed,
   // Not-yet-started run: same glyph as a backlog task.
   pending: EXECUTION_STATUS_VISUALS.backlog,
+  // A usage limit or a transport fault: retried on a schedule, not failed.
+  quota_limited: { color: cssVar.colorWarning, icon: CircleAlert },
   timeout: { color: cssVar.colorWarning, icon: CircleAlert },
+  transient_failed: { color: cssVar.colorWarning, icon: CircleAlert },
 };
+
+// Status glyphs sit beside ellipsized titles in flex rows; a long title must
+// truncate, not squeeze the glyph.
+const NO_SHRINK = { flexShrink: 0 } as const;
 
 const RunningIcon = memo<{ size: number }>(({ size }) => {
   const mainColor = cssVar.colorWarning;
   const ringColor = `color-mix(in srgb, ${cssVar.colorWarning} 35%, transparent)`;
   return (
-    <svg aria-hidden fill="none" height={size} viewBox="0 0 16 16" width={size}>
+    <svg aria-hidden fill="none" height={size} style={NO_SHRINK} viewBox="0 0 16 16" width={size}>
       <circle cx="8" cy="8" r="6.5" stroke={ringColor} strokeWidth="1.5" />
       <path
         d="M14.5 8 A 6.5 6.5 0 0 1 8 14.5"
@@ -52,7 +72,7 @@ const TopicStatusIcon = memo<TopicStatusIconProps>(({ size = 16, status }) => {
   if (status === 'running') return <RunningIcon size={size} />;
   const key = (status ?? 'pending') as keyof typeof STATIC_META;
   const meta = STATIC_META[key] ?? STATIC_META.pending;
-  return <Icon color={meta.color} icon={meta.icon} size={size} />;
+  return <Icon color={meta.color} icon={meta.icon} size={size} style={NO_SHRINK} />;
 });
 
 export default TopicStatusIcon;

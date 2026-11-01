@@ -1,9 +1,8 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Switch, toast } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, Icon, Switch, toast } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +27,7 @@ const AdvancedActions = () => {
   const transferAgentsFormItems = useTransferAgentsFormItem();
   const resetSettings = useUserStore((s) => s.resetSettings);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
+  const form = useForm();
 
   const handleReset = useCallback(() => {
     confirmModal({
@@ -65,7 +65,7 @@ const AdvancedActions = () => {
     } as const;
   };
 
-  const system: FormGroupItemType = {
+  const system: FormGroupItem = {
     children: [
       {
         children: (
@@ -103,7 +103,7 @@ const AdvancedActions = () => {
     title: t('storage.actions.title'),
   };
 
-  const analytics: FormGroupItemType = {
+  const analytics: FormGroupItem = {
     children: [
       {
         children: (
@@ -121,13 +121,12 @@ const AdvancedActions = () => {
           </SettingsSearchAnchor>
         ),
         minWidth: undefined,
-        valuePropName: 'checked',
       },
     ],
     title: t('analytics.title'),
   };
 
-  const dataMigration: FormGroupItemType | undefined = transferAgentsFormItems
+  const dataMigration: FormGroupItem | undefined = transferAgentsFormItems
     ? {
         children: transferAgentsFormItems,
         title: t('storage.migration.title'),
@@ -138,6 +137,7 @@ const AdvancedActions = () => {
     <>
       <Form
         collapsible={false}
+        form={form}
         itemsType={'group'}
         variant={'filled'}
         items={[

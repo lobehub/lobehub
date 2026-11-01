@@ -1,15 +1,15 @@
 'use client';
 
-import { memo, Suspense } from 'react';
+import { memo } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
 import SelfLearning from '@/features/SelfLearning';
+import SelfLearningSurfaceGate from '@/features/SelfLearning/SurfaceGate';
 
 /** The domain page is the same growth portrait, scoped to one direction via :domainId. */
 const AgentSelfLearningDomainPage = memo(() => (
-  <Suspense fallback={<Loading debugId="SelfLearningDomain" />}>
+  <SelfLearningSurfaceGate>
     <SelfLearning />
-  </Suspense>
+  </SelfLearningSurfaceGate>
 ));
 
 export default AgentSelfLearningDomainPage;

@@ -1,5 +1,5 @@
 import { RadarChart } from '@lobehub/charts';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import type { FC } from 'react';
 import { memo } from 'react';
 

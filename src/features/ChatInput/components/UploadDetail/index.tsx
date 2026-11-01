@@ -1,5 +1,4 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,10 +10,8 @@ import UploadStatus from './UploadStatus';
 
 const styles = createStaticStyles(({ css }) => ({
   status: css`
-    &.ant-tag {
-      padding-inline: 0;
-      background: none;
-    }
+    padding-inline: 0;
+    background: none;
   `,
 }));
 
