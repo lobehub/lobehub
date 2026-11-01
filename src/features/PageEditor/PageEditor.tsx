@@ -6,6 +6,7 @@ import type { FC, ReactNode, UIEvent } from 'react';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ComposerTarget } from '@/features/Conversation/types';
+import CharLimitBanner from '@/features/EditorCanvas/CharLimitBanner';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -14,7 +15,6 @@ import { usePermission } from '@/hooks/usePermission';
 import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
-import CharLimitBanner from './CharLimitBanner';
 import { usePageCollabEligible, usePageCollabEnabled } from './collab/usePageCollab';
 import DocumentComments from './DocumentComments';
 import BlockCommentMarker from './DocumentComments/BlockCommentMarker';
@@ -390,7 +390,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
                   compact status badge lives in the Header (EditingIndicator). */}
               <LockedAlert />
               {/* Plan page-size limit: refused-save notice and near-limit warning. */}
-              <CharLimitBanner />
+              <CharLimitBanner sticky documentId={documentId} />
               <EditorCanvas askCopilotTarget={askCopilotTarget} />
               <BlockCommentMarker hostRef={editorContentRef} />
               {documentId && <DocumentLikes documentId={documentId} key={documentId} />}

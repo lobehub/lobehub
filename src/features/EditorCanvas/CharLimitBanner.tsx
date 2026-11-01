@@ -9,7 +9,16 @@ import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
 import { resolveCharLimitNotice } from './charLimitNotice';
-import { usePageEditorStore } from './store';
+
+export interface CharLimitBannerProps {
+  documentId?: string;
+  /**
+   * Keeps the refused-save notice pinned to the top of the scrolling body, so
+   * it stays visible when the banner sits inside the scroll host. A host that
+   * renders the banner above its scroll area leaves this off.
+   */
+  sticky?: boolean;
+}
 
 /**
  * Persistent notice for the plan's per-page character limit:
@@ -20,9 +29,8 @@ import { usePageEditorStore } from './store';
  * - near: the page reached 90% of the known limit. The limit comes from the last
  *   refusal, else from the business hook (Cloud: the current personal plan).
  */
-const CharLimitBanner = memo(() => {
+const CharLimitBanner = memo<CharLimitBannerProps>(({ documentId, sticky }) => {
   const { t, i18n } = useTranslation('file');
-  const documentId = usePageEditorStore((s) => s.documentId);
   const refusal = useDocumentStore((s) =>
     documentId ? editorSelectors.charLimitError(documentId)(s) : undefined,
   );
@@ -43,9 +51,13 @@ const CharLimitBanner = memo(() => {
         showIcon
         action={action}
         description={t('pageEditor.charLimit.blockedDescription')}
-        style={{ marginBlock: 8 }}
         title={t('pageEditor.charLimit.blockedTitle', values)}
         type="warning"
+        style={
+          sticky
+            ? { insetBlockStart: 0, marginBlock: 8, position: 'sticky', zIndex: 2 }
+            : { marginBlock: 8 }
+        }
       />
     );
   }

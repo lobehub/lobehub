@@ -1,6 +1,5 @@
 'use client';
 
-import { DOCUMENT_CHAR_LIMIT_EXCEEDED, type DocumentCharLimitErrorData } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 import { toast } from '@lobehub/ui';
@@ -17,6 +16,7 @@ import { setNamespace } from '@/utils/storeDebug';
 import { PAGE_SYNC_WAIT_MS, waitForPageSynced } from '../../collabRegistry';
 import type { DocumentStore } from '../../store';
 import { documentDetailResource } from '../document/projection';
+import { getCharLimitRefusal, notifyCharLimitRefused } from './charLimit';
 import type { DocumentFormatFields } from './contentFormat';
 import { hasDocumentFormatFields, resolveDocumentContentFormat } from './contentFormat';
 import type { EditorContentState } from './initialState';
@@ -686,25 +686,14 @@ export class EditorActionImpl {
       // and surface a persistent banner instead of a toast on every autosave; no
       // debounced retry, since the same body would be refused again until the
       // user shortens it (the next edit schedules the next attempt).
-      const charLimitData = (
-        error as { data?: { errorData?: Partial<DocumentCharLimitErrorData> } }
-      )?.data?.errorData;
-      if (
-        charLimitData?.code === DOCUMENT_CHAR_LIMIT_EXCEEDED &&
-        typeof charLimitData.limit === 'number'
-      ) {
+      const charLimitError = getCharLimitRefusal(error, (doc.content ?? '').length);
+      if (charLimitError) {
         internal_dispatchDocument({
           id,
           type: 'updateDocument',
-          value: {
-            charLimitError: {
-              actual: charLimitData.actual ?? (doc.content ?? '').length,
-              limit: charLimitData.limit,
-              plan: charLimitData.plan,
-            },
-            saveStatus: 'failed',
-          },
+          value: { charLimitError, saveStatus: 'failed' },
         });
+        if (options?.saveSource === 'manual') notifyCharLimitRefused(charLimitError);
         if (hasMetadataChanges) throw error;
         return;
       }

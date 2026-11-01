@@ -2,6 +2,8 @@ import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useDocumentStore } from '@/store/document';
+
 import { useHighlightSave } from './useHighlightSave';
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
@@ -328,5 +330,85 @@ describe('useHighlightSave', () => {
     });
     expect(result.current.editingValue).toBe('new remote draft');
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  describe('plan character limit', () => {
+    const limitError = () =>
+      Object.assign(new Error('Over the limit'), {
+        data: {
+          code: 'BAD_REQUEST',
+          errorData: { actual: 120, code: 'DocumentCharLimitExceeded', limit: 100, plan: 'free' },
+        },
+      });
+
+    const seedStoreDocument = () =>
+      act(() => {
+        useDocumentStore.getState().internal_dispatchDocument({
+          id: 'doc-1',
+          type: 'addDocument',
+          value: { content: 'before', lastSavedContent: 'before', sourceType: 'notebook' },
+        });
+      });
+
+    beforeEach(() => {
+      act(() => useDocumentStore.getState().closeDocument('doc-1'));
+    });
+
+    it('records the refusal, keeps the buffer and toasts on a manual save', async () => {
+      seedStoreDocument();
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      const { result } = renderHook(() =>
+        useHighlightSave({ content: 'before', documentId: 'doc-1', onSaveStart: () => vi.fn() }),
+      );
+
+      act(() => result.current.handleChange('after'));
+      await act(() => result.current.handleSave());
+
+      expect(result.current.editingValue).toBe('after');
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toEqual({
+        actual: 120,
+        limit: 100,
+        plan: 'free',
+      });
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays quiet when an autosave is refused', async () => {
+      vi.useFakeTimers();
+      seedStoreDocument();
+      mockUpdateDocument.mockRejectedValueOnce(limitError());
+      const { result } = renderHook(() =>
+        useHighlightSave({ content: 'before', documentId: 'doc-1', onSaveStart: () => vi.fn() }),
+      );
+
+      act(() => result.current.handleChange('after'));
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+      vi.useRealTimers();
+
+      expect(mockUpdateDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ saveSource: 'autosave' }),
+      );
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toBeDefined();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('clears the refusal once a later save succeeds', async () => {
+      seedStoreDocument();
+      mockUpdateDocument
+        .mockRejectedValueOnce(limitError())
+        .mockResolvedValueOnce({ updatedAt: '2024-01-02T00:00:00.000Z' });
+      const { result } = renderHook(() =>
+        useHighlightSave({ content: 'before', documentId: 'doc-1', onSaveStart: () => vi.fn() }),
+      );
+
+      act(() => result.current.handleChange('after'));
+      await act(() => result.current.handleSave());
+      act(() => result.current.handleChange('short'));
+      await act(() => result.current.handleSave());
+
+      expect(useDocumentStore.getState().documents['doc-1'].charLimitError).toBeUndefined();
+    });
   });
 });

@@ -5,6 +5,8 @@ import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
 
 import type { SaveStatus } from '@/types/saveState';
 
+import type { DocumentCharLimitRefusal } from './charLimit';
+
 /**
  * Document source type - determines which service to use for persistence
  */
@@ -36,7 +38,7 @@ export interface EditorContentState {
    * character limit. The body stays dirty and unsaved; cleared by the next
    * successful save.
    */
-  charLimitError?: { actual: number; limit: number; plan?: string };
+  charLimitError?: DocumentCharLimitRefusal;
   /**
    * The body syncs through a live collaboration room, which persists it; local
    * saves only carry metadata.

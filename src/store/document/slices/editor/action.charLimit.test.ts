@@ -1,3 +1,4 @@
+import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,6 +22,11 @@ vi.mock('@/services/document', () => ({
       updatedAt: '2026-01-01T00:00:00.000Z',
     }),
   },
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('@/services/notebook', () => ({
@@ -63,6 +69,7 @@ describe('DocumentStore - Editor Actions (plan character limit)', () => {
   };
 
   beforeEach(() => {
+    vi.mocked(toast.error).mockClear();
     vi.mocked(documentService.updateDocument).mockReset().mockResolvedValue({
       historyAppended: false,
       id: 'doc-1',
@@ -135,5 +142,34 @@ describe('DocumentStore - Editor Actions (plan character limit)', () => {
     const doc = result.current.documents['doc-1'];
     expect(doc.saveStatus).toBe('failed');
     expect(doc.charLimitError).toEqual({ actual: 120, limit: 100, plan: 'free' });
+  });
+
+  it('stays quiet on a refused autosave', async () => {
+    const { result } = renderHook(() => useDocumentStore());
+    initDirtyDoc(result);
+    vi.mocked(documentService.updateDocument).mockRejectedValueOnce(limitError());
+
+    await act(async () => {
+      await result.current.performSave('doc-1', undefined, { saveSource: 'autosave' });
+    });
+
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('tells the user why a manual save did nothing', async () => {
+    const { result } = renderHook(() => useDocumentStore());
+    initDirtyDoc(result);
+    vi.mocked(documentService.updateDocument).mockRejectedValueOnce(limitError());
+
+    await act(async () => {
+      await result.current.saveVersion('doc-1');
+    });
+
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(result.current.documents['doc-1'].charLimitError).toEqual({
+      actual: 120,
+      limit: 100,
+      plan: 'free',
+    });
   });
 });
