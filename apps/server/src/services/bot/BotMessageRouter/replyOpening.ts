@@ -86,7 +86,7 @@ export interface ReplyOpeningResult {
 export interface ReplyOpeningDeps {
   /** The bot's own platform id, so its earlier lines read as its own. */
   applicationId: string;
-  client: Pick<PlatformClient, 'getReplyTargets'>;
+  client: Pick<PlatformClient, 'decidesReplyOpening' | 'getReplyTargets'>;
   /** The bot's wake switch (on unless `botWakeDisabled`): the bot decides only while it is on. */
   decides: boolean;
   /**
@@ -146,6 +146,7 @@ const verdictOf = (
  *   short model call: a quick answer stays in the channel, work that runs long moves into a thread
  *   it names, and work that takes a while gets a one-sentence acknowledgement first. A wake nobody
  *   asked for (`followup`) answers in the channel and never acknowledges: it may still end silent.
+ *   A platform without reply threads (`decidesReplyOpening`) only decides the acknowledgement.
  * - Otherwise, and whenever the model call fails, it behaves as before: a reply thread opens where
  *   one used to, and nothing is posted before the run.
  */
@@ -154,7 +155,10 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
   const timeoutMs = deps.timeoutMs ?? REPLY_OPENER_TIMEOUT_MS;
 
   const decidesPlacement = async () =>
-    deps.decides && mode === 'agent' && !!opener && !!client.getReplyTargets;
+    deps.decides &&
+    mode === 'agent' &&
+    !!opener &&
+    (!!client.getReplyTargets || !!client.decidesReplyOpening);
 
   const moveTo = (thread: OpeningThread, platformThreadId: string) => {
     if (platformThreadId === thread.id) return;
