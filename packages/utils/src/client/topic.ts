@@ -5,7 +5,11 @@ import type {
   GroupedTopic,
   TimeGroupId,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
+import {
+  agentDisplayName,
+  getWorkingDirEffectivePath,
+  getWorkingDirSourcePath,
+} from '@lobechat/types';
 import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
@@ -14,7 +18,8 @@ import isYesterday from 'dayjs/plugin/isYesterday';
 dayjs.extend(isToday);
 dayjs.extend(isYesterday);
 
-const getTopicGroupId = (timestamp: number): TimeGroupId => {
+/** Time bucket of a timestamp: today, yesterday, this week, this month, a month or a year. */
+export const getTimeGroupId = (timestamp: number): TimeGroupId => {
   const date = dayjs(timestamp);
   const now = dayjs();
 
@@ -47,8 +52,8 @@ const getTopicGroupId = (timestamp: number): TimeGroupId => {
   return `${date.year()}`;
 };
 
-// Ensure group sorting
-const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
+/** Orders time buckets newest first: the fixed buckets, then months and years. */
+export const sortTimeGroups = <T extends { id: string }>(groups: T[]): T[] => {
   const orderMap = new Map<string, number>([
     ['today', 0],
     ['yesterday', 1],
@@ -93,7 +98,7 @@ const groupTopicsByField = (
   const groupsMap = new Map<TimeGroupId, ChatTopic[]>();
 
   for (const topic of sortedTopics) {
-    const groupId = getTopicGroupId(getTopicSortTime(topic, field));
+    const groupId = getTimeGroupId(getTopicSortTime(topic, field));
     const existing = groupsMap.get(groupId);
     if (existing) {
       existing.push(topic);
@@ -107,7 +112,7 @@ const groupTopicsByField = (
     id,
   }));
 
-  return sortGroups(result);
+  return sortTimeGroups(result);
 };
 
 export const groupTopicsByTime = (topics: ChatTopic[]) => groupTopicsByField(topics, 'createdAt');
@@ -117,11 +122,32 @@ export const groupTopicsByUpdatedTime = (topics: ChatTopic[]) =>
 // Project-based grouping
 const NO_PROJECT_GROUP_ID = 'no-project';
 const PROJECT_GROUP_PREFIX = 'project:';
+const PROJECT_ID_GROUP_PREFIX = 'project-id:';
 
-// Extract the final path segment as display name; supports POSIX and Windows separators
-const getProjectName = (dir: string): string => {
-  const segments = dir.split(/[/\\]+/).filter(Boolean);
-  return segments.at(-1) || dir;
+/**
+ * Normalizes project display names to their shortest distinguishing path suffix.
+ *
+ * Before:
+ * - "/Users/me/Git/lobehub/lobehub", "/Users/me/work/lobehub/lobehub"
+ *
+ * After:
+ * - "Git/lobehub/lobehub", "work/lobehub/lobehub"
+ */
+// Extract the final path segment as display name; supports POSIX and Windows separators.
+// Expand only colliding names so unrelated private ancestors stay out of the sidebar.
+const getProjectName = (
+  dir: string,
+  segments: string[],
+  suffixCounts: Map<string, number>,
+): string => {
+  // The first unique suffix reveals only as much of the path as needed.
+  for (let depth = 1; depth <= segments.length; depth++) {
+    const name = segments.slice(-depth).join('/');
+    if (suffixCounts.get(name) === 1) return name;
+  }
+
+  // Preserve absolute/relative and separator distinctions when all segments match.
+  return dir;
 };
 
 const normalizeWorkingDirectory = (dir: string): string => dir.trim().replace(/[/\\]+$/, '');
@@ -158,22 +184,54 @@ export const getTopicWorkingDirectorySourcePath = (topic: ChatTopic): string | u
 export const getTopicWorkingDirectoryEffectivePath = (topic: ChatTopic): string | undefined =>
   getTopicMetadataWorkingDirectoryEffectivePath(topic.metadata);
 
+/**
+ * Groups topics by their owning project, falling back to source directory and
+ * raw path identities for topics that carry no project binding.
+ *
+ * Use when:
+ * - Rendering project groups in a topic sidebar or management view.
+ *
+ * Expects:
+ * - Topics with optional `projectId` / `projectWorkingDirectoryId` bindings
+ *   and optional source or worktree directory metadata.
+ * - A timestamp field for descending activity order.
+ *
+ * Returns:
+ * - `project-id:{projectId}` groups that merge every directory of one project
+ *   into a single group, `project-directory:{id}` / path-based IDs for topics
+ *   without a project, and `no-project` last.
+ * - Groups ordered with explicit-project groups first (the binding is
+ *   deliberate, not inferred from a directory), then directory-derived groups,
+ *   then `no-project`; each tier keeps most-recent-activity order.
+ * - Basenames for unique projects and distinguishing path suffixes for collisions.
+ */
 export const groupTopicsByProject = (
   topics: ChatTopic[],
   field: 'createdAt' | 'updatedAt',
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const groupsMap = new Map<string, { children: ChatTopic[]; path: string }>();
+  const groupsMap = new Map<string, { children: ChatTopic[]; paths: Set<string> }>();
 
   for (const topic of topics) {
     const normalized = getTopicWorkingDirectorySourcePath(topic) ?? '';
-    const id = normalized ? `${PROJECT_GROUP_PREFIX}${normalized}` : NO_PROJECT_GROUP_ID;
+    const deviceId = topic.metadata?.boundDeviceId;
+    const id = topic.projectId
+      ? `${PROJECT_ID_GROUP_PREFIX}${topic.projectId}`
+      : topic.projectWorkingDirectoryId
+        ? `project-directory:${topic.projectWorkingDirectoryId}`
+        : normalized
+          ? `${PROJECT_GROUP_PREFIX}${deviceId ? `${deviceId}:` : ''}${normalized}`
+          : NO_PROJECT_GROUP_ID;
     const existing = groupsMap.get(id);
     if (existing) {
       existing.children.push(topic);
+      if (normalized) existing.paths.add(normalized);
     } else {
-      groupsMap.set(id, { children: [topic], path: normalized });
+      groupsMap.set(id, {
+        children: [topic],
+        paths: normalized ? new Set([normalized]) : new Set(),
+      });
     }
   }
 
@@ -182,22 +240,206 @@ export const groupTopicsByProject = (
     group.children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
   }
 
+  // Count suffixes once so an expanding project list does not compare every pair
+  // of paths. A merged project group contributes each of its directories once.
+  const suffixCounts = new Map<string, number>();
+  for (const { paths } of groupsMap.values()) {
+    for (const path of paths) {
+      const segments = path.split(/[/\\]+/).filter(Boolean);
+      for (let depth = 1; depth <= segments.length; depth++) {
+        const suffix = segments.slice(-depth).join('/');
+        suffixCounts.set(suffix, (suffixCounts.get(suffix) ?? 0) + 1);
+      }
+    }
+  }
   const groups: GroupedTopic[] = Array.from(groupsMap.entries()).map(
-    ([id, { children, path }]) => ({
-      children,
-      id,
-      title: id === NO_PROJECT_GROUP_ID ? undefined : getProjectName(path),
-    }),
+    ([id, { children, paths }]) => {
+      // A merged project group spans directories; its most recently active
+      // directory names the group. Groups without any path stay title-less and
+      // let the renderer resolve the project name from its directory registry.
+      const primaryPath =
+        id === NO_PROJECT_GROUP_ID
+          ? undefined
+          : (children
+              .map((topic) => getTopicWorkingDirectorySourcePath(topic))
+              .find((path): path is string => !!path) ?? [...paths][0]);
+      return {
+        children,
+        id,
+        title:
+          id === NO_PROJECT_GROUP_ID || !primaryPath
+            ? undefined
+            : getProjectName(
+                primaryPath,
+                primaryPath.split(/[/\\]+/).filter(Boolean),
+                suffixCounts,
+              ),
+      };
+    },
   );
 
-  // Most-recently-active project first; "no project" always last
+  // Explicit-project groups first (the `projectId` binding is deliberate, not
+  // inferred), then directory-derived groups, then "no project" last. Within a
+  // tier the most recently active group leads.
+  const groupRank = (id: string): number => {
+    if (id === NO_PROJECT_GROUP_ID) return 2;
+    return id.startsWith(PROJECT_ID_GROUP_PREFIX) ? 0 : 1;
+  };
+
   return groups.sort((a, b) => {
-    if (a.id === NO_PROJECT_GROUP_ID) return 1;
-    if (b.id === NO_PROJECT_GROUP_ID) return -1;
+    const rankDiff = groupRank(a.id) - groupRank(b.id);
+    if (rankDiff !== 0) return rankDiff;
     const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
     const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
     return bTime - aTime;
   });
+};
+
+// Agent-based grouping
+const NO_AGENT_GROUP_ID = 'no-agent';
+const AGENT_GROUP_PREFIX = 'agent:';
+
+/**
+ * Topics only carry agent attribution on feeds that join it in (the project
+ * topic list selects `agentId` / `agentTitle` / `agentName` / `agentAvatar`
+ * per row); per-agent sidebar buckets omit it and every row resolves to the
+ * single `no-agent` bucket, where the renderer shows the active agent.
+ */
+interface AgentAttributedTopic extends ChatTopic {
+  agentId?: string | null;
+  agentName?: string | null;
+  agentTitle?: string | null;
+}
+
+/**
+ * Groups topics by their creating agent with agent-attributed titles.
+ *
+ * Use when:
+ * - Rendering the "group by agent" mode in a topic sidebar whose topics span
+ *   multiple agents (e.g. the project topic list).
+ *
+ * Returns:
+ * - `agent:{agentId}` groups sorted by most recent activity, titled with the
+ *   first row's agent display name (name, else title), and a title-less
+ *   `no-agent` bucket for rows without attribution (the renderer names those
+ *   from its agent context).
+ */
+export const groupTopicsByAgent = (
+  topics: AgentAttributedTopic[],
+  field: 'createdAt' | 'updatedAt',
+): GroupedTopic[] => {
+  if (!topics.length) return [];
+
+  const groupsMap = new Map<string, AgentAttributedTopic[]>();
+  for (const topic of topics) {
+    const id = topic.agentId ? `${AGENT_GROUP_PREFIX}${topic.agentId}` : NO_AGENT_GROUP_ID;
+    const existing = groupsMap.get(id);
+    if (existing) {
+      existing.push(topic);
+    } else {
+      groupsMap.set(id, [topic]);
+    }
+  }
+
+  for (const children of groupsMap.values()) {
+    children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
+  }
+
+  return Array.from(groupsMap.entries())
+    .map(([id, children]) => ({
+      children,
+      id,
+      title: agentDisplayName({
+        name: children[0]?.agentName,
+        title: children[0]?.agentTitle,
+      }),
+    }))
+    .sort((a, b) => {
+      const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
+      const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
+      return bTime - aTime;
+    });
+};
+
+// Device-based grouping
+const NO_DEVICE_GROUP_ID = 'no-device';
+const DEVICE_GROUP_PREFIX = 'device:';
+
+/**
+ * The directory shape `groupTopicsByDevice` needs to resolve a topic's device
+ * from its `projectWorkingDirectoryId` — structurally satisfied by the
+ * store's `ProjectDirectory`.
+ */
+export interface TopicDeviceDirectory {
+  deviceId?: string | null;
+  id: string;
+}
+
+/**
+ * Groups topics by the device they run on.
+ *
+ * Use when:
+ * - Rendering the "group by device" mode in a project-scoped topic sidebar
+ *   whose topics span multiple machines.
+ *
+ * Expects:
+ * - Topics with optional `metadata.boundDeviceId` (an explicit device binding
+ *   wins) and optional `projectWorkingDirectoryId`, resolved to a device via
+ *   `directories`.
+ *
+ * Returns:
+ * - `device:{deviceId}` groups sorted by most recent activity, and a
+ *   title-less `no-device` bucket for rows without any device attribution.
+ *   Groups carry no title — the renderer names them from its directory and
+ *   device registries.
+ */
+/**
+ * The device a topic runs on: an explicit `metadata.boundDeviceId` wins, then
+ * the device of its project working directory. Shared by device grouping and
+ * the project sidebar's device filter so both attribute topics the same way.
+ */
+export const createTopicDeviceResolver = (directories?: ReadonlyArray<TopicDeviceDirectory>) => {
+  const deviceIdByDirectoryId = new Map(
+    (directories ?? []).map((directory) => [directory.id, directory.deviceId]),
+  );
+  return (topic: ChatTopic): string | undefined =>
+    topic.metadata?.boundDeviceId ??
+    (topic.projectWorkingDirectoryId
+      ? (deviceIdByDirectoryId.get(topic.projectWorkingDirectoryId) ?? undefined)
+      : undefined);
+};
+
+export const groupTopicsByDevice = (
+  topics: ChatTopic[],
+  field: 'createdAt' | 'updatedAt',
+  directories?: ReadonlyArray<TopicDeviceDirectory>,
+): GroupedTopic[] => {
+  if (!topics.length) return [];
+
+  const resolveDeviceId = createTopicDeviceResolver(directories);
+  const groupsMap = new Map<string, ChatTopic[]>();
+  for (const topic of topics) {
+    const deviceId = resolveDeviceId(topic);
+    const id = deviceId ? `${DEVICE_GROUP_PREFIX}${deviceId}` : NO_DEVICE_GROUP_ID;
+    const existing = groupsMap.get(id);
+    if (existing) {
+      existing.push(topic);
+    } else {
+      groupsMap.set(id, [topic]);
+    }
+  }
+
+  for (const children of groupsMap.values()) {
+    children.sort((a, b) => getTopicSortTime(b, field) - getTopicSortTime(a, field));
+  }
+
+  return Array.from(groupsMap.entries())
+    .map(([id, children]) => ({ children, id }))
+    .sort((a, b) => {
+      const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
+      const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
+      return bTime - aTime;
+    });
 };
 
 // The display buckets for status grouping. These are NOT raw `ChatTopicStatus`
@@ -235,7 +477,7 @@ export const STATUS_GROUP_ORDER: TopicStatusBucket[] = [
  * server can't see) or persisted as `running` lands in `running`; then the
  * persisted status, defaulting to `active`.
  */
-const resolveStatusBucket = (
+export const resolveStatusBucket = (
   topic: ChatTopic,
   loadingTopicIds?: ReadonlySet<string>,
 ): TopicStatusBucket => {
@@ -280,4 +522,44 @@ export const groupTopicsByStatus = (
     children: groupsMap.get(status)!,
     id: status,
   }));
+};
+
+/** Status buckets a list can be narrowed to; archived work has its own toggle. */
+export const TOPIC_STATUS_FILTERS = ['pending', 'running', 'scheduled', 'active'] as const;
+export type TopicStatusFilter = (typeof TOPIC_STATUS_FILTERS)[number];
+
+/** `none` keeps the topics no device is attributed to. */
+export type TopicDeviceFilter = string | 'none';
+
+export interface TopicListFilter {
+  device?: TopicDeviceFilter;
+  status?: TopicStatusFilter;
+}
+
+/**
+ * Narrow a topic list by status bucket and device, using the same attribution
+ * as status and device grouping. An empty filter returns the list unchanged.
+ */
+export const filterTopics = (
+  topics: ChatTopic[],
+  filter: TopicListFilter,
+  {
+    directories,
+    loadingTopicIds,
+  }: {
+    directories?: ReadonlyArray<TopicDeviceDirectory>;
+    loadingTopicIds?: ReadonlySet<string>;
+  } = {},
+): ChatTopic[] => {
+  const { device, status } = filter;
+  if (!device && !status) return topics;
+  const resolveDeviceId = createTopicDeviceResolver(directories);
+  return topics.filter((topic) => {
+    if (status && resolveStatusBucket(topic, loadingTopicIds) !== status) return false;
+    if (device) {
+      const deviceId = resolveDeviceId(topic);
+      if (device === 'none' ? !!deviceId : deviceId !== device) return false;
+    }
+    return true;
+  });
 };

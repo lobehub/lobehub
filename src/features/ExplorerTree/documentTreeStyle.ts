@@ -61,6 +61,13 @@ const maskGlyph = (glyph: string) => `
     mask-size: ${iconSize}px ${iconSize}px;
 `;
 
+/**
+ * Label glyph for a document that has records nested under it: it sits in the
+ * tree as a container (chevron, children) but must still read as a document.
+ * Passed as ExplorerTree's `fileAppearanceCSS`.
+ */
+export const DOCUMENT_TREE_PARENT_DOCUMENT_GLYPH_CSS = maskGlyph(FILE_TEXT_ICON_SVG);
+
 export const DOCUMENT_TREE_ICON_CSS = `
   [data-item-type='folder'] [data-item-section='content'] {
     display: flex;
@@ -109,49 +116,35 @@ const DOCUMENT_TREE_NO_FOCUS_BORDER_CSS = `
 `;
 
 // pierre truncates every row with `MiddleTruncate split:"extension"` and no way
-// to configure it (FileTreeView hard-codes it; FileTreeOptions has no field for
-// truncation). The stem is rendered as a shrink-first segment and the extension
-// as a shrink-last one, so a long title collapses to `…承载md` — the ellipsis
-// lands mid-word and the extension survives, which is backwards for a document
-// outline where the title is the content and `.md` is storage detail.
-//
-// The split itself is only a flex priority in pierre's own stylesheet, so
-// swapping the two priorities is enough: the stem now holds its width and the
-// extension collapses to its own leading marker, which renders as one trailing
-// ellipsis. A title that fits is untouched — both halves render in full.
+// to configure it (FileTreeView hard-codes it). It halves the label, renders each
+// half as its own overflow-measured segment and paints an opaque "…" marker over
+// whichever half overflows, so a title without an extension loses its entire
+// second half the moment it overflows by a pixel, and the marker's fade-in
+// flashes a plate over the text whenever rows re-render (folder expand/collapse).
+// A document outline wants a plain trailing ellipsis, so flatten the segments
+// back into one inline run and let the browser truncate it.
 const DOCUMENT_TREE_TRAILING_ELLIPSIS_CSS = `
   [data-item-section='content'] [data-truncate-group-container='middle'] {
-    & > div[data-truncate-segment-priority='1'] {
-      flex: 0 999999 max-content;
+    overflow: hidden;
+    display: block;
+    min-width: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    & * {
+      overflow: visible;
+      display: inline;
+      height: auto;
+      margin: 0;
+      direction: ltr;
     }
 
-    & > div[data-truncate-segment-priority='2'] {
-      flex: 0 1 max-content;
+    & [data-truncate-content='overflow'],
+    & [data-truncate-marker-cell],
+    & [data-truncate-fill] {
+      display: none;
     }
   }
-
-  /* The swap leaves a narrow band where the overflow is smaller than the
-     extension: it then shrinks to a few pixels and, being right-aligned, leaks
-     its last character ("…研究报告 d"). pierre's own overflow query fires on that
-     segment, so stretch its marker across the segment — the marker is opaque and
-     sits above the text, so a partially rendered extension is covered rather
-     than half-shown. A fully collapsed one is zero-wide and stays invisible. */
-  @container measure (height > 1lh) {
-    [data-item-section='content'] [data-truncate-container='fruncate'] [data-truncate-marker] {
-      inset: 0;
-      justify-content: flex-start;
-    }
-  }
-
-  /* pierre paints the marker over the last characters and masks them with
-     --truncate-marker-background-color, which defaults to --trees-bg. These rows
-     are transparent so the panel shows through, and the ellipsis ended up drawn
-     on top of the text. Point the marker at the panel's own background so it
-     masks again, without giving the rows an opaque fill of their own. */
-  [data-type='item'] {
-    --truncate-marker-background-color: var(--explorer-tree-panel-bg, transparent);
-  }
-
 `;
 
 // Row presentation for the document tree. Nesting is carried by indentation
@@ -161,6 +154,28 @@ const DOCUMENT_TREE_TRAILING_ELLIPSIS_CSS = `
 export const DOCUMENT_TREE_ROW_CSS = `
   [data-item-type='folder'] > [data-item-section='content'] {
     font-weight: 500;
+  }
+
+  /* The row's fill shares the panel tabs' edge (the pane's 4px gutter); this
+     leading padding keeps the first glyph off that edge. Alignment is by glyph,
+     not by box: the file glyph's ~2.7px inset lands it on the section title's
+     first character. The trailing padding (the action lane) stays. */
+  [data-type='item'] {
+    padding-inline-start: 8px;
+  }
+
+  /* The chevron glyph sits ~5.7px inside its 16px slot, so it would read as
+     indented past the title and the file glyphs. Pull only the glyph back onto
+     their column; the slot keeps its width so the folder glyph and the label
+     stay where the nested file rows expect them. \`translate\` composes with
+     pierre's own nudge / expand-rotation \`transform\` instead of replacing it.
+     \`translate\` is physical, so RTL mirrors it toward the inline start too. */
+  [data-item-type='folder'] > [data-item-section='icon'] > [data-icon-name='file-tree-icon-chevron'] {
+    translate: -4px 0;
+
+    &:dir(rtl) {
+      translate: 4px 0;
+    }
   }
 
 ${DOCUMENT_TREE_NO_FOCUS_BORDER_CSS}

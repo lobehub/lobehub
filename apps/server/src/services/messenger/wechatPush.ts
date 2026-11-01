@@ -196,6 +196,7 @@ const undeliveredPayload = (
 
 const deliver = async (
   api: WechatApiClient,
+  applicationId: string,
   platformUserId: string,
   token: string,
   prepared: PreparedWechatDelivery,
@@ -210,7 +211,9 @@ const deliver = async (
   // the untouched originals so a failed recompressed image is requeued as its
   // small source rather than megabytes of base64.
   const sendResult = prepared.attachments.length
-    ? await sendWechatAttachments(api, platformUserId, prepared.attachments, token)
+    ? await sendWechatAttachments(api, platformUserId, prepared.attachments, token, {
+        applicationId,
+      })
     : { failures: [], undelivered: [] };
   const failed = sendResult.undelivered;
 
@@ -454,7 +457,14 @@ export const sendProactiveWechatMessage = async (params: {
 
   const progress: DeliveryProgress = { contentDelivered: false };
   try {
-    await deliver(target.api, target.platformUserId, credit.token, prepared, progress);
+    await deliver(
+      target.api,
+      target.applicationId,
+      target.platformUserId,
+      credit.token,
+      prepared,
+      progress,
+    );
     return { remaining: credit.remaining, status: 'sent' };
   } catch (error) {
     // The consumed credit is intentionally not refunded — a rejected send
@@ -499,7 +509,7 @@ const drainQueuedPushes = async (params: {
 
     const progress: DeliveryProgress = { contentDelivered: false };
     try {
-      await deliver(api, platformUserId, credit.token, prepared, progress);
+      await deliver(api, applicationId, platformUserId, credit.token, prepared, progress);
       return 'sent';
     } catch (error) {
       log('drainQueuedPushes: replay failed for %s: %O', platformUserId, error);

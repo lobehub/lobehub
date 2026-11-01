@@ -1,7 +1,12 @@
 import { z } from 'zod';
 
 import {
+  registerAgentInterventionLiveActivity,
+  registerLiveActivityPushToStartToken,
+} from '@/business/server/notification/liveActivity';
+import {
   deletePushTokenByExpoTokenAndDevice,
+  PushLiveActivityModel,
   PushTokenModel,
 } from '@/database/models/pushToken';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
@@ -19,16 +24,51 @@ export const pushTokenRouter = router({
   register: authedPushTokenProcedure
     .input(
       z.object({
+        apnsEnvironment: z.enum(['sandbox', 'production']).optional(),
         appVersion: z.string().optional(),
         deviceId: z.string().min(1),
         expoToken: z.string().min(1),
+        liveActivityPushToStartToken: z.string().min(1).max(512).optional(),
         locale: z.string().optional(),
         platform: z.enum(['ios', 'android']),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      return ctx.pushTokenModel.upsert(input);
+      const { apnsEnvironment, liveActivityPushToStartToken, ...pushToken } = input;
+      const row = await ctx.pushTokenModel.upsert(pushToken);
+
+      if (apnsEnvironment && liveActivityPushToStartToken) {
+        await registerLiveActivityPushToStartToken({
+          apnsEnvironment,
+          deviceId: input.deviceId,
+          liveActivityPushToStartToken,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+      }
+
+      return row;
     }),
+
+  /** Register/rotate one ActivityKit update token by durable intervention id. */
+  registerLiveActivity: authedPushTokenProcedure
+    .input(
+      z.object({
+        activityId: z.string().min(1).max(200),
+        activityKey: z.string().min(1).max(200),
+        apnsEnvironment: z.enum(['sandbox', 'production']),
+        deviceId: z.string().min(1),
+        operationId: z.string().min(1),
+        pushToken: z.string().min(1).max(512),
+      }),
+    )
+    .mutation(({ ctx, input }) =>
+      registerAgentInterventionLiveActivity({
+        ...input,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      }),
+    ),
 
   /**
    * Public on purpose: clients call this during sign-out, and in the wild many
@@ -71,7 +111,11 @@ export const pushTokenRouter = router({
       // Path B: legacy v1.0.7 + valid session — fall back to (userId, deviceId)
       if (ctx.userId) {
         const pushTokenModel = new PushTokenModel(ctx.serverDB, ctx.userId);
-        await pushTokenModel.unregister(deviceId);
+        const liveActivityModel = new PushLiveActivityModel(ctx.serverDB, ctx.userId);
+        await Promise.all([
+          pushTokenModel.unregister(deviceId),
+          liveActivityModel.unregisterDevice(deviceId),
+        ]);
         return { success: true };
       }
 

@@ -2,16 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
+  applyTopicModelToHeterogeneousProvider,
+  applyWorkingDirByDevicePatch,
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   canPublishAgentTopicLink,
   formatServerDefaultHeterogeneousModel,
   isServerDefaultHeterogeneousModel,
+  isServerDefaultHeterogeneousRelayInvocation,
   normalizeHeterogeneousProviderConfig,
-  pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
   resolveAgentTopicSharePolicy,
+  resolveHeterogeneousProviderTopicModel,
+  resolveHeterogeneousTopicRuntimeSnapshot,
   unwrapServerDefaultHeterogeneousModel,
 } from './agencyConfig';
 import {
@@ -51,6 +55,29 @@ describe('server-default heterogeneous model request', () => {
       'claude-sonnet-4-6',
     );
   });
+
+  it('recognizes only complete official-relay attestations', () => {
+    const invocation = {
+      acceptedAt: '2026-09-01T00:00:00.000Z',
+      agentType: 'trae',
+      ingress: 'openai-responses',
+      model: 'gpt-5.4',
+      operationId: 'operation-1',
+      provider: 'lobehub',
+    };
+
+    expect(isServerDefaultHeterogeneousRelayInvocation(invocation)).toBe(true);
+    expect(isServerDefaultHeterogeneousRelayInvocation(null)).toBe(false);
+    expect(isServerDefaultHeterogeneousRelayInvocation({ ...invocation, ingress: undefined })).toBe(
+      false,
+    );
+    expect(
+      isServerDefaultHeterogeneousRelayInvocation({ ...invocation, operationId: undefined }),
+    ).toBe(false);
+    expect(
+      isServerDefaultHeterogeneousRelayInvocation({ ...invocation, ingress: 'openai-chat' }),
+    ).toBe(false);
+  });
 });
 
 describe('normalizeHeterogeneousProviderConfig', () => {
@@ -85,34 +112,166 @@ describe('normalizeHeterogeneousProviderConfig', () => {
   });
 });
 
-describe('pruneWorkingDirByDeviceDeletes', () => {
+describe('applyWorkingDirByDevicePatch', () => {
+  it('replaces a device selection without retaining another repository’s Git state', () => {
+    const merged = {
+      workingDirByDevice: {
+        'device-a': {
+          git: { activeWorktree: '/repos/titu-worktree', branch: 'master' },
+          path: '/repos/lobehub',
+          repoType: 'github',
+        },
+        'device-b': '/remote/repo',
+      },
+    };
+
+    applyWorkingDirByDevicePatch(
+      merged,
+      {
+        workingDirByDevice: { 'device-a': { path: '/repos/lobehub' } },
+      },
+      ['device-a'],
+    );
+
+    expect(merged.workingDirByDevice).toEqual({
+      'device-a': { path: '/repos/lobehub' },
+      'device-b': '/remote/repo',
+    });
+  });
+
+  it('replaces Git metadata when returning from a worktree to its source repository', () => {
+    const merged = {
+      workingDirByDevice: {
+        'device-a': {
+          git: { activeWorktree: '/repos/worktree', branch: 'main' },
+          path: '/repos/source',
+        },
+      },
+    };
+
+    applyWorkingDirByDevicePatch(
+      merged,
+      {
+        workingDirByDevice: { 'device-a': { git: { branch: 'main' }, path: '/repos/source' } },
+      },
+      ['device-a'],
+    );
+
+    expect(merged.workingDirByDevice['device-a']).toEqual({
+      git: { branch: 'main' },
+      path: '/repos/source',
+    });
+  });
+
   it('deletes keys whose patch value is undefined', () => {
     const merged = { workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' } };
-    pruneWorkingDirByDeviceDeletes(merged, { workingDirByDevice: { 'device-a': undefined } });
+    applyWorkingDirByDevicePatch(merged, { workingDirByDevice: { 'device-a': undefined } });
     expect(merged.workingDirByDevice).toEqual({ 'device-b': '/b' });
   });
 
   it('leaves defined patch values untouched', () => {
     const merged = { workingDirByDevice: { 'device-a': '/a' } };
-    pruneWorkingDirByDeviceDeletes(merged, { workingDirByDevice: { 'device-a': '/a' } });
+    applyWorkingDirByDevicePatch(merged, { workingDirByDevice: { 'device-a': '/a' } });
     expect(merged.workingDirByDevice).toEqual({ 'device-a': '/a' });
   });
 
   it('is a no-op when the patch has no workingDirByDevice', () => {
     const merged = { workingDirByDevice: { 'device-a': '/a' } };
-    pruneWorkingDirByDeviceDeletes(merged, {});
-    pruneWorkingDirByDeviceDeletes(merged, undefined);
-    pruneWorkingDirByDeviceDeletes(merged, null);
+    applyWorkingDirByDevicePatch(merged, {});
+    applyWorkingDirByDevicePatch(merged, undefined);
+    applyWorkingDirByDevicePatch(merged, null);
     expect(merged.workingDirByDevice).toEqual({ 'device-a': '/a' });
   });
 
   it('is a no-op when the merged target has no workingDirByDevice', () => {
     expect(() =>
-      pruneWorkingDirByDeviceDeletes({}, { workingDirByDevice: { 'device-a': undefined } }),
+      applyWorkingDirByDevicePatch({}, { workingDirByDevice: { 'device-a': undefined } }),
     ).not.toThrow();
     expect(() =>
-      pruneWorkingDirByDeviceDeletes(undefined, { workingDirByDevice: { 'device-a': undefined } }),
+      applyWorkingDirByDevicePatch(undefined, { workingDirByDevice: { 'device-a': undefined } }),
     ).not.toThrow();
+  });
+});
+
+describe('heterogeneous topic models', () => {
+  it('snapshots the persisted selector and Default', () => {
+    expect(
+      resolveHeterogeneousProviderTopicModel({
+        args: ['--model', 'cursor-arg-model'],
+        model: 'stale-structured-model',
+        type: 'cursor',
+      }),
+    ).toEqual({ model: 'stale-structured-model', provider: 'cursor' });
+    expect(resolveHeterogeneousProviderTopicModel({ type: 'cursor' })).toEqual({
+      model: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
+      provider: 'cursor',
+    });
+  });
+
+  it('keeps server-default API models Agent-scoped and ignores stale topic bindings', () => {
+    const config = {
+      apiConfig: { model: 'server-model', source: 'server-default' },
+      authMode: 'api',
+      type: 'claude-code',
+    } as const;
+
+    expect(resolveHeterogeneousProviderTopicModel(config)).toBeUndefined();
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'stale-topic-model',
+        provider: 'anthropic',
+      }),
+    ).toBe(config);
+  });
+
+  it('overrides a CLI model without retaining a conflicting global flag', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      {
+        args: ['--model', 'global-model', '--mode', 'plan'],
+        model: 'global-model',
+        type: 'cursor',
+      },
+      { model: 'topic-model', provider: 'cursor' },
+    );
+
+    expect(effective).toEqual({
+      args: ['--mode', 'plan'],
+      model: 'topic-model',
+      type: 'cursor',
+    });
+    expect(buildHeteroSpawnArgs(effective)).toEqual(['--mode', 'plan', '--model', 'topic-model']);
+  });
+
+  it('overrides an API binding and drops a provider-specific fast model', () => {
+    expect(
+      applyTopicModelToHeterogeneousProvider(
+        {
+          apiConfig: {
+            model: 'global-model',
+            providerId: 'openai',
+            smallFastModel: 'gpt-4.1-mini',
+          },
+          authMode: 'api',
+          type: 'cursor',
+        },
+        { model: 'topic-model', provider: 'anthropic' },
+      ),
+    ).toMatchObject({
+      apiConfig: { model: 'topic-model', providerId: 'anthropic' },
+      authMode: 'api',
+      type: 'cursor',
+    });
+  });
+
+  it('ignores a topic model pinned for another heterogeneous runtime', () => {
+    const config = { model: 'global-model', type: 'cursor' } as const;
+
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, {
+        model: 'codex-topic-model',
+        provider: 'codex',
+      }),
+    ).toBe(config);
   });
 });
 
@@ -200,6 +359,34 @@ describe('buildHeteroSpawnArgs', () => {
     ).toEqual(['--model', 'gpt-5']);
   });
 
+  it('forwards Devin native arguments and model through direct ACP and device execution', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--agent-type', 'coding'],
+      model: 'claude-sonnet-4-6-thinking',
+      type: 'devin',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual([
+      '--agent-type',
+      'coding',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+    ]);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--agent-type',
+      '--agent-arg=coding',
+      '--model',
+      'claude-sonnet-4-6-thinking',
+    ]);
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['--model', 'native-model'],
+        model: 'selector-model',
+        type: 'devin',
+      }),
+    ).toEqual(['--model', 'native-model']);
+  });
+
   it('forwards Grok Build model and effort through direct ACP and device execution', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--no-subagents'],
@@ -256,6 +443,22 @@ describe('buildHeteroSpawnArgs', () => {
     ]);
   });
 
+  it('keeps Droid model selection in ACP instead of native process arguments', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--tag', 'lobe'],
+      model: 'gpt-5.4',
+      type: 'droid',
+    };
+
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--tag', 'lobe']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--tag',
+      '--agent-arg=lobe',
+      '--model',
+      'gpt-5.4',
+    ]);
+  });
+
   it('forwards Qoder native args, model, and reasoning effort', () => {
     const provider: HeterogeneousProviderConfig = {
       args: ['--verbose'],
@@ -294,6 +497,23 @@ describe('buildHeteroSpawnArgs', () => {
       '--model',
       'kimi-for-coding',
     ]);
+  });
+
+  it('does not duplicate the Kimi Code model when native args already spell it', () => {
+    expect(
+      buildHeteroSpawnArgs({
+        args: ['-m', 'kimi-code/k3'],
+        model: 'kimi-code/k3-256k',
+        type: 'kimi-code',
+      }),
+    ).toEqual(['-m', 'kimi-code/k3']);
+    expect(
+      buildHeteroExecArgs({
+        args: ['--model=kimi-code/k3'],
+        model: 'kimi-code/k3-256k',
+        type: 'kimi-code',
+      }),
+    ).toEqual(['--agent-arg=--model=kimi-code/k3']);
   });
 
   it('preserves Qoder model and reasoning effort from native args without injecting duplicates', () => {
@@ -860,21 +1080,11 @@ describe('resolveAgentAgencyConfig', () => {
     ).toEqual(shared);
   });
 
-  it('ignores member policy and overrides while a Workspace Agent is private', () => {
-    expect(
-      resolveAgentAgencyConfig(
-        {
-          boundDeviceId: 'owner-device',
-          executionTarget: 'device',
-          executionTargetSelectionPolicy: 'fixed',
-        },
-        { boundDeviceId: 'stale-member-device', executionTarget: 'local' },
-        { visibility: 'private', workspaceId: 'workspace-1' },
-      ),
-    ).toEqual({ boundDeviceId: 'owner-device', executionTarget: 'device' });
-  });
-
-  it('ignores member policy and overrides for an author or Workspace admin', () => {
+  // A `local` / this-machine pick is per-user even for the owner: the shared
+  // row must never reference a personal device (the server rejects it), so the
+  // owner's pick lives in the same override slot members use and must merge
+  // back at read time — bypassing `fixed`, which constrains members only.
+  it("applies the owner's own override on a private Workspace Agent, stripping the member policy", () => {
     expect(
       resolveAgentAgencyConfig(
         {
@@ -882,10 +1092,48 @@ describe('resolveAgentAgencyConfig', () => {
           executionTarget: 'device',
           executionTargetSelectionPolicy: 'fixed',
         },
-        { boundDeviceId: 'member-device', executionTarget: 'local' },
+        { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
+        { visibility: 'private', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'owner-desktop', executionTarget: 'local' });
+  });
+
+  it("applies an author's or Workspace admin's own override on a public Workspace Agent", () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
+        { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
+      ),
+    ).toEqual({ boundDeviceId: 'manager-desktop', executionTarget: 'local' });
+  });
+
+  it('keeps the shared config (policy stripped) for an owner without an override', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        {
+          boundDeviceId: 'shared-device',
+          executionTarget: 'device',
+          executionTargetSelectionPolicy: 'fixed',
+        },
+        undefined,
         { canManage: true, visibility: 'public', workspaceId: 'workspace-1' },
       ),
     ).toEqual({ boundDeviceId: 'shared-device', executionTarget: 'device' });
+  });
+
+  it('never applies an override on a personal agent', () => {
+    expect(
+      resolveAgentAgencyConfig(
+        { executionTarget: 'sandbox' },
+        { boundDeviceId: 'stale-device', executionTarget: 'local' },
+        { workspaceId: null },
+      ),
+    ).toEqual({ executionTarget: 'sandbox' });
   });
 });
 
@@ -945,5 +1193,143 @@ describe('canPublishAgentTopicLink', () => {
     expect(canPublishAgentTopicLink({ ...restricted, userId: null }, { userId: undefined })).toBe(
       false,
     );
+  });
+});
+
+describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
+  it.each(['server-default', 'user-provider'] as const)(
+    'drops an unsupported effort when an API binding rejects the old model pin (%s)',
+    (source) => {
+      const effective = applyTopicModelToHeterogeneousProvider(
+        {
+          type: 'codex',
+          authMode: 'api',
+          apiConfig:
+            source === 'server-default'
+              ? { source, model: 'deepseek-v4-pro' }
+              : { providerId: 'deepseek', model: 'deepseek-v4-pro' },
+          args: ['-c', 'model_reasoning_effort="ultra"'],
+        },
+        { model: 'gpt-5.6-sol', provider: 'codex', effort: 'ultra' },
+      );
+      expect(effective.apiConfig?.model).toBe('deepseek-v4-pro');
+      expect(effective.effort).toBe('default');
+      expect(buildHeteroExecArgs(effective)?.join(' ') ?? '').not.toContain('ultra');
+    },
+  );
+
+  it('validates effort after applying a supported model pin', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { type: 'codex', model: 'gpt-5.4' },
+      { model: 'gpt-5.6-sol', provider: 'codex', effort: 'ultra' },
+    );
+    expect(effective.effort).toBe('ultra');
+    expect(buildHeteroExecArgs(effective)?.join(' ')).toContain('ultra');
+  });
+
+  it('applies a topic effort pin without a model pin', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { command: 'claude', effort: 'low', type: 'claude-code' },
+      { effort: 'high' },
+    );
+
+    expect(effective).toEqual({ command: 'claude', effort: 'high', type: 'claude-code' });
+    expect(buildHeteroSpawnArgs(effective)).toEqual(['--effort', 'high']);
+  });
+
+  it('applies the model pin and the effort pin together', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { args: ['--effort', 'low'], model: 'global-model', type: 'claude-code' },
+      { effort: 'max', model: 'topic-model', provider: 'claude-code' },
+    );
+
+    expect(effective).toEqual({
+      args: [],
+      effort: 'max',
+      model: 'topic-model',
+      type: 'claude-code',
+    });
+  });
+
+  it("treats 'default' as a real pin that drops the agent effort flag", () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { command: 'claude', effort: 'high', type: 'claude-code' },
+      { effort: 'default' },
+    );
+
+    expect(effective.effort).toBe('default');
+    // no extra args and the agent declared none, so `provider.args` (undefined) comes back
+    expect(buildHeteroSpawnArgs(effective)).toBeUndefined();
+  });
+
+  it('keeps the agent effort when the topic pins none', () => {
+    const config = { command: 'claude', effort: 'high', type: 'claude-code' } as const;
+
+    expect(applyTopicModelToHeterogeneousProvider(config, undefined)).toBe(config);
+    expect(
+      applyTopicModelToHeterogeneousProvider(config, { model: 'default', provider: 'claude-code' }),
+    ).toMatchObject({
+      effort: 'high',
+    });
+  });
+
+  it('ignores an effort pin for runtimes without an effort selector', () => {
+    const config = { model: 'global-model', type: 'cursor' } as const;
+
+    expect(applyTopicModelToHeterogeneousProvider(config, { effort: 'high' })).toBe(config);
+  });
+});
+
+describe('resolveHeterogeneousTopicRuntimeSnapshot', () => {
+  it('snapshots an explicit speed, including a legacy service_tier arg', () => {
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ speed: 'fast', type: 'codex' })).toEqual({
+      heteroSpeed: 'fast',
+    });
+    expect(
+      resolveHeterogeneousTopicRuntimeSnapshot({
+        args: ['-c', 'service_tier="fast"'],
+        type: 'codex',
+      }),
+    ).toEqual({ heteroSpeed: 'fast' });
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ speed: 'default', type: 'codex' })).toEqual({
+      heteroSpeed: 'default',
+    });
+  });
+
+  it('leaves speed unpinned when the Agent sets none, so the CLI config still applies', () => {
+    expect(
+      resolveHeterogeneousTopicRuntimeSnapshot({ effort: 'high', model: 'gpt-5.5', type: 'codex' }),
+    ).toEqual({ heteroEffort: 'high' });
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ type: 'codex' })).toEqual({});
+  });
+});
+
+describe('applyTopicModelToHeterogeneousProvider - speed pin', () => {
+  it("drops the agent's Fast flag, including legacy CLI args, for a Standard topic", () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { args: ['-c', 'service_tier="fast"'], model: 'gpt-5.6-sol', type: 'codex' },
+      { speed: 'default' },
+    );
+
+    expect(resolveCodexSpeedMode(effective)).toBe('default');
+    expect(buildHeteroExecArgs(effective)?.join(' ') ?? '').not.toContain('fast');
+  });
+
+  it('applies a Fast topic pin and keeps the agent speed when the topic pins none', () => {
+    const config = { model: 'gpt-5.6-sol', type: 'codex' } as const;
+
+    expect(
+      buildHeteroExecArgs(applyTopicModelToHeterogeneousProvider(config, { speed: 'fast' })),
+    ).toEqual(['--model', 'gpt-5.6-sol', '--speed', 'fast']);
+    expect(applyTopicModelToHeterogeneousProvider(config, { effort: undefined })).toBe(config);
+  });
+
+  it('drops a Fast pin the effective model cannot run', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { model: 'gpt-5.6-sol', type: 'codex' },
+      { model: 'gpt-5.3-codex', provider: 'codex', speed: 'fast' },
+    );
+
+    expect(effective.speed).toBe('default');
   });
 });

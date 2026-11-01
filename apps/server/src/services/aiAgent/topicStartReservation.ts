@@ -8,6 +8,32 @@ const delay = (milliseconds: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 /**
+ * The topic could not be reserved for a new run. Thrown before anything of the
+ * run is written — no user message, no operation — so a caller that sees it
+ * knows the dispatch never started and never will. The message is unchanged
+ * for callers that still match on it.
+ */
+export class TopicStartReservationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TopicStartReservationError';
+  }
+}
+
+/**
+ * An interactive send found the topic driven by another member's live
+ * foreground run. A send only ever retires its own sender's runs, so the
+ * start is refused — before anything is written, like
+ * {@link TopicStartReservationError} — instead of interrupting a teammate.
+ */
+export class ForeignLiveRunError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ForeignLiveRunError';
+  }
+}
+
+/**
  * Claim the gap between choosing a conversation parent and publishing the
  * operation's `runningOperation` marker. Every existing-topic start uses the
  * same claim, so a foreground message and a task callback cannot both observe
@@ -22,6 +48,7 @@ const delay = (milliseconds: number): Promise<void> =>
  */
 export const acquireTopicStartReservation = async ({
   allowRunningOperationId,
+  allowSameReservationReentry,
   ignoreRunningOperation,
   replacesOperationId,
   reservationId,
@@ -29,6 +56,7 @@ export const acquireTopicStartReservation = async ({
   topicModel,
 }: {
   allowRunningOperationId?: string;
+  allowSameReservationReentry?: boolean;
   /**
    * Serialize only on the short reservation, not on `runningOperation`. Set by
    * interactive sends — see `TopicModel.tryReserveTaskCallback`.
@@ -42,6 +70,7 @@ export const acquireTopicStartReservation = async ({
   for (let attempt = 0; attempt < MAX_RESERVATION_ATTEMPTS; attempt += 1) {
     const reservation = await topicModel.tryReserveTaskCallback(topicId, reservationId, {
       allowRunningOperationId,
+      allowSameReservationReentry,
       ignoreRunningOperation,
       replacesOperationId,
     });
@@ -55,5 +84,7 @@ export const acquireTopicStartReservation = async ({
     }
   }
 
-  throw new Error(`Topic ${topicId} remained busy while starting operation ${reservationId}`);
+  throw new TopicStartReservationError(
+    `Topic ${topicId} remained busy while starting operation ${reservationId}`,
+  );
 };

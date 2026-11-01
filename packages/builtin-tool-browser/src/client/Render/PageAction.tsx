@@ -1,6 +1,5 @@
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
 
@@ -19,7 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-/** Compact "acted on this page" row used by navigate/click/fill/press/scroll. */
+/** Compact "acted on this page" row used by navigate/click/fill/press/scroll/setViewport. */
 const PageAction = memo<BuiltinRenderProps<unknown, BrowserPageState, string>>(
   ({ content, pluginState }) => {
     return (

@@ -1,0 +1,10 @@
+name = "no-unsafe-raw-sql"
+builtInAgent = "basic-structured"
+instruction = """
+Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
+
+Prevent SQL injection in backend/database query construction.
+Report request/user-controlled strings interpolated/concatenated into sql.raw, unsafe/query/execute raw SQL strings, including ORDER BY/table/column fragments. TypeScript type assertions are not runtime validation. Quote wrapping and manual quote replacement are not parameterization.
+Recommend Drizzle sql tagged-template bound values, eq/inArray/query builder parameters, or a strict map of allowed identifiers/order directions to trusted SQL fragments. SQL identifiers cannot be safely substituted as value parameters; use an identifier API plus authorization/allowlist as appropriate.
+Do not report Drizzle sql`...${value}...` (binds values), parameter arrays, fixed raw SQL/schema migrations, trusted generated SQL, or dynamic identifiers selected from a closed runtime-validated allowlist. Do not mistake sql.join over already-parameterized SQL objects for raw interpolation. Mere variable SQL or an SQL builder API is not evidence of injection.
+"""

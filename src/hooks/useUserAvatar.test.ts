@@ -7,8 +7,6 @@ import { useUserStore } from '@/store/user';
 
 import { useUserAvatar } from './useUserAvatar';
 
-vi.mock('zustand/traditional');
-
 const mockConstEnv = vi.hoisted(() => ({ isDesktop: false }));
 
 vi.mock('@lobechat/const', async (importOriginal) => {
@@ -26,7 +24,7 @@ vi.mock('@lobechat/const', async (importOriginal) => {
 describe('useUserAvatar', () => {
   it('should return default avatar when user has no avatar', () => {
     act(() => {
-      useUserStore.setState({ user: { avatar: undefined } as any });
+      useUserStore.setState({ user: { avatar: undefined } });
     });
 
     const { result } = renderHook(() => useUserAvatar());
@@ -38,7 +36,7 @@ describe('useUserAvatar', () => {
     const mockAvatar = 'https://example.com/avatar.png';
 
     act(() => {
-      useUserStore.setState({ user: { avatar: mockAvatar } as any });
+      useUserStore.setState({ user: { avatar: mockAvatar } });
     });
 
     const { result } = renderHook(() => useUserAvatar());
@@ -51,7 +49,7 @@ describe('useUserAvatar', () => {
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
-      useUserStore.setState({ user: { avatar: mockAvatar } as any });
+      useUserStore.setState({ user: { avatar: mockAvatar } });
       useElectronStore.setState({
         dataSyncConfig: { remoteServerUrl: 'https://server.com', storageMode: 'cloud' },
       });
@@ -67,7 +65,7 @@ describe('useUserAvatar', () => {
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
-      useUserStore.setState({ user: { avatar: mockAvatar } as any });
+      useUserStore.setState({ user: { avatar: mockAvatar } });
       useElectronStore.setState({
         dataSyncConfig: { remoteServerUrl: undefined, storageMode: 'selfHost' },
       });
@@ -84,7 +82,7 @@ describe('useUserAvatar', () => {
     const mockServerUrl = 'https://server.com';
 
     act(() => {
-      useUserStore.setState({ user: { avatar: mockAvatar } as any });
+      useUserStore.setState({ user: { avatar: mockAvatar } });
       useElectronStore.setState({
         dataSyncConfig: { remoteServerUrl: mockServerUrl, storageMode: 'selfHost' },
       });
@@ -101,7 +99,7 @@ describe('useUserAvatar', () => {
     const mockServerUrl = 'https://server.com';
 
     act(() => {
-      useUserStore.setState({ user: { avatar: mockAvatar } as any });
+      useUserStore.setState({ user: { avatar: mockAvatar } });
       useElectronStore.setState({
         dataSyncConfig: { remoteServerUrl: mockServerUrl, storageMode: 'selfHost' },
       });
@@ -112,12 +110,12 @@ describe('useUserAvatar', () => {
     expect(result.current).toBe(mockAvatar);
   });
 
-  it('should use OFFICIAL_URL when storageMode is cloud in desktop environment', () => {
+  it('should use OFFICIAL_CLOUD_URL when storageMode is cloud in desktop environment', () => {
     mockConstEnv.isDesktop = true;
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
-      useUserStore.setState({ user: { avatar: mockAvatar } as any });
+      useUserStore.setState({ user: { avatar: mockAvatar } });
       useElectronStore.setState({
         dataSyncConfig: { remoteServerUrl: '', storageMode: 'cloud' },
       });
@@ -125,8 +123,8 @@ describe('useUserAvatar', () => {
 
     const { result } = renderHook(() => useUserAvatar());
 
-    // In cloud mode, selector returns OFFICIAL_URL regardless of remoteServerUrl config
-    expect(result.current).toBe('https://app.lobehub.com/api/avatar.png');
+    // In cloud mode, selector returns OFFICIAL_CLOUD_URL regardless of remoteServerUrl config
+    expect(result.current).toBe('https://lobehub.com/api/avatar.png');
   });
 
   it('should return original avatar when storageMode is selfHost but no URL configured', () => {
@@ -134,7 +132,7 @@ describe('useUserAvatar', () => {
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
-      useUserStore.setState({ user: { avatar: mockAvatar } as any });
+      useUserStore.setState({ user: { avatar: mockAvatar } });
       useElectronStore.setState({
         dataSyncConfig: { remoteServerUrl: '', storageMode: 'selfHost' },
       });

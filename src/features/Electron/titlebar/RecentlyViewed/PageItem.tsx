@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
-import { cx } from 'antd-style';
+import { ActionIcon, cx, Flexbox, Icon } from '@lobehub/ui';
 import { Pin, PinOff } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';

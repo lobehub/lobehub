@@ -110,6 +110,15 @@ export function defineConfig(config: CustomNextConfig) {
           headers: securityHeaders,
           source: '/:path*',
         },
+        // Agent Share visitor pages live under `/agent/:slugOrId` and are
+        // reachable by anyone holding the link. Keep them out of search
+        // indexes (privacy) — the SPA shell is static per variant, so a
+        // per-route `<meta name="robots">` is not an option; the header is.
+        // Listed after the global rule so it overrides `x-robots-tag: all`.
+        {
+          headers: [{ key: 'x-robots-tag', value: 'noindex, nofollow' }],
+          source: '/agent/:path*',
+        },
         {
           headers: [
             {
@@ -134,7 +143,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/app-images/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/static/app-images/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [
@@ -269,6 +278,10 @@ export function defineConfig(config: CustomNextConfig) {
       outputFileTracingIncludes: config.outputFileTracingIncludes,
     }),
     reactStrictMode: true,
+    // Old clients keep their image URLs; App routes take precedence over this fallback.
+    rewrites: async () => ({
+      fallback: [{ destination: '/static/app-images/:path*', source: '/app-images/:path*' }],
+    }),
     redirects: async () => [
       // Sitemap generation lives on the landing site; keep legacy app sitemap URLs crawlable.
       {
@@ -355,6 +368,8 @@ export function defineConfig(config: CustomNextConfig) {
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',
       '@lobehub/editor',
+      // Must share one instance with @lobehub/editor's own Yjs binding.
+      'yjs',
       'discord.js',
       'ffmpeg-static',
       'pdfjs-dist',

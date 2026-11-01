@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps, SaveUserQuestionInput } from '@lobechat/types';
-import { cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,21 +26,19 @@ export const SaveUserQuestionInspector = memo<
 
   if (isArgumentsStreaming && !hasAnyField) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-web-onboarding.apiName.saveUserQuestion')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-web-onboarding.apiName.saveUserQuestion')}
+        </span>
       </div>
     );
   }
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-web-onboarding.apiName.saveUserQuestion')}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-web-onboarding.apiName.saveUserQuestion')}
+      </span>
       {(agentName || agentEmoji) && (
         <span className={styles.chip}>
           {agentEmoji && <span className={styles.emoji}>{agentEmoji}</span>}

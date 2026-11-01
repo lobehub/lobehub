@@ -1,8 +1,8 @@
 'use client';
 
-import { useAnalytics } from '@lobehub/analytics/react';
 import { memo, useCallback, useState } from 'react';
 
+import { useAnalytics } from '@/libs/analytics/client';
 import { useGlobalStore } from '@/store/global';
 import { useServerConfigStore } from '@/store/serverConfig';
 

@@ -1,5 +1,4 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, SplitButton } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, SplitButton, Text, toast } from '@lobehub/ui';
 import { CalendarOffIcon, PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +35,12 @@ export const formatCountdown = (msRemaining: number): CountdownDisplay => {
   return { countdown, type: 'time' };
 };
 
+export const shouldPersistFallbackAssignee = (
+  assigneeAgentId?: string | null,
+  assigneeUserId?: string | null,
+  inboxAgentId?: string | null,
+) => !assigneeAgentId && !assigneeUserId && !!inboxAgentId;
+
 const TaskDetailRunPauseAction = memo(() => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask, reason } = usePermission('create_content');
@@ -49,8 +54,10 @@ const TaskDetailRunPauseAction = memo(() => {
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isRerun = status === 'completed';
+  const isArchived = !!useTaskStore(taskDetailSelectors.activeTaskArchivedAt);
   const runTask = useTaskStore((s) => s.runTask);
   const updateTask = useTaskStore((s) => s.updateTask);
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
@@ -68,9 +75,14 @@ const TaskDetailRunPauseAction = memo(() => {
       return;
     }
     if (!canRun) return;
+    // Archived tasks are hidden from lists; the server refuses to run them.
+    if (isArchived) {
+      toast.info(t('taskList.contextMenu.runArchivedBlocked'));
+      return;
+    }
     setIsStarting(true);
     try {
-      if (!assigneeAgentId && inboxAgentId) {
+      if (shouldPersistFallbackAssignee(assigneeAgentId, assigneeUserId, inboxAgentId)) {
         await updateTask(taskId, { assigneeAgentId: inboxAgentId });
       }
       await runTask(taskId);
@@ -81,7 +93,10 @@ const TaskDetailRunPauseAction = memo(() => {
     taskId,
     canRun,
     canPause,
+    isArchived,
+    t,
     assigneeAgentId,
+    assigneeUserId,
     inboxAgentId,
     runTask,
     updateTask,
@@ -92,16 +107,30 @@ const TaskDetailRunPauseAction = memo(() => {
   const handleRunNow = useCallback(async () => {
     if (!canEditTask) return;
     if (!taskId) return;
+    if (isArchived) {
+      toast.info(t('taskList.contextMenu.runArchivedBlocked'));
+      return;
+    }
     setIsRunningNow(true);
     try {
-      if (!assigneeAgentId && inboxAgentId) {
+      if (shouldPersistFallbackAssignee(assigneeAgentId, assigneeUserId, inboxAgentId)) {
         await updateTask(taskId, { assigneeAgentId: inboxAgentId });
       }
       await runTask(taskId);
     } finally {
       setIsRunningNow(false);
     }
-  }, [canEditTask, taskId, assigneeAgentId, inboxAgentId, runTask, updateTask]);
+  }, [
+    canEditTask,
+    taskId,
+    isArchived,
+    t,
+    assigneeAgentId,
+    assigneeUserId,
+    inboxAgentId,
+    runTask,
+    updateTask,
+  ]);
 
   const handleCancelSchedule = useCallback(async () => {
     if (!canEditTask) return;

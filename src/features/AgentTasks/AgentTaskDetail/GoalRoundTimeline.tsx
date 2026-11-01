@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

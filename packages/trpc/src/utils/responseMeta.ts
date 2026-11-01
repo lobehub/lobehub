@@ -1,4 +1,5 @@
 import {
+  AUTH_FAILURE_HEADER,
   AUTH_REQUIRED_HEADER,
   MARKET_AUTH_REQUIRED_MESSAGE,
   TRPC_ERROR_CODE_UNAUTHORIZED,
@@ -48,6 +49,10 @@ export function createResponseMeta({ ctx, errors }: ResponseMetaParams): {
   );
   if (hasUnauthorizedError) {
     headers.set(AUTH_REQUIRED_HEADER, 'true');
+  } else {
+    // The failure reason is only meaningful next to a session 401; a public
+    // procedure served without a user must not carry it.
+    headers.delete(AUTH_FAILURE_HEADER);
   }
 
   // Only return headers if there's content or auth error

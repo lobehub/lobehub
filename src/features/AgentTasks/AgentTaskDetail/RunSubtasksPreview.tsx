@@ -1,6 +1,4 @@
-import { Block, Flexbox, Text } from '@lobehub/ui';
-import { Tag } from 'antd';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

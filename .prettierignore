@@ -64,8 +64,22 @@ Dockerfile*
 # add other ignore file below
 .next
 
+# vendored unchanged from the Agent Secret Channel reference implementation
+packages/secret-channel/src/asc/
+packages/secret-channel/test/vectors/
+packages/secret-channel/test/vectors.test.ts
+
 # generated files (regenerate with `bun generate` in packages/sdk)
 packages/sdk/src/generated/
 
 # generated files (regenerate with `codex app-server generate-ts`)
 packages/heterogeneous-agents/src/codex/protocol/generated.ts
+
+# Generated from lobehub/acceptance releases; preserve the upstream bytes.
+.agents/skills/acceptance/**
+
+# Vendored from lobehub/lobe-design-skill via its install.sh --copy; keep upstream formatting and send local fixes upstream.
+.agents/skills/lobe-design/**
+
+# generated files (regenerate with `bun run shell:vendor` in apps/desktop)
+apps/desktop/shell/rescue/electron-updater.cjs

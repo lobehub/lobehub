@@ -1,9 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { Result, Table } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox, Icon, Result, Table } from '@lobehub/ui';
 import { CheckCircle } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -53,11 +50,11 @@ const SuccessResult = memo<SuccessResultProps>(({ duration, dataSource, onClickF
           <Flexbox gap={16} width={500}>
             {t('importModal.finish.subTitle', { duration: (duration / 1000).toFixed(2) })}
             <Table
-              bordered
               dataSource={dataSource}
               pagination={false}
               rowKey={'title'}
               size={'small'}
+              variant="outlined"
               columns={[
                 { dataIndex: 'title', render: cellRender, title: t('importModal.result.type') },
                 { dataIndex: 'added', render: cellRender, title: t('importModal.result.added') },

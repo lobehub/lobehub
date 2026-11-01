@@ -2,7 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { MonitorIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,11 +38,11 @@ export const ListOnlineDevicesInspector = memo<
   const deviceCount = pluginState?.devices?.length;
 
   return (
-    <div
-      className={cx(inspectorTextStyles.root, styles.root, isPending && shinyTextStyles.shinyText)}
-    >
+    <div className={cx(inspectorTextStyles.root, styles.root)}>
       <Icon className={styles.icon} icon={MonitorIcon} size={14} />
-      <span>{t('builtins.lobe-remote-device.apiName.listOnlineDevices')}</span>
+      <span className={cx(isPending && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-remote-device.apiName.listOnlineDevices')}
+      </span>
       {!isPending && deviceCount !== undefined && (
         <span className={styles.count}>
           {t('builtins.lobe-remote-device.inspector.onlineCount', { count: deviceCount })}

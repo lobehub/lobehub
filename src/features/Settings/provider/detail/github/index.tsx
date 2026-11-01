@@ -1,7 +1,6 @@
 'use client';
 
-import { Markdown } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Markdown } from '@lobehub/ui';
 import { GithubProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
@@ -51,7 +50,7 @@ const useProviderCard = (): ProviderItem => {
           </Markdown>
         ),
         label: t('github.personalAccessToken.title'),
-        name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+        name: `${KeyVaultsConfigKey}.${LLMProviderApiTokenKey}`,
       },
     ],
   };

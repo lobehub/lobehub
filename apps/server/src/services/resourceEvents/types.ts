@@ -1,12 +1,19 @@
 /** Resource families that can broadcast realtime invalidation or collaboration events. */
-export type ResourceType = 'agent' | 'chatGroup' | 'document' | 'task' | 'topic';
+export type ResourceType = 'acceptance' | 'agent' | 'chatGroup' | 'document' | 'task' | 'topic';
 
 export interface ResourceRef {
   id: string;
   type: ResourceType;
 }
 
-export type ResourceEventType = 'doc.updated' | 'lock.changed' | 'topic.commentsChanged';
+export type ResourceEventType =
+  | 'acceptance.commentsChanged'
+  | 'acceptance.sessionChanged'
+  | 'doc.updated'
+  | 'document.commentsChanged'
+  | 'document.likesChanged'
+  | 'lock.changed'
+  | 'topic.commentsChanged';
 
 export interface ResourceEvent {
   /** User id that triggered the event; allows subscriber-side attribution or filtering. */

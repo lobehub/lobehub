@@ -1,24 +1,33 @@
 import { Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { CircleDotDashed, Database, ImagePlus, MessageSquareText, Video } from 'lucide-react';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import {
+  AudioLines,
+  CircleDotDashed,
+  Database,
+  ImagePlus,
+  MessageSquareText,
+  Mic,
+  Video,
+} from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chat: css`
-    color: ${cssVar.colorInfo};
-  `,
-  embedding: css`
-    color: ${cssVar.purple};
-  `,
-  imageGeneration: css`
-    color: ${cssVar.colorSuccess};
-  `,
-  videoGeneration: css`
-    color: ${cssVar.colorWarning};
-  `,
-}));
+const styles = stylex.create({
+  chat: { color: cssVar.colorInfo },
+  embedding: { color: cssVar.purple },
+  imageGeneration: { color: cssVar.colorSuccess },
+  speechRecognition: { color: cssVar.colorInfo },
+  textToSpeech: { color: cssVar.cyan },
+  videoGeneration: { color: cssVar.colorWarning },
+});
 
-export type SpendTypeValue = 'chat' | 'embedding' | 'imageGeneration' | 'videoGeneration';
+export type SpendTypeValue =
+  | 'chat'
+  | 'embedding'
+  | 'imageGeneration'
+  | 'speechRecognition'
+  | 'textToSpeech'
+  | 'videoGeneration';
 
 interface SpendTypeProps {
   /** The readable label — shown on hover, since the cell itself is icon-only. */
@@ -37,6 +46,12 @@ const getIcon = (type: string) => {
     case 'imageGeneration': {
       return ImagePlus;
     }
+    case 'speechRecognition': {
+      return Mic;
+    }
+    case 'textToSpeech': {
+      return AudioLines;
+    }
     case 'videoGeneration': {
       return Video;
     }
@@ -48,7 +63,7 @@ const getIcon = (type: string) => {
 
 const SpendType = memo<SpendTypeProps>(({ type, children }) => (
   <Tooltip title={children}>
-    <Icon className={styles[type]} icon={getIcon(type)} size={16} />
+    <Icon className={stylex.props(styles[type]).className} icon={getIcon(type)} size={16} />
   </Tooltip>
 ));
 

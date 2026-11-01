@@ -91,6 +91,30 @@ describe('TopicModel - Update', () => {
       expect(result[0].metadata).toEqual({ workingDirectory: '/path/to/dir' });
     });
 
+    it('should skip the write when onlyIf rejects the current metadata', async () => {
+      const topicId = 'metadata-test-only-if';
+      await serverDB.insert(topics).values({
+        userId,
+        id: topicId,
+        title: 'Test',
+        metadata: { boundDeviceId: 'device-d' },
+      });
+
+      const skipped = await topicModel.updateMetadata(
+        topicId,
+        { boundDeviceId: 'device-a' },
+        { onlyIf: (metadata) => metadata?.boundDeviceId === 'device-b' },
+      );
+      const written = await topicModel.updateMetadata(
+        topicId,
+        { boundDeviceId: 'device-a' },
+        { onlyIf: (metadata) => metadata?.boundDeviceId === 'device-d' },
+      );
+
+      expect(skipped).toEqual([]);
+      expect(written[0].metadata).toEqual({ boundDeviceId: 'device-a' });
+    });
+
     it('should merge metadata with existing metadata', async () => {
       const topicId = 'metadata-test-2';
       await serverDB.insert(topics).values({
@@ -171,6 +195,42 @@ describe('TopicModel - Update', () => {
       await expect(topicModel.tryReserveTaskCallback(topicId, 'foreground-1')).resolves.toBe(true);
       await expect(topicModel.tryReserveTaskCallback(topicId, 'foreground-1')).resolves.toBe(true);
       await expect(topicModel.tryReserveTaskCallback(topicId, 'callback-2')).resolves.toBe(false);
+    });
+
+    it('fences a concurrent deterministic intervention initializer with the same id', async () => {
+      const topicId = 'topic-start-non-reentrant-intervention';
+      await serverDB.insert(topics).values({ id: topicId, title: 'Test', userId });
+
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'op-intervention', {
+          allowSameReservationReentry: false,
+          ignoreRunningOperation: true,
+        }),
+      ).resolves.toBe(true);
+      await expect(
+        topicModel.tryReserveTaskCallback(topicId, 'op-intervention', {
+          allowSameReservationReentry: false,
+          ignoreRunningOperation: true,
+        }),
+      ).resolves.toBe(false);
+    });
+
+    it('grants exactly one non-reentrant initializer under a real concurrent row lock', async () => {
+      const topicId = 'topic-start-concurrent-non-reentrant-intervention';
+      await serverDB.insert(topics).values({ id: topicId, title: 'Test', userId });
+
+      const results = await Promise.all([
+        topicModel.tryReserveTaskCallback(topicId, 'op-intervention', {
+          allowSameReservationReentry: false,
+          ignoreRunningOperation: true,
+        }),
+        topicModel.tryReserveTaskCallback(topicId, 'op-intervention', {
+          allowSameReservationReentry: false,
+          ignoreRunningOperation: true,
+        }),
+      ]);
+
+      expect(results.sort()).toEqual([false, true]);
     });
 
     it('waits while a foreground operation is running', async () => {
@@ -293,6 +353,87 @@ describe('TopicModel - Update', () => {
           expect.objectContaining({ operationId: 'child-operation-2' }),
         ]),
       );
+    });
+
+    it('patches a child running operation without replacing its parent or siblings', async () => {
+      const topicId = 'task-callback-patch-child-operation';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              {
+                assistantMessageId: 'assistant-child-1',
+                hooks: [{ id: 'child-hook', type: 'onComplete', webhook: { url: '/child-hook' } }],
+                operationId: 'child-operation-1',
+              },
+              { assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2' },
+            ],
+            hooks: [{ id: 'parent-hook', type: 'onComplete', webhook: { url: '/parent-hook' } }],
+            operationId: 'parent-operation',
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.patchRunningOperation(topicId, 'child-operation-1', {
+          deviceId: 'device-1',
+          heteroType: 'devin',
+        }),
+      ).resolves.toBe(true);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({
+        hooks: [{ id: 'parent-hook', type: 'onComplete', webhook: { url: '/parent-hook' } }],
+        operationId: 'parent-operation',
+      });
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([
+        expect.objectContaining({
+          deviceId: 'device-1',
+          heteroType: 'devin',
+          hooks: [{ id: 'child-hook', type: 'onComplete', webhook: { url: '/child-hook' } }],
+          operationId: 'child-operation-1',
+        }),
+        { assistantMessageId: 'assistant-child-2', operationId: 'child-operation-2' },
+      ]);
+    });
+
+    it('patches a root running operation without changing its children', async () => {
+      const topicId = 'task-callback-patch-root-operation';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-parent',
+            childOperations: [
+              { assistantMessageId: 'assistant-child', operationId: 'child-operation' },
+            ],
+            operationId: 'parent-operation',
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.patchRunningOperation(topicId, 'parent-operation', {
+          deviceId: 'device-1',
+          heteroType: 'devin',
+        }),
+      ).resolves.toBe(true);
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({
+        deviceId: 'device-1',
+        heteroType: 'devin',
+        operationId: 'parent-operation',
+      });
+      expect(topic?.metadata?.runningOperation?.childOperations).toEqual([
+        { assistantMessageId: 'assistant-child', operationId: 'child-operation' },
+      ]);
     });
 
     it('atomically takes a child running operation once', async () => {
@@ -544,6 +685,175 @@ describe('TopicModel - Update', () => {
       );
     });
 
+    it('repairs the exact intervention continuation anchor after queue ACK', async () => {
+      const topicId = 'intervention-anchor-repair';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-source',
+            operationId: 'operation-source',
+          },
+          taskCallbackReservation: {
+            messageId: 'operation-continuation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.repairAgentInterventionContinuation({
+          active: true,
+          assistantMessageId: 'assistant-continuation',
+          continuationOperationId: 'operation-continuation',
+          reservationId: 'operation-continuation',
+          scope: 'main',
+          sourceOperationId: 'operation-source',
+          startedAt: '2026-08-26T00:00:00.000Z',
+          topicId,
+        }),
+      ).resolves.toBe('repaired');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toMatchObject({
+        assistantMessageId: 'assistant-continuation',
+        heteroType: null,
+        operationId: 'operation-continuation',
+        scope: 'main',
+      });
+      expect(topic?.metadata?.taskCallbackReservation).toBeNull();
+    });
+
+    it('releases an exact thread fence without changing the main running anchor', async () => {
+      const topicId = 'intervention-thread-reservation-release';
+      const mainRunningOperation = {
+        assistantMessageId: 'assistant-main',
+        operationId: 'operation-main',
+        scope: 'main',
+        startedAt: '2026-08-26T00:00:00.000Z',
+      };
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: mainRunningOperation,
+          taskCallbackReservation: {
+            messageId: 'operation-thread-continuation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.releaseTaskCallbackReservation(topicId, 'operation-thread-continuation'),
+      ).resolves.toBe('released');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toEqual(mainRunningOperation);
+      expect(topic?.metadata?.taskCallbackReservation).toBeNull();
+    });
+
+    it('does not release a foreign thread fence or change the main running anchor', async () => {
+      const topicId = 'intervention-thread-foreign-reservation';
+      const mainRunningOperation = {
+        assistantMessageId: 'assistant-main',
+        operationId: 'operation-main',
+      };
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: mainRunningOperation,
+          taskCallbackReservation: {
+            messageId: 'foreign-operation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.releaseTaskCallbackReservation(topicId, 'operation-thread-continuation'),
+      ).resolves.toBe('foreign');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toEqual(mainRunningOperation);
+      expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('foreign-operation');
+    });
+
+    it('does not repair across a foreign live topic reservation', async () => {
+      const topicId = 'intervention-anchor-foreign-reservation';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-source',
+            operationId: 'operation-source',
+          },
+          taskCallbackReservation: {
+            messageId: 'foreign-operation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.repairAgentInterventionContinuation({
+          active: true,
+          assistantMessageId: 'assistant-continuation',
+          continuationOperationId: 'operation-continuation',
+          reservationId: 'operation-continuation',
+          sourceOperationId: 'operation-source',
+          startedAt: '2026-08-26T00:00:00.000Z',
+          topicId,
+        }),
+      ).resolves.toBe('conflict');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation?.operationId).toBe('operation-source');
+      expect(topic?.metadata?.taskCallbackReservation?.messageId).toBe('foreign-operation');
+    });
+
+    it('clears a terminal intervention anchor without reactivating it', async () => {
+      const topicId = 'intervention-anchor-terminal';
+      await serverDB.insert(topics).values({
+        id: topicId,
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'assistant-source',
+            operationId: 'operation-source',
+          },
+          taskCallbackReservation: {
+            messageId: 'operation-continuation',
+            reservedAt: new Date().toISOString(),
+          },
+        },
+        title: 'Test',
+        userId,
+      });
+
+      await expect(
+        topicModel.repairAgentInterventionContinuation({
+          active: false,
+          assistantMessageId: 'assistant-continuation',
+          continuationOperationId: 'operation-continuation',
+          reservationId: 'operation-continuation',
+          sourceOperationId: 'operation-source',
+          startedAt: '2026-08-26T00:00:00.000Z',
+          topicId,
+        }),
+      ).resolves.toBe('terminal');
+
+      const topic = await topicModel.findById(topicId);
+      expect(topic?.metadata?.runningOperation).toBeNull();
+      expect(topic?.metadata?.taskCallbackReservation).toBeNull();
+    });
+
     it('does not reserve another user topic', async () => {
       await serverDB.insert(users).values({ id: 'task-callback-other-user' });
       await serverDB.insert(topics).values({
@@ -622,6 +932,43 @@ describe('TopicModel - Update', () => {
       expect(topic.totalCost).toBeNull();
       expect(topic.usage).toBeNull();
       expect(topic.cost).toBeNull();
+    });
+  });
+
+  describe('markRead', () => {
+    const statusOf = async (id: string) =>
+      (await serverDB.select().from(topics).where(eq(topics.id, id)))[0]?.status;
+
+    it('flips an unread topic to active and returns the cleared row', async () => {
+      await serverDB.insert(topics).values({ id: 'read-1', sessionId, status: 'unread', userId });
+
+      const cleared = await topicModel.markRead('read-1');
+
+      expect(cleared).toEqual([{ id: 'read-1', status: 'active' }]);
+      expect(await statusOf('read-1')).toBe('active');
+    });
+
+    /** @example A stale "unread" copy must not overwrite a run that started since. */
+    it.each(['running', 'waitingForHuman', 'completed'] as const)(
+      'leaves a %s topic untouched',
+      async (status) => {
+        await serverDB.insert(topics).values({ id: 'read-2', sessionId, status, userId });
+
+        const cleared = await topicModel.markRead('read-2');
+
+        expect(cleared).toEqual([]);
+        expect(await statusOf('read-2')).toBe(status);
+      },
+    );
+
+    it("does not clear another user's topic", async () => {
+      await serverDB.insert(users).values({ id: 'read-other-user' });
+      await serverDB
+        .insert(topics)
+        .values({ id: 'read-3', status: 'unread', userId: 'read-other-user' });
+
+      expect(await topicModel.markRead('read-3')).toEqual([]);
+      expect(await statusOf('read-3')).toBe('unread');
     });
   });
 });

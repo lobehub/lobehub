@@ -8,17 +8,13 @@ const testState = vi.hoisted(() => ({
     { visibility?: 'private' | 'public'; workspaceId?: string | null } | undefined,
   permission: {
     canManageResource: false,
+    isAccessConfirmed: true,
     isAccessResolved: true,
-    isLoading: false,
   },
 }));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => testState.permission,
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -37,8 +33,8 @@ describe('useAgentManagementAccess', () => {
   beforeEach(() => {
     testState.agent = undefined;
     testState.permission.canManageResource = false;
+    testState.permission.isAccessConfirmed = true;
     testState.permission.isAccessResolved = true;
-    testState.permission.isLoading = false;
   });
 
   it('fails closed while the Agent identity is loading', () => {
@@ -70,5 +66,14 @@ describe('useAgentManagementAccess', () => {
     const { result } = renderHook(() => useAgentManagementAccess('agent-1'));
 
     expect(result.current).toEqual({ canManageAgent: true, isAccessLoading: false });
+  });
+
+  it('waits for a server answer before publishing from a persisted record', () => {
+    testState.agent = { visibility: 'public', workspaceId: 'workspace-1' };
+    testState.permission.isAccessConfirmed = false;
+
+    const { result } = renderHook(() => useAgentManagementAccess('agent-1'));
+
+    expect(result.current).toEqual({ canManageAgent: false, isAccessLoading: true });
   });
 });

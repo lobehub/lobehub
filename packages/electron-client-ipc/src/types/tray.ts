@@ -10,7 +10,13 @@ export interface TrayNavigationItem {
   url: string;
 }
 
+export interface TrayActiveTopicItem extends TrayNavigationItem {
+  status: 'running' | 'waitingForHuman';
+}
+
 export interface TrayNavigationSnapshot {
+  // Optional: an OTA-updated renderer and the main process can ship different versions.
+  activeTopics?: TrayActiveTopicItem[];
   agents: TrayAgentItem[];
   pinned: TrayNavigationItem[];
   recent: TrayNavigationItem[];

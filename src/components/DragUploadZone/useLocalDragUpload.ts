@@ -1,6 +1,8 @@
 import debug from 'debug';
 import { useCallback } from 'react';
 
+import { getElectronLocalFilePath } from '@/utils/electron/localFilePath';
+
 const log = debug('lobe-client:drag-upload:local');
 
 export type DragContentKind = 'files' | 'folders' | 'mixed' | 'none';
@@ -15,30 +17,6 @@ export interface PartitionedDroppedLocalPaths {
   files: File[];
   localPaths: DroppedLocalPath[];
 }
-
-/**
- * Resolve the absolute filesystem path of a dropped File in Electron.
- * Returns null when not running under Electron or the path cannot be resolved.
- */
-const resolveElectronFilePath = (file: File): string | null => {
-  const webUtils = (
-    globalThis as unknown as {
-      window?: { electron?: { webUtils?: { getPathForFile?: (file: File) => string } } };
-    }
-  ).window?.electron?.webUtils;
-  if (!webUtils?.getPathForFile) {
-    log('webUtils.getPathForFile unavailable on window.electron — local path cannot be resolved');
-    return null;
-  }
-  try {
-    const result = webUtils.getPathForFile(file);
-    if (!result) log('webUtils.getPathForFile returned empty for %s', file.name);
-    return result || null;
-  } catch (error) {
-    log('webUtils.getPathForFile threw for %s: %O', file.name, error);
-    return null;
-  }
-};
 
 const safeGetEntry = (item: DataTransferItem): FileSystemEntry | null => {
   try {
@@ -149,7 +127,7 @@ export const partitionDroppedItemsAsLocalPaths = async (
 
     const entry = safeGetEntry(item);
     const topLevelFile = item.getAsFile();
-    const path = topLevelFile ? resolveElectronFilePath(topLevelFile) : null;
+    const path = topLevelFile ? getElectronLocalFilePath(topLevelFile) : null;
 
     if (path) {
       localPaths.push({

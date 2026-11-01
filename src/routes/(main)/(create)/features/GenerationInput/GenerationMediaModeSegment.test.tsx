@@ -20,36 +20,43 @@ const componentMocks = vi.hoisted(() => ({
   segmented: undefined as SegmentedCapture | undefined,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ title }: { title?: ReactNode }) => (
-    <button aria-label={typeof title === 'string' ? title : 'action'} type="button" />
-  ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span data-testid="mode-icon" />,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Segmented: (props: SegmentedCapture) => {
-    componentMocks.segmented = props;
-    return (
-      <div data-testid="mode-toggle-group">
-        {props.options?.map((option) => (
-          <span key={option.value}>{option.icon}</span>
-        ))}
-      </div>
-    );
-  },
-  Select: () => <div data-testid="mode-select" />,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    heroSelect: 'hero-select',
-    heroText: 'hero-text',
-    toolbarItem: 'toolbar-item',
-    toolbarLabel: 'toolbar-label',
-  }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      ActionIcon: ({ title }: { title?: ReactNode }) => (
+        <button aria-label={typeof title === 'string' ? title : 'action'} type="button" />
+      ),
+      Segmented: (props: SegmentedCapture) => {
+        componentMocks.segmented = props;
+        return (
+          <div data-testid="mode-toggle-group">
+            {props.options?.map((option) => (
+              <span key={option.value}>{option.icon}</span>
+            ))}
+          </div>
+        );
+      },
+      Select: () => <div data-testid="mode-select" />,
+    }),
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      createStaticStyles: () => ({
+        heroSelect: 'hero-select',
+        heroText: 'hero-text',
+        toolbarItem: 'toolbar-item',
+        toolbarLabel: 'toolbar-label',
+      }),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => componentMocks.navigate,
@@ -68,10 +75,6 @@ vi.mock('@/features/ChatInput/ActionBar/components/ActionPopover', () => ({
   ),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: <T,>(selector: (state: { isMobile: boolean }) => T) =>
     selector({ isMobile: false }),
@@ -81,9 +84,10 @@ describe('GenerationMediaModeSegment', () => {
   it('uses an icon-only toggle group in the composer toolbar', () => {
     render(<GenerationMediaModeSegment mode="image" />);
 
-    expect(screen.getByTestId('mode-toggle-group')).toBeInTheDocument();
+    const toggleGroup = screen.getByTestId('mode-toggle-group');
+    expect(toggleGroup).toBeInTheDocument();
     expect(screen.queryByTestId('mode-select')).not.toBeInTheDocument();
-    expect(screen.getAllByTestId('mode-icon')).toHaveLength(2);
+    expect(toggleGroup.querySelectorAll('svg')).toHaveLength(2);
     expect(screen.queryByText('tab.image')).not.toBeInTheDocument();
     expect(screen.queryByText('tab.video')).not.toBeInTheDocument();
     expect(componentMocks.segmented?.options?.map((option) => option.label)).toEqual([

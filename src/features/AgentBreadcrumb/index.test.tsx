@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,26 +14,6 @@ const mocks = vi.hoisted(() => ({
     inboxAgentId: 'inbox',
   },
 }));
-
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => <span />,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('antd', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-
-  return {
-    ...actual,
-    Breadcrumb: ({ items }: { items: Array<{ title: ReactNode }> }) => (
-      <nav>
-        {items.map((item, index) => (
-          <span key={index}>{item.title}</span>
-        ))}
-      </nav>
-    ),
-  };
-});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

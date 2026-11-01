@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 
 import { useChatStore } from '@/store/chat';

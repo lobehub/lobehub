@@ -180,6 +180,65 @@ export const HETEROGENEOUS_AGENT_CONFIGS = [
   },
   {
     auth: {
+      docsUrl: 'https://docs.factory.ai/cli/getting-started/quickstart',
+      errorMessage:
+        'Factory Droid could not authenticate. Run `droid` to sign in or configure FACTORY_API_KEY, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'factory_api_key',
+        'device pairing',
+      ],
+      signInCommand: 'droid',
+    },
+    defaultCommand: 'droid',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Droid',
+    install: {
+      commands: [
+        'curl -fsSL https://app.factory.ai/cli | sh',
+        'irm https://app.factory.ai/cli/windows | iex',
+      ],
+      docsUrl: 'https://docs.factory.ai/cli/getting-started/quickstart',
+    },
+    kind: 'local-cli',
+    menuKey: 'newDroidAgent',
+    menuLabelKey: 'newDroidAgent',
+    resume: { supported: true },
+    title: 'Factory Droid',
+    type: 'droid',
+  },
+  {
+    auth: {
+      docsUrl: 'https://docs.devin.ai/cli/enterprise/devin-auth',
+      errorMessage: 'Devin could not authenticate. Run `devin auth login`, then retry.',
+      patterns: [
+        ...COMMON_AUTH_REQUIRED_PATTERNS,
+        'authentication required',
+        'not logged in',
+        'devin auth login',
+      ],
+      signInCommand: 'devin auth login',
+    },
+    defaultCommand: 'devin',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'Devin',
+    install: {
+      commands: [
+        'curl -fsSL https://cli.devin.ai/install.sh | bash',
+        'irm https://static.devin.ai/cli/setup.ps1 | iex',
+      ],
+      docsUrl: 'https://docs.devin.ai/cli',
+    },
+    kind: 'local-cli',
+    menuKey: 'newDevinAgent',
+    menuLabelKey: 'newDevinAgent',
+    resume: { supported: true },
+    title: 'Devin',
+    type: 'devin',
+  },
+  {
+    auth: {
       docsUrl: 'https://docs.x.ai/build/overview',
       errorMessage: 'Grok Build could not authenticate. Run `grok login`, then retry.',
       patterns: [
@@ -355,6 +414,44 @@ export interface RemoteHeterogeneousAgentDescriptor {
   type: string;
 }
 
+/**
+ * A runtime LobeHub drives over a protocol instead of parsing a CLI's JSONL
+ * dialect — the DeepSeek Harness CLI (`dsh`) serving its `acp` profile over
+ * stdio. The `dsh` executable is user-installed; nothing ships with
+ * LobeHub.
+ */
+export interface LocalRuntimeHeterogeneousAgentDescriptor {
+  /** Executable the user installs; probed before the runtime is offered. */
+  defaultCommand: string;
+  defaultModel: string;
+  defaultTopicGroupMode?: TopicGroupMode;
+  iconId: string;
+  kind: 'local-runtime';
+  title: string;
+  type: string;
+}
+
+export const LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS = [
+  {
+    defaultCommand: 'dsh',
+    defaultModel: 'deepseek-v4-flash',
+    defaultTopicGroupMode: 'byProject',
+    iconId: 'DeepSeek',
+    kind: 'local-runtime',
+    title: 'DeepSeek Harness',
+    type: 'deepseek-harness',
+  },
+] as const satisfies readonly LocalRuntimeHeterogeneousAgentDescriptor[];
+
+/**
+ * Every agent type that runs on the producer's machine and streams through
+ * `heteroIngest` / `heteroFinish`: descriptor-backed CLIs plus protocol-driven runtimes.
+ */
+export const LocalExecutionHeterogeneousAgentTypeSchema = z.enum([
+  ...LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  ...LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS.map(({ type }) => type),
+]);
+
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
   {
     cli: {
@@ -384,11 +481,15 @@ export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
 
 export type HeterogeneousAgentDescriptor =
   | (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]
+  | (typeof LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS)[number]
   | (typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number];
 
 export type HeterogeneousAgentMenuLabelKey =
   (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]['menuLabelKey'];
 export type LocalHeterogeneousAgentType = (typeof HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
+export type LocalRuntimeHeterogeneousAgentType =
+  (typeof LOCAL_RUNTIME_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
 export type RemoteHeterogeneousAgentType =
   (typeof REMOTE_HETEROGENEOUS_AGENT_CONFIGS)[number]['type'];
-export type HeterogeneousAgentType = LocalHeterogeneousAgentType | RemoteHeterogeneousAgentType;
+export type HeterogeneousAgentType =
+  LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType | RemoteHeterogeneousAgentType;

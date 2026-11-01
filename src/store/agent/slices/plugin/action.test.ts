@@ -5,23 +5,11 @@ import { agentService } from '@/services/agent';
 
 import { useAgentStore } from '../../store';
 
-// Mock zustand/traditional for store testing
-vi.mock('zustand/traditional');
-
 // Mock agentService
 vi.mock('@/services/agent', () => ({
   AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
   agentService: {
     updateAgentConfig: vi.fn(),
-  },
-}));
-
-// Mock sessionStore
-vi.mock('@/store/session', () => ({
-  useSessionStore: {
-    getState: vi.fn(() => ({
-      refreshSessions: vi.fn(),
-    })),
   },
 }));
 
@@ -67,6 +55,7 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -95,6 +84,7 @@ describe('PluginSlice Actions', () => {
           plugins: [],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -123,6 +113,7 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -151,6 +142,7 @@ describe('PluginSlice Actions', () => {
           plugins: [],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -180,6 +172,7 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -208,6 +201,7 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
   });
@@ -238,6 +232,7 @@ describe('PluginSlice Actions', () => {
           plugins: [],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -267,6 +262,7 @@ describe('PluginSlice Actions', () => {
           plugins: ['existing-plugin'],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
   });
@@ -298,6 +294,7 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'disabled' }, 'plugin-2'],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -328,6 +325,7 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -360,6 +358,7 @@ describe('PluginSlice Actions', () => {
           plugins: ['plugin-2'],
         }),
         expect.any(AbortSignal),
+        undefined,
       );
     });
   });

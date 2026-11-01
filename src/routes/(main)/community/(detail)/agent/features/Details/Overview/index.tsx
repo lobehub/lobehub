@@ -1,7 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Block, Collapse, Flexbox } from '@lobehub/ui';
+import { Accordion, Block, Flexbox, useTheme } from '@lobehub/ui';
 import { ChatList } from '@lobehub/ui/chat';
-import { useTheme } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -61,15 +60,16 @@ const Overview = memo(() => {
 
   return (
     <Flexbox gap={16}>
-      <Collapse
-        defaultActiveKey={['summary']}
-        expandIconPlacement={'end'}
+      <Accordion
+        defaultValue={['summary']}
+        indicatorPlacement={'end'}
+        styles={{ content: { padding: '12px 16px' } }}
         variant={'outlined'}
         items={[
           {
             children: summary || description,
             key: 'summary',
-            label: t('assistants.details.summary.title'),
+            title: t('assistants.details.summary.title'),
           },
         ]}
       />

@@ -33,7 +33,7 @@ const AgentBuilderWelcome = memo<AgentBuilderWelcomeProps>(
             paddingBottom: 16,
           }}
         >
-          <Avatar avatar={agent.avatar || DEFAULT_INBOX_AVATAR} shape={'square'} size={78} />
+          <Avatar avatar={agent?.avatar || DEFAULT_INBOX_AVATAR} shape={'square'} size={78} />
           <Text fontSize={24} weight={'bold'}>
             {t('agentBuilder.title')}
           </Text>

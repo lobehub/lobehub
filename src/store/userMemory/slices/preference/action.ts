@@ -1,7 +1,5 @@
-import { uniqBy } from 'es-toolkit/compat';
-import { produce } from 'immer';
+import { type PreferenceMemorySimple, type UserMemoryItemSimple } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
 import { type DisplayPreferenceMemory } from '@/database/repositories/userMemory';
 import { userMemoryKeys } from '@/libs/swr/keys';
@@ -10,120 +8,138 @@ import { type StoreSetter } from '@/store/types';
 import { LayersEnum } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type UserMemoryStore } from '../../store';
+import { type UserMemoryStore, useUserMemoryStore } from '../../store';
+import { type MemoryListPageResult, MemoryQueryList } from '../utils/memoryQueryList';
+import {
+  PREFERENCE_LIST_PAGE_SIZE,
+  type PreferenceListData,
+  type PreferenceListParams,
+  preferenceListResource,
+} from './projection';
 
 const n = setNamespace('userMemory/preference');
 
-export interface PreferenceQueryParams {
+export interface PreferenceQueryParams extends Partial<PreferenceListParams> {
   page?: number;
-  pageSize?: number;
-  q?: string;
-  sort?: 'capturedAt' | 'scorePriority';
 }
+
+/** Flat mirrors of one page set (`undefined` = the active query has no view yet). */
+const mirrorsOf = (data: PreferenceListData | undefined): Partial<UserMemoryStore> =>
+  data
+    ? {
+        preferenceListData: data,
+        preferences: data.items,
+        preferencesHasMore: data.hasMore,
+        preferencesInit: true,
+        preferencesPage: data.currentPage + 1,
+        preferencesTotal: data.total ?? data.items.length,
+      }
+    : {
+        preferenceListData: undefined,
+        preferences: [],
+        preferencesHasMore: true,
+        preferencesInit: false,
+        preferencesPage: 1,
+        preferencesTotal: 0,
+      };
+
+/**
+ * Flatten a `queryMemories` row into the display shape the preference list
+ * renders. The endpoint returns `{ memory, preference }`; the row is merged in
+ * the same order the previous slice did.
+ */
+const toDisplayPreference = (item: UserMemoryItemSimple): DisplayPreferenceMemory => {
+  const { memory, preference } = item as PreferenceMemorySimple;
+  return { ...memory, ...preference } as unknown as DisplayPreferenceMemory;
+};
 
 type Setter = StoreSetter<UserMemoryStore>;
 export const createPreferenceSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
   new PreferenceActionImpl(set, get, _api);
 
+/**
+ * The user-memory preference list: one `MemoryQueryList` (shared with the other
+ * offset-paged memory lists) behind the slice's long-standing action names.
+ */
 export class PreferenceActionImpl {
-  readonly #get: () => UserMemoryStore;
-  readonly #set: Setter;
+  readonly #list: MemoryQueryList<
+    PreferenceListParams,
+    DisplayPreferenceMemory,
+    PreferenceListData
+  >;
 
   constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
-  }
-
-  deletePreference = async (id: string): Promise<void> => {
-    await memoryCRUDService.deletePreference(id);
-    // Reset list to refresh
-    this.#get().resetPreferencesList({
-      q: this.#get().preferencesQuery,
-      sort: this.#get().preferencesSort,
-    });
-  };
-
-  loadMorePreferences = (): void => {
-    const { preferencesPage, preferencesTotal, preferences } = this.#get();
-    if (preferences.length < (preferencesTotal || 0)) {
-      this.#set(
-        produce((draft) => {
-          draft.preferencesPage = preferencesPage + 1;
-        }),
-        false,
-        n('loadMorePreferences'),
-      );
-    }
-  };
-
-  resetPreferencesList = (params?: Omit<PreferenceQueryParams, 'page' | 'pageSize'>): void => {
-    this.#set(
-      produce((draft) => {
-        draft.preferences = [];
-        draft.preferencesPage = 1;
-        draft.preferencesQuery = params?.q;
-        draft.preferencesSearchLoading = true;
-        draft.preferencesSort = params?.sort;
-      }),
-      false,
-      n('resetPreferencesList'),
-    );
-  };
-
-  useFetchPreferences = (params: PreferenceQueryParams): SWRResponse<any> => {
-    const page = params.page ?? 1;
-
-    return useSWR(
-      userMemoryKeys.preferences(params),
-      async () => {
-        const result = await userMemoryService.queryMemories({
+    this.#list = new MemoryQueryList({
+      actionPrefix: n('preferenceList'),
+      activeKeyField: 'preferenceListKey',
+      entriesField: 'preferenceListEntries',
+      fetchPage: async (params, page) => {
+        const response = await userMemoryService.queryMemories({
           layer: LayersEnum.Preference,
-          page: params.page,
+          page,
           pageSize: params.pageSize,
           q: params.q,
           sort: params.sort,
         });
-
-        return result;
+        return { items: response.items.map(toDisplayPreference), total: response.total };
       },
-      {
-        onSuccess: (data: any) => {
-          this.#set(
-            produce((draft) => {
-              draft.preferencesSearchLoading = false;
+      get,
+      mirror: mirrorsOf,
+      queryFields: ({ q, sort }) => ({ preferencesQuery: q || undefined, preferencesSort: sort }),
+      replicaField: 'preferenceListReplica',
+      resource: preferenceListResource,
+      rootKey: userMemoryKeys.preferences.root,
+      set,
+      useStore: (selector) => useUserMemoryStore(selector),
+    });
+  }
 
-              // Set basic information
-              if (!draft.preferencesInit) {
-                draft.preferencesInit = true;
-                draft.preferencesTotal = data.total;
-              }
+  /** Delete one preference: optimistic, then the offset repair (see `OffsetListPager`). */
+  deletePreference = (id: string): Promise<void> =>
+    this.#list.delete(id, () => memoryCRUDService.deletePreference(id));
 
-              // Transform data structure
-              const transformedItems: DisplayPreferenceMemory[] = data.items.map((item: any) => ({
-                ...item.memory,
-                ...item.preference,
-              }));
+  /** Purge for "delete all memories" (every query, memory + IndexedDB). */
+  internal_clearPreferenceList = (user?: string): Promise<boolean> => this.#list.clear(user);
 
-              // Accumulate data logic
-              if (page === 1) {
-                // First page, set directly
-                draft.preferences = uniqBy(transformedItems, 'id');
-              } else {
-                // Subsequent pages, accumulate data
-                draft.preferences = uniqBy([...draft.preferences, ...transformedItems], 'id');
-              }
+  /** Confirmed edit of one preference in every loaded and persisted query. */
+  internal_updatePreferenceEntity = (
+    id: string,
+    fn: (item: DisplayPreferenceMemory) => DisplayPreferenceMemory,
+  ): void => {
+    this.#list.updateEntity(id, fn);
+  };
 
-              // Update hasMore
-              draft.preferencesHasMore = data.items.length >= (params.pageSize || 20);
-            }),
-            false,
-            n('useFetchPreferences/onSuccess'),
-          );
-        },
-        revalidateOnFocus: false,
-      },
-    );
+  /** Append the next page of the query on screen. */
+  loadMorePreferences = (): void => {
+    void this.#list.loadMore();
+  };
+
+  /** Seed the persisted head page of a query before its route paints. */
+  preHydratePreferences = (
+    query?: Omit<PreferenceQueryParams, 'page' | 'pageSize'>,
+  ): Promise<boolean> =>
+    this.#list.preHydrate({
+      ...query,
+      pageSize: PREFERENCE_LIST_PAGE_SIZE,
+      q: query?.q || undefined,
+    });
+
+  /** Point the list at another search / sort (no page set is dropped). */
+  resetPreferencesList = (params?: Omit<PreferenceQueryParams, 'page' | 'pageSize'>): void => {
+    this.#list.select({ ...params, q: params?.q || undefined });
+  };
+
+  /** Fetch orchestration for the preference list page (see `MemoryQueryList.useFetch`). */
+  useFetchPreferences = (
+    params: PreferenceQueryParams,
+  ): SWRResponse<MemoryListPageResult<DisplayPreferenceMemory>> => {
+    const { page: _page, ...query } = params;
+    return this.#list.useFetch({
+      ...query,
+      pageSize: params.pageSize ?? PREFERENCE_LIST_PAGE_SIZE,
+      q: params.q || undefined,
+    });
   };
 }
 

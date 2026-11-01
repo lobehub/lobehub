@@ -7,6 +7,7 @@ import {
   type BlueBubblesSendOptions,
   type BlueBubblesWebhookEvent,
 } from '@lobechat/chat-adapter-imessage';
+import { isMaskedBotCredential } from '@lobechat/const/bot';
 import type {
   ImessageBridgeConfig,
   ImessageBridgePublicConfig,
@@ -216,12 +217,22 @@ export default class ImessageBridgeService extends ServiceModule {
       config.blueBubblesPassword?.trim() || existing?.blueBubblesPassword?.trim();
     if (!blueBubblesPassword) throw new Error('blueBubblesPassword is required');
 
+    // `webhookSecret` is shared with the cloud provider, so the bridge and the
+    // cloud must hold the same value. The renderer reads the provider through
+    // the replica, whose at-rest copy masks credentials — a cache-first save
+    // therefore hands us the mask, not the secret. Keep the real secret this
+    // bridge already holds instead of persisting the placeholder, which would
+    // make local webhook forwarding fail against the cloud.
+    const webhookSecret = isMaskedBotCredential(config.webhookSecret)
+      ? existing?.webhookSecret
+      : config.webhookSecret;
+
     return {
       applicationId: assertString(config.applicationId, 'applicationId'),
       blueBubblesPassword,
       blueBubblesServerUrl: assertString(config.blueBubblesServerUrl, 'blueBubblesServerUrl'),
       enabled: config.enabled,
-      webhookSecret: assertString(config.webhookSecret, 'webhookSecret'),
+      webhookSecret: assertString(webhookSecret, 'webhookSecret'),
     };
   }
 

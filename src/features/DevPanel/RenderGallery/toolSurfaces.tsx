@@ -1,8 +1,7 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { Block, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { Component, memo, type ReactNode, useMemo } from 'react';
 
 import { type ConversationContext, ConversationProvider } from '@/features/Conversation';
@@ -167,7 +166,7 @@ const InterventionConversationHost = memo<InterventionConversationHostProps>(
     }, [api, derived.args, messageId, toolCallId]);
 
     return (
-      <ConversationProvider hasInitMessages skipFetch context={context} messages={messages}>
+      <ConversationProvider context={context} messages={messages}>
         {children}
       </ConversationProvider>
     );

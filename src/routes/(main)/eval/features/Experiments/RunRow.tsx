@@ -1,8 +1,7 @@
 'use client';
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 

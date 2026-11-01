@@ -9,6 +9,8 @@ import {
   workspaceInvitations,
   workspaceMembers,
   workspaces,
+  workspaceTeamMembers,
+  workspaceTeams,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { hasWorkspaceAdminAccess, WorkspaceModel } from '../workspace';
@@ -79,6 +81,53 @@ describe('WorkspaceModel', () => {
       userId: ownerId,
       workspaceId: workspace.id,
     });
+  });
+
+  it('seeds a team named after the new workspace with the creator in it', async () => {
+    const workspace = await new WorkspaceModel(serverDB, ownerId).create({
+      name: 'Acme Labs',
+      slug: 'acme-labs',
+    });
+
+    const teams = await serverDB
+      .select()
+      .from(workspaceTeams)
+      .where(eq(workspaceTeams.workspaceId, workspace.id));
+    expect(teams).toHaveLength(1);
+    expect(teams[0]).toMatchObject({ createdBy: ownerId, identifier: 'AL', name: 'Acme Labs' });
+
+    const members = await serverDB
+      .select({ userId: workspaceTeamMembers.userId })
+      .from(workspaceTeamMembers)
+      .where(eq(workspaceTeamMembers.teamId, teams[0].id));
+    expect(members).toEqual([{ userId: ownerId }]);
+  });
+
+  it('falls back to a generic team identifier for a non-latin workspace name', async () => {
+    const workspace = await new WorkspaceModel(serverDB, ownerId).create({
+      name: '研发中心',
+      slug: 'rd-center',
+    });
+
+    const [team] = await serverDB
+      .select()
+      .from(workspaceTeams)
+      .where(eq(workspaceTeams.workspaceId, workspace.id));
+    expect(team).toMatchObject({ identifier: 'TEAM', name: '研发中心' });
+  });
+
+  it('names the seeded team after the full workspace name, however long', async () => {
+    const name = `Research ${'x'.repeat(200)}`;
+    const workspace = await new WorkspaceModel(serverDB, ownerId).create({
+      name,
+      slug: 'long-name',
+    });
+
+    const [team] = await serverDB
+      .select()
+      .from(workspaceTeams)
+      .where(eq(workspaceTeams.workspaceId, workspace.id));
+    expect(team.name).toBe(name);
   });
 
   it('derives Admin access from membership.role — the single source of truth', async () => {
@@ -285,6 +334,26 @@ describe('WorkspaceModel', () => {
       gracePeriodUntil: 123,
       keep: true,
     });
+  });
+
+  it('defaults connector management to all members and updates it without replacing settings', async () => {
+    const workspaceId = await createWorkspace();
+    const model = new WorkspaceModel(serverDB, ownerId);
+
+    await expect(model.getConnectorMemberManage(workspaceId)).resolves.toBe('all_members');
+    await model.updateApiKeyMemberCreation(workspaceId, 'admins_only');
+    await model.updateConnectorMemberManage(workspaceId, 'admins_only');
+
+    await expect(model.getConnectorMemberManage(workspaceId)).resolves.toBe('admins_only');
+    await expect(model.getSettings(workspaceId)).resolves.toEqual({
+      apiKey: { memberCreation: 'admins_only' },
+      connector: { memberManage: 'admins_only' },
+      gracePeriodUntil: 123,
+      keep: true,
+    });
+
+    await model.updateConnectorMemberManage(workspaceId, 'all_members');
+    await expect(model.getConnectorMemberManage(workspaceId)).resolves.toBe('all_members');
   });
 
   it('finds a workspace by id and by slug, and returns undefined when missing', async () => {

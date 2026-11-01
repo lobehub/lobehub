@@ -23,6 +23,7 @@ const codexApiHeteroProvider = {
 };
 const remoteHeteroProvider = { type: 'openclaw' as const };
 const remoteHeteroProviderHermes = { type: 'hermes' as const };
+const codexCliProvider = { command: 'codex', type: 'codex' as const };
 
 describe('selectRuntimeType', () => {
   describe('on web (isDesktop = false)', () => {
@@ -34,6 +35,15 @@ describe('selectRuntimeType', () => {
 
     it('returns gateway when gateway mode is enabled', () => {
       expect(selectRuntimeType({ isGatewayMode: true }, opts)).toBe('gateway');
+    });
+
+    it('keeps device-only model providers (Ollama / LM Studio) on gateway', () => {
+      // The agent's model provider is deliberately not a routing input: a
+      // provider only this device can reach still runs its loop on the server,
+      // which relays each LLM attempt back to this client (`agent_llm_relay`).
+      // Falling back to the client runtime here would reintroduce #19624.
+      const localModelAgent = { isGatewayMode: true, model: 'qwen3', provider: 'lmstudio' };
+      expect(selectRuntimeType(localModelAgent, opts)).toBe('gateway');
     });
 
     it('routes local heterogeneousProvider to gateway on web', () => {
@@ -55,6 +65,33 @@ describe('selectRuntimeType', () => {
       expect(
         selectRuntimeType(
           { heterogeneousProvider: remoteHeteroProviderHermes, isGatewayMode: false },
+          opts,
+        ),
+      ).toBe('gateway');
+    });
+
+    it('routes Codex device execution to gateway on Android (isDesktop=false)', () => {
+      // Android cannot spawn the CLI in-process. A bound macOS device must go
+      // through Agent Gateway — never the Provider API (`client`).
+      expect(
+        selectRuntimeType(
+          {
+            boundDeviceId: 'macos-device',
+            executionTarget: 'device',
+            heterogeneousProvider: codexCliProvider,
+            isGatewayMode: false,
+          },
+          opts,
+        ),
+      ).toBe('gateway');
+      expect(
+        selectRuntimeType(
+          {
+            boundDeviceId: 'macos-device',
+            executionTarget: 'device',
+            heterogeneousProvider: codexCliProvider,
+            isGatewayMode: true,
+          },
           opts,
         ),
       ).toBe('gateway');

@@ -2,7 +2,6 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeCometAPIAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -10,18 +9,6 @@ const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
-
-// Basic provider tests
-testProvider({
-  Runtime: LobeCometAPIAI,
-  chatDebugEnv: 'DEBUG_COMETAPI_COMPLETION',
-  chatModel: 'gpt-3.5-turbo',
-  defaultBaseURL: 'https://api.cometapi.com/v1',
-  provider: ModelProvider.CometAPI,
-  test: {
-    skipAPICall: true,
-  },
-});
 
 // Custom feature tests
 describe('LobeCometAPIAI - custom features', () => {

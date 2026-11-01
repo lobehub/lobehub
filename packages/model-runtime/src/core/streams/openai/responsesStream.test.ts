@@ -1574,4 +1574,73 @@ describe('OpenAIResponsesStream', () => {
       expect(onCompletionMock).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('terminal failure events', () => {
+    const collect = async (events: any[]) => {
+      const onCompletion = vi.fn();
+      const protocolStream = OpenAIResponsesStream(createReadableStream(events), {
+        callbacks: { onCompletion },
+      });
+      const chunks = await readStreamChunk(protocolStream);
+      return { chunks, completion: onCompletion.mock.calls[0]?.[0] };
+    };
+
+    it('surfaces response.failed as an error carrying the upstream message', async () => {
+      const { chunks, completion } = await collect([
+        { type: 'response.created', response: { id: 'resp_failed', status: 'in_progress' } },
+        {
+          type: 'response.failed',
+          response: {
+            error: {
+              code: 'server_error',
+              message: 'The server had an error processing your request.',
+            },
+            id: 'resp_failed',
+            status: 'failed',
+            usage: null,
+          },
+        },
+      ]);
+
+      expect(chunks.some((c) => c.includes('event: error'))).toBe(true);
+      expect(completion.error).toMatchObject({
+        message: 'The server had an error processing your request.',
+        type: AgentRuntimeErrorType.ProviderBizError,
+      });
+    });
+
+    it('surfaces a bare error event as an error', async () => {
+      const { completion } = await collect([
+        { type: 'response.created', response: { id: 'resp_error', status: 'in_progress' } },
+        { type: 'error', code: 'rate_limit_exceeded', message: 'Rate limit reached', param: null },
+      ]);
+
+      expect(completion.error).toMatchObject({ message: 'Rate limit reached' });
+    });
+
+    it('reports usage and a length stop for response.incomplete', async () => {
+      const { completion } = await collect([
+        { type: 'response.created', response: { id: 'resp_incomplete', status: 'in_progress' } },
+        {
+          type: 'response.incomplete',
+          response: {
+            id: 'resp_incomplete',
+            incomplete_details: { reason: 'max_output_tokens' },
+            status: 'incomplete',
+            usage: {
+              input_tokens: 10,
+              input_tokens_details: { cached_tokens: 0 },
+              output_tokens: 500,
+              output_tokens_details: { reasoning_tokens: 500 },
+              total_tokens: 510,
+            },
+          },
+        },
+      ]);
+
+      expect(completion.error).toBeUndefined();
+      expect(completion.finishReason).toBe('length');
+      expect(completion.usage.totalOutputTokens).toBe(500);
+    });
+  });
 });

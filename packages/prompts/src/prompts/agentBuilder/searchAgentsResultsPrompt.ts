@@ -16,6 +16,12 @@ export interface SearchAgentResultItem {
   id: string;
   /** Whether the agent comes from the marketplace (vs. the user's workspace). */
   isMarket?: boolean;
+  /**
+   * User-facing display name ("Dario"). Independent of `title`, which is the
+   * agent's role — an agent is usually known by its name, so the model must
+   * see both or it cannot recognize the agent the user is talking about.
+   */
+  name?: string;
   title?: string;
 }
 
@@ -37,8 +43,10 @@ export interface SearchAgentsPromptInput {
 }
 
 const formatAgent = (agent: SearchAgentResultItem): string => {
+  const name = agent.name?.trim();
   const attrs: string[] = [
     `id="${escapeXmlAttr(agent.id)}"`,
+    ...(name ? [`name="${escapeXmlAttr(name)}"`] : []),
     `title="${escapeXmlAttr(agent.title || 'Untitled')}"`,
     `origin="${agent.isMarket ? 'market' : 'workspace'}"`,
   ];
@@ -64,7 +72,7 @@ const formatAgent = (agent: SearchAgentResultItem): string => {
  * @example
  * ```text
  * Found 1 agent in your workspace, showing 1-1:
- * <agent id="agt_xxx" title="CC 2号机" origin="workspace" heteroType="claude-code">My CC machine</agent>
+ * <agent id="agt_xxx" name="Dario" title="CC 2号机" origin="workspace" heteroType="claude-code">My CC machine</agent>
  *
  * Note: Agents with a `heteroType` are heterogeneous agents backed by an external CLI/device runtime. They can execute coding / agentic tasks directly — hand a task to them without extra setup.
  * ```

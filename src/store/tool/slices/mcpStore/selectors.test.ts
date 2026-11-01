@@ -5,6 +5,7 @@ import { MCPInstallStep } from '@/types/plugins';
 
 import { initialState } from '../../initialState';
 import { type ToolStoreState } from '../../initialState';
+import { type MCPPluginListData } from './initialState';
 import { mcpStoreSelectors } from './selectors';
 
 const createMockPluginItem = (id: string, overrides: Partial<PluginItem> = {}): PluginItem =>
@@ -44,9 +45,17 @@ const mockMcpPluginItems: PluginItem[] = [
   createMockPluginItem('plugin-c'),
 ];
 
+const mockPluginList = (items: PluginItem[]): MCPPluginListData => ({
+  currentPage: 0,
+  hasMore: false,
+  items,
+  pageSize: 20,
+  total: items.length,
+});
+
 const baseState: ToolStoreState = {
   ...initialState,
-  mcpPluginItems: mockMcpPluginItems,
+  mcpPluginList: mockPluginList(mockMcpPluginItems),
   installedPlugins: [
     {
       identifier: 'plugin-a',
@@ -105,8 +114,15 @@ describe('mcpStoreSelectors', () => {
       expect(result).toHaveLength(0);
     });
 
-    it('should return empty array when mcpPluginItems is empty', () => {
-      const state: ToolStoreState = { ...baseState, mcpPluginItems: [] };
+    it('should return empty array when the list has not loaded', () => {
+      const state: ToolStoreState = { ...baseState, mcpPluginList: undefined };
+      const result = mcpStoreSelectors.mcpPluginList(state);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should return empty array when the loaded page set is empty', () => {
+      const state: ToolStoreState = { ...baseState, mcpPluginList: mockPluginList([]) };
       const result = mcpStoreSelectors.mcpPluginList(state);
 
       expect(result).toHaveLength(0);
@@ -241,25 +257,9 @@ describe('mcpStoreSelectors', () => {
       expect(result).toBeUndefined();
     });
 
-    it('should return undefined when mcpPluginItems is empty', () => {
-      const state: ToolStoreState = { ...baseState, mcpPluginItems: [] };
+    it('should return undefined when the list has not loaded', () => {
+      const state: ToolStoreState = { ...baseState, mcpPluginList: undefined };
       const result = mcpStoreSelectors.getPluginById('plugin-a')(state);
-
-      expect(result).toBeUndefined();
-    });
-  });
-
-  describe('activeMCPPluginIdentifier', () => {
-    it('should return active MCP plugin identifier when set', () => {
-      const state: ToolStoreState = { ...baseState, activeMCPIdentifier: 'plugin-a' };
-      const result = mcpStoreSelectors.activeMCPPluginIdentifier(state);
-
-      expect(result).toBe('plugin-a');
-    });
-
-    it('should return undefined when no active plugin', () => {
-      const state: ToolStoreState = { ...baseState, activeMCPIdentifier: undefined };
-      const result = mcpStoreSelectors.activeMCPPluginIdentifier(state);
 
       expect(result).toBeUndefined();
     });

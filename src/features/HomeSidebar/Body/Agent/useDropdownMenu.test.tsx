@@ -12,12 +12,6 @@ vi.mock('@lobehub/ui', () => ({
   Icon: () => null,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
 vi.mock('@/features/HomeSidebar/Body/CustomizeSidebarModal', () => ({
   openCustomizeSidebarModal: vi.fn(),
 }));

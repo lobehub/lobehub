@@ -12,17 +12,25 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../acceptanceMerge', () => ({ mergeAcceptanceRounds: mocks.mergeRounds }));
 vi.mock('@/database/models/acceptance', () => ({
-  AcceptanceModel: vi.fn(() => ({
-    findById: mocks.findById,
-    updateStatus: mocks.updateStatus,
-  })),
+  AcceptanceModel: vi.fn(function () {
+    return {
+      findById: mocks.findById,
+      updateStatus: mocks.updateStatus,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({ listByAcceptance: mocks.listByAcceptance })),
+  VerifyRunModel: vi.fn(function () {
+    return { listByAcceptance: mocks.listByAcceptance };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({ VerifyCheckResultModel: vi.fn() }));
 vi.mock('@/database/models/verifyEvidence', () => ({ VerifyEvidenceModel: vi.fn() }));
-vi.mock('@/database/models/verifyReport', () => ({ VerifyReportModel: vi.fn(() => ({})) }));
+vi.mock('@/database/models/verifyReport', () => ({
+  VerifyReportModel: vi.fn(function () {
+    return {};
+  }),
+}));
 vi.mock('@/database/models/goal', () => ({ GoalModel: vi.fn() }));
 vi.mock('@/database/models/task', () => ({ TaskModel: vi.fn() }));
 vi.mock('@/database/models/topic', () => ({ TopicModel: vi.fn() }));

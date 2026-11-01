@@ -16,7 +16,26 @@ const sheetHandlers = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ActionIcon: ({
+    onClick,
+    title,
+    ...rest
+  }: {
+    onClick?: () => void;
+    title?: string;
+    [key: string]: unknown;
+  }) => (
+    <button
+      data-testid={(rest as any)['data-testid']}
+      title={title}
+      type="button"
+      onClick={onClick}
+    >
+      {title}
+    </button>
+  ),
   FloatingSheet: ({
     children,
     dismissible,
@@ -59,28 +78,6 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    onClick,
-    title,
-    ...rest
-  }: {
-    onClick?: () => void;
-    title?: string;
-    [key: string]: unknown;
-  }) => (
-    <button
-      data-testid={(rest as any)['data-testid']}
-      title={title}
-      type="button"
-      onClick={onClick}
-    >
-      {title}
-    </button>
-  ),
-  Icon: ({ icon }: { icon: () => void }) => <span data-icon={icon.name} />,
-}));
-
 const mergedHooksCaptured = vi.hoisted(() => ({
   current: undefined as
     | undefined
@@ -114,19 +111,11 @@ vi.mock('@/features/Conversation', () => ({
     />
   ),
   ChatList: () => null,
-  ConversationProvider: ({
-    children,
-    context,
-    hooks,
-    skipFetch,
-    hasInitMessages,
-    messages,
-  }: any) => {
+  ConversationProvider: ({ children, context, hooks, skipFetch, messages }: any) => {
     mergedHooksCaptured.current = hooks;
     return (
       <div
         data-context={JSON.stringify(context)}
-        data-has-init-messages={String(hasInitMessages ?? false)}
         data-has-messages-prop={String(messages !== undefined)}
         data-skip-fetch={String(skipFetch ?? false)}
         data-testid="provider"
@@ -251,21 +240,14 @@ describe('FloatingChatPanel', () => {
     });
   });
 
-  it('lets ConversationProvider drive the fetch when the chat store has no slice yet', () => {
-    const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
-    const provider = getByTestId('provider');
-    expect(provider.dataset.skipFetch).toBe('false');
-    expect(provider.dataset.hasInitMessages).toBe('false');
-  });
-
-  it('syncs the chat store slice into ConversationProvider when the topic already has messages', () => {
+  it('shows the chat store bucket of its context instead of passing a static transcript', () => {
     mockChatState.current.dbMessagesMap = {
       'agent-1:topic-1:null': [{ id: 'msg-1' }],
     };
     const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
     const provider = getByTestId('provider');
-    expect(provider.dataset.hasInitMessages).toBe('true');
-    expect(provider.dataset.hasMessagesProp).toBe('true');
+    expect(provider.dataset.skipFetch).toBe('false');
+    expect(provider.dataset.hasMessagesProp).toBe('false');
   });
 
   it('forwards title and headerActions to floating panel header', () => {

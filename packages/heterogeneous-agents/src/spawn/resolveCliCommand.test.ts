@@ -50,6 +50,8 @@ const existingFiles = (files: Record<string, string | true>) => {
 };
 
 const noErr = null;
+const DROID_ACP_HELP = `Usage: droid exec [options] [prompt]
+  --output-format <format>  Output format. ACP modes use bidirectional JSON-RPC.`;
 const TRAE_ACP_HELP = `Start the ACP server
 
 Usage:
@@ -90,7 +92,11 @@ const rejectUnqueuedExecFile = () => {
 const importModule = () => import('./resolveCliCommand');
 
 describe('resolveCliCommand', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // The login-shell PATH is cached for the life of the module now, which in a
+    // real app means "for the life of the process". A suite shares one module,
+    // so without this a later case reads the PATH an earlier one queued.
+    (await importModule()).invalidateLoginShellPathCache();
     execFileMock.mockReset();
     execMock.mockReset();
     accessMock.mockReset();
@@ -240,6 +246,20 @@ describe('resolveCliCommand', () => {
       });
     });
 
+    it('resolves and validates Devin using its version banner', async () => {
+      callExecFile('/Users/x/.local/bin/devin\n');
+      callExecFile('devin 3000.4.25 (7e8e528a)');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('devin', 'devin');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/Users/x/.local/bin/devin',
+        version: '3000.4.25',
+      });
+    });
+
     it("falls back to Cursor's unambiguous alias when another CLI owns `agent`", async () => {
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
@@ -307,6 +327,34 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         version: '0.120.52',
       });
       expect(execFileMock.mock.calls[2]![1]).toEqual(['acp', 'serve', '--help']);
+    });
+
+    it('accepts Factory Droid only when droid exec exposes ACP output', async () => {
+      callExecFile('/usr/local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile(DROID_ACP_HELP);
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+      const status = await detectHeterogeneousCliCommand('droid', 'droid');
+
+      expect(status).toMatchObject({
+        available: true,
+        path: '/usr/local/bin/droid',
+        version: '0.206.0',
+      });
+      expect(execFileMock.mock.calls[2]![1]).toEqual(['exec', '--help']);
+    });
+
+    it('rejects a droid binary without ACP output support', async () => {
+      callExecFile('/usr/local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile('Usage: droid exec [options]\n--output-format text|jsonl');
+
+      const { detectHeterogeneousCliCommand } = await importModule();
+
+      await expect(detectHeterogeneousCliCommand('droid', 'droid')).resolves.toMatchObject({
+        available: false,
+      });
     });
 
     it('accepts the TRAE Enterprise CLI bare-semver banner', async () => {
@@ -611,8 +659,37 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         const status = await detectHeterogeneousCliCommand('codex', 'codex');
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
+        expect(status.path).toBe(
+          '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
+        );
         expect(execFileMock.mock.calls[2]![0]).toBe(
+          '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('falls back to the flat ChatGPT.app CLI from bundles before the codex-cli package layout', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which codex
+        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app codex-cli/bin/codex
+        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app codex-cli/bin/codex
+        callExecFile('codex-cli 0.142.5'); // /Applications/ChatGPT.app flat codex
+
+        const { detectHeterogeneousCliCommand } = await importModule();
+        const status = await detectHeterogeneousCliCommand('codex', 'codex');
+
+        expect(status.available).toBe(true);
+        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
+        expect(execFileMock.mock.calls[3]![0]).toBe(
           '/Applications/ChatGPT.app/Contents/Resources/codex',
         );
       } finally {
@@ -630,8 +707,8 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
-        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
+        // ChatGPT.app: codex-cli/bin/codex then flat codex, /Applications and ~/Applications
+        for (let i = 0; i < 4; i++) callExecFileError(new Error('ENOENT'));
         callExecFile('codex-cli 0.142.5'); // /Applications/Codex.app
 
         const { detectHeterogeneousCliCommand } = await importModule();
@@ -639,7 +716,7 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
-        expect(execFileMock.mock.calls[3]![0]).toBe(
+        expect(execFileMock.mock.calls[5]![0]).toBe(
           '/Applications/Codex.app/Contents/Resources/codex',
         );
       } finally {
@@ -698,19 +775,28 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       }
     });
 
-    it('re-reads the login-shell PATH on a later scan', async () => {
+    it("sees an installer's PATH edit once the cache is invalidated", async () => {
+      // The scan used to re-read the login shell every time, which is what made
+      // this work — and put a second-long, timeout-prone probe on the critical
+      // path of every spawn. The freshness is now explicit: Rescan invalidates,
+      // and the next scan reads the shell again.
       const originalPath = process.env.PATH;
       const originalShell = process.env.SHELL;
       process.env.PATH = '/usr/bin:/bin';
       process.env.SHELL = '/bin/zsh';
 
       try {
-        const { detectValidatedCommand } = await importModule();
+        const { detectValidatedCommand, invalidateLoginShellPathCache } = await importModule();
+        invalidateLoginShellPathCache();
         const options = { validateKeywords: ['new-agent'] };
 
         callExecFileError(new Error('not found')); // which new-agent
         callExecFile('/usr/bin:/bin'); // login shell before installation
         expect((await detectValidatedCommand('new-agent', options)).available).toBe(false);
+
+        // Without this the pre-installation PATH stays cached, which is the
+        // whole point of the cache — the user pressing Rescan is what clears it.
+        invalidateLoginShellPathCache();
 
         callExecFileError(new Error('not found')); // inherited PATH is still stale
         callExecFile('/Users/x/.local/bin:/usr/bin:/bin'); // shell PATH after installation
@@ -1183,45 +1269,15 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       expect(resolved.command).toBe('/Users/x/.local/bin/amp');
     });
 
-    it('defines opencode as the default OpenCode command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.opencode).toBe('opencode');
-    });
-
-    it('defines agent as the default Cursor command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.cursor).toBe('agent');
-    });
-
-    it('defines grok as the default Grok Build command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND['grok-build']).toBe('grok');
-    });
-
-    it('defines pi as the default Pi command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
-    });
-
-    it('defines qodercli as the default Qoder command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
-    });
-
-    it('defines traecli as the default TRAE command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.trae).toBe('traecli');
-    });
-
-    it('resolves the default bare command to the validated absolute path', async () => {
+    it('resolves the default bare command to the validated absolute path and version', async () => {
       callExecFile('/usr/local/bin/codex\n');
       callExecFile('codex-cli 0.142.5');
 
       const { resolveHeteroSpawnCommand } = await importModule();
       const resolved = await resolveHeteroSpawnCommand('codex', undefined);
 
-      expect(resolved.command).toBe('/usr/local/bin/codex');
-      expect(resolved.pathEnv).toBeUndefined();
+      // The version decides how Claude Code is handed the `lh` guide.
+      expect(resolved).toEqual({ command: '/usr/local/bin/codex', version: '0.142.5' });
     });
 
     it('surfaces the login-shell PATH as pathEnv when resolution used it', async () => {
@@ -1257,10 +1313,8 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
-        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
-        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app
-        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app
+        // ChatGPT.app (two layouts) + Codex.app × /Applications and ~/Applications
+        for (let i = 0; i < 6; i++) callExecFileError(new Error('ENOENT'));
 
         const { resolveHeteroSpawnCommand } = await importModule();
         const resolved = await resolveHeteroSpawnCommand('codex', 'codex');
@@ -1307,5 +1361,130 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
     expect(status.available).toBe(false);
     // Sanity: keep `path` unused-import-free.
     expect(path.sep).toBeTruthy();
+  });
+});
+
+describe('login-shell PATH probe', () => {
+  beforeEach(() => {
+    execFileMock.mockReset();
+    execMock.mockReset();
+    rejectUnqueuedExecFile();
+    vi.mocked(os.platform).mockReturnValue('darwin');
+    process.env.SHELL = '/bin/zsh';
+  });
+
+  /** `which` misses, then the login shell answers. */
+  const queueMissThenShell = (shellPath: string) => {
+    callExecFileError(new Error('command not found'));
+    callExecFile(shellPath);
+  };
+
+  it('resolves the login-shell PATH once and reuses it for later probes', async () => {
+    // It used to be discarded the moment it settled, so every spawn re-paid a
+    // second-long subprocess on the critical path.
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    queueMissThenShell('/opt/tools/bin:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    const shellCallsAfterFirst = execFileMock.mock.calls.filter(
+      ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+    ).length;
+    expect(shellCallsAfterFirst).toBe(1);
+
+    execFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    callExecFileError(new Error('command not found'));
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(
+      execFileMock.mock.calls.filter(
+        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('reports a timed-out probe as its own failure, not as a missing CLI', async () => {
+    // The bug this replaces: a busy machine blew the probe's budget and the
+    // user was told to install a CLI that was present and had just run.
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('command not found'));
+    const timedOut = Object.assign(new Error('spawn timed out'), { killed: true });
+    callExecFileError(timedOut);
+
+    const status = await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(status.available).toBe(false);
+    expect(module.isLoginShellTimeoutStatus(status)).toBe(true);
+  });
+
+  it('still reads as a plain miss when the shell simply has nothing', async () => {
+    const module = await importModule();
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('command not found'));
+    callExecFileError(new Error('shell exploded'));
+
+    const status = await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(status.available).toBe(false);
+    expect(module.isLoginShellTimeoutStatus(status)).toBe(false);
+  });
+});
+
+describe('login-shell PATH invalidation races', () => {
+  beforeEach(async () => {
+    (await importModule()).invalidateLoginShellPathCache();
+    execFileMock.mockReset();
+    execMock.mockReset();
+    rejectUnqueuedExecFile();
+    vi.mocked(os.platform).mockReturnValue('darwin');
+    process.env.SHELL = '/bin/zsh';
+  });
+
+  it('refuses the cache to a probe that started before an invalidation', async () => {
+    // A Rescan during the (now ten-second) probe would otherwise have the older
+    // probe write the pre-Rescan PATH back moments later — hiding the very edit
+    // the user pressed Rescan to see.
+    const module = await importModule();
+
+    let releaseShell: (() => void) | undefined;
+    // `which` misses, then the shell probe is held open.
+    callExecFileError(new Error('command not found'));
+    execFileMock.mockImplementationOnce(((file: string, args: any, opts: any, cb: any) => {
+      const callback = typeof opts === 'function' ? opts : cb;
+      releaseShell = () => callback(noErr, { stderr: '', stdout: '/stale/bin:/usr/bin' });
+      return {} as any;
+    }) as any);
+
+    const inFlight = module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+    // Let the detector reach the held shell probe before the Rescan lands.
+    await vi.waitFor(() => expect(releaseShell).toBeTypeOf('function'));
+
+    module.invalidateLoginShellPathCache();
+
+    callExecFileError(new Error('still not found'));
+    releaseShell!();
+    await inFlight;
+
+    // The disowned probe must not have populated the cache, so the next lookup
+    // goes back to the shell.
+    execFileMock.mockReset();
+    rejectUnqueuedExecFile();
+    callExecFileError(new Error('command not found'));
+    callExecFile('/fresh/bin:/usr/bin');
+    callExecFileError(new Error('still not found'));
+    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
+
+    expect(
+      execFileMock.mock.calls.filter(
+        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
+      ),
+    ).toHaveLength(1);
   });
 });

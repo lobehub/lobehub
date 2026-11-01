@@ -1,7 +1,6 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Center } from '@lobehub/ui';
 import { TRPCClientError } from '@trpc/client';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,11 +8,17 @@ import { useTranslation } from 'react-i18next';
 import NotFound from '@/components/404';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 
+import { resolveShareNotFoundCopy, type ShareNotFoundCopy } from './notFoundCopy';
+
+export type { ShareNotFoundCopy } from './notFoundCopy';
+
 interface ShareErrorViewProps {
   error: unknown;
+  /** What a missing share is called on this page; defaults to the topic copy. */
+  notFound?: ShareNotFoundCopy;
 }
 
-const ShareErrorView = memo<ShareErrorViewProps>(({ error }) => {
+const ShareErrorView = memo<ShareErrorViewProps>(({ error, notFound }) => {
   const { t } = useTranslation('chat');
 
   const trpcError = error instanceof TRPCClientError ? error : null;
@@ -61,12 +66,14 @@ const ShareErrorView = memo<ShareErrorViewProps>(({ error }) => {
     );
   }
 
+  const copy = resolveShareNotFoundCopy(notFound, {
+    desc: t('sharePage.error.notFound.subtitle'),
+    title: t('sharePage.error.notFound.title'),
+  });
+
   return (
     <Center height={'100%'} padding={48}>
-      <NotFound
-        desc={t('sharePage.error.notFound.subtitle')}
-        title={t('sharePage.error.notFound.title')}
-      />
+      <NotFound desc={copy.desc} title={copy.title} />
     </Center>
   );
 });

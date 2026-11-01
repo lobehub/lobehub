@@ -1,15 +1,19 @@
 'use client';
 
 import type { ListHeterogeneousAgentModelsParams } from '@lobechat/types';
+import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useChatInputResourceAccess } from '../../hooks/useChatInputResourceAccess';
+import { useTopicId } from '../../hooks/useTopicId';
 import { ModelCatalogSelector } from './ModelCatalogSelector';
 import SelectorMenu from './SelectorMenu';
 import { resolveSelectorShape } from './selectorView';
@@ -22,24 +26,35 @@ const HeteroModel = memo(() => {
     isEqual,
   );
   const { allowed: canCreateContent, reason } = usePermission('create_content');
-  // Model/effort picks write the shared heterogeneous-provider config. Hide
-  // the selector when this caller cannot configure that shared resource.
+  // Model, effort and speed picks are topic-scoped once a topic exists; mode
+  // still writes the shared heterogeneous-provider config.
   const { canConfigureResource } = useChatInputResourceAccess();
   const enabled = canCreateContent && canConfigureResource;
   const patch = useHeteroProviderPatch({ agentId, enabled, provider });
+  // Model, effort and speed pins follow this composer's topic once one exists
+  // (see `useTopicId`), never the global active topic.
+  const topicId = useTopicId();
+  const topicScoped = !!topicId;
+  const topicPin = useChatStore(
+    (s) => (topicId ? topicSelectors.getTopicHeteroPinById(topicId)(s) : undefined),
+    isEqual,
+  );
+  const effectiveProvider = provider
+    ? applyTopicModelToHeterogeneousProvider(provider, topicPin)
+    : undefined;
 
-  const shape = resolveSelectorShape(provider, enabled);
+  const shape = resolveSelectorShape(effectiveProvider, enabled);
 
-  if (shape.kind === 'none' || !provider) return null;
+  if (shape.kind === 'none' || !effectiveProvider) return null;
 
   if (shape.kind === 'catalog')
     return (
       <ModelCatalogSelector
         agentId={agentId}
         disabled={false}
-        model={shape.capability.model.resolve(provider)}
+        model={shape.capability.model.resolve(effectiveProvider)}
         permissionReason={reason}
-        type={provider.type as ListHeterogeneousAgentModelsParams['type']}
+        type={effectiveProvider.type as ListHeterogeneousAgentModelsParams['type']}
         onSelect={(value) => void patch({ model: value })}
       />
     );
@@ -50,7 +65,9 @@ const HeteroModel = memo(() => {
       capability={shape.capability}
       patch={patch}
       permissionReason={reason}
-      provider={provider}
+      provider={effectiveProvider}
+      topicPin={topicPin}
+      topicScoped={topicScoped}
     />
   );
 });

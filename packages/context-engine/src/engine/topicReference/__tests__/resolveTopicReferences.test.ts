@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { parseReferTopicTags, resolveTopicReferences } from '../resolveTopicReferences';
+import {
+  mentionsTopic,
+  parseReferTopicTags,
+  resolveTopicReferences,
+} from '../resolveTopicReferences';
 
 // ============ parseReferTopicTags ============
 
@@ -274,5 +278,25 @@ describe('resolveTopicReferences', () => {
 
     expect(result![0].summary).toBeUndefined();
     expect(result![0].recentMessages).toBeUndefined();
+  });
+});
+
+describe('mentionsTopic', () => {
+  it('detects a <refer_topic> tag', () => {
+    expect(mentionsTopic([{ content: '<refer_topic name="Plan" id="topic-1" />\nGo on' }])).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    'tpc_AbCdEf123456 read this and rewrite the outline',
+    'read (tpc_AbCdEf123456) first',
+    'read tpc\\_AbCdEf123456 first',
+  ])('detects a raw topic id in %s', (content) => {
+    expect(mentionsTopic([{ content }])).toBe(true);
+  });
+
+  it.each(['no topic here', 'mytpc_AbCdEf123456', 'tpc_short', 'tpc_'])('ignores %s', (content) => {
+    expect(mentionsTopic([{ content }])).toBe(false);
   });
 });

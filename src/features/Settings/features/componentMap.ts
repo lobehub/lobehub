@@ -1,11 +1,11 @@
 import { createElement } from 'react';
 
+import { SettingsBodySkeleton } from '@/components/Skeleton/Settings/Page';
 import SettingsProfileSkeleton from '@/components/Skeleton/Settings/Profile';
-import SettingsSectionSkeleton from '@/components/Skeleton/Settings/Section';
 import dynamic from '@/libs/next/dynamic';
 import { SettingsTabs } from '@/store/global/initialState';
 
-const loading = (_debugId: string) => () => createElement(SettingsSectionSkeleton);
+const loading = (_debugId: string) => () => createElement(SettingsBodySkeleton);
 
 export const componentMap = {
   [SettingsTabs.Advanced]: dynamic(() => import('../advanced'), {
@@ -29,6 +29,9 @@ export const componentMap = {
   [SettingsTabs.Messenger]: dynamic(() => import('../messenger'), {
     loading: loading('Settings > Messenger'),
   }),
+  [SettingsTabs.Integrations]: dynamic(() => import('../integrations'), {
+    loading: loading('Settings > Integrations'),
+  }),
   [SettingsTabs.Notification]: dynamic(
     () => import('@/business/client/BusinessSettingPages/Notification'),
     {
@@ -50,8 +53,17 @@ export const componentMap = {
   [SettingsTabs.Storage]: dynamic(() => import('../storage'), {
     loading: loading('Settings > Storage'),
   }),
+  [SettingsTabs.Trash]: dynamic(() => import('../trash'), {
+    loading: loading('Settings > Trash'),
+  }),
   [SettingsTabs.Devices]: dynamic(() => import('../devices'), {
     loading: loading('Settings > Devices'),
+  }),
+  [SettingsTabs.Drive]: dynamic(() => import('../drive'), {
+    loading: loading('Settings > Drive'),
+  }),
+  [SettingsTabs.Environments]: dynamic(() => import('../environments'), {
+    loading: loading('Settings > Environments'),
   }),
   [SettingsTabs.Labels]: dynamic(() => import('../labels'), {
     loading: loading('Settings > Labels'),
@@ -83,6 +95,9 @@ export const componentMap = {
   }),
   [SettingsTabs.Connector]: dynamic(() => import('../connector'), {
     loading: loading('Settings > Connector'),
+  }),
+  [SettingsTabs.Tools]: dynamic(() => import('../tools'), {
+    loading: loading('Settings > Tools'),
   }),
 
   [SettingsTabs.Plans]: dynamic(() => import('@/business/client/BusinessSettingPages/Plans'), {

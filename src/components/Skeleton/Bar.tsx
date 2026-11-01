@@ -1,7 +1,6 @@
 'use client';
 
-import { Skeleton } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Skeleton } from '@lobehub/ui';
 
 export interface SkeletonBarProps {
   height: number;
@@ -10,10 +9,8 @@ export interface SkeletonBarProps {
 }
 
 const SkeletonBar = ({ height, width = '100%', radius }: SkeletonBarProps) => (
-  <Skeleton.Button
-    active
-    block
-    size={'small'}
+  <Skeleton
+    height={28}
     style={{
       borderRadius: radius ?? cssVar.borderRadius,
       height,

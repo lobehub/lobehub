@@ -14,6 +14,7 @@ import {
   agentProviderAccounts,
   agents,
   agentsFiles,
+  agentShares,
   agentsKnowledgeBases,
   chatGroups,
   chatGroupsAgents,
@@ -34,7 +35,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { AGENT_OWNERSHIP_STALE, AgentModel } from '../agent';
+import { AGENT_OWNERSHIP_STALE, AGENT_SHARED_TRANSFER_BLOCKED, AgentModel } from '../agent';
 import { AGENT_TRANSFER_IN_PROGRESS, AgentTransferJobModel } from '../agentTransferJob';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -70,6 +71,34 @@ afterEach(async () => {
 });
 
 describe('AgentModel.transferAgentOwnership', () => {
+  it.each(['link', 'private'] as const)(
+    'rejects ownership handover with a %s share without changing the agent or share',
+    async (visibility) => {
+      const agent = await ownerModel.create({
+        slug: 'shared-handover',
+        title: 'Shared Handover',
+        visibility: 'public',
+      });
+      const [share] = await serverDB
+        .insert(agentShares)
+        .values({
+          agentId: agent.id,
+          shareConfig: { allowReadMemory: true, monthlySpendLimit: 5 },
+          visibility,
+        })
+        .returning();
+
+      await expect(
+        handover({ agentId: agent.id, fromUserId: ownerId, toUserId: recipientId }),
+      ).rejects.toThrow(AGENT_SHARED_TRANSFER_BLOCKED);
+
+      expect(await serverDB.select().from(agents).where(eq(agents.id, agent.id))).toEqual([agent]);
+      expect(await serverDB.select().from(agentShares).where(eq(agentShares.id, share.id))).toEqual(
+        [share],
+      );
+    },
+  );
+
   it('flips only the agent owner; scope, slug and visibility stay put', async () => {
     const agent = await ownerModel.create({
       slug: 'handover-agent',

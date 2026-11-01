@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,22 +43,18 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export const SetTaskScheduleInspector = memo<
   BuiltinInspectorProps<SetTaskScheduleParams, SetTaskScheduleState>
->(({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
   const { t } = useTranslation('plugin');
 
-  const identifier = args?.identifier || partialArgs?.identifier;
+  const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
   const automationMode = args?.automationMode ?? partialArgs?.automationMode;
   const modeLabel = automationMode === null ? 'off' : automationMode;
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-task.apiName.setTaskSchedule')}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-task.apiName.setTaskSchedule')}
+      </span>
       {identifier && <span className={styles.identifierChip}>{identifier}</span>}
       {modeLabel && (
         <>

@@ -1,5 +1,4 @@
-import { ActionIcon, Flexbox, Image } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, cx, Flexbox, Image } from '@lobehub/ui';
 import { RotateCw, Trash } from 'lucide-react';
 import { memo } from 'react';
 

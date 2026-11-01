@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo, type PropsWithChildren, useEffect } from 'react';
 import { useLocation } from 'react-router';
 

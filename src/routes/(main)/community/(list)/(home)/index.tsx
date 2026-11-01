@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useDiscoverStore } from '@/store/discover';
+import { assistantSelectors, mcpSelectors } from '@/store/discover/selectors';
 import { AssistantSorts, McpSorts } from '@/types/discover';
 
 import ListLoading from '../../components/ListLoading';
@@ -15,34 +16,34 @@ import CreatorRewardBanner from './features/CreatorRewardBanner';
 
 const HomePage = memo(() => {
   const { t } = useTranslation('discover');
-  const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
+  const useAssistantList = useDiscoverStore((s) => s.useFetchAssistantList);
   const useMcpList = useDiscoverStore((s) => s.useFetchMcpList);
 
   const {
-    data: assistantList,
-    isLoading: assistantLoading,
     error: assistantError,
+    isLoading: assistantLoading,
     mutate: refetchAssistants,
+    queryKey: assistantQueryKey,
   } = useAssistantList({
     page: 1,
     pageSize: 12,
     sort: AssistantSorts.Recommended,
   });
+  const assistantList = useDiscoverStore(assistantSelectors.assistantList(assistantQueryKey));
 
   const {
-    data: mcpList,
-    isLoading: pluginLoading,
     error: mcpError,
+    isLoading: pluginLoading,
     mutate: refetchMcp,
+    queryKey: mcpQueryKey,
   } = useMcpList({
     page: 1,
     pageSize: 12,
     sort: McpSorts.Recommended,
   });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const mcpList = useDiscoverStore(mcpSelectors.mcpList(mcpQueryKey));
 
-  // Gate each section independently so a failure in one featured list surfaces a
-  // Retry there instead of leaving the whole page on a permanent skeleton
-  //
   return (
     <>
       <CreatorRewardBanner />
@@ -74,5 +75,7 @@ const HomePage = memo(() => {
     </>
   );
 });
+
+HomePage.displayName = 'CommunityHomePage';
 
 export default HomePage;

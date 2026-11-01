@@ -45,9 +45,25 @@ export class ContextTreeBuilder {
   }
 
   /**
-   * Transform a single IdNode and append to contextTree array
+   * Transform an IdNode and everything it continues into, appending to contextTree
    */
   private transformToLinear(idNode: IdNode, contextTree: ContextNode[]): void {
+    // A long topic is one parent chain thousands of messages deep. Each step
+    // hands back the nodes it continues with instead of recursing into them;
+    // pushing them in reverse keeps the original depth-first output order.
+    const stack: IdNode[] = [idNode];
+    while (stack.length > 0) {
+      const next: IdNode[] = [];
+      this.transformStep(stack.pop()!, contextTree, next);
+      for (let i = next.length - 1; i >= 0; i -= 1) stack.push(next[i]);
+    }
+  }
+
+  /**
+   * Transform a single IdNode into contextTree and collect, in output order,
+   * the IdNodes the walk continues with.
+   */
+  private transformStep(idNode: IdNode, contextTree: ContextNode[], next: IdNode[]): void {
     const message = this.messageMap.get(idNode.id);
     if (!message) return;
 
@@ -68,7 +84,7 @@ export class ContextTreeBuilder {
           (child) => child.id === compareNode.activeColumnId,
         );
         if (activeColumnIdNode && activeColumnIdNode.children.length > 0) {
-          this.transformToLinear(activeColumnIdNode.children[0], contextTree);
+          next.push(activeColumnIdNode.children[0]);
         }
       }
       return;
@@ -89,7 +105,7 @@ export class ContextTreeBuilder {
           (child) => child.id === compareNode.activeColumnId,
         );
         if (activeColumnIdNode && activeColumnIdNode.children.length > 0) {
-          this.transformToLinear(activeColumnIdNode.children[0], contextTree);
+          next.push(activeColumnIdNode.children[0]);
         }
       }
       return;
@@ -111,7 +127,7 @@ export class ContextTreeBuilder {
       // applies the same all-member continuation).
       for (const child of idNode.children) {
         if (child.children.length > 0) {
-          this.transformToLinear(child.children[0], contextTree);
+          next.push(child.children[0]);
         }
       }
       return;
@@ -129,7 +145,7 @@ export class ContextTreeBuilder {
       });
 
       for (const nonTaskChild of nonTaskChildren) {
-        this.transformToLinear(nonTaskChild, contextTree);
+        next.push(nonTaskChild);
       }
 
       // Also check for children of task messages (e.g., summary as child of last task)
@@ -142,7 +158,7 @@ export class ContextTreeBuilder {
         for (const taskGrandchild of taskChild.children) {
           const taskGrandchildMsg = this.messageMap.get(taskGrandchild.id);
           if (taskGrandchildMsg && taskGrandchildMsg.role !== 'task') {
-            this.transformToLinear(taskGrandchild, contextTree);
+            next.push(taskGrandchild);
           }
         }
       }
@@ -157,7 +173,7 @@ export class ContextTreeBuilder {
       // Find the next message after tools
       const nextMessage = this.messageCollector.findNextAfterTools(message, idNode);
       if (nextMessage) {
-        this.transformToLinear(nextMessage, contextTree);
+        next.push(nextMessage);
       }
       return;
     }
@@ -188,7 +204,7 @@ export class ContextTreeBuilder {
 
     // Continue with single child
     if (idNode.children.length === 1) {
-      this.transformToLinear(idNode.children[0], contextTree);
+      next.push(idNode.children[0]);
     }
   }
 

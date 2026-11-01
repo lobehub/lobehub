@@ -2,6 +2,7 @@ import { type ExecSubAgentParams, ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiAgentService } from '@/services/aiAgent';
+import { buildLlmExecutorDeclaration, oneShotRelay } from '@/services/llmRelay';
 import type { ChatStore } from '@/store/chat/store';
 
 import { ClientSubAgentTransport } from './ClientSubAgentTransport';
@@ -11,7 +12,17 @@ vi.mock('@/services/aiAgent', () => ({
     execSubAgentTask: vi.fn(),
     getSubAgentTaskStatus: vi.fn(),
     interruptTask: vi.fn(),
+    releaseSubAgentLlmRelay: vi.fn(),
   },
+}));
+
+vi.mock('@/business/client/trpc-headers', () => ({
+  getBusinessTrpcHeaders: vi.fn(async () => ({ 'X-Workspace-Id': 'ws_a1b2c3d4e5f6' })),
+}));
+
+vi.mock('@/services/llmRelay', () => ({
+  buildLlmExecutorDeclaration: vi.fn(),
+  oneShotRelay: { run: vi.fn() },
 }));
 
 const params: ExecSubAgentParams = {
@@ -53,6 +64,10 @@ describe('ClientSubAgentTransport', () => {
     vi.clearAllMocks();
     vi.mocked(aiAgentService.execSubAgentTask).mockResolvedValue(dispatchResult);
     vi.mocked(aiAgentService.interruptTask).mockResolvedValue({ success: true });
+    vi.mocked(aiAgentService.releaseSubAgentLlmRelay).mockResolvedValue({ success: true });
+    // Outside the `agent_llm_relay` rollout: no executor, the request runs as-is.
+    vi.mocked(buildLlmExecutorDeclaration).mockReturnValue(undefined);
+    vi.mocked(oneShotRelay.run).mockImplementation(async (_provider, request) => request());
   });
 
   afterEach(() => {
@@ -183,5 +198,50 @@ describe('ClientSubAgentTransport', () => {
       status: 'timed_out',
       success: false,
     });
+  });
+
+  it('stands by on a relay channel while the child runs, so its device-only LLM calls reach this tab', async () => {
+    const { store } = createStore();
+    const llmExecutor = {
+      capabilities: ['llm_relay@1'],
+      clientId: 'tab-1',
+      providers: ['ollama', 'openai'],
+    };
+    const channel = 'llmcall:user-1:ws_a1b2c3d4e5f6-3f2a9c1d8e7b4a60';
+    let standingBy = false;
+    vi.mocked(buildLlmExecutorDeclaration).mockImplementation(() =>
+      // The provider runtime state loads after the transport is called.
+      vi.mocked(oneShotRelay.run).mock.calls.length > 0 ? llmExecutor : undefined,
+    );
+    vi.mocked(oneShotRelay.run).mockImplementation(async (provider, request, options) => {
+      // Bound to the workspace the dispatch runs in.
+      expect(options).toMatchObject({ scope: 'ws_a1b2c3d4e5f6' });
+      // The providers are read when the relay asks for them, after the
+      // provider runtime state has loaded — not snapshotted at dispatch.
+      expect(typeof provider === 'function' ? provider() : provider).toEqual(['ollama', 'openai']);
+      standingBy = true;
+      try {
+        return await request({ channel, headers: {} });
+      } finally {
+        standingBy = false;
+      }
+    });
+    vi.mocked(aiAgentService.getSubAgentTaskStatus).mockImplementation(async () => {
+      // Still subscribed while the child is polled.
+      expect(standingBy).toBe(true);
+      return { result: 'done', status: 'completed' } as any;
+    });
+
+    const result = await new ClientSubAgentTransport(() => store, 'root-operation').execSubAgent(
+      params,
+    );
+
+    expect(aiAgentService.execSubAgentTask).toHaveBeenCalledWith({
+      ...params,
+      llmExecutor,
+      llmRelayChannel: channel,
+    });
+    expect(aiAgentService.releaseSubAgentLlmRelay).toHaveBeenCalledWith({ channel });
+    expect(result).toMatchObject({ result: 'done', status: 'completed', success: true });
   });
 });

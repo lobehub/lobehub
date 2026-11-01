@@ -1,5 +1,4 @@
-import { Block, Icon, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Icon, Text } from '@lobehub/ui';
 import { LockIcon, UsersIcon } from 'lucide-react';
 import { type ComponentProps, memo } from 'react';
 import { useTranslation } from 'react-i18next';

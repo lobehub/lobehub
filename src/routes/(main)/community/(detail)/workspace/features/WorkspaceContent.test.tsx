@@ -5,10 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { type WorkspaceDetailContextConfig, WorkspaceDetailProvider } from './DetailProvider';
 import WorkspaceContent from './WorkspaceContent';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 vi.mock('../../user/features/useUserDetail', () => ({
   useUserDetail: () => ({ handleStatusChange: vi.fn() }),
 }));

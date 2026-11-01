@@ -1,10 +1,7 @@
-import { Icon, Text } from '@lobehub/ui';
-import { Space } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Puzzle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-// Create styles using antd-style
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
@@ -64,11 +61,11 @@ export default function PluginEmptyState() {
         {t('dev.preview.empty.title')}
       </Text>
       <Text className={styles.description}>{t('dev.preview.empty.desc')}</Text>
-      <Space align="center" orientation="vertical">
+      <Flexbox align={'center'} gap={8}>
         <div className={styles.line} style={{ width: 128 }} />
         <div className={styles.line} style={{ width: 96 }} />
         <div className={styles.line} style={{ width: 48 }} />
-      </Space>
+      </Flexbox>
     </div>
   );
 }

@@ -64,6 +64,27 @@ afterEach(async () => {
 });
 
 describe('AgentEvalRunModel', () => {
+  describe('count', () => {
+    beforeEach(async () => {
+      await serverDB.insert(agentEvalRuns).values([
+        { datasetId, status: 'completed', userId },
+        { datasetId, status: 'running', userId },
+        // Another user's run must never be counted
+        { datasetId, status: 'completed', userId: userId2 },
+      ]);
+    });
+
+    it('should count only runs owned by the user', async () => {
+      expect(await runModel.count()).toBe(2);
+    });
+
+    it('should apply status and datasetId filters', async () => {
+      expect(await runModel.count({ status: 'completed' })).toBe(1);
+      expect(await runModel.count({ datasetId })).toBe(2);
+      expect(await runModel.count({ datasetId: 'nonexistent' })).toBe(0);
+    });
+  });
+
   describe('create', () => {
     it('should create a new run with minimal parameters', async () => {
       const params = {

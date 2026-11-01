@@ -4,11 +4,13 @@ import {
   LocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system';
 
-import { deviceGateway } from '@/server/services/deviceGateway';
+import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
+import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
+import { withoutDeviceReplay } from './withoutDeviceReplay';
 
 /**
  * Which arg carries the working directory for the APIs that consume one. The
@@ -46,8 +48,25 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
     if (!context.userId) {
       throw new Error('userId is required for Local System device proxy execution');
     }
+    // No active device: `activeDeviceId` is legitimately empty in device-capable
+    // runs (never bound yet, or the device dropped offline mid-run and the plan
+    // re-resolved to `device-unrouted`). Historically this guard threw a bare
+    // error string with no recovery path — the model kept stalling on it (see
+    // agent vent reports). Return a structured, actionable result per API call
+    // instead: the model is told exactly how to recover (activate a device, or
+    // ask the user to reconnect) rather than hitting an opaque failure.
     if (!context.activeDeviceId) {
-      throw new Error('activeDeviceId is required for Local System device proxy execution');
+      const noDevice = buildNoActiveDeviceResult('Local System', {
+        remoteDeviceToolAvailable: context.toolManifestMap
+          ? REMOTE_DEVICE_TOOL_IDENTIFIER in context.toolManifestMap
+          : true,
+      });
+
+      const proxy: Record<string, (args: any) => Promise<any>> = {};
+      for (const api of LocalSystemManifest.api) {
+        proxy[api.name] = async () => noDevice;
+      }
+      return proxy;
     }
 
     // Resolve the workspace scope the same way `remote-device` does, recovering
@@ -109,10 +128,15 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // CLI would resolve to the device credentials' PERSONAL scope, which is
         // how a workspace agent ends up unable to find (or edit) itself. Set on
         // every command, so an `lh` reached indirectly (`bash -lc 'lh …'`, a
-        // script, a Makefile) inherits the scope too. The model's own `env`
-        // wins: it may be deliberately overriding the scope.
+        // script, a Makefile) inherits the scope too. The run id travels with
+        // it: `lh goal plan` and the other run-attributed commands need it. The
+        // model's own `env` wins: it may be deliberately overriding the scope.
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
-          const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
+          finalArgs = { ...finalArgs, topicId: context.topicId, agentId: context.agentId };
+          const lhEnv = buildDeviceLhEnv({
+            operationId: context.operationId,
+            workspaceId: await getContentWorkspaceId(),
+          });
           if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
 
           // The sandbox decision belongs to the run's owner, not to the model:
@@ -133,7 +157,8 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           }
         }
 
-        return deviceGateway.executeToolCall(
+        const result = await executeAuthorizedDeviceToolCall(
+          context.serverDB,
           {
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,
@@ -150,6 +175,8 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           },
           context.executionTimeoutMs,
         );
+
+        return withoutDeviceReplay(result);
       };
     }
 

@@ -1,5 +1,4 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider, Flexbox, Text } from '@lobehub/ui';
 import { type FC, type ReactNode } from 'react';
 
 interface SettingHeaderProps {

@@ -1,8 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Upload } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Icon, Upload } from '@lobehub/ui';
 import { Loader2Icon, PencilIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -85,7 +83,7 @@ const AvatarRow = () => {
   const canUpload = isLogin;
 
   const avatarContent = canUpload ? (
-    <Upload beforeUpload={handleUploadAvatar} itemRender={() => void 0} maxCount={1}>
+    <Upload maxCount={1} onFiles={([file]) => handleUploadAvatar(file)}>
       <div className={styles.wrapper}>
         <UserAvatar size={40} />
         <div

@@ -1,7 +1,7 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { ClipboardList } from 'lucide-react';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { type MarkdownElementProps } from '../type';
 import { useTaskCardScope } from './context';
@@ -133,6 +133,7 @@ const Render = memo<TaskRenderProps>(({ children }) => {
   const enabled = useTaskCardScope();
   const text = typeof children === 'string' ? children : String(children ?? '');
   const parsed = useMemo<ParsedTaskContent>(() => parseTaskContent(text), [text]);
+  const { t } = useTranslation('chat');
 
   if (!enabled) {
     return <pre className={styles.fallback}>{text}</pre>;
@@ -161,7 +162,7 @@ const Render = memo<TaskRenderProps>(({ children }) => {
           <div className={styles.divider} />
           <Flexbox gap={4}>
             <Text fontSize={12} type={'secondary'}>
-              Instruction
+              {t('taskCard.field.instruction')}
             </Text>
             <div className={styles.instruction}>{parsed.instruction}</div>
           </Flexbox>
@@ -170,9 +171,9 @@ const Render = memo<TaskRenderProps>(({ children }) => {
 
       {(parsed.description || parsed.dependencies || parsed.review) && (
         <Flexbox gap={4}>
-          <FieldRow label="Description" value={parsed.description} />
-          <FieldRow label="Dependencies" value={parsed.dependencies} />
-          <FieldRow label="Review" value={parsed.review} />
+          <FieldRow label={t('taskCard.field.description')} value={parsed.description} />
+          <FieldRow label={t('taskCard.field.dependencies')} value={parsed.dependencies} />
+          <FieldRow label={t('taskCard.field.review')} value={parsed.review} />
         </Flexbox>
       )}
 
@@ -181,10 +182,13 @@ const Render = memo<TaskRenderProps>(({ children }) => {
         parsed.workspace?.length ||
         parsed.reviewRubrics?.length) && (
         <Flexbox gap={4}>
-          <RawSection items={parsed.subtasks ?? []} label="Subtasks" />
-          <RawSection items={parsed.activities ?? []} label="Activities" />
-          <RawSection items={parsed.workspace ?? []} label="Workspace" />
-          <RawSection items={parsed.reviewRubrics ?? []} label="Review rubrics" />
+          <RawSection items={parsed.subtasks ?? []} label={t('taskCard.field.subtasks')} />
+          <RawSection items={parsed.activities ?? []} label={t('taskCard.field.activities')} />
+          <RawSection items={parsed.workspace ?? []} label={t('taskCard.field.workspace')} />
+          <RawSection
+            items={parsed.reviewRubrics ?? []}
+            label={t('taskCard.field.reviewRubrics')}
+          />
         </Flexbox>
       )}
     </Flexbox>

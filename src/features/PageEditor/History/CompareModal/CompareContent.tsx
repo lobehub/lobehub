@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { RotateCcwIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';

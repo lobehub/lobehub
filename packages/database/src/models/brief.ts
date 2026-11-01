@@ -1,4 +1,4 @@
-import { NEWS_BRIEF_TYPES } from '@lobechat/types';
+import { HOME_FEED_EXCLUDED_BRIEF_TYPES, NEWS_BRIEF_TYPES } from '@lobechat/types';
 import { and, desc, eq, gte, inArray, isNull, lt, notInArray, type SQL, sql } from 'drizzle-orm';
 
 import { agents } from '../schemas/agent';
@@ -38,7 +38,7 @@ export class BriefModel {
   // share content rows), which would leak each member's briefs to everyone else
   // in the workspace. Brief ownership therefore always requires `user_id` to
   // match, in both personal and workspace mode.
-  private ownership = (): SQL =>
+  ownership = (): SQL =>
     this.workspaceId
       ? (and(eq(briefs.userId, this.userId), eq(briefs.workspaceId, this.workspaceId)) as SQL)
       : (and(eq(briefs.userId, this.userId), isNull(briefs.workspaceId)) as SQL);
@@ -105,7 +105,13 @@ export class BriefModel {
       .from(briefs)
       .leftJoin(agents, eq(briefs.agentId, agents.id))
       .leftJoin(tasks, eq(briefs.taskId, tasks.id))
-      .where(and(this.ownership(), isNull(briefs.resolvedAt)))
+      .where(
+        and(
+          this.ownership(),
+          isNull(briefs.resolvedAt),
+          notInArray(briefs.type, HOME_FEED_EXCLUDED_BRIEF_TYPES),
+        ),
+      )
       .orderBy(
         sql`CASE
           WHEN ${briefs.priority} = 'urgent' THEN 0

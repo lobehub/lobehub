@@ -1,7 +1,8 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Flexbox } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { AskUserQuestionItem } from './types';

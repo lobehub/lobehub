@@ -57,6 +57,9 @@ export function defineConfig() {
     const url = new URL(request.url);
     logDefault('Processing request: %s %s', request.method, request.url);
 
+    // Public installation instructions must remain readable by coding agents.
+    if (url.pathname === '/acceptance/skill.md') return NextResponse.next();
+
     // skip all api requests
     if (backendApiEndpoints.some((path) => url.pathname.startsWith(path))) {
       logDefault('Skipping API request: %s', url.pathname);
@@ -212,6 +215,7 @@ export function defineConfig() {
     '/api/webhooks(.*)',
     '/api/workflows(.*)',
     '/api/agent(.*)',
+    '/api/acceptance-review(.*)',
     '/api/dev(.*)',
     '/webapi(.*)',
     '/trpc(.*)',
@@ -237,6 +241,16 @@ export function defineConfig() {
     '/oidc/handoff',
     '/oidc/device/auth',
     '/oidc/token',
+    // OIDC protocol endpoints a client reads before (or without) any browser
+    // session: discovery and JWKS are public by spec, and userinfo authenticates
+    // with the bearer access token the provider itself checks. Session-gating them
+    // redirects non-browser callers to the sign-in HTML, which is what a
+    // third-party app registered through Settings → OAuth Apps hits first.
+    '/oidc/.well-known/openid-configuration',
+    '/oidc/jwks',
+    '/oidc/me',
+    // The review popup's last page: a code or a refusal for the opener, never a session read.
+    '/oidc/review/callback',
     // Interaction details for the consent/login page — must be reachable
     // before the user has a session, so it cannot be session-gated.
     '/oidc/interaction/(.*)',
@@ -244,12 +258,14 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
-    // standalone verification report viewer — the run id in the URL is the
-    // read-only capability for viewing the report without a signed-in session.
+    // retired standalone report links (/verify/:runId) — they now redirect to
+    // the run's acceptance round, and must stay reachable without a session:
+    // the run id is still the read capability, enforced by the run's own
+    // `visibility` in `verify.getRunAcceptanceRound`.
     '/verify/(.*)',
-    // acceptance decision page — same shape as /verify/:id: the id is the
-    // capability; the tRPC layer enforces the aggregate's `visibility` (a
-    // private aggregate 404s for anyone but the owner / workspace members).
+    // acceptance decision page — the id is the capability; the tRPC layer
+    // enforces the aggregate's `visibility` (a private aggregate 404s for
+    // anyone but the owner / workspace members).
     '/acceptance/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)
     // and the random_id token is the actual capability check; no need for

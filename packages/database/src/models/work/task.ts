@@ -4,17 +4,18 @@ import type {
   TaskWorkListItem,
   TaskWorkSummaryItem,
 } from '@lobechat/types';
-import type { SQL } from 'drizzle-orm';
-import { and, desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
-import { taskOwnership, type WorkContext, workOwnership } from './context';
+import { TaskModel } from '../task';
+import { type WorkContext, workOwnership } from './context';
 import {
   currentTaskSummaryFields,
   currentWorkListFields,
   eventTaskSummaryFields,
   eventWorkListFields,
+  taskDeletedField,
   taskSummaryJoin,
   type TaskWorkSummaryQueryRow,
   truncateSummaryText,
@@ -23,12 +24,6 @@ import {
   type WorkTypeAdapter,
 } from './internal';
 import { registerWorkVersion } from './writes';
-
-const normalizeTaskLookup = (value?: string) => {
-  const trimmed = value?.trim();
-  if (!trimmed) return undefined;
-  return trimmed.startsWith('task_') ? trimmed : trimmed.toUpperCase();
-};
 
 /**
  * Task display fields captured by each immutable version. Live data stays on
@@ -47,31 +42,9 @@ const resolveTask = async (
   ctx: WorkContext,
   params: RegisterTaskWorkParams,
 ): Promise<TaskItem | null> => {
-  const filters: SQL[] = [];
-  const taskId = normalizeTaskLookup(params.taskId);
-  const taskIdentifier = normalizeTaskLookup(params.taskIdentifier);
-
-  if (taskId) {
-    filters.push(taskId.startsWith('task_') ? eq(tasks.id, taskId) : eq(tasks.identifier, taskId));
-  }
-
-  if (taskIdentifier) {
-    filters.push(
-      taskIdentifier.startsWith('task_')
-        ? eq(tasks.id, taskIdentifier)
-        : eq(tasks.identifier, taskIdentifier),
-    );
-  }
-
-  if (filters.length === 0) return null;
-
-  const [task] = await ctx.db
-    .select()
-    .from(tasks)
-    .where(and(taskOwnership(ctx), filters.length === 1 ? filters[0] : or(...filters)))
-    .limit(1);
-
-  return task ?? null;
+  const ref = params.taskId ?? params.taskIdentifier;
+  if (!ref) return null;
+  return new TaskModel(ctx.db, ctx.userId, ctx.workspaceId).resolve(ref);
 };
 
 export const registerTaskWork = async (ctx: WorkContext, params: RegisterTaskWorkParams) => {
@@ -94,16 +67,16 @@ export const registerTaskWork = async (ctx: WorkContext, params: RegisterTaskWor
 
 /** Card-facing task fields from a live-coalesced task projection. */
 const toTaskCardFields = (
-  task: TaskWorkSummaryQueryRow['task'],
-): Pick<TaskWorkListItem, 'task' | 'taskDeleted'> => ({
+  row: Pick<TaskWorkSummaryQueryRow, 'resourceDeleted' | 'task'>,
+): Pick<TaskWorkListItem, 'resourceDeleted' | 'task'> => ({
+  resourceDeleted: row.resourceDeleted,
   task: {
-    identifier: task.identifier,
-    instruction: truncateSummaryText(task.instruction),
-    name: task.name,
-    priority: task.priority,
-    status: task.status,
+    identifier: row.task.identifier,
+    instruction: truncateSummaryText(row.task.instruction),
+    name: row.task.name,
+    priority: row.task.priority,
+    status: row.task.status,
   },
-  taskDeleted: task.deleted,
 });
 
 /**
@@ -118,6 +91,7 @@ export const taskWorkAdapter: WorkTypeAdapter = {
       .select({
         eventCreatedAt: workVersions.createdAt,
         ...currentTaskSummaryFields,
+        resourceDeleted: taskDeletedField,
         work: currentWorkListFields,
       })
       .from(workVersions)
@@ -133,7 +107,7 @@ export const taskWorkAdapter: WorkTypeAdapter = {
       eventCreatedAt: row.eventCreatedAt,
       item: {
         ...row.work,
-        ...toTaskCardFields(row.task),
+        ...toTaskCardFields(row),
         resourceType: 'task' as const,
         type: 'task' as const,
       } satisfies TaskWorkListItem,
@@ -144,6 +118,7 @@ export const taskWorkAdapter: WorkTypeAdapter = {
     const rows = await ctx.db
       .select({
         ...eventTaskSummaryFields,
+        resourceDeleted: taskDeletedField,
         version: versionEventSelection,
         work: eventWorkListFields,
       })
@@ -156,7 +131,7 @@ export const taskWorkAdapter: WorkTypeAdapter = {
 
     return rows.map((row) => ({
       ...row.work,
-      ...toTaskCardFields(row.task),
+      ...toTaskCardFields(row),
       resourceType: 'task' as const,
       type: 'task' as const,
       version: row.version,
@@ -165,7 +140,7 @@ export const taskWorkAdapter: WorkTypeAdapter = {
 
   mapCurrentRow: (row, totalCost): TaskWorkSummaryItem => ({
     ...row.work,
-    ...toTaskCardFields(row.task),
+    ...toTaskCardFields(row),
     event: row.event,
     resourceType: 'task' as const,
     totalCost,

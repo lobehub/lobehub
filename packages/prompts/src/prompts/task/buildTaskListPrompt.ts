@@ -1,5 +1,5 @@
 import type { TaskSummary } from './index';
-import { priorityLabel, statusIcon, timeAgo } from './index';
+import { priorityLabel, statusIcon, taskIdentity, timeAgo } from './index';
 import type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 import { buildTaskManagerDefaultsBlock } from './taskManagerDefaults';
 
@@ -33,7 +33,7 @@ export const buildTaskListPrompt = (input: BuildTaskListPromptInput, now?: Date)
         ? `  ${timeAgo(typeof t.createdAt === 'string' ? t.createdAt : t.createdAt.toISOString(), now)}`
         : '';
       lines.push(
-        `  ${t.identifier} ${statusIcon(t.status)} ${t.status}  [${priorityLabel(t.priority)}]  ${t.name || '(unnamed)'}${ago}`,
+        `  ${taskIdentity(t)} ${statusIcon(t.status)} ${t.status}  [${priorityLabel(t.priority)}]  ${t.name || '(unnamed)'}${ago}`,
       );
     }
     if (total > shown) {

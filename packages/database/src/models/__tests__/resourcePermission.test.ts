@@ -46,7 +46,9 @@ describe('ResourcePermissionModel', () => {
   it.each([
     ['agent', 'edit'],
     ['agentGroup', 'edit'],
-    ['document', 'view'],
+    // Regression: documents used to fall back to `view`, which left every
+    // workspace page read-only for anyone but its creator.
+    ['document', 'edit'],
   ] as const)(
     'falls back to %s-specific default %s without a row',
     async (resourceType, expected) => {
@@ -271,5 +273,29 @@ describe('ResourcePermissionModel collaborators', () => {
 
     expect(await model.getAccessLevel('knowledgeBase', kbId)).toBeNull();
     expect(await model.listCollaborators('knowledgeBase', kbId)).toEqual([]);
+  });
+
+  it('upsert and remove are no-ops on an empty member list', async () => {
+    // An empty batch must not emit an `in ()` / `values ()` statement — Drizzle
+    // throws on those — and must not disturb the rows already stored.
+    await model.upsertCollaborators({
+      accessLevel: 'edit',
+      createdBy: ownerId,
+      resourceId: kbId,
+      resourceType: 'knowledgeBase',
+      userIds: [memberA],
+    });
+
+    await model.upsertCollaborators({
+      accessLevel: 'edit',
+      createdBy: ownerId,
+      resourceId: kbId,
+      resourceType: 'knowledgeBase',
+      userIds: [],
+    });
+    await model.removeCollaborators('knowledgeBase', kbId, []);
+
+    const rows = await model.listCollaborators('knowledgeBase', kbId);
+    expect(rows.map((r) => r.userId)).toEqual([memberA]);
   });
 });

@@ -41,7 +41,7 @@ afterEach(async () => {
  * Performance tests for MessageModel.query with MessageGroup aggregation
  * These tests run sequentially to avoid resource contention
  */
-describe.sequential('MessageModel.query performance', () => {
+describe('MessageModel.query performance', { concurrent: false }, () => {
   it('should query 500 messages within 100ms', { retry: 3 }, async () => {
     // Create 500 messages
     const messageData = Array.from({ length: 500 }, (_, i) => ({

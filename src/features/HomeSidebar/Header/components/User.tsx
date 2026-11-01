@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 

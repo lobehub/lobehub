@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveCommittedSelectionRect, shouldHideChatPanel } from './overlaySelectionState';
+import {
+  resolveCommittedSelectionRect,
+  resolveEscapeAction,
+  shouldHideChatPanel,
+} from './overlaySelectionState';
 
 describe('overlaySelectionState', () => {
+  it('backs out of an empty capture pass to the composer on Esc', () => {
+    expect(resolveEscapeAction({ mode: 'capture', selectionCount: 0 })).toBe('exitCapture');
+  });
+
+  it('closes the overlay on Esc from the composer or once screenshots exist', () => {
+    expect(resolveEscapeAction({ mode: 'compose', selectionCount: 0 })).toBe('close');
+    expect(resolveEscapeAction({ mode: 'capture', selectionCount: 2 })).toBe('close');
+  });
+
   it('keeps the pending selection rect visible until the committed selection arrives', () => {
     expect(
       resolveCommittedSelectionRect({

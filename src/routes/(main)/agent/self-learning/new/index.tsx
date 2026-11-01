@@ -1,14 +1,14 @@
 'use client';
 
-import { memo, Suspense } from 'react';
+import { memo } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
 import CreateDomainPage from '@/features/SelfLearning/CreateDomainPage';
+import SelfLearningSurfaceGate from '@/features/SelfLearning/SurfaceGate';
 
 const AgentSelfLearningCreatePage = memo(() => (
-  <Suspense fallback={<Loading debugId="SelfLearningCreate" />}>
+  <SelfLearningSurfaceGate>
     <CreateDomainPage />
-  </Suspense>
+  </SelfLearningSurfaceGate>
 ));
 
 AgentSelfLearningCreatePage.displayName = 'AgentSelfLearningCreatePage';

@@ -5,13 +5,32 @@ import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
 import { createAgentSignalSelfIterationPrompt } from '@lobechat/prompts';
 import { isNonEmptyString } from '@lobechat/utils';
+import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
 
+import { AGENT_SIGNAL_DEFAULTS } from '../../../constants';
 import { defineSourceHandler } from '../../../runtime/middleware';
 import { enqueueSelfIterationRun } from '../dispatch/enqueueSelfIterationRun';
+import { resolveSelfIterationResponseLanguage } from '../dispatch/resolveResponseLanguage';
 import { buildNightlyReviewSourceId, ReviewRunStatus } from '../types';
 import type { CollectNightlyReviewContextInput, NightlyReviewContext } from './collect';
+
+const log = debug('lobe-server:agent-signal:nightly-review');
+
+/**
+ * Describes a refused nightly topic claim for skip details and logs.
+ *
+ * Before:
+ * - `'exhausted'`
+ *
+ * After:
+ * - `"Nightly review topic limit reached (50 topics per night)."`
+ */
+export const describeNightlyTopicQuotaDenial = (reason: 'exhausted' | 'unavailable') =>
+  reason === 'exhausted'
+    ? `Nightly review topic limit reached (${AGENT_SIGNAL_DEFAULTS.nightlyReviewTopicLimitPerUser} topics per night).`
+    : 'Nightly review topic limit unavailable; skipped to stay within the limit.';
 
 /**
  * Validated nightly review request payload consumed by the handler.
@@ -49,6 +68,8 @@ export interface NightlyReviewSourceGuardInput extends NightlyReviewSourcePayloa
 export interface NightlyReviewSourceHandlerResult extends Record<string, unknown> {
   /** Stable agent id being reviewed when payload validation succeeds. */
   agentId?: string;
+  /** Human-readable skip detail, e.g. when the nightly topic quota is used up. */
+  detail?: string;
   /** Stable guard key used for idempotency when payload validation succeeds. */
   guardKey?: string;
   /** User-local date in YYYY-MM-DD form when payload validation succeeds. */
@@ -56,7 +77,8 @@ export interface NightlyReviewSourceHandlerResult extends Record<string, unknown
   /** Operation id of the enqueued background self-iteration run, when dispatched. */
   operationId?: string;
   /** Machine-readable skip reason for non-dispatched runs. */
-  reason?: 'gate_disabled' | 'invalid_payload';
+  reason?:
+    'gate_disabled' | 'invalid_payload' | 'topic_quota_exhausted' | 'topic_quota_unavailable';
   /** Review window end as an ISO string when payload validation succeeds. */
   reviewWindowEnd?: string;
   /** Review window start as an ISO string when payload validation succeeds. */
@@ -89,6 +111,13 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
    * @default builtin agent default
    */
   maxSteps?: number;
+  /**
+   * Resolves the owner's response language for user-visible run output.
+   * Overridable for tests.
+   *
+   * @default reads the user's `responseLanguage` setting
+   */
+  resolveResponseLanguage?: typeof resolveSelfIterationResponseLanguage;
   /** Workspace id, threaded so the enqueued run targets the correct workspace. */
   workspaceId?: string;
 }
@@ -285,6 +314,7 @@ export const createNightlyReviewSourceHandler = (
           () =>
             deps.collectContext({
               agentId: payload.agentId,
+              localDate: payload.localDate,
               reviewWindowEnd: payload.reviewWindowEnd,
               reviewWindowStart: payload.reviewWindowStart,
               userId: payload.userId,
@@ -305,10 +335,37 @@ export const createNightlyReviewSourceHandler = (
           },
         );
 
+        // Every topic this agent had was refused by the user's nightly topic quota: the night's
+        // topic limit is used up by earlier agents, so this review is skipped.
+        if (context.topicQuota && context.topicQuota.admittedTopicCount === 0) {
+          const detail = describeNightlyTopicQuotaDenial(context.topicQuota.reason);
+          log(
+            'skip nightly review user=%s agent=%s date=%s: %s',
+            payload.userId,
+            payload.agentId,
+            payload.localDate,
+            detail,
+          );
+
+          return {
+            ...baseResult,
+            detail,
+            reason:
+              context.topicQuota.reason === 'exhausted'
+                ? 'topic_quota_exhausted'
+                : 'topic_quota_unavailable',
+            status: ReviewRunStatus.Skipped,
+          };
+        }
+
+        const responseLanguage = await (
+          deps.resolveResponseLanguage ?? resolveSelfIterationResponseLanguage
+        )(deps.db, payload.userId);
         const prompt = createAgentSignalSelfIterationPrompt({
           agentId: payload.agentId,
           context,
           mode: 'review',
+          responseLanguage,
           sourceId: source.sourceId,
           userId: payload.userId,
           window: {

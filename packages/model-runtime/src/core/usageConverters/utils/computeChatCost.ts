@@ -1,4 +1,3 @@
-import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '@lobechat/const/currency';
 import type { ModelTokensUsage } from '@lobechat/types';
 import debug from 'debug';
 import type {
@@ -9,6 +8,9 @@ import type {
   PricingUnitName,
   TieredPricingUnit,
 } from 'model-bank';
+
+import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '../../../const/currency';
+import { DEFAULT_CACHE_TTL } from '../../anthropicCompatibleFactory/resolveCacheTTL';
 
 const log = debug('lobe-cost:computeChatPricing');
 
@@ -233,6 +235,7 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
   imageOutput: (usage) => usage.outputImageTokens,
 
   videoInput: resolveInputVideoTokens,
+  videoGeneration: (usage) => usage.outputVideoTokens,
 
   imageGeneration: () => undefined,
 
@@ -310,7 +313,11 @@ const resolveLookupKey = (
 
   const missingParams: string[] = [];
   const params = unit.lookup.pricingParams.map((param) => {
-    const source = options?.lookupParams?.[param];
+    // Paths that never resolve a TTL (e.g. OpenAI-compatible providers falling back to an
+    // Anthropic card) still write to the cache, which the API does for its default 5 minutes.
+    const source =
+      options?.lookupParams?.[param] ??
+      (param === 'ttl' && DEFAULT_CACHE_TTL in unit.lookup.prices ? DEFAULT_CACHE_TTL : undefined);
     if (source === undefined || source === null) {
       missingParams.push(param);
       return 'undefined';
@@ -375,6 +382,11 @@ const resolveQuantity = (
   usage: ModelTokensUsage,
   context: UnitQuantityResolverContext,
 ) => {
+  // Character-billed units (e.g. TTS) count input characters instead of tokens.
+  if (unit.unit === 'millionCharacters') {
+    return unit.name === 'textInput' ? usage.inputCharacters : undefined;
+  }
+
   const resolver = UNIT_QUANTITY_RESOLVERS[unit.name as PricingUnitName];
   const quantity = resolver?.(usage, context);
   return typeof quantity === 'number' ? quantity : undefined;
@@ -426,7 +438,7 @@ export const computeChatCost = (
     if (quantity === undefined) continue;
 
     if (unit.strategy === 'fixed') {
-      if (unit.unit !== 'millionTokens')
+      if (unit.unit !== 'millionTokens' && unit.unit !== 'millionCharacters')
         throw new Error(`Unsupported chat pricing unit: ${unit.unit}`);
 
       const fixedUnit = unit as FixedPricingUnit;

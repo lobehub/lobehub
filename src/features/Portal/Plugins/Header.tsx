@@ -12,7 +12,7 @@ import Title from './Title';
  * ToolUI portal header: the generic back/close chrome plus the tool's title and,
  * when a tool registers them, header right-actions (e.g. prev/next nav).
  */
-const Header = () => {
+const Header = ({ onClose }: { onClose?: () => void }) => {
   const [toolUIIdentifier = '', messageId] = useChatStore((s) => [
     chatPortalSelectors.toolUIIdentifier(s),
     chatPortalSelectors.toolMessageId(s),
@@ -35,6 +35,7 @@ const Header = () => {
           />
         ) : undefined
       }
+      onClose={onClose}
     />
   );
 };

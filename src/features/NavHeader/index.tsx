@@ -6,6 +6,11 @@ import { memo } from 'react';
 import ToggleLeftPanelButton, { isMacDesktop } from '@/features/NavPanel/ToggleLeftPanelButton';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { isMobileSurface } from '@/utils/mobileSurface';
+
+import { getNavHeaderLeading } from './leading';
+import MobileHeaderNav from './MobileHeaderNav';
+import MobileRouteTitle from './MobileRouteTitle';
 
 export interface NavHeaderProps extends Omit<FlexboxProps, 'children'> {
   children?: ReactNode;
@@ -37,11 +42,15 @@ const NavHeader = memo<NavHeaderProps>(
   }) => {
     const expand = useGlobalStore(systemStatusSelectors.showLeftPanel);
 
-    const noContent = !left && !right && !children;
+    const leading = getNavHeaderLeading({
+      expand: !!expand,
+      isMacDesktop,
+      mobile: isMobileSurface(),
+      noContent: !left && !right && !children,
+      showTogglePanelButton,
+    });
 
-    // When empty, this header only rendered to host the collapse toggle. Hide it
-    // when expanded, and also on macOS desktop where the toggle moved to the titlebar.
-    if (noContent && (expand || isMacDesktop)) return;
+    if (leading === 'hidden') return;
 
     return (
       <Flexbox
@@ -66,8 +75,10 @@ const NavHeader = memo<NavHeaderProps>(
             justify={'flex-start'}
             style={styles?.left}
           >
-            {showTogglePanelButton && !expand && <ToggleLeftPanelButton />}
-            {left}
+            {leading === 'mobile' && <MobileHeaderNav />}
+            {leading === 'toggle' && <ToggleLeftPanelButton />}
+            {/* `left={null}` opts a mobile header out of the route-title fallback. */}
+            {left === undefined && leading === 'mobile' && !children ? <MobileRouteTitle /> : left}
           </Flexbox>
           {children && (
             <Flexbox className={slotClassNames?.center} flex={1} style={styles?.center}>

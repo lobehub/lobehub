@@ -6,7 +6,14 @@ import type {
   ScreenCaptureOverlayTheme,
 } from '@lobechat/electron-client-ipc';
 import { ModelIcon } from '@lobehub/icons';
-import { AlertCircleIcon, CheckIcon, ChevronDownIcon, Loader2Icon, XIcon } from 'lucide-react';
+import {
+  AlertCircleIcon,
+  CameraIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  Loader2Icon,
+  XIcon,
+} from 'lucide-react';
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -45,10 +52,12 @@ export interface ChatPanelSubmitPayload {
 export interface ChatPanelProps {
   agentId?: string;
   agents?: ScreenCaptureAgentOption[];
+  capturing?: boolean;
   hidden?: boolean;
   modelId?: string;
   models?: ScreenCaptureModelOption[];
   onRemoveSelection: (selectionId: string) => void;
+  onStartCapture: () => void;
   onSubmit: (payload: ChatPanelSubmitPayload) => void;
   placementResetKey?: number;
   selections: ChatPanelSelection[];
@@ -59,6 +68,15 @@ export interface ChatPanelProps {
 
 export const shouldShowOverlayModelSelector = (agent?: ScreenCaptureAgentOption) =>
   !agent?.heterogeneousType;
+
+/** Screenshots are optional; a prompt alone is sendable once attached uploads finish. */
+export const canSubmitOverlayPrompt = ({
+  prompt,
+  selections,
+}: {
+  prompt: string;
+  selections: Pick<ChatPanelSelection, 'uploadStatus'>[];
+}) => prompt.trim().length > 0 && selections.every((item) => item.uploadStatus === 'ready');
 
 export const resolveOverlayModelSelectionPayload = ({
   agent,
@@ -129,10 +147,12 @@ const ChatPanel = memo<ChatPanelProps>(
   ({
     agentId: initialAgentId,
     agents,
+    capturing = false,
     hidden = false,
     modelId: initialModelId,
     models,
     onRemoveSelection,
+    onStartCapture,
     onSubmit,
     placementResetKey = 0,
     selections,
@@ -290,16 +310,9 @@ const ChatPanel = memo<ChatPanelProps>(
       if (!hidden && textareaRef.current) {
         textareaRef.current.focus();
       }
-    }, [hidden, selected]);
+    }, [hidden, selected, capturing]);
 
-    useEffect(() => {
-      if (!selected) setPrompt('');
-    }, [selected]);
-
-    const allUploadsReady = useMemo(
-      () => selections.every((item) => item.uploadStatus === 'ready'),
-      [selections],
-    );
+    const canSend = canSubmitOverlayPrompt({ prompt, selections });
     const hasUploading = useMemo(
       () => selections.some((item) => item.uploadStatus === 'uploading'),
       [selections],
@@ -310,7 +323,7 @@ const ChatPanel = memo<ChatPanelProps>(
     );
 
     const submit = useCallback(() => {
-      if (selections.length === 0 || !prompt.trim() || !allUploadsReady) return;
+      if (!canSend) return;
       const modelSelection = resolveOverlayModelSelectionPayload({
         agent: currentAgent,
         model: currentModel,
@@ -324,16 +337,7 @@ const ChatPanel = memo<ChatPanelProps>(
         prompt: prompt.trim(),
         provider: modelSelection.provider,
       });
-    }, [
-      selections,
-      prompt,
-      agentId,
-      currentAgent,
-      modelId,
-      currentModel,
-      onSubmit,
-      allUploadsReady,
-    ]);
+    }, [selections, prompt, agentId, currentAgent, modelId, currentModel, onSubmit, canSend]);
 
     const handleKeyDown = useCallback(
       (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -344,8 +348,6 @@ const ChatPanel = memo<ChatPanelProps>(
       },
       [submit],
     );
-
-    const canSend = selected && prompt.trim().length > 0 && allUploadsReady;
 
     const handleAgentChange = useCallback((value: string) => {
       setAgentId(value || undefined);
@@ -473,7 +475,9 @@ const ChatPanel = memo<ChatPanelProps>(
                   ? selectionCount > 1
                     ? OVERLAY_COPY.multipleSelectedPlaceholder
                     : OVERLAY_COPY.selectedPlaceholder
-                  : OVERLAY_COPY.idlePlaceholder
+                  : capturing
+                    ? OVERLAY_COPY.idlePlaceholder
+                    : OVERLAY_COPY.composePlaceholder
               }
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -575,6 +579,20 @@ const ChatPanel = memo<ChatPanelProps>(
             </div>
 
             <div className={styles.actionBarRight}>
+              <button
+                aria-label={OVERLAY_COPY.captureLabel}
+                aria-pressed={capturing}
+                className={cn(
+                  styles.iconBtn,
+                  styles.captureBtn,
+                  capturing && styles.captureBtnActive,
+                )}
+                title={OVERLAY_COPY.captureLabel}
+                type="button"
+                onClick={onStartCapture}
+              >
+                <CameraIcon size={16} strokeWidth={2} />
+              </button>
               <button
                 aria-label={OVERLAY_COPY.sendAriaLabel}
                 className={styles.sendBtn}

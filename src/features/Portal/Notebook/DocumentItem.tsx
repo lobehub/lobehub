@@ -1,7 +1,5 @@
 import { type NotebookDocument } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, confirmModal, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { FileTextIcon, Trash2Icon } from 'lucide-react';
 import { type MouseEvent } from 'react';
 import { memo, useState } from 'react';
@@ -60,7 +58,9 @@ const DocumentItem = memo<DocumentItemProps>(({ document, topicId }) => {
           setDeleting(false);
         }
       },
-      title: t('notebook.confirmDelete'),
+      content: t('notebook.confirmDelete'),
+      okText: t('delete', { ns: 'common' }),
+      title: t('delete', { ns: 'common' }),
     });
   };
 
