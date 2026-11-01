@@ -44,8 +44,8 @@
     "@lobechat/prompts": "workspace:*",
     "@lobechat/types": "workspace:*",
     "debug": "^4.4.3",
-    "immer": "^10.1.3",
+    "immer": "^10.2.0",
     "model-bank": "workspace:*",
-    "p-map": "^7.0.6"
+    "p-map": "^7.1.1"
   }
 }

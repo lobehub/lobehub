@@ -17,7 +17,7 @@
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "@lobechat/utils": "workspace:*",
-    "es-toolkit": "^1.50.0",
+    "es-toolkit": "^1.53.1",
     "js-sha256": "^0.11.1"
   }
 }

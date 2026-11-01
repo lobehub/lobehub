@@ -34,7 +34,7 @@
     "@lobechat/agent-gateway-client": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
-    "@lobehub/icons": "^6.0.0",
+    "@lobehub/icons": "^6.13.0",
     "@modelcontextprotocol/node": "~2.1.2",
     "@modelcontextprotocol/server": "~2.4.0",
     "diff": "^8.0.4",
@@ -44,6 +44,6 @@
     "@modelcontextprotocol/client": "~2.4.0"
   },
   "peerDependencies": {
-    "react": "^19.0.0"
+    "react": "^19.3.1"
   }
 }

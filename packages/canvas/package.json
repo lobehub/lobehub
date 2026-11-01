@@ -19,7 +19,7 @@
     "acorn": "^8.19.0",
     "acorn-walk": "^8.3.5",
     "htmlparser2": "^10.1.0",
-    "pele": "^1.6.0",
+    "pele": "^1.13.0",
     "postcss-value-parser": "^4.2.0"
   }
 }

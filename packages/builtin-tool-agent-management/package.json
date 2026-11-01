@@ -17,8 +17,8 @@
     "@lobechat/business-const": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
-    "lucide-react": "^1.22.0",
-    "react-router": "^8.1.0"
+    "lucide-react": "^1.66.0",
+    "react-router": "^8.5.1"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

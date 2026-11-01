@@ -10,6 +10,6 @@
   "dependencies": {
     "comlink": "^4.4.2",
     "pyodide": "^0.28.3",
-    "url-join": "^5.0.0"
+    "url-join": "^5.2.0"
   }
 }

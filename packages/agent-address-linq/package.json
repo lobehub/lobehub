@@ -16,8 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
-    "standardwebhooks": "^1.0.0",
+    "@types/node": "^24.19.2",
+    "standardwebhooks": "^1.1.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }

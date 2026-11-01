@@ -17,11 +17,11 @@
   },
   "dependencies": {
     "chat": "~4.38.0",
-    "mime": "^4.1.0",
+    "mime": "^4.1.2",
     "silk-wasm": "^3.7.1"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
+    "@types/node": "^24.19.2",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }
