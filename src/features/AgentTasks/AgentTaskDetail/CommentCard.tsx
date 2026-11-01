@@ -62,6 +62,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const editor = useEditor();
   const mentionOption = useWorkspaceCommentMentionOption();
 
@@ -95,8 +96,13 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
   }, [activity.files]);
 
   const handleEdit = useCallback(() => {
+    setUploadingAttachments(false);
     setIsEditing(true);
   }, []);
+
+  const handleEditorChange = useCallback(() => {
+    setUploadingAttachments(hasIncompleteEditorAttachments(editor));
+  }, [editor]);
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
@@ -192,6 +198,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
               floatingToolbar={false}
               mentionOption={mentionOption}
               style={{ paddingBottom: 4 }}
+              onContentChange={handleEditorChange}
             />
           </div>
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
@@ -200,7 +207,13 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
               <Button disabled={submitting} size={'small'} onClick={handleCancel}>
                 {t('taskDetail.comment.cancel')}
               </Button>
-              <Button loading={submitting} size={'small'} type={'primary'} onClick={handleSave}>
+              <Button
+                disabled={uploadingAttachments}
+                loading={submitting}
+                size={'small'}
+                type={'primary'}
+                onClick={handleSave}
+              >
                 {t('taskDetail.comment.save')}
               </Button>
             </Flexbox>
