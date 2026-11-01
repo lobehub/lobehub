@@ -3,11 +3,19 @@ import { Md5 } from 'ts-md5';
 
 import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
-import { createMarkdownEditorSnapshot } from '@/server/services/agentDocuments/headlessEditor';
+import { createAgentMarkdownSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { DocumentService } from '@/server/services/document';
+import { updateDocumentThroughRoom } from '@/server/services/pageCollab/bodyWriter';
 
 export interface UpsertCrawledDocumentParams {
   content: string;
+  /**
+   * Crawler content type from `CrawlSuccessResult`. A `json` body is wrapped
+   * in a fenced code block before persisting: the agent markdown snapshot
+   * guard rejects raw JSON (markdown parsing would rewrite escapes and
+   * emphasis), while fenced code blocks are stored byte-exact.
+   */
+  contentType?: 'json';
   description?: string;
   title: string;
   /**
@@ -32,6 +40,14 @@ export interface UpsertCrawledDocumentResult {
 }
 
 const hashContent = (content: string): string => Md5.hashStr(content);
+
+/**
+ * Wrap a raw JSON crawl body in a fenced code block so it survives the agent
+ * markdown snapshot guard: raw JSON is rejected (markdown parsing would drop
+ * backslash escapes and pair `__`/`*` into emphasis), while fenced code
+ * blocks are stored byte-exact and keep the JSON parseable.
+ */
+const wrapJsonCrawlContent = (content: string): string => `\`\`\`json\n${content.trim()}\n\`\`\``;
 
 /**
  * Single owner of "crawl a web page, persist it as a document" semantics.
@@ -84,7 +100,11 @@ export class WebBrowsingDocumentService {
   upsertCrawledDocument = async (
     params: UpsertCrawledDocumentParams,
   ): Promise<UpsertCrawledDocumentResult> => {
-    const { content, description, title, topicId, url } = params;
+    const { content, contentType, description, title, topicId, url } = params;
+
+    // Raw JSON bodies must be fenced before hitting the markdown snapshot
+    // guard (see `UpsertCrawledDocumentParams.contentType`).
+    const persistedContent = contentType === 'json' ? wrapJsonCrawlContent(content) : content;
 
     const existing = await this.documentModel.findBySource(url, 'web');
 
@@ -92,28 +112,34 @@ export class WebBrowsingDocumentService {
     let status: UpsertCrawledDocumentResult['status'];
 
     if (existing) {
-      if (hashContent(existing.content ?? '') === hashContent(content)) {
+      if (hashContent(existing.content ?? '') === hashContent(persistedContent)) {
         // Byte-identical content → skip the write entirely. Both `documents`
         // and `document_histories` would only churn `updated_at`, which is
         // not worth the cost (and pollutes the history list with no-op rows).
         documentId = existing.id;
         status = 'unchanged';
       } else {
-        const snapshot = await createMarkdownEditorSnapshot(content);
+        const snapshot = await createAgentMarkdownSnapshot(persistedContent);
         // `DocumentService.updateDocument` runs inside a transaction and
         // writes a `document_histories` row when `editorData` differs from
         // the row's current snapshot, so each refresh becomes a revision.
-        await this.documentService.updateDocument(existing.id, {
-          content: snapshot.content,
-          editorData: snapshot.editorData,
-          saveSource: 'llm_call',
-          title,
-        });
+        await updateDocumentThroughRoom(
+          this.db,
+          this.documentService,
+          existing.id,
+          {
+            content: snapshot.content,
+            editorData: snapshot.editorData,
+            saveSource: 'llm_call',
+            title,
+          },
+          { userId: this.userId, workspaceId: this.workspaceId },
+        );
         documentId = existing.id;
         status = 'updated';
       }
     } else {
-      const snapshot = await createMarkdownEditorSnapshot(content);
+      const snapshot = await createAgentMarkdownSnapshot(persistedContent);
       const created = await this.documentModel.create({
         content: snapshot.content,
         description,

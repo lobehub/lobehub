@@ -29,6 +29,7 @@ const SELF_ITERATION_ACTION_TYPES = [
   'write_memory',
   'create_skill',
   'refine_skill',
+  'refine_prompt',
   'consolidate_skill',
   'noop',
   'proposal_only',
@@ -71,7 +72,7 @@ export interface BuildSelfReviewProposalKeyInput {
   /** Stable target id inside the selected target type. */
   targetId: string;
   /** Target namespace used to avoid collisions across resource tables. */
-  targetType: 'agent_document' | 'memory' | 'skill' | 'unknown';
+  targetType: 'agent' | 'agent_document' | 'memory' | 'skill' | 'unknown';
 }
 
 export interface SelfReviewProposalBaseSnapshot {
@@ -79,6 +80,8 @@ export interface SelfReviewProposalBaseSnapshot {
   absent?: boolean;
   /** Agent document id when the proposal targets managed skill/document state. */
   agentDocumentId?: string;
+  /** Agent id when the proposal targets its system prompt. */
+  agentId?: string;
   /** Content hash observed when the proposal was created. */
   contentHash?: string;
   /** Canonical document id observed when the proposal was created. */
@@ -87,12 +90,14 @@ export interface SelfReviewProposalBaseSnapshot {
   documentUpdatedAt?: string;
   /** Whether the target was managed by Agent Signal. */
   managed?: boolean;
+  /** Hash of the agent system prompt observed when the proposal was created. */
+  promptHash?: string;
   /** Stable skill name observed or reserved when the proposal was created. */
   skillName?: string;
   /** Human-readable target title observed at proposal time. */
   targetTitle?: string;
   /** Target domain captured by the proposal snapshot. */
-  targetType?: 'skill';
+  targetType?: 'agent_prompt' | 'skill';
   /** Whether the target was writable at proposal time. */
   writable?: boolean;
 }
@@ -138,7 +143,8 @@ export interface SelfReviewIdea {
  * @param TActionType - Mergeable action type that must carry a complete base snapshot.
  */
 export type MergeableSelfReviewProposalActionPlan<
-  TActionType extends 'create_skill' | 'refine_skill' = 'create_skill' | 'refine_skill',
+  TActionType extends 'create_skill' | 'refine_prompt' | 'refine_skill' =
+    'create_skill' | 'refine_prompt' | 'refine_skill',
 > = ActionPlan & {
   /** Mergeable action type that will be applied from a frozen proposal. */
   actionType: TActionType;
@@ -151,7 +157,7 @@ export type MergeableSelfReviewProposalActionPlan<
  */
 export type NonMergeableSelfReviewProposalActionPlan = ActionPlan & {
   /** Non-mergeable action type that can use legacy title-only fallback snapshots. */
-  actionType: Exclude<ActionType, 'create_skill' | 'refine_skill'>;
+  actionType: Exclude<ActionType, 'create_skill' | 'refine_prompt' | 'refine_skill'>;
   /** Optional proposal snapshot supplied by callers before projection. */
   baseSnapshot?: SelfReviewProposalBaseSnapshot;
 };
@@ -213,6 +219,8 @@ export interface SelfReviewProposalMetadata {
   proposalKey: string;
   /** Current proposal lifecycle state. */
   status: SelfReviewProposalStatus;
+  /** Reviewer-written one-line summary of what the proposal changes and why. */
+  summary?: string;
   /** Proposal key or brief id that superseded this proposal. */
   supersededBy?: string;
   /** ISO timestamp for the last proposal lifecycle update. */
@@ -232,10 +240,14 @@ export interface SelfReviewProposalBriefMetadata {
   };
 }
 
+/**
+ * Stored labels mirror the en-US `home` copy for each key (`brief.action.*`):
+ * the card renders the localized key and only falls back to these strings.
+ */
 export const AGENT_SIGNAL_PROPOSAL_BRIEF_ACTIONS = [
-  { key: 'approve', label: 'Apply', type: 'resolve' },
+  { key: 'approve', label: 'Approve', type: 'resolve' },
   { key: 'dismiss', label: 'Dismiss', type: 'resolve' },
-  { key: 'feedback', label: 'Request changes', type: 'comment' },
+  { key: 'feedback', label: 'Feedback', type: 'comment' },
 ] satisfies BriefAction[];
 
 /** Daily Brief actions for nightly self-review proposal cards. */
@@ -263,13 +275,15 @@ const SelfReviewProposalBaseSnapshotSchema = z
   .object({
     absent: z.boolean().optional(),
     agentDocumentId: z.string().optional(),
+    agentId: z.string().optional(),
     contentHash: z.string().optional(),
     documentId: z.string().optional(),
     documentUpdatedAt: z.string().optional(),
     managed: z.boolean().optional(),
+    promptHash: z.string().optional(),
     skillName: z.string().optional(),
     targetTitle: z.string().optional(),
-    targetType: z.literal('skill').optional(),
+    targetType: z.enum(['agent_prompt', 'skill']).optional(),
     writable: z.boolean().optional(),
   })
   .passthrough();
@@ -300,6 +314,7 @@ const SelfReviewProposalMetadataSchema = z
     expiresAt: z.string(),
     proposalKey: z.string(),
     status: z.enum(SELF_REVIEW_PROPOSAL_STATUSES),
+    summary: z.string().optional(),
     supersededBy: z.string().optional(),
     updatedAt: z.string(),
     version: z.literal(SELF_REVIEW_PROPOSAL_VERSION),
@@ -310,13 +325,19 @@ const getMergeableProposalSnapshotError = (action: SelfReviewProposalActionPlan)
   `Mergeable proposal action requires a complete base snapshot. actionType=${action.actionType}`;
 
 const isMergeableProposalAction = (actionType: string) =>
-  actionType === 'create_skill' || actionType === 'refine_skill';
+  actionType === 'create_skill' || actionType === 'refine_skill' || actionType === 'refine_prompt';
 
 const hasCompleteMergeableSnapshot = (
   actionType: string,
   snapshot: SelfReviewProposalBaseSnapshot | undefined,
 ) => {
-  if (!snapshot || snapshot.targetType !== 'skill') return false;
+  if (!snapshot) return false;
+
+  if (actionType === 'refine_prompt') {
+    return snapshot.targetType === 'agent_prompt' && !!snapshot.agentId && !!snapshot.promptHash;
+  }
+
+  if (snapshot.targetType !== 'skill') return false;
 
   if (actionType === 'refine_skill') {
     return (
@@ -424,6 +445,7 @@ const getProposalTarget = (
   if (action.target?.skillDocumentId) {
     return { targetId: action.target.skillDocumentId, targetType: 'agent_document' };
   }
+  if (action.target?.agentId) return { targetId: action.target.agentId, targetType: 'agent' };
   if (action.target?.memoryId) return { targetId: action.target.memoryId, targetType: 'memory' };
   if (action.target?.skillName) return { targetId: action.target.skillName, targetType: 'skill' };
 
@@ -468,6 +490,8 @@ export interface BuildSelfReviewProposalFromPlanInput {
   plan: SelfReviewProposalPlan;
   /** Execution results that identify which actions stayed proposed. */
   results: ActionResult[];
+  /** Reviewer-written proposal summary shown as the brief lead line. */
+  summary?: string;
 }
 
 /**
@@ -491,6 +515,7 @@ export const buildSelfReviewProposalFromPlan = ({
   now,
   plan,
   results,
+  summary,
 }: BuildSelfReviewProposalFromPlanInput): SelfReviewProposalMetadata | undefined => {
   const proposedResultKeys = new Set(
     results
@@ -545,6 +570,7 @@ export const buildSelfReviewProposalFromPlan = ({
     expiresAt: getNextProposalExpiry({ createdAt: now, now }),
     proposalKey,
     status: 'pending',
+    ...(summary?.trim() ? { summary: summary.trim() } : {}),
     updatedAt: now,
     version: SELF_REVIEW_PROPOSAL_VERSION,
   };
@@ -706,6 +732,7 @@ export const refreshSelfReviewProposal = ({
   evidenceWindowStart: incoming.evidenceWindowStart,
   expiresAt: getNextProposalExpiry({ createdAt: existing.createdAt, now }),
   status: 'pending',
+  summary: incoming.summary ?? existing.summary,
   updatedAt: now,
 });
 

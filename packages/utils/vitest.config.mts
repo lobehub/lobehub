@@ -10,7 +10,6 @@ export default defineConfig({
 
     },
     coverage: {
-      all: false,
       reporter: ['text', 'json', 'lcov', 'text-summary'],
     },
     environment: 'happy-dom',

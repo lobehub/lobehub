@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, lt, or } from 'drizzle-orm';
 
 import {
   agentEvalRuns,
@@ -41,8 +41,8 @@ export class AgentEvalRunTopicModel {
   /**
    * Find all topics for a run (with TestCase and Topic details)
    */
-  findByRunId = async (runId: string) => {
-    const rows = await this.db
+  findByRunId = async (runId: string, pagination?: { limit?: number; offset?: number }) => {
+    const query = this.db
       .select({
         createdAt: agentEvalRunTopics.createdAt,
         evalResult: agentEvalRunTopics.evalResult,
@@ -59,9 +59,29 @@ export class AgentEvalRunTopicModel {
       .leftJoin(agentEvalTestCases, eq(agentEvalRunTopics.testCaseId, agentEvalTestCases.id))
       .leftJoin(topics, eq(agentEvalRunTopics.topicId, topics.id))
       .where(and(eq(agentEvalRunTopics.runId, runId), this.ownership()))
-      .orderBy(asc(agentEvalTestCases.sortOrder));
+      .orderBy(asc(agentEvalTestCases.sortOrder), asc(agentEvalRunTopics.topicId))
+      .$dynamic();
 
-    return rows;
+    if (pagination?.limit !== undefined) {
+      query.limit(pagination.limit);
+    }
+
+    if (pagination?.offset !== undefined) {
+      query.offset(pagination.offset);
+    }
+
+    return query;
+  };
+
+  /**
+   * Count topics for a run
+   */
+  countByRunId = async (runId: string) => {
+    const result = await this.db
+      .select({ value: count() })
+      .from(agentEvalRunTopics)
+      .where(and(eq(agentEvalRunTopics.runId, runId), this.ownership()));
+    return Number(result[0]?.value) || 0;
   };
 
   /**

@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
+
 import type { LobeChatDatabase } from '@lobechat/database';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,11 +17,19 @@ vi.mock('@/database/models/topicDocument', () => ({
   TopicDocumentModel: vi.fn(),
 }));
 
+const CONTENT = '0123456789';
+const CONTENT_HASH = createHash('sha256').update(CONTENT).digest('hex').slice(0, 32);
+const ARCHIVE_PATH = `./.tool-results/${CONTENT_HASH}.txt`;
+
 describe('archiveToolResultIfNeeded', () => {
-  const db = {} as LobeChatDatabase;
+  const tx = { execute: vi.fn() };
+  const db = {
+    transaction: vi.fn(async (callback: (trx: unknown) => Promise<unknown>) => callback(tx)),
+  } as unknown as LobeChatDatabase;
   const mockVfsService = {
     mkdir: vi.fn(),
     read: vi.fn(),
+    stat: vi.fn(),
     write: vi.fn(),
   };
   const mockTopicDocumentModel = {
@@ -29,10 +39,16 @@ describe('archiveToolResultIfNeeded', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(AgentDocumentVfsService).mockImplementation(() => mockVfsService as any);
-    vi.mocked(TopicDocumentModel).mockImplementation(() => mockTopicDocumentModel as any);
+    vi.mocked(AgentDocumentVfsService).mockImplementation(function () {
+      return mockVfsService as any;
+    });
+    vi.mocked(TopicDocumentModel).mockImplementation(function () {
+      return mockTopicDocumentModel as any;
+    });
+    tx.execute.mockResolvedValue(undefined);
     mockVfsService.mkdir.mockResolvedValue({});
-    mockVfsService.read.mockResolvedValue({ content: '0123456789' });
+    mockVfsService.stat.mockResolvedValue(undefined);
+    mockVfsService.read.mockResolvedValue({ content: CONTENT });
     mockVfsService.write.mockResolvedValue({ documentId: 'document-1', id: 'agent-doc-1' });
     mockTopicDocumentModel.isAssociated.mockResolvedValue(false);
     mockTopicDocumentModel.associate.mockResolvedValue({
@@ -41,44 +57,45 @@ describe('archiveToolResultIfNeeded', () => {
     });
   });
 
-  it('returns unchanged content when it is under the limit', async () => {
-    const result = await archiveToolResultIfNeeded({
+  const archive = (overrides: Partial<Parameters<typeof archiveToolResultIfNeeded>[0]> = {}) =>
+    archiveToolResultIfNeeded({
       agentId: 'agent-1',
-      content: 'short result',
-      limit: 100,
-      serverDB: db,
-      toolCallId: 'call_1',
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
-
-    expect(result).toEqual({ archived: false, content: 'short result' });
-    expect(AgentDocumentVfsService).not.toHaveBeenCalled();
-  });
-
-  it('archives oversized content and returns a truncated pointer', async () => {
-    const result = await archiveToolResultIfNeeded({
-      agentId: 'agent-1',
-      content: '0123456789',
+      content: CONTENT,
       limit: 5,
       serverDB: db,
       toolCallId: 'call_1',
       topicId: 'topic-1',
       userId: 'user-1',
+      ...overrides,
     });
+
+  it('returns unchanged content when it is under the limit', async () => {
+    const result = await archive({ content: 'short result', limit: 100 });
+
+    expect(result).toEqual({ archived: false, content: 'short result' });
+    expect(AgentDocumentVfsService).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('archives oversized content under a content-hash path and returns a truncated pointer', async () => {
+    const result = await archive();
 
     expect(mockVfsService.mkdir).toHaveBeenCalledWith(
       './.tool-results',
       { agentId: 'agent-1', topicId: 'topic-1' },
       { recursive: true },
     );
+    expect(mockVfsService.stat).toHaveBeenCalledWith(ARCHIVE_PATH, {
+      agentId: 'agent-1',
+      topicId: 'topic-1',
+    });
     expect(mockVfsService.write).toHaveBeenCalledWith(
-      './.tool-results/topic-1_call_1.txt',
-      '0123456789',
+      ARCHIVE_PATH,
+      CONTENT,
       { agentId: 'agent-1', topicId: 'topic-1' },
       { contentFormat: 'raw' },
     );
-    expect(mockVfsService.read).toHaveBeenCalledWith('./.tool-results/topic-1_call_1.txt', {
+    expect(mockVfsService.read).toHaveBeenCalledWith(ARCHIVE_PATH, {
       agentId: 'agent-1',
       topicId: 'topic-1',
     });
@@ -87,26 +104,81 @@ describe('archiveToolResultIfNeeded', () => {
       topicId: 'topic-1',
     });
     expect(result.archived).toBe(true);
-    expect(result.archivePath).toBe('./.tool-results/topic-1_call_1.txt');
+    expect(result.archivePath).toBe(ARCHIVE_PATH);
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('./.tool-results/topic-1_call_1.txt');
+    expect(result.content).toContain(ARCHIVE_PATH);
     expect(result.content).toContain('lobe-agent-documents');
     expect(result.content).toContain('readDocument');
     expect(result.content).toContain('agent-doc-1');
   });
 
+  it('serializes archive writes per agent with a transaction-scoped advisory lock', async () => {
+    await archive();
+
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+    expect(tx.execute).toHaveBeenCalledTimes(1);
+    const [query] = tx.execute.mock.calls[0];
+    expect(JSON.stringify(query)).toContain('pg_advisory_xact_lock');
+    expect(JSON.stringify(query)).toContain('toolResultArchive:agent-1');
+    // Every VFS / topic-document write must run on the locked transaction handle.
+    expect(vi.mocked(AgentDocumentVfsService).mock.calls[0][0]).toBe(tx);
+    expect(vi.mocked(TopicDocumentModel).mock.calls[0][0]).toBe(tx);
+  });
+
+  it('reuses an existing archive with identical content instead of writing a new document', async () => {
+    mockVfsService.stat.mockResolvedValue({
+      documentId: 'document-existing',
+      id: 'agent-doc-existing',
+      type: 'file',
+    });
+
+    const result = await archive({ toolCallId: 'call_2', topicId: 'topic-2' });
+
+    expect(mockVfsService.write).not.toHaveBeenCalled();
+    expect(mockVfsService.read).toHaveBeenCalledWith(ARCHIVE_PATH, {
+      agentId: 'agent-1',
+      topicId: 'topic-2',
+    });
+    expect(mockTopicDocumentModel.associate).toHaveBeenCalledWith({
+      documentId: 'document-existing',
+      topicId: 'topic-2',
+    });
+    expect(result.archived).toBe(true);
+    expect(result.archivePath).toBe(ARCHIVE_PATH);
+    expect(result.content).toContain('agent-doc-existing');
+  });
+
+  it('falls back to a per-call path when the hash path holds different content', async () => {
+    mockVfsService.stat.mockResolvedValue({
+      documentId: 'document-other',
+      id: 'agent-doc-other',
+      type: 'file',
+    });
+    mockVfsService.read
+      .mockResolvedValueOnce({ content: 'something else' })
+      .mockResolvedValueOnce({ content: CONTENT });
+
+    const collisionPath = `./.tool-results/${CONTENT_HASH}_call_1.txt`;
+    const result = await archive();
+
+    expect(mockVfsService.write).toHaveBeenCalledWith(
+      collisionPath,
+      CONTENT,
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      { contentFormat: 'raw' },
+    );
+    expect(mockTopicDocumentModel.associate).toHaveBeenCalledWith({
+      documentId: 'document-1',
+      topicId: 'topic-1',
+    });
+    expect(result.archived).toBe(true);
+    expect(result.archivePath).toBe(collisionPath);
+  });
+
   it('does not duplicate topic association when the archive document is already associated', async () => {
     mockTopicDocumentModel.isAssociated.mockResolvedValue(true);
 
-    await archiveToolResultIfNeeded({
-      agentId: 'agent-1',
-      content: '0123456789',
-      limit: 5,
-      serverDB: db,
-      toolCallId: 'call_1',
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    await archive();
 
     expect(mockTopicDocumentModel.associate).not.toHaveBeenCalled();
   });
@@ -114,15 +186,7 @@ describe('archiveToolResultIfNeeded', () => {
   it('fails closed when the persisted archive content does not match the tool result', async () => {
     mockVfsService.read.mockResolvedValue({ content: 'corrupted' });
 
-    const result = await archiveToolResultIfNeeded({
-      agentId: 'agent-1',
-      content: '0123456789',
-      limit: 5,
-      serverDB: db,
-      toolCallId: 'call_1',
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const result = await archive();
 
     expect(result.archived).toBe(false);
     expect(result.error).toBe('Archived content verification failed');
@@ -130,35 +194,49 @@ describe('archiveToolResultIfNeeded', () => {
     expect(mockTopicDocumentModel.associate).not.toHaveBeenCalled();
   });
 
+  it('ends a multi-line archive preview with the readDocument call for the next window', async () => {
+    const content = 'line 1\nline 2\nline 3';
+    mockVfsService.read.mockResolvedValue({ content });
+
+    const result = await archive({ content, limit: 14 });
+
+    expect(result.content).toContain(
+      'line 1\nline 2\n[Showing lines 1-2 of 3 lines, 20 characters. To continue, call lobe-agent-documents readDocument with id="agent-doc-1", format="markdown" and offset=3.]',
+    );
+  });
+
+  it('tells the model to re-read a cut line that fits the readDocument budget', async () => {
+    const result = await archive();
+
+    expect(result.content).toContain(
+      'Line 1 is 10 characters long and was cut at 5. To read it in full and continue, call lobe-agent-documents readDocument with id="agent-doc-1", format="markdown" and offset=1.',
+    );
+  });
+
+  it('truncates without archiving or naming readDocument when the run cannot call it', async () => {
+    const result = await archive({ canReadArchive: false });
+
+    expect(result.archived).toBe(false);
+    expect(result.content).toContain('01234');
+    expect(result.content).not.toContain('readDocument');
+    expect(result.content).not.toContain('lobe-agent-documents');
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(AgentDocumentVfsService).not.toHaveBeenCalled();
+  });
+
   it('falls back to truncation without archive context', async () => {
-    const result = await archiveToolResultIfNeeded({
-      agentId: 'agent-1',
-      content: '0123456789',
-      limit: 5,
-      toolCallId: 'call_1',
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const result = await archive({ serverDB: undefined });
 
     expect(result.archived).toBe(false);
     expect(result.archivePath).toBeUndefined();
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('Content truncated');
+    expect(result.content).toContain('[Showing lines 1-1 of 1 lines');
     expect(result.content).not.toContain('Archive failed');
     expect(AgentDocumentVfsService).not.toHaveBeenCalled();
   });
 
   it('bypasses archive entirely for lobe-agent-documents tool results', async () => {
-    const result = await archiveToolResultIfNeeded({
-      agentId: 'agent-1',
-      content: 'x'.repeat(1000),
-      identifier: 'lobe-agent-documents',
-      limit: 5,
-      serverDB: db,
-      toolCallId: 'call_1',
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const result = await archive({ content: 'x'.repeat(1000), identifier: 'lobe-agent-documents' });
 
     expect(result.archived).toBe(false);
     expect(result.content).toBe('x'.repeat(1000));
@@ -168,18 +246,11 @@ describe('archiveToolResultIfNeeded', () => {
   it('keeps the tool result bounded when archive writing fails', async () => {
     mockVfsService.write.mockRejectedValue(new Error('write denied'));
 
-    const result = await archiveToolResultIfNeeded({
-      agentId: 'agent-1',
-      content: '0123456789',
-      limit: 5,
-      serverDB: db,
-      toolCallId: 'call_1',
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const result = await archive();
 
     expect(result.archived).toBe(false);
     expect(result.error).toBe('write denied');
+    expect(result.archivePath).toBe(ARCHIVE_PATH);
     expect(result.content).toContain('01234');
     expect(result.content).toContain('Archive failed: write denied');
   });

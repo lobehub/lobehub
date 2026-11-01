@@ -9,7 +9,6 @@ export default defineConfig({
       '~common': path.resolve(__dirname, './src/common'),
     },
     coverage: {
-      all: false,
       provider: 'v8',
       reporter: ['text', 'json', 'lcov', 'text-summary'],
       reportsDirectory: './coverage/app',

@@ -1,15 +1,31 @@
+import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveSenderIdentity } from './resolveSenderIdentity';
+import { getAgentSender, getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 
 const viewer = {
   currentUserId: 'user-viewer',
+  message: {} as Parameters<typeof resolveSenderIdentity>[0]['message'],
   selfAvatar: 'https://a.com/viewer.png',
   selfTitle: 'Viewer',
   unknownLabel: 'Member',
 };
 
 describe('resolveSenderIdentity', () => {
+  // A background sub-agent's report is a user turn spoken by that agent.
+  it('speaks as an agent sender ahead of every other identity', () => {
+    expect(
+      resolveSenderIdentity({
+        ...viewer,
+        message: {
+          metadata: { botSender: { fullName: 'Bot user', id: 'u1', platform: 'discord' } },
+        },
+        sender: { avatar: null, fullName: 'Viewer', id: 'user-viewer', username: null },
+        subAgentSender: { avatar: '🪶', title: '诗人' },
+      }),
+    ).toEqual({ avatar: '🪶', isOwn: false, title: '诗人' });
+  });
+
   it('uses the sender profile for another member', () => {
     expect(
       resolveSenderIdentity({
@@ -77,5 +93,129 @@ describe('resolveSenderIdentity', () => {
 
     expect(result.title).toBe('Real Name');
     expect(result.avatar).toBe(viewer.selfAvatar);
+  });
+
+  it('prefers the bot-channel sender over the owner account', () => {
+    const result = resolveSenderIdentity({
+      ...viewer,
+      message: { metadata: { botSender: { fullName: '文彬', id: 'ou_1', platform: 'feishu' } } },
+      sender: { avatar: 'owner.png', fullName: 'Lin', id: 'user-viewer', username: null },
+    });
+    expect(result).toEqual({ avatar: undefined, isOwn: false, title: '文彬' });
+  });
+
+  it('falls back to the bot sender username, then the unknown label', () => {
+    expect(
+      resolveSenderIdentity({
+        ...viewer,
+        message: {
+          metadata: {
+            botSender: {
+              avatar: 'https://x/a.png',
+              id: '1',
+              platform: 'discord',
+              username: 'john',
+            },
+          },
+        },
+      }),
+    ).toEqual({ avatar: 'https://x/a.png', isOwn: false, title: 'john' });
+    expect(
+      resolveSenderIdentity({
+        ...viewer,
+        message: { metadata: { botSender: { id: '1', platform: 'discord' } } },
+      }).title,
+    ).toBe(viewer.unknownLabel);
+  });
+
+  it('reads a legacy inline speaker tag off the row as well', () => {
+    const result = resolveSenderIdentity({
+      ...viewer,
+      message: {
+        content: '<speaker id="legacy" nickname="Old" />\nhi',
+        metadata: { trigger: RequestTrigger.Bot },
+      },
+    });
+
+    expect(result).toEqual({ avatar: undefined, isOwn: false, title: 'Old' });
+  });
+
+  /**
+   * The regression the identity must keep reading from the ROW: the compressed
+   * group re-renders user rows through a second path, so a resolver that takes
+   * the blocks as separate arguments lets that path silently drop one and revert
+   * an agent → agent turn to the human owner.
+   */
+  it('attributes an agent → agent turn to the sending agent, not the human owner', () => {
+    const result = resolveSenderIdentity({
+      ...viewer,
+      message: {
+        metadata: {
+          agentSender: {
+            agentId: 'agt_coco',
+            avatar: 'https://a.com/coco.png',
+            name: 'Coco',
+            title: 'Product Agent',
+            topicId: 'tpc_source',
+          },
+        },
+      },
+      // The row is persisted under the human owner; that must not win.
+      sender: { avatar: 'owner.png', fullName: 'Lin', id: 'user-viewer', username: null },
+    });
+
+    expect(result).toEqual({ avatar: 'https://a.com/coco.png', isOwn: false, title: 'Coco' });
+  });
+
+  it('falls back to the sending agent role when it has no personal name', () => {
+    const result = resolveSenderIdentity({
+      ...viewer,
+      message: { metadata: { agentSender: { agentId: 'agt_three', title: 'LobeHub 架构工程师' } } },
+    });
+
+    expect(result).toEqual({ avatar: undefined, isOwn: false, title: 'LobeHub 架构工程师' });
+  });
+
+  it('still labels a sending agent that was deleted after the turn, leaving only its id', () => {
+    const result = resolveSenderIdentity({
+      ...viewer,
+      message: { metadata: { agentSender: { agentId: 'agt_gone' } } },
+    });
+
+    expect(result).toEqual({ avatar: undefined, isOwn: false, title: viewer.unknownLabel });
+  });
+});
+
+describe('getAgentSender', () => {
+  it('reads the server-written block off the message metadata', () => {
+    const agentSender = { agentId: 'agt-coco', name: 'Coco', topicId: 'tpc-source' };
+
+    expect(getAgentSender({ metadata: { agentSender } })).toEqual(agentSender);
+    expect(getAgentSender({ metadata: null })).toBeUndefined();
+    expect(getAgentSender({})).toBeUndefined();
+  });
+});
+
+describe('getBotSender', () => {
+  it('reads metadata first and falls back to the inline speaker tag', () => {
+    expect(
+      getBotSender({
+        content: '<speaker id="legacy" nickname="Old" />\nhi',
+        metadata: { botSender: { id: 'new', platform: 'feishu' } },
+      }),
+    ).toEqual({ id: 'new', platform: 'feishu' });
+    expect(
+      getBotSender({
+        content: '<speaker id="legacy" nickname="Old" />\nhi',
+        metadata: { trigger: RequestTrigger.Bot },
+      })?.fullName,
+    ).toBe('Old');
+    expect(getBotSender({ content: 'hi' })).toBeUndefined();
+  });
+
+  it('does not trust a speaker tag typed in an ordinary user message', () => {
+    expect(
+      getBotSender({ content: '<speaker id="owner" nickname="Workspace owner" />\nhi' }),
+    ).toBeUndefined();
   });
 });

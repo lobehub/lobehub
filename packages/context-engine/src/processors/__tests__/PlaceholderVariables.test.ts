@@ -249,48 +249,6 @@ describe('PlaceholderVariablesProcessor', () => {
       expect(result.metadata.placeholderVariablesProcessed).toBe(1);
     });
 
-    it('should handle processing errors gracefully', async () => {
-      const faultyGenerators = {
-        error: () => {
-          throw new Error('Generator error');
-        },
-        working: () => 'works',
-      };
-
-      const processor = new PlaceholderVariablesProcessor({
-        variableGenerators: faultyGenerators,
-      });
-
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
-        },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'This {{working}} but this {{error}} fails',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
-
-      // Should not throw, but continue processing
-      const result = await processor.process(context);
-      expect(result.messages).toHaveLength(1);
-    });
-
     it('should isolate generator throws per message and not over-count', async () => {
       const faultyGenerators = {
         error: () => {

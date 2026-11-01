@@ -70,6 +70,7 @@ export const showElectronNotification = ({
     body: params.body,
     hasReply: false,
     silent: params.silent || false,
+    sound: params.soundName,
     timeoutType: 'default',
     title: params.title,
     urgency,

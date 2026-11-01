@@ -1,4 +1,4 @@
-import { createModal, Tabs, type TabsItem } from '@lobehub/ui/base-ui';
+import { createModal, Tabs, type TabsItem } from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,9 +1,15 @@
 'use client';
 
-import { Flexbox, Input, Text, TextArea } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox } from '@lobehub/ui';
+import {
+  Button,
+  createModal,
+  Input,
+  type ModalInstance,
+  Text,
+  TextArea,
+  useModalContext,
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -89,7 +95,7 @@ const ConvertToSkillContent = memo<ConvertToSkillContentProps>(
     const [description, setDescription] = useState(defaultDescription);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>();
-    const nameRef = useRef<InputRef>(null);
+    const nameRef = useRef<HTMLInputElement>(null);
     // The last generation's prefilled values + tracing id, used on save to
     // record whether the user edited the generation (implicit feedback).
     const generatedRef = useRef<{ tracingId: string; values: ConvertSkillMeta } | undefined>(

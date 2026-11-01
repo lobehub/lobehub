@@ -1,21 +1,15 @@
 'use client';
 
-import { Collapse } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Accordion } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { kebabCase } from 'es-toolkit';
 import { type FC, type ReactNode } from 'react';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  collapse: css`
-    margin-block: 1em;
-  `,
-  label: css`
-    font-size: 1.25em;
-    font-weight: 600;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-  `,
-}));
+const styles = stylex.create({
+  collapse: { marginBlock: '1em' },
+  label: { fontSize: '1.25em', fontWeight: 600, lineHeight: 1.4, color: cssVar.colorText },
+});
 
 interface CollapsibleSectionProps {
   children?: ReactNode;
@@ -31,17 +25,18 @@ const CollapsibleSection: FC<CollapsibleSectionProps> = ({ children, title = '' 
   const id = kebabCase(title);
 
   return (
-    <Collapse
-      className={styles.collapse}
-      defaultActiveKey={[]}
-      expandIconPlacement={'end'}
+    <Accordion
+      className={stylex.props(styles.collapse).className}
+      defaultValue={[]}
       gap={8}
+      indicatorPlacement={'end'}
+      styles={{ content: { padding: '12px 16px' } }}
       variant={'outlined'}
       items={[
         {
           children,
           key: id || 'section',
-          label: <span className={styles.label}>{title}</span>,
+          title: <span {...stylex.props(styles.label)}>{title}</span>,
         },
       ]}
     />

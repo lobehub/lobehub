@@ -12,6 +12,10 @@ import SkillDetail from './index';
 
 const mocks = vi.hoisted(() => {
   const toolState = {
+    agentSkillListMap: {} as Record<
+      string,
+      Array<{ id: string; identifier: string; userId?: string }>
+    >,
     builtinSkills: [],
     checkLobehubSkillStatus: vi.fn(),
     composioServers: [] as Array<{ identifier: string; status: string }>,
@@ -69,6 +73,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@lobechat/const', () => ({
   COMPOSIO_APP_TYPES: [],
+  isDesktop: false,
   getLobehubSkillProviderById: (identifier: string) =>
     identifier === 'notion'
       ? {
@@ -77,47 +82,9 @@ vi.mock('@lobechat/const', () => ({
       : undefined,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Avatar: () => <div data-testid="avatar" />,
-  Markdown: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Skeleton: () => <div data-testid="skeleton" />,
-}));
-
-// Stub the base-ui Button to a native button — it needs a MotionProvider the
-// app sets up globally but the unit env doesn't.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({
-    children,
-    disabled,
-    onClick,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   confirmModal: mocks.confirmModal,
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: (
-    creator: (tokens: {
-      css: () => string;
-      cssVar: Record<string, string>;
-    }) => Record<string, string>,
-  ) =>
-    creator({
-      css: () => '',
-      cssVar: {
-        colorBorderSecondary: 'colorBorderSecondary',
-        colorText: 'colorText',
-        colorTextSecondary: 'colorTextSecondary',
-        colorTextTertiary: 'colorTextTertiary',
-      },
-    }),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -176,6 +143,9 @@ vi.mock('@/store/tool', () => ({
 }));
 
 vi.mock('@/store/tool/selectors', () => ({
+  agentSkillsSelectors: {
+    getAgentSkills: (state: typeof mocks.toolState) => state.agentSkillListMap.all || [],
+  },
   builtinToolSelectors: {
     isBuiltinToolInstalled:
       (identifier: string) =>

@@ -23,8 +23,16 @@ const robots = (): MetadataRoute.Robots => {
         userAgent: 'Twitterbot',
       },
       {
-        allow: ['/'],
-        disallow: ['/api/*', '/signin', '/signup', '/knowledge/*', '/share/*'],
+        // Shared links stay out of search results through the `noindex` directive the share
+        // document and response header carry. A crawler can only read that directive while it may
+        // fetch the URL, so the three real share routes are allowed on top of the `/share/*`
+        // block. Everything else under `/share/` keeps the block: the SPA fallback answers those
+        // paths with the indexable app shell.
+        allow: ['/', '/share/t/', '/share/page/', '/share/artifact/', '/share/file/'],
+        // `/a/*` is the Agent Share visitor page: link-visible, creator-owned
+        // content that must never be indexed. `/agent/*` is the creator's own
+        // agent pages (and still forwards legacy share links).
+        disallow: ['/api/*', '/signin', '/signup', '/knowledge/*', '/share/*', '/agent/*', '/a/*'],
         userAgent: '*',
       },
     ],

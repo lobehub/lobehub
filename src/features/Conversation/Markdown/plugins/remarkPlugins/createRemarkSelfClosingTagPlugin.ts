@@ -23,8 +23,16 @@ const parseAttributes = (attributeString: string): Record<string, string | boole
   return attributes;
 };
 
+export interface RemarkSelfClosingTagOptions {
+  /**
+   * Also turn an exact backtick-wrapped tag into a tag node. Defaults to true;
+   * disable it where inline code must stay literal (e.g. quoted syntax).
+   */
+  inlineCode?: boolean;
+}
+
 export const createRemarkSelfClosingTagPlugin =
-  (tagName: string): Plugin<[], any> =>
+  (tagName: string, options: RemarkSelfClosingTagOptions = {}): Plugin<[], any> =>
   () => {
     // Regex for the specific tag, ensure it matches the entire string for HTML check
     // Allow trailing whitespace after /> to handle cases where markdown parsers include it
@@ -188,6 +196,8 @@ export const createRemarkSelfClosingTagPlugin =
           return [SKIP, index + newChildren.length]; // Skip new nodes
         }
       });
+
+      if (options.inlineCode === false) return;
 
       // 3. Visit inlineCode nodes (backtick-wrapped tags like `<localFile ... />`)
       // @ts-ignore

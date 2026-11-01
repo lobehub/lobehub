@@ -1,4 +1,4 @@
-import { Select } from '@lobehub/ui/base-ui';
+import { Select } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,9 +11,9 @@ const QualitySelect = memo(() => {
   const options =
     enumValues?.map((quality) => ({
       label:
-        quality === 'standard'
-          ? t('config.quality.options.standard')
-          : t('config.quality.options.hd'),
+        quality === 'standard' || quality === 'hd'
+          ? t(`config.quality.options.${quality}`)
+          : quality,
       value: quality,
     })) ?? [];
 

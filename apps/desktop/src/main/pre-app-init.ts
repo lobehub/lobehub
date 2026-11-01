@@ -24,3 +24,5 @@ if (electronIs.dev()) {
     userDataOverride || path.join(app.getPath('appData'), 'lobehub-desktop-dev'),
   );
 }
+
+if (globalThis.__SHELL__) Object.freeze(globalThis.__SHELL__);

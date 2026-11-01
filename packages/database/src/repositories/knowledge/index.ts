@@ -1,4 +1,11 @@
-import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+import {
+  AGENT_ARTIFACT_SOURCE_TYPES,
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  HTML_DOCUMENT_FILE_TYPE,
+  MARKDOWN_MIME_TYPES,
+  RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
+} from '@lobechat/const';
 import type { FileUploader, QueryFileListParams } from '@lobechat/types';
 import {
   AI_GENERATED_FILE_SOURCES,
@@ -13,6 +20,7 @@ import {
   asc,
   desc,
   eq,
+  exists,
   ilike,
   inArray,
   isNull,
@@ -30,6 +38,7 @@ import { FileModel } from '../../models/file';
 import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
+import { notAgentShareFile } from '../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 /**
@@ -39,6 +48,24 @@ import { buildWorkspaceWhere } from '../../utils/workspace';
  */
 const f = alias(files, 'f');
 const d = alias(documents, 'd');
+
+const fileNeedsContentPreview = or(
+  eq(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+  eq(f.fileType, 'article'),
+  ilike(f.fileType, 'text/html%'),
+  inArray(f.fileType, MARKDOWN_MIME_TYPES),
+  ilike(f.name, '%.md'),
+  ilike(f.name, '%.markdown'),
+);
+
+const documentNeedsContentPreview = or(
+  eq(d.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+  eq(d.fileType, 'article'),
+  ilike(d.fileType, 'text/html%'),
+  inArray(d.fileType, MARKDOWN_MIME_TYPES),
+  ilike(d.filename, '%.md'),
+  ilike(d.filename, '%.markdown'),
+);
 
 /**
  * The two arms of the resource UNION.
@@ -58,6 +85,7 @@ const d = alias(documents, 'd');
 const fileArmColumns = {
   chunkTaskId: f.chunkTaskId,
   content: d.content,
+  contentPreviewSource: sql<string | null>`NULL::text`.as('content_preview_source'),
   createdAt: f.createdAt,
   documentId: sql<string | null>`${d.id}`.as('document_id'),
   editorData: d.editorData,
@@ -66,6 +94,11 @@ const fileArmColumns = {
   fileType: f.fileType,
   // A file that backs a derived page is addressed by the page id.
   id: sql<string>`COALESCE(${d.id}, ${f.id})`.as('id'),
+  knowledgeBaseIds: sql<
+    string[]
+  >`ARRAY(SELECT ${knowledgeBaseFiles.knowledgeBaseId} FROM ${knowledgeBaseFiles} WHERE ${knowledgeBaseFiles.fileId} = ${f.id})`.as(
+    'knowledge_base_ids',
+  ),
   metadata: sql<Record<string, any> | null>`COALESCE(${d.metadata}, ${f.metadata})`.as('metadata'),
   name: f.name,
   size: f.size,
@@ -81,9 +114,23 @@ const fileArmColumns = {
   visibility: f.visibility,
 };
 
+const fileArmSummaryColumns = (includeContentPreview: boolean) => ({
+  ...fileArmColumns,
+  content: sql<string | null>`NULL::text`.as('content'),
+  contentPreviewSource: includeContentPreview
+    ? sql<
+        string | null
+      >`CASE WHEN ${fileNeedsContentPreview} THEN LEFT(${d.content}, ${RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH}) ELSE NULL END`.as(
+        'content_preview_source',
+      )
+    : sql<string | null>`NULL::text`.as('content_preview_source'),
+  editorData: sql<Record<string, any> | null>`NULL::jsonb`.as('editor_data'),
+});
+
 const documentArmColumns = {
   chunkTaskId: sql<string | null>`NULL::uuid`.as('chunk_task_id'),
   content: d.content,
+  contentPreviewSource: sql<string | null>`NULL::text`.as('content_preview_source'),
   createdAt: d.createdAt,
   documentId: sql<string | null>`${d.id}`.as('document_id'),
   editorData: d.editorData,
@@ -91,6 +138,11 @@ const documentArmColumns = {
   fileId: d.fileId,
   fileType: d.fileType,
   id: d.id,
+  knowledgeBaseIds: sql<
+    string[]
+  >`CASE WHEN ${d.knowledgeBaseId} IS NULL THEN ARRAY[]::text[] ELSE ARRAY[${d.knowledgeBaseId}] END`.as(
+    'knowledge_base_ids',
+  ),
   metadata: d.metadata,
   name: sql<string>`COALESCE(${d.title}, ${d.filename}, 'Untitled')`.as('name'),
   size: sql<number>`${d.totalCharCount}`.as('size'),
@@ -106,17 +158,33 @@ const documentArmColumns = {
   visibility: d.visibility,
 };
 
+const documentArmSummaryColumns = (includeContentPreview: boolean) => ({
+  ...documentArmColumns,
+  content: sql<string | null>`NULL::text`.as('content'),
+  contentPreviewSource: includeContentPreview
+    ? sql<
+        string | null
+      >`CASE WHEN ${documentNeedsContentPreview} THEN LEFT(${d.content}, ${RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH}) ELSE NULL END`.as(
+        'content_preview_source',
+      )
+    : sql<string | null>`NULL::text`.as('content_preview_source'),
+  editorData: sql<Record<string, any> | null>`NULL::jsonb`.as('editor_data'),
+});
+
 /** One row as the UNION returns it, before it is shaped into a `KnowledgeItem`. */
 interface KnowledgeRow {
   chunkTaskId: string | null;
   content: string | null;
+  contentPreviewSource: string | null;
   createdAt: Date;
   documentId: string | null;
   editorData: Record<string, any> | null;
   embeddingTaskId: string | null;
   fileId: string | null;
   fileType: string;
+  hasChildren: boolean;
   id: string;
+  knowledgeBaseIds: string[] | null;
   metadata: Record<string, any> | null;
   name: string;
   size: number;
@@ -143,13 +211,23 @@ const SORTABLE_COLUMNS: Record<string, string> = {
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
   content?: string | null;
+  /** Bounded raw source used only to generate a list preview on the server. */
+  contentPreviewSource?: string | null;
   createdAt: Date;
   documentId?: string | null;
   editorData?: Record<string, any> | null;
   embeddingTaskId?: string | null;
   fileId?: string | null;
   fileType: string;
+  /**
+   * Whether any document or file row names this row as its parent. Folders are
+   * containers either way; this is what lets a document that holds other
+   * documents expand in the tree.
+   */
+  hasChildren?: boolean;
   id: string;
+  /** Knowledge bases the row is filed into (empty when it lives outside every base). */
+  knowledgeBaseIds?: string[];
   metadata?: Record<string, any> | null;
   name: string;
   size: number;
@@ -189,6 +267,13 @@ interface KnowledgeQueryParams extends QueryFileListParams {
    * dropped from cross-KB listings; never populated from client input.
    */
   excludeKnowledgeBaseIds?: string[];
+  /**
+   * Include full document bodies in the result. List and bulk-operation callers
+   * should disable this and load content through the document detail endpoint.
+   */
+  includeContent?: boolean;
+  /** Select a bounded content prefix for server-side preview generation. */
+  includeContentPreview?: boolean;
 }
 
 /**
@@ -212,13 +297,16 @@ const toJson = (value: unknown): Record<string, any> | null => {
 const toKnowledgeItem = (row: KnowledgeRow): KnowledgeItem => ({
   chunkTaskId: row.chunkTaskId,
   content: row.content,
+  ...(row.contentPreviewSource ? { contentPreviewSource: row.contentPreviewSource } : {}),
   createdAt: row.createdAt,
   documentId: row.documentId,
   editorData: row.editorData,
   embeddingTaskId: row.embeddingTaskId,
   fileId: row.fileId,
   fileType: row.fileType,
+  hasChildren: Boolean(row.hasChildren),
   id: row.id,
+  knowledgeBaseIds: row.knowledgeBaseIds ?? [],
   metadata: toJson(row.metadata),
   name: row.name,
   size: Number(row.size),
@@ -260,13 +348,10 @@ export class KnowledgeRepo {
 
   /**
    * Scope predicate every file listing shares: ownership plus the exclusion of
-   * sources that belong to another surface (acceptance evidence). Kept as one
-   * helper so a new listing can't accidentally pick up ownership alone and
-   * start leaking hundreds of verification artifacts back into the library.
+   * acceptance evidence by source and visitor attachments by provenance.
    *
-   * `sourceFilter` is the only opt-out: asking for `acceptance` explicitly is a
-   * request for exactly the rows this predicate otherwise hides, so the
-   * exclusion is dropped and `fileSourceFilter` narrows to them instead.
+   * Asking for `acceptance` opts out of only that source filter. Agent-share
+   * provenance remains an access boundary for every ordinary resource read.
    */
   private fileScope = (sourceFilter?: ResourceSourceFilter) =>
     and(
@@ -274,9 +359,44 @@ export class KnowledgeRepo {
       sourceFilter === ResourceSourceFilter.Acceptance
         ? undefined
         : or(isNull(f.source), notInArray(f.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+      notAgentShareFile(f.metadata),
     );
 
   private documentScope = () => buildWorkspaceWhere(this.scope(), d);
+
+  /**
+   * `has_children` for one arm. It depends on the caller's scope, so it can't
+   * live in the static column literals; both arms append it last, which keeps
+   * the UNION positions aligned. Children always point at a document id, so the
+   * file arm passes its joined page id (NULL when the file backs no page, and
+   * then nothing can be under it).
+   *
+   * The children are scoped like any read (ownership, visibility, trash) but
+   * not by the listing's other filters, so a child the listing itself would
+   * hide (another knowledge base, a hidden source) still counts.
+   */
+  private hasChildrenColumn = (parentDocumentId: AnyPgColumn) =>
+    sql<boolean>`${or(
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.parentId, parentDocumentId),
+              buildWorkspaceWhere(this.scope(), documents),
+            ),
+          ),
+      ),
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(files)
+          .where(
+            and(eq(files.parentId, parentDocumentId), buildWorkspaceWhere(this.scope(), files)),
+          ),
+      ),
+    )}`.as('has_children');
 
   /**
    * Narrow a workspace-scoped list to one Resources mode. Personal rows are
@@ -320,8 +440,14 @@ export class KnowledgeRepo {
     where: (SQL | undefined)[],
     knowledgeBaseId?: string,
     sourceFilter?: ResourceSourceFilter,
+    includeContent: boolean = true,
+    includeContentPreview: boolean = false,
   ) => {
-    let query = this.db.select(fileArmColumns).from(f).$dynamic();
+    const columns = {
+      ...(includeContent ? fileArmColumns : fileArmSummaryColumns(includeContentPreview)),
+      hasChildren: this.hasChildrenColumn(d.id),
+    };
+    let query = this.db.select(columns).from(f).$dynamic();
 
     if (knowledgeBaseId) {
       query = query.innerJoin(
@@ -333,18 +459,50 @@ export class KnowledgeRepo {
       );
     }
 
-    return query
-      .leftJoin(d, eq(d.fileId, f.id))
-      .leftJoin(users, eq(users.id, f.userId))
-      .where(and(this.fileScope(sourceFilter), ...where));
+    return (
+      query
+        // Scope the joined document exactly as a direct read would. The file row
+        // itself is legitimately listed under `fileScope`, but its derived page
+        // can be scoped tighter (a creator-private document behind a
+        // workspace-public file); handing out that page's id makes the library
+        // list an entry that 404s the moment a member clicks it. Left join, so
+        // the file keeps its row and simply carries no page to open.
+        .leftJoin(d, and(eq(d.fileId, f.id), this.documentScope()))
+        .leftJoin(users, eq(users.id, f.userId))
+        .where(and(this.fileScope(sourceFilter), ...where))
+    );
   };
 
-  private documentArm = (where: (SQL | undefined)[]) =>
+  /**
+   * `includeAgentArtifacts` is the only opt-out from hiding machine-generated
+   * rows (`agent` / `agent-signal`): a knowledge-base listing shows exactly the
+   * rows the user filed into that base, agent artifacts included. Every other
+   * listing keeps them out — they are working files of the agent runtime, not
+   * library content, and they arrive by the hundreds.
+   */
+  private documentArm = (
+    where: (SQL | undefined)[],
+    includeContent: boolean = true,
+    includeContentPreview: boolean = false,
+    includeAgentArtifacts: boolean = false,
+  ) =>
     this.db
-      .select(documentArmColumns)
+      .select({
+        ...(includeContent ? documentArmColumns : documentArmSummaryColumns(includeContentPreview)),
+        hasChildren: this.hasChildrenColumn(d.id),
+      })
       .from(d)
       .leftJoin(users, eq(users.id, d.userId))
-      .where(and(this.documentScope(), ne(d.sourceType, 'file'), ...where));
+      .where(
+        and(
+          this.documentScope(),
+          ne(d.sourceType, 'file'),
+          includeAgentArtifacts
+            ? undefined
+            : notInArray(d.sourceType, [...AGENT_ARTIFACT_SOURCE_TYPES]),
+          ...where,
+        ),
+      );
 
   /**
    * Query combined results from files and documents tables
@@ -356,6 +514,9 @@ export class KnowledgeRepo {
     sortType,
     sorter,
     excludeKnowledgeBaseIds,
+    includeContent = true,
+    includeContentPreview = false,
+    filesOnly,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     parentId,
@@ -403,26 +564,38 @@ export class KnowledgeRepo {
       ],
       knowledgeBaseId,
       sourceFilter,
+      includeContent,
+      includeContentPreview,
     );
 
-    const documentArm = this.documentArm([
-      ...this.commonFilters(shared, {
-        names: [d.title, d.filename],
-        parentId: d.parentId,
-        userId: d.userId,
-        visibility: d.visibility,
-      }),
-      this.documentCategoryFilter(category),
-      this.documentSourceFilter(sourceFilter),
-      // Inside a knowledge base only standalone rows (folders and notes with no
-      // backing file) belong to the document arm — documents that do have a file
-      // already come back through the file arm.
-      knowledgeBaseId ? isNull(d.fileId) : undefined,
-      knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
-      !knowledgeBaseId && excludeKnowledgeBaseIds?.length
-        ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
-        : undefined,
-    ]);
+    const documentArm = this.documentArm(
+      [
+        ...this.commonFilters(shared, {
+          names: [d.title, d.filename],
+          parentId: d.parentId,
+          userId: d.userId,
+          visibility: d.visibility,
+        }),
+        this.documentCategoryFilter(category),
+        this.documentSourceFilter(sourceFilter),
+        // Inside a knowledge base only standalone rows (folders and notes with no
+        // backing file) belong to the document arm — documents that do have a file
+        // already come back through the file arm.
+        knowledgeBaseId ? isNull(d.fileId) : undefined,
+        knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
+        !knowledgeBaseId && excludeKnowledgeBaseIds?.length
+          ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+          : undefined,
+        // The drive lists uploaded files plus the folders that hold them: a folder
+        // row is the only way into its children, so dropping it strands every
+        // nested file. Pages still live in their own sidebar sections, and this
+        // filter is what keeps them out of the drive.
+        filesOnly ? eq(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
+      ],
+      includeContent,
+      includeContentPreview,
+      Boolean(knowledgeBaseId),
+    );
 
     const rows = await unionAll(fileArm, documentArm)
       .orderBy(this.orderBy(sortType, sorter))
@@ -446,25 +619,91 @@ export class KnowledgeRepo {
     kind?: RecentItemKind,
     visibility?: QueryFileListParams['visibility'],
   ): Promise<KnowledgeItem[]> {
-    const fileArm = this.fileArm([
-      this.notInAnyKnowledgeBase(),
-      this.visibilityFilter(visibility, f.visibility),
-      // Derived pages live in the documents table; their backing file row is not
-      // a file the user uploaded, so it never belongs to the file list.
-      kind === 'file' ? ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE) : undefined,
-    ]);
+    const fileArm = this.fileArm(
+      [
+        this.notInAnyKnowledgeBase(),
+        this.visibilityFilter(visibility, f.visibility),
+        // Derived pages live in the documents table; their backing file row is not
+        // a file the user uploaded, so it never belongs to the file list.
+        kind === 'file' ? ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE) : undefined,
+      ],
+      undefined,
+      undefined,
+      false,
+    );
 
-    const documentArm = this.documentArm([
-      isNull(d.knowledgeBaseId),
-      this.visibilityFilter(visibility, d.visibility),
-      // Folders are containers, not pages.
-      kind === 'page' ? ne(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
-    ]);
+    const documentArm = this.documentArm(
+      [
+        isNull(d.knowledgeBaseId),
+        this.visibilityFilter(visibility, d.visibility),
+        // Folders are containers, not pages.
+        kind === 'page' ? ne(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
+      ],
+      false,
+    );
 
     const recent =
       kind === 'file' ? fileArm : kind === 'page' ? documentArm : unionAll(fileArm, documentArm);
 
     const rows = await recent.orderBy(this.orderBy(SortType.Desc, 'updatedAt')).limit(limit);
+
+    return rows.map(toKnowledgeItem);
+  }
+
+  /**
+   * The Docs home list: pages (rich text and HTML artifacts) and uploaded documents (pdf / office / text; no
+   * media, raw data or page-backing rows) together, newest update first,
+   * wherever they live (a knowledge base or not; rows carry `knowledgeBaseIds`
+   * for the location column). `creator` narrows to the caller's own rows
+   * (`self`) or to what other workspace members shared (`others`); private rows
+   * of other members never pass the ownership scope in the first place. All
+   * exclusions run in SQL, so `limit` is never eaten by rows filtered later.
+   */
+  async queryHomeItems({
+    creator,
+    excludeKnowledgeBaseIds,
+    limit = 50,
+  }: {
+    creator?: 'others' | 'self';
+    excludeKnowledgeBaseIds?: string[];
+    limit?: number;
+  } = {}): Promise<KnowledgeItem[]> {
+    const creatorFilter = (column: AnyPgColumn) =>
+      creator === 'self'
+        ? eq(column, this.userId)
+        : creator === 'others'
+          ? ne(column, this.userId)
+          : undefined;
+
+    const fileArm = this.fileArm(
+      [
+        creatorFilter(f.userId),
+        this.fileCategoryFilter(FilesTabs.Documents),
+        excludeKnowledgeBaseIds?.length
+          ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
+          : undefined,
+      ],
+      undefined,
+      undefined,
+      false,
+    );
+
+    const documentArm = this.documentArm(
+      [
+        creatorFilter(d.userId),
+        // HTML pages (artifacts) are pages too; leaving them out hid every
+        // agent-written report from the list.
+        inArray(d.fileType, [CUSTOM_DOCUMENT_FILE_TYPE, HTML_DOCUMENT_FILE_TYPE]),
+        excludeKnowledgeBaseIds?.length
+          ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+          : undefined,
+      ],
+      false,
+    );
+
+    const rows = await unionAll(fileArm, documentArm)
+      .orderBy(this.orderBy(SortType.Desc, 'updatedAt'))
+      .limit(limit);
 
     return rows.map(toKnowledgeItem);
   }

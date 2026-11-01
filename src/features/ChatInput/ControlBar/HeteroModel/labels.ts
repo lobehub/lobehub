@@ -54,7 +54,17 @@ export const getModelLabel = (model: string, defaultLabel: string) => {
   return `${family[0].toUpperCase()}${family.slice(1)} ${major}.${minor}`;
 };
 
-export const getTriggerText = ({
+/**
+ * The two halves of the composer chip: the model (ellipsised when long) and
+ * the reasoning effort (never truncated). Collapses to a single "Default
+ * config" label when nothing is overridden.
+ */
+export interface TriggerLabel {
+  secondaryText?: string;
+  text: string;
+}
+
+export const getTriggerLabel = ({
   defaultConfigLabel,
   defaultModelLabel,
   defaultReasoningLabel,
@@ -70,16 +80,17 @@ export const getTriggerText = ({
   effortLabel?: string;
   model: string;
   modelLabel: string;
-}) => {
+}): TriggerLabel => {
   const isDefaultModel = model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
   const resolvedModelLabel = isDefaultModel ? defaultModelLabel : modelLabel;
 
-  if (!effort) return isDefaultModel ? defaultConfigLabel : resolvedModelLabel;
+  if (!effort) return { text: isDefaultModel ? defaultConfigLabel : resolvedModelLabel };
 
   const isDefaultEffort = effort === HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
-  if (isDefaultModel && isDefaultEffort) return defaultConfigLabel;
+  if (isDefaultModel && isDefaultEffort) return { text: defaultConfigLabel };
 
-  const resolvedEffortLabel = isDefaultEffort ? defaultReasoningLabel : effortLabel;
-
-  return `${resolvedModelLabel} ${resolvedEffortLabel}`;
+  return {
+    secondaryText: isDefaultEffort ? defaultReasoningLabel : effortLabel,
+    text: resolvedModelLabel,
+  };
 };

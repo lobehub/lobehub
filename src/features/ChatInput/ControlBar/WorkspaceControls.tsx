@@ -1,19 +1,15 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
 import { Tooltip } from '@lobehub/ui';
-import { memo } from 'react';
+import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
-import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
+import DeviceSwitcher from './DeviceSwitcher';
+import SandboxStorageSection from './SandboxStorageSection';
+import { useWorkspaceSurface, type WorkspaceSurface } from './useWorkspaceSurface';
 import WorkingDirectorySection from './WorkingDirectorySection';
 
 interface WorkspaceControlsProps {
@@ -40,79 +36,68 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
   ({ agentId, alwaysShowWorkspace = false }) => {
     const { t } = useTranslation('setting');
     const { canConfigureResource, canUseResource } = useChatInputResourceAccess();
-    const runtimeMode = useAgentStore(chatConfigByIdSelectors.getRuntimeModeById(agentId));
-    const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
-    // Effective config = shared row + this member's device override,
-    // so `isDeviceMode` routes the working-directory section by the device THIS
-    // member's run actually targets.
-    const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
-    const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
-    const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-      clientExecutionAvailable: isDesktop,
-      deviceRoutingAvailable,
-      isHetero: isHeterogeneous,
-      workspaceScoped,
-    });
-    const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
+    // Resolved from the effective (override-merged) execution target so the
+    // surfaces follow the device THIS member's run actually targets.
+    const surfaces = useWorkspaceSurface(agentId, alwaysShowWorkspace);
 
-    const renderWorkspace = () => {
-      // Remote device runs get the device-scoped picker, regardless of runtimeMode
-      // (HeteroDeviceSwitcher sets runtimeMode to 'none' when a device is selected).
-      if (isDeviceMode) return <WorkingDirectorySection agentId={agentId} />;
-
-      // Web has no local filesystem — cloud / heterogeneous agents browse the repo
-      // through the cloud repo switcher instead.
-      if (!isDesktop) {
-        return isHeterogeneous || alwaysShowWorkspace ? (
-          <CloudRepoSwitcher agentId={agentId} />
-        ) : null;
+    const renderSurface = (surface: WorkspaceSurface) => {
+      switch (surface) {
+        case 'workingDirectory': {
+          return <WorkingDirectorySection agentId={agentId} />;
+        }
+        case 'cloudRepo': {
+          return <CloudRepoSwitcher agentId={agentId} />;
+        }
+        case 'sandbox': {
+          return <SandboxStorageSection agentId={agentId} />;
+        }
       }
-
-      // Desktop: local working directory + git branch / diff / PR. Shown when the
-      // run is local, or always for heterogeneous agents (they always have a cwd).
-      if (alwaysShowWorkspace || runtimeMode === 'local') {
-        return <WorkingDirectorySection agentId={agentId} />;
-      }
-
-      return null;
     };
 
     // The directory picker and git controls write shared agent config / run
-    // device git mutations, so members without edit access see the whole
-    // cluster disabled. The device switcher handles its own use-level gate.
-    const workspace = renderWorkspace();
+    // device git mutations, so members without edit access see that cluster
+    // disabled. The device switcher handles its own use-level gate.
+    //
+    // The sandbox is exempt: its choice lands in the topic's own metadata, not
+    // in the shared agent row, so a member who may use the agent may choose
+    // where their own run keeps its files. Gated one surface at a time, so a
+    // run that shows both keeps the sandbox chip live while the repo switcher
+    // is inert.
+    const withAccessGate = (surface: WorkspaceSurface) => {
+      const node = renderSurface(surface);
+      if (canConfigureResource || surface === 'sandbox') return node;
+
+      return (
+        <Tooltip
+          title={t(
+            canUseResource ? 'permission.accessTag.useOnlyTip' : 'permission.accessTag.viewOnlyTip',
+          )}
+        >
+          {/* Outer div catches hover for the tooltip; the inner one makes
+              the controls inert. */}
+          <div style={{ alignItems: 'center', display: 'flex', gap: 4 }}>
+            <div
+              style={{
+                alignItems: 'center',
+                display: 'flex',
+                gap: 4,
+                opacity: 0.5,
+                pointerEvents: 'none',
+              }}
+            >
+              {node}
+            </div>
+          </div>
+        </Tooltip>
+      );
+    };
 
     return (
       <>
-        <HeteroDeviceSwitcher agentId={agentId} />
-        {workspace &&
-          (canConfigureResource ? (
-            workspace
-          ) : (
-            <Tooltip
-              title={t(
-                canUseResource
-                  ? 'permission.accessTag.useOnlyTip'
-                  : 'permission.accessTag.viewOnlyTip',
-              )}
-            >
-              {/* Outer div catches hover for the tooltip; the inner one makes
-                  the controls inert. */}
-              <div style={{ alignItems: 'center', display: 'flex', gap: 4 }}>
-                <div
-                  style={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    gap: 4,
-                    opacity: 0.5,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  {workspace}
-                </div>
-              </div>
-            </Tooltip>
-          ))}
+        <DeviceSwitcher agentId={agentId} />
+        {surfaces.map((surface) => (
+          <Fragment key={surface}>{withAccessGate(surface)}</Fragment>
+        ))}
       </>
     );
   },

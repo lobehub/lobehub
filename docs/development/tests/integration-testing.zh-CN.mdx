@@ -163,27 +163,36 @@ it('should create message with correct associations', async () => {
 
 #### 2. 测试级联操作
 
+删除 Agent 会将 Agent 和关联内容移入回收站。应验证软删除状态，而不是断言数据库行已经消失；物理级联删除发生在永久清除时。此示例使用不属于任何 Topic 的消息，因为这类消息会直接标记为软删除。
+
+使用上面的共享数据库和用户初始化步骤，并 mock `getServerDB`，使其返回该测试数据库，具体方式参见
+[Message Router 集成测试](https://github.com/lobehub/lobehub/blob/canary/apps/server/src/routers/lambda/__tests__/integration/message.integration.test.ts)。
+
 ```typescript
-it('should cascade delete messages when session is deleted', async () => {
-  const sessionCaller = sessionRouter.createCaller(createTestContext(userId));
+import { agents } from '@lobechat/database/schemas';
+
+import { agentRouter } from '../../agent';
+
+it('should trash an agent with its topicless messages', async () => {
+  const agentCaller = agentRouter.createCaller(createTestContext(userId));
   const messageCaller = messageRouter.createCaller(createTestContext(userId));
 
-  // 创建 session 和 messages
-  const sessionId = await sessionCaller.createSession({
-    /* ... */
+  // 创建 Agent 和不属于任何 Topic 的消息
+  const { agentId } = await agentCaller.createAgent({ config: { title: 'Cascade test' } });
+  const { id: messageId } = await messageCaller.createMessage({
+    agentId,
+    content: 'Test message',
+    role: 'user',
   });
-  await messageCaller.createMessage({ sessionId /* ... */ });
 
-  // 删除 session
-  await sessionCaller.removeSession({ id: sessionId });
+  await agentCaller.removeAgent({ agentId });
 
-  // ✅ 验证相关消息也被删除
-  const remainingMessages = await serverDB
-    .select()
-    .from(messages)
-    .where(eq(messages.sessionId, sessionId));
+  // 验证两行数据仍在数据库中，并已标记为软删除
+  const [agent] = await serverDB.select().from(agents).where(eq(agents.id, agentId));
+  const [message] = await serverDB.select().from(messages).where(eq(messages.id, messageId));
 
-  expect(remainingMessages).toHaveLength(0);
+  expect(agent).toMatchObject({ id: agentId, isDeleted: true });
+  expect(message).toMatchObject({ agentId, isDeleted: true, topicId: null });
 });
 ```
 
@@ -286,7 +295,7 @@ afterEach(async () => {
 ```typescript
 // ✅ 好的命名
 it('should create message with correct sessionId and topicId');
-it('should cascade delete messages when session is deleted');
+it('should trash an agent with its topicless messages');
 it('should prevent cross-user access to messages');
 
 // ❌ 不好的命名
@@ -323,7 +332,7 @@ it('test delete');
 
 - ✅ 跨层级的 ID 传递（sessionId、topicId、containerId、threadId）
 - ✅ 权限验证（用户只能访问自己的资源）
-- ✅ 级联删除（删除 session 时相关数据也删除）
+- ✅ 级联操作（删除 Agent 时隐藏关联内容，永久清除时删除数据）
 - ✅ 外键约束（不能创建不存在的关联）
 
 ### 优先级 P1（应该覆盖）

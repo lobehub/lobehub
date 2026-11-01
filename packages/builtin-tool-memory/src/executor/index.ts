@@ -5,7 +5,7 @@ import type {
   ExperienceMemoryItemSchema,
   PreferenceMemoryItemSchema,
   RemoveIdentityActionSchema,
-  UpdateIdentityActionSchema,
+  UpdateIdentityToolInputSchema,
 } from '@lobechat/memory-user-memory/schemas';
 import type {
   BuiltinToolContext,
@@ -118,7 +118,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
   };
 
   updateIdentityMemory = async (
-    params: z.infer<typeof UpdateIdentityActionSchema>,
+    params: z.input<typeof UpdateIdentityToolInputSchema>,
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     this.ensureWritable(ctx?.agentId);

@@ -1,5 +1,13 @@
 import type { TaskDetailData, TaskDetailWorkspaceNode } from './index';
-import { briefIcon, priorityLabel, statusIcon, timeAgo } from './index';
+import {
+  assignmentParticipantLabel,
+  briefIcon,
+  formatPropertyValue,
+  priorityLabel,
+  statusIcon,
+  taskIdentity,
+  timeAgo,
+} from './index';
 import type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 import { buildTaskManagerDefaultsBlock } from './taskManagerDefaults';
 
@@ -16,22 +24,22 @@ export const buildTaskDetailPrompt = (input: BuildTaskDetailPromptInput, now?: D
   const { activities, workspace } = task;
 
   const lines: string[] = [
-    `<page_context>The user is currently viewing the detail page of task ${task.identifier}. When the user says "this task" or refers ambiguously, it means ${task.identifier}.</page_context>`,
+    `<page_context>The user is currently viewing the detail page of task ${taskIdentity(task)}. When the user says "this task" or refers ambiguously, it means ${task.identifier}.</page_context>`,
     ...buildTaskManagerDefaultsBlock(input),
     '<task>',
     `<hint>This tag contains the complete context of the task the user is viewing. Do NOT call viewTask to re-fetch it.</hint>`,
-    `${task.identifier} ${task.name || '(unnamed)'}`,
+    `${taskIdentity(task)} ${task.name || '(unnamed)'}`,
     `Status: ${statusIcon(task.status)} ${task.status}     Priority: ${priorityLabel(task.priority)}`,
     `Instruction: ${task.instruction}`,
   ];
   if (task.description) lines.push(`Description: ${task.description}`);
   if (task.agentId) lines.push(`Agent: ${task.agentId}`);
-  if (task.parent) lines.push(`Parent: ${task.parent.identifier}`);
+  if (task.parent) lines.push(`Parent: ${taskIdentity(task.parent)}`);
   if (task.topicCount) lines.push(`Topics: ${task.topicCount}`);
 
   if (task.dependencies && task.dependencies.length > 0) {
     lines.push(
-      `Dependencies: ${task.dependencies.map((d) => `${d.type}: ${d.dependsOn}`).join(', ')}`,
+      `Dependencies: ${task.dependencies.map((d) => `${d.type}: ${d.dependsOn}${d.dependsOnId ? ` (id: ${d.dependsOnId})` : ''}`).join(', ')}`,
     );
   }
 
@@ -40,9 +48,11 @@ export const buildTaskDetailPrompt = (input: BuildTaskDetailPromptInput, now?: D
     lines.push('Subtasks:');
     const renderSubtasks = (nodes: NonNullable<typeof task.subtasks>, indent: string) => {
       for (const s of nodes) {
-        const dep = s.blockedBy ? ` ← blocks: ${s.blockedBy}` : '';
+        const dep = s.blockedBy
+          ? ` ← blocks: ${taskIdentity({ id: s.blockedById, identifier: s.blockedBy })}`
+          : '';
         lines.push(
-          `${indent}${s.identifier} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
+          `${indent}${taskIdentity(s)} ${statusIcon(s.status)} ${s.status} ${s.name || '(unnamed)'}${dep}`,
         );
         if (s.children && s.children.length > 0) {
           renderSubtasks(s.children, indent + '  ');
@@ -102,6 +112,20 @@ export const buildTaskDetailPrompt = (input: BuildTaskDetailPromptInput, now?: D
         const content = act.content || '';
         const truncated = content.length > 200 ? content.slice(0, 200) + '...' : content;
         lines.push(`  💭 ${ago} ${author} ${truncated}${idSuffix}`);
+      } else if (act.type === 'property') {
+        const actor = assignmentParticipantLabel(act.author, 'system');
+        const change = act.propertyChange;
+        lines.push(
+          `  🔁 ${ago} ${actor} changed ${change?.field}: ${formatPropertyValue(change?.field, change?.from)} → ${formatPropertyValue(change?.field, change?.to)}${idSuffix}`,
+        );
+      } else if (act.type === 'assignment') {
+        // Who owns this task has changed hands before; the agent reading the
+        // detail should see that history, not just the current chip.
+        const slot = act.assignment?.kind === 'agent' ? 'agent' : 'member';
+        const actor = assignmentParticipantLabel(act.author, 'system');
+        lines.push(
+          `  👥 ${ago} ${actor} set ${slot} assignee: ${assignmentParticipantLabel(act.assignment?.from)} → ${assignmentParticipantLabel(act.assignment?.to)}${idSuffix}`,
+        );
       }
     }
   }

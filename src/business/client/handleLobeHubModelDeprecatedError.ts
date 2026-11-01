@@ -1,5 +1,5 @@
 import { ChatErrorType } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 

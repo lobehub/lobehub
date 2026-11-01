@@ -11,6 +11,8 @@ export interface AvailableAgentItem {
   backgroundColor: string | null;
   description: string | null;
   id: string;
+  /** Product-owned inbox (Lobe AI). A builtin can never join a chat group. */
+  isInbox?: boolean;
   /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
   name: string | null;
   title: string | null;
@@ -73,6 +75,8 @@ const normalizeMarketAgentModel = (config?: PartialDeep<AgentItem>): PartialDeep
 export interface CreateAgentParams {
   config?: PartialDeep<AgentItem>;
   groupId?: string;
+  /** This desktop's gateway device, where the creator's direct Channel to a local Agent runs. */
+  localDeviceId?: string;
   /**
    * `private` keeps the agent visible only to its creator within the active
    * workspace; `public` (default) makes it visible to every member. The
@@ -141,6 +145,7 @@ class AgentService {
     return lambdaClient.agent.createAgent.mutate({
       config: normalizedConfig as any,
       groupId: params.groupId,
+      localDeviceId: params.localDeviceId,
       visibility: params.visibility,
     });
   };
@@ -241,9 +246,14 @@ class AgentService {
     agentId: string,
     config: PartialDeep<LobeAgentConfig>,
     signal?: AbortSignal,
+    replaceWorkingDirDeviceIds: string[] = [],
   ) => {
     return lambdaClient.agent.updateAgentConfig.mutate(
-      { agentId, value: config },
+      {
+        agentId,
+        replaceWorkingDirDeviceIds,
+        value: config,
+      },
       { context: { showNotification: false }, signal },
     );
   };
@@ -289,6 +299,7 @@ class AgentService {
    * Returns agents with minimal info (id, title, description, avatar, backgroundColor).
    */
   queryAgents = async (params?: {
+    includeInbox?: boolean;
     keyword?: string;
     limit?: number;
     offset?: number;
@@ -302,6 +313,7 @@ class AgentService {
    */
   countAgents = async (params?: {
     endDate?: string;
+    includeInbox?: boolean;
     keyword?: string;
     range?: [string, string];
     startDate?: string;

@@ -1,8 +1,14 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Button, Switch, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Switch,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { RotateCcw, XIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +52,7 @@ const CustomizeModalContent = memo(() => {
     taskCount,
     togglePortrait,
     toggleWidget,
+    usageActive,
   } = useHomeCustomization();
 
   return (
@@ -93,20 +100,24 @@ const CustomizeModalContent = memo(() => {
             <Text fontSize={12} type={'secondary'} weight={600}>
               {t(`dashboard.customize.group.${group.key}`)}
             </Text>
-            {group.widgets.map((key) => (
-              <SettingRow key={key} title={t(`dashboard.customize.widget.${key}`)}>
-                <Switch
-                  aria-label={t(`dashboard.customize.widget.${key}`)}
-                  checked={!isWidgetHidden(key)}
-                  // The scheduled block is the second half of the task overview,
-                  // so there is nothing for it to switch on while the first half
-                  // is off.
-                  disabled={key === 'scheduledTasks' && isWidgetHidden('tasks')}
-                  size={'small'}
-                  onChange={() => toggleWidget(key)}
-                />
-              </SettingRow>
-            ))}
+            {/* The usage widget is a business slot: a deployment without it
+                must not show a switch that toggles nothing. */}
+            {group.widgets
+              .filter((key) => key !== 'usage' || usageActive)
+              .map((key) => (
+                <SettingRow key={key} title={t(`dashboard.customize.widget.${key}`)}>
+                  <Switch
+                    aria-label={t(`dashboard.customize.widget.${key}`)}
+                    checked={!isWidgetHidden(key)}
+                    // The scheduled block is the second half of the task overview,
+                    // so there is nothing for it to switch on while the first half
+                    // is off.
+                    disabled={key === 'scheduledTasks' && isWidgetHidden('tasks')}
+                    size={'small'}
+                    onChange={() => toggleWidget(key)}
+                  />
+                </SettingRow>
+              ))}
           </Flexbox>
         ))}
 

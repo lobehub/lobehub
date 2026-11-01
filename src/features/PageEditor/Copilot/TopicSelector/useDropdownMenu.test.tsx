@@ -13,21 +13,12 @@ const permissionMock = vi.hoisted(() => ({
   edit_own_content: true,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => null,
-}));
-
 vi.mock('@/features/DeleteTopicConfirm', () => ({
   confirmRemoveTopic: confirmRemoveTopicMock,
 }));
 
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: {
@@ -134,6 +125,19 @@ describe('PageEditor Copilot TopicSelector useDropdownMenu', () => {
       'share',
       'delete',
     ]);
+  });
+
+  it('labels the share action like the sidebar topic menu', () => {
+    const { result } = renderHook(() =>
+      useDropdownMenu({
+        agentId: 'agent-1',
+        onClose: vi.fn(),
+        topicId: 'topic-1',
+        topicTitle: 'Topic 1',
+      }),
+    );
+
+    expect(getMenuItem(result.current(), 'share')).toMatchObject({ label: 'shareModal.title' });
   });
 
   it('disables write actions for viewers but keeps copy actions available', () => {

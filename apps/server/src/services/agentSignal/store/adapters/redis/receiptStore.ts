@@ -37,7 +37,6 @@ const parseReceiptTarget = (value?: string): AgentSignalReceipt['target'] | unde
     const target = JSON.parse(value) as Record<string, unknown>;
 
     if (target.type !== 'memory' && target.type !== 'skill') return;
-    if (typeof target.title !== 'string' || target.title.length === 0) return;
 
     return {
       ...(typeof target.agentDocumentId === 'string' && target.agentDocumentId.length > 0
@@ -55,10 +54,18 @@ const parseReceiptTarget = (value?: string): AgentSignalReceipt['target'] | unde
       ...(target.type === 'memory' && isMemoryLayer(target.memoryLayer)
         ? { memoryLayer: target.memoryLayer }
         : {}),
+      ...(target.type === 'memory' &&
+      (target.operation === 'create' ||
+        target.operation === 'remove' ||
+        target.operation === 'update')
+        ? { operation: target.operation }
+        : {}),
       ...(typeof target.summary === 'string' && target.summary.length > 0
         ? { summary: target.summary }
         : {}),
-      title: target.title,
+      ...(typeof target.title === 'string' && target.title.length > 0
+        ? { title: target.title }
+        : {}),
       type: target.type,
     };
   } catch {

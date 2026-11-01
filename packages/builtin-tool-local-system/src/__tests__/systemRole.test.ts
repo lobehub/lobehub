@@ -1,30 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { systemPrompt as genericPrompt } from '../systemRole';
-import { systemPrompt as desktopPrompt } from '../systemRole.desktop';
+import { systemPrompt } from '../systemRole';
 
-const extractPlaceholders = (template: string): Set<string> =>
-  new Set([...template.matchAll(/\{\{(\w+)\}\}/g)].map((match) => match[1]));
-
-describe('systemRole templates', () => {
-  /**
-   * The generic template is what the server renders for gateway runs; the
-   * `.desktop` variant is a client-only vite module swap. Keep the environment
-   * facts in sync: a placeholder present only in the desktop variant means
-   * gateway prompts silently lose information the local prompt has (this is
-   * how gateway runs ended up without the known-locations list).
-   */
-  it('generic template carries every placeholder the desktop variant has', () => {
-    const generic = extractPlaceholders(genericPrompt);
-    const desktopOnly = [...extractPlaceholders(desktopPrompt)].filter((key) => !generic.has(key));
-
-    expect(desktopOnly).toEqual([]);
+describe('systemRole template', () => {
+  it('pairs {{defaultShell}} with {{shellSyntaxGuidance}}', () => {
+    expect(systemPrompt).toContain('{{defaultShell}}');
+    expect(systemPrompt).toContain('{{shellSyntaxGuidance}}');
   });
 
-  it('both templates pair {{defaultShell}} with {{shellSyntaxGuidance}}', () => {
-    for (const template of [genericPrompt, desktopPrompt]) {
-      expect(template).toContain('{{defaultShell}}');
-      expect(template).toContain('{{shellSyntaxGuidance}}');
-    }
+  it('teaches image reads and the localFile response format', () => {
+    expect(systemPrompt).toContain('Image files are uploaded as visual tool results');
+    expect(systemPrompt).toContain('base64');
+    expect(systemPrompt).toContain('<localFile');
+  });
+
+  /**
+   * `{{hostname}}` has no generator in the desktop placeholder map, so a
+   * template that references it renders the raw token on the desktop client.
+   */
+  it('only references placeholders every host can render', () => {
+    expect(systemPrompt).not.toContain('{{hostname}}');
   });
 });

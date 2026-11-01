@@ -1,26 +1,36 @@
+import { runInNewContext } from 'node:vm';
+
+import { IssuerMismatchError } from '@modelcontextprotocol/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 
 import { GET } from './route';
 
-const { mockConsume, mockFindById, mockSync, mockUpdate } = vi.hoisted(() => ({
-  mockConsume: vi.fn(),
-  mockFindById: vi.fn(),
-  mockSync: vi.fn(),
-  mockUpdate: vi.fn(),
-}));
+const { mockConsume, mockDiscover, mockExchange, mockFindById, mockSync, mockUpdate } = vi.hoisted(
+  () => ({
+    mockConsume: vi.fn(),
+    mockDiscover: vi.fn().mockResolvedValue({ token_endpoint: 'https://as/token' }),
+    mockExchange: vi.fn(),
+    mockFindById: vi.fn(),
+    mockSync: vi.fn(),
+    mockUpdate: vi.fn(),
+  }),
+);
 
 vi.mock('@/database/server', () => ({ serverDB: {} }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com' } }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: vi.fn().mockResolvedValue({}) },
 }));
-vi.mock('@modelcontextprotocol/sdk/client/auth.js', () => ({
-  discoverAuthorizationServerMetadata: vi
-    .fn()
-    .mockResolvedValue({ token_endpoint: 'https://as/token' }),
-}));
 vi.mock('@/server/services/connector/oauth', () => ({
-  exchangeConnectorCode: vi.fn().mockResolvedValue({ access_token: 'tok' }),
+  discoverConnectorAuthorizationServerMetadata: mockDiscover,
+  exchangeConnectorCode: mockExchange,
+  toClientInformation: (oidc: { clientId: string; clientSecret?: string }) => ({
+    client_id: oidc.clientId,
+    client_secret: oidc.clientSecret,
+  }),
 }));
 vi.mock('@/server/services/connector/tokens', () => ({
   tokensToCredentials: vi
@@ -31,17 +41,17 @@ vi.mock('@/server/services/connector/stateStore', () => ({
   consumeConnectorOAuthState: mockConsume,
 }));
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi
-    .fn()
-    .mockImplementation(() => ({ findById: mockFindById, update: mockUpdate })),
+  ConnectorModel: vi.fn(function () {
+    return { findById: mockFindById, update: mockUpdate };
+  }),
 }));
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({})),
+  ConnectorToolModel: vi.fn(function () {}),
 }));
 vi.mock('@/server/services/connector/sync', () => ({ syncConnectorToolsById: mockSync }));
 
-const makeReq = () =>
-  ({ nextUrl: { searchParams: new URLSearchParams('code=abc&state=xyz') } }) as any;
+const makeReq = (query = 'code=abc&state=xyz') =>
+  ({ nextUrl: { searchParams: new URLSearchParams(query) } }) as any;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -60,9 +70,43 @@ beforeEach(() => {
     },
   });
   mockUpdate.mockResolvedValue(undefined);
+  mockExchange.mockResolvedValue({ tokens: { access_token: 'tok' } });
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 describe('connector OAuth callback', () => {
+  it.each([true, false])(
+    'delivers status with or without an opener (opener=%s)',
+    async (hasOpener) => {
+      mockSync.mockResolvedValue({ toolCount: 5 });
+      const body = await (await GET(makeReq())).text();
+      const postMessage = vi.fn();
+      const openerPostMessage = vi.fn();
+      const script = new DOMParser().parseFromString(body, 'text/html').querySelector('script');
+      if (!script?.textContent) throw new Error('Missing callback status script');
+
+      runInNewContext(script.textContent, {
+        setTimeout: vi.fn(),
+        window: {
+          location: { origin: 'https://app.example.com' },
+          opener: hasOpener ? { postMessage: openerPostMessage } : null,
+          postMessage,
+        },
+      });
+
+      const expected = {
+        connectorId: 'c1',
+        success: true,
+        synced: true,
+        type: 'lobe-connector-oauth',
+      };
+      expect(postMessage.mock.calls).toEqual([[expected, 'https://app.example.com']]);
+      expect(openerPostMessage.mock.calls).toEqual(
+        hasOpener ? [[expected, 'https://app.example.com']] : [],
+      );
+    },
+  );
+
   it('reports synced:false when auth succeeds but tool sync fails', async () => {
     mockSync.mockRejectedValue(new Error('mcp down'));
 
@@ -79,5 +123,102 @@ describe('connector OAuth callback', () => {
 
     expect(body).toContain('"success":true');
     expect(body).toContain('"synced":true');
+  });
+
+  it('looks the connector up in the workspace it was started from', async () => {
+    mockSync.mockResolvedValue({ toolCount: 5 });
+    mockConsume.mockResolvedValue({
+      authorizationServerUrl: 'https://as',
+      codeVerifier: 'v',
+      connectorId: 'c1',
+      lobeUserId: 'u1',
+      workspaceId: 'ws1',
+    });
+
+    const body = await (await GET(makeReq())).text();
+
+    expect(body).toContain('"success":true');
+    expect(ConnectorModel).toHaveBeenCalledWith({}, 'u1', 'ws1', {});
+    expect(ConnectorToolModel).toHaveBeenCalledWith({}, 'u1', 'ws1');
+  });
+
+  it('keeps the failure page open and shows the escaped reason', async () => {
+    mockFindById.mockResolvedValue(undefined);
+
+    const body = await (await GET(makeReq())).text();
+
+    expect(body).toContain('Authorization failed.');
+    expect(body).toContain('>connector_not_found</p>');
+    expect(body).not.toContain('window.close');
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it('shows the provider error description without injecting markup', async () => {
+    const body = await (
+      await GET(makeReq('error=access_denied&error_description=%3Cimg%20src%3Dx%3E'))
+    ).text();
+
+    expect(body).toContain('access_denied: &lt;img src=x&gt;');
+    expect(body).not.toContain('<img');
+    expect(mockConsume).not.toHaveBeenCalled();
+  });
+
+  it('remembers the client auth method that the token endpoint accepted', async () => {
+    mockSync.mockResolvedValue({ toolCount: 1 });
+    mockExchange.mockResolvedValue({
+      authMethod: 'client_secret_post',
+      tokens: { access_token: 'tok' },
+    });
+
+    await GET(makeReq());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        oidcConfig: expect.objectContaining({
+          clientId: 'cid',
+          tokenEndpointAuthMethod: 'client_secret_post',
+        }),
+      }),
+    );
+  });
+
+  it('leaves the OIDC config alone when the first auth method worked', async () => {
+    mockSync.mockResolvedValue({ toolCount: 1 });
+
+    await GET(makeReq());
+
+    expect(mockUpdate.mock.calls[0][1]).not.toHaveProperty('oidcConfig');
+  });
+});
+
+describe('SDK v2 OAuth callback regressions', () => {
+  it('passes iss from the callback to the code exchange', async () => {
+    await GET(makeReq('code=abc&state=xyz&iss=https%3A%2F%2Fas'));
+    expect(mockExchange).toHaveBeenCalledWith(expect.objectContaining({ iss: 'https://as' }));
+  });
+  it.each(['exchange', 'discovery'])(
+    'redacts the untrusted issuer on %s failure',
+    async (stage) => {
+      const error = new IssuerMismatchError(
+        'authorization_response',
+        'https://as',
+        'https://attacker.example/untrusted',
+      );
+      if (stage === 'exchange') mockExchange.mockRejectedValueOnce(error);
+      else mockDiscover.mockRejectedValueOnce(error);
+      const response = await GET(makeReq());
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).toContain('issuer_mismatch');
+      expect(body).not.toContain('attacker.example');
+      expect(mockUpdate).not.toHaveBeenCalled();
+    },
+  );
+  it('renders a failure page when discovery has a network error', async () => {
+    mockDiscover.mockRejectedValueOnce(new TypeError('network unavailable'));
+    const response = await GET(makeReq());
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('Authorization failed.');
   });
 });

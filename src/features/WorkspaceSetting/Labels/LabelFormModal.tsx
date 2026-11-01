@@ -1,7 +1,15 @@
 import { type AgentLabelListItem } from '@lobechat/types';
-import { Flexbox, Input } from '@lobehub/ui';
-import { Button, createModal, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Button,
+  createModal,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Input,
+  ModalFooter,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

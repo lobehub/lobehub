@@ -1,10 +1,15 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { ContextMenuTrigger, type GenericItemType, Icon } from '@lobehub/ui';
-import { confirmModal, ScrollArea } from '@lobehub/ui/base-ui';
+import {
+  confirmModal,
+  ContextMenuTrigger,
+  createStaticStyles,
+  type DropdownItem,
+  Icon,
+  ScrollArea,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +18,7 @@ import FileIcon from '@/components/FileIcon';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { getLocalFileTabId } from '@/store/chat/slices/portal/helpers';
+import { getLocalFileTabId, isRemoteLocalFile } from '@/store/chat/slices/portal/helpers';
 
 const SKILL_PATH_RE = /\/\.(?:agents|claude)\/skills\/([^/]+)\/SKILL\.md$/;
 
@@ -131,7 +136,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const SCROLL_AREA_STYLE = {
   background: 'transparent',
   borderRadius: 0,
-  flex: 1,
+  // Hug the tabs so the portal header's `…` sits right after the last one;
+  // still shrinks (and scrolls) once the tabs outgrow the header.
+  flex: '0 1 auto',
   minWidth: 0,
 };
 
@@ -188,7 +195,7 @@ const TabStrip = memo(() => {
   );
 
   const getContextMenuItems = useCallback(
-    (id: string, filePath: string, index: number): GenericItemType[] => [
+    (id: string, filePath: string, index: number): DropdownItem[] => [
       {
         disabled: index === 0,
         key: 'closeLeft',
@@ -207,10 +214,9 @@ const TabStrip = memo(() => {
         label: t('workingPanel.localFile.closeOther'),
         onClick: () => closeOtherLocalFileTabs(id),
       },
-      // Sandbox-backed tabs point at paths inside the cloud sandbox — a local
-      // "show in system" would open an unrelated folder or fail.
+      // Remote device and sandbox paths cannot be revealed in the local filesystem.
       ...(isDesktop &&
-      !openLocalFiles.find((file) => getLocalFileTabId(file) === id)?.sandboxTopicId
+      !isRemoteLocalFile(openLocalFiles.find((file) => getLocalFileTabId(file) === id))
         ? [
             {
               key: 'showInSystem',

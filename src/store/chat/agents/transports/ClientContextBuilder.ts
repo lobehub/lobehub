@@ -65,7 +65,6 @@ export class ClientContextBuilder implements ContextBuilder {
       enabledToolIds: resolvedTools.enabledToolIds,
       tools: resolvedTools.tools.length > 0 ? resolvedTools.tools : undefined,
     };
-    const { agentConfig } = promptAgentConfig;
     const { agentId, groupId, subAgentId, topicId } = operation.context;
     const effectiveAgentId = groupId && subAgentId ? subAgentId : agentId;
     const assistantMessageId = (input.payload as { assistantMessageId?: string })
@@ -77,13 +76,13 @@ export class ClientContextBuilder implements ContextBuilder {
       {
         agentId: effectiveAgentId || undefined,
         additionalContexts: input.payload.additionalContexts,
+        attachmentPreviewFileIds: input.payload.attachmentPreviewFileIds,
         groupId,
         messages,
         model: input.model,
         provider: input.provider,
         resolvedAgentConfig: promptAgentConfig,
         topicId: topicId ?? undefined,
-        ...agentConfig.params,
       },
       {
         initialContext: this.context.runtimeContext?.initialContext,
@@ -102,13 +101,17 @@ export class ClientContextBuilder implements ContextBuilder {
       messages: preparedMessages,
       modelParameters: {
         options: prepared.options,
-        params,
+        params: {
+          ...params,
+          // The client transport builds the request from these params alone,
+          // so a forced or configured preserveThinking must ride here too.
+          ...(typeof prepared.preserveThinking === 'boolean' && {
+            preserveThinking: prepared.preserveThinking,
+          }),
+        },
       } satisfies ClientLLMModelParameters,
-      preserveThinking:
-        typeof prepared.params.preserveThinking === 'boolean'
-          ? prepared.params.preserveThinking
-          : undefined,
-      replayAssistantReasoning: true,
+      preserveThinking: prepared.preserveThinking,
+      replayAssistantReasoning: prepared.replayAssistantReasoning ?? false,
       resolvedTools,
     };
   }

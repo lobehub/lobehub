@@ -10,6 +10,8 @@ export interface ReportInput {
   fullDiffPath: string | null;
   lintRan: boolean;
   problems: LintProblem[];
+  /** Files over the line limit that this change created; they fail the run. */
+  sizeErrors: string[];
   /** Files with no matching lint pipeline (only counted when lint ran). */
   skipped: number;
   testFileCount: number;
@@ -29,6 +31,7 @@ export const printReport = (input: ReportInput): { failed: boolean } => {
     fullDiffPath,
     lintRan,
     problems,
+    sizeErrors,
     skipped,
     testFileCount,
     tests,
@@ -40,6 +43,7 @@ export const printReport = (input: ReportInput): { failed: boolean } => {
   const failed =
     errors.length > 0 ||
     fatal.length > 0 ||
+    sizeErrors.length > 0 ||
     (tests?.failedOutput.length ?? 0) > 0 ||
     Boolean(typeOutput);
 
@@ -67,6 +71,7 @@ export const printReport = (input: ReportInput): { failed: boolean } => {
     );
   }
   if (typeOutput !== null) parts.push(typeOutput ? 'types failed' : 'types clean');
+  if (sizeErrors.length > 0) parts.push(`${sizeErrors.length} oversized`);
   if (advisories.length > 0) parts.push(`${advisories.length} advisories`);
   if (skipped > 0) parts.push(`${skipped} skipped (no linter)`);
 
@@ -80,6 +85,11 @@ export const printReport = (input: ReportInput): { failed: boolean } => {
       );
   }
   for (const message of fatal) console.log(`\nlint fatal:\n${message}`);
+
+  if (sizeErrors.length > 0) {
+    console.log('\nfile size:');
+    for (const message of sizeErrors) console.log(`✗ ${message}`);
+  }
 
   if (advisories.length > 0) {
     console.log('\nadvisories:');

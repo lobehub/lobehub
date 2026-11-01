@@ -9,7 +9,8 @@ import MarkdownImage from './MarkdownImage';
 const mockImage = vi.hoisted(() => vi.fn());
 const mockUseClientDataSWR = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   Image: ({
     alt,
     classNames,
@@ -38,12 +39,6 @@ vi.mock('@lobehub/ui', () => ({
         style={styles?.image}
       />
     );
-  },
-}));
-
-vi.mock('antd-style', () => ({
-  cssVar: {
-    colorFillQuaternary: 'var(--color-fill-quaternary)',
   },
 }));
 

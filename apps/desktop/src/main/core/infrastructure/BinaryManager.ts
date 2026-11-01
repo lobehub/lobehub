@@ -6,6 +6,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
+import { invalidateLoginShellPathCache } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import { app } from 'electron';
 
 import type { App } from '@/core/App';
@@ -245,6 +246,13 @@ export class BinaryManager {
    * @param force Force detection, bypass cache
    */
   async detect(name: string, force = false): Promise<BinaryStatus> {
+    // `force` is what Rescan means: the user just installed something, so the
+    // login-shell PATH cached for this process may predate the edit. Hooked
+    // here because this is the one method `detectAll` and `detectCategory`
+    // both route through — wiring the callers individually is how the first
+    // version of this fix missed the path that actually mattered.
+    if (force) invalidateLoginShellPathCache();
+
     const spec = this.specs.get(name);
     if (!spec) {
       return {
@@ -314,6 +322,11 @@ export class BinaryManager {
    * @param force Force detection, bypass cache
    */
   async detectAll(force = false): Promise<Map<string, BinaryStatus>> {
+    // Dropped once for the whole sweep rather than per binary, so one Rescan
+    // pays for one shell probe instead of one per spec. `detect` invalidates
+    // too, but by then the first spec has already refreshed it.
+    if (force) invalidateLoginShellPathCache();
+
     const results = new Map<string, BinaryStatus>();
 
     await Promise.all(
@@ -335,6 +348,8 @@ export class BinaryManager {
     category: BinaryCategory,
     force = false,
   ): Promise<Map<string, BinaryStatus>> {
+    if (force) invalidateLoginShellPathCache();
+
     const names = this.categoryMap.get(category);
     if (!names) {
       return new Map();

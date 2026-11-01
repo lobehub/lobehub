@@ -1,5 +1,6 @@
 import { classifyEditedFile, getBasename } from '@lobechat/builtin-tools/fileEditScan';
 import {
+  type ListedWorkType,
   type WorkListItem,
   workProviderOfResourceType,
   type WorkSkillProvider,
@@ -16,6 +17,7 @@ import {
   FileTextIcon,
   FileTypeIcon,
   LinkIcon,
+  PanelsTopLeftIcon,
   PresentationIcon,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -43,14 +45,15 @@ const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
  */
 export type WorkOpenTarget =
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
-  | { identifier: string; kind: 'task' }
+  | { taskId: string; identifier?: string; kind: 'task'; name?: string | null }
   | { kind: 'external'; url: string }
   /**
    * In-app preview of a cloud-persisted file (the FilePreview chat portal).
    * `url` is the already-allowlisted download fallback for surfaces without a
    * chat portal (WorkGallery), so they don't recompute the file-metadata lookup.
    */
-  | { fileId: string; kind: 'filePreview'; url?: string };
+  | { fileId: string; kind: 'filePreview'; url?: string }
+  | { canvasId: string; kind: 'canvas'; version?: number };
 
 /**
  * Client-side allowlist for external Work URLs (defense in depth over the
@@ -156,8 +159,26 @@ const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
   getFileWorkMetadata(item)?.filePath ?? item.description?.trim() ?? null;
 
 export const WORK_TYPE_DESCRIPTORS: {
-  [T in WorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
+  [T in ListedWorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
+  canvas: {
+    getDescription: (item) => item.description?.trim() ?? null,
+    getIcon: () => PanelsTopLeftIcon,
+    getIdentifier: () => null,
+    getOpenTarget: (item) => {
+      if (!item.resourceId) return null;
+      const eventVersion = 'event' in item ? item.event?.version : undefined;
+      const currentVersion = 'version' in item ? item.version?.version : undefined;
+      // Only an older card pins its version; the current card follows edits made after it opened.
+      const pinned = eventVersion && currentVersion && eventVersion < currentVersion;
+      return {
+        canvasId: item.resourceId,
+        kind: 'canvas',
+        ...(pinned ? { version: eventVersion } : {}),
+      };
+    },
+    getTitle: (item) => item.title,
+  },
   document: {
     getDescription: (item) => item.description?.trim() ?? null,
     getIcon: () => FileTextIcon,
@@ -235,16 +256,15 @@ export const WORK_TYPE_DESCRIPTORS: {
     getDescription: (item) => item.task.instruction?.trim() ?? null,
     getIcon: () => ClipboardListIcon,
     getIdentifier: (item) => item.task.identifier,
-    // Resolve the task detail by its human identifier (`TASK-1`, live-coalesced
-    // with the persisted works column) when present, else its id — the same
-    // identifier the chat portal and standalone route both accept. The
-    // task-deleted orphan case is gated by the call site (it also renders a
-    // badge), not stripped here. A task Work always has a resourceId, but it is
-    // nullable on the base type, so drop the affordance when both are missing.
-    getOpenTarget: (item) => {
-      const identifier = item.task.identifier ?? item.resourceId;
-      return identifier ? { identifier, kind: 'task' } : null;
-    },
+    getOpenTarget: (item) =>
+      item.resourceId
+        ? {
+            taskId: item.resourceId,
+            identifier: item.resourceDeleted ? undefined : (item.task.identifier ?? undefined),
+            kind: 'task',
+            name: item.task.name,
+          }
+        : null,
     getTitle: (item) => item.task.name,
   },
 };
@@ -287,9 +307,6 @@ export const getWorkTypeDescriptor = <Item extends WorkListItem | WorkSummaryIte
   // genuinely be missing even though the compile-time map looks total. The
   // re-narrowing casts are safe — a registry entry keyed by `item.type` accepts
   // exactly that type's item, which `Item` is.
-  const descriptors = WORK_TYPE_DESCRIPTORS as Record<
-    WorkType,
-    WorkTypeDescriptor<Item> | undefined
-  >;
+  const descriptors = WORK_TYPE_DESCRIPTORS as Partial<Record<WorkType, WorkTypeDescriptor<Item>>>;
   return descriptors[item.type] ?? (FALLBACK_WORK_TYPE_DESCRIPTOR as WorkTypeDescriptor<Item>);
 };

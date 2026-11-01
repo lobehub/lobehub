@@ -28,7 +28,11 @@ describe('AgentRuntimeCoordinator', () => {
       getExecutionHistory: vi.fn(),
       getOperationMetadata: vi.fn(),
       getStats: vi.fn(),
+      isInterrupted: vi.fn(),
       loadAgentState: vi.fn(),
+      markInterrupted: vi.fn(),
+      hasQueuedMessages: vi.fn(),
+      setQueuedMessages: vi.fn(),
       saveAgentState: vi.fn(),
       saveStepResult: vi.fn(),
     };
@@ -70,6 +74,25 @@ describe('AgentRuntimeCoordinator', () => {
       expect(mockStateManager.createOperationMetadata).toHaveBeenCalledWith(operationId, data);
       expect(mockStateManager.getOperationMetadata).toHaveBeenCalledWith(operationId);
       expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, metadata);
+    });
+
+    it('adds the routing meta to the init event without persisting it', async () => {
+      const operationId = 'test-operation-id';
+      const data = { userId: 'user-123' };
+      const metadata = { createdAt: '2024-01-01T00:00:00.000Z', status: 'idle', ...data };
+      mockStateManager.getOperationMetadata.mockResolvedValue(metadata);
+
+      await coordinator.createAgentOperation(operationId, data, {
+        agentId: 'agt_1',
+        topicId: 'tpc_1',
+      });
+
+      expect(mockStateManager.createOperationMetadata).toHaveBeenCalledWith(operationId, data);
+      expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, {
+        ...metadata,
+        agentId: 'agt_1',
+        topicId: 'tpc_1',
+      });
     });
 
     it('should not publish init event if metadata creation fails', async () => {
@@ -665,6 +688,33 @@ describe('AgentRuntimeCoordinator', () => {
         reason: 'done',
         stepIndex: 4,
         uiMessages,
+      });
+    });
+
+    it('marks a protocol-v2 patched terminal event with its expected revision', async () => {
+      const coordinatorWithResolver = new AgentRuntimeCoordinator({
+        messagePatchModeResolver: vi.fn().mockReturnValue(true),
+        stateManager: mockStateManager,
+        streamEventManager: mockStreamManager,
+        uiMessagesResolver: vi.fn().mockResolvedValue(undefined),
+      });
+      const stepResult = {
+        executionTime: 100,
+        newState: { status: 'done', stepCount: 4 },
+        stepIndex: 4,
+      };
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 3 });
+
+      await coordinatorWithResolver.saveStepResult('op-patch', stepResult as any);
+
+      expect(mockStreamManager.publishAgentRuntimeEnd).toHaveBeenCalledWith({
+        finalState: stepResult.newState,
+        messagePatchMode: true,
+        messageRevision: 5,
+        operationId: 'op-patch',
+        reason: 'done',
+        stepIndex: 4,
+        uiMessages: undefined,
       });
     });
 

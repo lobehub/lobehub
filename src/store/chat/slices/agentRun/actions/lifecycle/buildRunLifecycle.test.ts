@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatStore } from '@/store/chat/store';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
+import { topicMapKey } from '../../../../utils/topicMapKey';
 import type { AgentRuntimeType } from '../dispatch/agentDispatcher';
 import { buildRunLifecycle } from './buildRunLifecycle';
 import type { RunCompleteEvent, RunTerminalStatus, UserMessagePersistedEvent } from './types';
@@ -18,10 +19,12 @@ vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () =
 
 const desktopNotificationMock = vi.hoisted(() => ({
   notifyDesktopAgentCompleted: vi.fn().mockResolvedValue(undefined),
+  notifyDesktopAgentFailed: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/store/chat/utils/desktopNotification', () => ({
   notifyDesktopAgentCompleted: desktopNotificationMock.notifyDesktopAgentCompleted,
+  notifyDesktopAgentFailed: desktopNotificationMock.notifyDesktopAgentFailed,
 }));
 
 // Force the desktop branch of afterRunComplete on (isDesktop is false in the
@@ -46,22 +49,27 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     activeTopicId: 't1',
     completeOperation: vi.fn(),
     dbMessagesMap: {},
-    drainQueuedMessages: vi.fn(() => []),
+    drainQueuedMessages: vi.fn<ChatStore['drainQueuedMessages']>(() => []),
+    queuedMessages: {} as Record<string, unknown[]>,
     failOperation: vi.fn(),
     internal_updateTopic: vi.fn(),
     markTopicUnread: vi.fn(),
     messagesMap: {},
+    operationsByContext: { [messageMapKey(CONTEXT)]: [OP] },
     operations: {
       [OP]: {
+        id: OP,
         context: CONTEXT,
         metadata: afterCompletionCallbacks ? { runtimeHooks: { afterCompletionCallbacks } } : {},
         status: 'running',
       },
     },
     refreshTopic: vi.fn(async () => {}),
-    summaryTopicTitle: vi.fn(),
+    sendMessage: vi.fn().mockResolvedValue(undefined),
+    summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
     // topicDataMap / messagesMap reads default to empty (no topic, no messages).
     topicDataMap: {},
+    updateOperationMetadata: vi.fn(),
     updateTopicStatus: vi.fn(async () => {}),
   };
   return { get: (() => store) as unknown as () => ChatStore, store };
@@ -116,6 +124,35 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     );
   });
 
+  it('summarizes an audio-first topic before returning a queued follow-up', async () => {
+    const { get, store } = makeStore();
+    const messages = [
+      {
+        audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+        content: '',
+        id: 'u1',
+        role: 'user',
+      },
+      { content: 'The recording asks how to list files.', id: 'a1', role: 'assistant' },
+    ];
+    store.drainQueuedMessages = vi.fn(() => [{ content: 'follow up', id: 'q1' } as any]);
+    store.queuedMessages = { [messageMapKey(CONTEXT)]: [{ content: 'follow up', id: 'q1' }] };
+    store.messagesMap = { [messageMapKey(CONTEXT)]: messages } as any;
+    store.topicDataMap = {
+      [topicMapKey({ agentId: 'a1' })]: {
+        items: [{ id: 't1', title: 'defaultTitle' }],
+        total: 1,
+      },
+    } as any;
+
+    const { requeued } = await lifecycle('client', get).completeRun(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(requeued).toBe(true);
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
   it.each<[RunTerminalStatus, 'completeOperation' | 'failOperation']>([
     ['completed', 'completeOperation'],
     ['failed', 'failOperation'],
@@ -142,6 +179,10 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     // gateway/hetero reach completeRun with the op still `running`, so cancelled
     // must move it to terminal here. No markUnread, no failOperation, no signal.
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
+    // Settled as `completed`, yet nothing drains its queue: say so.
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith(OP, {
+      endedWithoutCompletion: true,
+    });
     expect(store.markTopicUnread).not.toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
     expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();
@@ -283,15 +324,55 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
   });
 
-  it('a top_level success DOES drain the queue (contrast probe)', async () => {
+  it('a top_level success with an empty queue completes without requeueing (contrast probe)', async () => {
     const { get, store } = makeStore();
-    store.drainQueuedMessages = vi.fn(() => []);
 
-    await lifecycle('gateway', get, 'top_level').completeRun(
+    const { requeued } = await lifecycle('gateway', get, 'top_level').completeRun(
       completeEvent('gateway', { status: 'completed' }),
     );
 
-    expect(store.drainQueuedMessages).toHaveBeenCalled();
+    expect(requeued).toBe(false);
+    expect(store.completeOperation).toHaveBeenCalledWith(OP);
+  });
+
+  it('keeps the queue in place until the drained send takes it', async () => {
+    vi.useFakeTimers();
+    try {
+      const { get, store } = makeStore();
+      const sendMessage = vi.fn(async () => {});
+      (store as any).sendMessage = sendMessage;
+      const queued = {
+        content: 'queued',
+        createdAt: 1,
+        id: 'q1',
+        interruptMode: 'soft',
+        metadata: { scope: 'x' },
+      } as any;
+      store.queuedMessages = { [messageMapKey(CONTEXT)]: [queued] };
+      store.drainQueuedMessages = vi.fn(() => [queued]);
+
+      const { requeued } = await lifecycle('gateway', get, 'top_level').completeRun(
+        completeEvent('gateway', { status: 'completed' }),
+      );
+
+      expect(requeued).toBe(true);
+      expect(store.completeOperation).toHaveBeenCalledWith(OP);
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+
+      await vi.runAllTimersAsync();
+
+      expect(store.drainQueuedMessages).toHaveBeenCalledTimes(1);
+      expect(sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'queued',
+          // A drained follow-up opens a fresh turn: its metadata keeps what
+          // was queued, unmarked.
+          metadata: { scope: 'x' },
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('afterRunComplete is a no-op for a sub_agent run (no notification)', async () => {
@@ -303,6 +384,35 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
         completeEvent('gateway', { runScope: 'sub_agent', status: 'completed' }),
       ),
     ).resolves.toBeUndefined();
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildRunLifecycle.afterRunComplete — failed run notification', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const error = { message: 'boom', type: 'AgentRuntimeError' };
+
+  it('announces a failed run with its error instead of a completion', async () => {
+    const { get } = makeStore();
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification: { error }, status: 'failed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentFailed).toHaveBeenCalledWith(get, {
+      context: { agentId: 'a1', groupId: undefined, topicId: 't1', workspaceSlug: 'team' },
+      error,
+    });
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('stays silent for a failed run the transport did not ask to announce', async () => {
+    const { get } = makeStore();
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'error' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentFailed).not.toHaveBeenCalled();
     expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
   });
 });
@@ -370,6 +480,118 @@ describe('buildRunLifecycle.afterRunComplete — client desktop notification bod
     );
 
     expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+  });
+
+  it('summarizes an untitled topic after its audio-only first message receives a reply', async () => {
+    const { get, store } = makeStore();
+    const voiceMessage = {
+      audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+      content: '',
+      id: 'u1',
+      role: 'user',
+    } as any;
+    const messages = [voiceMessage, thisTurnAssistant];
+    store.messagesMap = { [KEY]: messages } as any;
+    store.topicDataMap = {
+      [topicMapKey({ agentId: 'a1' })]: {
+        items: [{ id: 't1', title: 'defaultTitle' }],
+        total: 1,
+      },
+    } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it('summarizes an audio-first topic when the reply is grouped around a media tool call', async () => {
+    const { get, store } = makeStore();
+    const messages = [
+      {
+        audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+        content: '',
+        id: 'u1',
+        role: 'user',
+      },
+      {
+        children: [
+          {
+            content: 'Analyzing the recording.',
+            id: 'assistant-tool',
+            tools: [{ apiName: 'analyzeMedia', id: 'tool-1' }],
+          },
+          { content: 'The recording asks how to list files.', id: 'assistant-answer' },
+        ],
+        content: '',
+        id: 'assistant-group',
+        role: 'assistantGroup',
+      },
+    ];
+    store.messagesMap = { [KEY]: messages } as any;
+    store.topicDataMap = {
+      [topicMapKey({ agentId: 'a1' })]: {
+        items: [{ id: 't1', title: 'defaultTitle' }],
+        total: 1,
+      },
+    } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(store.summaryTopicTitle).toHaveBeenCalledWith('t1', messages);
+  });
+
+  it.each(['error', 'interrupted'] as const)(
+    'does not summarize partial audio replies when the client run ends as %s',
+    async (runtimeStatus) => {
+      const { get, store } = makeStore();
+      store.messagesMap = {
+        [KEY]: [
+          {
+            audioList: [
+              { alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' },
+            ],
+            content: '',
+            id: 'u1',
+            role: 'user',
+          },
+          { ...thisTurnAssistant, content: 'Partial reply' },
+        ],
+      } as any;
+      store.topicDataMap = {
+        [topicMapKey({ agentId: 'a1' })]: {
+          items: [{ id: 't1', title: 'defaultTitle' }],
+          total: 1,
+        },
+      } as any;
+
+      await lifecycle('client', get).afterRunComplete(completeEvent('client', { runtimeStatus }));
+
+      expect(store.summaryTopicTitle).not.toHaveBeenCalled();
+      expect(desktopNotificationMock.notifyDesktopAgentCompleted).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not re-summarize a text-first topic after the reply completes', async () => {
+    const { get, store } = makeStore();
+    store.messagesMap = {
+      [KEY]: [{ content: 'hello', id: 'u1', role: 'user' }, thisTurnAssistant],
+    } as any;
+    store.topicDataMap = {
+      [topicMapKey({ agentId: 'a1' })]: {
+        items: [{ id: 't1', title: 'defaultTitle' }],
+        total: 1,
+      },
+    } as any;
+
+    await lifecycle('client', get).afterRunComplete(
+      completeEvent('client', { runtimeStatus: 'done' }),
+    );
+
+    expect(store.summaryTopicTitle).not.toHaveBeenCalled();
   });
 });
 

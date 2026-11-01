@@ -15,6 +15,7 @@ const createFakeEditor = () => {
       json = undefined;
     }),
     focus: vi.fn(),
+    getLexicalEditor: () => ({}),
     getDocument: vi.fn((type: string) =>
       type === 'markdown' ? ((json?.text as string) ?? '') : json,
     ),
@@ -38,9 +39,38 @@ describe('useChatInputDraft', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps a saved draft when the composer can no longer serialize', () => {
+    const draftJson = { root: { children: [{ text: 'typed before the switch' }] } };
+    saveDraft('main_agt_a_tpc_1', draftJson);
+    // the kernel lost its data sources with the composer it belonged to
+    const tornDown = {
+      cleanDocument: () => {
+        throw new Error('DataSource for type "text" is not registered.');
+      },
+      focus: vi.fn(),
+      getDocument: () => {
+        throw new Error('DataSource for type "markdown" is not registered.');
+      },
+      getLexicalEditor: () => null,
+    } as unknown as IEditor;
+    const store = createStore({ draftKey: 'main_agt_a_tpc_1', editor: tornDown });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider createStore={() => store}>{children}</Provider>
+    );
+
+    renderHook(() => useChatInputDraft(), { wrapper });
+
+    act(() => {
+      store.setState({ draftKey: 'main_agt_b_tpc_2' });
+    });
+
+    expect(getDraft('main_agt_a_tpc_1')).toEqual(draftJson);
+  });
+
   it('flushes the pending debounced draft save on unmount', () => {
     const draftJson = { root: { children: [{ text: 'latest edit' }] } };
     const editor = {
+      getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'latest edit' : draftJson)),
     } as unknown as IEditor;
     const store = createStore({ draftKey: 'main_agent_topic', editor });
@@ -170,6 +200,7 @@ describe('useChatInputDraft', () => {
     const draftJson = { root: { children: [{ text: 'draft' }] } };
     const setDocument = vi.fn();
     const editor = {
+      getLexicalEditor: () => ({}),
       getDocument: vi.fn(),
       isEmpty: true,
       setDocument,
@@ -186,7 +217,7 @@ describe('useChatInputDraft', () => {
       result.current.restoreDraft(editor);
     });
 
-    expect(setDocument).toHaveBeenCalledWith('json', draftJson);
+    expect(setDocument).toHaveBeenCalledWith('json', draftJson, undefined);
   });
 
   it('saves the old draft, clears the editor and restores the new draft on draftKey change', () => {
@@ -200,6 +231,7 @@ describe('useChatInputDraft', () => {
         empty = true;
       }),
       focus: vi.fn(),
+      getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? markdown : oldJson)),
       get isEmpty() {
         return empty;
@@ -221,7 +253,7 @@ describe('useChatInputDraft', () => {
 
     expect(getDraft('main_agt_a_tpc_1')).toEqual(oldJson);
     expect(editor.cleanDocument).toHaveBeenCalledTimes(1);
-    expect(editor.setDocument).toHaveBeenCalledWith('json', newJson);
+    expect(editor.setDocument).toHaveBeenCalledWith('json', newJson, undefined);
 
     act(() => {
       vi.runAllTimers();
@@ -236,6 +268,7 @@ describe('useChatInputDraft', () => {
     const editor = {
       cleanDocument: vi.fn(),
       focus,
+      getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? '' : undefined)),
       isEmpty: true,
       setDocument: vi.fn(),
@@ -261,6 +294,7 @@ describe('useChatInputDraft', () => {
     const editor = {
       cleanDocument: vi.fn(),
       focus,
+      getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? '' : undefined)),
       isEmpty: true,
       setDocument: vi.fn(),
@@ -343,6 +377,7 @@ describe('useChatInputDraft', () => {
   it('does not overwrite current editor input when restoring a draft', () => {
     const setDocument = vi.fn();
     const editor = {
+      getLexicalEditor: () => ({}),
       getDocument: vi.fn(),
       isEmpty: false,
       setDocument,

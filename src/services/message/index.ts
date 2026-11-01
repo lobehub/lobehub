@@ -1,24 +1,30 @@
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import {
   type ChatMessageError,
   type ChatMessagePluginError,
   type ChatTranslate,
-  type ChatTTS,
   type CreateMessageParams,
   type CreateMessageResult,
   type HeterogeneousToolStateSnapshot,
   type MessageMetadata,
   type MessagePluginItem,
   type ModelRankItem,
+  type TopicMessageSearchMatch,
   type UIChatMessage,
   type UpdateMessageParams,
   type UpdateMessageRAGParams,
   type UpdateMessageResult,
 } from '@lobechat/types';
 import { type HeatmapsProps } from '@lobehub/charts';
+import pMap from 'p-map';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { abortableRequest } from '../utils/abortableRequest';
+import type { MessageListPage, MessageRoundCursor } from './cache';
+import { supportsRoundCursor } from './cache';
+import { readMessagesByRoundCursor, takePrimedMessageListPage } from './roundCursorPage';
 
 /**
  * Query context for message operations
@@ -32,9 +38,17 @@ export interface MessageQueryContext {
   topicShareId?: string;
 }
 
-interface MessageReadQueryContext {
+export interface MessageReadQueryContext {
   agentId?: string | null;
+  /** Agent-share visitor surface — routes the read through `shareChat.getMessages`. */
+  agentShareId?: string;
   groupId?: string | null;
+  /**
+   * Ask the server for render-facing tool view models instead of the stored
+   * payloads. Only set it for a read whose result is never turned into an LLM
+   * context in the browser — see `readConversationMessages`.
+   */
+  projectToolPayloads?: boolean;
   /**
    * Skip the Work-summary assembly on the server — set by mid-stream
    * refetches (tool_end / step_complete) so each tool round doesn't re-run
@@ -97,6 +111,9 @@ const getBatchMutationAbortKey = (operations: MessageBatchOperation[]) => {
   if (operation.type === 'updateToolMessage') return `tool-message-${operation.id}`;
 };
 
+/** Matches the `getToolResultPayloads` input cap in the lambda router. */
+const TOOL_PAYLOAD_BATCH_SIZE = 500;
+
 export class MessageService {
   batchMutate = async (operations: MessageBatchOperation[], signal?: AbortSignal) => {
     const input = {
@@ -146,6 +163,23 @@ export class MessageService {
   };
 
   getMessages = async (params: MessageReadQueryContext): Promise<UIChatMessage[]> => {
+    // Agent-share visitor surface: the owner-scoped query below resolves rows in
+    // the CALLER's scope, so it would come back empty for a visitor (share rows
+    // belong to the creator). Route through the share-authorized read instead.
+    // A share context without a topic is the visitor's new-topic bucket —
+    // nothing to fetch.
+    if (params.agentShareId) {
+      if (!params.topicId) return [];
+
+      const shared = await lambdaClient.shareChat.getMessages.query({
+        includeFileWorks: true,
+        shareId: params.agentShareId,
+        topicId: params.topicId,
+      });
+
+      return shared as unknown as UIChatMessage[];
+    }
+
     // Opt into `file` (and any future gated) work summaries in the message
     // payload. This client ships the descriptor fallback; clients that predate
     // the `file` type run the old service without the flag and stay on the
@@ -158,6 +192,93 @@ export class MessageService {
     return data as unknown as UIChatMessage[];
   };
 
+  /**
+   * Stored tool payload for a message whose projected copy dropped it
+   * (`UIChatMessage.payloadOmitted`). Called by detail surfaces on open, never
+   * as part of loading a conversation.
+   */
+  getToolResultPayload = async (messageId: string) => {
+    return lambdaClient.message.getToolResultPayload.query({ messageId });
+  };
+
+  /**
+   * Bulk form, for surfaces that need every omitted row at once (export).
+   *
+   * Chunked to the endpoint's own cap: a tool-dense topic can hold more
+   * projected rows than one request accepts, and the schema would reject the
+   * whole set rather than return what it could.
+   */
+  getToolResultPayloads = async (messageIds: string[]) => {
+    const chunks: string[][] = [];
+    for (let i = 0; i < messageIds.length; i += TOOL_PAYLOAD_BATCH_SIZE) {
+      chunks.push(messageIds.slice(i, i + TOOL_PAYLOAD_BATCH_SIZE));
+    }
+
+    const results = await pMap(
+      chunks,
+      (ids) => lambdaClient.message.getToolResultPayloads.query({ messageIds: ids }),
+      { concurrency: 3 },
+    );
+
+    return Object.assign({}, ...results) as Record<
+      string,
+      { content: string; pluginState?: unknown }
+    >;
+  };
+
+  /**
+   * The newest window of a conversation for the message-list cache. Topic
+   * conversations read it by round cursor so the page also says whether any
+   * older history exists (`olderCursor: null` → the topic start is loaded, and
+   * scrolling up must not fetch). Other contexts return the plain list, whose
+   * older history is unknown.
+   */
+  getMessageListPage = async (
+    params: MessageReadQueryContext,
+  ): Promise<MessageListPage | UIChatMessage[]> => {
+    if (!supportsRoundCursor(params)) return this.getMessages(params);
+
+    // A page primed for this conversation (see `primeMessageListPage`) answers
+    // its first read; if that request failed, read again rather than fail.
+    const primed = takePrimedMessageListPage(params);
+    if (primed) return primed.catch(() => readMessagesByRoundCursor(params, null));
+
+    return readMessagesByRoundCursor(params, null);
+  };
+
+  /**
+   * Load one round-aligned page of history strictly OLDER than `cursor` (the
+   * start of the oldest loaded round). Intentionally outside the
+   * `runMessageListQuery` client-cache policy: older pages are additive and
+   * merged by the earlier-history layer in `services/message/cache`.
+   */
+  getEarlierMessages = async (
+    params: MessageReadQueryContext,
+    cursor: MessageRoundCursor,
+  ): Promise<MessageListPage> => {
+    // Agent-share pages read through `shareChat.getMessages`, which has no
+    // round cursor: report the start as reached so the shared view keeps its
+    // current window instead of hitting the authed endpoint.
+    if (params.agentShareId) return { messages: [], olderCursor: null };
+
+    if (supportsRoundCursor(params)) return readMessagesByRoundCursor(params, cursor);
+
+    const data = await lambdaClient.message.getMessages.query({
+      ...params,
+      before: { createdAt: new Date(cursor.createdAt), id: cursor.id },
+      includeFileWorks: true,
+    });
+
+    return { messages: data as unknown as UIChatMessage[] };
+  };
+
+  searchInTopic = async (params: {
+    keyword: string;
+    topicId: string;
+  }): Promise<TopicMessageSearchMatch[]> => {
+    return lambdaClient.message.searchInTopic.query(params);
+  };
+
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
     return lambdaClient.message.diagnoseTopic.query(params);
   };
@@ -167,6 +288,7 @@ export class MessageService {
   };
 
   countMessages = async (params?: {
+    approximate?: boolean;
     endDate?: string;
     range?: [string, string];
     startDate?: string;
@@ -195,9 +317,7 @@ export class MessageService {
   };
 
   updateMessageError = async (id: string, value: ChatMessageError, ctx?: MessageQueryContext) => {
-    const error = value.type
-      ? value
-      : { body: value, message: value.message, type: 'ApplicationRuntimeError' };
+    const error = normalizeHeterogeneousMessageError(normalizeChatMessageError(value));
 
     return lambdaClient.message.update.mutate({
       ...ctx,
@@ -241,10 +361,6 @@ export class MessageService {
 
   updateMessageTranslate = async (id: string, translate: Partial<ChatTranslate> | false) => {
     return lambdaClient.message.updateTranslate.mutate({ id, value: translate as ChatTranslate });
-  };
-
-  updateMessageTTS = async (id: string, tts: Partial<ChatTTS> | false) => {
-    return lambdaClient.message.updateTTS.mutate({ id, value: tts });
   };
 
   updateMessageMetadata = async (
@@ -314,11 +430,20 @@ export class MessageService {
     return lambdaClient.message.removeMessage.mutate({ ...ctx, id });
   };
 
+  /**
+   * Moves the messages to the recycle bin. `permanent` hard-deletes instead —
+   * only for internal cleanup whose rows must never be restorable.
+   */
   removeMessages = async (
     ids: string[],
     ctx?: MessageQueryContext,
+    options?: { permanent?: boolean },
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.removeMessages.mutate({ ...ctx, ids });
+    return lambdaClient.message.removeMessages.mutate({
+      ...ctx,
+      ids,
+      ...(options?.permanent ? { permanent: true } : {}),
+    });
   };
 
   removeMessagesByAssistant = async (sessionId: string, topicId?: string) => {

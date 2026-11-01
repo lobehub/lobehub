@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -16,6 +15,7 @@ import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 import Breadcrumb from '../shared/Breadcrumb';
+import TaskDetailCopyActions from './TaskDetailCopyActions';
 import TaskDetailHeaderActions from './TaskDetailHeaderActions';
 import TaskDetailSections from './TaskDetailSections';
 import TaskDetailSkeleton from './TaskDetailSkeleton';
@@ -88,13 +88,16 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           </>
         }
         right={
-          showTaskAgentPanelToggle ? (
-            <ToggleRightPanelButton
-              hideWhenExpanded
-              expand={showTaskAgentPanel}
-              onToggle={() => toggleTaskAgentPanel()}
-            />
-          ) : undefined
+          <>
+            <TaskDetailCopyActions />
+            {showTaskAgentPanelToggle ? (
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={showTaskAgentPanel}
+                onToggle={() => toggleTaskAgentPanel()}
+              />
+            ) : undefined}
+          </>
         }
         styles={{
           left: {
@@ -108,10 +111,11 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
             centered reading column rather than the list page's full-bleed rows,
             whose value is the horizontal room for their metadata columns. */}
         <WideScreenContainer>
-          {isInitialLoading ? <TaskDetailSkeleton /> : <TaskDetailSections />}
+          {isInitialLoading ? <TaskDetailSkeleton chrome={'body'} /> : <TaskDetailSections />}
         </WideScreenContainer>
       </Flexbox>
-      <TopicChatDrawer />
+      {/* The task page has nothing else to read beside a run, so it opens wide. */}
+      <TopicChatDrawer defaultExpanded />
     </Flexbox>
   );
 });

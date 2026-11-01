@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import { PushResourceContent, type PushResourceModalProps } from './PushResourceContent';

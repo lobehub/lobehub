@@ -12,6 +12,29 @@ const createMockService = (overrides?: Partial<SkillRuntimeService>): SkillRunti
 });
 
 describe('SkillsExecutionRuntime', () => {
+  describe.each(['runCommand', 'execScript'] as const)('%s sandbox recreation', (api) => {
+    it.each([true, false])('reports workspace loss when command success is %s', async (success) => {
+      const commandResult = {
+        exitCode: success ? 0 : 1,
+        output: 'command output',
+        sessionExpiredAndRecreated: true,
+        stderr: success ? undefined : 'missing input file',
+        success,
+      } satisfies CommandResult;
+      const runtime = new SkillsExecutionRuntime({
+        service: createMockService({ [api]: vi.fn().mockResolvedValue(commandResult) }),
+      });
+
+      const result = await runtime[api]({ command: 'cat /tmp/input', description: 'Read input' });
+
+      expect(result.content).toContain('sandbox session expired and was recreated');
+      expect(result.content).toContain('Inform the user and ask before regenerating previous work');
+      expect(result.content).toContain('command output');
+      expect(result.state).toMatchObject({ sessionExpiredAndRecreated: true, success });
+      expect(result.success).toBe(success);
+    });
+  });
+
   describe('execScript', () => {
     const args = { command: 'echo hello', description: 'test command' };
 
@@ -82,7 +105,7 @@ describe('SkillsExecutionRuntime', () => {
 
         const result = await runtime.execScript(args);
 
-        expect(result.content).toBe('Command completed successfully.');
+        expect(result.content).toBe('Command completed successfully.\n\n(no output)');
       });
 
       it('should return success: false when execScript throws', async () => {
@@ -462,6 +485,38 @@ describe('SkillsExecutionRuntime', () => {
       const result = await runtime.readReference({ id: 'LobeHub', path: 'references/kb' });
       expect(result.success).toBe(true);
       expect(result.content).toBe('kb body');
+    });
+  });
+
+  describe('resolveSkill', () => {
+    const userSkill = {
+      content: 'PLAN BODY',
+      description: 'How each unit is done',
+      identifier: 'user-skills:goal-plan-x',
+      name: 'user-skills:goal-plan-x',
+      resources: {
+        'scripts/check.sh': { content: 'echo ok', fileHash: 'h', size: 7 },
+      },
+      source: 'builtin' as const,
+      title: 'Plan',
+    };
+
+    it('reads a skill that was not preloaded, once, only when it is asked for', async () => {
+      const resolveSkill = vi.fn().mockResolvedValue(userSkill);
+      const runtime = new SkillsExecutionRuntime({ resolveSkill, service: createMockService() });
+      expect(resolveSkill).not.toHaveBeenCalled();
+
+      const activated = await runtime.activateSkill({ name: 'user-skills:goal-plan-x' });
+      expect(activated.success).toBe(true);
+      expect(activated.content).toContain('PLAN BODY');
+      expect(activated.state).toMatchObject({ source: 'user' });
+
+      const script = await runtime.readReference({
+        id: 'user-skills:goal-plan-x',
+        path: 'scripts/check.sh',
+      } as never);
+      expect(script.content).toContain('echo ok');
+      expect(resolveSkill).toHaveBeenCalledTimes(1);
     });
   });
 });

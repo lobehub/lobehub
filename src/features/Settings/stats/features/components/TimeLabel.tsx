@@ -1,7 +1,5 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Spin } from '@lobehub/ui';
 import { type LucideIcon } from 'lucide-react';
-import { Loader2 } from 'lucide-react';
 import { memo } from 'react';
 
 const TimeLabel = memo<{
@@ -22,7 +20,7 @@ const TimeLabel = memo<{
     >
       <Icon icon={icon} />
       {title ? `${title}: ` : null}
-      {date ? <span style={{ fontWeight: 'bold' }}>{date}</span> : <Icon spin icon={Loader2} />}
+      {date ? <span style={{ fontWeight: 'bold' }}>{date}</span> : <Spin size="small" />}
     </Flexbox>
   );
 });

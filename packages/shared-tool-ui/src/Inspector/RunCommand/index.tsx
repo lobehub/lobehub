@@ -2,7 +2,7 @@
 
 import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Check, SquareChevronRight, X } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -97,16 +97,16 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
     if (isArgumentsStreaming) {
       if (!description)
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
+          <div className={inspectorTextStyles.root}>
             {leading}
-            <span>{t(translationKey as any)}</span>
+            <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
           </div>
         );
 
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
+        <div className={inspectorTextStyles.root}>
           {leading}
-          <span>{t(translationKey as any)}:</span>
+          <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}:</span>
           <span className={styles.chip}>
             {chipIcon}
             <span className={styles.command}>{description}</span>
@@ -118,9 +118,11 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
     const isSuccess = pluginState?.success || pluginState?.exitCode === 0;
 
     return (
-      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
+      <div className={inspectorTextStyles.root}>
         {leading}
-        <span>{t(translationKey as any)}:</span>
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+          {t(translationKey as any)}:
+        </span>
         {description && (
           <span className={styles.chip}>
             {chipIcon}

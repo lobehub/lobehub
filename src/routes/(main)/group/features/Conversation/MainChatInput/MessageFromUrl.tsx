@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 
 import { useConversationStore } from '@/features/Conversation';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
+import { isOnRouteTopic } from '@/features/Conversation/utils/isOnRouteTopic';
 import { usePermission } from '@/hooks/usePermission';
 
 /**
@@ -14,7 +15,12 @@ import { usePermission } from '@/hooks/usePermission';
  * Uses ConversationStore for input and send operations.
  */
 const MessageFromUrl = () => {
-  const [sendMessage, agentId] = useConversationStore((s) => [s.sendMessage, s.context.agentId]);
+  const [sendMessage, agentId, topicId] = useConversationStore((s) => [
+    s.sendMessage,
+    s.context.agentId,
+    s.context.topicId,
+  ]);
+  const { topicId: routeTopicId } = useParams<{ topicId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { allowed: canCreate } = usePermission('create_content');
   // Per-resource General access: view-only members must not auto-send into a
@@ -34,6 +40,9 @@ const MessageFromUrl = () => {
 
     // Wait for agentId to be available before sending
     if (!agentId) return;
+    // A topic URL's message belongs to that topic; sending before the
+    // conversation has switched to it would start a new topic instead.
+    if (!isOnRouteTopic(routeTopicId, topicId)) return;
 
     if (!canCreate) return;
     if (isAccessLoading) return;
@@ -63,6 +72,8 @@ const MessageFromUrl = () => {
     canCreate,
     canUseResource,
     isAccessLoading,
+    routeTopicId,
+    topicId,
   ]);
 
   return null;

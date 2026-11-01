@@ -1,37 +1,44 @@
 'use client';
 
-import { Flexbox, FormGroup, Grid } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Flexbox, Grid } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import type { ComponentType } from 'react';
+
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
 
-export type SurfaceSkeletonVariant = 'editor' | 'form' | 'grid' | 'list';
+export type SurfaceSkeletonVariant = 'detail' | 'editor' | 'form' | 'grid' | 'list';
 
 interface SurfaceSkeletonProps {
   header?: boolean;
   variant?: SurfaceSkeletonVariant;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  divider: css`
-    width: 100%;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  editor: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorBgContainer};
-  `,
-  row: css`
-    min-height: 64px;
-    padding-block: 16px;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  divider: {
+    width: '100%',
+    height: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  editor: {
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  row: { minHeight: '64px', paddingBlock: '16px' },
+});
 
 const HeaderSkeleton = () => (
   <Flexbox
@@ -50,7 +57,7 @@ const HeaderSkeleton = () => (
 const ListSkeleton = () => (
   <Flexbox gap={12} padding={16}>
     {Array.from({ length: 5 }).map((_, index) => (
-      <Flexbox className={styles.card} gap={10} key={index} padding={16}>
+      <Flexbox className={stylex.props(styles.card).className} gap={10} key={index} padding={16}>
         <Flexbox horizontal align={'center'} gap={8}>
           <SkeletonBar height={24} radius={'50%'} width={24} />
           <SkeletonBar height={14} width={96 + (index % 3) * 24} />
@@ -64,7 +71,7 @@ const ListSkeleton = () => (
 
 const FormSkeleton = () => (
   <Flexbox align={'center'} padding={24}>
-    <FormGroup
+    <Form.Group
       collapsible={false}
       style={{ width: 'min(800px, 100%)' }}
       title={<SkeletonBar height={18} width={112} />}
@@ -73,11 +80,11 @@ const FormSkeleton = () => (
       <Flexbox>
         {Array.from({ length: 3 }).map((_, index) => (
           <Flexbox key={index}>
-            {index > 0 && <div className={styles.divider} />}
+            {index > 0 && <div {...stylex.props(styles.divider)} />}
             <Flexbox
               horizontal
               align={'center'}
-              className={styles.row}
+              className={stylex.props(styles.row).className}
               gap={24}
               justify={'space-between'}
             >
@@ -90,7 +97,7 @@ const FormSkeleton = () => (
           </Flexbox>
         ))}
       </Flexbox>
-    </FormGroup>
+    </Form.Group>
   </Flexbox>
 );
 
@@ -106,10 +113,36 @@ const GridSkeleton = () => (
   </Grid>
 );
 
+const DetailSkeleton = () => (
+  <Flexbox align={'center'} padding={'32px 24px'}>
+    <Flexbox gap={24} width={'min(960px, 100%)'}>
+      <Flexbox horizontal align={'center'} gap={16}>
+        <SkeletonBar height={64} radius={'50%'} width={64} />
+        <Flexbox flex={1} gap={8}>
+          <SkeletonBar height={22} width={'32%'} />
+          <SkeletonBar height={14} width={'48%'} />
+        </Flexbox>
+        <SkeletonBar height={36} radius={18} width={104} />
+      </Flexbox>
+      <Flexbox horizontal gap={8}>
+        <SkeletonBar height={22} radius={11} width={72} />
+        <SkeletonBar height={22} radius={11} width={96} />
+        <SkeletonBar height={22} radius={11} width={64} />
+      </Flexbox>
+      <Flexbox gap={12}>
+        <SkeletonBar height={14} width={'94%'} />
+        <SkeletonBar height={14} width={'88%'} />
+        <SkeletonBar height={14} width={'62%'} />
+        <SkeletonBar height={180} radius={cssVar.borderRadiusLG} />
+      </Flexbox>
+    </Flexbox>
+  </Flexbox>
+);
+
 const EditorSkeleton = () => (
   <Flexbox align={'center'} flex={1} padding={'32px 24px'}>
     <Flexbox
-      className={styles.editor}
+      className={stylex.props(styles.editor).className}
       gap={20}
       padding={'32px 40px 96px'}
       width={'min(760px, 100%)'}
@@ -131,8 +164,24 @@ const SurfaceSkeleton = ({ header = true, variant = 'list' }: SurfaceSkeletonPro
       {variant === 'form' && <FormSkeleton />}
       {variant === 'grid' && <GridSkeleton />}
       {variant === 'editor' && <EditorSkeleton />}
+      {variant === 'detail' && <DetailSkeleton />}
     </Flexbox>
   </Flexbox>
 );
+
+const surfaceSkeletonCache = new Map<string, ComponentType<RouteSkeletonProps>>();
+
+export const createSurfaceSkeleton = (variant: SurfaceSkeletonVariant, header = true) => {
+  const key = `${variant}:${header}`;
+  const cached = surfaceSkeletonCache.get(key);
+  if (cached) return cached;
+
+  const Component = ({ chrome = 'page' }: RouteSkeletonProps) => (
+    <SurfaceSkeleton header={header && chrome !== 'body'} variant={variant} />
+  );
+  Component.displayName = `SurfaceSkeleton(${key})`;
+  surfaceSkeletonCache.set(key, Component);
+  return Component;
+};
 
 export default SurfaceSkeleton;

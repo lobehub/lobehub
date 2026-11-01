@@ -77,11 +77,9 @@ const captureEmittedSql = async (
     logQuery: (sql: string, params: unknown[]) => captured.push({ params, sql }),
   };
   const client = (serverDB as unknown as { $client: { waitReady?: unknown } }).$client;
-  const db = (
-    'waitReady' in (client ?? {})
-      ? pgliteDrizzle({ client: client as any, logger, schema })
-      : nodeDrizzle(client as any, { logger, schema })
-  ) as unknown as LobeChatDatabase;
+  const db = ('waitReady' in (client ?? {})
+    ? pgliteDrizzle({ client: client as any, logger, schema })
+    : nodeDrizzle(client as any, { logger, schema })) as unknown as LobeChatDatabase;
   await run(db);
   return captured;
 };
@@ -189,6 +187,26 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
     expect(rows.map((r) => r.id)).toEqual(['hetero']);
   });
 
+  it('looks up heterogeneous rows only in the operation topic', async () => {
+    // A copy of a stamped row in another topic (a fork, say) is not this op's.
+    await seedToolCall({
+      createdAt: T1,
+      id: 'hetero-elsewhere',
+      metadata: { heterogeneousToolStateOperationId: 'op-1' },
+      topicId: 'topic2',
+    });
+
+    const rows = await messageModel.listMessagePluginsForOperation({
+      completedAt: T3,
+      operationId: 'op-1',
+      startedAt: T0,
+      threadId: 'thread1',
+      topicId: 'topic1',
+    });
+
+    expect(rows).toEqual([]);
+  });
+
   it('falls back to now when completedAt is omitted', async () => {
     await seedToolCall({
       createdAt: new Date(),
@@ -225,6 +243,35 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
     });
 
     expect(asOther).toEqual([]);
+  });
+
+  it('sees a share visitor topic only when the model opts in', async () => {
+    // A visitor topic carries the visitor's id in `senderId`; the default
+    // `ownership()` predicate hides its rows from the creator-scoped model, so
+    // the completion-time Work scan for a share run must construct the model
+    // with `includeShareVisitor: true` or it registers nothing.
+    await serverDB.insert(users).values({ id: 'plugins-for-op-visitor' });
+    await serverDB
+      .insert(topics)
+      .values({ id: 'topic-visitor', senderId: 'plugins-for-op-visitor', userId });
+    await seedToolCall({ createdAt: T1, id: 'visitor-row', topicId: 'topic-visitor' });
+    const params = {
+      completedAt: T3,
+      operationId: 'op-1',
+      startedAt: T0,
+      threadId: null,
+      topicId: 'topic-visitor',
+    };
+
+    await expect(messageModel.listMessagePluginsForOperation(params)).resolves.toEqual([]);
+
+    const optedIn = new MessageModel(serverDB, userId, undefined, undefined, {
+      includeShareVisitor: true,
+    });
+    const rows = await optedIn.listMessagePluginsForOperation(params);
+    expect(rows.map((r) => r.id)).toEqual(['visitor-row']);
+
+    await serverDB.delete(users).where(eq(users.id, 'plugins-for-op-visitor'));
   });
 
   // Query-plan regression — the accurate guard. It reproduces the actual
@@ -268,8 +315,18 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
           userId,
         })),
       );
-      await seedToolCall({ createdAt: T1, id: 'in-window', threadId: 'thread1', topicId: 'topic1' });
-      await seedToolCall({ createdAt: T2, id: 'in-window-2', threadId: 'thread1', topicId: 'topic1' });
+      await seedToolCall({
+        createdAt: T1,
+        id: 'in-window',
+        threadId: 'thread1',
+        topicId: 'topic1',
+      });
+      await seedToolCall({
+        createdAt: T2,
+        id: 'in-window-2',
+        threadId: 'thread1',
+        topicId: 'topic1',
+      });
       await seedToolCall({
         createdAt: new Date('2027-01-01T00:00:00.000Z'),
         id: 'hetero',
@@ -326,6 +383,26 @@ describe('MessageModel.listMessagePluginsForOperation', () => {
         expect(
           examined,
           `a message_plugins⋈messages statement examined ${examined} rows — it walked ~all of the user's ${NOISE}-row history instead of a bounded/PK access. A jsonb metadata match was resolved inside the plugin JOIN.`,
+        ).toBeLessThan(NOISE / 2);
+      }
+
+      // The heterogeneous id lookup reads `messages` alone. The metadata
+      // expression has no index, so a user-wide lookup filtered every message the
+      // user owns (40s–300s per `heteroFinish` for a heavy user); it must stay
+      // within the op's topic.
+      const lookupStatements = statements.filter(
+        (s) => /heterogeneousToolStateOperationId/.test(s.sql) && !/"message_plugins"/i.test(s.sql),
+      );
+      expect(lookupStatements.length).toBeGreaterThan(0);
+      for (const statement of lookupStatements) {
+        const explained = await pool.query({
+          text: `EXPLAIN (ANALYZE, FORMAT JSON) ${statement.sql}`,
+          values: statement.params,
+        });
+        const examined = rowsExaminedOn(explained.rows[0]['QUERY PLAN'][0].Plan, 'messages');
+        expect(
+          examined,
+          `the heterogeneous lookup examined ${examined} messages — it filtered the user's whole history instead of the op's topic.`,
         ).toBeLessThan(NOISE / 2);
       }
     });

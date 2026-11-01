@@ -1,12 +1,12 @@
 'use client';
 
-import { Button } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 
 import AuthCard from '@/features/AuthCard';
-import { useAuthServerConfigStore } from '@/features/AuthShell';
+import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 
 import { ResetPasswordContent } from './ResetPasswordContent';
 

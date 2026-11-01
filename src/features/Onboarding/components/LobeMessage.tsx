@@ -1,5 +1,5 @@
-import { Avatar, type FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Text } from '@lobehub/ui';
+import { type FlexboxProps } from '@lobehub/ui';
+import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { type TypewriterEffectProps } from '@lobehub/ui/awesome';
 import { TypewriterEffect } from '@lobehub/ui/awesome';
 import { LoadingDots } from '@lobehub/ui/chat';

@@ -11,9 +11,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@upstash/workflow', () => ({
-  Client: vi.fn(() => ({
-    cancel: mocks.cancel,
-  })),
+  Client: vi.fn(function () {
+    return {
+      cancel: mocks.cancel,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/asyncTask', async (importOriginal) => {
@@ -21,9 +23,11 @@ vi.mock('@/database/models/asyncTask', async (importOriginal) => {
 
   return {
     ...actual,
-    AsyncTaskModel: vi.fn(() => ({
-      update: mocks.update,
-    })),
+    AsyncTaskModel: vi.fn(function () {
+      return {
+        update: mocks.update,
+      };
+    }),
   };
 });
 

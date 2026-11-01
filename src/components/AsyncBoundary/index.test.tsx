@@ -3,14 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import AsyncBoundary from './index';
 
-// Stub the base-ui Button (the failure state's Retry) to a native button — it
-// needs a MotionProvider the app sets up globally but the unit env doesn't; the
-// state-machine assertions only care that a button is/isn't present. vitest
-// hoists this above the imports regardless of position.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
-}));
-
 const DATA = <div>DATA_CONTENT</div>;
 const EMPTY = <div>EMPTY_ONBOARDING</div>;
 const LOADING = <div>LOADING_SKELETON</div>;

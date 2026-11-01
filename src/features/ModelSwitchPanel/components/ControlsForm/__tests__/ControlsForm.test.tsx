@@ -23,27 +23,16 @@ const testState = vi.hoisted(() => ({
   aiState: {
     extendParams: ['enableReasoning'],
   } as TestAiState,
-  setFieldsValue: vi.fn(),
+  setValues: vi.fn(),
   updateAgentChatConfig: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => {
-  const MockForm = () => <div data-testid="controls-form" />;
-  MockForm.useForm = () => [{ setFieldsValue: testState.setFieldsValue }];
-
-  return {
-    Flexbox: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
-    Form: MockForm,
-  };
-});
-
-vi.mock('antd', () => {
-  return {
-    Form: { useWatch: vi.fn(() => undefined) },
-    Grid: { useBreakpoint: () => ({ sm: true }) },
-    Switch: () => <input type="checkbox" />,
-  };
-});
+vi.mock('@lobehub/ui/form', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Form: () => <div data-testid="controls-form" />,
+  useForm: () => ({ setValues: testState.setValues }),
+  useWatch: vi.fn(() => undefined),
+}));
 
 vi.mock('react-i18next', () => {
   return {
@@ -101,7 +90,7 @@ describe('ControlsForm', () => {
 
     const { unmount } = render(<ControlsForm model="gpt-4" provider="openai" />);
 
-    expect(testState.setFieldsValue).toHaveBeenLastCalledWith({
+    expect(testState.setValues).toHaveBeenLastCalledWith({
       enableReasoning: false,
       thinking: 'disabled',
     });
@@ -115,7 +104,7 @@ describe('ControlsForm', () => {
 
     render(<ControlsForm model="gpt-4" provider="openai" />);
 
-    expect(testState.setFieldsValue).toHaveBeenLastCalledWith({
+    expect(testState.setValues).toHaveBeenLastCalledWith({
       enableReasoning: true,
       thinking: 'enabled',
     });
@@ -127,7 +116,7 @@ describe('ControlsForm', () => {
 
     render(<ControlsForm model="claude-sonnet-5" provider="lobehub" />);
 
-    expect(testState.setFieldsValue).toHaveBeenLastCalledWith(
+    expect(testState.setValues).toHaveBeenLastCalledWith(
       expect.objectContaining({
         enableAdaptiveThinking: true,
       }),
@@ -143,7 +132,7 @@ describe('ControlsForm', () => {
 
     render(<ControlsForm model="claude-sonnet-5" provider="lobehub" />);
 
-    expect(testState.setFieldsValue).toHaveBeenLastCalledWith(
+    expect(testState.setValues).toHaveBeenLastCalledWith(
       expect.objectContaining({
         enableAdaptiveThinking: false,
       }),

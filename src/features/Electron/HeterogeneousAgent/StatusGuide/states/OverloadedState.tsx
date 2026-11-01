@@ -1,11 +1,18 @@
-import { Flexbox, Highlighter, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { Ban, Loader2, RotateCcw } from 'lucide-react';
+import { Button, createStaticStyles, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
+import { Ban, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
+
+const styles = createStaticStyles(({ css }) => ({
+  errorDetails: css`
+    && pre {
+      padding: 12px;
+    }
+  `,
+}));
 
 const OverloadedState = ({
   autoRetry,
@@ -25,7 +32,7 @@ const OverloadedState = ({
     return (
       <GuideShell
         compact
-        icon={<Icon spin icon={Loader2} size={18} />}
+        icon={<Spin size="small" />}
         title={t('cliOverloadedGuide.autoRetry.title', { name: config.title })}
         variant={variant}
         actions={
@@ -75,8 +82,8 @@ const OverloadedState = ({
           <Highlighter
             wrap
             actionIconSize={'small'}
+            classNames={{ content: styles.errorDetails }}
             language={'log'}
-            padding={12}
             style={{ maxHeight: 200, overflow: 'auto' }}
             variant={'outlined'}
           >

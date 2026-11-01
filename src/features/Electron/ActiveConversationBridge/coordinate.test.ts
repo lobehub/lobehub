@@ -35,6 +35,123 @@ describe('active conversation coordinate', () => {
     expect(coordinate.threadId).toBeNull();
   });
 
+  it('resolves group routes and keeps subsequent topic navigation in the group route', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { gid: 'group-a', topicId: 'topic-a' },
+      url: '/team/group/group-a/topic-a?thread=thread-a',
+    });
+
+    expect(coordinate).toMatchObject({
+      groupBasePath: '/team/group/group-a',
+      groupId: 'group-a',
+      isConversation: true,
+      threadId: 'thread-a',
+      topicId: 'topic-a',
+    });
+    expect(buildActiveConversationUrl(coordinate, 'topic-b', null)).toBe(
+      '/team/group/group-a/topic-b',
+    );
+  });
+
+  it('resolves a project conversation route and keeps topic navigation in the project route', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1', topicId: 'tpc_1' },
+      url: '/project/prj_1/topic/tpc_1?thread=thread-a',
+    });
+
+    expect(coordinate).toMatchObject({
+      isConversation: true,
+      projectBasePath: '/project/prj_1/topic',
+      projectId: 'prj_1',
+      threadId: 'thread-a',
+      topicId: 'tpc_1',
+    });
+    expect(buildActiveConversationUrl(coordinate, 'tpc_2', null)).toBe(
+      '/project/prj_1/topic/tpc_2',
+    );
+  });
+
+  it('keeps the workspace prefix in the project conversation base path', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1', topicId: 'tpc_1' },
+      url: '/acme/project/prj_1/topic/tpc_1',
+    });
+
+    expect(coordinate.projectBasePath).toBe('/acme/project/prj_1/topic');
+    expect(buildActiveConversationUrl(coordinate, 'tpc_2', null)).toBe(
+      '/acme/project/prj_1/topic/tpc_2',
+    );
+  });
+
+  it('resolves the route root when the project slug is literally "project"', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'project', topicId: 'tpc_1' },
+      url: '/project/project/topic/tpc_1',
+    });
+
+    expect(coordinate).toMatchObject({
+      isConversation: true,
+      projectBasePath: '/project/project/topic',
+      projectId: 'project',
+      topicId: 'tpc_1',
+    });
+    expect(buildActiveConversationUrl(coordinate, 'tpc_2', null)).toBe(
+      '/project/project/topic/tpc_2',
+    );
+  });
+
+  it('resolves a project conversation route without a topic id', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { projectId: 'prj_1' },
+      url: '/project/prj_1/topic',
+    });
+    expect(coordinate).toMatchObject({
+      isConversation: true,
+      projectBasePath: '/project/prj_1/topic',
+      projectId: 'prj_1',
+      topicId: null,
+    });
+    expect(buildActiveConversationUrl(coordinate, 'tpc_2', null)).toBe(
+      '/project/prj_1/topic/tpc_2',
+    );
+  });
+
+  it('keeps the resolved agent id on an agent subpage', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'friendly-name' },
+      resolvedAgentId: 'agt_persisted',
+      url: '/agent/friendly-name/profile',
+    });
+
+    expect(coordinate).toMatchObject({
+      agentId: 'agt_persisted',
+      isConversation: false,
+      routeAgentId: 'friendly-name',
+    });
+  });
+
+  it('retains the group id on a group subpage', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { gid: 'group-a' },
+      url: '/group/group-a/profile',
+    });
+
+    expect(coordinate).toMatchObject({
+      groupId: 'group-a',
+      isConversation: false,
+    });
+  });
+
+  it('does not treat an agent named group as a group route', () => {
+    const coordinate = resolveActiveConversationCoordinate({
+      params: { aid: 'group', topicId: 'topic-a' },
+      url: '/agent/group/topic-a',
+    });
+
+    expect(coordinate.groupBasePath).toBeUndefined();
+    expect(buildActiveConversationUrl(coordinate, 'topic-b', null)).toBe('/agent/group/topic-b');
+  });
+
   it('ignores non-agent routes even when another segment is named agent', () => {
     const coordinate = resolveActiveConversationCoordinate({
       params: {},

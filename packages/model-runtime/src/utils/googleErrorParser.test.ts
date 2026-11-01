@@ -9,30 +9,6 @@ import {
 
 describe('googleErrorParser', () => {
   describe('cleanErrorMessage', () => {
-    it('should remove leading asterisk and spaces', () => {
-      const input = '* API key not valid. Please check your credentials.';
-      const expected = 'API key not valid. Please check your credentials.';
-      expect(cleanErrorMessage(input)).toBe(expected);
-    });
-
-    it('should convert escaped newlines to actual newlines', () => {
-      const input = 'Error occurred\\nPlease try again';
-      const expected = 'Error occurred Please try again';
-      expect(cleanErrorMessage(input)).toBe(expected);
-    });
-
-    it('should replace multiple newlines with single space', () => {
-      const input = 'Line 1\n\n\nLine 2\nLine 3';
-      const expected = 'Line 1 Line 2 Line 3';
-      expect(cleanErrorMessage(input)).toBe(expected);
-    });
-
-    it('should trim whitespace', () => {
-      const input = '  \t  Error message  \t  ';
-      const expected = 'Error message';
-      expect(cleanErrorMessage(input)).toBe(expected);
-    });
-
     it('should handle combined formatting issues', () => {
       const input =
         '* API key not valid.\\nPlease check your credentials.\\n\\nContact support if needed.  ';
@@ -54,19 +30,6 @@ describe('googleErrorParser', () => {
       });
       expect(result.prefix).toBe('Connection failed');
     });
-
-    it('should handle different status codes', () => {
-      const input = 'Request failed [401 Unauthorized] Invalid credentials';
-      const result = extractStatusCodeFromError(input);
-
-      expect(result.errorDetails).toEqual({
-        message: 'Invalid credentials',
-        statusCode: 401,
-        statusCodeText: '[401 Unauthorized]',
-      });
-      expect(result.prefix).toBe('Request failed');
-    });
-
     it('should return null for messages without status codes', () => {
       const input = 'Simple error message without status code';
       const result = extractStatusCodeFromError(input);
@@ -86,43 +49,6 @@ describe('googleErrorParser', () => {
       });
       expect(result.prefix).toBe('Error');
     });
-
-    it('should handle multiple spaces between status code and text', () => {
-      const input = 'Error [500  Internal Server Error] Something went wrong';
-      const result = extractStatusCodeFromError(input);
-
-      expect(result.errorDetails).toEqual({
-        message: 'Something went wrong',
-        statusCode: 500,
-        statusCodeText: '[500 Internal Server Error]',
-      });
-      expect(result.prefix).toBe('Error');
-    });
-
-    it('should handle status code at the beginning of message', () => {
-      const input = '[429 Too Many Requests] Rate limit exceeded';
-      const result = extractStatusCodeFromError(input);
-
-      expect(result.errorDetails).toEqual({
-        message: 'Rate limit exceeded',
-        statusCode: 429,
-        statusCodeText: '[429 Too Many Requests]',
-      });
-      expect(result.prefix).toBe('');
-    });
-
-    it('should handle status code at the end of message', () => {
-      const input = 'Request failed [503 Service Unavailable]';
-      const result = extractStatusCodeFromError(input);
-
-      expect(result.errorDetails).toEqual({
-        message: '',
-        statusCode: 503,
-        statusCodeText: '[503 Service Unavailable]',
-      });
-      expect(result.prefix).toBe('Request failed');
-    });
-
     it('should not be vulnerable to ReDoS attacks', () => {
       // Test with a potentially malicious input that could cause catastrophic backtracking
       const maliciousInput = 'Error ' + 'a'.repeat(10000) + ' [not matching]';

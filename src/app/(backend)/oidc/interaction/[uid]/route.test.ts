@@ -10,6 +10,20 @@ const mocks = vi.hoisted(() => ({
   authEnv: { ENABLE_OIDC: true },
   getConsentClientMetadata: vi.fn(),
   getInteractionDetails: vi.fn(),
+  getUserAuth: vi.fn(),
+  resolveReviewAccess: vi.fn(),
+}));
+
+vi.mock('@lobechat/utils/server', () => ({
+  getUserAuth: mocks.getUserAuth,
+}));
+
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(async () => ({})),
+}));
+
+vi.mock('@/server/services/acceptanceReview/access', () => ({
+  resolveReviewAccess: mocks.resolveReviewAccess,
 }));
 
 vi.mock('debug', () => ({
@@ -162,5 +176,57 @@ describe('GET /oidc/interaction/[uid]', () => {
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: 'server_error' });
+  });
+
+  describe('acceptance review client', () => {
+    const RESOURCE = 'urn:lobehub:acceptance:7f0c9a7e-0000-4000-8000-000000000001';
+
+    beforeEach(() => {
+      mocks.getInteractionDetails.mockResolvedValue({
+        params: { client_id: 'lobehub-review', resource: RESOURCE, scope: 'acceptance:review' },
+        prompt: { name: 'consent' },
+      });
+      mocks.getConsentClientMetadata.mockResolvedValue({ clientName: 'LobeHub Review' });
+      mocks.getUserAuth.mockResolvedValue({ userId: 'user-1' });
+    });
+
+    it('names the acceptance the reviewer is about to open', async () => {
+      mocks.resolveReviewAccess.mockResolvedValue({
+        acceptance: { metadata: { title: 'Billing redesign' }, requirement: 'r' },
+        can: { comment: true, decide: false, moderate: false },
+      });
+
+      const response = await GET(createRequest('uid-r'), createProps('uid-r'));
+
+      await expect(response.json()).resolves.toMatchObject({
+        acceptanceReview: { allowed: true, title: 'Billing redesign' },
+      });
+      expect(mocks.resolveReviewAccess).toHaveBeenCalledWith(
+        {},
+        'user-1',
+        '7f0c9a7e-0000-4000-8000-000000000001',
+      );
+    });
+
+    it('says nothing about an acceptance the reviewer cannot read', async () => {
+      mocks.resolveReviewAccess.mockResolvedValue(null);
+
+      const response = await GET(createRequest('uid-r'), createProps('uid-r'));
+      const body = await response.json();
+
+      expect(body.acceptanceReview).toEqual({ allowed: false, kind: 'acceptance' });
+    });
+
+    it('is not looked up for other clients', async () => {
+      mocks.getInteractionDetails.mockResolvedValue({
+        params: { client_id: 'lobehub-desktop', scope: 'openid' },
+        prompt: { name: 'consent' },
+      });
+
+      const response = await GET(createRequest('uid-d'), createProps('uid-d'));
+
+      expect((await response.json()).acceptanceReview).toBeUndefined();
+      expect(mocks.resolveReviewAccess).not.toHaveBeenCalled();
+    });
   });
 });

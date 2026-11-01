@@ -40,12 +40,7 @@ export interface AgentSignalReceiptMetadata {
   reviewScope?: Scope;
   /** Rollback availability/status for the linked mutation. */
   rollbackStatus?:
-    | 'available'
-    | 'conflict'
-    | 'failed'
-    | 'not_found'
-    | 'rolled_back'
-    | 'unsupported';
+    'available' | 'conflict' | 'failed' | 'not_found' | 'rolled_back' | 'unsupported';
   /** Scoped self-reflection id for non-nightly review receipts. */
   scopeId?: string;
   /** Scoped self-reflection namespace for non-nightly review receipts. */
@@ -113,10 +108,15 @@ export interface AgentSignalReceipt {
     memoryId?: string;
     /** User memory layer used to route memory receipts to their detail page. */
     memoryLayer?: LayersEnum;
+    /** Memory write kind; only `create` memory receipts can be undone. */
+    operation?: 'create' | 'remove' | 'update';
     /** Short summary captured at write time. */
     summary?: string;
-    /** Human-readable resource title captured at write time. */
-    title: string;
+    /**
+     * Human-readable resource title captured at write time. Absent when the write had no
+     * attributable title; clients then render a localized fallback by receipt kind.
+     */
+    title?: string;
     /** User-facing resource domain. */
     type: 'memory' | 'skill';
   };
@@ -331,7 +331,9 @@ const getReceiptTopicId = (input: { sourceId: string; topicId?: string }) =>
   input.topicId ?? input.sourceId;
 
 const getActionReceiptKind = (action: ActionPlan): AgentSignalReceipt['kind'] =>
-  action.operation?.domain ?? 'review';
+  action.operation?.domain === 'memory' || action.operation?.domain === 'skill'
+    ? action.operation.domain
+    : 'review';
 
 const getActionReceiptStatus = (status: ActionStatus): AgentSignalReceipt['status'] | undefined => {
   if (status === ActionStatus.Applied) return 'applied';

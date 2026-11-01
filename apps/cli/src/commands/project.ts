@@ -1,10 +1,13 @@
 import { PROJECT_STATUSES, PROJECT_VISIBILITIES } from '@lobechat/types';
+import { taskTitleSlug } from '@lobechat/utils/taskSlug';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
+import { resolveAppUrlBuilder } from './task/url';
 
 const statusValues = PROJECT_STATUSES.join(', ');
 
@@ -21,7 +24,11 @@ export function registerProjectCommand(program: Command) {
       const result = await client.project.list.query({
         statuses: options.status as (typeof PROJECT_STATUSES)[number][] | undefined,
       });
-      if (options.json !== undefined) return outputJson(result.data, options.json);
+      if (options.json !== undefined)
+        return outputJson(
+          withUrls(result.data, await resolveUrlBuilder(client), (p) => resourcePath.project(p.id)),
+          options.json,
+        );
       if (result.data.length === 0) return console.log('No projects found.');
       printTable(
         result.data.map((item) => [
@@ -40,8 +47,13 @@ export function registerProjectCommand(program: Command) {
     .description('View project detail')
     .option('--json [fields]', 'Output JSON')
     .action(async (id: string, options: { json?: boolean | string }) => {
-      const { data } = await (await getTrpcClient()).project.detail.query({ id });
-      if (options.json !== undefined) return outputJson(data, options.json);
+      const client = await getTrpcClient();
+      const { data } = await client.project.detail.query({ id });
+      if (options.json !== undefined)
+        return outputJson(
+          withUrl(data, await resolveUrlBuilder(client), resourcePath.project(data.project.id)),
+          options.json,
+        );
       console.log(`\n${pc.bold(data.project.name)} ${pc.dim(data.project.id)}`);
       console.log(`${pc.dim('Status:')} ${data.project.status}`);
       console.log(`${pc.dim('Visibility:')} ${data.project.visibility}`);
@@ -54,7 +66,10 @@ export function registerProjectCommand(program: Command) {
   project
     .command('create')
     .description('Create a project')
-    .requiredOption('-i, --identifier <identifier>', 'Task identifier prefix (for example LOBE)')
+    .option(
+      '-i, --identifier <identifier>',
+      'Task identifier prefix (for example ACE); omit to use the default prefix',
+    )
     .requiredOption('-n, --name <name>', 'Project name')
     .option('-d, --description <description>', 'Description')
     .option('--slug <slug>', 'Project slug')
@@ -62,13 +77,17 @@ export function registerProjectCommand(program: Command) {
     .action(
       async (options: {
         description?: string;
-        identifier: string;
+        identifier?: string;
         name: string;
         slug?: string;
         visibility?: (typeof PROJECT_VISIBILITIES)[number];
       }) => {
-        const result = await (await getTrpcClient()).project.create.mutate(options);
+        const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
+        const result = await client.project.create.mutate(options);
+        const url = buildUrl(`/project/${encodeURIComponent(result.data.id)}`);
         console.log(`${pc.green('✓')} Created project ${pc.bold(result.data.id)}`);
+        console.log(`${pc.bold('project')}: ${url}`);
       },
     );
 
@@ -183,22 +202,23 @@ export function registerProjectCommand(program: Command) {
         projectId: string,
         options: { agent?: string; instruction: string; name?: string; parent?: string },
       ) => {
-        const result = await (
-          await getTrpcClient()
-        ).task.create.mutate({
+        const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
+        const result = await client.task.create.mutate({
           assigneeAgentId: options.agent,
           instruction: options.instruction,
           name: options.name,
           parentTaskId: options.parent,
           projectId,
         });
+        const slug = taskTitleSlug(result.data.name);
+        const url = buildUrl(
+          `/task/${encodeURIComponent(result.data.identifier)}${slug ? `/${slug}` : ''}`,
+        );
         console.log(`${pc.green('✓')} Created task ${pc.bold(result.data.identifier)}`);
+        console.log(`${pc.bold('task')}: ${url}`);
       },
     );
-  task.command('move <projectId> <taskId>').action(async (projectId: string, taskId: string) => {
-    const result = await (await getTrpcClient()).project.moveTask.mutate({ id: projectId, taskId });
-    console.log(`${pc.green('✓')} Moved ${result.data.length} task(s)`);
-  });
 
   project.command('request-review <id>').action(async (id: string) => {
     await (await getTrpcClient()).project.requestCompletion.mutate({ id });
