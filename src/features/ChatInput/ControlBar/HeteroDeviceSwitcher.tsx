@@ -3,17 +3,9 @@
 import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
-import {
-  Button,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Popover,
-  toast,
-  Tooltip,
-} from '@lobehub/ui';
+import { Button, Flexbox, Icon, Popover, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
   ExternalLinkIcon,
@@ -30,6 +22,7 @@ import { DOWNLOAD_URL } from '@/const/url';
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { useLocalSandboxCapability } from '@/features/ChatInput/hooks/useLocalSandboxCapability';
 import { useSelectExecutionTarget } from '@/features/ChatInput/hooks/useSelectExecutionTarget';
+import DeviceLoadMeter, { useDeviceLoad } from '@/features/DeviceManager/DeviceLoadMeter';
 import {
   devicePoolForAgent,
   ExecutionTargetIcon,
@@ -56,204 +49,143 @@ import OptionRow from './OptionRow';
 import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
 import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
 
-const styles = createStaticStyles(({ css }) => ({
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  buttonLabel: css`
-    overflow: hidden;
-    max-width: 120px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  buttonReadonly: css`
-    cursor: default;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-      background: transparent;
-    }
-  `,
-  desc: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  extraInfo: css`
-    cursor: help;
-
-    display: flex;
-    align-items: center;
-
-    color: ${cssVar.colorTextQuaternary};
-
-    transition: color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  deviceList: css`
-    overflow-y: auto;
-    max-height: 240px;
-
-    /* Room for the scrollbar so rows don't sit flush against it. */
-    margin-inline-end: -4px;
-    padding-inline-end: 4px;
-  `,
-  empty: css`
-    padding-block: 8px;
-    padding-inline: 8px;
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  downloadCard: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 10px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    text-decoration: none;
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  downloadCardArrow: css`
-    flex: none;
-    margin-inline-start: auto;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  optionIcon: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgElevated};
-  `,
-  optionMeta: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 1px;
-
-    min-width: 0;
-  `,
-  optionTitle: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  header: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    justify-content: space-between;
-
-    padding-block: 4px;
-    padding-inline: 8px;
-  `,
-  headerInfo: css`
-    cursor: help;
-    color: ${cssVar.colorTextQuaternary};
-    transition: color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  headerLink: css`
-    display: flex;
-    gap: 3px;
-    align-items: center;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-    text-decoration: none;
-
-    transition: color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-  headerTitle: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  manageButton: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 3px;
-    align-items: center;
-
-    padding: 0;
-    border: none;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-
-    background: none;
-
-    transition: color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-  groupLabel: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  button: {
+    cursor: 'pointer',
+    display: 'flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '4px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  buttonLabel: {
+    overflow: 'hidden',
+    maxWidth: '120px',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  buttonReadonly: {
+    cursor: 'default',
+    color: { 'default': null, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: { 'default': null, ':hover': 'transparent' },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  desc: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    fontSize: '11px',
+    color: cssVar.colorTextDescription,
+  },
+  extraInfo: {
+    cursor: 'help',
+    display: 'flex',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorTextSecondary },
+    transition: 'color 0.2s',
+  },
+  deviceList: {
+    overflowY: 'auto',
+    maxHeight: '240px',
+    marginInlineEnd: '-4px',
+    paddingInlineEnd: '4px',
+  },
+  empty: {
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    color: cssVar.colorTextQuaternary,
+  },
+  downloadCard: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    textDecoration: 'none',
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  downloadCardArrow: { flex: 'none', marginInlineStart: 'auto', color: cssVar.colorTextQuaternary },
+  optionIcon: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  optionMeta: { display: 'flex', flex: '1', flexDirection: 'column', gap: '1px', minWidth: '0' },
+  optionTitle: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  header: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+  },
+  headerInfo: {
+    cursor: 'help',
+    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorTextSecondary },
+    transition: 'color 0.2s',
+  },
+  headerLink: {
+    display: 'flex',
+    gap: '3px',
+    alignItems: 'center',
+    fontSize: '11px',
+    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorPrimary },
+    textDecoration: 'none',
+    transition: 'color 0.2s',
+  },
+  headerTitle: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextTertiary },
+  manageButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '3px',
+    alignItems: 'center',
+    padding: '0',
+    borderStyle: 'none',
+    fontSize: '11px',
+    color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorPrimary },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: 'color 0.2s',
+  },
+  groupLabel: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: cssVar.colorTextQuaternary,
+  },
+});
 
 interface HeteroDeviceSwitcherProps {
   agentId: string;
@@ -474,12 +406,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     isWorkspacePreferenceLoading,
   ]);
 
-  if (!canShowExecutionTarget) return null;
-
   const boundDevice =
     canShowExecutionTargetSelector && executionTarget === 'device'
       ? devices?.find((d) => d.deviceId === boundDeviceId)
       : undefined;
+  // Only a picked remote device; the local machine is the one already in front of the user.
+  const load = useDeviceLoad(topicDeviceUnknown ? undefined : boundDevice);
+
+  if (!canShowExecutionTarget) return null;
 
   // The picker splits by whether the caller is inside a workspace agent:
   // - **Personal agent** — flat list of the caller's personal-scope devices
@@ -607,18 +541,20 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const content = (
     <Flexbox style={{ maxWidth: 320, minWidth: 280 }}>
-      <div className={styles.header}>
+      <div {...stylex.props(styles.header)}>
         <Flexbox horizontal align={'center'} gap={4}>
-          <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
+          <span {...stylex.props(styles.headerTitle)}>
+            {t('heteroAgent.executionTarget.title')}
+          </span>
           <Tooltip title={t('heteroAgent.executionTarget.infoTooltip')}>
-            <span className={styles.headerInfo}>
+            <span {...stylex.props(styles.headerInfo)}>
               <Icon icon={InfoIcon} size={12} />
             </span>
           </Tooltip>
         </Flexbox>
         {isDesktop || showWebDownloadCard ? (
           <button
-            className={styles.manageButton}
+            {...stylex.props(styles.manageButton)}
             type="button"
             onClick={() => {
               setOpen(false);
@@ -630,7 +566,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           </button>
         ) : (
           <a
-            className={styles.headerLink}
+            {...stylex.props(styles.headerLink)}
             href={DOWNLOAD_URL.default}
             rel="noreferrer"
             target="_blank"
@@ -710,7 +646,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
                   onChange={handleToggleSandboxNetwork}
                 />
                 <Tooltip title={t('heteroAgent.executionTarget.localSandboxNetworkTip')}>
-                  <span className={styles.extraInfo}>
+                  <span {...stylex.props(styles.extraInfo)}>
                     <Icon icon={InfoIcon} size={12} />
                   </span>
                 </Tooltip>
@@ -744,36 +680,36 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           <>
             {privateDevices.length > 0 ? (
               <>
-                <div className={styles.groupLabel}>
+                <div {...stylex.props(styles.groupLabel)}>
                   {t('heteroAgent.executionTarget.personalGroup')}
                 </div>
-                <div className={styles.deviceList}>
+                <div {...stylex.props(styles.deviceList)}>
                   {privateDevices.map((d) => renderDeviceRow(d))}
                 </div>
               </>
             ) : null}
             {workspaceDevices.length > 0 ? (
               <>
-                <div className={styles.groupLabel}>
+                <div {...stylex.props(styles.groupLabel)}>
                   {t('heteroAgent.executionTarget.workspaceGroup')}
                 </div>
-                <div className={styles.deviceList}>
+                <div {...stylex.props(styles.deviceList)}>
                   {workspaceDevices.map((d) => renderDeviceRow(d))}
                 </div>
               </>
             ) : null}
           </>
         ) : (
-          <div className={styles.deviceList}>
+          <div {...stylex.props(styles.deviceList)}>
             {personalOnlyDevices.map((d) => renderDeviceRow(d))}
           </div>
         )
       ) : null}
       {poolStatus === 'loading' ? (
-        <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
+        <div {...stylex.props(styles.empty)}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}
       {poolStatus === 'error' ? (
-        <div className={styles.empty}>
+        <div {...stylex.props(styles.empty)}>
           {t('heteroAgent.executionTarget.loadFailed')}{' '}
           <a
             role="button"
@@ -789,7 +725,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           suppressed above, so guide the user to enroll one into the shared
           pool instead of showing a bare menu. */}
       {showWorkspaceEnrollHint ? (
-        <div className={styles.empty}>
+        <div {...stylex.props(styles.empty)}>
           {t('heteroAgent.executionTarget.noWorkspaceDevices', {
             cmd: `lh connect --workspace ${agentWorkspaceId}`,
           })}
@@ -799,35 +735,40 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           unlocks local execution + `lh connect`) rather than a muted dead-end. */}
       {showWebDownloadCard ? (
         <a
-          className={styles.downloadCard}
+          {...stylex.props(styles.downloadCard)}
           href={DOWNLOAD_URL.default}
           rel="noreferrer"
           target="_blank"
         >
-          <div className={styles.optionIcon}>
+          <div {...stylex.props(styles.optionIcon)}>
             <Icon icon={MonitorDownIcon} size={14} />
           </div>
-          <div className={styles.optionMeta}>
-            <div className={styles.optionTitle}>
+          <div {...stylex.props(styles.optionMeta)}>
+            <div {...stylex.props(styles.optionTitle)}>
               {t('heteroAgent.executionTarget.downloadDesktopTitle')}
             </div>
-            <div className={styles.desc}>
+            <div {...stylex.props(styles.desc)}>
               {t('heteroAgent.executionTarget.downloadDesktopDesc')}
             </div>
           </div>
-          <Icon className={styles.downloadCardArrow} icon={ExternalLinkIcon} size={13} />
+          <Icon
+            className={stylex.props(styles.downloadCardArrow).className}
+            icon={ExternalLinkIcon}
+            size={13}
+          />
         </a>
       ) : null}
       {isPoolEmpty && isDesktop && !isWorkspaceAgent ? (
-        <div className={styles.empty}>{t('heteroAgent.executionTarget.noDevices')}</div>
+        <div {...stylex.props(styles.empty)}>{t('heteroAgent.executionTarget.noDevices')}</div>
       ) : null}
     </Flexbox>
   );
 
   const chip = (
-    <div className={cx(styles.button, !canShowExecutionTargetSelector && styles.buttonReadonly)}>
+    <div {...stylex.props(styles.button, !canShowExecutionTargetSelector && styles.buttonReadonly)}>
       {chipIcon}
-      <span className={styles.buttonLabel}>{chipLabel}</span>
+      <span {...stylex.props(styles.buttonLabel)}>{chipLabel}</span>
+      {load && <DeviceLoadMeter load={load} />}
       {canShowExecutionTargetSelector ? <Icon icon={ChevronDownIcon} size={12} /> : null}
     </div>
   );
@@ -854,7 +795,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       trigger="click"
       onOpenChange={setOpen}
     >
-      {chip}
+      {/* A stable wrapper, so adding the load tooltip never swaps the popover's anchor. */}
+      <div>{open || !load ? chip : <Tooltip title={load.summary}>{chip}</Tooltip>}</div>
     </Popover>
   );
 });

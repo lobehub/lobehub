@@ -43,6 +43,7 @@ import {
   isCompletedRuntimeEnd,
   resolveRuntimeEndStatus,
 } from './runtimeEndReason';
+import { applyStepMetrics } from './stepMetrics';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -724,12 +725,12 @@ export const createGatewayEventHandler = (
           // is what un-blocks the enqueue chain so live chunks can land
           // mid-stream.
           //
-          // Hetero CLI adapters (Claude Code / Codex) never set
-          // `assistantMessage.id` on stream_start, so the DB read stays
-          // mandatory for them — it (a) pulls the executor-created
-          // placeholder into `dbMessagesMap` so subsequent chunks can
-          // dispatch to it, and (b) resolves the next-step assistant id for
-          // the `newStep` fallback.
+          // Server-ingested hetero runs get `assistantMessage.id` stamped at
+          // publish; desktop-local hetero steps and older servers send none,
+          // so the DB read stays mandatory for them — it (a) pulls the
+          // executor-created placeholder into `dbMessagesMap` for later
+          // chunks, and (b) resolves the `newStep` fallback, which only knows
+          // "the assistant after the current one" (wrong for a replay).
           if (!newAssistantMessageId) {
             const messages = await refreshMessagesFromDb({
               skipWorks: true,
@@ -1059,12 +1060,9 @@ export const createGatewayEventHandler = (
           });
         }
 
-        // The server's stepIndex is the authoritative step counter — mirror it
-        // onto the operation so step-based UI (OpStatusTray) stays correct
-        // even across page-refresh reconnects.
-        if (typeof event.stepIndex === 'number') {
-          get().updateOperationMetadata(operationId, { stepCount: event.stepIndex + 1 });
-        }
+        // `stepIndex` is the execution counter; `llmCalls` is the user-facing metric.
+        const update = get().updateOperationMetadata;
+        applyStepMetrics(update, operationId, event.stepIndex, (event.data as any)?.llmCalls);
 
         // Server attaches the canonical UIChatMessage[] snapshot at every
         // step boundary (agent-runtime #15152). Use it as Source of Truth
@@ -1235,6 +1233,8 @@ export const createGatewayEventHandler = (
           }
           break;
         }
+
+        applyStepMetrics(get().updateOperationMetadata, operationId, undefined, data?.llmCalls);
 
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {

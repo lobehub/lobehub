@@ -104,6 +104,14 @@ export const readDeviceDispatchRoute = (error: unknown): DeviceDispatchRoute | u
   };
 };
 
+/**
+ * Whether a dispatch failed only because the device's ack never arrived. Unlike
+ * every other dispatch failure this does not prove nothing ran — see
+ * {@link GATEWAY_CODE_ALIASES}.
+ */
+export const isDeviceResponseTimeout = (raw?: string): boolean =>
+  toDispatchErrorCode(raw) === 'DEVICE_RESPONSE_TIMEOUT';
+
 export const humanizeHeteroDispatchError = (raw?: string): string => {
   const code = toDispatchErrorCode(raw);
 

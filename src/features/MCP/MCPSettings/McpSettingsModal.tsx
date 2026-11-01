@@ -4,8 +4,8 @@ import { Button, createModal, Flexbox, ModalFooter } from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import { type RefObject } from 'react';
 
-import { type SettingsRef } from './index';
 import Settings from './index';
+import { type SettingsRef } from './index';
 
 interface McpSettingsModalOptions {
   identifier: string;

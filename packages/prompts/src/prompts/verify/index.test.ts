@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAcceptanceRepairPrompt, buildVerifierPrompt } from './index';
+import {
+  buildAcceptanceRepairPrompt,
+  buildLocalAcceptanceRepairPrompt,
+  buildVerifierPrompt,
+} from './index';
 
 const checkItem = {
   id: 'check-1',
@@ -55,5 +59,17 @@ describe('buildAcceptanceRepairPrompt', () => {
 
   it('stays the plain CLI handoff without a reason', () => {
     expect(buildAcceptanceRepairPrompt('acc-1')).toMatch(/^Use the LobeHub CLI/);
+  });
+});
+
+describe('buildLocalAcceptanceRepairPrompt', () => {
+  it('reads feedback from the acceptance directory and renders the repair back into it', () => {
+    const prompt = buildLocalAcceptanceRepairPrompt('.acceptances/task-T-12', 'Focus is lost');
+    expect(
+      prompt.startsWith('The reviewer sent this delivery back with this reason:\n\nFocus is lost'),
+    ).toBe(true);
+    expect(prompt).toContain('lh acceptance feedback .acceptances/task-T-12 --actionable');
+    expect(prompt).toContain('lh acceptance run render <roundDir>');
+    expect(prompt).not.toContain('ingest');
   });
 });

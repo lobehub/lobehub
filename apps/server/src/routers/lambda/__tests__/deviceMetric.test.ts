@@ -26,16 +26,19 @@ vi.mock('@/server/services/deviceGateway', () => ({
 
 const { deviceMetricRouter } = await import('../deviceMetric');
 
-const sample = (observedAt: number) => ({
+const sample = (observedAt: number, patch: Record<string, unknown> = {}) => ({
   connected: true,
   cpuCount: 8,
   cpuPercent: 12,
+  diskTotalBytes: 1000,
+  diskUsedBytes: 500,
   load1: 1,
   load15: 1,
   load5: 1,
   memoryTotalBytes: 100,
   memoryUsedBytes: 50,
   observedAt,
+  ...patch,
 });
 
 describe('deviceMetricRouter.getSeries', () => {
@@ -68,6 +71,29 @@ describe('deviceMetricRouter.getSeries', () => {
     expect(series.to - series.from).toBe(12 * 60 * 60 * 1000);
     expect(series.cpuCount).toBe(8);
     expect(series.points).toHaveLength(1);
+  });
+
+  it('takes the disk size from the newest sample that read the disk', async () => {
+    deviceModel.findPersonalByDeviceId.mockResolvedValue({ id: 'row-1', workspaceId: null });
+    const now = Date.now();
+    queryDeviceMetrics.mockResolvedValue([
+      sample(now - 120_000, { diskTotalBytes: 2000 }),
+      sample(now - 60_000, { diskTotalBytes: null, diskUsedBytes: null }),
+    ]);
+
+    const series = await personal.getSeries({ deviceId: 'dev-1' });
+
+    expect(series.diskTotalBytes).toBe(2000);
+  });
+
+  it('has no disk size when the device never reported one', async () => {
+    deviceModel.findPersonalByDeviceId.mockResolvedValue({ id: 'row-1', workspaceId: null });
+    const { diskTotalBytes: _, diskUsedBytes: __, ...legacy } = sample(Date.now() - 60_000);
+    queryDeviceMetrics.mockResolvedValue([legacy]);
+
+    const series = await personal.getSeries({ deviceId: 'dev-1' });
+
+    expect(series.diskTotalBytes).toBeNull();
   });
 
   it('does not treat a workspace row as personal', async () => {

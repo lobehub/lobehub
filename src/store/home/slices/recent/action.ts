@@ -18,25 +18,18 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type RecentEntityRef, toRecentEntityRef } from './initialState';
 import {
-  type RecentFileCard,
-  recentFileListResource,
+  DOCS_HOME_LIMIT,
+  docsHomeListResource,
+  type DocsHomeRow,
+  type DocsHomeTab,
   recentListResource,
-  type RecentPageCard,
-  recentPageListResource,
-  type ResourceRecentParams,
-  toPersistedRecentFiles,
-  toRecentFileCard,
-  toRecentPageCard,
+  toDocsHomeRow,
 } from './projection';
 
 const n = setNamespace('recent');
 
 /** Rows in the "all recents" drawer. */
 export const ALL_RECENTS_LIMIT = 50;
-/** Cards in the resource home "Recent files" grid. */
-export const RESOURCE_RECENT_FILES_LIMIT = 8;
-/** Cards in the resource home "Recent pages" grid. */
-export const RESOURCE_RECENT_PAGES_LIMIT = 6;
 
 interface RenameRecentParams {
   id: string;
@@ -78,8 +71,7 @@ export class RecentActionImpl {
   readonly #renameQueues = new Map<RecentEntityRef, Promise<unknown>>();
   readonly #recentList;
   readonly #recents;
-  readonly #resourceRecentFiles;
-  readonly #resourceRecentPages;
+  readonly #docsHome;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -94,28 +86,14 @@ export class RecentActionImpl {
       view: recordLens<HomeStore, RecentItem[]>('recentListMap'),
     });
     this.#recents = linkReplicaEntity<RecentItem>([this.#recentList]);
-    this.#resourceRecentFiles = createReplicaSlice(recentFileListResource, {
-      actionPrefix: n('resourceRecentFiles'),
-      fetcher: async ({ visibility }) =>
-        (await fileService.getRecentFiles(RESOURCE_RECENT_FILES_LIMIT, visibility)).map(
-          toRecentFileCard,
-        ),
+    this.#docsHome = createReplicaSlice(docsHomeListResource, {
+      actionPrefix: n('docsHome'),
+      fetcher: async ({ tab }) =>
+        (await fileService.getDocsHomeItems(tab, DOCS_HOME_LIMIT)).map(toDocsHomeRow),
       get,
       set,
-      stateKey: 'resourceRecentFilesReplica',
-      toPersisted: toPersistedRecentFiles,
-      view: recordLens<HomeStore, RecentFileCard[]>('resourceRecentFilesMap'),
-    });
-    this.#resourceRecentPages = createReplicaSlice(recentPageListResource, {
-      actionPrefix: n('resourceRecentPages'),
-      fetcher: async ({ visibility }) =>
-        (await fileService.getRecentPages(RESOURCE_RECENT_PAGES_LIMIT, visibility)).map(
-          toRecentPageCard,
-        ),
-      get,
-      set,
-      stateKey: 'resourceRecentPagesReplica',
-      view: recordLens<HomeStore, RecentPageCard[]>('resourceRecentPagesMap'),
+      stateKey: 'docsHomeReplica',
+      view: recordLens<HomeStore, DocsHomeRow[]>('docsHomeMap'),
     });
   }
 
@@ -174,13 +152,14 @@ export class RecentActionImpl {
   useFetchAllRecents = (open: boolean): ReplicaSyncResult =>
     this.#recentList.useSync({ limit: ALL_RECENTS_LIMIT }, { enabled: open });
 
-  /** Resource home "Recent files". Read them with `homeRecentSelectors.resourceFiles`. */
-  useFetchResourceRecentFiles = (params: ResourceRecentParams): ReplicaSyncResult =>
-    this.#resourceRecentFiles.useSync(params);
+  /** Refetch every loaded Docs home tab, e.g. after a page or file was added. */
+  refreshDocsHome = async (): Promise<void> => {
+    await this.#docsHome.revalidate();
+  };
 
-  /** Resource home "Recent pages". Read them with `homeRecentSelectors.resourcePages`. */
-  useFetchResourceRecentPages = (params: ResourceRecentParams): ReplicaSyncResult =>
-    this.#resourceRecentPages.useSync(params);
+  /** The Docs home list for one tab. Read it with `homeRecentSelectors.docsHome`. */
+  useFetchDocsHome = (tab: DocsHomeTab, enabled: boolean = true): ReplicaSyncResult =>
+    this.#docsHome.useSync({ tab }, { enabled });
 
   /**
    * Sidebar recents. Asks for `limit + 1` rows to know whether "view all" is

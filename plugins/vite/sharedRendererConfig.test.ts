@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -421,5 +422,25 @@ describe('createSharedRolldownOutput', () => {
     const output = createSharedRolldownOutput({ splitInitial: false });
     expect(output.codeSplitting).not.toHaveProperty('includeDependenciesRecursively');
     expect((output.codeSplitting.groups as OutputGroup[]).some((g) => 'tags' in g)).toBe(false);
+  });
+
+  // Regression: base.css (which styles <body>) shared a chunk with modules the
+  // App's lazy chunks import, so loading Home restyled the App's body.
+  it('gives canvas runtime sources a chunk of their own, apart from modules the App shares', () => {
+    const entry = '/repo/packages/canvas-runtime/src/index.tsx';
+    const base = '/repo/packages/canvas-runtime/src/base.css';
+    const shared = '/repo/packages/canvas/src/index.ts';
+    const graph: Record<string, string[]> = { [base]: [], [entry]: [base, shared], [shared]: [] };
+    const ctx = { getModuleInfo: (id: string) => ({ importedIds: graph[id] }) };
+    const chunkOf = (id: string) =>
+      groups({ initialEntries: { runtime: entry } })
+        .filter((g) => (typeof g.test === 'function' ? g.test(id) : (g.test?.test(id) ?? true)))
+        .sort((a, b) => b.priority - a.priority)
+        .map((g) => (typeof g.name === 'function' ? g.name(id, ctx) : g.name))
+        .find(Boolean);
+
+    expect(chunkOf(base)).toBe('canvas-runtime-runtime');
+    expect(chunkOf(entry)).toBe('canvas-runtime-runtime');
+    expect(chunkOf(shared)).toBe('initial-runtime');
   });
 });

@@ -2,28 +2,26 @@
 
 import { type TaskDetail } from '@lobechat/types';
 import { type IconProps } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { Footprints, Timer, Wrench } from 'lucide-react';
+import { Flexbox, Icon, Tag } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { BrainCircuit, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Markdown from '../../../Markdown';
 import { formatCost, formatDuration } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  collapseContent: css`
-    padding-block: 8px;
-    padding-inline: 0;
-    font-size: 13px;
-    line-height: 1.6;
-  `,
-  separator: css`
-    width: 3px;
-    height: 3px;
-    border-radius: 50%;
-    background: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  collapseContent: { paddingBlock: '8px', paddingInline: '0', fontSize: '13px', lineHeight: 1.6 },
+  separator: {
+    width: '3px',
+    height: '3px',
+    borderRadius: '50%',
+    backgroundColor: cssVar.colorTextQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 export type CompletedStateVariant = 'detail' | 'compact';
 
@@ -70,8 +68,8 @@ const MetricsRow = memo<MetricsRowProps>(
     // Build metrics array in order
     if (totalSteps !== undefined && totalSteps > 0) {
       metrics.push({
-        icon: Footprints,
-        label: t('task.metrics.stepsShort'),
+        icon: BrainCircuit,
+        label: t('task.metrics.llmCallsShort'),
         value: totalSteps,
       });
     }
@@ -126,7 +124,7 @@ const MetricsRow = memo<MetricsRowProps>(
         <Flexbox horizontal align="center" gap={12}>
           {metrics.map((metric, index) => (
             <Flexbox horizontal align="center" gap={12} key={index}>
-              {index > 0 && <div className={styles.separator} />}
+              {index > 0 && <div {...stylex.props(styles.separator)} />}
               <MetricItem icon={metric.icon} label={metric.label} value={metric.value} />
             </Flexbox>
           ))}
@@ -175,7 +173,7 @@ const CompletedState = memo<CompletedStateProps>(
     return (
       <>
         {hasContent && expanded && (
-          <div className={styles.collapseContent}>
+          <div {...stylex.props(styles.collapseContent)}>
             <Markdown>{content}</Markdown>
           </div>
         )}

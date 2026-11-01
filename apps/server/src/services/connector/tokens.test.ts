@@ -1,11 +1,15 @@
-import { discoverAuthorizationServerMetadata } from '@modelcontextprotocol/sdk/client/auth.js';
+import {
+  discoverAuthorizationServerMetadata,
+  IssuerMismatchError,
+} from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as OauthModule from './oauth';
 import { refreshConnectorToken } from './oauth';
 import { refreshExpiredConnectorTokens } from './tokens';
 
-vi.mock('@modelcontextprotocol/sdk/client/auth.js', () => ({
+vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   discoverAuthorizationServerMetadata: vi.fn(),
 }));
 vi.mock('./oauth', async (importOriginal) => ({
@@ -36,7 +40,23 @@ describe('refreshExpiredConnectorTokens', () => {
     vi.clearAllMocks();
   });
 
-  // LOBE-14771: agent runs baked the stored (expired) token into manifests, so
+  it.each([
+    new TypeError('network unavailable'),
+    new IssuerMismatchError('metadata', 'https://as', 'https://other'),
+  ])(
+    'keeps credentials and reloads a concurrent rotation after discovery failure: %s',
+    async (error) => {
+      const expired = oauthConnector('discovery-failed', NOW - 1000);
+      const findById = vi.fn().mockResolvedValue(expired);
+      vi.mocked(discoverAuthorizationServerMetadata).mockRejectedValueOnce(error);
+      const pending = refreshExpiredConnectorTokens([expired], { findById } as any);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await pending).toEqual([expired]);
+      expect(findById).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  // Agent runs baked the stored (expired) token into manifests, so
   // the first call after every expiry 401'd even when it was refreshable.
   it('refreshes an expired token and persists the rotated credentials', async () => {
     vi.mocked(refreshConnectorToken).mockResolvedValue({

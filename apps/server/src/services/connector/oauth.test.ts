@@ -1,8 +1,9 @@
-import { registerClient } from '@modelcontextprotocol/sdk/client/auth.js';
-import type { AuthorizationServerMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { AuthorizationServerMetadata } from '@modelcontextprotocol/client';
+import { registerClient, RegistrationRejectedError } from '@modelcontextprotocol/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  discoverConnectorOAuth,
   exchangeConnectorCode,
   refreshConnectorToken,
   registerDynamicClient,
@@ -11,9 +12,14 @@ import {
   toClientInformation,
 } from './oauth';
 
-vi.mock('@modelcontextprotocol/sdk/client/auth.js', async (importOriginal) => ({
+vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   registerClient: vi.fn(),
+}));
+// These tests stub the global fetch; the SSRF boundary itself is covered by
+// oauth.network.test.ts over real sockets.
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({
+  ssrfSafeFetch: (url: string, init?: RequestInit) => fetch(url, init),
 }));
 
 const metadataWith = (
@@ -86,7 +92,7 @@ describe('registerDynamicClient', () => {
  * was registered with (`client_secret_post`). Records how each request
  * authenticated.
  */
-const stubPostOnlyTokenEndpoint = () => {
+const stubPostOnlyTokenEndpoint = (errorStatus = 401) => {
   const attempts: string[] = [];
   vi.stubGlobal(
     'fetch',
@@ -102,7 +108,7 @@ const stubPostOnlyTokenEndpoint = () => {
       if (method !== 'client_secret_post') {
         return Response.json(
           { error: 'invalid_client', error_description: 'Client authentication failed' },
-          { status: 401 },
+          { status: errorStatus },
         );
       }
       return Response.json({ access_token: 'tok', refresh_token: 'rt', token_type: 'Bearer' });
@@ -203,5 +209,88 @@ describe('registeredAuthMethod', () => {
     expect(
       registeredAuthMethod({ client_id: 'c', redirect_uris: [] }, metadataWith(['none'])),
     ).toBe('none');
+  });
+});
+
+describe('SDK v2 OAuth regressions', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('retries invalid_client in an HTTP 200 OAuth error response', async () => {
+    const attempts = stubPostOnlyTokenEndpoint(200);
+    const result = await exchange({ clientId: 'cid', clientSecret: 'secret' }, [
+      'client_secret_basic',
+      'client_secret_post',
+    ]);
+    expect(attempts).toEqual(['client_secret_basic', 'client_secret_post']);
+    expect(result.tokens.access_token).toBe('tok');
+  });
+
+  it('passes the authorization response issuer and rejects its absence when required', async () => {
+    stubPostOnlyTokenEndpoint();
+    const params = {
+      authorizationCode: 'code',
+      authorizationServerUrl: 'https://auth.example.com',
+      clientInformation: toClientInformation({
+        clientId: 'cid',
+        clientSecret: 'secret',
+        tokenEndpointAuthMethod: 'client_secret_post',
+      }),
+      codeVerifier: 'verifier',
+      metadata: { ...metadataWith(), authorization_response_iss_parameter_supported: true },
+      redirectUri: 'https://app.example.com/oauth/connector/callback',
+    };
+    await expect(
+      exchangeConnectorCode({ ...params, iss: 'https://auth.example.com' }),
+    ).resolves.toMatchObject({ tokens: { access_token: 'tok' } });
+    await expect(exchangeConnectorCode(params)).rejects.toThrow('Issuer mismatch');
+  });
+
+  it('discovers a root issuer with a trailing slash when PRM is absent', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        if (String(url).includes('oauth-authorization-server'))
+          return Response.json({ ...metadataWith(), issuer: 'https://auth.example.com/' });
+        return new Response(null, { status: 404 });
+      }),
+    );
+    await expect(discoverConnectorOAuth('https://auth.example.com/mcp')).resolves.toMatchObject({
+      authorizationServerUrl: 'https://auth.example.com/',
+      metadata: { issuer: 'https://auth.example.com/' },
+    });
+  });
+
+  it('keeps the authorization server registration error_description', async () => {
+    vi.mocked(registerClient).mockRejectedValueOnce(
+      new RegistrationRejectedError({
+        status: 400,
+        body: '{"error":"invalid_client_metadata","error_description":"Use a public client"}',
+        submittedMetadata: { redirect_uris: [] },
+      }),
+    );
+    await expect(
+      registerDynamicClient({
+        authorizationServerUrl: 'https://auth.example.com',
+        metadata: metadataWith(),
+        redirectUri: 'https://app.example.com/callback',
+      }),
+    ).rejects.toThrow('Use a public client');
+  });
+});
+
+describe('OAuth metadata issuer validation', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it('explains a mismatched discovery issuer without exposing the received value', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        if (String(url).includes('oauth-authorization-server'))
+          return Response.json({ ...metadataWith(), issuer: 'https://untrusted.example/' });
+        return new Response(null, { status: 404 });
+      }),
+    );
+    await expect(discoverConnectorOAuth('https://auth.example.com/mcp')).rejects.toThrow(
+      'Check the connector authorization server configuration.',
+    );
   });
 });

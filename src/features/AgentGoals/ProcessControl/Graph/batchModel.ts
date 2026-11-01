@@ -150,7 +150,8 @@ export const batchCellState = (
   if (status === 'resolved') return 'done';
   if (status === 'waiting' || view.decision || view.isStale || waitingOn.has(view.node.id))
     return 'human';
-  if (isRunningNode(view)) return 'running';
+  // Held for a usage window to reopen: still in flight, resumes on its own.
+  if (isRunningNode(view) || view.quotaRetryAt) return 'running';
   return 'backlog';
 };
 

@@ -5,9 +5,12 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { MessageService } from './index';
 import {
   ForwardPagingUnsupportedError,
+  isPartialHeadWindow,
   primeMessageListPage,
+  readMessagesByRoundCursor,
   readMessagesForward,
   SHARED_TOPIC_FIRST_PAGE,
+  toRoundCursorQueryInput,
 } from './roundCursorPage';
 
 vi.mock('@/libs/trpc/client', () => ({
@@ -27,6 +30,71 @@ const listPage = (id: string) => Promise.resolve({ messages: [{ id }], olderCurs
 let seq = 0;
 // The primed map is module state: give every test its own conversation.
 const nextContext = () => ({ agentId: 'agent-1', topicId: 'topic-1', topicShareId: `s${++seq}` });
+
+describe('toRoundCursorQueryInput', () => {
+  it('requests 500-row gateway pages for the initial window and older history', async () => {
+    query.mockReset();
+    const service = new MessageService();
+    const context = { ...nextContext(), projectToolPayloads: true };
+    const cursor = { createdAt: '2026-01-01T00:00:00.000000Z', id: 'oldest-head' };
+    const messages = Array.from({ length: 500 }, (_, index) => ({ id: `head-${index}` }));
+    query.mockResolvedValueOnce({ ...page('head'), hasMore: true, messages, nextCursor: cursor });
+    query.mockResolvedValueOnce(page('older'));
+
+    const head = await service.getMessageListPage(context);
+    const older = await service.getEarlierMessages(context, cursor);
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ countBudget: 500, cursor: null, projectToolPayloads: true }),
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ countBudget: 500, cursor, projectToolPayloads: true }),
+    );
+    expect(head).toEqual({ messages, olderCursor: cursor });
+    expect(older).toEqual({ messages: [{ id: 'older' }], olderCursor: null });
+  });
+
+  it('keeps the full window for client-mode reads', () => {
+    const input = toRoundCursorQueryInput({ agentId: 'a', topicId: 't' }, null);
+
+    expect(input).toMatchObject({ countBudget: 1000, roundLimit: 1000 });
+  });
+});
+
+describe('partial head window', () => {
+  const older = { createdAt: '2026-01-01T00:00:00.000000Z', id: 'u1' };
+
+  it('marks a gateway head page that has older history', async () => {
+    const context = nextContext();
+    query.mockResolvedValueOnce({ ...page('m'), hasMore: true, nextCursor: older });
+
+    await readMessagesByRoundCursor({ ...context, projectToolPayloads: true }, null);
+
+    expect(isPartialHeadWindow(context)).toBe(true);
+  });
+
+  it('clears the mark once a full-budget head page lands', async () => {
+    const context = nextContext();
+    query.mockResolvedValueOnce({ ...page('m'), hasMore: true, nextCursor: older });
+    await readMessagesByRoundCursor({ ...context, projectToolPayloads: true }, null);
+    query.mockResolvedValueOnce({ ...page('m'), hasMore: true, nextCursor: older });
+
+    await readMessagesByRoundCursor(context, null);
+
+    expect(isPartialHeadWindow(context)).toBe(false);
+  });
+
+  it('does not mark a gateway head page that holds the whole topic', async () => {
+    const context = nextContext();
+    query.mockResolvedValueOnce(page('m'));
+
+    await readMessagesByRoundCursor({ ...context, projectToolPayloads: true }, null);
+
+    expect(isPartialHeadWindow(context)).toBe(false);
+  });
+});
 
 describe('primeMessageListPage', () => {
   const service = new MessageService();

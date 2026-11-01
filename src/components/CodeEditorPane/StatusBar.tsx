@@ -1,55 +1,48 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Tooltip } from '@lobehub/ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import type { IndentStyle } from './indent';
 
-const styles = createStaticStyles(({ css }) => ({
-  bar: css`
-    flex-shrink: 0;
-
-    height: 24px;
-    padding-inline: 10px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-size: 11px;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  button: css`
-    cursor: pointer;
-
-    height: 18px;
-    padding-inline: 6px;
-    border: none;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-size: 11px;
-    line-height: 1;
-    color: inherit;
-    white-space: nowrap;
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  item: css`
-    padding-inline: 6px;
-    white-space: nowrap;
-  `,
-  readOnly: css`
-    padding-inline: 6px;
-    border-radius: ${cssVar.borderRadiusSM};
-    color: ${cssVar.colorTextSecondary};
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  bar: {
+    flexShrink: 0,
+    height: '24px',
+    paddingInline: '10px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '11px',
+    lineHeight: 1,
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  button: {
+    cursor: 'pointer',
+    height: '18px',
+    paddingInline: '6px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadiusSM,
+    fontSize: '11px',
+    lineHeight: 1,
+    color: { 'default': 'inherit', ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  item: { paddingInline: '6px', whiteSpace: 'nowrap' },
+  readOnly: {
+    paddingInline: '6px',
+    borderRadius: cssVar.borderRadiusSM,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 export interface CursorPosition {
   column: number;
@@ -78,19 +71,24 @@ const StatusBar = ({
   const { t } = useTranslation('components');
 
   return (
-    <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.bar).className}
+      justify={'space-between'}
+    >
       <Flexbox horizontal align={'center'}>
-        {readOnly && <span className={styles.readOnly}>{t('CodeEditorPane.readOnly')}</span>}
+        {readOnly && <span {...stylex.props(styles.readOnly)}>{t('CodeEditorPane.readOnly')}</span>}
       </Flexbox>
       <Flexbox horizontal align={'center'}>
         {cursor && (
-          <span className={styles.item}>
+          <span {...stylex.props(styles.item)}>
             {t('CodeEditorPane.cursor', { column: cursor.column, line: cursor.line })}
             {cursor.selectionLength > 0 &&
               ` ${t('CodeEditorPane.selected', { length: cursor.selectionLength })}`}
           </span>
         )}
-        <span className={styles.item}>
+        <span {...stylex.props(styles.item)}>
           {t(indent.useTabs ? 'CodeEditorPane.tabSize' : 'CodeEditorPane.spaces', {
             size: indent.size,
           })}
@@ -98,14 +96,14 @@ const StatusBar = ({
         <Tooltip title={t('CodeEditorPane.toggleWordWrap')}>
           <button
             aria-pressed={lineWrapping}
-            className={styles.button}
+            {...stylex.props(styles.button)}
             type={'button'}
             onClick={() => onLineWrappingChange(!lineWrapping)}
           >
             {t(lineWrapping ? 'CodeEditorPane.wrapOn' : 'CodeEditorPane.wrapOff')}
           </button>
         </Tooltip>
-        <span className={styles.item}>{languageLabel}</span>
+        <span {...stylex.props(styles.item)}>{languageLabel}</span>
       </Flexbox>
     </Flexbox>
   );

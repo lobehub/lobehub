@@ -388,12 +388,10 @@ export const AcceptanceCheckRow = memo<{
                   horizontal
                   align={'center'}
                   className={cx(styles.rowActions, 'acceptance-row-actions')}
+                  // A running accept/ignore spinner stays visible after the pointer leaves.
+                  data-busy={accepting || ignoring ? '' : undefined}
                   gap={2}
-                  style={{
-                    // The accept spinner must stay visible after the pointer leaves.
-                    ...(accepting ? { opacity: 1 } : undefined),
-                    flex: 'none',
-                  }}
+                  style={{ flex: 'none' }}
                 >
                   <ActionIcon
                     disabled={reviewPending && !accepting}

@@ -109,7 +109,7 @@ const run = (plugins: string[]) =>
 const manifestToken = (manifest: unknown) =>
   (manifest as { mcpParams?: { auth?: { accessToken?: string } } })?.mcpParams?.auth?.accessToken;
 
-// LOBE-14771: manifests carry the connector token for the whole run, so an
+// Manifests carry the connector token for the whole run, so an
 // expired-but-refreshable token used to 401 on the first call after expiry.
 describe('discoverTools — connector OAuth token refresh', () => {
   it('builds a pinned connector manifest from refreshed credentials', async () => {

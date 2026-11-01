@@ -11,6 +11,11 @@ class TestMenuPlatform extends BaseMenuPlatform {
     return this.buildReloadMenuItem('Reload', ignoreCache);
   }
 }
+class TestNewWindowMenuPlatform extends BaseMenuPlatform {
+  triggerNewWindow(targetWindow?: ElectronBrowserWindow | null) {
+    this.openNewWindow(targetWindow);
+  }
+}
 class TestDevToolsMenuPlatform extends BaseMenuPlatform {
   buildDevToolsItem(label = 'Developer Tools', accelerator = 'F12') {
     return this.buildDevToolsMenuItem(label, accelerator);
@@ -272,6 +277,66 @@ describe('BaseMenuPlatform', () => {
       expect(ownerWindow.webContents.closeDevTools).toHaveBeenCalled();
       expect(BrowserWindow).not.toHaveBeenCalled();
       expect(focusedDefaultDevToolsWindow.webContents.openDevTools).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('openNewWindow', () => {
+    let newWindowMenuPlatform: TestNewWindowMenuPlatform;
+    let mainWindow: { broadcast: ReturnType<typeof vi.fn> };
+
+    const registerBrowser = (identifier: string, path: string, target: ElectronBrowserWindow) => {
+      const browser = { broadcast: vi.fn(), options: { path }, webContents: target.webContents };
+      mockApp.browserManager.browsers.set(identifier, browser as any);
+      return browser;
+    };
+
+    beforeEach(() => {
+      mainWindow = { broadcast: vi.fn() };
+      vi.mocked(mockApp.browserManager.getMainWindow).mockReturnValue(mainWindow as any);
+      newWindowMenuPlatform = new TestNewWindowMenuPlatform(mockApp);
+    });
+
+    afterEach(() => {
+      mockApp.browserManager.browsers.clear();
+    });
+
+    it('asks the focused app-shell window to open its workspace in a new window', () => {
+      const target = createBrowserWindow({});
+      const workspaceWindow = registerBrowser('workspace_ws1', '/acme', target);
+
+      newWindowMenuPlatform.triggerNewWindow(target);
+
+      expect(workspaceWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
+      expect(mainWindow.broadcast).not.toHaveBeenCalled();
+    });
+
+    it('uses the OS-focused window when the menu has no target window', () => {
+      const target = createBrowserWindow({});
+      const workspaceWindow = registerBrowser('workspace_ws1', '/acme', target);
+      vi.mocked(BrowserWindow.getFocusedWindow).mockReturnValue(target);
+
+      newWindowMenuPlatform.triggerNewWindow(null);
+
+      expect(workspaceWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
+    });
+
+    it.each(['/popup/agent/a/t', '/desktop/devtools'])(
+      'falls back to the main window when the focused window has no app shell (%s)',
+      (path) => {
+        const target = createBrowserWindow({});
+        const popup = registerBrowser('popup', path, target);
+
+        newWindowMenuPlatform.triggerNewWindow(target);
+
+        expect(popup.broadcast).not.toHaveBeenCalled();
+        expect(mainWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
+      },
+    );
+
+    it('falls back to the main window when no window is focused', () => {
+      newWindowMenuPlatform.triggerNewWindow(null);
+
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('openNewWindow');
     });
   });
 });

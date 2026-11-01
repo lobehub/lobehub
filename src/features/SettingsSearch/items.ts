@@ -12,6 +12,7 @@ export type SettingsSearchTab = SettingsTabs | WorkspaceSettingsTabs;
 export interface SettingsSearchContext {
   disableEmailPassword: boolean;
   enableBusinessFeatures: boolean;
+  enableChannels: boolean;
   enableComposio: boolean;
   enableGatewayMode: boolean;
   /** Workspaces are available to this user */
@@ -81,6 +82,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
   [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
   [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
+  [SettingsTabs.Drive]: ['storage', 'drive', 'network drive', 'files', 'quota'],
   [SettingsTabs.Environments]: [
     'sandbox',
     'environments',
@@ -467,24 +469,49 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   // Service Model
   {
     anchor: 'service-model-assignments',
-    keywords: ['model assignment', 'topic naming', 'translation', 'default model'],
-    labelKey: 'serviceModel.modelAssignments.title',
+    descKey: 'serviceModel.desc',
+    keywords: ['main model', 'flash model', 'embedding', 'default model', 'system recommended'],
+    labelKey: 'serviceModel.tier.main.title',
     tab: SettingsTabs.ServiceModel,
   },
   {
-    anchor: 'service-model-memory',
-    keywords: ['memory', 'embedding', 'vector'],
-    labelKey: 'serviceModel.memoryModels.title',
+    // Follow-up / input completion stay out of the keywords: inside a workspace
+    // they live on Chat Preferences, not here.
+    anchor: 'service-model-advanced',
+    keywords: [
+      'model assignment',
+      'topic naming',
+      'translation',
+      'memory',
+      'prompt rewrite',
+      'history compress',
+    ],
+    labelKey: 'serviceModel.advanced.title',
     tab: SettingsTabs.ServiceModel,
   },
   {
-    anchor: 'service-model-optional-features',
-    keywords: ['follow up', 'input completion', 'prompt rewrite', 'suggestion'],
-    labelKey: 'serviceModel.optionalFeatures.title',
+    anchor: 'service-model-verify',
+    descKey: 'serviceModel.tier.verify.desc',
+    keywords: ['acceptance', 'verify', 'verifier', 'vision', 'multimodal'],
+    labelKey: 'serviceModel.tier.verify.title',
     tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-asr',
+    keywords: ['voice', 'transcription', 'speech to text'],
+    labelKey: 'systemAgent.asr.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-channelRouting',
+    descKey: 'systemAgent.channelRouting.modelDesc',
+    keywords: ['channel', 'decision', 'Jev', '频道', '决策', '回复'],
+    labelKey: 'systemAgent.channelRouting.title',
+    tab: SettingsTabs.ServiceModel,
+    visible: (ctx) => ctx.enableChannels,
   },
   // Chat Preferences (workspace only — the personal sidebar keeps these rows in
-  // Service Model › Optional Features)
+  // Service Model › Advanced)
   {
     anchor: 'chat-preference-followUpAction',
     descKey: 'systemAgent.followUpAction.modelDesc',

@@ -39,6 +39,9 @@ export const preHydrateTopicListForRoute = async (routeAgentId?: string): Promis
   const agentId = resolveRouteAgentId(routeAgentId);
   if (!agentId) return;
 
+  // The per-agent "only mine" filter is part of the list identity. It is read
+  // from the system status, which restores it synchronously at store creation
+  // (`createInitialSystemStatus`), so the params below already carry it.
   const params = getSidebarTopicListParams({ agentId });
   if (!params) return;
 

@@ -9,8 +9,7 @@ import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { IndexedDBQueryProjectionStorage } from '@/libs/queryProjectionStorage';
-import { cacheScope } from '@/libs/replica';
+import { AppIndexedDBStorage, cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
@@ -34,7 +33,7 @@ const wrapper = ({ children }: PropsWithChildren) =>
   );
 
 /** The rows the agent config replica reads (`replica:<name>:v<version>`). */
-const configStorage = new IndexedDBQueryProjectionStorage<unknown>({
+const configStorage = new AppIndexedDBStorage<unknown>({
   namespace: 'replica:agentConfig:v1',
 });
 

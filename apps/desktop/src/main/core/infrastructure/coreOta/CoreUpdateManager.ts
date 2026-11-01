@@ -366,6 +366,10 @@ export class CoreUpdateManager {
     return true;
   };
 
+  dismissAppliedNotice = () => {
+    this.appliedVersion = null;
+  };
+
   getStatus = () => ({
     appliedVersion: this.appliedVersion,
     applyMode: this.staged?.applyMode ?? null,

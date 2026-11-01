@@ -1,7 +1,11 @@
 import type { Message } from 'chat';
 
-import { mergeBotMessages } from '../mergeMessages';
-import { findMatchingWatchKeywordEntries, type WatchKeywordEntry } from '../platforms';
+import { getSameSenderMessages, mergeBotMessages } from '../mergeMessages';
+import {
+  findMatchingWatchKeywordEntries,
+  messageMatchesWatchKeyword,
+  type WatchKeywordEntry,
+} from '../platforms';
 import type { BotCommand } from './types';
 
 /**
@@ -42,6 +46,21 @@ export function mergeSkippedMessages(message: Message, context?: { skipped?: Mes
   // context.skipped is chronological; current message is the latest
   return mergeBotMessages(message, context?.skipped);
 }
+
+/**
+ * Whether the message, or a debounced message the same sender queued before it, contains one of
+ * `keywords`. Inspecting the siblings lets a keyword queued behind a non-trigger still fire.
+ */
+export const burstMatchesWatchKeyword = (
+  message: Message,
+  skipped: Message[] | undefined,
+  keywords: ReadonlyArray<string>,
+): boolean =>
+  keywords.length > 0 &&
+  (messageMatchesWatchKeyword(message.text, keywords) ||
+    getSameSenderMessages(message, skipped).some((m) =>
+      messageMatchesWatchKeyword(m.text, keywords),
+    ) === true);
 
 /**
  * Prepend the operator-authored `instruction` of every matched watch

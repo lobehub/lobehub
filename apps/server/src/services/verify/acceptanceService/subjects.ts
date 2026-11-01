@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { DocumentModel } from '@/database/models/document';
 import { GoalModel } from '@/database/models/goal';
+import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
@@ -83,7 +84,8 @@ export const findSubject = async (
       const goal = await goalOfGate(deps, subjectId);
       return goal ? { id: subjectId, title: goal.title } : null;
     }
-    case 'standalone': {
+    case 'standalone':
+    case 'site': {
       return null;
     }
   }
@@ -109,6 +111,18 @@ export const resolveRunTopicTaskId = async (
 export const goalOfGate = (deps: AcceptanceServiceDeps, nodeId: string) =>
   new GoalModel(deps.db, deps.userId, deps.workspaceId).findByNode(nodeId);
 
+/** A project named by id must be readable in the caller's scope; resolves to its id. */
+export const assertProjectExists = async (
+  deps: AcceptanceServiceDeps,
+  projectId: string,
+): Promise<string> => {
+  const project = await new ProjectModel(deps.db, deps.userId, deps.workspaceId).findById(
+    projectId,
+  );
+  if (!project) throw new Error(`project "${projectId}" not found in the current workspace`);
+  return project.id;
+};
+
 export const resolveSubjectProjectId = async (
   deps: AcceptanceServiceDeps,
   subjectType: AcceptanceSubjectType,
@@ -122,6 +136,13 @@ export const resolveSubjectProjectId = async (
   }
   if (subjectType === 'goal_gate') return (await goalOfGate(deps, subjectId))?.projectId ?? null;
   if (subjectType === 'topic') {
+    // A project conversation carries its project itself; only a topic outside
+    // one falls back to the project of the task it runs.
+    const topic = await new TopicModel(deps.db, deps.userId, deps.workspaceId).findOwnTopicById(
+      subjectId,
+    );
+    if (topic?.projectId) return topic.projectId;
+
     const taskTopic = await new TaskTopicModel(
       deps.db,
       deps.userId,

@@ -8,8 +8,8 @@ import ThemeButton from '@/features/User/UserPanel/ThemeButton';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
-import { type UserAvatarProps } from './UserAvatar';
 import UserAvatar from './UserAvatar';
+import { type UserAvatarProps } from './UserAvatar';
 
 export interface UserInfoProps extends FlexboxProps {
   avatarProps?: Partial<UserAvatarProps>;

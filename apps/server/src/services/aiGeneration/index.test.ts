@@ -158,36 +158,31 @@ describe('AiGenerationService.decide', () => {
   beforeEach(() => {
     decide.mockReset();
     initSpy.mockReset();
+    resolveProviderRelay.mockReset();
     initSpy.mockResolvedValue({ decide } as any);
   });
 
-  it('resolves the provider runtime and forwards the payload, trigger, onUsage and signal', async () => {
-    const questions = {
-      meaningChanged: {
-        criteria: { false: 'Same meaning', true: 'Meaning changed' },
-        instructions: 'Did the meaning change?',
-        type: 'boolean' as const,
-      },
-    };
-    const response = {
-      answers: { meaningChanged: { probability: 0.1, type: 'boolean' } },
-      model: 'gpt-5-mini',
-    };
+  it('calls the decision model from the server, never through the device relay', async () => {
+    const response = { answers: { ok: { probability: 0.9, type: 'boolean' } }, model: 'jev' };
     decide.mockResolvedValue(response);
-    const onUsage = vi.fn();
-    const signal = new AbortController().signal;
+    const questions = { ok: { instructions: 'Is it ok?', type: 'boolean' as const } };
 
     const ai = new AiGenerationService({} as any, 'user-1', 'ws-1');
     const result = await ai.decide(
-      { model: 'gpt-5-mini', provider: 'openai', questions, state: 'note' },
-      { metadata: { trigger: RequestTrigger.Chat }, onUsage, signal },
+      { model: 'jev-1.14.0', provider: 'lobehub', questions, state: 'state' },
+      { metadata: { trigger: RequestTrigger.Cli }, tracing: { scenario: 'replay' } },
     );
 
-    expect(result).toBe(response);
-    expect(initSpy).toHaveBeenCalledWith({}, 'user-1', 'openai', 'ws-1');
+    expect(resolveProviderRelay).not.toHaveBeenCalled();
+    expect(initSpy).toHaveBeenCalledWith({}, 'user-1', 'lobehub', 'ws-1');
     expect(decide).toHaveBeenCalledWith(
-      { model: 'gpt-5-mini', questions, state: 'note' },
-      { metadata: { trigger: RequestTrigger.Chat }, onUsage, signal },
+      { model: 'jev-1.14.0', questions, state: 'state' },
+      {
+        metadata: { trigger: RequestTrigger.Cli },
+        signal: undefined,
+        tracing: { scenario: 'replay' },
+      },
     );
+    expect(result).toBe(response);
   });
 });

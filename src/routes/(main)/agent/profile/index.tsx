@@ -26,6 +26,13 @@ import { useClickToFocusEditor } from './features/useClickToFocusEditor';
 
 const styles = StyleSheet.create({
   contentWrapper: {
+    /**
+     * Do not stretch the column to this scroller's height. A stretched column
+     * stays viewport-tall while the editor overflows it, so CodeMirror picks it
+     * as the nearest scrollable ancestor (`scrollHeight > clientHeight`) and
+     * drag-selecting past the bottom edge scrolls nothing.
+     */
+    alignItems: 'flex-start',
     cursor: 'text',
     display: 'flex',
     overflowY: 'auto',

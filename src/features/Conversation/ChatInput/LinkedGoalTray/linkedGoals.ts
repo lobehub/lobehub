@@ -1,9 +1,8 @@
 import { isGoalPrompt } from '@lobechat/builtin-tool-goal';
+import { deriveOperationGoals } from '@lobechat/builtin-tools/operationArtifacts';
 import type { UIChatMessage } from '@lobechat/types';
 
 import type { GoalListItem } from '@/services/goal';
-
-import { deriveOperationGoals } from '../../Messages/GoalTaskCard/deriveOperationGoals';
 
 /** The tray is a pointer, not a list — past this the goal page's list is the right surface. */
 export const MAX_LINKED_GOALS = 3;
@@ -30,6 +29,24 @@ export const selectLinkedGoals = (
   );
 
   return goals.filter(({ goal }) => !carded.has(goal.id)).slice(0, MAX_LINKED_GOALS);
+};
+
+export type LinkedGoalConfirmState = 'checking' | 'confirmed' | 'failed';
+
+/**
+ * How trustworthy a tray row's status is. A row restored from storage paints
+ * before the server answers, so it holds a neutral "checking" state instead of
+ * presenting a persisted "running" as live. If that first read is the one that
+ * fails, the row has to say so: a settled goal with no run behind it stops
+ * polling, so no later request would ever replace the misleading state.
+ */
+export const linkedGoalConfirmState = (
+  confirmed: boolean,
+  syncError: unknown,
+): LinkedGoalConfirmState => {
+  if (confirmed) return 'confirmed';
+
+  return syncError ? 'failed' : 'checking';
 };
 
 /**

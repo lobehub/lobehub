@@ -1,7 +1,9 @@
 'use client';
 
 import type { QuotaAccountIdentity } from '@lobechat/heterogeneous-agents/quota';
-import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Text, usePopoverContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CalendarDaysIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,17 +13,20 @@ import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 
 import { openQuotaAccountManagerModal } from './QuotaAccountManagerModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  // Divider faces the quota windows: below when on top, above when it trails.
-  bottom: css`
-    padding-block-start: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  top: css`
-    padding-block-end: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  bottom: {
+    paddingBlockStart: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  top: {
+    paddingBlockEnd: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 /**
  * Compact account line in the quota panel: shows the account this quota belongs
@@ -29,17 +34,24 @@ const styles = createStaticStyles(({ css }) => ({
  * per-account controls). The heavy lifting lives in QuotaAccountManagerModal.
  */
 const QuotaAccountSwitcher = memo<{
+  /** Bound execution device the panel samples; the manager checks logins there, not here. */
+  deviceId?: string;
   placement?: 'top' | 'bottom';
   provider: QuotaCalendarProvider;
   snapshot: { identity?: QuotaAccountIdentity | null };
-}>(({ snapshot, provider, placement = 'top' }) => {
+}>(({ deviceId, snapshot, provider, placement = 'top' }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const identity = snapshot.identity;
+  // Only rendered inside the quota popover; hand off to each modal without
+  // leaving the popover open underneath it.
+  const { close } = usePopoverContext();
 
   const openManager = useCallback(() => {
-    if (agentId) openQuotaAccountManagerModal(agentId);
-  }, [agentId]);
+    if (!agentId) return;
+    close();
+    openQuotaAccountManagerModal(agentId, { deviceId });
+  }, [agentId, close, deviceId]);
 
   if (!agentId) return null;
 
@@ -47,7 +59,7 @@ const QuotaAccountSwitcher = memo<{
     <Flexbox
       horizontal
       align={'center'}
-      className={placement === 'top' ? styles.top : styles.bottom}
+      className={stylex.props(placement === 'top' ? styles.top : styles.bottom).className}
       gap={8}
       justify={'space-between'}
     >
@@ -65,9 +77,10 @@ const QuotaAccountSwitcher = memo<{
           size={'small'}
           style={{ flex: 'none' }}
           title={t('heteroAgent.claudeQuota.calendar.entry')}
-          onClick={() =>
-            openQuotaCalendarModal({ externalAccountId: identity?.externalAccountId, provider })
-          }
+          onClick={() => {
+            close();
+            openQuotaCalendarModal({ externalAccountId: identity?.externalAccountId, provider });
+          }}
         />
       </Flexbox>
       {/*

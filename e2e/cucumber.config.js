@@ -16,7 +16,7 @@ export default {
   parallel: canRunInParallel ? Math.max(1, requestedParallel) : 1,
   paths: ['src/features/**/*.feature'],
   publishQuiet: true,
-  require: ['src/steps/**/*.ts', 'src/support/**/*.ts'],
+  require: ['src/steps/**/!(*.test).ts', 'src/support/**/*.ts'],
   requireModule: ['tsx/cjs'],
   retry: 0,
   tags: 'not @skip',

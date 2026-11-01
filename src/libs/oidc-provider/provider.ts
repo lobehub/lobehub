@@ -1,3 +1,4 @@
+import { siteReviewFromResource } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 import type { Configuration, KoaContextWithOIDC } from 'oidc-provider';
@@ -9,6 +10,7 @@ import { appEnv } from '@/envs/app';
 import { getJWKS } from '@/libs/oidc-provider/jwt';
 import { OIDC_ISSUER_PATH, OIDC_ROUTES } from '@/libs/oidc-provider/routes';
 import { normalizeLocale } from '@/locales/resources';
+import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 
 import { accessTokenTTL, isAcceptanceReviewClient, reviewResourceServer } from './acceptanceReview';
 import { isOIDCUserBanned } from './access-control';
@@ -149,14 +151,19 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
         defaultResource: () => API_AUDIENCE,
         enabled: true,
 
-        getResourceServerInfo: (ctx, resourceIndicator) => {
+        getResourceServerInfo: async (ctx, resourceIndicator) => {
           logProvider('getResourceServerInfo called with indicator: %s', resourceIndicator); // <-- Add this log line
           const review = reviewResourceServer(
             ctx.oidc.client?.clientId,
             resourceIndicator,
             ctx.oidc.params?.resource,
+            { grantType: ctx.oidc.params?.grant_type as string | undefined, route: ctx.oidc.route },
           );
           if (review === 'reject') throw new errors.InvalidTarget();
+          const site = review ? siteReviewFromResource(resourceIndicator) : undefined;
+          if (site && !(await findSiteForOrigin(db, site.siteId, site.origin))) {
+            throw new errors.InvalidTarget('site is not registered for this origin');
+          }
           if (review) return review;
 
           if (resourceIndicator === API_AUDIENCE) {

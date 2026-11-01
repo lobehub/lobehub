@@ -6,7 +6,7 @@ import CreateForm from './CreateForm';
 
 interface ModalContentProps {
   id?: string;
-  initialValues?: { name?: string; description?: string };
+  initialValues?: { cover?: string; description?: string; name?: string };
   onSuccess?: (id: string) => void;
 }
 
@@ -20,7 +20,7 @@ ModalContent.displayName = 'KnowledgeBaseCreateModalContent';
 
 interface OpenParams {
   id?: string;
-  initialValues?: { name?: string; description?: string };
+  initialValues?: { cover?: string; description?: string; name?: string };
   onSuccess?: (id: string) => void;
 }
 

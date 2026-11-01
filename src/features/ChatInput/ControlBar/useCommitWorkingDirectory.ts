@@ -61,6 +61,9 @@ const normalizeWorkingDirEntry = (entry: WorkingDirEntry): WorkingDirEntry | und
 };
 
 const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
+  // Metadata only: the code environment the folder was picked with. Nothing
+  // runs it on a device yet; it travels so the association is not lost.
+  ...(entry.environmentId ? { environmentId: entry.environmentId } : {}),
   ...(entry.git ? { git: entry.git } : {}),
   path: entry.path,
   ...(entry.repoType ? { repoType: entry.repoType } : {}),

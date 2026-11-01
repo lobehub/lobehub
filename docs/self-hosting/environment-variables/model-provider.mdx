@@ -909,4 +909,13 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; uses the built-in example model list with the examples disabled. This does not guarantee local availability or change existing saved model selections.
 - Example: `-all,+your-local-model-id=Local Model`
 
+## magpie
+
+### `MAGPIE_PROXY_URL`
+
+- Type: Optional
+- Description: The magpie gateway address the server sends requests to, and with it the switch that stops the browser from sending them. Leave it unset when magpie runs on the user's own machine: the browser reaches `127.0.0.1:3425`, which a hosted deployment's server cannot. Set it when magpie runs where the server can reach it: a container, another host, or behind a proxy. A browser cannot reach those directly, because magpie refuses a preflight that carries no gateway key and the browser never sends one.
+- Default: Unset; the browser sends the requests.
+- Example: `http://magpie.example.com:3425/v1`
+
 [model-list]: /docs/self-hosting/advanced/model-list

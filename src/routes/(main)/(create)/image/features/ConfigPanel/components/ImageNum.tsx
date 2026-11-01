@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, InputNumber, Tabs, type TabsItem } from '@lobehub/ui';
+import { ActionIcon, Flexbox, InputNumber, Tabs, type TabsItem } from '@lobehub/ui';
 import { Check, Plus, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 

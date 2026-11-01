@@ -9,18 +9,20 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
+
+import { useProjectLinearSync } from '../LinearSync';
+import { useCanManageProject } from '../useCanManageProject';
 
 export function AdvancedSettings({ project }: { project: ProjectDetail['project'] }) {
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
   const deleteProject = useProjectStore((s) => s.deleteProject);
-  const currentUserId = useUserStore(userProfileSelectors.userId);
+  const canManage = useCanManageProject();
   const [pending, setPending] = useState(false);
+  const linearSync = useProjectLinearSync(project.id);
 
-  // Destructive settings stay owner-only; the page hides this tab for everyone else.
-  if (currentUserId !== project.userId) return null;
+  // Destructive settings need edit permission; the page hides this tab from viewers.
+  if (!canManage) return null;
 
   const confirmDelete = () => {
     confirmModal({
@@ -46,6 +48,14 @@ export function AdvancedSettings({ project }: { project: ProjectDetail['project'
 
   return (
     <Flexbox gap={24}>
+      {linearSync.item ? (
+        <Flexbox gap={16}>
+          <Form {...FORM_STYLE} items={[linearSync.item]} itemsType="flat" variant="filled" />
+          {linearSync.rules}
+        </Flexbox>
+      ) : (
+        linearSync.rules
+      )}
       <Form
         {...FORM_STYLE}
         itemsType="flat"

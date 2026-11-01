@@ -1,13 +1,17 @@
 import { nanoid } from '@lobechat/utils';
+import { toast } from '@lobehub/ui';
 import debug from 'debug';
+import { t } from 'i18next';
 import { produce } from 'immer';
 
+import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat/store';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
+import { type ChatTopicStatus } from '@/types/topic';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { operationSelectors } from './selectors';
@@ -26,6 +30,14 @@ import {
 } from './types';
 
 const n = setNamespace('operation');
+const MARK_READ_RETRY_BASE_MS = 1000;
+
+/** A network failure (no HTTP status) or a 5xx may pass on retry; a 4xx will not. */
+const isRetryableWriteError = (error: unknown) => {
+  const status = (error as { data?: { httpStatus?: unknown } } | null)?.data?.httpStatus;
+  return typeof status !== 'number' || status >= 500;
+};
+
 const log = debug('lobe-store:operation');
 
 const isSameNullableContextValue = (left?: string | null, right?: string | null): boolean =>
@@ -553,6 +565,7 @@ export class OperationActionsImpl {
         if (!op || op.status !== 'cancelled' || op.metadata.cancelReason !== reason) return;
 
         op.status = 'running';
+        delete op.metadata.isAborting;
         delete op.metadata.cancelReason;
         delete op.metadata.duration;
         delete op.metadata.endTime;
@@ -630,13 +643,18 @@ export class OperationActionsImpl {
         matches = matches && isSameNullableContextValue(op.context.threadId, filter.threadId);
       }
       if (filter.groupId !== undefined) {
-        matches = matches && op.context.groupId === filter.groupId;
+        matches = matches && isSameNullableContextValue(op.context.groupId, filter.groupId);
       }
       if (filter.scope !== undefined) {
-        matches = matches && op.context.scope === filter.scope;
+        // Match message-map scope inference, while keeping explicit sub-agent
+        // scopes separate: sharing a display bucket does not authorize Stop.
+        const scope =
+          op.context.scope ??
+          (op.context.groupId ? 'group' : op.context.threadId ? 'thread' : 'main');
+        matches = matches && scope === filter.scope;
       }
       if (filter.isNew !== undefined) {
-        matches = matches && op.context.isNew === filter.isNew;
+        matches = matches && (op.context.isNew ?? false) === filter.isNew;
       }
 
       if (matches) {
@@ -645,9 +663,16 @@ export class OperationActionsImpl {
     });
 
     // Cancel all matched operations
-    matchedIds.forEach((id) => {
-      this.#get().cancelOperation(id, reason);
-    });
+    void Promise.all(matchedIds.map((id) => this.#get().cancelOperation(id, reason)))
+      .then((confirmations) => {
+        if (confirmations.some((confirmed) => !confirmed)) {
+          toast.error(t('backgroundActivity.stopFailed', { ns: 'chat' }));
+        }
+      })
+      .catch((error: unknown) => {
+        log('[cancelOperations] cancellation error: %O', error);
+        toast.error(t('backgroundActivity.stopFailed', { ns: 'chat' }));
+      });
 
     return matchedIds;
   };
@@ -803,37 +828,79 @@ export class OperationActionsImpl {
 
   /**
    * Clear a topic's unread mark by flipping `status: 'unread'` back to 'active'.
-   * Only touches topics currently in the unread state — never stomps a
-   * running / paused / completed status. Invoked when the user opens the topic.
+   * Invoked when the user opens the topic.
+   *
+   * `status` is the caller's own copy of the topic's status, for surfaces that
+   * list topics outside `topicDataMap` (the project sidebar); without it the
+   * status is read from the loaded topic buckets. That copy may be stale (a
+   * persisted list, another tab), so the server write is conditional on the row
+   * still being unread, and the local mirror never outranks a newer transition —
+   * a run started since keeps its `running` status. A transient failure is
+   * retried while the topic stays open, since the callers fire once per open.
+   *
+   * When the server reports the row is no longer unread, the local copy is the
+   * stale one (e.g. a run's terminal `active` write landed after its `unread`
+   * one). The row's actual status is read back and mirrored, because surfaces
+   * like the project page never refetch the agent's topic list to correct it.
    */
-  markTopicRead = ({
+  markTopicRead = async ({
     agentId,
     groupId,
+    status,
     topicId,
   }: {
     agentId?: string;
     groupId?: string | null;
+    status?: ChatTopicStatus | null;
     topicId?: string | null;
-  }): void => {
+  }): Promise<void> => {
     if (!topicId) return;
 
     const key = topicMapKey({
       agentId: agentId ?? this.#get().activeAgentId,
       groupId: groupId ?? this.#get().activeGroupId,
     });
-    const topic = this.#get().topicDataMap[key]?.items?.find((t) => t.id === topicId);
-    if (topic?.status !== 'unread') return;
+    const knownStatus =
+      status === undefined
+        ? this.#get().topicDataMap[key]?.items?.find((t) => t.id === topicId)?.status
+        : status;
+    if (knownStatus !== 'unread') return;
 
-    void this.#get()
-      .updateTopicStatus?.({
-        agentId,
-        groupId: groupId ?? undefined,
-        status: 'active',
-        topicId,
-      })
-      ?.then(() => {
-        void getHomeStoreState().refreshAgentList?.();
-      });
+    const cleared = await this.#clearUnread(topicId);
+    if (cleared === undefined) return;
+
+    if (cleared === null) {
+      const current = await topicService.getTopicDetail(topicId).catch(() => null);
+      if (current?.status && current.status !== 'unread')
+        this.#get().internal_settleTopicRead?.({ status: current.status, topicId });
+      return;
+    }
+
+    this.#get().internal_settleTopicRead?.({ topicId });
+    void getHomeStoreState().refreshAgentList?.();
+  };
+
+  /**
+   * The conditional server clear, retried with backoff while the topic stays
+   * open. A 4xx will not change on retry, so it ends the attempt. Resolves to
+   * the cleared row, `null` when the server row was no longer unread, or
+   * `undefined` when the write failed.
+   */
+  #clearUnread = async (topicId: string) => {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await topicService.markTopicRead(topicId);
+      } catch (error) {
+        if (!isRetryableWriteError(error)) {
+          console.error('[markTopicRead] persist failed:', error);
+          return undefined;
+        }
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(MARK_READ_RETRY_BASE_MS * 2 ** attempt, 30_000)),
+        );
+        if (this.#get().activeTopicId !== topicId) return undefined;
+      }
+    }
   };
   // ━━━ Message Queue Actions ━━━
 

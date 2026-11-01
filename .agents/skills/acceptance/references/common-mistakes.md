@@ -10,12 +10,16 @@
 
 A mistake catalogue works by having been read — you cannot search for a failure
 mode you do not yet know you are about to hit. But the rule is what must be in
-context, not the narrative. So the file has two tiers, read at two moments:
+context, not the narrative. Its designated acquisition owner reads two tiers:
 
 | Tier          | Read                                                                                      | When                                                                                 |
 | ------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **Checklist** | in full — one line per mistake                                                            | once the target is known, and again before marking any case `pass` or the round done |
-| **Entries**   | by id — `rg -n '^### M' <file>` for line numbers, `sed -n '<start>,<end>p'` for one entry | when a checklist line applies to a case, or a reviewer's feedback matches one        |
+| **Checklist** | in full — one line per mistake | once per source version when the target is known; apply retained applicable lines before `pass` or handoff |
+| **Entries** | by id — `rg -n '^### M' <file>` for line numbers, `sed -n '<start>,<end>p'` for one entry | when detail is needed and not already acquired |
+
+Pass applicable lines and acquired entry details to their execution/inspection
+owner. Other roles do not reread the same file. A case boundary alone does not
+invalidate the checklist; changed source versions require only affected updates.
 
 Only **judgment** rules live here — the ones no tool can check. Rules an agent
 skips under pressure are in SKILL.md ("Rules you will be tempted to skip");
@@ -28,7 +32,7 @@ Apply the same shape to the project layer's file. Never narrate the reading.
 
 ## Checklist
 
-- **M1** Open every screenshot with Read before `pass`; greps and element counts never decide. Presence/absence of a UI section is asserted on structured state, never on page text.
+- **M1** The designated inspector opens every cited screenshot with an image-capable tool before `pass`, once per artifact version; other roles use its attributable inspection record. Greps and element counts never decide. Presence/absence of a UI section is asserted on structured state, never on page text.
 - **M5** Before/after is a `comparison` pair of pre-change vs delivered code in the same state, with exactly one `before` and one `after`; never a stale shot loose in `evidence`, never a hand-composed image, never sequential flow steps, never loading vs loaded of one build.
 - **M6** Prove the running instance loads your working-tree code by measuring a changed value. After a direct fixture write, cold-load and assert at the layer the behavior reads, not where you wrote.
 - **M12** A UI chip/badge is supporting evidence; the payload, request body, DB row, or side effect is the proof.
@@ -51,8 +55,9 @@ count. Layout-shell text is always in the DOM and a blank page also has zero
 skeletons, so both false-positive. The mirror is worse: grepping page text to
 prove a feature is _absent_ matches your own report prose naming it.
 
-**Rule:** every screenshot cited as evidence is opened with the Read tool and
-visually confirmed first. Blank / watermark / shell-only = fail or uncertain; go
+**Rule:** the assigned inspector opens each cited screenshot with an image-capable
+tool and records its visual findings once; other roles use that attributable
+record. Blank / watermark / shell-only = fail or uncertain; go
 find the cause. Presence or absence of a UI section is asserted against the state
 that drives it or a located DOM node, never a substring.
 

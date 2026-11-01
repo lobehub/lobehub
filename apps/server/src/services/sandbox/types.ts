@@ -4,9 +4,12 @@ import type {
   SandboxMode,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { AgentShareVisitorContext } from '@lobechat/types';
 
 import type { FileService } from '@/server/services/file';
 import type { MarketService } from '@/server/services/market';
+
+import type { SandboxInitialization } from './environmentInit';
 
 export type SandboxProviderKind = 'market' | 'onlyboxes';
 
@@ -40,9 +43,17 @@ export interface SandboxSessionContext {
    * Working directory inside the persistent workspace, relative to its root.
    * Forwarded with every call; the execution plane composes it onto the
    * directory the entitlement names and fences the result. Only meaningful
-   * alongside `sandboxMode: 'persistent'`.
+   * alongside a persistent `sandboxMode` — a drive folder, or an instance's
+   * directory; a drive without one works at the drive's root.
    */
   sandboxCwd?: string;
+  /**
+   * The environment to initialize the working directory from before the first
+   * call — clone and setup, guarded by a marker the run leaves behind. Absent
+   * when the topic picked none, and on a legacy instance run, whose build
+   * already did this.
+   */
+  sandboxInitialization?: SandboxInitialization;
   /**
    * Named environment to restore for this run; absent means the caller's
    * default. Like `sandboxMode`, every call for a topic must carry the same
@@ -50,8 +61,9 @@ export interface SandboxSessionContext {
    */
   sandboxInstanceId?: string;
   /**
-   * Whether this run wants its working directory to survive the session.
-   * Absent means ephemeral. Half the decision — the execution plane also
+   * Whether this run wants its working directory to survive the session, and
+   * how: `drive` keeps the folder only, `persistent` an instance with its
+   * installed packages. Absent means ephemeral. Half the decision — the execution plane also
    * requires an entitlement on the trust token, which is minted upstream of
    * this service.
    */
@@ -78,6 +90,8 @@ export interface SandboxSessionContext {
 }
 
 export interface SandboxServiceOptions extends SandboxSessionContext {
+  /** Set for Agent Share visitor runs; image previews get the same `metadata.agentShare` provenance as other visitor file writes. */
+  agentShareVisitor?: Pick<AgentShareVisitorContext, 'shareId' | 'visitorUserId'>;
   fileService?: FileService;
   marketService: MarketService;
   /** Used to look up topic/session files when bootstrapping the sandbox. */

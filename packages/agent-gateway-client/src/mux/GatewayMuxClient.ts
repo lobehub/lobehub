@@ -8,10 +8,13 @@ import type {
   TerminalSessionStatus,
 } from '../types';
 import type {
+  DocumentChannel,
+  DocumentChannelHandler,
   GatewayMuxClientEvents,
   GatewayMuxClientOptions,
   GatewayMuxStatus,
   MuxClientMessage,
+  MuxDocServerMessage,
   MuxOperationMessage,
   MuxServerMessage,
   MuxToolResultMessage,
@@ -359,6 +362,7 @@ export class GatewayMuxClient {
   private connectGeneration = 0;
   private connectInFlight = false;
   private connectWaiters: Array<{ reject: (error: Error) => void; resolve: () => void }> = [];
+  private connectDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
 
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private missedHeartbeats = 0;
@@ -369,10 +373,12 @@ export class GatewayMuxClient {
   private consecutiveDialFailures = 0;
   /** Whether the socket now being torn down ever reached `ready`. */
   private currentDialReachedReady = false;
+  private hasReachedReady = false;
   private declaredUnavailable = false;
   private browserListenersInstalled = false;
 
   private readonly subscriptions = new Map<string, Set<OperationSubscriptionImpl>>();
+  private readonly documentChannels = new Map<string, DocumentChannelHandler>();
   private toolResultQueue: Array<{
     at: number;
     message: MuxToolResultMessage;
@@ -384,6 +390,7 @@ export class GatewayMuxClient {
   private readonly getToken: () => Promise<string>;
   private readonly clientId: string;
   private readonly autoReconnect: boolean;
+  private readonly connectTimeoutMs?: number;
   private readonly heartbeatIntervalMs: number;
   private readonly keepAlive: boolean;
   private readonly maxDialFailures: number;
@@ -393,6 +400,7 @@ export class GatewayMuxClient {
     this.getToken = options.getToken;
     this.clientId = options.clientId ?? randomClientId();
     this.autoReconnect = options.autoReconnect ?? true;
+    this.connectTimeoutMs = options.connectTimeoutMs;
     this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL;
     this.keepAlive = options.keepAlive ?? false;
     this.maxDialFailures = options.maxDialFailures ?? MAX_CONSECUTIVE_DIAL_FAILURES;
@@ -475,6 +483,34 @@ export class GatewayMuxClient {
     return subscription;
   }
 
+  /**
+   * Join a page collaboration room over this socket. One channel per
+   * document; the handler re-subscribes from `onReady` after every reconnect.
+   */
+  openDocument(documentId: string, handler: DocumentChannelHandler): DocumentChannel {
+    this.clearIdleClose();
+    this.documentChannels.set(documentId, handler);
+
+    if (this.isReady()) {
+      queueMicrotask(() => {
+        if (this.documentChannels.get(documentId) === handler) handler.onReady();
+      });
+    } else {
+      this.connect().catch(() => {});
+    }
+
+    return {
+      close: () => {
+        if (this.documentChannels.get(documentId) !== handler) return;
+        this.documentChannels.delete(documentId);
+        this.sendMessage({ documentId, type: 'doc_unsubscribe' });
+        if (this.isIdle()) this.scheduleIdleClose();
+      },
+      isReady: () => this.isReady(),
+      send: (message) => this.sendMessage(message),
+    };
+  }
+
   // ─── Subscription callbacks (internal) ───
 
   /** @internal */
@@ -495,7 +531,12 @@ export class GatewayMuxClient {
 
   /** Nothing subscribed, nobody awaiting `connect()`, and not asked to stay up. */
   private isIdle(): boolean {
-    return !this.keepAlive && this.subscriptions.size === 0 && this.connectWaiters.length === 0;
+    return (
+      !this.keepAlive &&
+      this.subscriptions.size === 0 &&
+      this.documentChannels.size === 0 &&
+      this.connectWaiters.length === 0
+    );
   }
 
   /**
@@ -564,6 +605,7 @@ export class GatewayMuxClient {
     // serve v2" case the budget exists for. Left set from the previous socket,
     // those attempts would never count and the page would retry forever.
     this.currentDialReachedReady = false;
+    this.armConnectDeadline(generation);
 
     let token: string;
     try {
@@ -575,7 +617,7 @@ export class GatewayMuxClient {
         'error',
         error instanceof Error ? error : new Error('Failed to obtain gateway token'),
       );
-      this.handleConnectionLost();
+      this.handleConnectionLost(undefined, true);
       return;
     }
     // `disconnect()` or a newer attempt superseded this one while awaiting.
@@ -591,6 +633,37 @@ export class GatewayMuxClient {
     } catch (error) {
       console.error('[GatewayMuxClient] Failed to create WebSocket:', error);
       this.handleConnectionLost();
+    }
+  }
+
+  /** See `GatewayMuxClientOptions.connectTimeoutMs`. */
+  private armConnectDeadline(generation: number): void {
+    this.clearConnectDeadline();
+    if (!this.connectTimeoutMs) return;
+    this.connectDeadlineTimer = setTimeout(() => {
+      this.connectDeadlineTimer = null;
+      if (generation !== this.connectGeneration || this.currentDialReachedReady) return;
+      const awaitingToken = this.connectInFlight;
+      // Supersede the attempt: a token that still arrives is dropped.
+      this.connectGeneration++;
+      this.connectInFlight = false;
+      this.closeWebSocket();
+      this.listeners.emit(
+        'error',
+        new Error(
+          awaitingToken
+            ? 'Timed out obtaining gateway token'
+            : 'Timed out waiting for the gateway to get ready',
+        ),
+      );
+      this.handleConnectionLost(undefined, awaitingToken);
+    }, this.connectTimeoutMs);
+  }
+
+  private clearConnectDeadline(): void {
+    if (this.connectDeadlineTimer) {
+      clearTimeout(this.connectDeadlineTimer);
+      this.connectDeadlineTimer = null;
     }
   }
 
@@ -619,10 +692,12 @@ export class GatewayMuxClient {
 
     switch (message.type) {
       case 'ready': {
+        this.clearConnectDeadline();
         this.reconnectAttempt = 0;
         this.consecutiveAuthFailures = 0;
         this.consecutiveDialFailures = 0;
         this.currentDialReachedReady = true;
+        this.hasReachedReady = true;
         this.setStatus('connected');
         this.startHeartbeat();
         // Subscribe before flushing: the hub rejects op messages from a
@@ -631,6 +706,7 @@ export class GatewayMuxClient {
           for (const subscription of set) this.sendSubscribe(subscription);
         }
         this.flushToolResults();
+        for (const handler of this.documentChannels.values()) handler.onReady();
         this.listeners.emit('connected');
         this.resolveWaiters();
         break;
@@ -638,6 +714,11 @@ export class GatewayMuxClient {
 
       case 'heartbeat_ack': {
         this.missedHeartbeats = 0;
+        break;
+      }
+
+      case 'channel_changed': {
+        this.listeners.emit('channel_changed', message);
         break;
       }
 
@@ -657,7 +738,12 @@ export class GatewayMuxClient {
       }
 
       default: {
-        this.route(message);
+        if (message.type.startsWith('doc_')) {
+          const doc = message as MuxDocServerMessage;
+          this.documentChannels.get(doc.documentId)?.onMessage(doc);
+          break;
+        }
+        this.route(message as MuxOperationMessage);
       }
     }
   };
@@ -694,14 +780,16 @@ export class GatewayMuxClient {
     this.listeners.emit('error', new Error('Gateway WebSocket error'));
   };
 
-  private handleConnectionLost(delayOverride?: number): void {
-    // Only a dial that never reached `ready` counts against the budget. A
-    // socket that worked and then dropped is a network event, not evidence
-    // that this deployment cannot serve v2; a refused token (`delayOverride`
-    // 0, immediate refresh) has its own budget in `consecutiveAuthFailures`.
-    // Counting either here would spend the fallback budget on a link that is
-    // fine and strand the page on v1 for the rest of the session.
-    const failedDial = delayOverride === undefined && !this.currentDialReachedReady;
+  private handleConnectionLost(delayOverride?: number, tokenFailed = false): void {
+    this.clearConnectDeadline();
+    // Once v2 has worked, failed network dials indicate an outage, not missing
+    // protocol support. Keep backing off so a Gateway restart can recover.
+    // Token minting still has a finite budget: the API may have been removed,
+    // and explicit 4401 refusals retain their separate auth failure budget.
+    const failedDial =
+      delayOverride === undefined &&
+      !this.currentDialReachedReady &&
+      (tokenFailed || !this.hasReachedReady);
     if (failedDial) this.consecutiveDialFailures++;
 
     // Retrying a deployment that cannot serve v2 at all only spins: give the
@@ -863,6 +951,7 @@ export class GatewayMuxClient {
     if (this._status === status) return;
     this._status = status;
     this.listeners.emit('status_changed', status);
+    for (const handler of this.documentChannels.values()) handler.onStatus?.(status);
   }
 
   private broadcastStatus(status: ConnectionStatus): void {
@@ -934,6 +1023,7 @@ export class GatewayMuxClient {
   }
 
   private cleanup(): void {
+    this.clearConnectDeadline();
     this.clearIdleClose();
     this.stopHeartbeat();
     this.clearReconnectTimer();

@@ -10,7 +10,7 @@ import type { UserMemorySettings } from './memory';
 import type { UserModelProviderConfig } from './modelProvider';
 import type { NotificationSettings } from './notification';
 import type { UserQuickNoteSettings } from './quickNote';
-import type { UserServiceModelConfig } from './systemAgent';
+import type { ServiceModelTierConfig, UserServiceModelConfig } from './systemAgent';
 import type { UserToolConfig } from './tool';
 import type { UserTTSConfig } from './tts';
 
@@ -45,7 +45,7 @@ export interface UserSettings {
   memory?: UserMemorySettings;
   notification?: NotificationSettings;
   quickNote?: UserQuickNoteSettings;
-  systemAgent: UserServiceModelConfig;
+  systemAgent: UserServiceModelConfig & { tiers?: ServiceModelTierConfig };
   tool: UserToolConfig;
   tts: UserTTSConfig;
 }

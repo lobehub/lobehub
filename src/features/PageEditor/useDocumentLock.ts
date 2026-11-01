@@ -72,7 +72,11 @@ export const useDocumentLock = () => {
     'document',
     isWorkspacePage && documentId ? documentId : undefined,
   );
-  const workspacePage = Boolean(documentId && canEdit && canEditResource && isWorkspacePage);
+  // A collaboration room merges concurrent edits, so it never takes the lock.
+  const inRoom = usePageEditorStore((s) => !!s.collab);
+  const workspacePage = Boolean(
+    documentId && canEdit && canEditResource && isWorkspacePage && !inRoom,
+  );
   const ownerId = useMemo(
     () => (documentId ? createLockOwnerId(documentId) : undefined),
     [documentId],

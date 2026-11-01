@@ -1,14 +1,22 @@
+import { isDesktop } from '@lobechat/const';
+import type { ClaudeCodeLocalAccount } from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
+import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand';
 
 import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { electronKeys } from '@/libs/swr/keys';
 import { agentQuotaService } from '@/services/agentQuota';
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
+import { getElectronStoreState } from '@/store/electron';
 import { type StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 
 import { initialState, type State } from './initialState';
 import {
   hashQuotaSourceKey,
+  parseQuotaDeviceAccountKey,
   QUOTA_ACCOUNTS_KEY,
   QUOTA_HISTORY_DAYS,
   QUOTA_HISTORY_WINDOW_LIMIT,
@@ -16,6 +24,9 @@ import {
   quotaAccountsResource,
   type QuotaBinding,
   quotaBindingsResource,
+  type QuotaDeviceAccount,
+  quotaDeviceAccountKey,
+  quotaDeviceAccountResource,
   type QuotaHistory,
   type QuotaHistoryFetched,
   quotaHistoryResource,
@@ -39,7 +50,7 @@ type Setter = StoreSetter<Store>;
  */
 export const QUOTA_READ_DEDUPE_MS = 10_000;
 
-type QuotaResourceName = 'accounts' | 'bindings' | 'history' | 'readings';
+type QuotaResourceName = 'accounts' | 'bindings' | 'deviceAccount' | 'history' | 'readings';
 
 interface ReadOptions {
   /** Skip the dedupe window and retire older requests (after a write / ingest). */
@@ -76,6 +87,7 @@ export class ActionImpl {
   readonly #set: Setter;
   readonly #accounts;
   readonly #bindings;
+  readonly #deviceAccount;
   readonly #readings;
   readonly #history;
   readonly #panel;
@@ -114,6 +126,19 @@ export class ActionImpl {
       set,
       stateKey: 'quotaBindingsReplica',
       view: recordLens<Store, QuotaBinding[]>('quotaBindingsMap'),
+    });
+    this.#deviceAccount = createReplicaSlice(quotaDeviceAccountResource, {
+      actionPrefix: 'quotaDeviceAccount',
+      effects: confirmOn('deviceAccount'),
+      fetcher: (key) => {
+        const { agentId, deviceId } = parseQuotaDeviceAccountKey(key);
+        return agentQuotaService.getDeviceAccount(agentId, deviceId);
+      },
+      get,
+      merge: sameValue,
+      set,
+      stateKey: 'quotaDeviceAccountReplica',
+      view: recordLens<Store, QuotaDeviceAccount>('quotaDeviceAccountMap'),
     });
     this.#readings = createReplicaSlice(quotaReadingsResource, {
       actionPrefix: 'quotaReadings',
@@ -181,6 +206,15 @@ export class ActionImpl {
   useFetchQuotaBindings = (agentId?: string | null): ReplicaSyncResult =>
     this.#bindings.useSync(agentId || null, this.#syncOptions('bindings', agentId));
 
+  /** Sync one agent's account choice on one device (gateway id). */
+  useFetchQuotaDeviceAccount = (
+    agentId?: string | null,
+    deviceId?: string | null,
+  ): ReplicaSyncResult => {
+    const key = agentId && deviceId ? quotaDeviceAccountKey(agentId, deviceId) : null;
+    return this.#deviceAccount.useSync(key, this.#syncOptions('deviceAccount', key));
+  };
+
   useFetchQuotaReadings = (accountId?: string | null): ReplicaSyncResult =>
     this.#readings.useSync(accountId || null, this.#syncOptions('readings', accountId));
 
@@ -221,6 +255,19 @@ export class ActionImpl {
   readQuotaBindings = (agentId: string, options?: ReadOptions): Promise<QuotaBinding[]> =>
     this.#read('bindings', this.#bindings, agentId, 'quotaBindingsMap', options);
 
+  readQuotaDeviceAccount = (
+    agentId: string,
+    deviceId: string,
+    options?: ReadOptions,
+  ): Promise<QuotaDeviceAccount> =>
+    this.#read(
+      'deviceAccount',
+      this.#deviceAccount,
+      quotaDeviceAccountKey(agentId, deviceId),
+      'quotaDeviceAccountMap',
+      options,
+    );
+
   /**
    * A `fresh` readings read follows an ingest (local, device-side or a reset),
    * which also appended to the account's snapshot series and windows: refresh a
@@ -251,6 +298,31 @@ export class ActionImpl {
       () => agentQuotaService.switchAccount(agentId, accountId),
     );
     await this.#refresh(this.#bindings, agentId);
+  };
+
+  /**
+   * Pin an account for an agent on one device (Manual mode there), or return
+   * that device to Auto with `null`. The server first hands a legacy
+   * agent-wide pin to the devices that hold its login, so the bindings change
+   * too and are re-read.
+   */
+  setQuotaDeviceAccount = async (
+    agentId: string,
+    deviceId: string,
+    accountId: string | null,
+  ): Promise<void> => {
+    const key = quotaDeviceAccountKey(agentId, deviceId);
+    if (this.#get().quotaDeviceAccountMap[key] === undefined)
+      await this.readQuotaDeviceAccount(agentId, deviceId);
+    await this.#deviceAccount.optimistic(
+      key,
+      () => ({ accountId }),
+      () => agentQuotaService.setDeviceAccount(agentId, deviceId, accountId),
+    );
+    await Promise.all([
+      this.#refresh(this.#deviceAccount, key),
+      this.#refresh(this.#bindings, agentId),
+    ]);
   };
 
   /** Add an account to an agent's pool, or change its role there. */
@@ -302,6 +374,74 @@ export class ActionImpl {
   };
 
   /**
+   * Take an account in or out of the workspace's rotation. A disabled account
+   * stays listed (and keeps its history) but the load balancer skips it.
+   */
+  setQuotaAccountEnabled = async (accountId: string, enabled: boolean): Promise<void> => {
+    await this.#accounts.optimistic(
+      QUOTA_ACCOUNTS_KEY,
+      (accounts) =>
+        accounts.map((account) => (account.id === accountId ? { ...account, enabled } : account)),
+      () => agentQuotaService.updateAccount(accountId, { enabled }),
+    );
+    await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
+  };
+
+  // ---- local Claude Code logins (desktop) ----
+
+  /**
+   * The Claude logins this desktop holds. Listing also samples each login's
+   * quota into the pool: the quota panel only samples the login it shows, Auto
+   * mode can only balance on readings that exist, and a login whose usage call
+   * fails (e.g. a blocked network) must still show up as an account.
+   */
+  useFetchClaudeLocalAccounts = (enabled = true): SWRResponse<ClaudeCodeLocalAccount[]> =>
+    useClientDataSWR(
+      enabled ? electronKeys.claudeCodeAccounts() : null,
+      () => this.#syncClaudeLocalAccounts(),
+      {
+        onSuccess: (claudeLocalAccounts: ClaudeCodeLocalAccount[]) =>
+          this.#set({ claudeLocalAccounts }, false, 'claudeLocalAccounts'),
+        revalidateOnFocus: false,
+      },
+    );
+
+  /**
+   * Sample every local login into the pool now, without a view mounted. The
+   * quota panel calls this on its refresh: in Auto mode runs may land on any
+   * local profile, and balancing reads these readings, so they must not go
+   * stale while the account manager is closed.
+   */
+  refreshClaudeLocalAccounts = async (): Promise<void> => {
+    const claudeLocalAccounts = await this.#syncClaudeLocalAccounts();
+    this.#set({ claudeLocalAccounts }, false, 'claudeLocalAccounts');
+  };
+
+  /**
+   * Sign an account in to this desktop through the browser (`claude auth
+   * login` in a profile of its own), then add it to the pool.
+   */
+  loginClaudeAccount = async (email?: string): Promise<ClaudeCodeLocalAccount> => {
+    this.#set({ claudeLoginPending: true }, false, 'claudeLoginPending');
+    try {
+      const account = await heterogeneousAgentService.loginClaudeCodeAccount(
+        email ? { email } : undefined,
+      );
+      await this.#ingestLocalLogin(account, true).catch(() => false);
+      await mutate(electronKeys.claudeCodeAccounts());
+      await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
+      return account;
+    } finally {
+      this.#set({ claudeLoginPending: false }, false, 'claudeLoginPending');
+    }
+  };
+
+  /** Abort the browser sign-in in progress; `loginClaudeAccount` then rejects. */
+  cancelClaudeAccountLogin = async (): Promise<void> => {
+    await heterogeneousAgentService.cancelClaudeCodeAccountLogin();
+  };
+
+  /**
    * Drop every quota view and confirmation when the data context changes
    * (desktop `refreshUserData` / `disconnectRemoteServer`), even when the next
    * context derives the same scope string.
@@ -313,16 +453,91 @@ export class ActionImpl {
   reset = (): void => {
     // A mounted manager / calendar keeps its sync key across the reset, so
     // nothing would refetch until a focus or remount: revalidate once cleared.
-    for (const slice of [this.#accounts, this.#bindings, this.#readings, this.#history])
+    for (const slice of [
+      this.#accounts,
+      this.#bindings,
+      this.#deviceAccount,
+      this.#readings,
+      this.#history,
+    ])
       void slice.clear().then(() => slice.revalidate());
     void this.#panel.clear();
     this.#appliedAt.clear();
     // Live panel samples are not replica fetches, so `clear()` cannot retire them.
     this.#resetGeneration += 1;
     this.#set({ ...initialState }, false, 'resetAgentQuotaStore');
+    // Local logins outlive the data context, but their accounts must land in
+    // the new context's pool: list (and ingest) them again.
+    if (isDesktop) void mutate(electronKeys.claudeCodeAccounts()).catch(() => {});
   };
 
   // ---- internals ----
+
+  #syncClaudeLocalAccounts = async (): Promise<ClaudeCodeLocalAccount[]> => {
+    const accounts = await heterogeneousAgentService.listClaudeCodeAccounts();
+    const ingested = await Promise.all(
+      accounts.map((account) => this.#ingestLocalLogin(account).catch(() => false)),
+    );
+    if (ingested.some(Boolean)) await this.#refresh(this.#accounts, QUOTA_ACCOUNTS_KEY);
+    // Record which logins this machine holds, so a per-device account choice
+    // can only name one it can run (and a signed-out one stops counting).
+    const deviceId = await getElectronStoreState().resolveGatewayDeviceId();
+    if (deviceId) {
+      const synced = await agentQuotaService
+        .syncDeviceLogins(
+          deviceId,
+          'claude-code',
+          accounts.flatMap((account) => account.identity.externalAccountId ?? []),
+        )
+        .then(() => true)
+        .catch((error) => {
+          console.error('[agentQuota:syncDeviceLogins]', error);
+          return false;
+        });
+      // A login gone from this machine takes the picks made on it along, so
+      // re-read the picks already on screen for this device.
+      if (synced)
+        await Promise.all(
+          Object.keys(this.#get().quotaDeviceAccountMap)
+            .filter((key) => parseQuotaDeviceAccountKey(key).deviceId === deviceId)
+            .map((key) => this.#refresh(this.#deviceAccount, key)),
+        );
+    }
+    return accounts;
+  };
+
+  /**
+   * Sample one local login and persist it. A login whose usage call fails still
+   * registers its account (no readings), so a fresh sign-in always shows up.
+   * Returns whether anything new reached the server.
+   */
+  #ingestLocalLogin = async (account: ClaudeCodeLocalAccount, force = false): Promise<boolean> => {
+    const live = await heterogeneousAgentService
+      .getClaudeCodeQuota({
+        ...(account.configDir && { env: { CLAUDE_CONFIG_DIR: account.configDir } }),
+        ...(force && { force: true }),
+      })
+      .catch(() => null);
+    const identity = live?.identity ?? account.identity;
+    const readings = live?.status === 'ok' ? (live.readings ?? []) : [];
+
+    const known = (await this.readQuotaAccounts().catch(() => [])).find(
+      (row) => row.externalAccountId === identity.externalAccountId,
+    );
+    if (known) {
+      if (readings.length === 0) return false;
+      // The main-process cache echoes a sample already persisted (same
+      // capturedAt); snapshots are append-only, so never ingest it twice.
+      const persisted = await this.readQuotaReadings(known.id).catch(() => []);
+      const newest = (rows: { capturedAt: number }[]) =>
+        rows.reduce((max, row) => Math.max(max, row.capturedAt), 0);
+      if (newest(readings) <= newest(persisted)) return false;
+    }
+
+    await agentQuotaService.ingestClaudeSnapshot({ identity, readings });
+    if (known) await this.readQuotaReadings(known.id, { fresh: true }).catch(() => []);
+    return true;
+  };
 
   /**
    * A sampler read (`readQuota*`) seeds the sync cache, but SWR still
@@ -385,7 +600,7 @@ export class ActionImpl {
       fetch: (params: string, options?: ReadOptions) => Promise<{ applied: boolean; data: T }>;
     },
     key: string,
-    field: 'quotaAccountsMap' | 'quotaBindingsMap' | 'quotaReadingsMap',
+    field: 'quotaAccountsMap' | 'quotaBindingsMap' | 'quotaDeviceAccountMap' | 'quotaReadingsMap',
     { fresh = false }: ReadOptions = {},
     retried = false,
   ): Promise<T> => {

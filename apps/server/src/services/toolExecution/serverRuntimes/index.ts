@@ -7,6 +7,9 @@
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
 
+import { LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
+import { LegacyGoalIdentifier } from '@lobechat/builtin-tool-goal';
+
 import type { ToolExecutionContext } from '../types';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
@@ -22,6 +25,8 @@ import { auvRuntime } from './auv';
 import { briefRuntime } from './brief';
 import { browserRuntime } from './browser';
 import { calculatorRuntime } from './calculator';
+import { canvasRuntime } from './canvas';
+import { channelRuntime } from './channel';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { dashboardRuntime } from './dashboard';
@@ -68,6 +73,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  channelRuntime,
   acceptanceEvidenceRuntime,
   auvRuntime,
   agentBuilderRuntime,
@@ -90,6 +96,7 @@ registerRuntimes([
   taskRuntime,
   userInteractionRuntime,
   credsRuntime,
+  canvasRuntime,
   dashboardRuntime,
   groupAgentBuilderRuntime,
   groupManagementRuntime,
@@ -111,6 +118,11 @@ registerRuntimes([
   verifyResultRuntime,
   quickNoteRuntime,
 ]);
+
+// Goal calls approved after the rename still name the tool `lobe-goal`.
+serverRuntimeFactories.set(LegacyGoalIdentifier, goalRuntime.factory);
+// Same for dashboard calls approved after the rename from `lobe-dashboard`.
+serverRuntimeFactories.set(LegacyDashboardIdentifier, dashboardRuntime.factory);
 
 // ==================== Registry API ====================
 

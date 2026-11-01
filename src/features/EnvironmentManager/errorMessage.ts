@@ -12,17 +12,25 @@ import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
  * sentence — falls back to the caller's generic line.
  */
 const CODE_KEYS: Record<string, string> = {
-  DEFAULT_INSTANCE: 'environments.instances.defaultUndeletable',
+  DUPLICATE_INSTANCE_DIRECTORY: 'environments.files.folderTaken',
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
   // The execution plane calls this an instance now too. The old
   // code is kept until that rename is deployed everywhere, so a refusal from a
   // server still on the previous build reads as a sentence rather than a code.
+  ENVIRONMENT_IN_PROJECT: 'environments.inProject',
   ENVIRONMENT_IN_USE: 'environments.instances.inUse',
+  // Initializing a folder that already holds work would mix a checkout into it.
+  FOLDER_NOT_EMPTY: 'environments.files.folderNotEmpty',
   INSTANCE_BUILDING: 'environments.instances.stopBuilding',
   INSTANCE_BUSY: 'environments.instances.stopBusy',
   INSTANCE_IN_USE: 'environments.instances.inUse',
+  // An environment directory is written by its own sessions alone.
+  INSTANCE_READ_ONLY: 'environments.files.readOnly',
+  // A private environment's directory left on the public drive.
+  INSTANCE_REBUILD_REQUIRED: 'environments.instances.rebuildPersonalRequired',
   INSTANCE_STARTING: 'environments.instances.stopStarting',
   INSTANCE_STOP_FAILED: 'environments.instances.stopRefused',
+  PATH_NOT_FOUND: 'environments.files.notFound',
   PATH_OUTSIDE_INSTANCE: 'environments.files.invalidPath',
   // Retryable on purpose: the run is still packing its snapshot, and the
   // execution plane would rather leave it running than cut the save off.

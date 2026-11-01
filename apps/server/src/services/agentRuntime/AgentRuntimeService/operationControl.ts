@@ -1,5 +1,5 @@
 import type { AgentState } from '@lobechat/agent-runtime';
-import { isParkedStatus } from '@lobechat/agent-runtime';
+import { getLlmCallCount, isParkedStatus } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { redisService } from '@/server/services/redis';
@@ -448,7 +448,7 @@ export async function getOperationStatus(
         : 0,
       totalCost: currentState.cost?.total || 0,
       totalMessages: currentState.messages?.length || 0,
-      totalSteps: currentState.stepCount || 0,
+      totalSteps: getLlmCallCount(currentState),
       uptime: operationMetadata.createdAt
         ? Date.now() - new Date(operationMetadata.createdAt).getTime()
         : 0,

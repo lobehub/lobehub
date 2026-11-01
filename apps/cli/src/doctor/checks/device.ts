@@ -1,9 +1,9 @@
 import { GatewayClient } from '@lobechat/device-gateway-client';
 
 import { CLI_PRIMARY_BIN } from '../../constants/identity';
-import { getRunningDaemonPid, readStatus, removePid, removeStatus } from '../../daemon/manager';
+import { readConnectRuntimes } from '../../daemon/connectStatus';
+import { readStatus, removePid, removeStatus } from '../../daemon/manager';
 import { describeDeviceGateway, describeDeviceGatewayFailure } from '../../device/gatewayEndpoint';
-import { readConnectServiceStatus } from '../../service/connect';
 import { resolveLocalDeviceId } from '../../utils/device';
 import { probeCredential, probeDeviceGateway, probeDevices } from '../probes';
 import { redactUrlCredentials, redactUrlsInMessage } from '../redact';
@@ -29,12 +29,14 @@ const daemon: DoctorCheck = {
     removeStatus();
     return 'removed the stale daemon pid/status files';
   },
-  run: (): CheckOutcome => {
-    // Also self-heals: a pid file whose process is gone (or was recycled by the
-    // OS) is deleted as a side effect of asking.
-    const pid = getRunningDaemonPid();
-    const status = readStatus();
-    const service = readServiceStatus();
+  run: async (): Promise<CheckOutcome> => {
+    const { runtimes, unavailableScopes } = await readConnectRuntimes();
+    const running = runtimes.filter((runtime) => runtime.pid);
+    const runtime = running[0];
+    const pid = runtime?.pid;
+    const status = runtime ? runtime.status : readStatus();
+    const service = runtimes.flatMap((item) => (item.service ? [item.service] : []));
+    const label = runtime?.service ? `${runtime.manager}-level systemd service` : 'Daemon';
     const evidence = {
       connectionStatus: status?.connectionStatus,
       deviceId: status?.deviceId,
@@ -42,9 +44,27 @@ const daemon: DoctorCheck = {
       gatewayUrl: redactUrlCredentials(status?.gatewayUrl),
       pid,
       service,
+      unavailableScopes,
     };
 
+    if (running.length > 1)
+      return {
+        detail: 'Multiple managed connect processes are running.',
+        evidence,
+        fix: `Inspect '${CLI_PRIMARY_BIN} connect status' and stop the duplicate through its manager.`,
+        status: 'warn',
+      };
+
     if (!pid) {
+      if (service.length || unavailableScopes.length)
+        return {
+          detail: service.length
+            ? 'A connect service is installed, but no running process was reported.'
+            : 'Connect service status could not be fully inspected.',
+          evidence,
+          fix: `Run '${CLI_PRIMARY_BIN} connect service status' before starting another connector.`,
+          status: 'warn',
+        };
       if (status)
         return {
           detail: 'A daemon status file is left over, but no daemon is running.',
@@ -64,7 +84,7 @@ const daemon: DoctorCheck = {
     // A live process is not a connection: success needs the daemon's own report.
     if (!status?.connectionStatus)
       return {
-        detail: `Daemon ${pid} is running but has not reported a connection state.`,
+        detail: `${label} ${pid} is running but has not reported a connection state.`,
         evidence,
         fix: `Check the daemon log: ${CLI_PRIMARY_BIN} connect logs`,
         status: 'warn',
@@ -72,7 +92,7 @@ const daemon: DoctorCheck = {
 
     if (status.connectionStatus !== 'connected')
       return {
-        detail: `Daemon ${pid} is running but its last known state is "${status.connectionStatus}".`,
+        detail: `${label} ${pid} is running but its last known state is "${status.connectionStatus}".`,
         evidence,
         fix: `Check the daemon log: ${CLI_PRIMARY_BIN} connect logs`,
         status: 'warn',
@@ -82,22 +102,13 @@ const daemon: DoctorCheck = {
       ? ` via ${evidence.gatewayUrl}${evidence.gatewaySource ? ` (${evidence.gatewaySource})` : ''}`
       : '';
     return {
-      detail: `Daemon ${pid} connected as device ${status.deviceId ?? 'unknown'}${via}.`,
+      detail: `${label} ${pid} connected as device ${status.deviceId ?? 'unknown'}${via}.`,
       evidence,
       status: 'ok',
     };
   },
   title: 'connect daemon',
 };
-
-function readServiceStatus(): unknown {
-  try {
-    return readConnectServiceStatus();
-  } catch {
-    // Not installed, or not a systemd platform — neither is a finding.
-    return undefined;
-  }
-}
 
 /**
  * Can this machine authenticate to the device gateway at all — separating

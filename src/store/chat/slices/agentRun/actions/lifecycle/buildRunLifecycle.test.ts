@@ -335,7 +335,7 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
   });
 
-  it('keeps the queue in place until the steered send takes it', async () => {
+  it('keeps the queue in place until the drained send takes it', async () => {
     vi.useFakeTimers();
     try {
       const { get, store } = makeStore();
@@ -365,7 +365,9 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
       expect(sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           message: 'queued',
-          metadata: expect.objectContaining({ scope: 'x', steer: true }),
+          // A drained follow-up opens a fresh turn: its metadata keeps what
+          // was queued, unmarked.
+          metadata: { scope: 'x' },
         }),
       );
     } finally {

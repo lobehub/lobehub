@@ -1,4 +1,5 @@
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
+import { type ScopedConnectorActionError } from '@/utils/connectorActionError';
 
 import { type ComposioServer, type ComposioTool } from './types';
 
@@ -9,6 +10,11 @@ export interface ComposioStoreState {
   composioAppToolsReplica: ReplicaState<ComposioTool[]>;
   /** In-flight tool calls, keyed `identifier:toolSlug` (local UI state; never persisted). */
   composioExecutingToolIds: Set<string>;
+  /**
+   * Last failed connect / remove per connection `identifier`, so the settings
+   * row can show why it failed in place (local UI state; never persisted).
+   */
+  composioServerErrors: Record<string, ScopedConnectorActionError>;
   /** The user's Composio connections — the view of the `composioServers` replica. */
   composioServers: ComposioServer[];
   /** Replica bookkeeping of `composioServers`. */
@@ -26,6 +32,7 @@ export interface ComposioStoreState {
 export const initialComposioStoreState: ComposioStoreState = {
   composioExecutingToolIds: new Set(),
   composioAppToolsMap: {},
+  composioServerErrors: {},
   composioAppToolsReplica: createReplicaState(),
   composioServers: [],
   composioServersReplica: createReplicaState(),

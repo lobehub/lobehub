@@ -1,7 +1,8 @@
 'use client';
 
 import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
-import { cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
@@ -50,9 +51,11 @@ const Layout: FC = () => {
         <DndContextWrapper>
           <Flexbox
             horizontal
-            className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
             height={showCloudPromotion ? `calc(100% - ${BANNER_HEIGHT}px)` : '100%'}
             width={'100%'}
+            className={
+              stylex.props(isPWA ? styles.mainContainerPWA : styles.mainContainer).className
+            }
           >
             <NavPanelShell />
             <DesktopLayoutContainer>

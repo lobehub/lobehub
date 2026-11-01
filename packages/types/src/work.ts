@@ -6,7 +6,7 @@ import type { TaskStatus } from './task';
  * version per acceptance result. It is read through the goal graph, not the
  * generic Work lists.
  */
-export type WorkType = 'document' | 'external' | 'file' | 'goal_report' | 'task';
+export type WorkType = 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
 /** Work types the generic Work lists return; a `goal_report` is read through its goal. */
 export type ListedWorkType = Exclude<WorkType, 'goal_report'>;
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
@@ -14,7 +14,7 @@ export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
 /** Every resource type backed by the unified `external` Work type. */
 export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
 export type WorkResourceType =
-  'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
+  'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
@@ -45,8 +45,14 @@ export interface AgentShareWorkProvenance {
   visitorUserId: string;
 }
 
+export interface CanvasWorkPublishMetadata {
+  deploymentId: string;
+  publishedVersion: number;
+}
+
 export interface WorkMetadata {
   agentShare?: AgentShareWorkProvenance;
+  canvasPublish?: CanvasWorkPublishMetadata;
 }
 
 /**
@@ -70,8 +76,45 @@ export const agentShareWorkAccessScope = (
   visitorUserId: provenance.visitorUserId,
 });
 
+export interface CanvasPublishFile {
+  content: string;
+  contentType: string;
+  encoding: 'base64' | 'utf8';
+  path: string;
+}
+
+export interface CanvasPublishBundle {
+  files: CanvasPublishFile[];
+  html: string;
+}
+
+export interface CanvasWorkVersionMetadata {
+  entry: string;
+  fileCount: number;
+  manifestKey: string;
+  runtimeMajor: number;
+  totalSize: number;
+}
+
+/**
+ * Storage one Canvas holds in the caller's file usage: every distinct blob
+ * registered under the canvas across all its versions. The canvas is the unit
+ * a user can free — its files only render together, so they are never listed
+ * or deleted one by one.
+ */
+export interface CanvasStorageItem {
+  canvasId: string;
+  fileCount: number;
+  /** `null` when the files outlived their Work (the save never registered one). */
+  title: string | null;
+  totalSize: number;
+  updatedAt: Date;
+  workId: string | null;
+}
+
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
+  canvas?: CanvasWorkVersionMetadata;
   /**
    * `file` Work — the edited file's identity in the file store, when the entity
    * file was persisted. `filePath` is always present for a file Work; the
@@ -249,8 +292,17 @@ export interface FileWorkListItem extends WorkListBaseItem {
   type: 'file';
 }
 
+export interface CanvasWorkListItem extends WorkListBaseItem {
+  resourceType: 'canvas';
+  type: 'canvas';
+}
+
 export type WorkListItem =
-  DocumentWorkListItem | ExternalWorkListItem | FileWorkListItem | TaskWorkListItem;
+  | CanvasWorkListItem
+  | DocumentWorkListItem
+  | ExternalWorkListItem
+  | FileWorkListItem
+  | TaskWorkListItem;
 
 export interface TaskWorkVersionEventItem extends TaskWorkListItem {
   version: WorkVersionPreview;
@@ -268,7 +320,12 @@ export interface FileWorkVersionEventItem extends FileWorkListItem {
   version: WorkVersionPreview;
 }
 
+export interface CanvasWorkVersionEventItem extends CanvasWorkListItem {
+  version: WorkVersionPreview;
+}
+
 export type WorkVersionEventItem =
+  | CanvasWorkVersionEventItem
   | DocumentWorkVersionEventItem
   | ExternalWorkVersionEventItem
   | FileWorkVersionEventItem
@@ -302,8 +359,18 @@ export interface FileWorkSummaryItem extends FileWorkListItem {
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
+export interface CanvasWorkSummaryItem extends CanvasWorkListItem {
+  event: WorkSummaryVersionPreview;
+  totalCost: number | null;
+  version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
+}
+
 export type WorkSummaryItem =
-  DocumentWorkSummaryItem | ExternalWorkSummaryItem | FileWorkSummaryItem | TaskWorkSummaryItem;
+  | CanvasWorkSummaryItem
+  | DocumentWorkSummaryItem
+  | ExternalWorkSummaryItem
+  | FileWorkSummaryItem
+  | TaskWorkSummaryItem;
 export type WorkSummaryMap = Record<string, WorkSummaryItem[]>;
 
 export interface RegisterDocumentWorkParams {
@@ -359,6 +426,26 @@ export interface RegisterFileWorkParams {
   topicId: string;
   userId: string;
   /** Defaults to `private` when omitted — edited files are user-private. */
+  visibility?: WorkVisibility;
+}
+
+export interface RegisterCanvasWorkParams {
+  agentId?: string | null;
+  canvasId: string;
+  cumulativeCost?: number | null;
+  cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  description?: string | null;
+  /** Checked under the Work row lock; 0 means this must be the first version. */
+  expectedVersion?: number;
+  messageId?: string | null;
+  metadata: CanvasWorkVersionMetadata;
+  rootOperationId?: string | null;
+  threadId?: string | null;
+  title: string;
+  toolCallId?: string | null;
+  toolIdentifier: string;
+  toolName: string;
+  topicId?: string | null;
   visibility?: WorkVisibility;
 }
 
@@ -542,4 +629,15 @@ export type WorkRegistrationIntent =
       action: 'delete';
       document: { agentDocumentId?: string | null; agentId?: string | null; documentId: string };
       type: 'document';
+    }
+  | {
+      action: 'register';
+      canvas: {
+        canvasId: string;
+        description?: string | null;
+        metadata: CanvasWorkVersionMetadata;
+        title: string;
+        toolName: string;
+      };
+      type: 'canvas';
     };

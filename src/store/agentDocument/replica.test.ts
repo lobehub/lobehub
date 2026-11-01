@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * An agent's document list and the read-only reader are `@lobechat/replica`
+ * An agent's document list and the read-only reader are `local-replica`
  * resources: the persisted projection paints a cold start while the network
  * confirms it, client-side edits never reach storage, scopes stay isolated, and
  * the reader keeps only the fields it renders and forgets deleted documents.

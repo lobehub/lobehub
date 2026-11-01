@@ -1,14 +1,10 @@
 'use client';
 
 import { List, type ListClickInfo, type ListItemType } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  item: css`
-    min-height: 36px;
-  `,
-}));
+const styles = stylex.create({ item: { minHeight: '36px' } });
 
 export interface CategoryMenuProps {
   className?: string;
@@ -25,7 +21,7 @@ const CategoryMenu = memo<CategoryMenuProps>(
       <List
         activeKey={selectedKeys?.[0]}
         className={className}
-        classNames={{ item: styles.item }}
+        classNames={{ item: stylex.props(styles.item).className }}
         data-testid="category-menu"
         items={items}
         style={style}

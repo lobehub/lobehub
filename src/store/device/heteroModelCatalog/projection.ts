@@ -1,9 +1,9 @@
-import { replicaKeys } from '@lobechat/replica';
 import type {
   HeterogeneousAgentModelCatalogSuccess,
   HeterogeneousProviderConfig,
   ListHeterogeneousAgentModelsParams,
 } from '@lobechat/types';
+import { replicaKeys } from 'local-replica';
 
 import { cacheScope, defineReplica } from '@/libs/replica';
 

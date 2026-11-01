@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The agent-knowledge list is a `@lobechat/replica` resource whose view is the
+ * The agent-knowledge list is a `local-replica` resource whose view is the
  * agent store's `agentKnowledgeMap`: the persisted projection paints while the
  * network confirms it, an unchanged response keeps the array reference, a
  * refresh after a knowledge mutation repaints the surface, and a cache-scope

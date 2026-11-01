@@ -35,6 +35,11 @@ import { isManagedSkillDocument } from '../agentDocumentVfs/mounts/skills/provid
 import { DocumentService } from '../document';
 import { FileService } from '../file';
 import { TOOL_RESULTS_DIR_NAME } from '../toolExecution/constants';
+import {
+  type AgentDocumentBodyWriter,
+  writeAgentDocumentBody,
+  writeSnapshotThroughRoom,
+} from './bodyWrite';
 import { isRawTextAgentDocument } from './contentFormat';
 import {
   attachEmptyParseShellLiteXML,
@@ -191,6 +196,7 @@ const toAgentDocumentContextPayload = (
  */
 export class AgentDocumentsService {
   private agentDocumentModel: AgentDocumentModel;
+  private bodyWriter: AgentDocumentBodyWriter;
   private documentService: DocumentService;
   private fileModel: FileModel;
   private fileServiceInstance?: FileService;
@@ -216,6 +222,8 @@ export class AgentDocumentsService {
     );
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId, documentAccessScope);
+    const { agentDocumentModel, documentService } = this;
+    this.bodyWriter = { agentDocumentModel, db, documentService, userId, workspaceId };
   }
 
   /** Defers storage configuration until upload cleanup; native documents need only the database. */
@@ -1078,6 +1086,8 @@ export class AgentDocumentsService {
     const snapshot = await createAgentMarkdownSnapshot(content);
 
     if (existing && projectedExisting?.content !== snapshot.content) {
+      if (await writeSnapshotThroughRoom(this.bodyWriter, existing.documentId, snapshot))
+        return (await this.agentDocumentModel.findById(existing.id)) ?? existing;
       await this.documentService.trySaveCurrentDocumentHistory(existing.documentId, 'llm_call');
     }
 
@@ -1095,14 +1105,9 @@ export class AgentDocumentsService {
     const { content: finalContent } = extractMarkdownH1Title(content);
     const snapshot = await createAgentMarkdownSnapshot(finalContent);
 
-    if (doc.content !== snapshot.content) {
-      await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');
-    }
-
-    await this.agentDocumentModel.update(documentId, {
-      content: snapshot.content,
-      editorData: snapshot.editorData,
-    });
+    const target = { agentDocumentId: documentId, documentId: doc.documentId };
+    const recordHistory = doc.content !== snapshot.content;
+    await writeAgentDocumentBody(this.bodyWriter, target, snapshot, { recordHistory });
     return this.getDocumentByIdInAgent(documentId, expectedAgentId);
   }
 
@@ -1122,16 +1127,9 @@ export class AgentDocumentsService {
 
     // History must capture the successfully hydrated pre-edit state. Persisted
     // editorData may be the stale payload that forced Markdown recovery.
-    await this.documentService.trySaveCurrentDocumentHistory(
-      doc.documentId,
-      'llm_call',
-      snapshot.previousEditorData,
-    );
-
-    await this.agentDocumentModel.update(documentId, {
-      content: snapshot.content,
-      editorData: snapshot.editorData,
-    });
+    const target = { agentDocumentId: documentId, documentId: doc.documentId };
+    const { previousEditorData } = snapshot;
+    await writeAgentDocumentBody(this.bodyWriter, target, snapshot, { previousEditorData });
 
     return this.getDocumentByIdInAgent(documentId, expectedAgentId);
   }

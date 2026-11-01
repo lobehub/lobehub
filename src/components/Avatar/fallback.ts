@@ -34,7 +34,7 @@ export const getAvatarInitials = (name?: string | null): string => {
  */
 const BLANK_BACKGROUNDS = new Set(['transparent', 'rgba(0,0,0,0)', 'none']);
 
-const usableBackground = (background?: string): string | undefined => {
+export const usableBackground = (background?: string | null): string | undefined => {
   const value = background?.trim();
   if (!value) return undefined;
 

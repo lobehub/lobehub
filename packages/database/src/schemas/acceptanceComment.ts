@@ -22,7 +22,8 @@ import { workspaces } from './workspace';
  * checklist, regions circled on evidence images, and reviewers' approvals.
  * Rows never enter the verify execution tables — a comment changes no check
  * result, no round, and no acceptance status. The decider still closes the
- * acceptance through `verify_runs.user_decision`.
+ * acceptance through `verify_runs.user_decision`; a granted access request only
+ * widens who may make that decision's reject.
  */
 /**
  * Short on purpose: this id is the addressable part of a comment's URL, and a
@@ -59,8 +60,10 @@ export const acceptanceComments = pgTable(
     parentCommentId: text('parent_comment_id').references((): AnyPgColumn => acceptanceComments.id),
     /**
      * `comment` (a remark), `approval` (a reviewer's "fine by me" for a round),
-     * `reaction` (one emoji on one comment), or `proposal` (the round's own
-     * note, which renders as part of the round rather than as a message).
+     * `reaction` (one emoji on one comment), `proposal` (the round's own
+     * note, which renders as part of the round rather than as a message), or
+     * `access_request` (asking the deciders for reject access; the answer is
+     * server-owned `metadata.accessRequest`, read by the reject path).
      */
     kind: text('kind').$type<AcceptanceCommentKind>().default('comment').notNull(),
 

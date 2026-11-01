@@ -278,6 +278,9 @@ export class ServerToolTransport implements ToolTransport {
               ...(agentVisibility !== undefined && { agentVisibility }),
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
+              // Who in the IM conversation asked for this run; tools that act for the owner
+              // (changing a bot's settings) refuse anyone else.
+              botContext: context.state.principal?.actor?.bot,
               clientIp: context.state.principal?.audit?.clientIp,
               currentTodos: context.currentTodos,
               deviceCapable: context.state.plan?.execution
@@ -306,6 +309,7 @@ export class ServerToolTransport implements ToolTransport {
               memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
               messageId: context.state.origin?.sourceMessageId,
               operationId,
+              projectId: context.state.origin?.projectId,
               projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
               scope: context.state.origin?.scope,
@@ -445,6 +449,9 @@ export class ServerToolTransport implements ToolTransport {
         mocked: toolCallMocked || execution.mocked,
         result: executionResult,
         resultBlocked: controlled.blocked,
+        // A tool that created its own row (a background sub-agent's placeholder)
+        // gets its result written there instead of into a second tool message.
+        toolMessageId: execution.toolMessageId ?? executionResult.toolMessageId,
       };
     } catch (error) {
       executeToolSpan.recordException(error as Error);

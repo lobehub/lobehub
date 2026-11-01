@@ -18,6 +18,7 @@ export type ComposerRunRequest = Pick<
   | 'acceptsFileWorks'
   | 'acceptsMemberRuntimeEnd'
   | 'agentId'
+  | 'agentSender'
   | 'appContext'
   | 'autoStart'
   | 'clientIds'
@@ -31,7 +32,9 @@ export type ComposerRunRequest = Pick<
   | 'mentionedAgents'
   | 'parentMessageId'
   | 'prompt'
+  | 'queuedSuccessor'
   | 'replacesOperationId'
+  | 'requireDevice'
   | 'resumeApproval'
   | 'resumeApprovals'
   | 'resumeToolResult'
@@ -40,6 +43,7 @@ export type ComposerRunRequest = Pick<
   | 'slug'
   | 'sourceOperationId'
   | 'steer'
+  | 'title'
   | 'trigger'
   | 'userInterventionConfig'
   | 'userMessage'
@@ -114,6 +118,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     // intentionally not part of the client-passable input schema.
     clientIp: ctx.clientIp,
     deviceId: input.deviceId,
+    requireDevice: input.requireDevice,
     localDeviceId: input.localDeviceId,
     existingMessageIds: input.existingMessageIds,
     ...(topicRun && {
@@ -143,6 +148,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     mentionedAgents: input.mentionedAgents,
     parentMessageId,
     prompt: input.prompt,
+    queuedSuccessor: input.queuedSuccessor,
     replacesOperationId: input.replacesOperationId,
     // When parentMessageId is provided, this is a regeneration/continue or a
     // human-approval resume — either way, skip user message creation.
@@ -153,8 +159,10 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     selectedSkillIds: input.selectedSkillIds,
     selectedToolIds: input.selectedToolIds,
     slug: input.slug,
+    agentSender: input.agentSender,
     sourceOperationId: input.sourceOperationId,
     steer: input.steer,
+    title: input.title,
     trigger: input.trigger ?? RequestTrigger.Chat,
     userAgent: ctx.userAgent,
     userInterventionConfig: input.userInterventionConfig,

@@ -5,7 +5,6 @@ import type { AgentEvalRunStatus, EvalRunInputConfig } from '@lobechat/types';
 import {
   Accordion,
   ActionIcon,
-  Avatar,
   createStaticStyles,
   cssVar,
   Flexbox,
@@ -22,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
@@ -107,9 +107,12 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
       allAgents.map((agent) => ({
         label: (
           <span style={{ alignItems: 'center', display: 'inline-flex', gap: 8 }}>
-            <Avatar
+            <AgentAvatar
+              agentId={agent.id}
               avatar={agent.avatar || undefined}
               background={agent.backgroundColor || undefined}
+              name={agent.title || undefined}
+              shape={'circle'}
               size={20}
               title={agent.title || ''}
             />

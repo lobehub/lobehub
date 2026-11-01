@@ -213,3 +213,50 @@ describe('ClaudeAgentSdkSession resume cost', () => {
     expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
   });
 });
+
+describe('ClaudeAgentSdkSession plugins', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  const optionsFor = async (args: string[]) => {
+    sdkQueryMock.mockImplementation(() => ({
+      async *[Symbol.asyncIterator]() {},
+      close: vi.fn(),
+    }));
+    await new ClaudeAgentSdkSession({
+      args,
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-sdk-plugins',
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'hi', role: 'user' }, type: 'user' })}\n`,
+    }).run();
+    return sdkQueryMock.mock.calls[0][0].options;
+  };
+
+  // `extraArgs` holds one value per flag, so a user's own `--plugin-dir` and the
+  // one carrying the `lh` guide would overwrite each other there.
+  it('loads every `--plugin-dir` as a session plugin', async () => {
+    const options = await optionsFor(['--plugin-dir', '/user/plugin', '--plugin-dir', '/lobehub']);
+
+    expect(options.plugins).toEqual([
+      { path: '/user/plugin', type: 'local' },
+      { path: '/lobehub', type: 'local' },
+    ]);
+    expect(options.extraArgs?.['plugin-dir']).toBeUndefined();
+  });
+
+  it('passes an appended system prompt through to the CLI', async () => {
+    const options = await optionsFor(['--append-system-prompt', 'guide']);
+
+    expect(options.extraArgs).toEqual({ 'append-system-prompt': 'guide' });
+    expect(options).not.toHaveProperty('plugins');
+  });
+});

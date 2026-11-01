@@ -48,7 +48,7 @@ RED="${ACCEPTANCE_GUARD_RED:-swap=80,free=8}"
 GUARD_GROUPS=(
   'browser=Google Chrome for Testing'
   'devserver=next-server|vite'
-  'typecheck=tsgo'
+  'typecheck=tsrs'
 )
 
 RUN_TAG="${ACCEPTANCE_RUN_TAG:-}"

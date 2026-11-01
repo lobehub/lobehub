@@ -2,14 +2,18 @@
 
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { projectWindows } from '@lobechat/heterogeneous-agents/quota';
-import { createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   type ModalInstance,
   Segmented,
   Skeleton,
   Text,
+  Tooltip,
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';

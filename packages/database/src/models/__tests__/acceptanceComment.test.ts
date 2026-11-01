@@ -249,6 +249,50 @@ describe('AcceptanceCommentModel', () => {
     });
   });
 
+  describe('access requests', () => {
+    const request = (clientId: string, status = 'pending') =>
+      model.create({
+        acceptanceId,
+        authorUserId: reviewer,
+        clientId,
+        content: 'let me collaborate',
+        kind: 'access_request',
+        metadata: { accessRequest: { permission: 'collaborate', status: status as any } },
+      });
+
+    const standingRows = () =>
+      serverDB
+        .select()
+        .from(acceptanceComments)
+        .where(eq(acceptanceComments.kind, 'access_request'));
+
+    it('keeps one standing request when two tabs ask at once', async () => {
+      const [first, second] = await Promise.all([request('tab-a'), request('tab-b')]);
+
+      expect(await standingRows()).toHaveLength(1);
+      expect(first.comment.id).toBe(second.comment.id);
+      expect([first.isDuplicate, second.isDuplicate].sort()).toEqual([false, true]);
+    });
+
+    it('hands back a granted request instead of opening another', async () => {
+      const { comment: granted } = await request('earlier', 'granted');
+
+      const again = await request('later');
+
+      expect(again).toMatchObject({ comment: { id: granted.id }, isDuplicate: true });
+      expect(await standingRows()).toHaveLength(1);
+    });
+
+    it('opens a new request once the last one was declined', async () => {
+      await request('earlier', 'declined');
+
+      const again = await request('later');
+
+      expect(again.isDuplicate).toBe(false);
+      expect(await standingRows()).toHaveLength(2);
+    });
+  });
+
   describe('listByAcceptance', () => {
     it('returns only this acceptance, oldest first', async () => {
       await model.create({ acceptanceId, authorUserId: owner, clientId: 'a', content: 'a' });

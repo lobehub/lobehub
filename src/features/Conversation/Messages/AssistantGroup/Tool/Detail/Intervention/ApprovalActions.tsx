@@ -1,15 +1,40 @@
 import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotkeys';
-import { Button, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import type { BuiltinRememberApproval, DynamicInterventionResolver } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
+import { Button, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleStop, CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { clientInterventionAudits } from '@/store/chat/slices/agentRun/actions/transports/client/interventionAudits';
+import { useToolStore } from '@/store/tool';
+import { toolSelectors } from '@/store/tool/selectors';
+
 import { useConversationResourceAccess } from '../../../../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../../../../store';
-import { type ApprovalChoice, isChoiceSubmitBlocked } from './approvalGate';
+import {
+  type ApprovalChoice,
+  approveChoiceLabelKeys,
+  canRememberViaAllowList,
+  dynamicAuditType,
+  getApprovalChoices,
+  isChoiceSubmitBlocked,
+  isCoveredByRemember,
+  resolveRememberAction,
+} from './approvalGate';
 import { type ApprovalMode } from './index';
 import { isSubmitShortcutBlockedByTarget } from './submitShortcutGuard';
+
+/** The audit this client runs for a tool's dynamic approval, to re-check calls after a remember. */
+const rememberAuditFor = (config: unknown) => {
+  const type = dynamicAuditType(config);
+  return type
+    ? (clientInterventionAudits as Record<string, DynamicInterventionResolver>)[type]
+    : undefined;
+};
 
 interface ApprovalActionsProps {
   apiName: string;
@@ -28,110 +53,88 @@ interface ApprovalActionsProps {
    */
   onBeforeApprove?: () =>
     Promise<Record<string, unknown> | undefined> | Record<string, unknown> | undefined;
+  /** The tool's own "approve and remember" step, when its intervention defines "similar". */
+  rememberOption?: BuiltinRememberApproval;
+  /** The call's arguments: a call that must always ask cannot be remembered. */
+  toolArgs?: Record<string, unknown>;
   toolCallId: string;
 }
 
 type Choice = ApprovalChoice;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    width: 100%;
-  `,
-  footer: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-end;
-
-    margin-block-start: 8px;
-  `,
-  number: css`
-    flex-shrink: 0;
-    width: 18px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  option: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    min-height: 40px;
-    padding-block: 7px;
-    padding-inline: 16px;
-    border-radius: calc(${cssVar.borderRadiusLG} - 2px);
-
-    color: ${cssVar.colorTextSecondary};
-
-    transition:
-      background 120ms,
-      color 120ms;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  optionLabel: css`
-    flex: 1;
-    line-height: 1.4;
-  `,
-  optionList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  `,
-  optionSelected: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  rejectInput: css`
-    flex: 1;
-
-    width: 100%;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-
-    background: transparent;
-
-    &::placeholder {
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    &:focus,
-    &:focus-visible {
-      outline: none;
-    }
-
-    &:disabled {
-      cursor: pointer;
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  shortcutHint: css`
-    display: inline-flex;
-    align-items: center;
-    margin-inline-start: 6px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  submitButton: css`
-    min-width: 88px;
-    height: 36px;
-    border-radius: calc(${cssVar.borderRadiusLG} - 2px);
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    width: '100%',
+  },
+  footer: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginBlockStart: '8px',
+  },
+  number: {
+    flexShrink: 0,
+    width: '18px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+  option: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    minHeight: '40px',
+    paddingBlock: '7px',
+    paddingInline: '16px',
+    borderRadius: `calc(${cssVar.borderRadiusLG} - 2px)`,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: 'background 120ms, color 120ms',
+  },
+  optionLabel: {
+    flex: '1',
+    lineHeight: 1.4,
+  },
+  optionList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  optionSelected: {
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  rejectInput: {
+    'flex': '1',
+    'width': '100%',
+    'padding': '0',
+    'borderStyle': 'none',
+    'borderRadius': '0',
+    'fontFamily': 'inherit',
+    'fontSize': '14px',
+    'lineHeight': 1.4,
+    'color': { 'default': cssVar.colorText, ':disabled': cssVar.colorTextSecondary },
+    'backgroundColor': 'transparent',
+    'backgroundImage': 'none',
+    'outlineStyle': 'none',
+    'cursor': { 'default': null, ':disabled': 'pointer' },
+    '::placeholder': { color: cssVar.colorTextSecondary },
+  },
+  shortcutHint: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    marginInlineStart: '6px',
+    color: cssVar.colorTextTertiary,
+  },
+  submitButton: {
+    minWidth: '88px',
+    height: '36px',
+    borderRadius: `calc(${cssVar.borderRadiusLG} - 2px)`,
+  },
+});
 
 const ApprovalActions = memo<ApprovalActionsProps>(
   ({
@@ -142,33 +145,60 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     identifier,
     messageId,
     onBeforeApprove,
+    rememberOption,
+    toolArgs,
   }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'plugin']);
     const [choice, setChoice] = useState<Choice>('approve');
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
     const rejectInputRef = useRef<HTMLInputElement>(null);
 
     const isMessageCreating = messageId.startsWith('tmp_');
-    const isAllowListMode = approvalMode === 'allow-list';
     // Workspace topics are shared: a view-only member can be LOOKING at a
     // teammate's running conversation — they must not drive its tool approvals.
     const { canUseResource } = useConversationResourceAccess();
 
-    // Ordered choices drive both the numbered rows and the 1/2/3 shortcuts.
-    // "Approve & don't ask again" is a first-class option (allow-list only)
-    // rather than a checkbox nested under approve.
-    const choices = useMemo<Choice[]>(
-      () => (isAllowListMode ? ['approve', 'approve-remember', 'reject'] : ['approve', 'reject']),
-      [isAllowListMode],
+    // "Approve, and don't ask again for similar actions" is one shared choice
+    // for every tool. A tool may define "similar" itself (its own remember
+    // step); otherwise the tool joins the allow-list, which only helps when
+    // this call is not one that must always ask.
+    const interventionConfig = useToolStore(
+      (s) =>
+        toolSelectors
+          .getManifestById(identifier)(s)
+          ?.api?.find((api) => api.name === apiName)?.humanIntervention,
     );
+    const allowListRememberable = useMemo(
+      () => canRememberViaAllowList({ config: interventionConfig, toolArgs }),
+      [interventionConfig, toolArgs],
+    );
+    const hasToolRemember = !!rememberOption;
+    // Ordered choices drive both the numbered rows and the 1/2/3 shortcuts.
+    const choices = useMemo<Choice[]>(
+      () =>
+        getApprovalChoices({
+          allowListRememberable,
+          approvalMode,
+          toolRemember: hasToolRemember,
+        }),
+      [allowListRememberable, approvalMode, hasToolRemember],
+    );
+    // A tool's choice can be withdrawn while the card is open; fall back to plain approve.
+    const effectiveChoice: Choice = choices.includes(choice) ? choice : 'approve';
+    const rememberAction = resolveRememberAction({ toolRemember: hasToolRemember });
 
-    const [approveToolCall, rejectAndContinueToolCall, stopPendingApprovalForCard] =
-      useConversationStore((s) => [
-        s.approveToolCall,
-        s.rejectAndContinueToolCall,
-        s.stopPendingApprovalForCard,
-      ]);
+    const [
+      approveToolCall,
+      approveToolCallAndCovered,
+      rejectAndContinueToolCall,
+      stopPendingApprovalForCard,
+    ] = useConversationStore((s) => [
+      s.approveToolCall,
+      s.approveToolCallAndCovered,
+      s.rejectAndContinueToolCall,
+      s.stopPendingApprovalForCard,
+    ]);
     const [stopping, setStopping] = useState(false);
 
     /**
@@ -195,21 +225,37 @@ const ApprovalActions = memo<ApprovalActionsProps>(
       stopPendingApprovalForCard,
       messageId,
     ]);
-    const submitBlocked = isChoiceSubmitBlocked(choice, approveDisabled);
+    const submitBlocked = isChoiceSubmitBlocked(effectiveChoice, approveDisabled);
     const handleSubmit = useCallback(async () => {
       if (loading || isMessageCreating || !canUseResource || submitBlocked) return;
       setLoading(true);
       try {
-        if (choice === 'reject') {
+        if (effectiveChoice === 'reject') {
           await rejectAndContinueToolCall(messageId, reason.trim() || undefined);
         } else {
+          const remember = effectiveChoice === 'approve-remember';
+          // The tool's own remember step runs first, so the very next call
+          // after this approval already sees it.
+          if (remember && rememberAction === 'tool') await rememberOption?.onRemember();
           const editedArguments = await onBeforeApprove?.();
-          await approveToolCall(messageId, assistantGroupId ?? '', {
-            editedArguments,
-            ...(isAllowListMode && choice === 'approve-remember'
-              ? { rememberToolKey: `${identifier}/${apiName}` }
-              : {}),
-          });
+          if (remember) {
+            const audit = rememberAuditFor(interventionConfig);
+            await approveToolCallAndCovered(messageId, assistantGroupId ?? '', {
+              editedArguments,
+              isCovered: (sibling) =>
+                isCoveredByRemember({
+                  audit,
+                  config: interventionConfig,
+                  rememberAction,
+                  toolArgs: safeParseJSON(sibling.requestArgs) ?? {},
+                }),
+              ...(rememberAction === 'allow-list'
+                ? { rememberToolKey: `${identifier}/${apiName}` }
+                : {}),
+            });
+          } else {
+            await approveToolCall(messageId, assistantGroupId ?? '', { editedArguments });
+          }
         }
       } finally {
         setLoading(false);
@@ -217,17 +263,20 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     }, [
       apiName,
       approveToolCall,
+      approveToolCallAndCovered,
       assistantGroupId,
       canUseResource,
-      choice,
+      effectiveChoice,
       identifier,
-      isAllowListMode,
+      interventionConfig,
       isMessageCreating,
       loading,
       messageId,
       onBeforeApprove,
       reason,
       rejectAndContinueToolCall,
+      rememberAction,
+      rememberOption,
       submitBlocked,
     ]);
 
@@ -322,9 +371,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
 
     const rejectNumber = choices.indexOf('reject') + 1;
 
-    const approveLabel: Record<'approve' | 'approve-remember', string> = {
-      'approve': t('tool.intervention.optionApprove'),
-      'approve-remember': t('tool.intervention.optionApproveRemember'),
+    const approveLabelFor = (c: 'approve' | 'approve-remember') => {
+      const keys = approveChoiceLabelKeys({ apiName, choice: c, identifier });
+      return t(keys.tool, { defaultValue: t(keys.shared), ns: 'plugin' });
     };
 
     // View-only members see the pending intervention but get no approval
@@ -332,14 +381,14 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     if (!canUseResource) return null;
 
     return (
-      <Flexbox className={styles.container} ref={containerRef}>
-        <div className={styles.optionList} role="radiogroup">
+      <Flexbox className={stylex.props(styles.container).className} ref={containerRef}>
+        <div {...stylex.props(styles.optionList)} role="radiogroup">
           {choices.map((c, index) => {
             if (c === 'reject') {
               return (
                 <div
                   aria-checked={choice === 'reject'}
-                  className={cx(styles.option, choice === 'reject' && styles.optionSelected)}
+                  {...stylex.props(styles.option, choice === 'reject' && styles.optionSelected)}
                   key={c}
                   role="radio"
                   onClick={() => {
@@ -347,10 +396,10 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                     rejectInputRef.current?.focus();
                   }}
                 >
-                  <span className={styles.number}>{rejectNumber}.</span>
+                  <span {...stylex.props(styles.number)}>{rejectNumber}.</span>
                   <input
                     aria-label={t('tool.intervention.rejectReasonPlaceholder')}
-                    className={styles.rejectInput}
+                    {...stylex.props(styles.rejectInput)}
                     disabled={loading || isMessageCreating}
                     placeholder={t('tool.intervention.rejectReasonPlaceholder')}
                     ref={rejectInputRef}
@@ -367,21 +416,23 @@ const ApprovalActions = memo<ApprovalActionsProps>(
 
             return (
               <div
-                aria-checked={choice === c}
+                aria-checked={effectiveChoice === c}
                 aria-disabled={approveDisabled || undefined}
-                className={cx(styles.option, choice === c && styles.optionSelected)}
+                {...stylex.props(styles.option, effectiveChoice === c && styles.optionSelected)}
                 key={c}
                 role="radio"
                 onClick={() => setChoice(c)}
               >
-                <span className={styles.number}>{index + 1}.</span>
-                <span className={styles.optionLabel}>{approveLabel[c]}</span>
+                <span className={stylex.props(styles.number).className}>{index + 1}.</span>
+                <span className={stylex.props(styles.optionLabel).className}>
+                  {approveLabelFor(c)}
+                </span>
               </div>
             );
           })}
         </div>
 
-        <div className={styles.footer}>
+        <div {...stylex.props(styles.footer)}>
           <Button
             disabled={loading || isMessageCreating}
             icon={CircleStop}
@@ -393,7 +444,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
             {t('tool.intervention.stop')}
           </Button>
           <Button
-            className={styles.submitButton}
+            className={stylex.props(styles.submitButton).className}
             disabled={isMessageCreating || submitBlocked}
             loading={loading}
             size={'middle'}
@@ -401,7 +452,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
             onClick={handleSubmit}
           >
             {t('tool.intervention.submit')}
-            <span className={styles.shortcutHint}>
+            <span {...stylex.props(styles.shortcutHint)}>
               <CornerDownLeft size={12} />
             </span>
           </Button>

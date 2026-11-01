@@ -36,11 +36,20 @@ export const RUNNABLE_AUTOMATION = and(
  */
 const LIVE_AUTOMATION = and(RUNNABLE_AUTOMATION, isNull(tasks.archivedAt))!;
 
+/** The statuses `closedAfter` narrows, matching the list's `HIDDEN_WHEN_COMPLETED_STATUSES`. */
+const CLOSED_TASK_STATUSES = ['canceled', 'completed'];
+
 export interface TaskListFilterOptions {
   assigneeAgentId?: string;
   /** Only tasks assigned to this workspace member. */
   assigneeUserId?: string;
   automated?: boolean;
+  /**
+   * Leave out completed and canceled tasks closed before this time. A closed
+   * task without `completedAt` (canceled ones) falls back to `updatedAt`;
+   * unfinished tasks are never narrowed.
+   */
+  closedAfter?: Date;
   /** Only tasks created by this user. */
   createdByUserId?: string;
   /** Archived tasks are user-closed and hidden from every list unless asked for. */
@@ -88,6 +97,7 @@ export const buildTaskListFilters = ({
   assigneeAgentId,
   assigneeUserId,
   automated,
+  closedAfter,
   createdByUserId,
   includeArchived,
   includeQuickNoteTasks,
@@ -113,6 +123,14 @@ export const buildTaskListFilters = ({
     );
   } else if (!includeQuickNoteTasks) {
     conditions.push(NOT_QUICK_NOTE_TASK);
+  }
+  if (closedAfter) {
+    conditions.push(
+      or(
+        notInArray(tasks.status, CLOSED_TASK_STATUSES),
+        sql`coalesce(${tasks.completedAt}, ${tasks.updatedAt}) >= ${closedAfter.toISOString()}`,
+      )!,
+    );
   }
   if (projectId) conditions.push(eq(tasks.projectId, projectId));
   if (visibility) conditions.push(eq(tasks.visibility, visibility));

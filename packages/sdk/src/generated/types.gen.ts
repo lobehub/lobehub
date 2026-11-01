@@ -331,6 +331,14 @@ export type Usage = {
         since: string;
         until: string;
     };
+    quota: {
+        limit: number | null;
+        remaining: number | null;
+        resetsAt: string | null;
+        source: 'personal' | 'workspace_pool' | 'member_budget';
+        used: number;
+        usedRatio: number | null;
+    } | null;
     remainingBalance: number | null;
     scope: 'personal' | 'workspace';
     spent: number;
@@ -6338,12 +6346,14 @@ export type PostApiV1ImMessagesData = {
         agentId: string;
         clientMessageId?: string;
         content: string;
+        fileIds?: Array<string>;
         groupId?: string;
         topicId?: string | null;
     } | {
         agentId?: string;
         clientMessageId?: string;
         content: string;
+        fileIds?: Array<string>;
         groupId: string;
         topicId?: string | null;
     };
@@ -6403,6 +6413,13 @@ export type PostApiV1ImMessagesResponses = {
                 content: string;
                 createdAt: string;
                 error: boolean;
+                files?: Array<{
+                    id: string;
+                    name: string;
+                    fileType: string;
+                    size: number;
+                    url: string;
+                }>;
                 id: string;
                 role: 'assistant' | 'user';
             };
@@ -6478,6 +6495,13 @@ export type GetApiV1ImTopicsByTopicIdSyncResponses = {
                 content: string;
                 createdAt: string;
                 error: boolean;
+                files?: Array<{
+                    id: string;
+                    name: string;
+                    fileType: string;
+                    size: number;
+                    url: string;
+                }>;
                 id: string;
                 role: 'assistant' | 'user';
             }>;
@@ -8564,7 +8588,7 @@ export type GetApiV1ModelsData = {
         pageSize?: string;
         enabled?: string | null;
         provider?: string | null;
-        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'stt' | null;
+        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'decision' | 'stt' | null;
     };
     url: '/api/v1/models';
 };
@@ -8646,7 +8670,7 @@ export type PostApiV1ModelsData = {
         releasedAt?: string | null;
         sort?: number | null;
         source?: 'remote' | 'custom' | 'builtin' | null;
-        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'stt' | null;
+        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'decision' | 'stt' | null;
         id: string;
         providerId: string;
     };
@@ -8791,7 +8815,7 @@ export type PatchApiV1ModelsByProviderIdByModelIdData = {
         releasedAt?: string | null;
         sort?: number | null;
         source?: 'remote' | 'custom' | 'builtin' | null;
-        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'stt' | null;
+        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'decision' | 'stt' | null;
     };
     path: {
         modelId: string;
@@ -8919,6 +8943,177 @@ export type GetApiV1NotificationsResponses = {
 };
 
 export type GetApiV1NotificationsResponse = GetApiV1NotificationsResponses[keyof GetApiV1NotificationsResponses];
+
+export type GetApiV1NotificationsSettingsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        scope?: 'personal' | 'workspace';
+    };
+    url: '/api/v1/notifications/settings';
+};
+
+export type GetApiV1NotificationsSettingsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1NotificationsSettingsError = GetApiV1NotificationsSettingsErrors[keyof GetApiV1NotificationsSettingsErrors];
+
+export type GetApiV1NotificationsSettingsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1NotificationsSettingsResponse = GetApiV1NotificationsSettingsResponses[keyof GetApiV1NotificationsSettingsResponses];
+
+export type PatchApiV1NotificationsSettingsData = {
+    body: {
+        content?: {
+            scheduledTaskSummary?: boolean;
+        };
+        email?: {
+            enabled?: boolean;
+            items?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+        };
+        im?: {
+            enabled?: boolean;
+            items?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+            platforms?: {
+                [key: string]: {
+                    enabled?: boolean;
+                    items?: {
+                        [key: string]: {
+                            [key: string]: boolean;
+                        };
+                    };
+                    tenantId?: string;
+                };
+            };
+        };
+        inbox?: {
+            enabled?: boolean;
+            items?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+        };
+        push?: {
+            enabled?: boolean;
+            items?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+        };
+    };
+    path?: never;
+    query?: {
+        scope?: 'personal' | 'workspace';
+    };
+    url: '/api/v1/notifications/settings';
+};
+
+export type PatchApiV1NotificationsSettingsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1NotificationsSettingsError = PatchApiV1NotificationsSettingsErrors[keyof PatchApiV1NotificationsSettingsErrors];
+
+export type PatchApiV1NotificationsSettingsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1NotificationsSettingsResponse = PatchApiV1NotificationsSettingsResponses[keyof PatchApiV1NotificationsSettingsResponses];
 
 export type GetApiV1NotificationsUnreadCountData = {
     body?: never;
@@ -11194,6 +11389,7 @@ export type PatchApiV1TasksByIdData = {
             [key: string]: unknown;
         };
         description?: string | null;
+        heartbeatInterval?: number;
         instruction?: string;
         name?: string;
         parentTaskId?: string | null;
@@ -11325,6 +11521,134 @@ export type PatchApiV1TasksByIdStatusResponses = {
 };
 
 export type PatchApiV1TasksByIdStatusResponse = PatchApiV1TasksByIdStatusResponses[keyof PatchApiV1TasksByIdStatusResponses];
+
+export type GetApiV1TasksByIdRunsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        limit?: number;
+    };
+    url: '/api/v1/tasks/{id}/runs';
+};
+
+export type GetApiV1TasksByIdRunsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdRunsError = GetApiV1TasksByIdRunsErrors[keyof GetApiV1TasksByIdRunsErrors];
+
+export type GetApiV1TasksByIdRunsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdRunsResponse = GetApiV1TasksByIdRunsResponses[keyof GetApiV1TasksByIdRunsResponses];
+
+export type PostApiV1TasksByIdRunsData = {
+    body: {
+        prompt?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/runs';
+};
+
+export type PostApiV1TasksByIdRunsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksByIdRunsError = PostApiV1TasksByIdRunsErrors[keyof PostApiV1TasksByIdRunsErrors];
+
+export type PostApiV1TasksByIdRunsResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksByIdRunsResponse = PostApiV1TasksByIdRunsResponses[keyof PostApiV1TasksByIdRunsResponses];
 
 export type GetApiV1TopicsData = {
     body?: never;

@@ -62,7 +62,18 @@ export const reviewGoalDelivery = async (
     // draft, or one a CLI-driven verification was appended past — and its
     // result-less items would otherwise each read as missing evidence and turn a
     // passing delivery into a rejection.
-    const confirmed = runs.filter((round) => !isDraftVerifyRun(round));
+    //
+    // A round opened after the one under review belongs to a later attempt that
+    // has not delivered yet. Task rounds confirm their plan as they open, so it
+    // would plan every check with no results and mark this delivery's evidence as
+    // carried forward — a passing delivery rejected for "current evidence" it had
+    // just submitted. Judge the chain up to the round that settled.
+    const reviewedRoundIndex = runs.find((round) => round.id === run.id)?.roundIndex;
+    const confirmed = runs.filter(
+      (round) =>
+        !isDraftVerifyRun(round) &&
+        (reviewedRoundIndex == null || (round.roundIndex ?? 0) <= reviewedRoundIndex),
+    );
     // A result filed under an id its round never planned surfaces as a row of its
     // own, required by default. No later round plans it, so the builder is never
     // asked to re-answer it and it is never flagged as carried forward — its
@@ -108,6 +119,15 @@ export const reviewGoalDelivery = async (
 
     const predictor = new VerifyReviewPredictorService(db, userId, workspaceId);
     const feedback: string[] = [];
+    // Only a check this round itself answered can be repaired inside the round;
+    // one judged from an earlier round's result has no row here to re-open.
+    const rejectCheck = (check: (typeof checks)[number], reason: string) => {
+      if (check.result?.verifyRunId !== run.id) return;
+      (review.rejectedChecks ??= []).push({
+        checkItemId: check.result.checkItemId,
+        feedback: reason,
+      });
+    };
     // Checks are judged concurrently, so the aggregate has to be order
     // independent: take the most blocking outcome seen rather than letting the
     // last writer win. `rejected` outranks `unjudgeable` because one genuinely
@@ -172,7 +192,10 @@ export const reviewGoalDelivery = async (
         // The criterion asks for something no reader can confirm. Re-delivering
         // cannot change that, so this must not read as a rejected delivery.
         escalate('unjudgeable');
-      } else escalate('rejected');
+      } else {
+        escalate('rejected');
+        rejectCheck(check, prediction.comment ?? 'Acceptance review rejected this check.');
+      }
       feedback.push(
         `${check.title}: ${prediction?.comment ?? prediction?.statusReason ?? 'Review could not reach a decision.'}`,
       );

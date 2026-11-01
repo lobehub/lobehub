@@ -24,6 +24,7 @@ export async function applyMainIntent(
     case 'createAssistant': {
       const createMetadata: Record<string, any> = {
         ...heteroProvenance(state, intent.mainMessageId),
+        operationId: state.operationId,
       };
       if (intent.signal) createMetadata.signal = intent.signal;
       // Persist the turn's CC message.id so a cold replica can recover
@@ -65,7 +66,10 @@ export async function applyMainIntent(
       if (intent.reasoning !== undefined) update.reasoning = { content: intent.reasoning };
       if (intent.model) update.model = intent.model;
       if (intent.provider) update.provider = intent.provider;
-      if (intent.metadata) update.metadata = intent.metadata;
+      update.metadata = {
+        ...intent.metadata,
+        operationId: state.operationId,
+      };
       if (Object.keys(update).length > 0) {
         await deps.messageModel.update(intent.messageId, update);
       }
@@ -143,6 +147,7 @@ export async function applyMainIntent(
         update.metadata = {
           ...state.main.turnMetadata,
           ...heteroProvenance(state, state.main.currentMainMessageId),
+          operationId: state.operationId,
           usage: intent.usage,
         };
       }
@@ -379,6 +384,11 @@ export async function applySubagentIntent(
 
     case 'finalizeThread': {
       await deps.threadModel.update(intent.threadId, { status: ThreadStatus.Active });
+      return;
+    }
+
+    case 'reopenThread': {
+      await deps.threadModel.update(intent.threadId, { status: ThreadStatus.Processing });
       return;
     }
   }

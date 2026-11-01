@@ -4,18 +4,19 @@ import { describe, expect, it } from 'vitest';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
 import { applyLiteXMLOperations, exportEditorDataSnapshot } from '../agentDocuments/headlessEditor';
-import { resolveDocumentEditorData } from './editorData';
+import { resolveDocumentWrite, stripTitleHeading } from './editorData';
 
-describe('resolveDocumentEditorData', () => {
+describe('resolveDocumentWrite', () => {
   it('keeps valid Lexical editorData untouched', async () => {
     const editorData = { root: { children: [{ type: 'paragraph' }], type: 'root' } };
 
-    await expect(resolveDocumentEditorData({ content: 'x', editorData })).resolves.toBe(editorData);
+    const write = await resolveDocumentWrite({ content: 'x', editorData });
+    expect(write.editorData).toBe(editorData);
   });
 
   it('replaces the `{ type: "doc", content }` shape older CLI builds sent', async () => {
     const content = '## Tick Log\n\n- tick 1\n';
-    const editorData = await resolveDocumentEditorData({
+    const { editorData } = await resolveDocumentWrite({
       content,
       editorData: { content, type: 'doc' },
     });
@@ -25,7 +26,7 @@ describe('resolveDocumentEditorData', () => {
 
   it('builds editorData when only content is sent, so node ids stay stable across reads', async () => {
     const content = '## Tick Log\n\n- tick 1\n';
-    const editorData = await resolveDocumentEditorData({ content });
+    const { editorData } = await resolveDocumentWrite({ content });
 
     const first = await exportEditorDataSnapshot({
       editorData,
@@ -49,21 +50,73 @@ describe('resolveDocumentEditorData', () => {
   });
 
   it('leaves folders and metadata-only updates alone', async () => {
-    await expect(
-      resolveDocumentEditorData({ content: '', fileType: 'custom/folder' }),
-    ).resolves.toBeUndefined();
-    await expect(resolveDocumentEditorData({})).resolves.toBeUndefined();
+    await expect(resolveDocumentWrite({ content: '', fileType: 'custom/folder' })).resolves.toEqual(
+      { content: '', editorData: undefined },
+    );
+    await expect(resolveDocumentWrite({})).resolves.toEqual({});
   });
 
   it('never builds or keeps editorData for an HTML document', async () => {
     const content = '<!doctype html><html><body><h1>Report</h1></body></html>';
     const editorData = { root: { children: [{ type: 'paragraph' }], type: 'root' } };
 
+    await expect(resolveDocumentWrite({ content, fileType: 'custom/html' })).resolves.toEqual({
+      content,
+      editorData: undefined,
+    });
     await expect(
-      resolveDocumentEditorData({ content, fileType: 'custom/html' }),
-    ).resolves.toBeUndefined();
-    await expect(
-      resolveDocumentEditorData({ content, editorData, fileType: 'custom/html' }),
-    ).resolves.toBeUndefined();
+      resolveDocumentWrite({ content, editorData, fileType: 'custom/html', title: 'Report' }),
+    ).resolves.toEqual({ content, editorData: undefined });
+  });
+
+  it('drops the heading that repeats the title from a Markdown write and its editorData', async () => {
+    const write = await resolveDocumentWrite({
+      content: '# rc 与 device — 讨论纪要\n\n来源：eval 频道\n',
+      title: 'rc 与 device — 讨论纪要',
+    });
+
+    expect(write.content).toBe('来源：eval 频道\n');
+    const snapshot = await exportEditorDataSnapshot({
+      editorData: write.editorData,
+      fallbackContent: write.content!,
+      litexml: true,
+    });
+    expect(snapshot.litexml).not.toContain('<h1');
+  });
+
+  it('keeps content saved together with editorData as the editor wrote it', async () => {
+    const editorData = { root: { children: [{ type: 'paragraph' }], type: 'root' } };
+    const content = '# Plan\n\nbody';
+
+    await expect(resolveDocumentWrite({ content, editorData, title: 'Plan' })).resolves.toEqual({
+      content,
+      editorData,
+    });
+  });
+});
+
+describe('stripTitleHeading', () => {
+  it('drops a heading equal to the title, ignoring case, spacing and closing hashes', () => {
+    expect(stripTitleHeading('# Weekly  Report #\n\nbody', 'weekly report')).toBe('body');
+  });
+
+  it('drops a heading that differs from the title only by a suffix', () => {
+    expect(stripTitleHeading('# 任务验证未通过汇总\n\nbody', '任务验证未通过汇总（T-77）')).toBe(
+      'body',
+    );
+    expect(stripTitleHeading('# Report (2026-10-20)\n\nbody', 'Report')).toBe('body');
+  });
+
+  it('keeps a heading that names something other than the title', () => {
+    const content = '# Background\n\nbody';
+
+    expect(stripTitleHeading(content, 'Launch plan')).toBe(content);
+    // A shared prefix that ends mid-word is a different name, not a suffix.
+    expect(stripTitleHeading('# Plan\n\nbody', 'Planning notes')).toBe('# Plan\n\nbody');
+  });
+
+  it('keeps deeper headings and content without a title', () => {
+    expect(stripTitleHeading('## Report\n\nbody', 'Report')).toBe('## Report\n\nbody');
+    expect(stripTitleHeading('# Report\n\nbody', undefined)).toBe('# Report\n\nbody');
   });
 });

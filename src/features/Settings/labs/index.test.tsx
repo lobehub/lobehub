@@ -121,11 +121,10 @@ describe('Labs settings page', () => {
     expect(screen.getByText('features.oauthApps.title')).toBeDefined();
   });
 
-  it('renders Integrations as an alpha lab toggle', () => {
+  it('does not render released Integrations as a lab toggle', () => {
     renderPage();
 
-    const integrations = screen.getByText('features.integrations.title');
-    expect(within(integrations).getByText('stage.alpha.label')).toBeDefined();
+    expect(screen.queryByText('features.integrations.title')).toBeNull();
   });
 
   it('renders the topic acceptance (tray) lab toggle', () => {
@@ -165,15 +164,9 @@ describe('Labs settings page', () => {
     );
   });
 
-  it('shows the workspace group only to users with workspace access', () => {
-    renderPage();
-    expect(screen.queryByText('group.workspace')).toBeNull();
-    expect(screen.queryByText('features.workspaceOnboarding.title')).toBeNull();
-    cleanup();
-
+  it('does not render an empty workspace group', () => {
     renderPage({ enableWorkspace: true });
-    expect(screen.getByText('group.workspace')).toBeDefined();
-    expect(screen.getByText('features.workspaceOnboarding.title')).toBeDefined();
+    expect(screen.queryByText('group.workspace')).toBeNull();
   });
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {

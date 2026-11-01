@@ -1,10 +1,6 @@
 import type { GitWorkingTreeFiles, ProjectFileIndexResult } from '@lobechat/electron-client-ipc';
 
-import {
-  IndexedDBQueryProjectionStorage,
-  LocalStorageQueryProjectionStorage,
-} from '@/libs/queryProjectionStorage';
-import { cacheScope, defineReplica } from '@/libs/replica';
+import { AppIndexedDBStorage, AppLocalStorage, cacheScope, defineReplica } from '@/libs/replica';
 import { localFileKeys } from '@/libs/swr/keys';
 
 import {
@@ -62,7 +58,7 @@ export const projectIndexResource = defineReplica<
   name: 'projectFileIndex',
   persist: { maxEntries: PROJECT_INDEX_PERSIST_MAX_ROWS },
   storage: (namespace) =>
-    withPersistCodec(new IndexedDBQueryProjectionStorage({ namespace }), projectIndexCodec),
+    withPersistCodec(new AppIndexedDBStorage({ namespace }), projectIndexCodec),
   syncKey: (params) => localFileKeys.projectIndex(projectIndexHost(params), params.dirPath),
   version: 1,
 });
@@ -81,7 +77,7 @@ export const gitWorkingTreeFilesResource = defineReplica<
   name: 'gitWorkingTreeFiles',
   persist: { maxEntries: GIT_WORKING_TREE_PERSIST_MAX_ROWS },
   storage: (namespace) =>
-    withPersistCodec(new IndexedDBQueryProjectionStorage({ namespace }), gitWorkingTreeFilesCodec),
+    withPersistCodec(new AppIndexedDBStorage({ namespace }), gitWorkingTreeFilesCodec),
   syncKey: ({ deviceId, dirPath }) => localFileKeys.gitWorkingTreeFiles(deviceId, dirPath),
   version: 1,
 });
@@ -107,7 +103,7 @@ export const filesLocationResource = defineReplica<FilesLocationParams, FilesLoc
   key: ({ contextKey }) => contextKey,
   name: 'filesLocation',
   persist: { maxEntries: 100 },
-  storage: (namespace) => new LocalStorageQueryProjectionStorage<FilesLocation>({ namespace }),
+  storage: (namespace) => new AppLocalStorage<FilesLocation>({ namespace }),
   version: 1,
 });
 
@@ -118,8 +114,7 @@ export const filesLocationResource = defineReplica<FilesLocationParams, FilesLoc
  */
 export const peekFilesLocation = (contextKey: string, scope: string): FilesLocation | undefined => {
   if (!cacheScope.canHydrate?.()) return undefined;
-  const storage = filesLocationResource.storage as
-    LocalStorageQueryProjectionStorage<FilesLocation> | undefined;
+  const storage = filesLocationResource.storage as AppLocalStorage<FilesLocation> | undefined;
   return storage?.getSync({ queryKey: filesLocationResource.storageKey({ contextKey }), scope })
     ?.data;
 };

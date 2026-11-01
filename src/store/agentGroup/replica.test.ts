@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  *
- * The agent group store is two `@lobechat/replica` resources: the group list
+ * The agent group store is two `local-replica` resources: the group list
  * (`groups`) and the per-group detail (`groupMap`). The persisted projection
  * paints while the network confirms it, a gone group is dropped from every view
  * that holds it (and from storage), and one group row is patched everywhere it

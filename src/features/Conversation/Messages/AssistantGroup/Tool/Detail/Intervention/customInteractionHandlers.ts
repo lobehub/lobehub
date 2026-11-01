@@ -19,6 +19,7 @@ import { topicService } from '@/services/topic';
 const CURSOR_IDENTIFIER = 'cursor';
 const DEVIN_IDENTIFIER = 'devin';
 const DROID_IDENTIFIER = 'droid';
+const OPENCODE_IDENTIFIER = 'opencode';
 const QODER_IDENTIFIER = 'qoder';
 
 interface SubmitToolInteractionOptions {
@@ -172,6 +173,7 @@ const HETERO_CUSTOM_INTERACTION_IDENTIFIERS = new Set<string>([
   CURSOR_IDENTIFIER,
   DEVIN_IDENTIFIER,
   DROID_IDENTIFIER,
+  OPENCODE_IDENTIFIER,
   QODER_IDENTIFIER,
 ]);
 

@@ -71,6 +71,7 @@ const createMessageTransport = (): MessageTransport => ({
   deleteMessage: vi.fn(),
   findById: vi.fn().mockResolvedValue({ id: 'parent-1' }),
   findToolMessageIdByToolCallId: vi.fn(),
+  getToolMessage: vi.fn(),
   query: vi.fn(),
   update: vi.fn(),
   updatePluginState: vi.fn(),
@@ -418,6 +419,7 @@ describe('callLlm executor', () => {
     const error = new Error('temporary outage');
     const firstOutput = createAttemptOutput('partial');
     const finalOutput = createAttemptOutput('complete');
+    finalOutput.usage = { totalTokens: 10 };
     const runAttempt = vi
       .fn()
       .mockResolvedValueOnce({ error, ok: false, output: firstOutput })
@@ -489,6 +491,8 @@ describe('callLlm executor', () => {
       type: 'stream_retry',
     });
     expect(policy.waitForRetry).toHaveBeenCalledWith(1000);
+    // Both provider attempts count toward the user-facing LLM-call metric.
+    expect(result.newState.usage?.llm.apiCalls).toBe(2);
     expect(result.newState.messages.at(-1)).toMatchObject({ content: 'complete' });
     expect(transport.trace.recordResult).toHaveBeenCalledWith(finalOutput);
     expect(policy.onError).not.toHaveBeenCalled();

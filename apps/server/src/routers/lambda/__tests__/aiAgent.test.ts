@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
+  agentOperations,
   agents,
   agentsToSessions,
   messages,
@@ -658,6 +659,73 @@ describe('AI Agent Router Integration Tests', () => {
 
       await expect(caller.issueGatewayUserToken()).resolves.toEqual({ token: 'user-hub-jwt' });
       expect(mockSignUserJWT).toHaveBeenCalledTimes(1);
+      expect(mockSignUserJWT).toHaveBeenCalledWith(userId);
+    });
+  });
+
+  describe('refreshGatewayToken in a workspace', () => {
+    let workspaceId: string;
+    let teammateId: string;
+
+    beforeEach(async () => {
+      teammateId = await createTestUser(serverDB);
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({ name: 'Team', primaryOwnerId: userId, slug: `ws-gw-${userId}` })
+        .returning();
+      workspaceId = workspace.id;
+      mockSignUserJWT.mockResolvedValue('gateway-jwt');
+    });
+
+    afterEach(async () => {
+      await cleanupTestUser(serverDB, teammateId);
+    });
+
+    /** A workspace topic whose live run was started by `starterId`. */
+    const seedRunningTopic = async (starterId: string) => {
+      const operationId = `op-${starterId}`;
+      const [topic] = await serverDB
+        .insert(topics)
+        .values({
+          metadata: {
+            runningOperation: {
+              assistantMessageId: 'msg-1',
+              operationId,
+              startedAt: new Date().toISOString(),
+            },
+          },
+          title: 'Running',
+          userId: starterId,
+          workspaceId,
+        })
+        .returning();
+      await serverDB.insert(agentOperations).values({
+        id: operationId,
+        status: 'running',
+        topicId: topic.id,
+        userId: starterId,
+        workspaceId,
+      });
+      return topic.id;
+    };
+
+    it("refuses a teammate's live run instead of signing a token the gateway rejects", async () => {
+      const topicId = await seedRunningTopic(teammateId);
+      const caller = aiAgentRouter.createCaller({ ...createTestContext(), workspaceId });
+
+      await expect(caller.refreshGatewayToken({ topicId })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockSignUserJWT).not.toHaveBeenCalled();
+    });
+
+    it('still signs for the member who started the run', async () => {
+      const topicId = await seedRunningTopic(userId);
+      const caller = aiAgentRouter.createCaller({ ...createTestContext(), workspaceId });
+
+      await expect(caller.refreshGatewayToken({ topicId })).resolves.toEqual({
+        token: 'gateway-jwt',
+      });
       expect(mockSignUserJWT).toHaveBeenCalledWith(userId);
     });
   });

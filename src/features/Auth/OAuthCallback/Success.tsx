@@ -5,6 +5,8 @@ import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
+import resultStyles from '../resultStyles.module.css';
+
 const SuccessPage = memo(() => {
   const { t } = useTranslation('oauth');
   const [searchParams] = useSearchParams();
@@ -46,10 +48,11 @@ const SuccessPage = memo(() => {
 
   return (
     <Result
+      className={resultStyles.fullWidthSubTitle}
       icon={<FluentEmoji emoji={'✅'} size={96} type={'anim'} />}
       status="success"
       subTitle={
-        <Text align="left" as="span" fontSize={16} style={{ display: 'block' }} type="secondary">
+        <Text align="center" as="span" fontSize={16} style={{ display: 'block' }} type="secondary">
           {provider
             ? t('success.subTitleWithCountdown', {
                 countdown,

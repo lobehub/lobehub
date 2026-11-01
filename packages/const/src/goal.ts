@@ -22,6 +22,12 @@ export const goalStatuses = [
 export type GoalStatus = (typeof goalStatuses)[number];
 
 /**
+ * Longest title a person may give a goal. A title is a one-line label for the
+ * list, the sidebar and the page header; the full ask lives in `requirement`.
+ */
+export const GOAL_TITLE_MAX_LENGTH = 255;
+
+/**
  * The execution carrier a goal is optionally bound to. Kept polymorphic so a
  * goal does not depend on any single execution model:
  *
@@ -132,6 +138,19 @@ export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 /** The verifier itself could not run, so the delivery was never evaluated. */
 export const VERIFICATION_ERRORED_ERROR =
   'Verification could not run (internal error); the delivery was not evaluated.';
+/**
+ * The verifier could not run because the account has no credits left for its
+ * model. The delivery was never evaluated, and nothing a builder does changes
+ * that.
+ *
+ * Deliberately has NO recovery branch. Recovering it like any other verifier
+ * error started a fresh builder attempt, which re-delivered the same evidence
+ * into the same refused verifier and spent attempt after attempt until the
+ * budget ran out. The `InsufficientBudgetForModel` code in the text classifies
+ * it as a setup problem, so the gate asks for credits instead of a judgment.
+ */
+export const VERIFICATION_OUT_OF_CREDITS_ERROR =
+  'Verification could not run: the verifier model was refused for lack of credits (InsufficientBudgetForModel); the delivery was not evaluated.';
 /**
  * The review read the evidence and found the criterion undecidable from it — it
  * asks for an action the review layer cannot perform (re-running the delivered

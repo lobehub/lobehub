@@ -1,10 +1,8 @@
 import type {
   ChatCompletionTool,
-  DecisionOptions,
   DecisionPayload,
   DecisionQuestions,
   DecisionResponse,
-  GenerateObjectOptions,
   GenerateObjectPayload,
   GenerateObjectSchema,
 } from '@lobechat/model-runtime';
@@ -23,6 +21,12 @@ export interface AiGenerationObjectInput {
   tools?: ChatCompletionTool[];
 }
 
+export interface AiGenerationDecisionInput<
+  Q extends DecisionQuestions = DecisionQuestions,
+> extends DecisionPayload<Q> {
+  provider: string;
+}
+
 export interface AiGenerationObjectOptions {
   /**
    * Context forwarded to non-tracing hooks (billing, routing). Use `tracing`
@@ -33,8 +37,6 @@ export interface AiGenerationObjectOptions {
    * (e.g. `task`), not the prompt — the prompt goes in `tracing.scenario`.
    */
   metadata: Record<string, unknown> & { trigger: RequestTrigger };
-  /** Receives the token usage of the call, after billing and tracing hooks have seen it. */
-  onUsage?: GenerateObjectOptions['onUsage'];
   signal?: AbortSignal;
   /**
    * Structured tracing config (scenario / promptVersion / schemaName /
@@ -88,30 +90,30 @@ export class AiGenerationService {
         thinking: input.thinking,
         tools: input.tools,
       },
-      {
-        metadata: options.metadata,
-        onUsage: options.onUsage,
-        signal: options.signal,
-        tracing: options.tracing,
-      },
+      { metadata: options.metadata, signal: options.signal, tracing: options.tracing },
     )) as T;
   }
 
   /**
-   * Answer typed questions about one state (`ModelRuntime.decide`): natively for decision
-   * models, emulated through `generateObject` for chat models. Runs on the server runtime
-   * only; device-relayed providers are not supported here.
+   * Asks a decision model typed questions about one state and returns its probabilities.
+   *
+   * Always called from the server: decision endpoints are hosted APIs, and the device relay
+   * {@link generateObject} may use has no decision call. A provider without a decision endpoint
+   * rejects with `CapabilityNotSupported`.
    */
   async decide<Q extends DecisionQuestions>(
-    { provider, ...payload }: DecisionPayload<Q> & { provider: string },
-    options: Pick<AiGenerationObjectOptions, 'metadata' | 'signal'> &
-      Pick<DecisionOptions, 'onUsage'>,
+    input: AiGenerationDecisionInput<Q>,
+    options: AiGenerationObjectOptions,
   ): Promise<DecisionResponse<Q>> {
-    const runtime = await initModelRuntimeFromDB(this.db, this.userId, provider, this.workspaceId);
-    return runtime.decide(payload as DecisionPayload<Q>, {
-      metadata: options.metadata,
-      onUsage: options.onUsage,
-      signal: options.signal,
-    });
+    const runtime = await initModelRuntimeFromDB(
+      this.db,
+      this.userId,
+      input.provider,
+      this.workspaceId,
+    );
+    return runtime.decide(
+      { model: input.model, questions: input.questions, state: input.state },
+      { metadata: options.metadata, signal: options.signal, tracing: options.tracing },
+    );
   }
 }

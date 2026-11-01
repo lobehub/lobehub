@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * The file manager's knowledge-item list and by-id detail are
- * `@lobechat/replica` resources: the persisted head page / detail paints before
+ * `local-replica` resources: the persisted head page / detail paints before
  * the network answers, the response confirms and persists it, "load more"
  * appends through the engine, and — because the two resources are linked — a
  * rename or delete reaches the list row and every loaded detail entry at once.

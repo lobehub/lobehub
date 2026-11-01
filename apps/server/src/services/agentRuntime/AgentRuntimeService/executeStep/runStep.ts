@@ -1,4 +1,5 @@
 import type { AgentRuntime, AgentRuntimeContext } from '@lobechat/agent-runtime';
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
@@ -252,6 +253,7 @@ export async function saveAndPublishStep(
       ...(stepResult.newState.host?.includeFinalState === true && {
         finalState: stepResult.newState,
       }),
+      llmCalls: getLlmCallCount(stepResult.newState),
       nextStepScheduled,
       stepIndex,
     },

@@ -26,6 +26,7 @@ export default {
   'agentViewAll.orderBy.author': 'Author',
   'agentViewAll.orderBy.title': 'Title',
   'agentViewAll.orderBy.updatedAt': 'Updated at',
+  'agentViewAll.pendant.official': 'Official',
   'agentViewAll.removeFromSidebar': 'Hide from my sidebar',
   'agentViewAll.sidebarSection.collapse': 'Fold',
   'agentViewAll.sidebarSection.expand': 'Unfold',
@@ -175,7 +176,7 @@ export default {
 
   'cmdk.painting': 'Image',
 
-  'cmdk.resource': 'Resources',
+  'cmdk.resource': 'Docs',
 
   'cmdk.search.agent': 'Agent',
 
@@ -294,6 +295,12 @@ export default {
   'exportType.allAgent': 'Export All Agent Settings',
   'exportType.allAgentWithMessage': 'Export All Agents and Messages',
   'exportType.globalSetting': 'Export Global Settings',
+  'favorite.add': 'Add to Favorites',
+  'favorite.limitReached': 'Favorites can hold up to {{count}} items. Remove one to add another.',
+  'favorite.remove': 'Remove from Favorites',
+  'favorite.reorderError': "Couldn't save the order of your favorites. Try again.",
+  'favorite.section': 'Favorites',
+  'favorite.updateError': "Couldn't update your favorites. Try again.",
   'feedback': 'Feedback',
   'feedback.emailContact': 'You can also email us at <email>{{email}}</email>',
   'feedback.errors.fileTooLarge': 'File exceeds 5MB',
@@ -412,7 +419,7 @@ export default {
   'layoutInitializing': 'Loading layout...',
   'legal': 'Legal Disclaimer',
   'loading': 'Loading...',
-  'stillLoading': 'Still loading...',
+  'bootLoadingHint': 'Setting the stage…',
   'mail.business': 'Business Cooperation',
   'mail.support': 'Email Support',
   'deleteHistoryMigrating':
@@ -429,6 +436,8 @@ export default {
   'navPanel.agent': 'Agents',
   'navPanel.bottomDivider': 'Items below anchor to bottom',
   'navPanel.customizeSidebar': 'Customize Sidebar',
+  'navPanel.openMenu': 'Open menu',
+  'navPanel.shortcuts': 'Shortcuts',
   'navPanel.displayItems': 'Display Items',
   'navPanel.resetDefault': 'Reset to Default',
   'navPanel.hidden': 'Hidden',
@@ -484,7 +493,7 @@ export default {
   'visibilityConfirm.publish.itemReversible':
     'You can switch it back to private later from the same menu',
   'visibilityConfirm.publish.itemCapturedState':
-    'Members can run its copies and reach everything it has captured — files, CLI logins, your signed-in identity',
+    'Copies made before environments became one-time setups keep what they captured — files, CLI logins, your signed-in identity — and members can reach them',
   'visibilityConfirm.publish.itemLoaded':
     'After switching back, content others have already loaded can’t be pulled back',
   'retry': 'Retry',
@@ -608,7 +617,7 @@ export default {
   'tab.memory': 'Memory',
   'tab.note': 'Quick Note',
   'tab.pages': 'Pages',
-  'tab.resource': 'Resources',
+  'tab.resource': 'Docs',
   'tab.search': 'Search',
   'tab.setting': 'Settings',
   'tab.tasks': 'Tasks',

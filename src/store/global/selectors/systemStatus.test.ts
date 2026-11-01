@@ -277,10 +277,11 @@ describe('systemStatusSelectors', () => {
         status: { sidebarItems: stored },
       });
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
-        // Defaults missing from a saved layout (here the newer `goals` and
-        // `dashboard`) are backfilled.
+        // Defaults missing from a saved layout (here the newer `goals`,
+        // `dashboard` and `favorites`) are backfilled.
         'goals',
         'dashboard',
+        'favorites',
         'private',
         'agent',
         'recents',
@@ -302,6 +303,7 @@ describe('systemStatusSelectors', () => {
         'note',
         'goals',
         'dashboard',
+        'favorites',
         'project',
         'recents',
         'private',
@@ -344,6 +346,7 @@ describe('systemStatusSelectors', () => {
         'note',
         'goals',
         'dashboard',
+        'favorites',
         'recents',
         'project',
         'private',
@@ -356,6 +359,41 @@ describe('systemStatusSelectors', () => {
       ]);
     });
 
+    it('should backfill favorites at the head of a saved accordion block', () => {
+      const stored = [
+        'tasks',
+        'goals',
+        'dashboard',
+        'resource',
+        'recents',
+        'project',
+        'private',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'community',
+        'memory',
+      ];
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarItems: stored },
+      });
+      expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
+        'tasks',
+        'goals',
+        'dashboard',
+        'resource',
+        'favorites',
+        'recents',
+        'project',
+        'private',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'community',
+        'memory',
+      ]);
+    });
+
     it('should slot missing top-group defaults before the accordion block', () => {
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: ['agent', 'recents'] },
@@ -363,7 +401,6 @@ describe('systemStatusSelectors', () => {
       const items = systemStatusSelectors.sidebarItems(null)(s);
       const spacerIdx = items.indexOf(SIDEBAR_SPACER_ID);
       // every known key is present
-      expect(items).toContain('pages');
       expect(items).toContain('note');
       expect(items).toContain('tasks');
       expect(items).toContain('community');
@@ -378,8 +415,9 @@ describe('systemStatusSelectors', () => {
       expect(items.indexOf('resource')).toBeLessThan(spacerIdx - 3);
       // missing bottom-group defaults sit after the spacer
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
-      expect(items.indexOf('pages')).toBeGreaterThan(spacerIdx);
-      expect(items.indexOf('note')).toBeGreaterThan(items.indexOf('pages'));
+      // Pages live in Docs now; the retired entry is not backfilled
+      expect(items).not.toContain('pages');
+      expect(items.indexOf('note')).toBeGreaterThan(spacerIdx);
     });
 
     it('should migrate legacy `sidebarSectionOrder` accordion order into the default layout', () => {
@@ -394,6 +432,7 @@ describe('systemStatusSelectors', () => {
         'goals',
         'dashboard',
         'resource',
+        'favorites',
         'private',
         'agent',
         'recents',
@@ -401,7 +440,6 @@ describe('systemStatusSelectors', () => {
         SIDEBAR_SPACER_ID,
         'image',
         'community',
-        'pages',
         'note',
         'memory',
       ]);
@@ -419,6 +457,7 @@ describe('systemStatusSelectors', () => {
         'goals',
         'dashboard',
         'resource',
+        'favorites',
         'private',
         'recents',
         'project',
@@ -426,7 +465,6 @@ describe('systemStatusSelectors', () => {
         SIDEBAR_SPACER_ID,
         'image',
         'community',
-        'pages',
         'note',
         'memory',
       ]);

@@ -478,7 +478,9 @@ export class AcceptanceFlowModel {
               definition: {
                 ...item.definition,
                 preconditions: [
+                  /* v8 ignore start -- unreachable: child plan items come from graph(), which always builds definition.preconditions as an array, and materialize() keeps item.definition as-is, so `?? []` never applies */
                   ...(item.definition?.preconditions ?? []),
+                  /* v8 ignore stop */
                   ...(branch
                     ? [branch.trigger, ...(branch.condition ? [branch.condition] : [])]
                     : []),
