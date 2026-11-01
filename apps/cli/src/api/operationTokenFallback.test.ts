@@ -168,4 +168,28 @@ describe('operation token fallback', () => {
     await expect(query(expiredToken)).rejects.toThrow('jwt expired');
     expect(expiredToken).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * A device run's `caller:act` token is accepted on user-scoped routes, and
+   * refused only outside the run's workspace or after the run ended. Those
+   * limits are the run's own, so the machine's login, even of the same
+   * account, must not lift them.
+   */
+  it("keeps a caller token's scope and end refusals instead of retrying them", async () => {
+    storedLogin('user-1');
+    const outOfScope = vi.fn(() =>
+      trpcError(
+        "This run's token only works in workspace ws-team, not in workspace ws-other.",
+        'FORBIDDEN',
+      ),
+    );
+    const ended = vi.fn(() =>
+      trpcError('This run has ended, so its token no longer works.', 'UNAUTHORIZED'),
+    );
+
+    await expect(query(outOfScope)).rejects.toThrow('only works in workspace ws-team');
+    await expect(query(ended)).rejects.toThrow('This run has ended');
+    expect(outOfScope).toHaveBeenCalledTimes(1);
+    expect(ended).toHaveBeenCalledTimes(1);
+  });
 });

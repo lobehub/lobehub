@@ -51,6 +51,7 @@ describe('heteroOperationCapabilities', () => {
     // Every hetero run used to carry it, so a server-started run (Task, goal
     // planning, wakeups) could drive `lh goal create` and start uncapped work.
     expect(heteroOperationCapabilities('fix the build')).toEqual([
+      'caller:act',
       'hetero:ingest',
       'hetero:finish',
       'hetero:intervention:read',
