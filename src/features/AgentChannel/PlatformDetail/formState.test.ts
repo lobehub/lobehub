@@ -11,6 +11,7 @@ import {
   mergeCredentialsForSave,
   mergeSettingsWithDefaults,
   shouldAdoptIncomingConfig,
+  withHeterogeneousWakeOff,
 } from './formState';
 
 const slackSchema: FieldSchema[] = [
@@ -321,5 +322,32 @@ describe('findOverLimitSettings', () => {
   it('ignores values that are not lists at all', () => {
     expect(findOverLimitSettings(listSchema, { allowChannels: '1,2,3' })).toEqual([]);
     expect(findOverLimitSettings(undefined, { allowChannels: [{ id: '1' }] })).toEqual([]);
+  });
+});
+
+describe('withHeterogeneousWakeOff', () => {
+  const schema = [
+    {
+      key: 'settings',
+      label: 'settings',
+      properties: [{ default: false, key: 'botWakeDisabled', label: 'x', type: 'boolean' }],
+      type: 'object',
+    },
+  ] as FieldSchema[];
+
+  it('starts the wake switch off, over the schema default', () => {
+    expect(
+      mergeSettingsWithDefaults(schema, withHeterogeneousWakeOff(schema, {})).botWakeDisabled,
+    ).toBe(true);
+  });
+
+  it('keeps a choice already made', () => {
+    const settings = { botWakeDisabled: false };
+
+    expect(withHeterogeneousWakeOff(schema, settings)).toBe(settings);
+  });
+
+  it('adds nothing on a platform without the switch', () => {
+    expect(withHeterogeneousWakeOff([], { charLimit: 2000 })).toEqual({ charLimit: 2000 });
   });
 });

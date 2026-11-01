@@ -36,8 +36,6 @@
   "features.messageTextSelectionActions.title": "Acties voor Tekstselectie in Berichten",
   "features.oauthApps.desc": "Toon OAuth-appbeheer in persoonlijke en werkruimte-instellingen. Deze functie is standaard verborgen.",
   "features.oauthApps.title": "OAuth-apps",
-  "features.persistentSandbox.desc": "Bewaar bestanden die de cloud-sandbox schrijft. De werkmap blijft behouden na het hergebruiken van sessies en wordt gedeeld tussen je onderwerpen, in plaats van te worden verwijderd met de sandbox. Vereist een betaald abonnement; grote downloads en afhankelijkheden horen nog steeds in /tmp.",
-  "features.persistentSandbox.title": "Persistente Sandbox",
   "features.projects.desc": "Organiseer langlopende doelen in speciale werkruimtes met eigen agenten, kennisbanken en taken.",
   "features.projects.title": "Projectwerkruimtes",
   "features.selfLearning.desc": "Toon wat elke agent heeft geleerd uit echte praktijk — zijn regelbasis, welke regels daadwerkelijk worden gebruikt en welke lagen nog leeg zijn.",

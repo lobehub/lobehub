@@ -13,7 +13,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 /** Public invalidations share the authenticated user socket, never an Agent's private stream. */
 export const useChannelEvents = (params?: ChannelViewParams) => {
   const gatewayUrl = useServerConfigStore((s) => s.serverConfig.agentGatewayUrl);
-  const enabled = useServerConfigStore((s) => s.featureFlags.enableGatewayMux);
+  const enabled = useServerConfigStore((s) => s.serverConfig.agentGatewayProtocol === 2);
   const channelId = params?.channelId;
   const threadId = params?.threadId;
   const before = params?.before;

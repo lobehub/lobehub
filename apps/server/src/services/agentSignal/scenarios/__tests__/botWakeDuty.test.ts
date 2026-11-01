@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { BOT_WAKE_SETTING_KEYS as K, parseBotWakeSettings } from '../botWake/config';
 import type { WakeDutyJudge } from '../botWake/policies';
-import { createDutyPolicy, DUTY_POLICY_ID } from '../botWake/policies';
+import { createDutyPolicy, DUTY_HELPFUL_TAG, DUTY_POLICY_ID } from '../botWake/policies';
 import type { WakeAuthor, WakeConversationLine, WakeSignal } from '../botWake/types';
 
 const teammate: WakeAuthor = {
@@ -106,7 +106,7 @@ describe('duty policy', () => {
     expect((await reply('bob')).verdict).toBe('allow');
   });
 
-  it('stays out right after another person spoke, but not after the bot or the author', async () => {
+  it('stays out right after another bot spoke, but asks the model after a person', async () => {
     const judge = judgeScoring(1);
     const after = (line: Partial<WakeConversationLine>, at = NOW - 30_000) =>
       createDutyPolicy(rules(), judge).evaluate({
@@ -121,19 +121,77 @@ describe('duty policy', () => {
         },
       });
 
-    expect(await after({})).toMatchObject({ reason: 'answering-other', verdict: 'abstain' });
-    expect(judge).not.toHaveBeenCalled();
-
-    expect((await after({}, NOW - 5 * 60_000)).verdict).toBe('allow');
-    expect((await after({ authorId: 'bot-app', isBot: true })).verdict).toBe('allow');
-    expect((await after({ authorId: 'bob' })).verdict).toBe('allow');
-
     // Another agent in the thread: the owner is answering it, not asking this bot.
     expect(await after({ authorId: 'other-agent', isBot: true })).toMatchObject({
       reason: 'answering-other',
       verdict: 'abstain',
     });
+    expect(judge).not.toHaveBeenCalled();
+
+    expect((await after({ authorId: 'other-agent', isBot: true }, NOW - 5 * 60_000)).verdict).toBe(
+      'allow',
+    );
+    expect((await after({})).verdict).toBe('allow');
+    expect((await after({ authorId: 'bot-app', isBot: true })).verdict).toBe('allow');
     expect(judge).toHaveBeenCalledTimes(3);
+  });
+
+  it('steps in when stepping in would help, though the message is not one of its duties', async () => {
+    const judge = vi.fn<WakeDutyJudge>(async () => ({
+      duty: '评估需求',
+      helpful: 0.77,
+      inDuty: 0.4,
+      reason: 'p=0.40 helpful=0.77',
+    }));
+
+    expect(await run(judge, signal({ message: '话说我们能看到单个话题花了多少token么' }))).toEqual({
+      confidence: 0.77,
+      reason: 'p=0.40 helpful=0.77',
+      tags: ['duty', DUTY_HELPFUL_TAG],
+      verdict: 'allow',
+    });
+  });
+
+  it('stays out when neither the duty nor the help clears its bar', async () => {
+    const judge = vi.fn<WakeDutyJudge>(async () => ({
+      helpful: 0.69,
+      inDuty: 0.64,
+      reason: 'p=0.64 helpful=0.69',
+    }));
+
+    expect(await run(judge)).toMatchObject({ confidence: 0.64, verdict: 'deny' });
+  });
+
+  it('keeps the duty when both clear the bar, and reads a judge without `helpful` as before', async () => {
+    const both = vi.fn<WakeDutyJudge>(async () => ({
+      duty: '评估需求',
+      helpful: 0.9,
+      inDuty: 0.8,
+      reason: 'p=0.80',
+    }));
+    expect(await run(both)).toMatchObject({
+      confidence: 0.8,
+      matched: '评估需求',
+      tags: ['duty'],
+      verdict: 'allow',
+    });
+
+    expect((await run(judgeScoring(0.5))).verdict).toBe('deny');
+  });
+
+  it('defaults the help threshold to 0.7 and takes one from a hand-written config', async () => {
+    const judge = vi.fn<WakeDutyJudge>(async () => ({ helpful: 0.6, inDuty: 0.1, reason: '' }));
+    const { rules: lowered } = parseBotWakeSettings({
+      botWake: { duties: { helpfulThreshold: 0.55, text: DUTIES }, enabled: true },
+    });
+
+    expect(rules().duties.helpfulThreshold).toBe(0.7);
+    expect(lowered.duties.helpfulThreshold).toBe(0.55);
+    const result = await createDutyPolicy(lowered, judge).evaluate({
+      signal: signal(),
+      state: { conversation: { botNames: ['Nasa'], recent: [] } },
+    });
+    expect(result.verdict).toBe('allow');
   });
 
   it('does not ask about a message too short to act on', async () => {
@@ -189,7 +247,7 @@ describe('duty policy', () => {
       costly: true,
       id: DUTY_POLICY_ID,
       mode: 'enforce',
-      version: 2,
+      version: 3,
     });
   });
 });
