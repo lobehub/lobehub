@@ -145,4 +145,24 @@ describe('useTaskBatchActions', () => {
     refreshWarning![0].actions[0].onClick();
     expect(refreshTaskList).toHaveBeenCalledTimes(2);
   });
+
+  it('warns when the completion follow-ups failed after the batch committed', async () => {
+    batchUpdate.mockResolvedValue({
+      failed: [],
+      followUpFailed: true,
+      skipped: [],
+      updated: ['a'],
+    });
+    useTaskSelectionStore.getState().prune(new Set(['a']));
+    useTaskSelectionStore.getState().selectAll(['a']);
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    await act(() => result.current.run({ kind: 'update', patch: { priority: 1 } }));
+
+    expect(
+      toastWarning.mock.calls.some(
+        ([arg]) => typeof arg === 'object' && arg?.title === 'taskList.bulk.followUpFailed.title',
+      ),
+    ).toBe(true);
+  });
 });

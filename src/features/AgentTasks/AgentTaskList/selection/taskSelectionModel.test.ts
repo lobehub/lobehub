@@ -48,6 +48,7 @@ describe('taskSelectionModel', () => {
       ]),
     ).toEqual({
       failed: [{ error: 'x', id: 'd' }],
+      followUpFailed: false,
       skipped: [{ id: 'b', reason: 'running' }],
       updated: ['a', 'c'],
     });

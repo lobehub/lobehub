@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { agents, taskActivities, tasks, users } from '@/database/schemas';
+import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { TaskBatchService } from './batch';
 
@@ -186,6 +187,23 @@ describe('TaskBatchService (real PostgreSQL)', () => {
       await service.updateStatus([child.id], 'completed', { userId });
 
       expect((await model.findById(parent.id))?.status).toBe('paused');
+    });
+
+    it('keeps a committed completion when its follow-ups fail, and reports it', async () => {
+      const [task] = await createTasks(1);
+      const spy = vi
+        .spyOn(TaskRunnerService.prototype, 'cascadeOnCompletionMany')
+        .mockRejectedValueOnce(new Error('dependency discovery failed'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const { result } = await service.updateStatus([task.id], 'completed', { userId });
+
+      expect(spy).toHaveBeenCalled();
+      expect(result.updated).toEqual([task.id]);
+      expect(result.failed).toEqual([]);
+      expect(result.followUpFailed).toBe(true);
+      expect((await model.findById(task.id))?.status).toBe('completed');
+      spy.mockRestore();
     });
 
     it('does not re-open a parent completed in the same batch', async () => {

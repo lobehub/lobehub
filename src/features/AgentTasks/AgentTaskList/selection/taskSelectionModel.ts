@@ -51,12 +51,14 @@ export const chunkIds = (ids: readonly string[], size = TASK_BATCH_CHUNK_SIZE): 
 
 export interface TaskBatchOutcome {
   failed: { error: string; id: string }[];
+  followUpFailed?: boolean;
   skipped: { id: string; reason: string }[];
   updated: string[];
 }
 
 export const mergeOutcomes = (outcomes: readonly TaskBatchOutcome[]): TaskBatchOutcome => ({
   failed: outcomes.flatMap((outcome) => outcome.failed),
+  followUpFailed: outcomes.some((outcome) => outcome.followUpFailed),
   skipped: outcomes.flatMap((outcome) => outcome.skipped),
   updated: outcomes.flatMap((outcome) => outcome.updated),
 });

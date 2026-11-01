@@ -38,6 +38,7 @@ import SelectableTaskRow from './selection/SelectableTaskRow';
 import { useTaskSelectionStore } from './selection/store';
 import TaskBulkActionBar from './selection/TaskBulkActionBar';
 import { isEditableTarget } from './selection/taskSelectionModel';
+import { useSelectionScope } from './selection/useSelectionScope';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualModel';
@@ -67,6 +68,13 @@ interface TaskListProps {
   /** Store entry of the list to render (`useFetchTaskList().queryKey`) when `items` is absent. */
   queryKey?: string;
   routeScope?: TaskItemRouteScope;
+  /**
+   * Identity of the collection behind `items` (tab, sub-scope, page, owner).
+   * The selection is dropped whenever it changes; without it every items-backed
+   * collection shares one scope, and a task present in two of them would stay
+   * selected across the switch.
+   */
+  selectionScope?: string;
 }
 
 /** Row height the window sizes itself by before it has measured real rows. */
@@ -251,8 +259,8 @@ const TaskList = memo<TaskListProps>((props) => {
   useEffect(() => {
     useTaskSelectionStore.getState().prune(new Set(selectableIds));
   }, [selectableIds]);
-  const selectionScope = items ? 'items' : (queryKey ?? '');
-  useEffect(() => () => useTaskSelectionStore.getState().clear(), [selectionScope]);
+  const selectionScope = props.selectionScope ?? (items ? 'items' : (queryKey ?? ''));
+  useSelectionScope(selectionScope);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

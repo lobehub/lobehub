@@ -2624,6 +2624,8 @@
   "taskList.bulk.deleteConfirm.ok": "Delete",
   "taskList.bulk.deleteConfirm.title_one": "Delete {{count}} task?",
   "taskList.bulk.deleteConfirm.title_other": "Delete {{count}} tasks?",
+  "taskList.bulk.followUpFailed.desc": "The tasks were completed, but checkpoint pauses and dependent tasks could not be processed. Check the affected parent and dependent tasks.",
+  "taskList.bulk.followUpFailed.title": "Completion follow-ups did not run",
   "taskList.bulk.noResults": "No matching actions",
   "taskList.bulk.progress": "Updating {{done}} / {{total}}…",
   "taskList.bulk.refreshFailed.desc": "The changes were saved, but the list could not refresh and may show outdated tasks.",

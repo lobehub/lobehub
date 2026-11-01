@@ -45,6 +45,12 @@ export type TaskBatchSkipReason =
 
 export interface TaskBatchResult {
   failed: { error: string; id: string }[];
+  /**
+   * The status change committed, but its completion follow-ups (parent
+   * checkpoint pause, starting unlocked dependents) failed afterwards. The
+   * tasks are completed; the caller should say the follow-ups did not run.
+   */
+  followUpFailed?: boolean;
   skipped: { id: string; reason: TaskBatchSkipReason }[];
   /** Ids (as stored, not the caller's refs) that the batch changed. */
   updated: string[];
@@ -407,8 +413,26 @@ export class TaskBatchService {
       { concurrency: BATCH_SIDE_EFFECT_CONCURRENCY },
     );
 
+    // Post-commit: the tasks are completed whatever happens here, so a failure
+
+    // must not turn the whole request into an error the client would retry —
+
+    // a retry finds every row `unchanged` and changes nothing. Report it
+
+    // instead. (Re-running the follow-ups automatically on a later retry is
+
+    // deliberately avoided: it would start agent runs on dependents a person
+
+    // may have parked in the backlog on purpose.)
+
     if (status === 'completed' && updatedTasks.length > 0) {
-      await this.afterCompletion(updatedTasks);
+      try {
+        await this.afterCompletion(updatedTasks);
+      } catch (error) {
+        console.error('[TaskBatchService.updateStatus] completion follow-ups failed', error);
+
+        result.followUpFailed = true;
+      }
     }
 
     return { result, tasks: updatedTasks };

@@ -2624,6 +2624,8 @@
   "taskList.bulk.deleteConfirm.ok": "删除",
   "taskList.bulk.deleteConfirm.title_one": "删除 {{count}} 个任务？",
   "taskList.bulk.deleteConfirm.title_other": "删除 {{count}} 个任务？",
+  "taskList.bulk.followUpFailed.desc": "任务已标记完成，但检查点暂停和依赖任务没有处理成功，请检查相关的父任务和依赖任务。",
+  "taskList.bulk.followUpFailed.title": "完成后的后续处理未执行",
   "taskList.bulk.noResults": "没有匹配的操作",
   "taskList.bulk.progress": "正在处理 {{done}} / {{total}}…",
   "taskList.bulk.refreshFailed.desc": "修改已保存，但列表刷新失败，当前显示的可能是旧数据。",

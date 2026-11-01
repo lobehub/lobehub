@@ -93,7 +93,7 @@ export const useTaskBatchActions = () => {
       });
       setProgress(undefined);
 
-      const { failed, skipped, updated } = mergeOutcomes(outcomes);
+      const { failed, followUpFailed, skipped, updated } = mergeOutcomes(outcomes);
       const unprocessed = ids.length - updated.length - skipped.length - failed.length;
       const failedCount = failed.length + Math.max(unprocessed, 0);
 
@@ -117,6 +117,12 @@ export const useTaskBatchActions = () => {
       if (skipped.length > 0)
         parts.push(t('taskList.bulk.result.skipped', { count: skipped.length }));
       if (failedCount > 0) parts.push(t('taskList.bulk.result.failed', { count: failedCount }));
+      if (followUpFailed) {
+        toast.warning({
+          description: t('taskList.bulk.followUpFailed.desc'),
+          title: t('taskList.bulk.followUpFailed.title'),
+        });
+      }
       const message = parts.join(' · ');
       if (failedCount > 0) toast.warning(message);
       else toast.success(message);
