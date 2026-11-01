@@ -68,6 +68,12 @@ export type TaskExternalProvider = 'linear';
 /** Facts about the linked Linear issue kept on the link row, for display only. */
 export interface LinearIssueLinkMetadata {
   assigneeName?: string;
+  /**
+   * The issue's comments were read and copied at least once. A closed task
+   * whose issue left a rule's filter is caught up only until this is set.
+   * Sync bookkeeping, not display: a display refresh keeps it.
+   */
+  commentsSynced?: boolean;
   labels?: string[];
   projectName?: string;
   stateName?: string;

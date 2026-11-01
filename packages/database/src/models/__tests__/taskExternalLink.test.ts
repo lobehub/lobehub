@@ -71,7 +71,7 @@ describe('TaskExternalLinkModel', () => {
     expect(await shared.findByContainer('linear', 'team-1')).toHaveLength(1);
   });
 
-  it('appends synced comment ids and keeps them when display metadata is replaced', async () => {
+  it('records synced comments and keeps them when display metadata is replaced', async () => {
     const model = new TaskExternalLinkModel(db, userId);
     const task = await new TaskModel(db, userId).create({ instruction: 'one' });
     const created = await model.create({
@@ -79,16 +79,31 @@ describe('TaskExternalLinkModel', () => {
       metadata: { assigneeName: 'Ada', stateName: 'Todo' },
     });
 
-    await model.addSyncedCommentIds(created.id, ['c1', 'c2']);
-    await model.addSyncedCommentIds(created.id, ['c3']);
-    await model.addSyncedCommentIds(created.id, []);
-    // A display refresh built from a read taken before the ids were recorded.
+    await model.recordSyncedComments(created.id, ['c1', 'c2']);
+    await model.recordSyncedComments(created.id, ['c3']);
+    // A display refresh built from a read taken before the comments were recorded.
     await model.update(created.id, { metadata: { stateName: 'Done' } });
 
     const [current] = await model.findByExternalIds('linear', ['issue-1']);
     expect(current.metadata).toEqual({
+      commentsSynced: true,
       stateName: 'Done',
       syncedCommentIds: ['c1', 'c2', 'c3'],
+    });
+  });
+
+  it('marks an issue without comments as synced', async () => {
+    const model = new TaskExternalLinkModel(db, userId);
+    const task = await new TaskModel(db, userId).create({ instruction: 'one' });
+    const created = await model.create({ ...link(task.id), metadata: { stateName: 'Todo' } });
+
+    await model.recordSyncedComments(created.id, []);
+
+    const [current] = await model.findByExternalIds('linear', ['issue-1']);
+    expect(current.metadata).toEqual({
+      commentsSynced: true,
+      stateName: 'Todo',
+      syncedCommentIds: [],
     });
   });
 
@@ -107,7 +122,7 @@ describe('TaskExternalLinkModel', () => {
     const task = await new TaskModel(db, userId).create({ instruction: 'one' });
     const created = await new TaskExternalLinkModel(db, userId).create(link(task.id));
 
-    await new TaskExternalLinkModel(db, otherUserId).addSyncedCommentIds(created.id, ['c1']);
+    await new TaskExternalLinkModel(db, otherUserId).recordSyncedComments(created.id, ['c1']);
 
     const [current] = await new TaskExternalLinkModel(db, userId).findByExternalIds('linear', [
       'issue-1',

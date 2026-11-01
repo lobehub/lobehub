@@ -677,6 +677,55 @@ describe('LinearIssueSyncService comments (real PostgreSQL)', () => {
     ]);
   });
 
+  it('catches up the comments of a closed task the filter no longer reaches, once', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    // Imported as completed, without comments, before comments could be synced.
+    const done = issue({ id: '1', state: { name: 'Done', type: 'completed' } });
+    serve([done]);
+    await service.importIssues(TOKEN, ['1']);
+    expect((await linkedTask('1'))?.status).toBe('completed');
+
+    // A rule over open states only never lists it again.
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    serveComments([comment({ id: 'c1', issueId: '1' })]);
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result).toMatchObject({ closed: 0, commentsImported: 1 });
+    expect(await commentsOf('1')).toHaveLength(1);
+
+    linear.listLinearIssueComments.mockClear();
+    const again = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(again.commentsImported).toBeUndefined();
+    expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+  });
+
+  it('retries a closed task whose comments could not be read', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1', state: { name: 'Done', type: 'completed' } })]);
+    linear.listLinearIssueComments.mockRejectedValue(new LinearApiError('rate limited', 429));
+    await service.importIssues(TOKEN, ['1'], { syncComments: true });
+    expect(await commentsOf('1')).toHaveLength(0);
+
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    serveComments([comment({ id: 'c1', issueId: '1' })]);
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result.commentsImported).toBe(1);
+    expect(await commentsOf('1')).toHaveLength(1);
+  });
+
   it('leaves out issues it did not import and tasks the caller cannot see', async () => {
     const service = new LinearIssueSyncService(db, userId);
     serve([issue({ id: '1' })]);

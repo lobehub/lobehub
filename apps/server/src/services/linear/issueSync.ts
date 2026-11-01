@@ -227,7 +227,13 @@ export class LinearIssueSyncService {
       { createClosed: true, targetProjectId: options.targetProjectId },
       result,
     );
-    if (options.syncComments) await this.syncComments(accessToken, issues, result);
+    if (options.syncComments) {
+      await this.syncComments(
+        accessToken,
+        issues.map((issue) => issue.id),
+        result,
+      );
+    }
     return result;
   }
 
@@ -294,7 +300,13 @@ export class LinearIssueSyncService {
       },
       result,
     );
-    if (options.syncComments) await this.syncComments(accessToken, issues, result);
+    if (options.syncComments) {
+      await this.syncComments(
+        accessToken,
+        issues.map((issue) => issue.id),
+        result,
+      );
+    }
     if (result.truncated) {
       // Resume where the first issue left for later is, so none is skipped;
       // past every page read when the cap was not what stopped this run.
@@ -323,20 +335,34 @@ export class LinearIssueSyncService {
       .flat()
       .filter((link) => !seen.has(link.externalId));
     if (unseen.length > 0) {
-      const open = await this.taskModel.findByIds(unseen.map((link) => link.taskId));
-      const openTaskIds = new Set(
-        open.filter((task) => !CLOSED_TASK_STATUSES.has(task.status)).map((task) => task.id),
+      const visible = await this.taskModel.findByIds(unseen.map((link) => link.taskId));
+      const closedTaskIds = new Set(
+        visible.filter((task) => CLOSED_TASK_STATUSES.has(task.status)).map((task) => task.id),
       );
-      const toCheck = unseen.filter((link) => openTaskIds.has(link.taskId));
+      const visibleTaskIds = new Set(visible.map((task) => task.id));
+      const toCheck = unseen.filter(
+        (link) => visibleTaskIds.has(link.taskId) && !closedTaskIds.has(link.taskId),
+      );
       if (toCheck.length > 0) {
         const fetched = await getLinearIssuesByIds(
           accessToken,
           toCheck.map((link) => link.externalId),
         );
         await this.syncIssues(fetched, { closeOnly: true }, result);
-        // The comments posted before Linear closed it would otherwise never
-        // be read: later runs no longer match the issue either.
-        if (options.syncComments) await this.syncComments(accessToken, fetched, result);
+      }
+      if (options.syncComments) {
+        // The filter no longer reaches these issues, so their comments are
+        // read here: those being closed now, and closed tasks whose comments
+        // were never synced (imported before, or a failed read) — once, so a
+        // long tail of closed issues is not reread on every run.
+        const catchUp = unseen.filter(
+          (link) => closedTaskIds.has(link.taskId) && !link.metadata?.commentsSynced,
+        );
+        await this.syncComments(
+          accessToken,
+          [...toCheck, ...catchUp].map((link) => link.externalId),
+          result,
+        );
       }
     }
 
@@ -589,10 +615,11 @@ export class LinearIssueSyncService {
    */
   private async syncComments(
     accessToken: string,
-    issues: LinearIssue[],
+    issueIds: string[],
     result: LinearSyncResult,
   ): Promise<void> {
-    const links = [...(await this.visibleLinks(issues.map((issue) => issue.id))).values()];
+    if (issueIds.length === 0) return;
+    const links = [...(await this.visibleLinks(issueIds)).values()];
 
     for (let start = 0; start < links.length; start += LINEAR_PAGE_SIZE) {
       const batch = links.slice(start, start + LINEAR_PAGE_SIZE);
@@ -621,9 +648,10 @@ export class LinearIssueSyncService {
       }
 
       for (const link of batch) {
-        const issueComments = byIssue.get(link.externalId);
+        const issueComments = byIssue.get(link.externalId) ?? [];
         const known = new Set(link.metadata?.syncedCommentIds ?? []);
-        if (!issueComments?.some((comment) => !known.has(comment.id))) continue;
+        const hasNew = issueComments.some((comment) => !known.has(comment.id));
+        if (!hasNew && link.metadata?.commentsSynced) continue;
         try {
           const added = await this.appendComments(link, issueComments);
           if (added > 0) result.commentsImported = (result.commentsImported ?? 0) + added;
@@ -667,7 +695,7 @@ export class LinearIssueSyncService {
           userId: this.userId,
         });
       }
-      await linkModel.addSyncedCommentIds(
+      await linkModel.recordSyncedComments(
         current.id,
         fresh.map((comment) => comment.id),
       );
