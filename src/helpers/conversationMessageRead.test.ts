@@ -19,7 +19,6 @@ const mockGatewayMode = ({
   protocolV2?: boolean;
 }) => {
   vi.spyOn(serverConfigStore, 'getServerConfigStoreState').mockReturnValue({
-    featureFlags: { enableGatewayMux: protocolV2 },
     serverConfig: {
       ...(protocolV2 && { agentGatewayProtocol: 2 }),
       ...(gatewayMode && { agentGatewayUrl: 'https://gateway.test', enableGatewayMode: true }),
