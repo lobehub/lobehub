@@ -16,12 +16,14 @@ class ImportService {
 
   private createErrorHandler = (callbacks?: OnImportCallbacks) => (e: unknown) => {
     callbacks?.onStageChange?.(ImportStage.Error);
-    const error = e as any;
+    const error = typeof e === 'object' && e !== null ? (e as any) : {};
+    const message = typeof e === 'string' ? e : error?.message || 'Import failed';
+    const code = error?.data?.code || error?.code || (typeof e === 'string' ? e : 'IMPORT_FAILED');
 
     callbacks?.onError?.({
-      code: error?.data?.code || error?.code || 'IMPORT_FAILED',
+      code,
       httpStatus: error?.data?.httpStatus || error?.httpStatus || 500,
-      message: error?.message || 'Import failed',
+      message,
       path: error?.data?.path || error?.path,
     });
   };

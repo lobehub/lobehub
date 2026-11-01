@@ -282,6 +282,33 @@ describe('ImportService', () => {
         );
       });
 
+      it('should handle string upload error message like UPLOAD_NETWORK_ERROR', async () => {
+        const mockData = {
+          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
+          version: 1,
+        };
+
+        vi.mocked(uploadService.uploadDataToS3).mockRejectedValue('UPLOAD_NETWORK_ERROR');
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+        };
+
+        await expect(importService.importData(mockData as any, callbacks)).rejects.toThrow(
+          'Upload Error',
+        );
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            code: 'UPLOAD_NETWORK_ERROR',
+            message: 'UPLOAD_NETWORK_ERROR',
+          }),
+        );
+      });
+
       it('should handle server response with success: false after successful upload', async () => {
         const mockData = {
           messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
@@ -697,6 +724,38 @@ describe('ImportService', () => {
         expect(callbacks.onError).toHaveBeenCalledWith(
           expect.objectContaining({
             message: 'Network disconnected',
+          }),
+        );
+        expect(callbacks.onSuccess).not.toHaveBeenCalled();
+      });
+
+      it('should handle string upload error message like UPLOAD_NETWORK_ERROR', async () => {
+        const mockData = {
+          data: {
+            messages: Array.from({ length: 500 }).fill({ id: 1, content: 'test' }),
+          },
+          mode: 'postgres' as const,
+          schemaHash: 'hash123',
+        };
+
+        vi.mocked(uploadService.uploadDataToS3).mockRejectedValue('UPLOAD_NETWORK_ERROR');
+
+        const callbacks = {
+          onError: vi.fn(),
+          onStageChange: vi.fn(),
+          onSuccess: vi.fn(),
+        };
+
+        await expect(importService.importPgData(mockData as any, { callbacks })).rejects.toThrow(
+          'Upload Error',
+        );
+
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Uploading);
+        expect(callbacks.onStageChange).toHaveBeenCalledWith(ImportStage.Error);
+        expect(callbacks.onError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            code: 'UPLOAD_NETWORK_ERROR',
+            message: 'UPLOAD_NETWORK_ERROR',
           }),
         );
         expect(callbacks.onSuccess).not.toHaveBeenCalled();
