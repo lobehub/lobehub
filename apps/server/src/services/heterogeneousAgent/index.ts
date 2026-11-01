@@ -298,10 +298,11 @@ export class HeterogeneousAgentService {
       );
     }
     for (const event of unpublished) {
-      // Each event already carries operationId; pass through unchanged so the
-      // wire shape on the WS side is identical to gateway-driven runs.
+      // Each event already carries operationId; the wire shape matches
+      // gateway-driven runs, which also name the step's assistant row on
+      // `stream_start` (see `publishData`).
       await this.streamEventManager.publishStreamEvent(operationId, {
-        data: event.data,
+        data: this.persistenceHandler.publishData(operationId, event),
         stepIndex: event.stepIndex,
         type: event.type,
       });

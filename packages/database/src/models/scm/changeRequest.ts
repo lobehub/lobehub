@@ -9,7 +9,7 @@ import type {
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, lt, or, type SQL,sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, type SQL, sql } from 'drizzle-orm';
 
 import type { ScmChangeRequestItem } from '../../schemas';
 import { acceptances, scmChangeRequests, scmInstallations } from '../../schemas';
@@ -488,6 +488,7 @@ export class ScmChangeRequestModel {
             const adopted = held && held.sha === params.headSha ? held.checks : null;
             return {
               checks: adopted,
+              /* v8 ignore next -- unreachable: `ciValues` is only built when `headChanged`, which already requires a truthy `params.headSha` */
               ciHeadSha: params.headSha ?? null,
               ciStatus: adopted ? rollupCiStatus(adopted) : null,
             };

@@ -134,8 +134,11 @@ class TaskService {
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.create.mutate(params);
 
-  updateVisibility = async (id: string, visibility: 'private' | 'public') =>
-    lambdaClient.task.updateVisibility.mutate({ id, visibility });
+  updateVisibility = async (
+    id: string,
+    visibility: 'private' | 'public',
+    options?: { takeOwnership?: boolean },
+  ) => lambdaClient.task.updateVisibility.mutate({ id, visibility, ...options });
 
   update = async (
     id: string,
@@ -171,6 +174,27 @@ class TaskService {
     },
   ) => lambdaClient.task.update.mutate({ id, ...data });
 
+  // ── Batch (list multi-select) ──
+  // One request per action for the whole selection; the server answers with a
+  // per-task outcome (`updated` / `skipped` / `failed`).
+
+  batchUpdate = async (params: {
+    assigneeAgentId?: string | null;
+    assigneeUserId?: string | null;
+    ids: string[];
+    priority?: number;
+  }) => lambdaClient.task.batchUpdate.mutate(params);
+
+  batchUpdateStatus = async (
+    ids: string[],
+    status: 'backlog' | 'canceled' | 'completed' | 'paused',
+  ) => lambdaClient.task.batchUpdateStatus.mutate({ ids, status });
+
+  batchArchive = async (ids: string[], archived: boolean) =>
+    lambdaClient.task.batchArchive.mutate({ archived, ids });
+
+  batchDelete = async (ids: string[]) => lambdaClient.task.batchDelete.mutate({ ids });
+
   delete = async (id: string) => lambdaClient.task.delete.mutate({ id });
 
   archive = async (id: string, archived: boolean) =>
@@ -194,8 +218,10 @@ class TaskService {
   updateStatusCascade = async (id: string, status: 'canceled' | 'completed') =>
     lambdaClient.task.updateStatusCascade.mutate({ id, status });
 
-  run = async (id: string, params?: { continueTopicId?: string; prompt?: string }) =>
-    lambdaClient.task.run.mutate({ id, ...params });
+  run = async (
+    id: string,
+    params?: { continueTopicId?: string; model?: string; prompt?: string; provider?: string },
+  ) => lambdaClient.task.run.mutate({ id, ...params });
 
   previewSubtaskLayers = async (id: string) => lambdaClient.task.previewSubtaskLayers.query({ id });
 

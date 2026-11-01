@@ -164,8 +164,10 @@ describe('sendMessage behind a running Gateway run', () => {
     vi.useRealTimers();
 
     expect(sendQueued).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'earlier\n\nnewer', metadata: { steer: true } }),
+      expect.objectContaining({ message: 'earlier\n\nnewer' }),
     );
+    // The drained messages open a turn of their own, so they are not marked.
+    expect(sendQueued.mock.calls[0][0].metadata?.steer).toBeUndefined();
   });
 
   it('waits behind a follow-up a run is still delivering, instead of overtaking it', async () => {

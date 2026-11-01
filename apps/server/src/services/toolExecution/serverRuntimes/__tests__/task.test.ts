@@ -212,7 +212,9 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-manager',
         taskCaller: taskCaller as any,
         taskId: 'T-1',
-        taskModel: {} as any,
+        taskModel: {
+          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+        } as any,
         taskService: {} as any,
       });
 
@@ -222,9 +224,9 @@ describe('createTaskRuntime', () => {
       expect(taskCaller.addComment).toHaveBeenCalledWith({
         authorAgentId: 'agt-manager',
         content: 'Keep the original parent.',
-        id: 'T-1',
+        id: 'task-1',
       });
-      expect(result.content).toBe('Comment added to task T-1.');
+      expect(result.content).toBe('Comment added to task T-1 (id: task-1).');
     });
 
     it('updates and deletes comments by commentId', async () => {
@@ -235,7 +237,9 @@ describe('createTaskRuntime', () => {
       const runtime = createTaskRuntime({
         agentModel: { existsById: vi.fn() } as any,
         taskCaller: taskCaller as any,
-        taskModel: {} as any,
+        taskModel: {
+          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+        } as any,
         taskService: {} as any,
       });
 
@@ -703,7 +707,7 @@ describe('createTaskRuntime', () => {
       expect(deps.taskModel.update).not.toHaveBeenCalled();
     });
 
-    it('delegates parentIdentifier to router update for resolution and safety validation', async () => {
+    it('resolves parentIdentifier before the router update and safety validation', async () => {
       const deps = makeDeps();
 
       const runtime = createTaskRuntime({
@@ -714,13 +718,20 @@ describe('createTaskRuntime', () => {
         taskService: deps.taskService as any,
       });
 
+      deps.taskModel.resolve.mockImplementation(async (ref) => ({
+        id: ref === 'T-43' ? 'task-43' : 'task-1',
+        identifier: ref,
+      }));
       const result = await runtime.editTask({
         identifier: 'T-1',
         parentIdentifier: 'T-43',
       });
 
       expect(result.success).toBe(true);
-      expect(deps.taskCaller.update).toHaveBeenCalledWith({ id: 'task-1', parentTaskId: 'T-43' });
+      expect(deps.taskCaller.update).toHaveBeenCalledWith({
+        id: 'task-1',
+        parentTaskId: 'task-43',
+      });
       expect(deps.taskModel.update).not.toHaveBeenCalled();
       expect(result.content).toContain('parent → T-43');
     });
@@ -798,7 +809,9 @@ describe('createTaskRuntime', () => {
         agentId: 'agt-xyz',
         scope: 'task',
         taskCaller: taskCaller as any,
-        taskModel: {} as any,
+        taskModel: {
+          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+        } as any,
         taskService: {} as any,
       });
 
@@ -867,8 +880,8 @@ describe('createTaskRuntime', () => {
       expect(result.state).toEqual({
         failed: 0,
         results: [
-          { error: undefined, identifier: 'T-A', name: 'A', success: true },
-          { error: undefined, identifier: 'T-B', name: 'B', success: true },
+          { error: undefined, taskId: 'db-A', identifier: 'T-A', name: 'A', success: true },
+          { error: undefined, taskId: 'db-B', identifier: 'T-B', name: 'B', success: true },
         ],
         succeeded: 2,
       });
@@ -1103,12 +1116,14 @@ describe('createTaskRuntime', () => {
 
     it('handles status-only updates', async () => {
       const taskCaller = {
-        updateStatus: vi.fn().mockResolvedValue({ data: { identifier: 'T-1' } }),
+        updateStatus: vi.fn().mockResolvedValue({ data: { id: 'task-1', identifier: 'T-1' } }),
       };
       const runtime = createTaskRuntime({
         agentModel: { existsById: vi.fn() } as any,
         taskCaller: taskCaller as any,
-        taskModel: {} as any,
+        taskModel: {
+          resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }),
+        } as any,
         taskService: {} as any,
       });
 
@@ -1117,7 +1132,7 @@ describe('createTaskRuntime', () => {
       expect(result.success).toBe(true);
       expect(taskCaller.updateStatus).toHaveBeenCalledWith({
         error: undefined,
-        id: 'T-1',
+        id: 'task-1',
         status: 'completed',
       });
     });
@@ -1144,90 +1159,6 @@ describe('createTaskRuntime', () => {
         completion: { requestedByOperationId: 'operation-1' },
       });
       expect(taskCaller.updateStatus).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('runTask / runTasks', () => {
-    it('forwards identifier + prompt + continueTopicId to taskCaller.run', async () => {
-      const taskCaller = {
-        run: vi.fn().mockResolvedValue({ operationId: 'op_1', topicId: 'tpc_1' }),
-      };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: {} as any,
-        taskService: {} as any,
-      });
-
-      const result = await runtime.runTask({
-        continueTopicId: 'tpc_existing',
-        identifier: 'T-1',
-        prompt: 'extra',
-      });
-
-      expect(result.success).toBe(true);
-      expect(taskCaller.run).toHaveBeenCalledWith({
-        continueTopicId: 'tpc_existing',
-        id: 'T-1',
-        prompt: 'extra',
-      });
-      expect(result.content).toContain('Task T-1 started');
-      expect(result.content).toContain('Topic: tpc_1');
-    });
-
-    it('falls back to current task context when identifier omitted', async () => {
-      const taskCaller = {
-        run: vi.fn().mockResolvedValue({ operationId: 'op', topicId: 'tpc' }),
-      };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskId: 'T-current',
-        taskModel: {} as any,
-        taskService: {} as any,
-      });
-
-      await runtime.runTask({});
-
-      expect(taskCaller.run).toHaveBeenCalledWith(expect.objectContaining({ id: 'T-current' }));
-    });
-
-    it('refuses to run when neither identifier nor task context is available', async () => {
-      const taskCaller = { run: vi.fn() };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: {} as any,
-        taskService: {} as any,
-      });
-
-      const result = await runtime.runTask({});
-
-      expect(result.success).toBe(false);
-      expect(taskCaller.run).not.toHaveBeenCalled();
-    });
-
-    it('runs identifiers sequentially and surfaces per-item failures without aborting', async () => {
-      const taskCaller = {
-        run: vi
-          .fn()
-          .mockResolvedValueOnce({ topicId: 'tpc_a' })
-          .mockRejectedValueOnce(new Error('Task already has a running topic'))
-          .mockResolvedValueOnce({ topicId: 'tpc_c' }),
-      };
-      const runtime = createTaskRuntime({
-        agentModel: { existsById: vi.fn() } as any,
-        taskCaller: taskCaller as any,
-        taskModel: {} as any,
-        taskService: {} as any,
-      });
-
-      const result = await runtime.runTasks({ identifiers: ['T-A', 'T-B', 'T-C'] });
-
-      expect(taskCaller.run).toHaveBeenCalledTimes(3);
-      expect(result.success).toBe(false);
-      expect(result.content).toContain('Started 2/3 tasks (1 failed)');
-      expect(result.content).toContain('T-B — failed: Task already has a running topic');
     });
   });
 });
@@ -1436,7 +1367,7 @@ describe('createTaskRuntime — human assignee (assigneeUserId)', () => {
     const baseDeps = {
       agentModel: {} as any,
       taskCaller: {} as any,
-      taskModel: {} as any,
+      taskModel: { resolve: vi.fn().mockResolvedValue({ id: 'task-1', identifier: 'T-1' }) } as any,
       taskService: {} as any,
     };
 

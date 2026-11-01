@@ -64,6 +64,8 @@ export interface StartOperationInput {
   providedApprovalResolutionRequestId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** See {@link InternalExecAgentParams.reservedOperationId}. */
+  reservedOperation?: boolean;
   signal?: AbortSignal;
   stream?: boolean;
   topicStartOwnerOperationId?: string;
@@ -131,6 +133,7 @@ export const startOperation = async (
     providedApprovalResolutionRequestId,
     queueRetries,
     queueRetryDelay,
+    reservedOperation,
     signal,
     stream,
     topicStartOwnerOperationId,
@@ -336,6 +339,7 @@ export const startOperation = async (
       hooks,
       operationId,
       parentOperationId,
+      reservedOperation,
       signal,
       queueRetries,
       queueRetryDelay,

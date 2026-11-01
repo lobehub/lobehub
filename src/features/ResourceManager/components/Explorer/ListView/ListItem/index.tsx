@@ -162,7 +162,6 @@ const FileListItem = ({
   selected,
   showUploader = true,
   size,
-  slug,
   sourceType,
   uploader,
   url,
@@ -250,9 +249,12 @@ const FileListItem = ({
     isPage,
     libraryId: resourceManagerState.libraryId,
     openInPanel: true,
-    slug,
   });
-  const handleItemDoubleClick = useFileItemDoubleClick({ id, isPage });
+  const handleItemDoubleClick = useFileItemDoubleClick({
+    id,
+    isPage,
+    libraryId: resourceManagerState.libraryId,
+  });
   const { menuItems } = useFileItemDropdown({
     fileId,
     fileType,

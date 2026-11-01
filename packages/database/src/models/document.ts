@@ -843,6 +843,7 @@ export class DocumentModel {
         if (seen.has(currentId)) continue;
         seen.add(currentId);
         const original = byId.get(currentId);
+        /* v8 ignore next -- unreachable: the queue only holds documentId (the subtree root collectSubtree fetched by that id) and ids pushed from subtree rows, so byId always has it */
         if (!original) continue;
 
         const newParentId =

@@ -4,8 +4,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { channelMessages, channelThreads, messages, topics } from '../../../schemas';
+import { channelJobs, channelMessages, channelThreads, messages, topics } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import { deliver } from '../delivery';
 import { createChannelFixture, jobsOf } from './testUtils';
 
 const db: LobeChatDatabase = await getTestDB();
@@ -38,7 +39,7 @@ describe('ChannelRepository.send', () => {
       content: 'Fix the bug',
       mentions: [coder.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     expect(message).toMatchObject({
@@ -59,6 +60,30 @@ describe('ChannelRepository.send', () => {
     ]);
   });
 
+  it('keeps one job per message and member when delivery is repeated', async () => {
+    const { asMember, channel, member } = await fixture.createTeamChannel();
+    const coder = await fixture.addAgent(channel.id, 'Coder');
+    const reviewer = await fixture.addAgent(channel.id, 'Reviewer');
+    const message = await asMember.send(channel.id, {
+      content: 'Everyone',
+      requestKey: 'once',
+      routing: 'fallback',
+    });
+    const jobs = await jobsOf(db, message.id);
+    expect(jobs).toHaveLength(2);
+
+    await db.transaction((tx) => deliver(tx, message, [coder, reviewer], member.id));
+    const duplicate = await db
+      .insert(channelJobs)
+      .values({ ...jobs[0], id: undefined })
+      .onConflictDoNothing({ target: [channelJobs.messageId, channelJobs.memberId] })
+      .returning();
+
+    expect(duplicate).toEqual([]);
+    expect(await jobsOf(db, message.id)).toEqual(expect.arrayContaining(jobs));
+    expect(await jobsOf(db, message.id)).toHaveLength(2);
+  });
+
   it('wakes no Agent when only people are mentioned', async () => {
     const { asMember, channel, owner } = await fixture.createTeamChannel();
     await fixture.addAgent(channel.id, 'Coder');
@@ -67,14 +92,14 @@ describe('ChannelRepository.send', () => {
       content: 'Can you review this?',
       mentions: [owner.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     expect(message).toMatchObject({ recipientMemberIds: [], routingStatus: 'directed' });
     expect(await jobsOf(db, message.id)).toEqual([]);
   });
 
-  it('leaves an unmentioned message to Jev, or to every Agent without a decision model', async () => {
+  it('leaves an unmentioned message to the decision model, or to every Agent without a decision model', async () => {
     const { asMember, channel } = await fixture.createTeamChannel();
     const coder = await fixture.addAgent(channel.id, 'Coder');
     const reviewer = await fixture.addAgent(channel.id, 'Reviewer');
@@ -82,7 +107,7 @@ describe('ChannelRepository.send', () => {
     const routed = await asMember.send(channel.id, {
       content: 'Anyone?',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     expect(routed).toMatchObject({ routingAttempt: 1, routingStatus: 'pending' });
     expect(await jobsOf(db, routed.id)).toEqual([]);
@@ -103,7 +128,7 @@ describe('ChannelRepository.send', () => {
     const message = await asMember.send(channel.id, {
       content: 'Hello',
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
 
     expect(message.routingStatus).toBe('skipped');
@@ -117,7 +142,7 @@ describe('ChannelRepository.send', () => {
       content: 'Root',
       mentions: [coder.id],
       requestKey: 'root',
-      routing: 'jev',
+      routing: 'decision',
     });
     const [thread] = await db
       .insert(channelThreads)
@@ -141,7 +166,7 @@ describe('ChannelRepository.send', () => {
       content: 'Join us',
       mentions: [reviewer.id.toUpperCase(), reviewer.id],
       requestKey: 'join',
-      routing: 'jev',
+      routing: 'decision',
       threadId: thread.id,
     });
     const [joined] = await db.select().from(channelThreads).where(eq(channelThreads.id, thread.id));
@@ -163,7 +188,7 @@ describe('ChannelRepository.send', () => {
       content: 'Once',
       mentions: [coder.id.toUpperCase(), coder.id],
       requestKey: 'req-1',
-      routing: 'jev' as const,
+      routing: 'decision' as const,
     };
 
     const first = await asMember.send(channel.id, input);
@@ -179,7 +204,7 @@ describe('ChannelRepository.send', () => {
 
   it('rejects empty or oversized content, unknown mentions and foreign files', async () => {
     const { asMember, channel } = await fixture.createTeamChannel();
-    const base = { requestKey: 'req-1', routing: 'jev' as const };
+    const base = { requestKey: 'req-1', routing: 'decision' as const };
 
     await expect(asMember.send(channel.id, { ...base, content: '  ' })).rejects.toMatchObject({
       code: 'BAD_REQUEST',

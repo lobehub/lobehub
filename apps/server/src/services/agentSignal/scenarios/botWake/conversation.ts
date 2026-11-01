@@ -1,4 +1,4 @@
-import type { WakeConversationLine } from './types';
+import type { WakeConversation, WakeConversationLine } from './types';
 
 /** A message longer than this is cut: the log keeps context for a model, not an archive. */
 export const CONVERSATION_LINE_MAX_CHARS = 500;
@@ -8,6 +8,9 @@ export const CONVERSATION_LOG_MAX_LINES = 200;
 
 /** Messages shown to the classifier. */
 export const CONVERSATION_PROMPT_LINES = 20;
+
+/** Participants named to a woken agent: who is in the room, not a roster. */
+export const MAX_NAMED_PARTICIPANTS = 8;
 
 /** A name shorter than this would match inside ordinary words. */
 const MIN_BOT_NAME_LENGTH = 2;
@@ -112,6 +115,46 @@ export const describeLine = (
         : name;
 
   return `${speaker}: ${line.text}`;
+};
+
+/** Someone taking part in a conversation, as the woken agent is told: a name and what they are. */
+export interface WakeParticipant {
+  /** Another bot or agent. */
+  isBot: boolean;
+  /** The bot's owner. */
+  isOwner: boolean;
+  name: string;
+}
+
+/**
+ * Who else has been taking part in a conversation lately, newest first: people and other bots, by
+ * the name they posted under. Names only, never what they said. Leaves out this bot's own lines
+ * (logged under `botAuthorId`) and lines without a name.
+ */
+export const conversationParticipants = (
+  conversation: WakeConversation | undefined,
+  botAuthorId: string | undefined,
+): WakeParticipant[] => {
+  const seen = new Set<string>();
+  const participants: WakeParticipant[] = [];
+
+  for (const line of [...(conversation?.recent ?? [])].reverse()) {
+    if (line.isBot && botAuthorId !== undefined && line.authorId === botAuthorId) continue;
+    const name = line.authorName?.trim();
+    if (!name) continue;
+    const key = line.authorId ?? name;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    participants.push({
+      isBot: line.isBot,
+      isOwner: conversation?.ownerId !== undefined && line.authorId === conversation.ownerId,
+      name,
+    });
+    if (participants.length >= MAX_NAMED_PARTICIPANTS) break;
+  }
+
+  return participants;
 };
 
 const isWordChar = (char: string | undefined) => !!char && /\w/.test(char);

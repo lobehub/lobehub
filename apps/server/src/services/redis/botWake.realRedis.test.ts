@@ -41,17 +41,39 @@ describe.skipIf(!url)('botWake redis domain (real Redis)', () => {
     await cleanup?.();
   });
 
-  it('files bot-spoke under the channel and the thread, and either one finds it', async () => {
+  it('opens the window on the thread the bot spoke in, not on its whole channel', async () => {
     const keys = ['discord:app:g:c1', 'discord:app:g:c1:t1'];
     await domain.recordBotSpoke(keys, 1_000, 300_000);
 
-    expect(await domain.readChannel([keys[0]])).toMatchObject({
+    expect(await domain.readChannel(keys)).toMatchObject({
       botLastSpokeAt: 1_000,
       followupUntil: 301_000,
       silentWakes: 0,
     });
-    expect(await domain.readChannel(keys)).toMatchObject({ botLastSpokeAt: 1_000 });
-    expect(await domain.readChannel(['discord:app:g:c1:other'])).toMatchObject({ silentWakes: 0 });
+    // The parent channel and its other threads are not a follow-up to the reply in t1.
+    const channelOnly = await domain.readChannel([keys[0]]);
+    expect(channelOnly?.followupUntil).toBeUndefined();
+    const otherThread = await domain.readChannel(['discord:app:g:c1', 'discord:app:g:c1:t2']);
+    expect(otherThread?.followupUntil).toBeUndefined();
+  });
+
+  it('opens the channel window when the bot spoke in the channel itself', async () => {
+    await domain.recordBotSpoke(['discord:app:g:c4'], 1_000, 300_000);
+
+    expect(await domain.readChannel(['discord:app:g:c4'])).toMatchObject({
+      followupUntil: 301_000,
+    });
+  });
+
+  it('keeps who woke the bot with the window of that conversation', async () => {
+    const keys = ['discord:app:g:c5', 'discord:app:g:c5:t1'];
+    await domain.recordWakeAuthor(keys[1], 'u1');
+    await domain.recordBotSpoke(keys, 1_000, 300_000);
+
+    expect(await domain.readChannel(keys)).toMatchObject({
+      followupAuthorId: 'u1',
+      followupUntil: 301_000,
+    });
   });
 
   it('counts silent wakes and resets them when the bot speaks', async () => {
@@ -65,6 +87,18 @@ describe.skipIf(!url)('botWake redis domain (real Redis)', () => {
     await domain.recordBotSpoke(keys, 5_000, 60_000);
     expect(await domain.readChannel(keys)).toMatchObject({ silentWakes: 0 });
     expect(await domain.recordSilentWake(keys)).toBe(1);
+  });
+
+  it('keeps a stand-down on the thread the bot left, not on its whole channel', async () => {
+    const keys = ['discord:app:g:c6', 'discord:app:g:c6:t1'];
+    await domain.recordBotSpoke(keys, 1_000, 300_000);
+    await domain.recordStandDown(keys[1], 1_801_000);
+
+    expect(await domain.readChannel(keys)).toMatchObject({
+      followupUntil: 301_000,
+      standDownUntil: 1_801_000,
+    });
+    expect((await domain.readChannel([keys[0]]))?.standDownUntil).toBeUndefined();
   });
 
   it('remembers when the owner last spoke without touching the bot fields', async () => {
@@ -131,6 +165,21 @@ describe.skipIf(!url)('botWake redis domain (real Redis)', () => {
     raw.disconnect();
 
     expect(result).toBeUndefined();
+  });
+
+  it('lets one edit wake the bot on a message that never engaged it, and only once', async () => {
+    expect(await domain.claimEditWake('app', 'fresh')).toBe(true);
+    // A second edit of the same message, or a redelivery, does not wake it again.
+    expect(await domain.claimEditWake('app', 'fresh')).toBe(false);
+    // Another bot in the channel may still be woken by its own @-mention.
+    expect(await domain.claimEditWake('other-app', 'fresh')).toBe(true);
+  });
+
+  it('keeps an edit from waking the bot on a message that already engaged it', async () => {
+    await domain.markEditWakeEngaged('app', ['answered', 'answered', 'merged']);
+
+    expect(await domain.claimEditWake('app', 'answered')).toBe(false);
+    expect(await domain.claimEditWake('app', 'merged')).toBe(false);
   });
 
   describe('conversation log', () => {

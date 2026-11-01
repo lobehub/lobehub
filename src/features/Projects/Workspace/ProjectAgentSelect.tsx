@@ -8,8 +8,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
@@ -52,7 +51,7 @@ const useAgentMeta = (agent: ProjectComposerAgent) => {
   const { t } = useTranslation('common');
   const source = agent.title || agent.name || agent.avatar ? agent : stored;
   return {
-    avatar: (typeof source?.avatar === 'string' ? source.avatar : undefined) || DEFAULT_AVATAR,
+    avatar: typeof source?.avatar === 'string' ? source.avatar : undefined,
     background: source?.backgroundColor || undefined,
     name: agentDisplayName(source, t('defaultAgent')),
   };
@@ -75,7 +74,8 @@ const AgentRow = memo<{
       variant={'borderless'}
       onClick={() => onSelect(agent.id)}
     >
-      <Avatar
+      <AgentAvatar
+        agentId={agent.id}
         avatar={meta.avatar}
         background={meta.background}
         name={meta.name}
@@ -142,7 +142,8 @@ const ProjectAgentSelect = memo<ProjectAgentSelectProps>(
           size={'small'}
           type={'text'}
         >
-          <Avatar
+          <AgentAvatar
+            agentId={selected.id}
             avatar={meta.avatar}
             background={meta.background}
             name={meta.name}

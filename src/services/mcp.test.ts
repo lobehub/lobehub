@@ -108,6 +108,55 @@ describe('MCPService', () => {
   });
 
   describe('invokeMcpToolCall', () => {
+    describe('HTTP connector connection failures', () => {
+      const payload = {
+        apiName: 'echo',
+        arguments: '{}',
+        identifier: 'http-mcp',
+      } as ChatToolPayload;
+
+      beforeEach(() => {
+        mockGetToolStoreState.mockReturnValue({
+          connectors: [
+            {
+              id: 'http-id',
+              identifier: 'http-mcp',
+              isEnabled: true,
+              mcpConnectionType: 'http',
+              mcpServerUrl: 'https://example.com/mcp',
+            },
+          ],
+        });
+      });
+
+      it.each(['AUTHORIZATION_ERROR', 'INITIALIZATION_TIMEOUT', 'CONNECTION_FAILED'])(
+        'preserves readable %s as a failed tool result',
+        async (type) => {
+          const { lambdaClient } = await import('@/libs/trpc/client');
+          const error = Object.assign(new Error('Reconnect this MCP in connector settings.'), {
+            data: { errorData: { type } },
+          });
+          vi.mocked(lambdaClient.connector.callTool.mutate).mockRejectedValue(error);
+          await expect(mcpService.invokeMcpToolCall(payload, {})).resolves.toMatchObject({
+            content: error.message,
+            error: { message: error.message },
+            success: false,
+            state: { isError: true },
+          });
+        },
+      );
+
+      it.each(['UNAUTHORIZED', 'FORBIDDEN'])(
+        'keeps unrelated %s errors on their original path',
+        async (code) => {
+          const { lambdaClient } = await import('@/libs/trpc/client');
+          const error = Object.assign(new Error(code), { data: { code } });
+          vi.mocked(lambdaClient.connector.callTool.mutate).mockRejectedValue(error);
+          await expect(mcpService.invokeMcpToolCall(payload, {})).rejects.toBe(error);
+        },
+      );
+    });
+
     describe('stdio connectors', () => {
       const payload: ChatToolPayload = {
         id: 'local-call',

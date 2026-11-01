@@ -547,11 +547,13 @@ export class AiAgentService {
    * 2. Delegate to execAgent for the rest
    */
   async execGroupAgent(
-    params: ExecGroupAgentParams & Pick<InternalExecAgentParams, 'clientIds' | 'interactiveStart'>,
+    params: ExecGroupAgentParams &
+      Pick<InternalExecAgentParams, 'clientIds' | 'fileIds' | 'interactiveStart'>,
   ): Promise<ExecGroupAgentResult> {
     const {
       agentId,
       clientIds,
+      fileIds,
       groupId,
       interactiveStart,
       message,
@@ -594,6 +596,7 @@ export class AiAgentService {
       appContext: { groupId, orchestrationRole: 'supervisor', topicId },
       autoStart: true,
       clientIds,
+      fileIds,
       interactiveStart,
       prompt: message,
       trigger: RequestTrigger.Chat,
@@ -634,6 +637,7 @@ export class AiAgentService {
           ?.visibility ?? null,
       findOperation: (operationId) => this.agentOperationModel.findById(operationId),
       findTopic: (topicId) => this.topicModel.findById(topicId),
+      findTriggerHop: (params) => this.messageModel.findLatestUserTurnHop(params),
       userId: this.userId,
       workspaceId: this.workspaceId,
     });

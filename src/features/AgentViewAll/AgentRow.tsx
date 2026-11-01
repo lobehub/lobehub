@@ -12,9 +12,9 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
-import AgentAvatar from './AgentAvatar';
 import ItemActions from './ItemActions';
 import LabelTags from './LabelTags';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 /** Fixed action-column width (sidebar-eye toggle + "…" menu) so rows stay aligned. */
 export const ACTION_COL_WIDTH = 64;
@@ -180,7 +180,7 @@ const AgentRow = memo<AgentRowProps>(
             className={styles.identity}
             to={type === 'group' ? GROUP_CHAT_URL(id) : AGENT_CHAT_URL(id, false)}
           >
-            <AgentAvatar item={item} size={28} />
+            <SidebarItemAvatar item={item} size={28} />
             {/* Three single-line columns: who the agent is, the role it plays,
               and what it is responsible for. */}
             <Text ellipsis className={cx('agent-row-title', styles.name)} weight={500}>

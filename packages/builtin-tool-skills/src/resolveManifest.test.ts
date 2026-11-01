@@ -143,6 +143,27 @@ describe('resolveSkillsManifest', () => {
     expect(result.identifier).toBe(SkillsManifest.identifier);
   });
 
+  it.each([undefined, 'sandbox', 'device'] as const)(
+    'leaves only the Cloud Sandbox runCommand in page scope (executionEnv %s)',
+    (executionEnv) => {
+      const result = resolveSkillsManifest({ executionEnv, scope: 'page' })!;
+      const names = result.api.map((a) => a.name);
+
+      expect(names).not.toContain(SkillsApiName.runCommand);
+      expect(names).toContain(SkillsApiName.execScript);
+      expect(names).toContain(SkillsApiName.activateSkill);
+    },
+  );
+
+  it('keeps runCommand outside page scope', () => {
+    for (const scope of ['main', 'task']) {
+      const names = resolveSkillsManifest({ executionEnv: 'sandbox', scope })!.api.map(
+        (a) => a.name,
+      );
+      expect(names).toContain(SkillsApiName.runCommand);
+    }
+  });
+
   it('does not mutate the static manifest', () => {
     const staticDescriptions = SkillsManifest.api.map((a) => a.description);
 

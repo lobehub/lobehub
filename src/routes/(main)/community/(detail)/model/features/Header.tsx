@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
+import { Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { DotIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,20 +14,8 @@ import ModelTypeIcon from '@/routes/(main)/community/(list)/model/features/List/
 
 import { useDetailContext } from './DetailProvider';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    desc: css`
-      color: ${cssVar.colorTextSecondary};
-    `,
-    time: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
-    `,
-    version: css`
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 13px;
-    `,
-  };
+const styles = stylex.create({
+  time: { fontSize: '12px', color: cssVar.colorTextDescription },
 });
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
@@ -87,7 +77,10 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               {...abilities}
             />
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={releasedAt as string} />
+            <PublishedTime
+              className={stylex.props(styles.time).className}
+              date={releasedAt as string}
+            />
           </Flexbox>
         </Flexbox>
       </Flexbox>

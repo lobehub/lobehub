@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { McpSchema } from '../../types/protocol';
-import { generateRFCProtocolUrl, parseProtocolUrl } from '../protocol';
+import { generateRFCProtocolUrl, getProtocolScheme, parseProtocolUrl } from '../protocol';
+
+const desktopEnv = vi.hoisted(() => ({
+  DESKTOP_PROTOCOL_SCHEME: undefined as string | undefined,
+}));
+
+vi.mock('@/env', () => ({ getDesktopEnv: () => desktopEnv }));
+
+afterEach(() => {
+  desktopEnv.DESKTOP_PROTOCOL_SCHEME = undefined;
+});
 
 describe('Protocol', () => {
   describe('generateRFCProtocolUrl', () => {
@@ -198,6 +208,37 @@ describe('Protocol', () => {
         expect(parsed?.params.test).toBe('value');
         expect(parsed?.originalUrl).toBe(url);
       });
+    });
+  });
+
+  describe('distribution scheme override', () => {
+    it('uses the configured scheme instead of the channel heuristics', () => {
+      desktopEnv.DESKTOP_PROTOCOL_SCHEME = 'acme';
+
+      expect(getProtocolScheme()).toBe('acme');
+    });
+
+    it('accepts deep links on the configured scheme', () => {
+      desktopEnv.DESKTOP_PROTOCOL_SCHEME = 'acme';
+
+      expect(parseProtocolUrl('acme://plugin/install?id=figma')).toMatchObject({
+        action: 'install',
+        urlType: 'plugin',
+      });
+    });
+
+    it('matches a mixed-case override against the lowercased scheme URL parsing yields', () => {
+      desktopEnv.DESKTOP_PROTOCOL_SCHEME = 'Acme';
+
+      expect(getProtocolScheme()).toBe('acme');
+      expect(parseProtocolUrl('Acme://plugin/install?id=figma')).toMatchObject({
+        action: 'install',
+        urlType: 'plugin',
+      });
+    });
+
+    it('still rejects schemes that are neither upstream nor configured', () => {
+      expect(parseProtocolUrl('acme://plugin/install?id=figma')).toBeNull();
     });
   });
 });

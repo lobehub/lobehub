@@ -13,7 +13,7 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
-import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
+import { displaySubtaskPlan, type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
 import { writeKeepingArchivedIdle } from './archiveGuard';
@@ -28,7 +28,7 @@ import {
   type UpdateStatusCascadeResult,
   type UpdateStatusResult,
 } from './statusTransitions';
-import { interruptTaskOperation, resolveTaskOrThrow } from './utils';
+import { findTaskOrThrow, interruptTaskOperation } from './utils';
 
 export type { UpdateStatusCascadeResult, UpdateStatusResult } from './statusTransitions';
 
@@ -37,6 +37,26 @@ const SUBTASK_KICKOFF_CONCURRENCY = 5;
 
 /** How long after a run starts a task may have no recorded operation yet. */
 const TASK_RUN_STARTING_GRACE_MS = 2 * 60 * 1000;
+
+/**
+ * The runner marks a task `running` before it dispatches the agent and records
+ * the topic / operation only after dispatch returns. Inside that window there
+ * is nothing to interrupt yet, so a write that stops the task would orphan the
+ * run about to start. Past the grace window a missing operation means the
+ * start died.
+ */
+export const isTaskRunStarting = (
+  task: { startedAt?: Date | string | null; status: string },
+  runningTopics: { operationId?: string | null }[],
+  now = Date.now(),
+): boolean => {
+  if (task.status !== 'running') return false;
+  const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
+  return (
+    now - startedAt < TASK_RUN_STARTING_GRACE_MS &&
+    (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId))
+  );
+};
 
 export interface CreateTaskInput {
   assigneeAgentId?: string;
@@ -65,8 +85,9 @@ export interface CreateTaskInput {
 }
 
 export interface RunReadySubtasksResult {
-  failed: { error: string; identifier: string }[];
+  failed: { error: string; id?: string; identifier: string }[];
   kickedOff: string[];
+  kickedOffTasks?: { id: string; identifier: string }[];
   plan: SubtaskGraphPlan;
   skipped?: { reason: 'nothing-runnable' };
 }
@@ -110,8 +131,14 @@ export class TaskService {
    * `parentTaskId` if it's an identifier, and snapshots the assignee agent's
    * current model/provider into `task.config` so later changes to the agent's
    * default model don't silently affect this task.
+   *
+   * Inside a caller's transaction pass `maxRetries: 1`: an identifier clash
+   * aborts the transaction, so only the caller can retry it as a whole.
    */
-  async createTask(input: CreateTaskInput): Promise<TaskItem> {
+  async createTask(
+    input: CreateTaskInput,
+    options: { maxRetries?: number } = {},
+  ): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
 
     const taskInput = input;
@@ -121,7 +148,7 @@ export class TaskService {
 
     let parentVisibility: 'private' | 'public' | undefined;
     if (createData.parentTaskId) {
-      const parent = await this.resolveOrThrow(createData.parentTaskId);
+      const parent = await this.findOrThrow(createData.parentTaskId);
       createData.parentTaskId = parent.id;
       parentVisibility = parent.visibility;
       if (createData.projectId && createData.projectId !== parent.projectId) {
@@ -192,10 +219,10 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    const task = await this.createTaskWithAssigneeLock({
-      ...createData,
-      ...armScheduleOnCreate(createData),
-    });
+    const task = await this.createTaskWithAssigneeLock(
+      { ...createData, ...armScheduleOnCreate(createData) },
+      options.maxRetries,
+    );
 
     return task;
   }
@@ -322,11 +349,8 @@ export class TaskService {
    * `keepOperationId` spares the caller's own run (an agent deleting the task
    * it is executing), which would otherwise interrupt itself mid-tool-call.
    */
-  async deleteTask(
-    idOrIdentifier: string,
-    options: { keepOperationId?: string } = {},
-  ): Promise<TaskItem> {
-    const task = await this.resolveOrThrow(idOrIdentifier);
+  async deleteTask(taskId: string, options: { keepOperationId?: string } = {}): Promise<TaskItem> {
+    const task = await this.findOrThrow(taskId);
 
     const runningTopics = await this.taskTopicModel.findRunningByTaskIds([task.id]);
 
@@ -335,12 +359,7 @@ export class TaskService {
     // that window finds nothing to interrupt and would orphan the run it is
     // about to start. Past the grace window a missing operation means the
     // start died, and deletion goes ahead.
-    const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
-    const isStarting =
-      task.status === 'running' &&
-      Date.now() - startedAt < TASK_RUN_STARTING_GRACE_MS &&
-      (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId));
-    if (isStarting) {
+    if (isTaskRunStarting(task, runningTopics)) {
       throw new TRPCError({
         code: 'CONFLICT',
         message: 'This task is still starting its run. Try deleting it again in a moment.',
@@ -428,7 +447,7 @@ export class TaskService {
     id: string;
     topicId?: string;
   }): Promise<ReviewResult> {
-    const task = await this.resolveOrThrow(input.id);
+    const task = await this.findOrThrow(input.id);
 
     const reviewConfig = this.taskModel.getReviewConfig(task);
     if (!reviewConfig?.enabled) {
@@ -501,23 +520,23 @@ export class TaskService {
   }
 
   /**
-   * Compute the subtask execution plan for `idOrIdentifier` without
+   * Compute the subtask execution plan for `taskId` without
    * actually kicking anything off.
    */
-  async previewSubtaskLayers(idOrIdentifier: string): Promise<SubtaskGraphPlan> {
-    const parent = await this.resolveOrThrow(idOrIdentifier);
+  async previewSubtaskLayers(taskId: string): Promise<SubtaskGraphPlan> {
+    const parent = await this.findOrThrow(taskId);
     const graph = new TaskGraphService(this.db, this.userId, this.workspaceId);
-    const { plan } = await graph.planForParent(parent.id);
-    return plan;
+    const { plan, descendants } = await graph.planForParent(parent.id);
+    return displaySubtaskPlan(plan, descendants);
   }
 
   /**
-   * Kick off the first runnable layer of subtasks under `idOrIdentifier`.
+   * Kick off the first runnable layer of subtasks under `taskId`.
    * Subsequent layers fire automatically through
    * `TaskRunnerService.cascadeOnCompletion` as each upstream finishes.
    */
-  async runReadySubtasks(idOrIdentifier: string): Promise<RunReadySubtasksResult> {
-    const parent = await this.resolveOrThrow(idOrIdentifier);
+  async runReadySubtasks(taskId: string): Promise<RunReadySubtasksResult> {
+    const parent = await this.findOrThrow(taskId);
     const graph = new TaskGraphService(this.db, this.userId, this.workspaceId);
     const { descendants, plan } = await graph.planForParent(parent.id);
 
@@ -525,26 +544,24 @@ export class TaskService {
       return {
         failed: [],
         kickedOff: [],
-        plan,
+        plan: displaySubtaskPlan(plan, descendants),
         skipped: { reason: 'nothing-runnable' as const },
       };
     }
 
     const firstLayer = plan.layers[0];
-    const identifierToId = new Map(descendants.map((d) => [d.identifier, d.id]));
+    const byId = new Map(descendants.map((d) => [d.id, d]));
     const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
 
     const kickedOff: string[] = [];
-    const failed: { error: string; identifier: string }[] = [];
+    const failed: { error: string; id?: string; identifier: string }[] = [];
 
     const settled = await pMap(
       firstLayer,
-      async (identifier): Promise<PromiseSettledResult<string>> => {
+      async (id): Promise<PromiseSettledResult<string>> => {
         try {
-          const id = identifierToId.get(identifier);
-          if (!id) throw new Error(`Subtask ${identifier} not found`);
           await runner.runTask({ taskId: id });
-          return { status: 'fulfilled', value: identifier };
+          return { status: 'fulfilled', value: id };
         } catch (reason) {
           return { reason, status: 'rejected' };
         }
@@ -553,17 +570,27 @@ export class TaskService {
     );
 
     for (const [index, result] of settled.entries()) {
-      const identifier = firstLayer[index];
+      const id = firstLayer[index];
+      const identifier = byId.get(id)!.identifier;
       if (result.status === 'fulfilled') {
         kickedOff.push(identifier);
       } else {
         const message =
           result.reason instanceof Error ? result.reason.message : 'Failed to start task';
-        failed.push({ error: message, identifier });
+        failed.push({ error: message, id, identifier });
       }
     }
 
-    return { failed, kickedOff, plan };
+    return {
+      failed,
+      kickedOff,
+      kickedOffTasks: settled.flatMap((result, index) =>
+        result.status === 'fulfilled'
+          ? [{ id: firstLayer[index], identifier: byId.get(firstLayer[index])!.identifier }]
+          : [],
+      ),
+      plan: displaySubtaskPlan(plan, descendants),
+    };
   }
 
   private async assertAssigneeAgentBelongsToUser(assigneeAgentId?: string | null): Promise<void> {
@@ -585,6 +612,18 @@ export class TaskService {
    */
   async assertAssigneeUserAssignable(assigneeUserId?: string | null): Promise<void> {
     await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+  }
+
+  /**
+   * {@link assertAssigneeUserAssignable} inside the caller's transaction,
+   * locking the member row until it commits — for bulk writes that assign
+   * many tasks in one transaction.
+   */
+  async assertAssigneeUserAssignableLocked(
+    tx: LobeChatDatabase,
+    assigneeUserId: string,
+  ): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
   }
 
   private async assertAssigneeUserAssignableWithDatabase(
@@ -644,10 +683,13 @@ export class TaskService {
 
   private async createTaskWithAssigneeLock(
     createData: CreateTaskInput & { config?: Record<string, unknown>; status?: TaskStatus },
+    insertRetries?: number,
   ): Promise<TaskItem> {
     if (!createData.assigneeUserId || !this.workspaceId) {
       await this.assertAssigneeUserAssignable(createData.assigneeUserId);
-      return this.taskModel.create(createData);
+      return insertRetries === undefined
+        ? this.taskModel.create(createData)
+        : this.taskModel.create(createData, { maxRetries: insertRetries });
     }
 
     // TaskModel's normal retry loop cannot continue after a unique violation
@@ -717,13 +759,11 @@ export class TaskService {
     );
   }
 
-  private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {
-    return resolveTaskOrThrow(this.deps, idOrIdentifier);
+  private async findOrThrow(taskId: string): Promise<TaskItem> {
+    return findTaskOrThrow(this.taskModel, taskId);
   }
 
-  async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
-    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(
-      taskIdOrIdentifier,
-    );
+  async getTaskDetail(taskId: string): Promise<TaskDetailData | null> {
+    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(taskId);
   }
 }

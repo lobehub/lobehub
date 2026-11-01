@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skillDragData';
 import {
+  filterSkillItems,
   openRenameSkillModal,
   type SkillListItem,
   type SkillRowAction,
@@ -80,13 +81,16 @@ interface UserLevelSkillsProps {
    * matching the agent-only layout this used to ship with.
    */
   hideHeader?: boolean;
+  /** Only render skills matching this query. */
+  searchQuery?: string;
 }
 
-const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader }) => {
+const UserLevelSkills = memo<UserLevelSkillsProps>(({ hideHeader, searchQuery = '' }) => {
   const { t } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
 
-  const items = useUserSkills();
+  const userItems = useUserSkills();
+  const items = useMemo(() => filterSkillItems(userItems, searchQuery), [userItems, searchQuery]);
   // The row shape keys off `identifier`, but the store mutations key off the DB
   // id — resolve one from the other through the raw skill list.
   const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);

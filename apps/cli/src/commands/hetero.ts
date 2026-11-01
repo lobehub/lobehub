@@ -18,7 +18,7 @@ import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolv
 import {
   createPiRpcAgentHandle,
   type PiRpcStartupControl,
-  toPiRpcPrompt,
+  preparePiRpcInput,
 } from '@lobechat/heterogeneous-agents/rpc';
 import type {
   AgentContentBlock,
@@ -91,11 +91,8 @@ const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 
 /**
- * Runtime selection registry for `lh hetero exec` — the CLI counterpart of
- * the desktop controller's `runtimeDispatchers`. Long-lived bidirectional
- * runtimes (pi RPC) register a spawn factory here; every other agent uses the
- * generic one-shot `spawnAgent`. A future agent adopting an RPC mode only
- * adds one entry — no dispatch edit.
+ * Runtime factories for `lh hetero exec`. Pi uses RPC; other agents fall
+ * through to the generic one-shot `spawnAgent`.
  */
 const spawnRuntimeRegistry: Partial<
   Record<
@@ -111,7 +108,10 @@ const spawnRuntimeRegistry: Partial<
 > = {
   pi: async (spawnOpts, lifecycle) =>
     createPiRpcAgentHandle({
-      args: spawnOpts.extraArgs ?? [],
+      ...(await preparePiRpcInput(spawnOpts.prompt, {
+        args: spawnOpts.extraArgs ?? [],
+        lobeHubContext: !!spawnOpts.env?.LOBEHUB_TOPIC_ID,
+      })),
       commandPath: spawnOpts.command!,
       cwd: spawnOpts.cwd ?? process.cwd(),
       detached: spawnOpts.detached,
@@ -119,7 +119,6 @@ const spawnRuntimeRegistry: Partial<
       operationId: spawnOpts.operationId,
       onRawStdout: lifecycle?.onRawStdout,
       onStartupControl: lifecycle?.onStartupControl,
-      prompt: await toPiRpcPrompt(spawnOpts.prompt),
       resumeSessionId: spawnOpts.resumeSessionId,
       uploadImage: spawnOpts.uploadImage,
     }),
@@ -1261,14 +1260,14 @@ const exec = async (options: ExecOptions): Promise<void> => {
     agentType: options.type,
     askUserBridge: askBridge,
     command: resolvedCommand.command,
+    commandVersion: resolvedCommand.version,
     cwd: options.cwd || process.cwd(),
     detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
     env: commandEnv,
     extraArgs,
-    // Device and sandbox executions are observed through the same gateway
-    // stream as native server agents. Ask Claude Code for content-block
-    // deltas so the current conversation receives text while the process is
-    // running instead of seeing only the terminal assistant snapshot.
+    // Device and sandbox executions are observed through the same gateway stream as native
+    // server agents. Ask Claude Code for content-block deltas so the current conversation
+    // receives text while the process is running, not only the terminal assistant snapshot.
     includePartialMessages: options.type === 'claude-code',
     initialModel:
       options.type === 'droid' || options.type === 'devin' || options.type === 'trae'

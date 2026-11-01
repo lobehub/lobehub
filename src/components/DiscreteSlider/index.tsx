@@ -1,58 +1,45 @@
-import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Slider, type SliderProps, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
+import { sx } from '@/styles/sx';
+
 import { findClosestOptionIndex } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  label: css`
-    cursor: pointer;
-
-    padding: 0;
-    border: none;
-
-    font: inherit;
-    font-size: 12px;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-    text-align: center;
-    overflow-wrap: anywhere;
-
-    background: transparent;
-
-    transition: color 0.2s ease;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    &:focus-visible {
-      border-radius: 6px;
-      outline: 1px solid ${cssVar.colorBorder};
-      outline-offset: 2px;
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-    }
-  `,
-  labels: css`
-    display: grid;
-    gap: 8px;
-    width: 100%;
-  `,
-  root: css`
-    width: 100%;
-  `,
-  selectedLabel: css`
-    color: ${cssVar.colorText};
-  `,
-  slider: css`
-    width: 100%;
-    padding-inline: 6px;
-  `,
-}));
+const styles = stylex.create({
+  label: {
+    cursor: { 'default': 'pointer', ':disabled': 'not-allowed' },
+    padding: '0',
+    borderStyle: 'none',
+    fontFamily: 'inherit',
+    fontStyle: 'inherit',
+    fontWeight: 'inherit',
+    fontSize: '12px',
+    lineHeight: '16px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    textAlign: 'center',
+    overflowWrap: 'anywhere',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+    transition: 'color 0.2s ease',
+    borderRadius: { 'default': null, ':focus-visible': '6px' },
+    outlineWidth: { 'default': null, ':focus-visible': '1px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorBorder },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
+  },
+  labels: { display: 'grid', gap: '8px', width: '100%' },
+  root: { width: '100%' },
+  // `.label:hover` outranked `.selectedLabel` in the emotion cascade, so a selected label
+  // still dims to the secondary colour on hover.
+  selectedLabel: {
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorTextSecondary },
+  },
+  slider: { width: '100%', paddingInline: '6px' },
+});
 
 export interface DiscreteSliderOption {
   ariaLabel?: string;
@@ -96,7 +83,7 @@ const DiscreteSlider = memo<DiscreteSliderProps>(
         : 'minmax(0, 1fr)';
 
     const slider = (
-      <div className={styles.slider}>
+      <div {...stylex.props(styles.slider)}>
         <Slider
           {...rest}
           disabled={disabled || options.length === 0}
@@ -117,13 +104,13 @@ const DiscreteSlider = memo<DiscreteSliderProps>(
     );
 
     return (
-      <Flexbox className={cx(styles.root, className)} gap={6} style={style}>
+      <Flexbox gap={6} {...sx([styles.root], className, style)}>
         {formatTooltip && currentOption ? (
           <Tooltip title={formatTooltip(currentOption.value)}>{slider}</Tooltip>
         ) : (
           slider
         )}
-        <div className={styles.labels} style={{ gridTemplateColumns }}>
+        <div {...sx([styles.labels], undefined, { gridTemplateColumns })}>
           {options.map((option, index) => {
             const isFirst = index === 0;
             const isLast = index === options.length - 1;
@@ -133,10 +120,12 @@ const DiscreteSlider = memo<DiscreteSliderProps>(
               <button
                 aria-current={index === currentIndex ? 'true' : undefined}
                 aria-label={option.ariaLabel}
-                className={cx(styles.label, index === currentIndex && styles.selectedLabel)}
                 disabled={disabled}
                 key={option.value}
-                style={{ textAlign, ...option.style }}
+                {...sx([styles.label, index === currentIndex && styles.selectedLabel], undefined, {
+                  textAlign,
+                  ...option.style,
+                })}
                 type={'button'}
                 onClick={() => onChange?.(option.value)}
               >

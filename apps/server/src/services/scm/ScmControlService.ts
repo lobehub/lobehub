@@ -12,6 +12,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { archiveSignedOffGoalTasks } from '@/server/services/goal/signOffArchive';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 
 import type { GitHubReviewFeedback } from './github/app';
@@ -425,6 +426,8 @@ export class ScmControlService {
       url: row.url,
     });
     if (!accepted) return { detail: 'acceptance no longer exists', outcome: 'skipped' };
+    // A merge signs a Goal-level acceptance off like the owner's own accept does.
+    await archiveSignedOffGoalTasks(this.db, accepted);
     return { acceptanceId: accepted.id, outcome: 'accepted' };
   };
 
@@ -497,7 +500,6 @@ export class ScmControlService {
     if (!topic?.agentId) return { detail: 'conversation has no agent', outcome: 'skipped' };
 
     const prompt = await this.buildPrompt(row, reason, trigger);
-    const running = Boolean(topic.metadata?.runningOperation);
 
     // Take the slot before starting anything: the check above read a row
     // snapshot, and on a Redis-less deployment there is no debounce to stop
@@ -509,8 +511,9 @@ export class ScmControlService {
     }
 
     // A busy topic: execAgent's reservation retries briefly for the running
-    // turn to hand back (queued-steer semantics); if it does not, the wake is
-    // dropped and the next event tries again.
+    // turn to hand back; if it does not, the wake is dropped and the next
+    // event tries again. The wake starts a turn of its own after the hand-back,
+    // so it is not a steer of the run it waited behind.
     let operationId: string;
     try {
       const result = await new AiAgentService(this.db, row.userId, {
@@ -527,7 +530,6 @@ export class ScmControlService {
           url: row.url,
         },
         prompt,
-        steer: running,
         trigger: RequestTrigger.Scm,
         userInterventionConfig: { approvalMode: 'headless' },
       });

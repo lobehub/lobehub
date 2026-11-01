@@ -40,6 +40,7 @@ the next free number of that prefix.
 - **L-E21** Evidence for "A is unaffected by B" must be able to tell A from B: distinct content and the target echoed in the request line.
 - **L-E21** Publish against production even when the subject exists only locally; a local ingest may supplement, never replace.
 - **L-E22** `requiredEvidence: text` is satisfied only by `.txt`/`.json`-style files; an `.md` file ingests as `markdown` and leaves the check `uncertain`.
+- **L-E23** Published evidence never shows a real person's private content (photos, faces, personal messages); rebuild the case on placeholder fixtures instead of the user's real page.
 
 **Product and interaction contracts**
 
@@ -620,6 +621,20 @@ dev.mjs 每次启动都会拉起 renderer Vite dev server，而后者启动即�
 **Rule:** 文本类执行记录用 `.txt` 或 `.json` 保存；必须用 Markdown 排版时，另附一份同内容的
 `.txt`。发布后用 `lh acceptance run result list --run <id> --json` 核对每项 verdict。已发布的轮次
 用 `lh acceptance run result submit --type text --file <x>.txt --verdict ...` 补交，不要新开一轮。
+
+### L-E23 — Capturing a real user's private content as evidence
+
+`since 2026-10-26` · `holds-while: always`
+
+**Trap:** the report reproduces a bug on the real page the user linked (a
+`/share/t/<id>` topic of their own). The screenshots show the conversation as is,
+including a family member's photo, and ingest publishes them.
+
+**Rule:** before capture, build the case on placeholder data: `lh topic import`
+of placeholder messages, `lh topic share` it, and unshare and delete it in
+teardown. When only the real page reproduces the case, redact faces, photos and
+personal text before ingest. Open every image before ingest; if a published
+round still leaks content, `lh acceptance run delete <runId> --yes` and republish.
 
 ### L-S26 — 在坏掉的根 `.env` 上原地硬修
 

@@ -26,11 +26,16 @@ vi.mock('@/libs/oidc-provider/jwt', () => ({
 vi.mock('@/server/workflows/expertiseRejection', () => ({
   ExpertiseRejectionWorkflow: { trigger: vi.fn() },
 }));
+vi.mock('@/envs/app', async (importOriginal) => {
+  const original = await importOriginal<{ appEnv: Record<string, unknown> }>();
+  return { ...original, appEnv: { ...original.appEnv, APP_URL: 'https://app.fieldnotes.app/' } };
+});
 
 const { default: app } = await import('../index');
 
 const BASE = 'http://localhost/api/acceptance-review/v1';
 const ORIGIN = 'https://fieldnotes.app';
+const APP_ORIGIN = 'https://app.fieldnotes.app';
 
 describe('site review tokens', () => {
   let ownerId: string;
@@ -95,6 +100,41 @@ describe('site review tokens', () => {
     const response = await call(ownerId, '/session', 'https://fieldnotes-mirror.net');
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ error: { code: 'FORBIDDEN' } });
+  });
+
+  describe('on the LobeHub app origin itself', () => {
+    const sameOriginCall = (headers: Record<string, string>) =>
+      app.request(`${BASE}/session`, {
+        headers: { authorization: `Bearer ${ownerId}|${site.id}|${APP_ORIGIN}`, ...headers },
+      });
+
+    beforeEach(async () => {
+      site = await new ProjectReviewService(serverDB, ownerId).createSite(projectId, {
+        name: 'LobeHub app',
+        origins: [APP_ORIGIN, ORIGIN],
+      });
+    });
+
+    it('accepts a same-origin request, which browsers send without an Origin header', async () => {
+      const response = await sameOriginCall({ 'sec-fetch-site': 'same-origin' });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ site: { id: site.id } });
+    });
+
+    it('still rejects a request that carries neither Origin nor a same-origin fetch marker', async () => {
+      expect((await sameOriginCall({})).status).toBe(403);
+      expect((await sameOriginCall({ 'sec-fetch-site': 'cross-site' })).status).toBe(403);
+    });
+
+    it('rejects a same-origin request when the token was issued for another origin', async () => {
+      const response = await app.request(`${BASE}/session`, {
+        headers: {
+          'authorization': `Bearer ${ownerId}|${site.id}|${ORIGIN}`,
+          'sec-fetch-site': 'same-origin',
+        },
+      });
+      expect(response.status).toBe(403);
+    });
   });
 
   it('reads a site that no longer lists the origin as gone', async () => {

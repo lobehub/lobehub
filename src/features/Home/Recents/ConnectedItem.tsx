@@ -24,7 +24,7 @@ const ConnectedItem = memo<ConnectedItemProps>(({ itemRef, queryKey }) => {
   // this link carries survives arrival instead of being rewritten.
   const route =
     item.type === 'task'
-      ? taskDetailPath(item.id, item.agentId ?? undefined, item.slugTitle)
+      ? taskDetailPath(item.taskIdentifier ?? item.id, item.agentId ?? undefined, item.slugTitle)
       : item.routePath;
 
   return (

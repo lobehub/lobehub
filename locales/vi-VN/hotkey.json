@@ -43,6 +43,8 @@
   "switchAgent.title": "Chuyển Nhanh Tác Nhân",
   "switchTab.desc": "Chuyển đến một tab cụ thể theo vị trí của nó (1–9) trên thanh tab của ứng dụng Desktop",
   "switchTab.title": "Chuyển Đến Tab Theo Số",
+  "toggleFavorite.desc": "Thêm trang đang mở vào mục Yêu thích trong thanh bên, hoặc xóa nó",
+  "toggleFavorite.title": "Thêm vào / Xóa khỏi Yêu thích",
   "toggleLeftPanel.desc": "Hiện hoặc ẩn bảng bên trái",
   "toggleLeftPanel.title": "Bật/Tắt Bảng Bên Trái",
   "toggleRightPanel.desc": "Hiện hoặc ẩn bảng bên phải",

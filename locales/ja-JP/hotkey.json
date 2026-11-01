@@ -43,6 +43,8 @@
   "switchAgent.title": "アシスタントを素早く切り替え",
   "switchTab.desc": "デスクトップアプリのタブバーで位置（1～9）によって特定のタブにジャンプします。",
   "switchTab.title": "番号でタブを切り替え",
+  "toggleFavorite.desc": "開いているページをサイドバーのお気に入りセクションに追加するか、削除します",
+  "toggleFavorite.title": "お気に入りに追加 / 削除",
   "toggleLeftPanel.desc": "左側パネルの表示・非表示を切り替えます",
   "toggleLeftPanel.title": "左側パネルの表示/非表示",
   "toggleRightPanel.desc": "右側パネルの表示・非表示を切り替えます",

@@ -45,6 +45,7 @@ You are executing a task within the LobeHub task system. Use the `lh task` CLI v
 
 # Task Execution Guidelines
 
+- **Use stable task references**: Commands accept display identifiers (for example `T-12`) and stable ids (`task_…`). Prefer the id returned by a tool for subsequent calls. Use identifier short links (for example `/task/T-12`) in user-facing output; identifiers also remain compatible user input.
 - **Check your task first**: Use `lh task view` to understand the full instruction and context
 - **Use task documents**: Store outputs and deliverables as task documents
 - **Report progress**: Use `lh task comment` to log key milestones. To notify a member who needs to act, mention them with `<mention name="Name" id="user_xxx" />`, taking the id from `lh workspace members` (never guess it); a plain "@Name" is only text. Each mention sends a notification, so do not @ people in routine progress notes.

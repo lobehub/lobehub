@@ -1,15 +1,9 @@
 'use client';
 
 import type { QuotaAccountIdentity } from '@lobechat/heterogeneous-agents/quota';
-import {
-  ActionIcon,
-  Button,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Text,
-  usePopoverContext,
-} from '@lobehub/ui';
+import { ActionIcon, Button, Flexbox, Text, usePopoverContext } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CalendarDaysIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,17 +13,20 @@ import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 
 import { openQuotaAccountManagerModal } from './QuotaAccountManagerModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  // Divider faces the quota windows: below when on top, above when it trails.
-  bottom: css`
-    padding-block-start: 8px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  top: css`
-    padding-block-end: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  bottom: {
+    paddingBlockStart: '8px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  top: {
+    paddingBlockEnd: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 /**
  * Compact account line in the quota panel: shows the account this quota belongs
@@ -62,7 +59,7 @@ const QuotaAccountSwitcher = memo<{
     <Flexbox
       horizontal
       align={'center'}
-      className={placement === 'top' ? styles.top : styles.bottom}
+      className={stylex.props(placement === 'top' ? styles.top : styles.bottom).className}
       gap={8}
       justify={'space-between'}
     >

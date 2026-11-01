@@ -105,6 +105,7 @@ describe('webhooks hono routes', () => {
       '/api/webhooks/logto',
       '/api/webhooks/memory-extraction',
       '/api/webhooks/memory-extraction/benchmark-locomo',
+      '/api/webhooks/memory-user-memory/consolidation',
       '/api/webhooks/memory-user-memory/persona/update-writing',
       '/api/webhooks/memory-user-memory/pipelines/extract/chat-topic/cancel',
       '/api/webhooks/video/:provider',

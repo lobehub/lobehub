@@ -9,6 +9,7 @@ import {
   AgentStreamHistoryError,
 } from '../../utils/agentStreamTransport';
 import { log } from '../../utils/logger';
+import { supportsGatewayProtocolV2 } from './gatewayProtocol';
 
 interface FollowAgentRunOptions {
   json?: boolean;
@@ -41,20 +42,27 @@ export const followAgentRun = async (
   const gatewayUrl = resolveAgentGatewayUrl();
   if (!gatewayUrl) throw new Error('Agent gateway URL is not configured');
 
+  // Protocol 2 when the server's Gateway has it: one per-user socket, minted
+  // per dial. Followed without `clientProtocol: 2` on purpose — the CLI renders
+  // the journal's message snapshots, not the web's message patches.
+  const getGatewayUserToken = (await supportsGatewayProtocolV2(await getTrpcClient(), gatewayUrl))
+    ? async () => (await (await getTrpcClient()).aiAgent.issueGatewayUserToken.query()).token
+    : undefined;
+
   try {
     const outcome = await streamAgentEvents({
       ...options,
       gatewayUrl,
       getAuth: () => resolveAgentStreamAuthInfo(),
+      getGatewayUserToken,
       operationId,
       // The cached client resolves stored credentials per request, so pages
       // read after a token refresh still authenticate.
       readHistory: async (cursor, signal) => {
         try {
-          return await (await getTrpcClient()).aiAgent.getOperationStreamHistory.query(
-            { cursor, operationId },
-            { signal },
-          );
+          return await (
+            await getTrpcClient()
+          ).aiAgent.getOperationStreamHistory.query({ cursor, operationId }, { signal });
         } catch (error) {
           // Server predates the journal: no event stream can be produced, but the
           // run is still observable through status polling.

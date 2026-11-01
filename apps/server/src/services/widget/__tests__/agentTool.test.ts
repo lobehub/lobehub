@@ -239,7 +239,13 @@ describe('createDashboardToolService', () => {
     await new DashboardModel(db, userId).create({ agentId, title: 'Agent board' });
 
     expect(await service.listDashboards()).toEqual([
-      { id: board.id, projectId: null, title: 'Ops', widgets: [{ id: widgetId, title: 'Mine' }] },
+      {
+        description: null,
+        id: board.id,
+        projectId: null,
+        title: 'Ops',
+        widgets: [{ id: widgetId, title: 'Mine' }],
+      },
     ]);
     expect((await service.listWidgets()).map((widget) => widget.title)).toEqual(['Mine']);
   });
@@ -320,6 +326,7 @@ describe('createDashboardToolService', () => {
 
     expect(await service.listDashboards()).toEqual([
       {
+        description: null,
         id: projectBoard.id,
         projectId,
         title: 'Project',
@@ -329,6 +336,7 @@ describe('createDashboardToolService', () => {
         ],
       },
       {
+        description: null,
         id: home.id,
         projectId: null,
         title: 'Home',
@@ -337,7 +345,7 @@ describe('createDashboardToolService', () => {
           { id: c.widgetId, title: 'C' },
         ],
       },
-      { id: empty.id, projectId: null, title: 'Empty', widgets: [] },
+      { description: null, id: empty.id, projectId: null, title: 'Empty', widgets: [] },
     ]);
     expect(perBoard).not.toHaveBeenCalled();
     expect(batch).toHaveBeenCalledTimes(1);
@@ -452,6 +460,114 @@ describe('createDashboardToolService', () => {
       { id: agentBoard.id, level: projectId },
       { id: home.id, level: null },
     ]);
+  });
+});
+
+describe('dashboard description', () => {
+  it('stores the description of a board the agent creates', async () => {
+    const service = createDashboardToolService(db, scope);
+    const runtime = new DashboardExecutionRuntime(service);
+    const { widgetId } = await service.createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Stars',
+    });
+
+    const result = await runtime.addWidgetToDashboard({
+      newDashboardDescription: 'Launch monitoring for iBench 0.1',
+      newDashboardTitle: 'iBench launch',
+      widgetId,
+    });
+
+    expect(result.success).toBe(true);
+    const board = await new DashboardModel(db, userId).findById(result.state.dashboardId);
+    expect(board).toMatchObject({
+      description: 'Launch monitoring for iBench 0.1',
+      title: 'iBench launch',
+    });
+    expect((await runtime.listDashboards()).content).toContain(
+      '"iBench launch" (' + board!.id + ') — Launch monitoring for iBench 0.1: "Stars"',
+    );
+  });
+
+  it('creates an empty board on the conversation level', async () => {
+    const home = await new DashboardExecutionRuntime(
+      createDashboardToolService(db, scope),
+    ).createDashboard({ description: 'Home ops', title: 'Ops' });
+    const inProject = await new DashboardExecutionRuntime(
+      createDashboardToolService(db, { ...scope, projectId, topicId: projectTopicId }),
+    ).createDashboard({ description: 'Project launch', title: 'Launch' });
+
+    expect(home.success).toBe(true);
+    expect(inProject.success).toBe(true);
+    const model = new DashboardModel(db, userId);
+    expect(await model.findById(home.state.dashboardId)).toMatchObject({
+      agentId: null,
+      description: 'Home ops',
+      projectId: null,
+      title: 'Ops',
+    });
+    expect(await model.findById(inProject.state.dashboardId)).toMatchObject({
+      description: 'Project launch',
+      projectId,
+      title: 'Launch',
+    });
+    expect(await model.listItems(home.state.dashboardId)).toEqual([]);
+  });
+
+  it('fills in and clears the description of an offered board', async () => {
+    const service = createDashboardToolService(db, scope);
+    const runtime = new DashboardExecutionRuntime(service);
+    const board = await new DashboardModel(db, userId).create({ title: 'Ops' });
+
+    const filled = await runtime.updateDashboard({
+      dashboardId: board.id,
+      description: 'Repo health of lobehub/lobehub',
+    });
+    expect(filled).toMatchObject({
+      state: { description: 'Repo health of lobehub/lobehub', title: 'Ops' },
+      success: true,
+    });
+    expect(await new DashboardModel(db, userId).findById(board.id)).toMatchObject({
+      description: 'Repo health of lobehub/lobehub',
+      title: 'Ops',
+    });
+
+    await runtime.updateDashboard({ dashboardId: board.id, description: '' });
+    expect(await new DashboardModel(db, userId).findById(board.id)).toMatchObject({
+      description: null,
+    });
+  });
+
+  it('refuses to edit boards listDashboards does not offer', async () => {
+    const homeService = createDashboardToolService(db, scope);
+    const projectBoard = await new DashboardModel(db, userId).create({
+      projectId,
+      title: 'Project board',
+    });
+    const agentBoard = await new DashboardModel(db, userId).create({
+      agentId,
+      title: 'Agent board',
+    });
+
+    for (const id of [projectBoard.id, agentBoard.id, '00000000-0000-4000-8000-000000000000']) {
+      await expect(homeService.updateDashboard(id, { description: 'x' })).rejects.toThrow(
+        /not found or not editable/,
+      );
+    }
+    expect(await new DashboardModel(db, userId).findById(projectBoard.id)).toMatchObject({
+      description: null,
+    });
+
+    // The project's own conversation does reach it.
+    const projectService = createDashboardToolService(db, {
+      ...scope,
+      projectId,
+      topicId: projectTopicId,
+    });
+    await expect(
+      projectService.updateDashboard(projectBoard.id, { title: 'Renamed' }),
+    ).resolves.toMatchObject({ projectId, title: 'Renamed' });
   });
 });
 
@@ -577,6 +693,7 @@ describe('resolveClientTopic in a workspace', () => {
     await expect(service.createDashboardWithWidget('Ops', widgetId)).rejects.toThrow(
       /inside a project/,
     );
+    await expect(service.createDashboard('Ops', 'Empty board')).rejects.toThrow(/inside a project/);
     // The agent sees the same refusal, worded for the conversation.
     const runtime = new DashboardExecutionRuntime(service);
     const result = await runtime.addWidgetToDashboard({ newDashboardTitle: 'Ops', widgetId });
@@ -634,8 +751,26 @@ describe('resolveClientTopic in a workspace', () => {
     });
 
     expect(await projectService.listDashboards()).toEqual([
-      { id: ownProject.id, projectId: wsProjectId, title: 'Own project board', widgets: [] },
+      {
+        description: null,
+        id: ownProject.id,
+        projectId: wsProjectId,
+        title: 'Own project board',
+        widgets: [],
+      },
     ]);
+    // A teammate's board of the same project stays read-only for the agent.
+    const teammateBoard = await new DashboardModel(db, teammateId, workspaceId).create({
+      projectId: wsProjectId,
+      title: 'Teammate public board',
+      visibility: 'public',
+    });
+    await expect(
+      projectService.updateDashboard(teammateBoard.id, { description: 'Hijacked' }),
+    ).rejects.toThrow(/not editable/);
+    expect(
+      await new DashboardModel(db, teammateId, workspaceId).findById(teammateBoard.id),
+    ).toMatchObject({ description: null });
   });
 
   it('does not reach a workspace topic from personal mode', async () => {

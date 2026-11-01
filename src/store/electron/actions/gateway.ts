@@ -3,10 +3,16 @@ import type { GatewayConnectionState } from '@lobechat/electron-client-ipc';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { electronKeys } from '@/libs/swr/keys';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { type StoreSetter } from '@/store/types';
 
+import {
+  GATEWAY_STABLE_DEVICE_ID_KEY,
+  type GatewayStableDeviceId,
+  gatewayStableDeviceIdResource,
+} from '../projection';
 import { type ElectronStore } from '../store';
 
 type Setter = StoreSetter<ElectronStore>;
@@ -22,11 +28,22 @@ export interface GatewayDeviceInfo {
 export class ElectronGatewayActionImpl {
   readonly #get: () => ElectronStore;
   readonly #set: Setter;
+  readonly #stableDeviceId;
 
   constructor(set: Setter, get: () => ElectronStore, _api?: unknown) {
     void _api;
     this.#get = get;
     this.#set = set;
+    this.#stableDeviceId = createReplicaSlice(gatewayStableDeviceIdResource, {
+      actionPrefix: 'gatewayStableDeviceId',
+      fetcher: async (): Promise<GatewayStableDeviceId> => ({
+        deviceId: (await this.resolveGatewayDeviceId()) ?? null,
+      }),
+      get,
+      set,
+      stateKey: 'gatewayStableDeviceIdReplica',
+      view: recordLens<ElectronStore, GatewayStableDeviceId>('gatewayStableDeviceIdMap'),
+    });
   }
 
   connectGateway = async (): Promise<void> => {
@@ -86,6 +103,15 @@ export class ElectronGatewayActionImpl {
       return;
     }
   };
+
+  /**
+   * Keep this machine's stable device id in sync for a mounted view that must
+   * not act before it is known. Data comes from
+   * `electronSelectors.gatewayStableDeviceId`; resolving also corrects a cached
+   * fallback id in `gatewayDeviceInfo`.
+   */
+  useFetchGatewayStableDeviceId = (enabled = true): ReplicaSyncResult =>
+    this.#stableDeviceId.useSync(isDesktop && enabled ? GATEWAY_STABLE_DEVICE_ID_KEY : null);
 
   useFetchGatewayDeviceInfo = (): SWRResponse<GatewayDeviceInfo> => {
     return useSWR<GatewayDeviceInfo>(

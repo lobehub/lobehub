@@ -6,6 +6,7 @@ import { t } from 'i18next';
 
 import { agentQuotaService } from '@/services/agentQuota';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
+import { getElectronStoreState } from '@/store/electron';
 
 export interface QuotaAccountSpawnPlan {
   /** Account chosen for this run, when routing applied. */
@@ -56,15 +57,17 @@ const inheritedEnvRoutesExternally = async (agentEnv?: Record<string, string>) =
 
 /**
  * Resolve which provider account this agent should run on and turn the choice
- * into spawn env. Account rows are shared across devices, but a login is not:
- * the desktop maps the chosen account to the login it holds on THIS machine —
+ * into spawn env. Account rows are shared across devices, but a login is not,
+ * so the choice is asked for THIS device (its own Manual pick wins) and the
+ * desktop maps it to the login it holds here —
  *
  * - the default login → no override;
  * - the account's own profile → `CLAUDE_CONFIG_DIR=<profile>`;
- * - no local login → the run fails with a clear reason, never falls back to an
- *   unselected login: a pinned account names the missing login, and Auto mode
- *   re-selects among the accounts this device can run, failing when the
- *   rotation holds none of them.
+ * - no local login → never falls back to an unselected login: this device's
+ *   own pick names the missing login and fails the run; a legacy agent-wide
+ *   pin (picked on another machine) and Auto mode re-select among the
+ *   accounts this device can run; Auto fails when the rotation holds none,
+ *   the legacy pin then spawns on the default login like an unbound agent.
  *
  * No bindings, or the quota service unreachable, → `{}` and the spawn behaves
  * as before; a desktop that fails to look up its logins fails the run. An env
@@ -82,9 +85,12 @@ export const resolveQuotaAccountSpawnPlan = async (
   if (adapterType !== 'claude-code' || !agentId) return NO_ROUTING;
   if (claudeCodeAgentEnvPicksLogin(agentEnv)) return NO_ROUTING;
 
+  // Without a device id (signed out of the gateway) only agent-wide choices apply.
+  const deviceId = await getElectronStoreState().resolveGatewayDeviceId();
   const select = (runnableExternalAccountIds?: string[]) =>
     agentQuotaService
       .selectAccountForAgent(agentId, {
+        ...(deviceId && { deviceId }),
         provider: adapterType,
         ...(runnableExternalAccountIds && { runnableExternalAccountIds }),
       })
@@ -97,10 +103,13 @@ export const resolveQuotaAccountSpawnPlan = async (
 
   let resolution = await resolveLocalLogin(selection);
 
-  // Auto picked an account this desktop has no login for: pick again among
-  // the ones it has. (Listing first on every run would cost unbound agents
-  // a Keychain read per profile for nothing.)
-  if (resolution?.kind === 'missing' && selection.reason === 'balanced') {
+  // Auto, or a pin made on another machine, picked an account this desktop has
+  // no login for: pick again among the ones it has. (Listing first on every
+  // run would cost unbound agents a Keychain read per profile for nothing.)
+  // Only a legacy agent-wide pin is re-picked; this device's own pin (or one
+  // from a server that predates per-device picks) stays strict.
+  const strictPin = selection.reason === 'pinned' && selection.pinScope !== 'agent';
+  if (resolution?.kind === 'missing' && !strictPin) {
     // The selected login is known to be absent here, so a failed listing must
     // stop the run — falling back would start it on a login nobody selected.
     const local = await heterogeneousAgentService.listClaudeCodeAccounts().catch((error) => {
@@ -112,6 +121,10 @@ export const resolveQuotaAccountSpawnPlan = async (
 
     const runnable = local.flatMap((account) => account.identity.externalAccountId ?? []);
     const rebalanced = await select(runnable);
+    // A pin made on another machine is not a choice for this one: with nothing
+    // in the rotation it can run, this device behaves as if it had no binding
+    // and spawns on its default login.
+    if (!rebalanced && selection.pinScope === 'agent') return NO_ROUTING;
     // The listing just read every login, so map the new pick from it rather
     // than scanning the logins again.
     const login = rebalanced
@@ -135,7 +148,7 @@ export const resolveQuotaAccountSpawnPlan = async (
   if (resolution?.kind === 'profile')
     return { ...attribution, env: { CLAUDE_CONFIG_DIR: resolution.configDir } };
 
-  if (resolution?.kind === 'missing' && selection.reason === 'pinned') {
+  if (resolution?.kind === 'missing') {
     const pinnedId = selection.accountId;
     const account = await agentQuotaService
       .listAccounts()

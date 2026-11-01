@@ -25,6 +25,78 @@ const createUniqueViolation = (constraint: string) => {
 };
 
 describe('ServerMessageTransport', () => {
+  it('persists the server origin alongside the shared intervention identity', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'tool-1' });
+    const transport = new ServerMessageTransport({ create } as unknown as MessageModel);
+    await transport.createToolMessage({
+      ...params,
+      role: 'tool',
+      pluginIntervention: {
+        batchId: 'op:1:assistant',
+        operationId: 'op',
+        status: 'pending',
+      },
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pluginIntervention: {
+          batchId: 'op:1:assistant',
+          operationId: 'op',
+          runtimeType: 'server',
+          status: 'pending',
+        },
+      }),
+    );
+  });
+
+  it('keeps the complete Work intent readable while excluding it from runtime message queries', async () => {
+    const intent = {
+      type: 'skill' as const,
+      provider: 'example',
+      toolName: 'create',
+      data: { body: 'raw payload' },
+    };
+    const row = {
+      id: 'tool-1',
+      role: 'tool',
+      content: 'truncated',
+      metadata: { operationId: 'op', toolWorkRegistration: intent },
+    };
+    const model = {
+      query: vi.fn().mockResolvedValue([row]),
+      findById: vi.fn().mockResolvedValue(row),
+      findMessagePlugin: vi.fn().mockResolvedValue({ toolCallId: 'call-1' }),
+    } as unknown as MessageModel;
+    const transport = new ServerMessageTransport(model);
+    expect((await transport.getToolMessage('tool-1'))?.metadata?.toolWorkRegistration).toEqual(
+      intent,
+    );
+    expect((await transport.query())[0].metadata).toEqual({ operationId: 'op' });
+    expect(row.metadata.toolWorkRegistration).toEqual(intent);
+  });
+
+  it('reads both halves of a durable tool result instead of only its message row', async () => {
+    const messageModel = {
+      findById: vi.fn().mockResolvedValue({
+        content: 'Created document',
+        id: 'tool-1',
+        parentId: 'assistant-1',
+        role: 'tool',
+      }),
+      findMessagePlugin: vi.fn().mockResolvedValue({
+        state: { documentId: 'docs-1' },
+        toolCallId: 'call-1',
+      }),
+    } as unknown as MessageModel;
+    expect(await new ServerMessageTransport(messageModel).getToolMessage('tool-1')).toMatchObject({
+      content: 'Created document',
+      id: 'tool-1',
+      parentId: 'assistant-1',
+      pluginState: { documentId: 'docs-1' },
+      tool_call_id: 'call-1',
+    });
+  });
+
   it('returns the first assistant message when the same idempotency key is delivered twice', async () => {
     const existingMessage = {
       agentId: 'agent-1',

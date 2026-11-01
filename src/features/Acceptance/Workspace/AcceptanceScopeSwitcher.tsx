@@ -1,8 +1,7 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { DropdownItem } from '@lobehub/ui';
-import { Avatar, Button, DropdownMenu, Icon } from '@lobehub/ui';
+import { Button, DropdownMenu, Icon } from '@lobehub/ui';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +9,7 @@ import { useNavigate } from 'react-router';
 
 import { useActiveWorkspace } from '@/business/client/hooks/useActiveWorkspace';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
+import WorkspaceAvatar from '@/components/WorkspaceAvatar';
 
 import { acceptanceListPath } from '../Viewer/routes';
 
@@ -37,7 +37,7 @@ const AcceptanceScopeSwitcher = memo(() => {
       },
       ...workspaces.map((workspace) => ({
         extra: check(active?.id === workspace.id),
-        icon: <Avatar avatar={workspace.avatar || DEFAULT_AVATAR} shape={'square'} size={18} />,
+        icon: <WorkspaceAvatar avatar={workspace.avatar} name={workspace.name} size={18} />,
         key: workspace.id,
         label: workspace.name,
         onClick: () => navigate(`/${workspace.slug}${acceptanceListPath()}`),

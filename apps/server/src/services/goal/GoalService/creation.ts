@@ -13,6 +13,7 @@ import { GoalAssignmentService, staleModelSlots } from '../assignment';
 import { GoalManagerService } from '../manager';
 import { DEFAULT_MANAGER_MAX_TURNS } from '../recoveryPolicy';
 import { seedGoalTasks } from '../seedTasks';
+import { assertGoalAgentVisibilityCompat, resolveGoalVisibility } from '../visibility';
 import type { CreateGoalGraphInput, GoalServiceContext } from './types';
 
 /**
@@ -27,7 +28,12 @@ import type { CreateGoalGraphInput, GoalServiceContext } from './types';
 export const createFromConversation = async (
   ctx: GoalServiceContext,
   operationId: string,
-  input: Omit<CreateGoalGraphInput, 'agentId' | 'createdByAgentId' | 'topicId'>,
+  {
+    taskModelConfig,
+    ...input
+  }: Omit<CreateGoalGraphInput, 'agentId' | 'createdByAgentId' | 'topicId'> & {
+    taskModelConfig?: { model: string; provider: string };
+  },
   /**
    * A local desktop run keeps its operation client-side, so no server row
    * exists for `operationId`. Its conversation env names the topic and agent
@@ -54,6 +60,9 @@ export const createFromConversation = async (
     topicId,
   });
   try {
+    // Before the turn is adopted: its snapshot covers the goal config, so a
+    // later write would make the run's first plan stale.
+    if (taskModelConfig) await ctx.setTaskModel(created.goal.id, taskModelConfig);
     const state = await new GoalManagerService(
       ctx.db,
       ctx.userId,
@@ -138,6 +147,10 @@ export const bindTopic = async (
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  // Only a change of agent can break visibility; re-binding the same agent is a no-op here.
+  const current = await ctx.goalModel.findById(goalId);
+  if (current && current.agentId !== agentId)
+    await assertGoalAgentVisibilityCompat(ctx.db, current, [agentId]);
 
   // One transaction: the agent change and the Task moves it implies commit
   // together. Committed apart, a failed move left the goal already on the new
@@ -279,6 +292,14 @@ export const create = async (
     }
     config = { ...config, exploration: { maxExperiments, instruction } };
   }
+  // Resolved before any write: a refused visibility must not leave criteria behind.
+  const visibility = await resolveGoalVisibility(
+    ctx.db,
+    input.visibility,
+    [goalAgentId, config?.taskAgentId],
+    input.projectId,
+  );
+
   if (input.criteria?.length) {
     const criteriaIds = await new VerifyPlanGeneratorService(
       ctx.db,
@@ -312,6 +333,7 @@ export const create = async (
       ? { subjectId: input.topicId, subjectType: 'topic' as const }
       : { subjectType: 'standalone' as const }),
     title: input.title,
+    visibility,
   });
   // `/goal` is an agent making the call. Seeding through the user-attributed
   // model would file the whole opening graph under the goal's owner, which is

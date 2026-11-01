@@ -150,14 +150,14 @@ export const buildExecAppContext = (
     executionContext,
     initialTopicMetadata,
     messageContext = executionContext,
-    projectWorkingDirectoryId,
+    newTopicProject: { projectId, projectWorkingDirectoryId } = {},
   }: {
     executionContext: ConversationContext;
     /** Seed metadata for the topic this run creates. */
     initialTopicMetadata?: Partial<ChatTopicMetadata>;
     messageContext?: ConversationContext;
-    /** The project directory the topic this run creates is bound to. */
-    projectWorkingDirectoryId?: string;
+    /** The project directory — or, without one, the project — the topic this run creates is bound to. */
+    newTopicProject?: { projectId?: string; projectWorkingDirectoryId?: string };
   },
 ): ExecAgentAppContext => {
   const newThread = resolveNewThreadIntent(executionContext);
@@ -198,7 +198,7 @@ export const buildExecAppContext = (
     // supervisor turn loses its role on the step_start snapshot / refetch
     // and renders as a generic assistant.
     orchestrationRole: executionContext.orchestrationRole,
-    ...(projectWorkingDirectoryId && { projectWorkingDirectoryId }),
+    ...(projectWorkingDirectoryId ? { projectWorkingDirectoryId } : projectId && { projectId }),
     scope: executionContext.scope,
     taskId:
       executionContext.viewedTask?.type === 'detail'

@@ -12,6 +12,8 @@ import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoo
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
+import { GoalService } from '@/server/services/goal';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { rethrowDuplicateProjectField } from './_helpers/projectConstraintErrors';
@@ -196,14 +198,18 @@ export const projectRouter = router({
         if (input.coordinatorAgentId) {
           await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
         }
-        return {
-          data: await withMainAgent(
-            ctx.projectModel,
-            await ctx.projectModel.create(input).catch(rethrowDuplicateProjectField),
-          ),
-          message: 'Project created',
-          success: true,
-        };
+        const project = await withMainAgent(
+          ctx.projectModel,
+          await ctx.projectModel.create(input).catch(rethrowDuplicateProjectField),
+        );
+        await createDefaultChannel({
+          agentId: project.coordinatorAgentId,
+          db: ctx.serverDB,
+          projectId: project.id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data: project, message: 'Project created', success: true };
       } catch (error) {
         mapProjectError(error, 'create');
       }
@@ -439,6 +445,7 @@ export const projectRouter = router({
     )
     .mutation(async ({ ctx, input: { id, ...input } }) => {
       try {
+        let previousVisibility: string | undefined;
         if (input.visibility !== undefined) {
           const project = requireResult(await ctx.projectModel.findById(id));
           if (project.userId !== ctx.userId) {
@@ -447,12 +454,18 @@ export const projectRouter = router({
               message: 'Only the project creator can change its visibility',
             });
           }
+          previousVisibility = project.visibility;
         }
+        const updated = requireResult(await ctx.projectModel.update(id, input));
+        // Members can no longer see the project, so they must not keep opening its goals.
+        if (input.visibility === 'private' && previousVisibility === 'public')
+          await new GoalService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).privatizeProjectGoals(id);
         return {
-          data: await withMainAgent(
-            ctx.projectModel,
-            requireResult(await ctx.projectModel.update(id, input)),
-          ),
+          data: await withMainAgent(ctx.projectModel, updated),
           message: 'Project updated',
           success: true,
         };

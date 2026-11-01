@@ -164,6 +164,54 @@ const googleChatModels: AIChatModelCard[] = [
       video: true,
       vision: true,
     },
+    // Unified 1M window shared by input, thinking and output; a response defaults to 64K output
+    // and can go up to 1M with long decode.
+    // https://ai.google.dev/gemini-api/docs/models/gemini-4-argon
+    contextWindowTokens: 1_048_576,
+    description:
+      "Gemini 4 Argon is Google's flagship reasoning model, built for complex software engineering, deep math and science, autonomous multi-step agents, and long decode up to 1M tokens.",
+    displayName: 'Gemini 4 Argon',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-4',
+    id: 'gemini-4-argon',
+    knowledgeCutoff: '2026-03',
+    maxOutput: 65_536,
+    /** Introductory rates through 2026-11-30; they double afterward ($4 input, $0.20 cached input,
+     * $20 output). Explicit caching is not supported, so there is no cache-write price.
+     * @see https://ai.google.dev/gemini-api/docs/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-13',
+    // Sampling parameters are ignored by the API.
+    // https://ai.google.dev/gemini-api/docs/latest-model
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
       "Gemini 3.8 Flash is Google's most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows.",
@@ -379,6 +427,42 @@ const googleChatModels: AIChatModelCard[] = [
     settings: {
       disabledParams: ['temperature', 'top_p'],
       extendParams: ['thinkingLevel', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      // no functionCall: the model does not support function calling
+      imageOutput: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072 + 32_768,
+    description:
+      'Nano Banana 2.1 is an update to Nano Banana 2 with better visual quality, prompt adherence, multi-turn character consistency and text rendering across 1K, 2K and 4K output.',
+    displayName: 'Nano Banana 2.1',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.1',
+    id: 'gemini-nano-banana-2.1',
+    maxOutput: 32_768,
+    // https://ai.google.dev/gemini-api/docs/pricing ($0.0336 per 1K image)
+    pricing: {
+      approximatePricePerImage: 0.0336,
+      units: [
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-10-06',
+    // Thinking levels are minimal / medium (default) / high, which no `thinkingLevel*` param covers.
+    settings: {
+      extendParams: ['imageAspectRatio2', 'imageResolution2'],
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -799,6 +883,29 @@ export const imagenGenParameters: ModelParamsSchema = {
 
 const googleImageModels: AIImageModelCard[] = [
   {
+    displayName: 'Nano Banana 2.1',
+    id: 'gemini-nano-banana-2.1:image',
+    type: 'image',
+    enabled: true,
+    description:
+      'Nano Banana 2.1 is an update to Nano Banana 2 with better visual quality, prompt adherence, multi-turn character consistency and text rendering across 1K, 2K and 4K output.',
+    releasedAt: '2026-10-06',
+    // Output resolutions are 1K / 2K / 4K only (no 512).
+    parameters: {
+      ...nanoBanana2Parameters,
+      resolution: { default: '1K', enum: ['1K', '2K', '4K'] },
+    },
+    pricing: {
+      approximatePricePerImage: 0.0336,
+      units: [
+        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+  },
+  {
     displayName: 'Nano Banana 2',
     id: 'gemini-3.1-flash-image:image',
     type: 'image',
@@ -953,6 +1060,46 @@ const googleVideoModels: AIVideoModelCard[] = [
       units: [{ name: 'videoGeneration', rate: 0.35, strategy: 'fixed', unit: 'second' }],
     },
     releasedAt: '2026-01-13',
+    type: 'video',
+  },
+  {
+    description:
+      "Google's video generation and editing model with native audio: text, image and reference-guided video, first/last frame interpolation, and conversational editing.",
+    displayName: 'Gemini Omni 1.1 Flash',
+    enabled: true,
+    id: 'gemini-omni-1.1-flash',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, max: 10, min: 3, step: 1 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrls: {
+        default: [],
+        maxCount: 7,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['360p', '720p', '1080p', '4k'],
+      },
+    },
+    pricing: {
+      // Billed per token: video output is about 5,792 tokens per second of 720p video (~$0.10/s).
+      // https://ai.google.dev/gemini-api/docs/pricing
+      units: [
+        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoGeneration', rate: 17.5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-27',
     type: 'video',
   },
 ];

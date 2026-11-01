@@ -793,7 +793,11 @@ export class DocumentService {
         historyAppended ||
         htmlTypeChanged ||
         (params.content !== undefined && params.content !== currentDocument.content);
-      if (contentChanged && this.isCollaborativeDocument(currentDocument)) {
+      if (
+        contentChanged &&
+        params.origin !== 'room-projection' &&
+        this.isCollaborativeDocument(currentDocument)
+      ) {
         const canWrite = await this.editLockService.canWrite('document', id, params.lockOwnerId);
         if (!canWrite) {
           throw new TRPCError({
@@ -849,6 +853,7 @@ export class DocumentService {
       const savedAt = historyAppended ? updatedAt : undefined;
       if (historyAppended) {
         await documentHistoryService.createHistory({
+          ...params.history,
           breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,

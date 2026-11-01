@@ -274,6 +274,15 @@ export class DocumentService {
     };
   }
 
+  /** Store a page's live collaboration room as a version; false when it has no live room. */
+  async snapshotPageVersion(documentId: string, saveSource: 'manual'): Promise<boolean> {
+    const { recorded } = await lambdaClient.document.snapshotPageVersion.mutate({
+      documentId,
+      saveSource,
+    });
+    return recorded;
+  }
+
   async transferDocument(
     documentId: string,
     targetWorkspaceId: string | null,

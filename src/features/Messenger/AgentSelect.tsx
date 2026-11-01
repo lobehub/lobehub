@@ -2,12 +2,12 @@
 
 import { agentDisplayName } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Select, type SelectProps, Text } from '@lobehub/ui';
+import { Select, type SelectProps, Text } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 
@@ -42,9 +42,12 @@ const AgentSelect = memo<AgentSelectProps>(
           return {
             label: (
               <Flexbox horizontal align={'center'} gap={8}>
-                <Avatar
-                  avatar={agent.avatar || DEFAULT_AVATAR}
+                <AgentAvatar
+                  agentId={agent.id}
+                  avatar={agent.avatar}
                   background={agent.backgroundColor ?? undefined}
+                  name={title}
+                  shape={'circle'}
                   size={20}
                 />
                 <Text ellipsis>{title}</Text>

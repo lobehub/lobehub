@@ -9,6 +9,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
 import { resolveAgentReference } from '@/server/services/agent/resolveReference';
+import { createAgentDirectChannel } from '@/server/services/channel/defaultChannel';
 
 import { assertCanUseConversationTargets } from './_helpers/conversationResourceGuard';
 
@@ -59,6 +60,12 @@ export const sessionRouter = router({
         },
         groupId: groupId && groupId !== 'default' ? groupId : undefined,
         visibility: config.visibility,
+      });
+      await createAgentDirectChannel({
+        agentId,
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
       return agentId;
     }),

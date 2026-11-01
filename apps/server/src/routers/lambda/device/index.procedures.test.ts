@@ -62,6 +62,7 @@ function expected(): Array<
     ['gitPullRequestMergeContext', 'query', 12],
     ['gitWorkingTreeStatus', 'query', 12],
     ['installAppUpdate', 'mutation', 12],
+    ['listClaudeCodeMemory', 'query', 14],
     ['listDevices', 'query', 11],
     ['listGitBranches', 'query', 12],
     ['listGitRemoteBranches', 'query', 12],

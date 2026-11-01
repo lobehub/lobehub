@@ -12,6 +12,31 @@ const fixture = createChannelFixture(db, 'channel-view');
 beforeEach(fixture.setup);
 afterEach(fixture.cleanup);
 
+const publishedReply = async (workspace = true) => {
+  const asOwner = new ChannelRepository(
+    db,
+    fixture.ownerId,
+    workspace ? fixture.workspaceId : undefined,
+  );
+  const { channel } = await asOwner.create({ title: 'Agent replies' });
+  const author = await fixture.addAgent(channel.id, 'Author');
+  const other = await fixture.addAgent(channel.id, 'Other');
+  const request = await asOwner.send(channel.id, {
+    content: 'Hello',
+    mentions: [author.id],
+    requestKey: 'hello',
+    routing: 'fallback',
+  });
+  const [job] = await jobsOf(db, request.id);
+  const executions = new ChannelExecutionRepository(db);
+  await executions.claim(channel.id, job.id, lease);
+  await executions.accepted(channel.id, job.id);
+  await executions.saveDraft(channel.id, job.id, 'Hello from Author');
+  const replyId = await executions.publish(channel.id, job.id);
+  await executions.releaseWriter(channel.id, job.id);
+  return { asOwner, author, channel, other, replyId };
+};
+
 describe('Channel public view', () => {
   it('returns an ordered page without exposing execution config, private topics or drafts', async () => {
     const { asOwner, channel } = await fixture.createTeamChannel();
@@ -55,7 +80,10 @@ describe('Channel public view', () => {
     await expect(
       new ChannelRepository(db, fixture.ownerId).detail(channel.id),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await db.update(channelMembers).set({ active: false }).where(eq(channelMembers.id, member.id));
+    await db
+      .update(channelMembers)
+      .set({ status: 'removed' })
+      .where(eq(channelMembers.id, member.id));
     await expect(asMember.detail(channel.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
@@ -86,6 +114,69 @@ describe('Channel public view', () => {
     expect(await jobsOf(db, reply.id)).toHaveLength(1);
     await expect(
       asOwner.createThread(channel.id, { ...input, rootMessageId: reply.id }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it.each([false, true])(
+    'includes the reply author so a new thread can answer without a mention (workspace: %s)',
+    async (workspace) => {
+      const { asOwner, author, channel, replyId } = await publishedReply(workspace);
+      const view = await asOwner.detail(channel.id);
+      expect(view.messages.find((message) => message.id === replyId)?.recipientMemberIds).toEqual(
+        [],
+      );
+      const input = { followerMemberIds: [], rootMessageId: replyId };
+      const thread = await asOwner.createThread(channel.id, input);
+      expect(thread.followerMemberIds).toEqual([author.id]);
+      expect((await asOwner.createThread(channel.id, input)).id).toBe(thread.id);
+      // Opening a thread must not trigger an unsolicited reply.
+      expect(await jobsOf(db, replyId)).toEqual([]);
+      const followup = await asOwner.send(channel.id, {
+        content: 'Which directory can you see?',
+        requestKey: 'followup',
+        routing: 'fallback',
+        threadId: thread.id,
+      });
+      expect(followup.recipientMemberIds).toEqual([author.id]);
+      expect(await jobsOf(db, followup.id)).toEqual([
+        expect.objectContaining({ memberId: author.id, threadId: thread.id, status: 'queued' }),
+      ]);
+    },
+  );
+
+  it('keeps explicitly selected followers and deduplicates the automatically included author', async () => {
+    const { asOwner, author, channel, other, replyId } = await publishedReply();
+    const thread = await asOwner.createThread(channel.id, {
+      followerMemberIds: [other.id, author.id, other.id],
+      rootMessageId: replyId,
+    });
+    expect(thread.followerMemberIds.sort()).toEqual([author.id, other.id].sort());
+  });
+
+  it.each(['inactive', 'rebound'] as const)(
+    'does not automatically include an %s reply author',
+    async (state) => {
+      const { asOwner, author, channel, other, replyId } = await publishedReply();
+      await db
+        .update(channelMembers)
+        .set(state === 'inactive' ? { status: 'removed' as const } : { agentId: other.agentId })
+        .where(eq(channelMembers.id, author.id));
+      const thread = await asOwner.createThread(channel.id, {
+        followerMemberIds: [],
+        rootMessageId: replyId,
+      });
+      expect(thread.followerMemberIds).toEqual([]);
+    },
+  );
+
+  it('still rejects explicit followers outside the reply channel', async () => {
+    const { asOwner, channel, replyId } = await publishedReply();
+    const otherChannel = await fixture.createTeamChannel('Foreign');
+    await expect(
+      asOwner.createThread(channel.id, {
+        followerMemberIds: [otherChannel.owner.id],
+        rootMessageId: replyId,
+      }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
@@ -163,7 +254,7 @@ describe('Channel public view', () => {
     const [job] = await jobsOf(db, request.id);
     const executions = new ChannelExecutionRepository(db);
     await executions.claim(channel.id, job.id, lease);
-    await executions.accepted(channel.id, job.id, {});
+    await executions.accepted(channel.id, job.id);
     await executions.saveDraft(channel.id, job.id, 'Original reply');
     await executions.publish(channel.id, job.id);
     await db

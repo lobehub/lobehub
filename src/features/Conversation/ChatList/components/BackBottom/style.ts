@@ -1,24 +1,22 @@
-import { createStaticStyles, cx, lobeStaticStylish } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: cx(
-    lobeStaticStylish.blur,
-    css`
-      pointer-events: none;
-
-      position: absolute;
-      z-index: 50;
-      inset-block-end: 16px;
-      inset-inline-end: 16px;
-      transform: translateY(16px);
-
-      opacity: 0;
-      background: color-mix(in srgb, ${cssVar.colorBgElevated} 50%, transparent) !important;
-    `,
-  ),
-  visible: css`
-    pointer-events: all;
-    transform: translateY(0);
-    opacity: 1;
-  `,
-}));
+export const styles = stylex.create({
+  container: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 50,
+    insetBlockEnd: '16px',
+    insetInlineEnd: '16px',
+    transform: 'translateY(16px)',
+    opacity: 0,
+    backdropFilter: 'saturate(150%) blur(10px)',
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgElevated} 50%, transparent)`,
+    backgroundImage: 'none',
+  },
+  visible: {
+    pointerEvents: 'all',
+    transform: 'translateY(0)',
+    opacity: 1,
+  },
+});

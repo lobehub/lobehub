@@ -435,21 +435,39 @@ export default {
   'channel.watchKeywordInstructionLabel': 'Instruction',
   'channel.watchKeywordInstructionPlaceholder':
     'e.g. Scan the recent thread and reply if there is an actionable bug report',
+  'channel.watchKeywordAsNameLabel': 'Bot name',
+  'channel.watchKeywordAsNameHint':
+    'Saying this word calls the bot, like its own name: it answers right away, even while you\'re active in the channel. Leave it off for topic words like "bug".',
   'channel.watchKeywordsAdd': 'Add keyword',
   'channel.watchKeywordsEmpty':
     'No keywords added yet — bot only wakes on @mention or DM in subscribed channels.',
-  'channel.botWakeEnabled': 'Judge unprompted follow-ups',
+  'channel.replyStyle': 'Reply style',
+  'channel.replyStyleHint':
+    'How the bot talks in every channel, in your own words: tone, length, formatting, language, emoji. It shapes how the bot speaks, not what it does. You can also ask the bot to update this itself. Up to 2000 characters.',
+  'channel.replyStylePlaceholder':
+    'Casual and short, like a teammate. No bullet lists. Reply in the language you were spoken to.',
+  'channel.channelReplyStyles': 'Reply style per channel',
+  'channel.channelReplyStylesHint':
+    'A style for one channel or thread, used there instead of the reply style above.',
+  'channel.channelReplyStylesAdd': 'Add channel',
+  'channel.channelReplyStylesEmpty':
+    'No channel has its own style. Every channel uses the reply style above.',
+  'channel.channelReplyStyleChannelLabel': 'Channel ID',
+  'channel.channelReplyStyleChannelPlaceholder': 'Channel or thread ID',
+  'channel.channelReplyStyleStyleLabel': 'Style',
+  'channel.replyEmojis': 'Emoji the bot can use',
+  'channel.replyEmojisHint':
+    "Emoji and stickers the bot may drop into a reply, and when each fits. Paste the code as it appears in a message: a Discord custom emoji is <:name:id>; send \\:name: in Discord to see it. The bot uses them sparingly and never any custom emoji that isn't listed.",
+  'channel.replyEmojisAdd': 'Add emoji',
+  'channel.replyEmojisEmpty':
+    'No emoji added. The bot uses plain Unicode emoji only when its style calls for it.',
+  'channel.replyEmojiLabel': 'Emoji',
+  'channel.replyEmojiPlaceholder': 'e.g. <:doge:1234567890>',
+  'channel.replyEmojiUsageLabel': 'When to use',
+  'channel.replyEmojiUsagePlaceholder': 'e.g. when someone ships something',
+  'channel.botWakeEnabled': 'Speak up on its own',
   'channel.botWakeEnabledHint':
-    "Turns on the rules below. They decide whether the bot may answer a message nobody addressed to it: a watch keyword in a thread it was not mentioned in, or a message continuing a conversation it already joined. Plain channel chatter is only judged and recorded, unless the rules are set to Enforce: then a message that calls the bot by name, or comes soon after it spoke, can start a reply. Off keeps today's behavior, where a watch keyword wakes the bot without a rule check.",
-  'channel.botWakeMode': 'Rules',
-  'channel.botWakeModeHint': 'How the built-in rules and the settings below are applied.',
-  'channel.botWakeModeOff': 'Off',
-  'channel.botWakeModeOffHint': 'Rules are not evaluated.',
-  'channel.botWakeModeShadow': 'Record only',
-  'channel.botWakeModeShadowHint': 'Rules are evaluated and recorded, but never stop a reply.',
-  'channel.botWakeModeEnforce': 'Enforce',
-  'channel.botWakeModeEnforceHint':
-    'A rule that says no stops the bot from joining. A message that calls the bot by name, or comes soon after it spoke, can also start a reply, even without an @mention.',
+    'When on, the bot reads messages nobody addressed to it and may join in, following the duties, channels and pace below. When off, it only answers @-mentions, DMs, replies and watch keywords.',
   'channel.botWakeScope': 'Where it may join',
   'channel.botWakeScopeHint': 'Limits the places where the bot may join unprompted.',
   'channel.botWakeScopeAll': 'Everywhere it can see',
@@ -457,6 +475,8 @@ export default {
   'channel.botWakeScopeBotThreads': 'Only where it already spoke',
   'channel.botWakeScopeBotThreadsHint':
     'A channel or thread where the bot posted within the follow-up window. Discord counts a channel and its threads as one place.',
+  'channel.botWakeScopeBotThreadsHintLark':
+    'A group chat where the bot posted within the follow-up window.',
   'channel.botWakeScopeNone': 'Nowhere',
   'channel.botWakeScopeNoneHint': 'The bot never joins unprompted.',
   'channel.botWakeAllowChannels': 'Allowed channels',
@@ -471,7 +491,24 @@ export default {
   'channel.botWakeDenyChannelsEmpty': 'No channels blocked.',
   'channel.botWakeChannelIdLabel': 'Channel ID',
   'channel.botWakeChannelIdPlaceholder': 'e.g. 1234567890',
+  'channel.botWakeChannelIdPlaceholderLark':
+    'Group chat ID, e.g. oc_a0553eda9014c201e6969b478895c230',
   'channel.channelListLimit': 'Lists hold at most {{max}} entries — remove one first.',
+  'channel.botWakePace': 'How often it joins',
+  'channel.botWakePaceHint':
+    'How often the bot speaks up on its own. Pick a preset, or Custom to set the numbers.',
+  'channel.botWakePaceCalm': 'Calm',
+  'channel.botWakePaceCalmHint':
+    'Joins rarely: a short follow-up window, quiet while you are around, and a burst of messages gets one reply.',
+  'channel.botWakePaceBalanced': 'Balanced',
+  'channel.botWakePaceBalancedHint':
+    'Follows up for 5 minutes after it speaks and stays quiet for 2 minutes after you do.',
+  'channel.botWakePaceActive': 'Active',
+  'channel.botWakePaceActiveHint':
+    'Keeps up for 10 minutes after it speaks and joins even while you are around.',
+  'channel.botWakePaceCustom': 'Custom',
+  'channel.botWakePaceCustomHint':
+    'Set the follow-up window, silence limit, owner presence and batching yourself.',
   'channel.botWakeWindowSeconds': 'Follow-up window (seconds)',
   'channel.botWakeWindowSecondsHint':
     'After the bot speaks, plain messages in the same place within this time count as a follow-up to it.',
@@ -481,23 +518,25 @@ export default {
   'channel.botWakeOwnerPresenceSeconds': 'Owner presence (seconds)',
   'channel.botWakeOwnerPresenceSecondsHint':
     "If the bot's owner posted in the channel within this time, the bot stays quiet. 0 turns this off.",
-  'channel.botWakeClassifierMode': 'Addressed-to-bot check',
-  'channel.botWakeClassifierModeHint':
-    'A small model scores whether a message is directed at the bot. It only runs on ambiguous follow-ups.',
-  'channel.botWakeClassifierModeOff': 'Off',
-  'channel.botWakeClassifierModeOffHint': 'No model calls.',
-  'channel.botWakeClassifierModeShadow': 'Record only',
-  'channel.botWakeClassifierModeShadowHint': 'Scores are recorded; nothing is blocked.',
-  'channel.botWakeClassifierModeEnforce': 'Enforce',
-  'channel.botWakeClassifierModeEnforceHint': 'Messages scoring below the threshold are skipped.',
-  'channel.botWakeClassifierThreshold': 'Score threshold',
+  'channel.botWakeClassifierThreshold': 'Follow-up sensitivity',
   'channel.botWakeClassifierThresholdHint':
-    'Used when the check is set to enforce. From 0 to 1; a higher value skips more messages.',
-  'channel.botWakeCustomInstructions': 'Custom instructions',
+    'Right after the bot replied, how sure it must be that a message is still for it before it joins, from 0 to 1. A higher value makes it join less often.',
+  'channel.botWakeDuties': 'What the bot handles',
+  'channel.botWakeDutiesHint':
+    "What the bot is responsible for in its channels, in your own words, one duty per line. When anyone's message falls within them, the bot may step in without being called, and may still stay silent. Leave empty to turn this off. You can also ask the bot to keep this up to date itself. Up to 4000 characters.",
+  'channel.botWakeDutiesPlaceholder':
+    'When someone describes a feature request, assess it; for easy ones, create a task for dario.\nOnce the PR is up, tell the person who asked for it.',
+  'channel.botWakeDutiesThreshold': 'Duty sensitivity',
+  'channel.botWakeDutiesThresholdHint':
+    'How sure the bot must be that a message falls within its duties before it steps in, from 0 to 1. A higher value makes it step in less often.',
+  'channel.botWakeCustomInstructionsEnabled': 'Custom instructions',
+  'channel.botWakeCustomInstructionsEnabledHint':
+    'Tell the bot in your own words whom to answer and what to leave alone. Turn on to write them.',
+  'channel.botWakeCustomInstructions': 'Instructions',
   'channel.botWakeCustomInstructionsHint':
-    'Plain-language guidance for the check, such as when to join and when to stay out. It informs the model and is not a hard rule. Up to 1000 characters.',
+    'Written to the bot like a prompt: who it should answer, what to leave alone, examples of each. It guides the judgement and is not a hard rule. Up to 4000 characters.',
   'channel.botWakeCustomInstructionsPlaceholder':
-    'e.g. Join when someone asks about billing; stay out of casual chat',
+    'Answer when someone asks about billing, refunds or invoices, or follows up on something you said.\nStay out of casual chat between teammates and of messages addressed to someone else.\nIf a message mentions you only in passing, do not reply.',
   'channel.botWakeSchedulerMode': 'Batch follow-ups',
   'channel.botWakeSchedulerModeHint':
     'Hold follow-ups briefly and answer a burst of messages in one run instead of one run per message. Has no effect on deployments without a job queue.',
@@ -579,6 +618,33 @@ export default {
   'channel.access.identity.required': 'Required to approve strangers',
   'channel.access.identity.approverMissing':
     'To approve strangers, add your own ID first, or nobody can run /approve.',
+  'channel.access.section.identity': 'Owner identity',
+  'channel.access.section.conversation': 'Conversation access',
+  'channel.access.section.conversationDesc':
+    'Determines who may talk to the bot in direct messages, and in which groups and channels it responds.',
+  'channel.access.section.device': 'Device access',
+  'channel.access.section.deviceDesc':
+    'Determines who may operate your devices through the bot, such as reading files or running commands. Conversation access does not include device access.',
+  'channel.access.device.label': 'Who can use your devices',
+  'channel.access.device.owner': 'Only me',
+  'channel.access.device.ownerDesc':
+    'Only you can have the bot operate your devices. Others can still talk to it.',
+  'channel.access.device.allowlist': 'Me and authorized people',
+  'channel.access.device.allowlistDesc':
+    'You and the people listed below can have the bot operate your devices.',
+  'channel.access.device.list': 'Authorized people',
+  'channel.access.device.listHint':
+    'Listed people can read and write files and run commands on your devices through the bot. Add only people you trust.',
+  'channel.access.device.listEmpty': 'No one is authorized yet, so only you can use your devices.',
+  'channel.access.device.ownerMissing':
+    'Add your platform user ID under Owner identity first. Until then the bot cannot recognize you, and no one can use your devices.',
+  'channel.devicePolicy': 'Device Access',
+  'channel.devicePolicyHint': 'Who may operate your devices through the bot.',
+  'channel.deviceAllowFrom': 'Authorized People',
+  'channel.deviceAllowFromAdd': 'Add person',
+  'channel.deviceAllowFromEmpty': 'No one is authorized yet, so only you can use your devices.',
+  'channel.deviceAllowFromHint':
+    'Listed people can read and write files and run commands on your devices through the bot.',
   'channel.hero.title': '{{name}} bot',
   'channel.hero.connected': '{{agent}} · app ID {{id}}',
   'channel.hero.new': 'Once connected, {{agent}} can work in {{name}}.',
@@ -587,11 +653,99 @@ export default {
   'channel.tab.reply': 'Replies',
   'channel.tab.wake': 'Wake policy',
   'channel.wake.intro':
-    'Decides whether the bot may answer a message nobody addressed to it: a watch keyword in a thread it was not mentioned in, or a message continuing a conversation it already joined. Plain channel chatter is only judged and recorded, never answered.',
+    'Lets the bot speak up when nobody @-mentioned it: when a message calls it by name, when someone follows up soon after it spoke, or when a watch keyword matches. It judges each message first, and may choose to stay silent.',
+  'channel.wake.feishuScope.title': 'Group messages need an extra permission',
+  'channel.wake.feishuScope.desc':
+    'To hear group messages that do not @-mention the bot, the app needs the im:message.group_msg scope. If other bots share the group, also add im:message.group_msg.include_bot:read so the bot sees what they say when it decides whether to step in. Add scopes under Permissions & Scopes in the developer console, then create and publish a new version. Apps made with one-click setup already have the first one.',
+  'channel.wake.section.keywords': 'Keywords',
+  'channel.wake.section.channels': 'Channels',
+  'channel.wake.section.channelsDesc':
+    'Where the bot may join a conversation nobody addressed to it.',
+  'channel.wake.section.pace': 'Pace',
+  'channel.wake.section.paceDesc': 'How soon, and how often, the bot speaks up on its own.',
+  'channel.wake.section.judgement': 'Duties',
+  'channel.wake.section.judgementDesc':
+    'What the bot is responsible for, so it can step in without being called, and the instructions it follows.',
+  'channel.wake.section.more': 'More',
+  'channel.wake.section.switch': 'Proactive participation',
   'channel.tab.advanced': 'Advanced',
+  'channel.tab.unsaved': 'Unsaved changes',
+  'channel.tab.records': 'Wake records',
+  'channel.records.intro':
+    'Every message the bot judged in the last {{days}} days: whether it woke up, and why. Mark the ones it got wrong.',
+  'channel.records.summary.wake': 'Woke',
+  'channel.records.summary.skip': 'Skipped',
+  'channel.records.summary.defer': 'Deferred',
+  'channel.records.summary.followup': 'Proactive wakes',
+  'channel.records.summary.followupHint': 'Woke up without being @-mentioned',
+  'channel.records.summary.marked': 'Marked by you',
+  'channel.records.filter.all': 'All',
+  'channel.records.filter.followupOnly': 'Proactive only',
+  'channel.records.filter.unmarkedOnly': 'Unmarked only',
+  'channel.records.outcome.wake': 'Woke',
+  'channel.records.outcome.skip': 'Skipped',
+  'channel.records.outcome.defer': 'Deferred',
+  'channel.records.proactive': 'Proactive',
+  'channel.records.refresh': 'Refresh',
+  'channel.records.purged': 'Message expired',
+  'channel.records.purgedHint': 'Message text is kept for 7 days.',
+  'channel.records.silenced': 'Chose not to reply',
+  'channel.records.silencedWithReason': 'Chose not to reply: {{reason}}',
+  'channel.records.reason.access-gate-rejected': 'Blocked by access rules',
+  'channel.records.reason.addressed': 'A reply to the bot',
+  'channel.records.reason.classifier-confident': 'Judged as meant for it',
+  'channel.records.reason.command': 'Command',
+  'channel.records.reason.direct-message': 'Direct message',
+  'channel.records.reason.explicit-mention': '@-mentioned',
+  'channel.records.reason.followup-window': 'Follow-up right after it spoke',
+  'channel.records.reason.in-duty': 'Within its duties',
+  'channel.records.reason.monitoring-not-allowed': 'Channel not open to proactive replies',
+  'channel.records.reason.named-in-text': 'Called by name',
+  'channel.records.reason.not-addressed': 'Not addressed to it',
+  'channel.records.reason.policy-denied': 'Wake rules said no',
+  'channel.records.reason.proactive-help': 'Offered help',
+  'channel.records.reason.scheduled': 'Held to read with the next messages',
+  'channel.records.reason.solo-conversation': 'One-on-one conversation',
+  'channel.records.reason.watch-keyword': 'Watch keyword matched',
+  'channel.records.noReplyReason.already_handled': 'Already handled',
+  'channel.records.noReplyReason.duplicate': 'Already answered',
+  'channel.records.noReplyReason.empty_completion': 'Empty reply',
+  'channel.records.noReplyReason.not_addressed': 'Not talking to it',
+  'channel.records.noReplyReason.nothing_to_add': 'Nothing to add',
+  'channel.records.noReplyReason.off_topic': 'Off topic',
+  'channel.records.noReplyReason.stand_down': 'Asked to step back',
+  'channel.records.noReplyReason.unspecified': 'No reason given',
+  'channel.records.mark.correct': 'Right call',
+  'channel.records.mark.false_wake': "Shouldn't have woken",
+  'channel.records.mark.missed_wake': 'Should have woken',
+  'channel.records.mark.failed': "Couldn't save your mark. Try again.",
+  'channel.records.column.time': 'Time',
+  'channel.records.column.message': 'Message',
+  'channel.records.column.outcome': 'Result',
+  'channel.records.column.reason': 'Why',
+  'channel.records.column.mark': 'Right?',
+  'channel.records.mark.wrong': 'Wrong call',
+  'channel.records.openMessage': 'Open the message',
+  'channel.records.column.score': 'Score',
+  'channel.records.judge.addressed': 'Is it meant for the bot',
+  'channel.records.judge.duty': 'Is it within its duties',
+  'channel.records.judge.allow': 'over the threshold',
+  'channel.records.judge.deny': 'under the threshold',
+  'channel.records.judge.hint': '{{judge}}: {{verdict}}',
+  'channel.records.mark.undo': 'Click again to remove the mark',
+  'channel.records.empty.title': 'No records yet',
+  'channel.records.total': '{{count}} records',
+  'channel.records.empty.desc':
+    'Records show up here once the bot judges a message in a channel it can see.',
+  'channel.records.emptyFiltered.title': 'Nothing matches these filters',
+  'channel.records.emptyFiltered.clear': 'Clear filters',
+  'channel.module.save': 'Save',
+  'channel.module.unsaved': 'Unsaved changes',
   'channel.group.connection': 'Connection options',
   'channel.reply.instant':
     'Changes here take effect as soon as you make them. There is nothing to save.',
+  'channel.reply.section.display': 'How replies look',
+  'channel.reply.section.style': 'Style and emoji',
   'channel.settings': 'Advanced Settings',
   'channel.settingsResetConfirm': 'Are you sure you want to reset advanced settings to default?',
   'channel.settingsResetDefault': 'Reset to Default',
@@ -611,6 +765,15 @@ export default {
   'channel.reactionModeFullHint': 'Also switch between thinking and working after every step',
   'channel.reactionModeNone': 'Off',
   'channel.reactionModeNoneHint': 'Never add status reactions',
+  'channel.replyPlacement': 'Where to Reply',
+  'channel.replyPlacementHint':
+    'Where the bot answers a message sent to it in a channel. Messages already in a thread or a DM are answered where they are.',
+  'channel.replyPlacementAgent': 'Let the bot decide',
+  'channel.replyPlacementAgentHint':
+    'Quick answers stay in the channel; longer work moves into a thread under the message. When the work takes a while, it first posts a short note on what it will do.',
+  'channel.replyPlacementThread': 'Always open a thread',
+  'channel.replyPlacementThreadHint':
+    'Every message that wakes the bot in a channel gets its own thread.',
   'channel.historyLimit': 'History Message Limit',
   'channel.historyLimitHint': 'Default number of messages to fetch when reading channel history',
   'channel.serverId': 'Default Server ID',

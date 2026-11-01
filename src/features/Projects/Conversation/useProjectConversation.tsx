@@ -6,11 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, useParams, useSearchParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
+import { type PendingNewTopicDirectory } from '@/store/chat/slices/topic/initialState';
+import { useCurrentProjectDetail, useProjectIdByRef, useProjectStore } from '@/store/project';
 import {
   useProjectDirectories,
   useProjectDirectoryStore,
@@ -40,10 +42,11 @@ export const useProjectConversation = () => {
   const { projectId, topicId } = useParams<{ projectId: string; topicId?: string }>();
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
-  const topicsRequest = useProjectDirectoryStore((s) => s.useFetchProjectTopics)(
-    detail?.project.id,
-  );
-  const topics = useProjectTopics(detail?.project.id);
+  // Topics and directories are keyed by the project id, which the list (or the
+  // id-shaped route param) already gives: don't queue them behind the detail.
+  const { confirmed: projectConfirmed, id: projectRefId } = useProjectIdByRef(projectId);
+  const topicsRequest = useProjectDirectoryStore((s) => s.useFetchProjectTopics)(projectRefId);
+  const topics = useProjectTopics(projectRefId);
   const selectedTopic = topics.find((topic) => topic.id === topicId);
   const projectSlug = detail?.project.slug ?? projectId;
   const storedTopic = useChatStore((s) =>
@@ -55,18 +58,20 @@ export const useProjectConversation = () => {
   const [searchParams] = useSearchParams();
   const draftAgentParam = topicId ? null : searchParams.get('agent');
   const draftDirectoryParam = topicId ? null : searchParams.get('dir');
-  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(
-    detail?.project.id,
-  );
-  const directories = useProjectDirectories(detail?.project.id);
+  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectRefId);
+  const directories = useProjectDirectories(projectRefId);
   const directoryIds = useMemo(() => new Set(directories.map((d) => d.id)), [directories]);
-  const draft = useMemo(
-    () =>
-      draftAgentParam && draftDirectoryParam && directoryIds.has(draftDirectoryParam)
+  // A draft without a directory is conversation-only in the project; it needs
+  // the real project id (the param may be a slug) before it can be staged.
+  const draftProjectId = projectConfirmed ? projectRefId : undefined;
+  const draft = useMemo<PendingNewTopicDirectory | undefined>(() => {
+    if (!draftAgentParam) return;
+    if (draftDirectoryParam)
+      return directoryIds.has(draftDirectoryParam)
         ? { agentId: draftAgentParam, projectWorkingDirectoryId: draftDirectoryParam }
-        : undefined,
-    [draftAgentParam, draftDirectoryParam, directoryIds],
-  );
+        : undefined;
+    return draftProjectId ? { agentId: draftAgentParam, projectId: draftProjectId } : undefined;
+  }, [draftAgentParam, draftDirectoryParam, directoryIds, draftProjectId]);
   const draftAgentId = draft?.agentId;
   const restageDraft = useProjectDraftStaging(draft, directoryIds);
   const chatAgentId = useChatStore((s) => s.activeAgentId);
@@ -75,7 +80,7 @@ export const useProjectConversation = () => {
   const freshOwnerRef = useRef<{ agentId: string; topicId: string }>(undefined);
   const freshTopicAgentId = freshProjectTopicAgentId({
     listed: !!selectedTopic,
-    projectId: detail?.project.id,
+    projectId: projectRefId,
     rememberedOwner: freshOwnerRef.current,
     storedTopic,
     topicId,
@@ -93,7 +98,7 @@ export const useProjectConversation = () => {
 
   const agent = useInitAgentConfig(conversationAgentId);
   const topicDetail = useChatStore((s) => s.useFetchTopicDetail)(selectedTopic?.id);
-  useMarkProjectTopicRead(detail?.project.id, selectedTopic);
+  useMarkProjectTopicRead(projectRefId, selectedTopic);
 
   useLayoutEffect(() => {
     if (!conversationAgentId) return;
@@ -119,7 +124,7 @@ export const useProjectConversation = () => {
     agentConfigLoading: !!agent.isLoading,
     chatAgentId,
     conversationAgentId,
-    hasProject: !!detail,
+    hasProject: !!projectRefId,
   });
 
   let fallback: ReactElement | undefined;
@@ -129,21 +134,32 @@ export const useProjectConversation = () => {
     );
   else if (agent.error)
     fallback = <AsyncError error={agent.error} variant="page" onRetry={agent.mutate} />;
-  else if (topicsRequest.error)
+  // A guessed id may really be a slug, which fails the topic request; that
+  // failure is not the conversation's until the project resolves.
+  else if (topicsRequest.error && (projectConfirmed || detailSWR.error))
     fallback = (
       <AsyncError error={topicsRequest.error} variant="page" onRetry={topicsRequest.revalidate} />
     );
   else if (!topicId && !draftAgentId) {
-    // A draft's directory list may still be loading; wait for it rather than
-    // sending the draft away. Other new project conversations start from the
-    // project home composer.
+    // A draft's directory list (or, without a directory, its project) may still
+    // be loading; wait for it rather than sending the draft away. Other new
+    // project conversations start from the project home composer.
     fallback =
-      draftAgentParam && !directoriesRequest.hasData ? (
+      draftAgentParam &&
+      (draftDirectoryParam ? !directoriesRequest.hasData : !draftProjectId && !detailSWR.error) ? (
         loading
       ) : (
         <Navigate replace relative="path" to=".." />
       );
-  } else if (topicId && topicsRequest.hasData && !selectedTopic && !isFreshTopic)
+  } else if (
+    topicId &&
+    topicsRequest.hasData &&
+    !selectedTopic &&
+    !isFreshTopic &&
+    // An id guessed from the route param may really be a slug; wait for the
+    // project to resolve before calling the topic missing.
+    (projectConfirmed || detailSWR.error)
+  )
     fallback = (
       <Center height="100%">
         <Text>{t('topics.notFound')}</Text>
@@ -151,7 +167,8 @@ export const useProjectConversation = () => {
     );
   else if (detailSWR.error && !detail)
     fallback = <AsyncError error={detailSWR.error} variant="page" onRetry={detailSWR.revalidate} />;
-  else if (stage === 'loading') fallback = loading;
+  // The conversation's shape, not a lone spinner on a blank pane.
+  else if (stage === 'loading') fallback = <ConversationSegmentSkeleton />;
 
   return {
     fallback,

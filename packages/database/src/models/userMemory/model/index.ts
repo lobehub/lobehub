@@ -5,11 +5,11 @@ import type {
   QueryTaxonomyOptionsResult,
   SearchMemoryParams,
   UserMemoryDetail,
+  UserMemoryInsert,
 } from '@lobechat/types';
 import { MemorySourceType } from '@lobechat/types';
 
 import type { FtsSearchCandidateSource } from '../../../repositories/ftsSearch';
-import type { userMemories } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
 import type { UserMemoryHybridSearchAggregatedResult } from '../query';
@@ -288,7 +288,7 @@ export class UserMemoryModel {
       status?: string | null;
       tags?: string[] | null;
     },
-  ): typeof userMemories.$inferInsert {
+  ): UserMemoryInsert {
     const now = new Date();
 
     return {
@@ -307,7 +307,7 @@ export class UserMemoryModel {
       tags: options?.tags ?? null,
       title: params.title ?? null,
       userId: this.userId,
-    } satisfies typeof userMemories.$inferInsert;
+    } satisfies UserMemoryInsert;
   }
 
   create = (params: CreateUserMemoryParams) => create(this.context, params);

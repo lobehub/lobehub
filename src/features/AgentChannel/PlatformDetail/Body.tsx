@@ -1,9 +1,9 @@
 'use client';
 
 import { Button, confirmModal, Flexbox, Text } from '@lobehub/ui';
-import { Form, type FormInstance } from '@lobehub/ui/form';
+import { Form, type FormInstance, useWatch } from '@lobehub/ui/form';
 import { RotateCcw } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useCallback, useMemo } from 'react';
+import { Fragment, memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type {
@@ -16,15 +16,43 @@ import {
   platformCredentialBodyMap,
   platformCredentialExtrasMap,
   platformSettingsFieldExtrasMap,
+  platformWakeNoticeMap,
 } from '../platform/registry';
 import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
+import { WakeRecords } from '../WakeRecords';
 import { AccessSection } from './AccessSection';
+import styles from './Body.module.css';
 import type { ChannelTab } from './channelTabs';
 import { extractSettingsDefaults, WAKE_MASTER_KEY } from './formState';
 import type { ChannelFormValues } from './index';
+import { ModuleSaveBar } from './ModuleSaveBar';
+import type { SaveModuleId } from './saveModules';
 import { ApplicationIdField, SchemaField } from './SchemaField';
-import { getSchemaFields, groupSettingsFields, WAKE_KEY_PREFIX } from './settingsGroups';
+import {
+  getSchemaFields,
+  groupAccessFields,
+  groupReplyFields,
+  groupSettingsFields,
+  groupWakeFields,
+  WAKE_KEY_PREFIX,
+} from './settingsGroups';
+
+/**
+ * What the page hands the body so each block can show its own Save: which blocks exist, which
+ * hold unsaved changes, and which one is being saved. Absent while a bot is still being created,
+ * when the setup steps save everything at once.
+ */
+export interface ModuleControls {
+  dirty: readonly SaveModuleId[];
+  ids: readonly SaveModuleId[];
+  onDiscard: (id: SaveModuleId) => void;
+  onSave: (id: SaveModuleId) => void;
+  saving?: SaveModuleId;
+}
+
+/** The wake blocks that say, under their title, what they are for. */
+const WAKE_SECTIONS_WITH_DESC = new Set(['channels', 'judgement', 'pace']);
 
 /**
  * One tab's content. Every panel stays mounted and only the active one is
@@ -53,11 +81,15 @@ interface BodyProps {
   currentConfig?: {
     applicationId: string;
     credentials: Record<string, string>;
+    /** The saved bot's id; the wake records tab reads its history by it. */
+    id?: string;
     settings?: Record<string, unknown> | null;
   };
   disabled?: boolean;
   form: FormInstance<ChannelFormValues>;
   hasConfig?: boolean;
+  /** Per-block save buttons; see {@link ModuleControls}. */
+  moduleControls?: ModuleControls;
   /** Saves and connects the credentials; resolves `false` when saving failed. */
   onAuthenticated?: (params: {
     applicationId: string;
@@ -82,6 +114,7 @@ const Body = memo<BodyProps>(
     form,
     hasConfig,
     currentConfig,
+    moduleControls,
     onAuthenticated,
     onSave,
     onValuesChange,
@@ -93,8 +126,14 @@ const Body = memo<BodyProps>(
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
+    // The records tab is a history read, not settings: it mounts the first time it is opened and
+    // then stays, so switching tabs keeps its filters and loaded pages.
+    const [recordsOpened, setRecordsOpened] = useState(false);
+    if (activeTab === 'records' && !recordsOpened) setRecordsOpened(true);
+
     const CustomCredentialBody = platformCredentialBodyMap[platformDef.id];
     const CredentialExtras = platformCredentialExtrasMap[platformDef.id];
+    const WakeNotice = platformWakeNoticeMap[platformDef.id];
 
     // Fields behind a rollout flag stay hidden until the user's flag is on (and
     // while the flags have not loaded yet).
@@ -178,6 +217,48 @@ const Body = memo<BodyProps>(
       );
     };
 
+    // The Save in the corner of a block, when the page saves that block by itself.
+    const moduleExtra = (id: SaveModuleId) =>
+      moduleControls?.ids.includes(id) ? (
+        <ModuleSaveBar
+          dirty={moduleControls.dirty.includes(id)}
+          disabled={disabled}
+          saving={moduleControls.saving === id}
+          onDiscard={() => moduleControls.onDiscard(id)}
+          onSave={() => moduleControls.onSave(id)}
+        />
+      ) : undefined;
+
+    // With the wake switch off, the blocks that only tune how the bot speaks up on its own are
+    // hidden; the switch and the keywords stay.
+    const wakeOn = useWatch(form, (values) => values.settings?.[WAKE_MASTER_KEY] !== true);
+    const wakeSectionShown = (section: { fields: FieldSchema[]; key: string }) =>
+      wakeOn ||
+      section.key === 'switch' ||
+      !section.fields.every((field) => field.key.startsWith(WAKE_KEY_PREFIX));
+
+    // The fields of one settings block.
+    const renderSettingsFields = (fields: FieldSchema[]) =>
+      fields.map((field, index) => {
+        // Feature-gated fields (e.g. watch keywords) lock when the resolved access meta
+        // reports the feature as not allowed.
+        const featureLocked =
+          !!field.paidFeature &&
+          platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+        return (
+          <Fragment key={field.key}>
+            <SchemaField
+              disabled={disabled}
+              divider={index !== 0}
+              featureLocked={featureLocked}
+              field={field}
+              parentKey="settings"
+            />
+            {renderExtras(field, featureLocked)}
+          </Fragment>
+        );
+      });
+
     return (
       <Form
         form={form}
@@ -214,9 +295,11 @@ const Body = memo<BodyProps>(
             fold away; a new bot has nothing else to do but fill them in. */}
               {(groupCredentialFields.length > 0 || showApplicationId || showExtras) && (
                 <Form.Group
+                  className={styles.moduleGroup}
                   collapsible={!!hasConfig || inlineKeys.size > 0}
                   defaultActive={!hasConfig && inlineKeys.size === 0}
                   desc={t('channel.group.credentialsDesc')}
+                  extra={moduleExtra('credentials')}
                   keyValue={`credentials-${platformDef.id}`}
                   variant={'filled'}
                   // The steps above ask for what is needed; what is left is optional.
@@ -275,7 +358,9 @@ const Body = memo<BodyProps>(
           )}
           {connectGroup && (
             <Form.Group
+              className={styles.moduleGroup}
               collapsible={false}
+              extra={moduleExtra('connection')}
               keyValue={`settings-connect-${platformDef.id}`}
               title={t('channel.group.connection')}
               variant={'filled'}
@@ -303,72 +388,130 @@ const Body = memo<BodyProps>(
                     {t('channel.wake.intro')}
                   </Text>
                 )}
-              {group.key === 'reply' && hasConfig && (
-                <Text fontSize={12} type={'secondary'}>
-                  {t('channel.reply.instant')}
-                </Text>
-              )}
-              <Form.Group
-                collapsible={false}
-                keyValue={`settings-${group.key}-${platformDef.id}`}
-                variant={'filled'}
-              >
-                {group.key === 'access' &&
-                group.fields.some((f) => f.key === 'dmPolicy' || f.key === 'groupPolicy') ? (
-                  <AccessSection
-                    disabled={disabled}
-                    fields={group.fields}
-                    form={form}
-                    userIdExtras={renderExtras(group.fields.find((f) => f.key === 'userId'))}
-                    onValuesChange={onValuesChange}
-                  />
-                ) : (
-                  group.fields
-                    // The master switch is always on for the people who see these options.
-                    .filter((field) => field.key !== WAKE_MASTER_KEY)
-                    .map((field, index) => {
-                      // Feature-gated fields (e.g. watch keywords) lock when the
-                      // resolved access meta reports the feature as not allowed.
-                      const featureLocked =
-                        !!field.paidFeature &&
-                        platformDef.access?.features?.[field.paidFeature]?.allowed === false;
-                      return (
-                        <Fragment key={field.key}>
-                          <SchemaField
-                            disabled={disabled}
-                            divider={index !== 0}
-                            featureLocked={featureLocked}
-                            field={field}
-                            parentKey="settings"
-                          />
-                          {renderExtras(field, featureLocked)}
-                        </Fragment>
-                      );
-                    })
-                )}
-                {group.key === 'advanced' && (
-                  <Flexbox horizontal justify={'flex-end'} style={{ paddingBlock: 8 }}>
-                    <Button
+              {group.key === 'wake' && WakeNotice && <WakeNotice />}
+              {group.key === 'access' ? (
+                // Who the owner is, who may talk to the bot and who may use the owner's devices are
+                // three separate decisions, so each gets a block (and a Save) of its own.
+                groupAccessFields(group.fields).map((section) => (
+                  <Form.Group
+                    className={styles.moduleGroup}
+                    collapsible={false}
+                    extra={moduleExtra(`access-${section.key}`)}
+                    key={section.key}
+                    keyValue={`settings-access-${section.key}-${platformDef.id}`}
+                    title={t(`channel.access.section.${section.key}`)}
+                    variant={'filled'}
+                    desc={
+                      section.key === 'identity'
+                        ? undefined
+                        : t(`channel.access.section.${section.key}Desc`)
+                    }
+                  >
+                    <AccessSection
                       disabled={disabled}
-                      icon={<RotateCcw size={14} />}
-                      size="small"
-                      type="text"
-                      onClick={() =>
-                        confirmModal({
-                          content: t('channel.settingsResetConfirm'),
-                          okText: t('channel.settingsResetDefault'),
-                          title: t('channel.settingsResetDefault'),
-                          onOk: () => handleResetGroup(group.fields),
-                        })
+                      fields={section.fields}
+                      form={form}
+                      section={section.key}
+                      userIdExtras={renderExtras(section.fields.find((f) => f.key === 'userId'))}
+                      onValuesChange={onValuesChange}
+                    />
+                  </Form.Group>
+                ))
+              ) : group.key === 'reply' ? (
+                // How a reply looks saves itself as it changes; how the bot talks is long text, so
+                // it is a block of its own with a Save.
+                groupReplyFields(group.fields).map((section) => (
+                  <Form.Group
+                    className={styles.moduleGroup}
+                    collapsible={false}
+                    extra={section.key === 'style' ? moduleExtra('reply-style') : undefined}
+                    key={section.key}
+                    keyValue={`settings-reply-${section.key}-${platformDef.id}`}
+                    title={t(`channel.reply.section.${section.key}`)}
+                    variant={'filled'}
+                    desc={
+                      section.key === 'display' && hasConfig
+                        ? t('channel.reply.instant')
+                        : undefined
+                    }
+                  >
+                    {renderSettingsFields(section.fields)}
+                  </Form.Group>
+                ))
+              ) : group.key === 'wake' ? (
+                // The switch, then keywords, channels, pace and judgement each get a block of their
+                // own, so a long list of options reads as separate decisions. The switch saves
+                // itself as it changes, so it has no Save.
+                groupWakeFields(group.fields)
+                  .filter(wakeSectionShown)
+                  .map((section) => (
+                    <Form.Group
+                      className={styles.moduleGroup}
+                      collapsible={false}
+                      key={section.key}
+                      keyValue={`settings-wake-${section.key}-${platformDef.id}`}
+                      title={t(`channel.wake.section.${section.key}`)}
+                      variant={'filled'}
+                      desc={
+                        WAKE_SECTIONS_WITH_DESC.has(section.key)
+                          ? t(`channel.wake.section.${section.key}Desc`)
+                          : undefined
+                      }
+                      extra={
+                        section.key === 'switch' ? undefined : moduleExtra(`wake-${section.key}`)
                       }
                     >
-                      {t('channel.settingsResetDefault')}
-                    </Button>
-                  </Flexbox>
-                )}
-              </Form.Group>
+                      {renderSettingsFields(section.fields)}
+                    </Form.Group>
+                  ))
+              ) : (
+                <Form.Group
+                  className={styles.moduleGroup}
+                  collapsible={false}
+                  extra={moduleExtra(group.key as SaveModuleId)}
+                  keyValue={`settings-${group.key}-${platformDef.id}`}
+                  variant={'filled'}
+                  // A block with a Save in its corner needs a header to hold it.
+                  title={
+                    moduleControls?.ids.includes(group.key as SaveModuleId)
+                      ? t(`channel.tab.${group.key}`)
+                      : undefined
+                  }
+                >
+                  {renderSettingsFields(group.fields)}
+                  {group.key === 'advanced' && (
+                    <Flexbox horizontal justify={'flex-end'} style={{ paddingBlock: 8 }}>
+                      <Button
+                        disabled={disabled}
+                        icon={<RotateCcw size={14} />}
+                        size="small"
+                        type="text"
+                        onClick={() =>
+                          confirmModal({
+                            content: t('channel.settingsResetConfirm'),
+                            okText: t('channel.settingsResetDefault'),
+                            title: t('channel.settingsResetDefault'),
+                            onOk: () => handleResetGroup(group.fields),
+                          })
+                        }
+                      >
+                        {t('channel.settingsResetDefault')}
+                      </Button>
+                    </Flexbox>
+                  )}
+                </Form.Group>
+              )}
             </Panel>
           ))}
+        {recordsOpened && currentConfig?.id && (
+          <Panel active={activeTab === 'records'} tab="records">
+            <WakeRecords
+              active={activeTab === 'records'}
+              botId={currentConfig.id}
+              disabled={disabled}
+            />
+          </Panel>
+        )}
       </Form>
     );
   },

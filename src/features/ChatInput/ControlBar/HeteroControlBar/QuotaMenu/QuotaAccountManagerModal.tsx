@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { currentUtilization, isWeeklyAllLimit } from '@lobechat/heterogeneous-agents/quota';
-import { createStaticStyles, cssVar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -14,6 +14,8 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t as i18nT } from 'i18next';
 import {
   CheckIcon,
@@ -36,56 +38,39 @@ import {
   useAgentQuotaStore,
 } from '@/store/agentQuota';
 import { useElectronStore } from '@/store/electron';
+import { electronGatewaySelectors } from '@/store/electron/selectors';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    margin-block-start: 4px;
-    padding-block-start: 10px;
-    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  hint: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  interactive: css`
-    display: contents;
-  `,
-  radioGroup: css`
-    width: 100%;
+import radioGroupStyles from './QuotaAccountManagerModal.module.css';
 
-    > label {
-      width: 100%;
-    }
-
-    > label > span:last-child {
-      flex: 1;
-      min-width: 0;
-    }
-  `,
-  routing: css`
-    padding-block: 6px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  row: css`
-    padding-block: 6px;
-    padding-inline: 4px;
-    border-radius: ${cssVar.borderRadius};
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    &[data-off='true'] {
-      opacity: 0.5;
-    }
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    marginBlockStart: '4px',
+    paddingBlockStart: '10px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+  },
+  hint: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  interactive: { display: 'contents' },
+  routing: {
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  row: {
+    paddingBlock: '6px',
+    paddingInline: '4px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  // [data-off='true']
+  rowOff: { opacity: 0.5 },
+});
 
 type Account = QuotaAccount;
 type Binding = QuotaBinding;
@@ -124,7 +109,8 @@ interface QuotaAccountManagerProps {
   /**
    * Bound execution device the agent runs on. A remote device's logins live
    * on that machine, not on the desktop showing this modal, so local sign-in
-   * state says nothing about which accounts it can run there.
+   * state says nothing about which accounts it can run there. The Manual pick
+   * is made for this device (this desktop when unset).
    */
   deviceId?: string;
 }
@@ -134,8 +120,10 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   const [
     useFetchQuotaAccounts,
     useFetchQuotaBindings,
+    useFetchQuotaDeviceAccount,
     bindQuotaAccount,
     renameQuotaAccount,
+    setQuotaDeviceAccount,
     switchQuotaAccount,
     unbindQuotaAccount,
     useFetchClaudeLocalAccounts,
@@ -144,8 +132,10 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   ] = useAgentQuotaStore((s) => [
     s.useFetchQuotaAccounts,
     s.useFetchQuotaBindings,
+    s.useFetchQuotaDeviceAccount,
     s.bindQuotaAccount,
     s.renameQuotaAccount,
+    s.setQuotaDeviceAccount,
     s.switchQuotaAccount,
     s.unbindQuotaAccount,
     s.useFetchClaudeLocalAccounts,
@@ -158,8 +148,35 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   // Only the desktop runs Claude Code locally, so only it has logins to show —
   // and only when this agent runs here: in-process, or through the gateway on
   // this desktop's own device row, which spawns on the same logins.
-  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
+  const [currentDeviceId, useFetchGatewayStableDeviceId] = useElectronStore((s) => [
+    s.gatewayDeviceInfo?.deviceId,
+    s.useFetchGatewayStableDeviceId,
+  ]);
+  // The cached id may still be the install's fallback before the gateway
+  // connects; resolving corrects it, so the pick lands on this machine's row.
+  // Until it settles a write could not tell this device from "no device" and
+  // would fall back to the agent-wide pin, so the controls wait for it.
+  const needsLocalDevice = isDesktop && !deviceId;
+  useFetchGatewayStableDeviceId(needsLocalDevice);
+  const stableDeviceId = useElectronStore(electronGatewaySelectors.gatewayStableDeviceId);
+  // The replica entry is `undefined` until this device is resolved (or hydrated).
+  const localDeviceSettled = !needsLocalDevice || stableDeviceId !== undefined;
+  // Resolved to no id (the IPC lookup failed): this is still a desktop picking
+  // for itself, not the web's agent-wide case, so it shows but cannot write.
+  const localDeviceMissing = needsLocalDevice && stableDeviceId === null;
   const managesLocalLogins = isDesktop && (!deviceId || deviceId === currentDeviceId);
+  // A login lives on one machine, so the Manual pick belongs to one device.
+  // The web without a bound device has none and keeps the agent-wide pin.
+  // Never the cached `gatewayDeviceInfo` id: before the gateway connects that
+  // is the install's fallback UUID, not the row the server knows this machine by.
+  const targetDeviceId = deviceId ?? (isDesktop ? (stableDeviceId ?? undefined) : undefined);
+  useFetchQuotaDeviceAccount(agentId, targetDeviceId);
+  const deviceAccount = useAgentQuotaStore(
+    agentQuotaSelectors.deviceAccount(agentId, targetDeviceId),
+  );
+  const deviceAccountConfirmed = useAgentQuotaStore(
+    agentQuotaSelectors.isDeviceAccountConfirmed(scope, agentId, targetDeviceId),
+  );
   useFetchClaudeLocalAccounts(managesLocalLogins);
   const localAccounts = useAgentQuotaStore((s) => s.claudeLocalAccounts);
   const loginPending = useAgentQuotaStore((s) => s.claudeLoginPending);
@@ -185,14 +202,21 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
   // Until this agent's bindings are on screen, every row would read as "off"
   // and Auto as routing to nobody: keep the mode and per-account controls
   // disabled and show no routing hint instead of acting on that guess.
-  const bindingsLoaded = loadedBindings !== undefined;
+  const bindingsLoaded =
+    localDeviceSettled &&
+    loadedBindings !== undefined &&
+    (!targetDeviceId || deviceAccount !== undefined);
   // A hydrated row may be outdated (changed in another tab or on another
   // device): show it, but take writes only once the server confirmed it, so a
   // change is computed against the bindings the server actually holds.
   const bindingsConfirmed = useAgentQuotaStore(
     agentQuotaSelectors.isBindingsConfirmed(scope, agentId),
   );
-  const canEditBindings = bindingsLoaded && bindingsConfirmed;
+  const canEditBindings =
+    !localDeviceMissing &&
+    bindingsLoaded &&
+    bindingsConfirmed &&
+    (!targetDeviceId || deviceAccountConfirmed);
   const readingsMap = useAgentQuotaStore((s) => s.quotaReadingsMap);
   const weeklyById = useMemo(
     () =>
@@ -240,7 +264,18 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
     [localAccounts, managesLocalLogins],
   );
 
-  const pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
+  // A legacy agent-wide pin only counts here while this device can run it: a
+  // pin picked on another machine leaves this one balancing (as runs do).
+  const agentPinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
+  const agentPinned = accounts.find((a) => a.id === agentPinnedId);
+  const devicePinnedId = deviceAccount?.accountId ?? undefined;
+  const pinnedId = targetDeviceId
+    ? devicePinnedId && inRotation(devicePinnedId)
+      ? devicePinnedId
+      : agentPinned && signedInHere(agentPinned)
+        ? agentPinned.id
+        : undefined
+    : agentPinnedId;
   const current = pinnedId ?? AUTO;
   const selected = pending ?? current;
   const dirty = pending !== null && pending !== current;
@@ -270,16 +305,40 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
       run(async () => {
         const value = pending;
         if (value === null) return;
-        if (value === AUTO) {
+        // Never turn this desktop's pick into an agent-wide one.
+        if (needsLocalDevice && !targetDeviceId) return;
+        if (value !== AUTO && !bindings.some((b) => b.accountId === value)) {
+          await bindQuotaAccount(agentId, value, 'pool');
+        }
+        if (targetDeviceId) {
+          await setQuotaDeviceAccount(agentId, targetDeviceId, value === AUTO ? null : value);
+        } else if (value === AUTO) {
           if (pinnedId) await bindQuotaAccount(agentId, pinnedId, 'pool');
         } else {
-          if (!bindings.some((b) => b.accountId === value)) {
-            await bindQuotaAccount(agentId, value, 'pool');
-          }
           await switchQuotaAccount(agentId, value);
         }
-      }).then(() => setPending(null)),
-    [agentId, bindQuotaAccount, bindings, pending, pinnedId, run, switchQuotaAccount],
+      })
+        .then(() => setPending(null))
+        .catch((error: { data?: { code?: string } }) => {
+          toast.error(
+            error?.data?.code === 'PRECONDITION_FAILED'
+              ? t('heteroAgent.claudeQuota.manage.notSignedInOnDevice')
+              : t('heteroAgent.claudeQuota.manage.switchFailed'),
+          );
+        }),
+    [
+      agentId,
+      bindQuotaAccount,
+      bindings,
+      needsLocalDevice,
+      pending,
+      pinnedId,
+      run,
+      setQuotaDeviceAccount,
+      switchQuotaAccount,
+      t,
+      targetDeviceId,
+    ],
   );
 
   const setRotation = useCallback(
@@ -352,7 +411,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
         <AccountReadingsSync accountId={a.id} key={a.id} />
       ))}
       <RadioGroup
-        className={styles.radioGroup}
+        className={radioGroupStyles.radioGroup}
         gap={2}
         horizontal={false}
         // Which mode is active is unknown until the bindings are on screen. The
@@ -364,10 +423,15 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
           {
             disabled: busy || !canEditBindings,
             label: (
-              <Flexbox className={styles.row} gap={4}>
+              <Flexbox className={stylex.props(styles.row).className} gap={4}>
                 <Text style={{ fontSize: 13 }}>{t('heteroAgent.claudeQuota.manage.modeAuto')}</Text>
                 {bindingsLoaded && selected === AUTO && (
-                  <Flexbox horizontal align={'center'} className={styles.routing} gap={6}>
+                  <Flexbox
+                    horizontal
+                    align={'center'}
+                    className={stylex.props(styles.routing).className}
+                    gap={6}
+                  >
                     <Icon icon={ZapIcon} size={14} />
                     {routeAccount
                       ? t('heteroAgent.claudeQuota.manage.autoRoutingTo', {
@@ -409,7 +473,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
                 <Flexbox
                   horizontal
                   align={'center'}
-                  className={styles.row}
+                  className={stylex.props(styles.row, !rotate && styles.rowOff).className}
                   data-off={!rotate}
                   gap={8}
                 >
@@ -465,7 +529,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
                         )}
                       </Flexbox>
                       {!runnable && (
-                        <span className={styles.interactive} onClick={preventRadioSelection}>
+                        <span {...stylex.props(styles.interactive)} onClick={preventRadioSelection}>
                           <Button
                             disabled={loginPending}
                             size={'small'}
@@ -476,7 +540,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
                           </Button>
                         </span>
                       )}
-                      <span className={styles.interactive} onClick={preventRadioSelection}>
+                      <span {...stylex.props(styles.interactive)} onClick={preventRadioSelection}>
                         <Switch
                           checked={rotate}
                           disabled={busy || !canEditBindings}
@@ -484,7 +548,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
                           onChange={(v) => void setRotation(a.id, v)}
                         />
                       </span>
-                      <span className={styles.interactive} onClick={preventRadioSelection}>
+                      <span {...stylex.props(styles.interactive)} onClick={preventRadioSelection}>
                         <DropdownMenu items={menuItems} placement={'bottomRight'}>
                           <ActionIcon
                             icon={MoreHorizontalIcon}
@@ -505,11 +569,18 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
       />
 
       {accounts.length === 0 && (accountsConfirmed || !!accountsError) && (
-        <Text className={styles.hint}>{t('heteroAgent.claudeQuota.manage.empty')}</Text>
+        <Text className={stylex.props(styles.hint).className}>
+          {t('heteroAgent.claudeQuota.manage.empty')}
+        </Text>
       )}
 
       {dirty ? (
-        <Flexbox horizontal className={styles.footer} gap={8} justify={'flex-end'}>
+        <Flexbox
+          horizontal
+          className={stylex.props(styles.footer).className}
+          gap={8}
+          justify={'flex-end'}
+        >
           <Button disabled={busy} onClick={() => setPending(null)}>
             {i18nT('cancel', { ns: 'common' })}
           </Button>
@@ -521,11 +592,11 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.footer}
+          className={stylex.props(styles.footer).className}
           gap={8}
           justify={'space-between'}
         >
-          <Text className={styles.hint}>
+          <Text className={stylex.props(styles.hint).className}>
             {loginPending
               ? t('heteroAgent.claudeQuota.manage.loginWaiting')
               : t('heteroAgent.claudeQuota.manage.addHintDesktop')}
@@ -546,7 +617,7 @@ const QuotaAccountManager = memo<QuotaAccountManagerProps>(({ agentId, deviceId 
           )}
         </Flexbox>
       ) : (
-        <Text className={styles.hint} style={{ marginBlockStart: 4 }}>
+        <Text className={stylex.props(styles.hint).className} style={{ marginBlockStart: 4 }}>
           {t('heteroAgent.claudeQuota.manage.addHint')}
         </Text>
       )}

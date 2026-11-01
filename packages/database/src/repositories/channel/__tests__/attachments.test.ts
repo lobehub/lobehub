@@ -49,7 +49,7 @@ describe('channel message attachments', () => {
       fileIds: [first, second],
       mentions: [agent.id],
       requestKey: 'req-1',
-      routing: 'jev' as const,
+      routing: 'decision' as const,
     };
 
     const message = await asMember.send(channel.id, input);
@@ -71,7 +71,7 @@ describe('channel message attachments', () => {
       fileIds: [kept, deleted],
       mentions: [agent.id],
       requestKey: 'req-1',
-      routing: 'jev',
+      routing: 'decision',
     });
     await db.delete(files).where(eq(files.id, deleted));
     const [job] = await jobsOf(db, message.id);

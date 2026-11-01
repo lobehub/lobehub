@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { formatCost, formatNumber, outputJson, printBoxTable, timeUntil } from './format';
+import {
+  formatCost,
+  formatNumber,
+  outputJson,
+  printBoxTable,
+  printTable,
+  timeUntil,
+} from './format';
 
 describe('formatNumber', () => {
   it('should format numbers with commas', () => {
@@ -162,6 +169,29 @@ describe('printBoxTable', () => {
     expect(output.join('\n')).toMatchSnapshot();
 
     vi.restoreAllMocks();
+  });
+});
+
+describe('printTable', () => {
+  it('keeps a multi-line cell on its own row', () => {
+    const lines: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((line: string) => lines.push(line));
+
+    printTable(
+      [
+        ['tpc_a', 'Check to verify\ncheckItemId: 2d8\r\n  done', '2'],
+        ['tpc_b', 'Weekly', '1'],
+      ],
+      ['ID', 'TITLE', 'HITS'],
+    );
+    spy.mockRestore();
+
+    expect(lines).toHaveLength(3);
+    expect(lines.every((line) => !/[\r\n]/.test(line))).toBe(true);
+    expect(lines[1]).toContain('Check to verify checkItemId: 2d8 done');
+    // Column widths come from the flattened cell, so the last column stays aligned.
+    expect(lines[1].trimEnd().endsWith('  2')).toBe(true);
+    expect(lines[2].trimEnd().length).toBe(lines[1].trimEnd().length);
   });
 });
 

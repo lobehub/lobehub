@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "Mô hình này hỗ trợ nhận diện video",
   "ModelSelect.featureTag.vision": "Mô hình này hỗ trợ nhận diện hình ảnh.",
   "ModelSelect.removed": "Mô hình không có trong danh sách. Sẽ tự động bị xóa nếu bỏ chọn.",
+  "ModelSelect.routing": "Định tuyến",
+  "ModelSelect.routingTooltip": "Một nhóm định tuyến: nhiều nhà cung cấp phục vụ mô hình này, và mỗi yêu cầu sẽ được gửi đến nhà cung cấp nào phản hồi.",
   "ModelSelect.staleModel.current": "Lựa chọn hiện tại",
   "ModelSelect.staleModel.notEnabled.action": "Kích hoạt mô hình này",
   "ModelSelect.staleModel.notEnabled.actionFailed": "Không thể kích hoạt mô hình. Vui lòng thử lại.",

@@ -37,9 +37,9 @@ vi.mock('@/server/services/file', () => ({
     uploadFromBuffer = mocks.upload;
   },
 }));
-vi.mock('@/server/routers/lambda/_helpers/acceptanceRepairDispatch', async (importOriginal) => ({
+vi.mock('@/server/routers/lambda/_helpers/acceptanceFeedbackRepair', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  dispatchAcceptanceRepair: mocks.dispatch,
+  dispatchAcceptanceFeedbackRepair: mocks.dispatch,
 }));
 vi.mock('@/server/services/resourceEvents', async (importOriginal) => {
   const actual = await importOriginal<typeof ResourceEvents>();
@@ -384,12 +384,13 @@ describe('POST /decision', () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ dispatched: false, status: 'rejected' });
-    // The repair runs the owner's agent, so it is dispatched as the owner.
+    // Run the owner's agent while keeping the visitor as the feedback author.
     expect(mocks.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ userId: ownerId }),
       expect.anything(),
       expect.objectContaining({ id: acceptanceId }),
       'still overlaps',
+      expect.objectContaining({ userId: visitorId }),
     );
   });
 

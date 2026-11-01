@@ -229,7 +229,13 @@ export async function statPath(
     workspaceId?: string;
   },
 ): Promise<
-  | { exists: boolean; isDirectory: boolean; repositoryUrl?: string; repoType?: 'git' | 'github' }
+  | {
+      canonicalPath?: string;
+      exists: boolean;
+      isDirectory: boolean;
+      repositoryUrl?: string;
+      repoType?: 'git' | 'github';
+    }
   | undefined
 > {
   const { userId, deviceId, path, timeout = 8000, workspaceId } = params;
@@ -238,6 +244,7 @@ export async function statPath(
 
   try {
     const result = await client.invokeRpc<{
+      canonicalPath?: string;
       exists: boolean;
       isDirectory: boolean;
       repoType?: 'git' | 'github';

@@ -21,6 +21,7 @@ import type {
 } from '../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
+import { respondJsonAfterStream } from '../../utils/consumeStream';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugPayload, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
@@ -699,10 +700,6 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           options?.signal,
         );
 
-        if (payload.responseMode === 'json') {
-          return Response.json(response);
-        }
-
         const stream = new ReadableStream<Anthropic.MessageStreamEvent>({
           start(controller) {
             const message = response as Anthropic.Message;
@@ -757,7 +754,8 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
                 cache_creation_input_tokens: message.usage?.cache_creation_input_tokens ?? null,
                 cache_read_input_tokens: message.usage?.cache_read_input_tokens ?? null,
                 input_tokens: message.usage?.input_tokens ?? null,
-                output_tokens: 0,
+                // `message_delta.usage` is cumulative, so it repeats the full output count.
+                output_tokens: message.usage?.output_tokens ?? 0,
                 server_tool_use: message.usage?.server_tool_use ?? null,
               },
             } satisfies Anthropic.MessageStreamEvent);
@@ -767,7 +765,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           },
         });
 
-        return StreamingResponse(
+        const streamingResponse = StreamingResponse(
           chatCompletion?.handleStream
             ? chatCompletion.handleStream(stream, {
                 callbacks: streamOptions.callbacks,
@@ -783,6 +781,10 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
             headers: options?.headers,
           },
         );
+
+        if (payload.responseMode === 'json')
+          return await respondJsonAfterStream(streamingResponse, response);
+        return streamingResponse;
       } catch (error) {
         throw this.handleError(error);
       }

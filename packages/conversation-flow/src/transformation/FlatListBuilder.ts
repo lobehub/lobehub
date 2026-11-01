@@ -723,18 +723,14 @@ export class FlatListBuilder {
     const tail = assistantChain.at(-1);
     if (!tail) return;
 
-    for (const assistant of assistantChain.slice(0, -1)) {
+    for (const [index, assistant] of assistantChain.slice(0, -1).entries()) {
       const childIds = this.childrenMap.get(assistant.id) ?? [];
-      const interruptions = childIds.filter((id) => {
-        const message = this.messageMap.get(id);
-        return (
-          message?.role === 'user' &&
-          !message.threadId &&
-          !processedIds.has(id) &&
-          toTime(message.createdAt) >= toTime(assistant.createdAt) &&
-          toTime(message.createdAt) <= toTime(tail.createdAt)
-        );
-      });
+      const interruptions = this.messageCollector.collectGroupInterruptions(
+        assistant,
+        assistantChain[index + 1],
+        tail,
+        processedIds,
+      );
       if (interruptions.length === 0) continue;
 
       const activeId = this.branchResolver.getActiveBranchIdFromMetadata(

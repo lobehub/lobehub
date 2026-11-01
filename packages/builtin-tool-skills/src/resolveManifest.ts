@@ -30,6 +30,13 @@ const DEVICE_HIDDEN_API_NAMES = new Set<string>([
 ]);
 
 /**
+ * The page agent edits the page through the Cloud Sandbox `runCommand`, which
+ * page scope auto-approves. Offered a second, always-confirmed `runCommand`
+ * here, models picked it for nearly every page edit, so each edit asked first.
+ */
+const PAGE_HIDDEN_API_NAMES = new Set<string>([SkillsApiName.runCommand]);
+
+/**
  * Per-environment description preambles for the exec-class APIs. Descriptions
  * carry tool semantics only (where it runs, what credentials it has);
  * cross-tool arbitration lives in `EXEC_ENV_FACTS`.
@@ -116,9 +123,20 @@ const resolveUnroutedTexts = (
  */
 export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
   const basePreamble = context.executionEnv && EXEC_ENV_PREAMBLES[context.executionEnv];
-  if (!basePreamble) return SkillsManifest;
+  const isPageScope = context.scope === 'page';
+  if (!basePreamble) {
+    return isPageScope
+      ? {
+          ...SkillsManifest,
+          api: SkillsManifest.api.filter((api) => !PAGE_HIDDEN_API_NAMES.has(api.name)),
+        }
+      : SkillsManifest;
+  }
 
   const isDeviceRun = context.executionEnv === 'device';
+  const isHidden = (name: string) =>
+    (isDeviceRun && DEVICE_HIDDEN_API_NAMES.has(name)) ||
+    (isPageScope && PAGE_HIDDEN_API_NAMES.has(name));
   const unrouted =
     context.executionEnv === 'device-unrouted'
       ? resolveUnroutedTexts(context.executionEnvUnroutedReason)
@@ -129,7 +147,7 @@ export const resolveSkillsManifest: BuiltinManifestResolver = (context) => {
   return {
     ...SkillsManifest,
     api: SkillsManifest.api
-      .filter((api) => !isDeviceRun || !DEVICE_HIDDEN_API_NAMES.has(api.name))
+      .filter((api) => !isHidden(api.name))
       .map((api) =>
         EXEC_API_NAMES.has(api.name)
           ? { ...api, description: `${preamble} ${api.description}` }

@@ -13,8 +13,9 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import AgentAvatar from './AgentAvatar';
+import { AGENT_GRID_MIN_COLUMN } from './AgentCard';
 import ItemActions from './ItemActions';
+import SidebarItemAvatar from './SidebarItemAvatar';
 
 // "In sidebar" overview: a collapsible card grid pinned above the main list
 // so the user can see at a glance which agents currently show in the sidebar
@@ -68,8 +69,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   grid: css`
     display: grid;
 
-    /* Full-width page: as many 280px+ columns as fit, one column on narrow screens. */
-    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+    /* Same column width as the badge wall below, so both grids line up. */
+    grid-template-columns: repeat(auto-fill, minmax(min(${AGENT_GRID_MIN_COLUMN}px, 100%), 1fr));
     gap: 12px;
 
     width: 100%;
@@ -124,7 +125,7 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
       >
         <Block clickable className={styles.card} height={'100%'} variant={'outlined'}>
           <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-            <AgentAvatar item={item} size={24} />
+            <SidebarItemAvatar item={item} size={24} />
             <Text ellipsis style={{ minWidth: 0 }} weight={600}>
               {displayTitle}
             </Text>

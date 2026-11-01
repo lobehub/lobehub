@@ -10,6 +10,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
 
+import { useProjectLinearSync } from '../LinearSync';
 import { useCanManageProject } from '../useCanManageProject';
 
 export function AdvancedSettings({ project }: { project: ProjectDetail['project'] }) {
@@ -18,6 +19,7 @@ export function AdvancedSettings({ project }: { project: ProjectDetail['project'
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const canManage = useCanManageProject();
   const [pending, setPending] = useState(false);
+  const linearSync = useProjectLinearSync(project.id);
 
   // Destructive settings need edit permission; the page hides this tab from viewers.
   if (!canManage) return null;
@@ -46,6 +48,14 @@ export function AdvancedSettings({ project }: { project: ProjectDetail['project'
 
   return (
     <Flexbox gap={24}>
+      {linearSync.item ? (
+        <Flexbox gap={16}>
+          <Form {...FORM_STYLE} items={[linearSync.item]} itemsType="flat" variant="filled" />
+          {linearSync.rules}
+        </Flexbox>
+      ) : (
+        linearSync.rules
+      )}
       <Form
         {...FORM_STYLE}
         itemsType="flat"

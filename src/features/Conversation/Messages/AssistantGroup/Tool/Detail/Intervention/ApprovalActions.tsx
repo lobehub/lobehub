@@ -1,11 +1,15 @@
 import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotkeys';
-import type { BuiltinRememberApproval } from '@lobechat/types';
-import { Button, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
+import type { BuiltinRememberApproval, DynamicInterventionResolver } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
+import { Button, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CircleStop, CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { clientInterventionAudits } from '@/store/chat/slices/agentRun/actions/transports/client/interventionAudits';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
@@ -13,13 +17,24 @@ import { useConversationResourceAccess } from '../../../../../hooks/useConversat
 import { useConversationStore } from '../../../../../store';
 import {
   type ApprovalChoice,
+  approveChoiceLabelKeys,
   canRememberViaAllowList,
+  dynamicAuditType,
   getApprovalChoices,
   isChoiceSubmitBlocked,
+  isCoveredByRemember,
   resolveRememberAction,
 } from './approvalGate';
 import { type ApprovalMode } from './index';
 import { isSubmitShortcutBlockedByTarget } from './submitShortcutGuard';
+
+/** The audit this client runs for a tool's dynamic approval, to re-check calls after a remember. */
+const rememberAuditFor = (config: unknown) => {
+  const type = dynamicAuditType(config);
+  return type
+    ? (clientInterventionAudits as Record<string, DynamicInterventionResolver>)[type]
+    : undefined;
+};
 
 interface ApprovalActionsProps {
   apiName: string;
@@ -47,105 +62,79 @@ interface ApprovalActionsProps {
 
 type Choice = ApprovalChoice;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    width: 100%;
-  `,
-  footer: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-end;
-
-    margin-block-start: 8px;
-  `,
-  number: css`
-    flex-shrink: 0;
-    width: 18px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  option: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    min-height: 40px;
-    padding-block: 7px;
-    padding-inline: 16px;
-    border-radius: calc(${cssVar.borderRadiusLG} - 2px);
-
-    color: ${cssVar.colorTextSecondary};
-
-    transition:
-      background 120ms,
-      color 120ms;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  optionLabel: css`
-    flex: 1;
-    line-height: 1.4;
-  `,
-  optionList: css`
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  `,
-  optionSelected: css`
-    color: ${cssVar.colorText};
-    background: ${cssVar.colorFillSecondary};
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  rejectInput: css`
-    flex: 1;
-
-    width: 100%;
-    padding: 0;
-    border: none;
-    border-radius: 0;
-
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
-
-    background: transparent;
-
-    &::placeholder {
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    &:focus,
-    &:focus-visible {
-      outline: none;
-    }
-
-    &:disabled {
-      cursor: pointer;
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  shortcutHint: css`
-    display: inline-flex;
-    align-items: center;
-    margin-inline-start: 6px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  submitButton: css`
-    min-width: 88px;
-    height: 36px;
-    border-radius: calc(${cssVar.borderRadiusLG} - 2px);
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    width: '100%',
+  },
+  footer: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginBlockStart: '8px',
+  },
+  number: {
+    flexShrink: 0,
+    width: '18px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+  option: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    minHeight: '40px',
+    paddingBlock: '7px',
+    paddingInline: '16px',
+    borderRadius: `calc(${cssVar.borderRadiusLG} - 2px)`,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+    transition: 'background 120ms, color 120ms',
+  },
+  optionLabel: {
+    flex: '1',
+    lineHeight: 1.4,
+  },
+  optionList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  optionSelected: {
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  rejectInput: {
+    'flex': '1',
+    'width': '100%',
+    'padding': '0',
+    'borderStyle': 'none',
+    'borderRadius': '0',
+    'fontFamily': 'inherit',
+    'fontSize': '14px',
+    'lineHeight': 1.4,
+    'color': { 'default': cssVar.colorText, ':disabled': cssVar.colorTextSecondary },
+    'backgroundColor': 'transparent',
+    'backgroundImage': 'none',
+    'outlineStyle': 'none',
+    'cursor': { 'default': null, ':disabled': 'pointer' },
+    '::placeholder': { color: cssVar.colorTextSecondary },
+  },
+  shortcutHint: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    marginInlineStart: '6px',
+    color: cssVar.colorTextTertiary,
+  },
+  submitButton: {
+    minWidth: '88px',
+    height: '36px',
+    borderRadius: `calc(${cssVar.borderRadiusLG} - 2px)`,
+  },
+});
 
 const ApprovalActions = memo<ApprovalActionsProps>(
   ({
@@ -159,7 +148,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     rememberOption,
     toolArgs,
   }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'plugin']);
     const [choice, setChoice] = useState<Choice>('approve');
     const [reason, setReason] = useState('');
     const [loading, setLoading] = useState(false);
@@ -199,12 +188,17 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     const effectiveChoice: Choice = choices.includes(choice) ? choice : 'approve';
     const rememberAction = resolveRememberAction({ toolRemember: hasToolRemember });
 
-    const [approveToolCall, rejectAndContinueToolCall, stopPendingApprovalForCard] =
-      useConversationStore((s) => [
-        s.approveToolCall,
-        s.rejectAndContinueToolCall,
-        s.stopPendingApprovalForCard,
-      ]);
+    const [
+      approveToolCall,
+      approveToolCallAndCovered,
+      rejectAndContinueToolCall,
+      stopPendingApprovalForCard,
+    ] = useConversationStore((s) => [
+      s.approveToolCall,
+      s.approveToolCallAndCovered,
+      s.rejectAndContinueToolCall,
+      s.stopPendingApprovalForCard,
+    ]);
     const [stopping, setStopping] = useState(false);
 
     /**
@@ -244,12 +238,24 @@ const ApprovalActions = memo<ApprovalActionsProps>(
           // after this approval already sees it.
           if (remember && rememberAction === 'tool') await rememberOption?.onRemember();
           const editedArguments = await onBeforeApprove?.();
-          await approveToolCall(messageId, assistantGroupId ?? '', {
-            editedArguments,
-            ...(remember && rememberAction === 'allow-list'
-              ? { rememberToolKey: `${identifier}/${apiName}` }
-              : {}),
-          });
+          if (remember) {
+            const audit = rememberAuditFor(interventionConfig);
+            await approveToolCallAndCovered(messageId, assistantGroupId ?? '', {
+              editedArguments,
+              isCovered: (sibling) =>
+                isCoveredByRemember({
+                  audit,
+                  config: interventionConfig,
+                  rememberAction,
+                  toolArgs: safeParseJSON(sibling.requestArgs) ?? {},
+                }),
+              ...(rememberAction === 'allow-list'
+                ? { rememberToolKey: `${identifier}/${apiName}` }
+                : {}),
+            });
+          } else {
+            await approveToolCall(messageId, assistantGroupId ?? '', { editedArguments });
+          }
         }
       } finally {
         setLoading(false);
@@ -257,10 +263,12 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     }, [
       apiName,
       approveToolCall,
+      approveToolCallAndCovered,
       assistantGroupId,
       canUseResource,
       effectiveChoice,
       identifier,
+      interventionConfig,
       isMessageCreating,
       loading,
       messageId,
@@ -363,9 +371,9 @@ const ApprovalActions = memo<ApprovalActionsProps>(
 
     const rejectNumber = choices.indexOf('reject') + 1;
 
-    const approveLabel: Record<'approve' | 'approve-remember', string> = {
-      'approve': t('tool.intervention.optionApprove'),
-      'approve-remember': t('tool.intervention.optionApproveRemember'),
+    const approveLabelFor = (c: 'approve' | 'approve-remember') => {
+      const keys = approveChoiceLabelKeys({ apiName, choice: c, identifier });
+      return t(keys.tool, { defaultValue: t(keys.shared), ns: 'plugin' });
     };
 
     // View-only members see the pending intervention but get no approval
@@ -373,14 +381,14 @@ const ApprovalActions = memo<ApprovalActionsProps>(
     if (!canUseResource) return null;
 
     return (
-      <Flexbox className={styles.container} ref={containerRef}>
-        <div className={styles.optionList} role="radiogroup">
+      <Flexbox className={stylex.props(styles.container).className} ref={containerRef}>
+        <div {...stylex.props(styles.optionList)} role="radiogroup">
           {choices.map((c, index) => {
             if (c === 'reject') {
               return (
                 <div
                   aria-checked={choice === 'reject'}
-                  className={cx(styles.option, choice === 'reject' && styles.optionSelected)}
+                  {...stylex.props(styles.option, choice === 'reject' && styles.optionSelected)}
                   key={c}
                   role="radio"
                   onClick={() => {
@@ -388,10 +396,10 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                     rejectInputRef.current?.focus();
                   }}
                 >
-                  <span className={styles.number}>{rejectNumber}.</span>
+                  <span {...stylex.props(styles.number)}>{rejectNumber}.</span>
                   <input
                     aria-label={t('tool.intervention.rejectReasonPlaceholder')}
-                    className={styles.rejectInput}
+                    {...stylex.props(styles.rejectInput)}
                     disabled={loading || isMessageCreating}
                     placeholder={t('tool.intervention.rejectReasonPlaceholder')}
                     ref={rejectInputRef}
@@ -410,19 +418,21 @@ const ApprovalActions = memo<ApprovalActionsProps>(
               <div
                 aria-checked={effectiveChoice === c}
                 aria-disabled={approveDisabled || undefined}
-                className={cx(styles.option, effectiveChoice === c && styles.optionSelected)}
+                {...stylex.props(styles.option, effectiveChoice === c && styles.optionSelected)}
                 key={c}
                 role="radio"
                 onClick={() => setChoice(c)}
               >
-                <span className={styles.number}>{index + 1}.</span>
-                <span className={styles.optionLabel}>{approveLabel[c]}</span>
+                <span className={stylex.props(styles.number).className}>{index + 1}.</span>
+                <span className={stylex.props(styles.optionLabel).className}>
+                  {approveLabelFor(c)}
+                </span>
               </div>
             );
           })}
         </div>
 
-        <div className={styles.footer}>
+        <div {...stylex.props(styles.footer)}>
           <Button
             disabled={loading || isMessageCreating}
             icon={CircleStop}
@@ -434,7 +444,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
             {t('tool.intervention.stop')}
           </Button>
           <Button
-            className={styles.submitButton}
+            className={stylex.props(styles.submitButton).className}
             disabled={isMessageCreating || submitBlocked}
             loading={loading}
             size={'middle'}
@@ -442,7 +452,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
             onClick={handleSubmit}
           >
             {t('tool.intervention.submit')}
-            <span className={styles.shortcutHint}>
+            <span {...stylex.props(styles.shortcutHint)}>
               <CornerDownLeft size={12} />
             </span>
           </Button>
