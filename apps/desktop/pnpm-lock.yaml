@@ -19,8 +19,8 @@ importers:
         specifier: 0.0.38
         version: 0.0.38
       '@auv-js/sdk':
-        specifier: 0.0.38
-        version: 0.0.38
+        specifier: 0.0.39
+        version: 0.0.39
       '@lobehub/fluent-emoji':
         specifier: ^5.0.0
         version: 5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -990,8 +990,8 @@ packages:
       zod:
         optional: true
 
-  '@auv-js/api-client@0.0.38':
-    resolution: {integrity: sha512-5TWH9YTxtN18MnyUtWw0bpYCMycAbSkZMJGIC+LlRIdHNFdD4b6JydU0Ptb/HfZWt221gOH+4BBptBrWaVdQ0w==}
+  '@auv-js/api-client@0.0.39':
+    resolution: {integrity: sha512-V5X8gIWwviy1sJBW3lcw/SZouDqB63ZzFbskEt+cIBnoKzM88F/jl73GHK3PC+t4V6yL/JrhqI5yA2JAsgCG8w==}
 
   '@auv-js/cli-darwin-arm64@0.0.38':
     resolution: {integrity: sha512-2jOUDX5Z9Ya3B0yOJYpYDTB/0uMS2PZrSellXxoUPYnVq2zNcDSKnT14XK+HP5puUt2K+1vBKfeawNUFw1xUrA==}
@@ -1035,8 +1035,8 @@ packages:
     resolution: {integrity: sha512-Onm/Wy0eYdikZOvjyuajn5QaqGuOdGeKe4YXf3XlMc6GO7AY9izsIdlYFnM/qGEfYKtfvMXvSJUjkoPlTVZkKQ==}
     hasBin: true
 
-  '@auv-js/sdk@0.0.38':
-    resolution: {integrity: sha512-yK6nuWUwVTnUp2UHB+VXU8FF8f8G/64JbihCxNUr8QTJvdrxGkD4GPGkxlpGJpNWVEIILNQrFCAc+EasCHg6EA==}
+  '@auv-js/sdk@0.0.39':
+    resolution: {integrity: sha512-wnk5eEZcCydgo/imdVVGcCShPUsAhtXzh9ZCA/nXMtbahQaa9ayMtECjIfR3xzReQQZ9ld/7wfIMJgAJQ9n4eA==}
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -2462,6 +2462,7 @@ packages:
   '@opentelemetry/sdk-trace-base@2.11.0':
     resolution: {integrity: sha512-H19x/TX/LZdqiYOjM7fqtSxwlplC5pgelavqbQdHbhdq0q/AI/TGkM2dfGuuynTXmJPeF2HoZVoPDu+TGoW78A==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
@@ -3769,6 +3770,11 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
+    peerDependencies:
+      ajv: ^8.0.0
+    peerDependenciesMeta:
+      ajv:
+        optional: true
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
@@ -8461,7 +8467,7 @@ snapshots:
     optionalDependencies:
       zod: 4.6.5
 
-  '@auv-js/api-client@0.0.38': {}
+  '@auv-js/api-client@0.0.39': {}
 
   '@auv-js/cli-darwin-arm64@0.0.38':
     optional: true
@@ -8492,9 +8498,9 @@ snapshots:
       '@auv-js/cli-win32-arm64-msvc': 0.0.38
       '@auv-js/cli-win32-x64-msvc': 0.0.38
 
-  '@auv-js/sdk@0.0.38':
+  '@auv-js/sdk@0.0.39':
     dependencies:
-      '@auv-js/api-client': 0.0.38
+      '@auv-js/api-client': 0.0.39
       '@bufbuild/protobuf': 2.13.0
       '@grpc/grpc-js': 1.14.4
       '@moeru/std': 0.1.0-beta.20
